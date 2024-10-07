@@ -4,6 +4,7 @@ use Inertia\Inertia;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Foundation\Application;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\SchuleController;
 
 /*
 |--------------------------------------------------------------------------
@@ -43,6 +44,11 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions'])->group(function
     Route::get('/dashboard', function () {
         return Inertia::render('Dashboard');
     })->name('dashboard');
+
+
+
+    Route::get('/schule', [SchuleController::class, 'index'])->name('schule.index');
+
 
     Route::get('/benutzer', [UserController::class, 'index'])->name('user.index');
 
