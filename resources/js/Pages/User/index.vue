@@ -1,8 +1,19 @@
-<script>
+<script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
 import axios from 'axios';
+import { ref, watch } from 'vue';
+import {router} from "@inertiajs/vue3"
+let search = ref('');
 
+//lesen von Daten die in seach geschrieben werden
+watch(search, value => {
+    router.get('/benutzer', { search: value }, {
+        preserveState: true,
+    });
+});
+</script>
 
+<script>
 export default {
     // Komponente referenzieren
     components: {
@@ -12,18 +23,10 @@ export default {
     // Props für empfangene Daten
     props: ['users'],
 
-    data() {
-        return {
-            alle_users: [], // Leeres Array wird initialisiert
-
-        };
-    },
-
     // Mounted Lifecycle Hook
     mounted() {
         // alle_users aus users setzen (wird aus props geladen)
-        this.alle_users = this.users;
-        console.log(this.alle_users);  // Konsolenausgabe der Benutzer
+        console.log(this.users);  // Konsolenausgabe der Benutzer
     },
 
     methods: {
@@ -51,25 +54,37 @@ export default {
     <app-layout>
         <!-- Header Slot -->
         <template #header>Alle Users</template>
-
+        <div v-if="users.length === 0">Keine Benutzer gefunden.</div>
+        <div v-else>
         <!-- Benutzerausgabe -->
-        <div
-            class="m-6 p-4 bg-white rounded shadow flex justify-between"
-            v-for="user in alle_users"
-            :key="user.id">
-            <div>
-                <div class="text-2xl">{{ user.name }}</div>
-                <div>{{ user.email }}</div>
-                <!-- Toggle-Check bei Klick -->
-                <div
-                    class="bg-orange-500 p-2 rounded text-white cursor-pointer"
-                    @click="toggleCheck(user.id)"
-                >
-                    {{ user.check }}
+            <div
+                class="m-6 p-4 bg-white rounded shadow flex justify-between"
+                v-for="user in users"
+                :key="user.id">
+                <div>
+                    <div class="text-2xl">{{ user.name }}</div>
+                    <div>{{ user.email }}</div>
+                    <!-- Toggle-Check bei Klick -->
+                    <div
+                        class="bg-orange-500 p-2 rounded text-white cursor-pointer"
+                        @click="toggleCheck(user.id)"
+                    >
+                        {{ user.check }}
+                    </div>
+                </div>
+                <div class="content-center my-auto">
+                    <a :href="route('dashboard')" class="bg-orange-500 p-2">---</a>
                 </div>
             </div>
-            <div class="content-center my-auto">
-                <a :href="route('dashboard')" class="bg-orange-500 p-2">---</a>
+        </div>
+
+        <div class="flex items-center max-w-sm mx-auto">
+            <label for="simple-search" class="sr-only">Search</label>
+            <div class="relative w-full mb-3">
+                <div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
+                    <i class="fa fa-search text-gray-500 dark:text-gray-400 pr-1"></i>
+                </div>
+                <input v-model="search" type="text" id="simple-search" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full ps-10 p-2.5  dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Suchen ..."/>
             </div>
         </div>
 
@@ -89,7 +104,7 @@ export default {
                     </tr>
                 </thead>
                 <tbody>
-                    <tr  v-for="user in alle_users" :key="user.id"
+                    <tr  v-for="user in users" :key="user.id"
                     class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
                         <th scope="row" class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">
                             {{user.name}}
@@ -104,6 +119,5 @@ export default {
                 </tbody>
             </table>
         </div>
-
     </app-layout>
 </template>

@@ -1,8 +1,5 @@
 <template>
-    <div :class="{'block': sidebarOpen, 'hidden': !sidebarOpen, 'md:block': true}" class=" w-64 bg-gray-800 z-40 transition duration-300">
-      <div class="overflow-y-auto">
-        <div id="sidebar-menu" class="p-4">
-          <ul class="space-y-4 pl-0">
+    <SidebarLayout>
             <!-- Profile Settings -->
             <li class="text-white text-sm font-bold uppercase">
               <span>Einstellungen</span>
@@ -19,15 +16,24 @@
               </ul>
             </li>
             <!-- Weitere Menüpunkte -->
-          </ul>
-        </div>
-      </div>
-    </div>
+        </SidebarLayout>
   </template>
 
-  <script>
 
-  export default {
-    props: ['sidebarOpen', 'activeMenu', 'toggleMenu']
-  }
-  </script>
+<script setup>
+import { Head, Link, router } from '@inertiajs/vue3';
+import SidebarLayout from '../Sidebar/SidebarLayout.vue';
+
+</script>
+<script>
+
+export default {
+props: {
+sidebarOpen: Boolean, // Offen oder geschlossen
+activeMenu: String, // Welches Menü ist aktiv
+toggleMenu: Function, // Funktion, um Menüs umzuschalten
+
+},
+
+}
+</script>

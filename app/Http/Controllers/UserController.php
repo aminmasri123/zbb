@@ -3,8 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Facades\Request;
+use Illuminate\Support\Facades\URL;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
-use Illuminate\Http\Request;
+use Inertia\Response;
 
 class UserController extends Controller
 {
@@ -13,10 +20,21 @@ class UserController extends Controller
      *
      * @return \Illuminate\Http\Response
      */
-    public function index()
+    public function index(): Response
     {
-        $users = User::all();
-        return Inertia::render('User/index', compact('users'));
+        return Inertia::render('User/Index', [
+            'users' => User::query()
+                ->when(Request::input('search'), function ($query, $search) {
+                    $query->where('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%");  // Platzhalter korrigiert
+                })
+                ->get()  // Paginierung anwenden
+                ->map(fn ($user) => [  // `map` auf die Collection anwenden
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                ]),
+        ]);
     }
 
     /**

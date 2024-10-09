@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AbteilungController;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Foundation\Application;
@@ -61,6 +62,9 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions'])->group(function
     Route::get('/benutzer', [UserController::class, 'index'])->name('user.index');
     Route::get('/benutzer-anlegen', function () { return Inertia::render('User/CreateUser'); })->name('user.create');
 
+
+    //Abteilung
+    Route::get('/abteilung', [AbteilungController::class, 'index'])->name('abteilung.index');
 
 
 
