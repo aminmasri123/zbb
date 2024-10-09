@@ -31,7 +31,8 @@ class UserController extends Controller
                 ->get()  // Paginierung anwenden
                 ->map(fn ($user) => [  // `map` auf die Collection anwenden
                     'id' => $user->id,
-                    'name' => $user->name,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
                     'email' => $user->email,
                 ]),
         ]);
