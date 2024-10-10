@@ -51,6 +51,8 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions'])->group(function
     Route::get('/schule', [SchuleController::class, 'index'])->name('schule.index');
 
 
+
+
     Route::get('/benutzer', [UserController::class, 'index'])->name('user.index');
 
     Route::post('/toggleCheck', [UserController::class, 'check'])->name('user.check');

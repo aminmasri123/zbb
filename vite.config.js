@@ -6,6 +6,7 @@ export default defineConfig({
     server: {
         host: '192.168.0.192', //zuhause
         //host: '192.168.245.56', //ZBB
+        //host: '192.168.101.13',
     },
 
     plugins: [

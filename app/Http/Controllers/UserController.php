@@ -20,21 +20,18 @@ class UserController extends Controller
      *
      * @return \Illuminate\Http\Response
      */
-    public function index(): Response
+    public function index()
     {
+
         return Inertia::render('User/Index', [
             'users' => User::query()
                 ->when(Request::input('search'), function ($query, $search) {
-                    $query->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%");  // Platzhalter korrigiert
+                    $query->where('first_name', 'like', "%{$search}%")
+                          ->orWhere('last_name', 'like', "%{$search}%")
+                          ->orWhere('email', 'like', "%{$search}%");
                 })
-                ->get()  // Paginierung anwenden
-                ->map(fn ($user) => [  // `map` auf die Collection anwenden
-                    'id' => $user->id,
-                    'first_name' => $user->first_name,
-                    'last_name' => $user->last_name,
-                    'email' => $user->email,
-                ]),
+                ->with('roles')  // Lade die Beziehung zur Rolle
+                ->paginate(20),  // Paginierung anwenden
         ]);
     }
 
@@ -43,31 +40,28 @@ class UserController extends Controller
      *
      * @return \Illuminate\Http\Response
      */
-    public function check(Request $request)
+    public function check(Request $request) // Typ-Hinweis für die Request-Klasse
     {
-         // Erhalte die User-ID aus der Anfrage
-    $id = $request->input('userId');
+        // Erhalte die User-ID aus der Anfrage
+        $id = Request::input('userId'); // Hier wird die richtige Methode auf der Request-Instanz verwendet
 
-    // Finde den Benutzer mit der gegebenen ID
-    $user = User::findOrFail($id);
+        // Finde den Benutzer mit der gegebenen ID
+        $user = User::find($id);
+        if (!$user) {
+            return response()->json(['error' => 'User not found'], 404);
+        }
 
-    // Toggle-Logik für den Check-Status
-    if ($user->check == 1) {
-        $user->check = 0;
-    } else {
-        $user->check = 1;
+        // Toggle-Logik für den Check-Status
+        $user->eee = $user->eee == 1 ? 0 : 1;
+
+        // Speichern der Änderungen
+        if ($user->save()) {
+            return response()->json(['success' => $user->eee]); // Rückgabe des neuen Wertes
+        }
+
+        // Fehlerhafte Antwort
+        return response()->json(['error' => 'User status could not be updated'], 500);
     }
-
-    // Speichern der Änderungen
-    if ($user->save()) {
-        return response()->json(['check' => $user->check]);
-    }
-
-    // Fehlerhafte Antwort
-    return response()->json(['error' => 'User status could not be updated'], 500);
-
-    }
-
     /**
      * Store a newly created resource in storage.
      *

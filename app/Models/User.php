@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Laravel\Sanctum\HasApiTokens;
+use Spatie\Permission\Models\Role;
 use Laravel\Jetstream\HasProfilePhoto;
 use Spatie\Permission\Traits\HasRoles;
 use Illuminate\Notifications\Notifiable;
@@ -27,11 +28,16 @@ class User extends Authenticatable
      * @var array<int, string>
      */
     protected $fillable = [
+        'id',
         'first_name',
         'last_name',
         'email',
         'password',
-        'check',
+        'eee',
+    ];
+
+    protected $date = [
+        'two_factor_confirmed_at',
     ];
 
     /**
@@ -63,6 +69,9 @@ class User extends Authenticatable
     protected $appends = [
         'profile_photo_url',
     ];
+
+
+
 
 
    /* public function scopeFilter($query, array $filters)
