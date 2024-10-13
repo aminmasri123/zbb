@@ -20,6 +20,7 @@
     },
     "dependencies": {
         "@popperjs/core": "^2.11.8",
+        "sweetalert2": "^11.14.3",
         "vue-i18n": "^9.14.1",
         "vue-router": "^4.4.5"
     }

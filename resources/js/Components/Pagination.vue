@@ -32,6 +32,4 @@ const goToPage = (url) => {
         router.get(url);
     }
 };
-
-
 </script>

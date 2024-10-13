@@ -78,11 +78,11 @@ const clearPhotoFileInput = () => {
 <template>
     <FormSection @submitted="updateProfileInformation">
         <template #title>
-            Profile Information
+            {{$t('profilinformationen')}}
         </template>
 
         <template #description>
-            Update your account's profile information and email address.
+            {{$t('aktualisieren_sie_die_profilinformationen_und_die_a-Mail-adresse_ihres_Kontos.')}}
         </template>
 
         <template #form>

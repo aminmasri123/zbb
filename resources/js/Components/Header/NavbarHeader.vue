@@ -12,58 +12,97 @@
                     </div>
 
                     <!-- Navigation Links -->
-                    <div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex">
-                        <NavLink :href="route('dashboard')" :active="route().current('dashboard')">
-                            Dashboard
-                        </NavLink>
-                    </div>
                 </div>
-
-                <div class="hidden sm:flex sm:items-center sm:ml-6">
+                <div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex text-center">
+                    <NavLink :href="route('dashboard')" :active="route().current('dashboard')">
+                        {{ $t('dashboard') }}
+                    </NavLink>
+                    <NavLink :href="route('organisation.index')" :active="route().current('organisation.index')">
+                        {{ $t('organisation') }}
+                    </NavLink>
+                </div>
+                <div class="flex items-center sm:ml-6">
                     <!-- Teams Dropdown -->
-                    <Dropdown v-if="$page.props.jetstream.hasTeamFeatures" align="right" width="60">
+                    <Dropdown v-if="$page.props.auth.user.projekte" align="right" width="60">
                         <template #trigger>
                             <span class="inline-flex rounded-md">
                                 <button type="button" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
-                                    {{ $page.props.auth.user.current_team.name }}
+                                    <i class="fa fa-briefcase" aria-hidden="true"></i>
 
-                                    <svg class="ml-2 -mr-0.5 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" />
-                                    </svg>
                                 </button>
                             </span>
                         </template>
-                        <!-- Dropdown content -->
+                        <template #content>
+                            <div class="w-40 ">
+                                <!-- Team Management -->
+                                <template v-if="$page.props.auth.user.projekte">
+                                    <div class="block px-4 py-2 text-xs text-gray-400">
+                                        {{$t('team')}}
+                                    </div>
 
+                                    <!-- Team Settings -->
+                                    <DropdownLink :href="route('dashboard', $page.props.auth.user.current_team)">
+                                        {{$t('teameinstellung')}}
+                                    </DropdownLink>
 
+                                    <DropdownLink v-if="$page.props.jetstream.canCreateTeams" :href="route('dashboard')">
+                                        {{$t('Neues_Team_beitreten')}}
+                                    </DropdownLink>
+
+                                    <div class="border-t border-gray-200" />
+
+                                    <!-- Team Switcher -->
+                                    <div class="block px-4 py-2 text-xs text-gray-400">
+                                        {{$t('projekt_wechseln')}}
+                                    </div>
+
+                                    <template v-for="team in $page.props.auth.user.projekte" :key="team.id">
+                                        <form @submit.prevent="switchToTeam(team)">
+                                            <DropdownLink as="button">
+                                                <div class="flex items-center">
+                                                    <svg v-if="team.id == $page.props.auth.user.current_team_id" class="mr-2 h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                    </svg>
+
+                                                    <div>{{ team.name }}</div>
+                                                </div>
+                                            </DropdownLink>
+                                        </form>
+                                    </template>
+                                </template>
+                            </div>
+                        </template>
                     </Dropdown>
 
                     <!-- Sprache Dropdown -->
                     <Dropdown align="right" width="48">
-                        <template #trigger>
+                        <template #trigger >
                             <button class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
                                 <i class="las la-globe text-lg"></i>
-                                <span class="ml-2">Sprache wählen</span>
-                                <svg class="ml-2 -mr-0.5 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                                </svg>
                             </button>
                         </template>
                         <template #content>
-                            <div class="block px-4 py-2 text-xs text-gray-400">Sprachen</div>
-                            <DropdownLink :href="'#'" @click.prevent="setLocale('de')" class="flex items-center space-x-2">
+                            <div class="block px-4 py-2 text-xs text-gray-400">{{$t('sprachen')}}</div>
+                            <DropdownLink
+                                :href="'#'"
+                                @click.prevent="changeLocale('de')"
+                                :class="{ 'bg-gray-200 decoration-black': currentLang  === 'de' }"
+                            >
                                 <i class="las la-flag text-lg"></i> <!-- Deutsch Flagge Icon -->
-                                <span>Deutsch</span>
+                                <span>{{$t('deutsch')}}</span>
                             </DropdownLink>
-                            <DropdownLink :href="'#'" @click.prevent="setLocale('en')" class="flex items-center space-x-2">
+                            <DropdownLink :href="'#'" @click.prevent="changeLocale('en')"
+                            :class="{ 'bg-gray-200 decoration-black': currentLang  === 'en' }">
                                 <i class="las la-flag text-lg"></i> <!-- Englisch Flagge Icon -->
-                                <span>English</span>
+                                <span>{{$t('english')}}</span>
                             </DropdownLink>
-                            <DropdownLink :href="'#'" @click.prevent="setLocale('fr')" class="flex items-center space-x-2">
+                            <DropdownLink :href="'#'" @click.prevent="changeLocale('fr')"
+                            :class="{ 'bg-gray-200 decoration-black': currentLang  === 'fr' }"  >
                                 <i class="las la-flag text-lg"></i> <!-- Französisch Flagge Icon -->
-                                <span>Français</span>
+                                <span>{{$t('französich')}}</span>
                             </DropdownLink>
                             <div class="border-t border-gray-200"></div>
+                            <span class=" flex text-xs text-red-500 text-center p-2 bg-yellow-300">"Die Übersetzung ist in Bearbeitung."</span>
                         </template>
                         <!-- Dropdown content -->
                     </Dropdown>
@@ -77,38 +116,37 @@
 
                             <span v-else class="inline-flex rounded-md">
                                 <button type="button" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
-                                    {{ $page.props.auth.user.first_name }} {{ $page.props.auth.user.last_name }}
-
-
-                                    <svg class="ml-2 -mr-0.5 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                                    </svg>
+                                    <i class="fa fa-user" aria-hidden="true"></i>
                                 </button>
                             </span>
                         </template>
                         <template #content>
-                                        <!-- Account Management -->
-                                        <div class="block px-4 py-2 text-xs text-gray-400">
-                                            Manage Account
-                                        </div>
+                            <!-- Account Management -->
+                            <div class="block px-4 pt-2 text-xs text-gray-400">
+                                Manage Account
+                            </div>
+                            <div class="block px-4 pb-2 text-xs">
+                                {{ $page.props.auth.user.first_name }} {{ $page.props.auth.user.last_name }}
+                            </div>
 
-                                        <DropdownLink :href="route('profile.show')">
-                                            Profile
-                                        </DropdownLink>
+                            <DropdownLink :href="route('profile.show')">
+                                Profile
+                            </DropdownLink>
 
-                                        <DropdownLink v-if="$page.props.jetstream.hasApiFeatures" :href="route('api-tokens.index')">
-                                            API Tokens
-                                        </DropdownLink>
+                            <DropdownLink v-if="$page.props.jetstream.hasApiFeatures" :href="route('api-tokens.index')">
+                                API Tokens
+                            </DropdownLink>
 
-                                        <div class="border-t border-gray-200" />
+                            <div class="border-t border-gray-200" />
 
-                                        <!-- Authentication -->
-                                        <form @submit.prevent="logout">
-                                            <DropdownLink as="button">
-                                                Log Out
-                                            </DropdownLink>
-                                        </form>
-                                    </template>
+                            <!-- Authentication -->
+                            <form @submit.prevent="logout">
+                                <DropdownLink as="button">
+                                    <p>{{ $t('abmelden') }}</p>
+
+                                </DropdownLink>
+                            </form>
+                        </template>
                         <!-- Dropdown content -->
                     </Dropdown>
                 </div>
@@ -146,7 +184,10 @@
         <div :class="{'block': showingNavigationDropdown, 'hidden': !showingNavigationDropdown}" class="sm:hidden">
             <div class="pt-2 pb-3 space-y-1">
                 <ResponsiveNavLink :href="route('dashboard')" :active="route().current('dashboard')">
-                    Dashboard
+                    {{$t('dashboard')}}
+                </ResponsiveNavLink>
+                <ResponsiveNavLink :href="route('organisation.index')" :active="route().current('organisation.index')">
+                    {{$t('organisation')}}
                 </ResponsiveNavLink>
             </div>
 
@@ -158,7 +199,7 @@
                     </div>
 
                     <div>
-                        <div class="font-medium text-base text-gray-800">{{ $page.props.auth.user.name }}</div>
+                        <div class="font-medium text-sm text-gray-500">{{ $page.props.auth.user.first_name }} {{ $page.props.auth.user.last_name }}</div>
                         <div class="font-medium text-sm text-gray-500">{{ $page.props.auth.user.email }}</div>
                     </div>
                 </div>
@@ -170,7 +211,7 @@
                     <!-- Logout -->
                     <form method="POST" :action="route('logout')" @submit.prevent="logout">
                         <ResponsiveNavLink as="button">
-                            Logout
+                            {{$t('abmelden')}}
                         </ResponsiveNavLink>
                     </form>
                 </div>
@@ -180,21 +221,41 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
-import { Link, router } from '@inertiajs/vue3';
-import ApplicationMark from '@/Components/ApplicationMark.vue';
-import NavLink from '@/Components/NavLink.vue';
-import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
-import Dropdown from '@/Components/Dropdown.vue';
-import DropdownLink from '@/Components/DropdownLink.vue';
+    import { ref } from 'vue';
+    import { Link, router } from '@inertiajs/vue3';
+    import ApplicationMark from '@/Components/ApplicationMark.vue';
+    import NavLink from '@/Components/NavLink.vue';
+    import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
+    import Dropdown from '@/Components/Dropdown.vue';
+    import DropdownLink from '@/Components/DropdownLink.vue';
 
-const showingNavigationDropdown = ref(false);
+    import { useI18n } from 'vue-i18n';
 
-const toggleNavigationDropdown = () => {
-    showingNavigationDropdown.value = !showingNavigationDropdown.value;
-};
+    const { t, locale } = useI18n();
 
-const logout = () => {
-    router.post(route('logout'));
-};
+    const changeLocale = (lang) => {
+        locale.value = lang; // Sprache wechseln
+        document.documentElement.lang = lang; // HTML lang-Attribut setzen
+    };
+    const showingNavigationDropdown = ref(false);
+    const toggleNavigationDropdown = () => {
+        showingNavigationDropdown.value = !showingNavigationDropdown.value;
+    };
+
+    const logout = () => {
+        router.post(route('logout'));
+    };
+</script>
+<script>
+    export default {
+        data() {
+            return {
+            currentLang: 'de', // Fallback, falls keine Sprache gesetzt ist
+            };
+        },
+        mounted() {
+            // Stelle sicher, dass `document` verfügbar ist, wenn der DOM vollständig geladen ist
+            this.currentLang = document.documentElement.lang || 'de'; // Default-Wert 'en', falls lang nicht gesetzt ist
+        }
+    };
 </script>

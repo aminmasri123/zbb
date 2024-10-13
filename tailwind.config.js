@@ -16,6 +16,9 @@ module.exports = {
                 //'Helvetica'
                 sans: ['Figtree', ...defaultTheme.fontFamily.sans],
             },
+            colors:{
+                zbb: '#ff8500',
+            }
         },
     },
 

@@ -42,11 +42,13 @@ const submit = () => {
 
     <AuthenticationCard>
         <template #logo>
-            <AuthenticationCardLogo />
         </template>
 
         <div class="mb-4 text-sm text-gray-600">
+            <AuthenticationCardLogo />
+
             <template v-if="! recovery">
+
                 Please confirm access to your account by entering the authentication code provided by your authenticator application.
             </template>
 
@@ -56,6 +58,7 @@ const submit = () => {
         </div>
 
         <form @submit.prevent="submit">
+
             <div v-if="! recovery">
                 <InputLabel for="code" value="Code" />
                 <TextInput

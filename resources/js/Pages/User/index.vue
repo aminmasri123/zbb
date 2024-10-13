@@ -94,7 +94,11 @@ const goToPage = (url) => {
 </script>
 <template>
     <app-layout>
-        <template #header>Alle Users</template>
+        <template #header>
+            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+                {{$t('alle_benutzer')}}
+            </h2>
+        </template>
          <!-- Search Input -->
          <div class="flex justify-around items-center mb-3">
             <label for="simple-search" class="sr-only">Search</label>
@@ -144,7 +148,7 @@ const goToPage = (url) => {
         </div>
 
         <!-- User Table -->
-        <div class="relative overflow-x-auto mx-20">
+        <div class="relative overflow-x-auto">
             <table class="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400 shadow-sm">
                 <thead class="text-xs text-gray-700 uppercase bg-gray-300 dark:bg-gray-700 dark:text-gray-400">
                     <tr>
@@ -193,10 +197,7 @@ const goToPage = (url) => {
 
         </div>
 
-
-
-
-        <div id="modal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 hidden">
+        <div id="modal" class="fixed inset-0  items-center justify-center bg-black bg-opacity-50 z-50 hidden">
             <div class="bg-white p-8 rounded-lg shadow-lg max-w-lg w-full">
                 <h2 class="text-xl font-semibold mb-4">Modal Title</h2>
                 <p class="mb-6">This is the content of the modal.</p>

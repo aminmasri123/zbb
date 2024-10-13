@@ -40,33 +40,32 @@ const closeModal = () => {
 <template>
     <ActionSection>
         <template #title>
-            Delete Account
+            {{$t('konto_löschen')}}
         </template>
 
         <template #description>
-            Permanently delete your account.
+            {{$t('dauerhaft_konto_löschen')}}
         </template>
 
         <template #content>
             <div class="max-w-xl text-sm text-gray-600">
-                Once your account is deleted, all of its resources and data will be permanently deleted. Before deleting your account, please download any data or information that you wish to retain.
+                {{ $t('konto_löschen_nachricht') }}
             </div>
 
             <div class="mt-5">
                 <DangerButton @click="confirmUserDeletion">
-                    Delete Account
+                    {{$t('konto_löschen')}}
                 </DangerButton>
             </div>
 
             <!-- Delete Account Confirmation Modal -->
             <DialogModal :show="confirmingUserDeletion" @close="closeModal">
                 <template #title>
-                    Delete Account
+                    {{$t('konto_löschen')}}
                 </template>
 
                 <template #content>
-                    Are you sure you want to delete your account? Once your account is deleted, all of its resources and data will be permanently deleted. Please enter your password to confirm you would like to permanently delete your account.
-
+                    {{ $t('löschung_der_konto_nachricht') }}
                     <div class="mt-4">
                         <TextInput
                             ref="passwordInput"
@@ -84,7 +83,7 @@ const closeModal = () => {
 
                 <template #footer>
                     <SecondaryButton @click="closeModal">
-                        Cancel
+                        {{$t('abbrechen')}}
                     </SecondaryButton>
 
                     <DangerButton
@@ -93,7 +92,7 @@ const closeModal = () => {
                         :disabled="form.processing"
                         @click="deleteUser"
                     >
-                        Delete Account
+                    {{$t('konto_löschen')}}
                     </DangerButton>
                 </template>
             </DialogModal>

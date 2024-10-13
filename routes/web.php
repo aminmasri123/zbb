@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AbteilungController;
+use App\Http\Controllers\BerechtigungController;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Foundation\Application;
@@ -40,11 +41,15 @@ Route::post('/set-locale', function () {
 
 
 // Geschützte Routen
-Route::middleware(['auth', 'verified', 'injectUserPermissions'])->group(function() {
+Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProjekte'])->group(function() {
 
     Route::get('/dashboard', function () {
         return Inertia::render('Dashboard');
     })->name('dashboard');
+
+    Route::get('/organisation', function () {
+        return Inertia::render('Dashboards/Organisation');
+    })->name('organisation.index');
 
 
 
@@ -57,12 +62,14 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions'])->group(function
 
     Route::post('/toggleCheck', [UserController::class, 'check'])->name('user.check');
 
-
+    //Einstellung -- Rolle
+    Route::get('/berechtigung/{id?}', [BerechtigungController::class, 'index'])->name('berechtigung.index');
+    Route::post('/berechtigungZuweisen', [BerechtigungController::class, 'berechtigungZuweisen'])->name('berechtigung.zuweisen');
 
 
     //Benutzer
     Route::get('/benutzer', [UserController::class, 'index'])->name('user.index');
-    Route::get('/benutzer-anlegen', function () { return Inertia::render('User/CreateUser'); })->name('user.create');
+    Route::get('/benutzer/anlegen', function () { return Inertia::render('User/CreateUser'); })->name('user.create');
 
 
     //Abteilung

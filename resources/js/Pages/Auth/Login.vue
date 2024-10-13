@@ -33,15 +33,15 @@ const submit = () => {
     <Head title="Log in" />
 
     <AuthenticationCard>
-        <template #logo>
-            <AuthenticationCardLogo />
-        </template>
+
 
         <div v-if="status" class="mb-4 font-medium text-sm text-green-600">
             {{ status }}
         </div>
 
         <form @submit.prevent="submit">
+            <AuthenticationCardLogo />
+
             <div>
                 <InputLabel for="email" value="Email" />
                 <TextInput

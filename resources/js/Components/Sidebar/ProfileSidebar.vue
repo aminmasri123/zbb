@@ -29,9 +29,10 @@ import SidebarLayout from '../Sidebar/SidebarLayout.vue';
 
 export default {
 props: {
-sidebarOpen: Boolean, // Offen oder geschlossen
 activeMenu: String, // Welches Menü ist aktiv
 toggleMenu: Function, // Funktion, um Menüs umzuschalten
+roles: Array, // Rollen vom Backend
+permissions: Array, // Berechtigungen vom Backend
 
 },
 

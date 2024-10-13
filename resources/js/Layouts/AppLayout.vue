@@ -1,32 +1,34 @@
 <script setup>
-import { ref } from 'vue';
-import { Head, Link, router } from '@inertiajs/vue3';
-import ApplicationMark from '@/Components/ApplicationMark.vue';
+import { ref, computed } from 'vue';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import Banner from '@/Components/Banner.vue';
-import Dropdown from '@/Components/Dropdown.vue';
-import DropdownLink from '@/Components/DropdownLink.vue';
-import NavLink from '@/Components/NavLink.vue';
-import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
-import DashboardSidebar from '@/Components/Sidebar/DashboardSidebar.vue'; // Standardmäßig importierte Sidebar
 import NavigationMenu from '@/Components/Header/NavbarHeader.vue';
 
+// Sidebar-Komponenten importieren
+import DashboardSidebar from '@/Components/Sidebar/DashboardSidebar.vue';
+import ProfileSidebar from '@/Components/Sidebar/ProfileSidebar.vue';
+import OrganisationSidebar from '@/Components/Sidebar/OrganisationSidebar.vue';
 defineProps({
     title: String,
 });
 
-const showingNavigationDropdown = ref(false);
+// Aktuelle Seite/Route
+const page = usePage();
 
-const switchToTeam = (team) => {
-    router.put(route('current-team.update'), {
-        team_id: team.id,
-    }, {
-        preserveState: false,
-    });
-};
+// Dynamisch die Sidebar auswählen basierend auf der Route oder Seite
+const currentSidebar = computed(() => {
+  const url = page.url; // Aktuelle URL abrufen
+  if (url.startsWith('/dashboard')) {
+    return DashboardSidebar;
+  } else if (url.startsWith('/user')) {
+    return ProfileSidebar;
+  } else if (url.startsWith('/organisation')) {
+    return OrganisationSidebar;
+  }
+  return DashboardSidebar; // Standardmäßig DashboardSidebar, wenn kein anderer Pfad passt
+});
+const sidebarOpen = ref(false); // Für die mobile Ansicht Sidebar umschalten
 
-const logout = () => {
-    router.post(route('logout'));
-};
 
 
 </script>
@@ -113,33 +115,30 @@ export default {
         <Banner />
         <div id="app" class="main-wrapper ">
             <div class="min-h-screen bg-gray-100">
-                    <NavigationMenu/>
-
-                    <!-- Page Heading -->
-                    <header v-if="$slots.header" class="bg-white shadow">
-                        <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-                            <slot name="header" />
-                        </div>
-                    </header>
-
-
-                <!-- Page Sidbar -->
+                <NavigationMenu/>
+                <!-- Page Sidebar -->
                 <div class="flex">
                     <!-- Hamburger Button (nur auf Mobilgeräten sichtbar) -->
-                    <button @click="sidebarOpen = !sidebarOpen" class="md:hidden text-black ml-10 p-4 z-50 absolute top-1 left-12">
-                        <i class="la la-bars text-2xl"></i> <!-- Icon-Größe angepasst -->
+                    <button
+                    @click="sidebarOpen = !sidebarOpen"
+                    class="md:hidden text-black ml-10 p-4 z-50 absolute top-1 left-12"
+                    >
+                    <i class="la la-bars text-2xl"></i> <!-- Icon-Größe angepasst -->
                     </button>
+
                     <!-- Sidebar -->
-                    <slot name="sidebar">
-                        <!-- Default Sidebar wenn kein Slot verwendet wird -->
-                        <dashboard-sidebar :sidebarOpen="sidebarOpen" :activeMenu="activeMenu" :toggleMenu="toggleMenu"></dashboard-sidebar>
-                    </slot>
+                    <component :is="currentSidebar" :sidebarOpen="sidebarOpen" :activeMenu="activeMenu" :toggleMenu="toggleMenu"/>
 
-
-
-
-                    <main class="w-full md:w-5/6 bg-gray-100 h-full p-2">
-                        <slot />
+                    <main class="w-full md:w-5/6 bg-gray-100 h-full ">
+                        <!-- Page Heading -->
+                        <header v-if="$slots.header" class="bg-white shadow mb-5">
+                            <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+                                <slot name="header" />
+                            </div>
+                        </header>
+                        <div class="mx-7">
+                            <slot  />
+                        </div>
                     </main>
                 </div>
 
