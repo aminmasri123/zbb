@@ -18,7 +18,8 @@ module.exports = {
             },
             colors:{
                 zbb: '#ff8500',
-            }
+            },
+
         },
     },
 

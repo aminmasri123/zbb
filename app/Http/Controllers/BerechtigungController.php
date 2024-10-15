@@ -51,6 +51,10 @@ class BerechtigungController extends Controller
         ]);
     }
 
+
+
+
+
     public function berechtigungZuweisen(Request $request)
         {
             $roleId = Request::input('roleId');
@@ -72,41 +76,6 @@ class BerechtigungController extends Controller
             }
         }
 
-
-
-
-
-    public function rolePermissionRole($id)
-    {
-        // Alle Rollen holen
-        //$alle_rollen = Role::all();
-
-        // Hole die aktuelle Rolle, für die Berechtigungen gesetzt werden sollen
-        //$adminRole = Role::findOrFail($id);
-
-        // Hole alle Berechtigungen
-        //$alle_permission = Permission::all();
-
-        // Berechtigungen, die dieser Rolle zugewiesen sind
-        //$alle_permission_zugewiesen = $adminRole->permissions;
-
-        // Aktuelle Benutzerrolle (benötigt, um zu filtern)
-        $current_user = Auth::user();
-
-        $role_id = $id;
-
-        $userRole = Role::where('name', $current_user->getRoleNames())->first(); // Hier wird die ID der aktuellen Rolle zugewiesen
-        $userRoleId = $userRole->id;
-
-        // Kategorien, auf die der aktuelle Benutzer Berechtigungen hat (Verknüpfung durch rolle_kategories)
-        $kategorien = Kategorie::whereHas('roles', function($query) use ($userRoleId) {
-            $query->where('role_id', $userRoleId);
-        })->get();
-
-
-        // Gibt die Ansicht zurück mit allen benötigten Daten
-        return view('backend.main.seite.einstellung.roles-permissions', compact('alle_rollen', 'alle_permission', 'alle_permission_zugewiesen','userRoleId', 'role_id', 'kategorien'));
-    }
 
 
 
@@ -137,23 +106,6 @@ class BerechtigungController extends Controller
         }
     }
 
-    public function updateCheckbox(Request $request)
-    {
-        $permissionId = Permission::findOrFail($request->permission_id);
-        $roleId = Role::findOrFail($request->role_id);
-
-        if ($request->action === 'addPermission') {
-            // Die Berechtigung zur Rolle hinzufügen
-            $roleId->givePermissionTo($permissionId);
-            return response()->json(['success' => true, 'message' => 'Berechtigung zur Rolle hinzugefügt.']);
-        } elseif ($request->action === 'removePermission') {
-            // Die Berechtigung von der Rolle entfernen
-            $roleId->revokePermissionTo($permissionId);
-            return response()->json(['success' => true, 'message' => 'Berechtigung von der Rolle entfernt.']);
-        } else {
-            return response()->json(['success' => false, 'message' => 'Ungültige Aktion.']);
-        }
-    }
 
 
 

@@ -45,7 +45,7 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
 
     Route::get('/dashboard', function () {
         return Inertia::render('Dashboard');
-    })->name('dashboard');
+    })->name('dashboard')->can('dashboard.index');
 
     Route::get('/organisation', function () {
         return Inertia::render('Dashboards/Organisation');
@@ -70,7 +70,7 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
     //Benutzer
     Route::get('/benutzer', [UserController::class, 'index'])->name('user.index');
     Route::get('/benutzer/anlegen', function () { return Inertia::render('User/CreateUser'); })->name('user.create');
-
+    Route::post('/benutzer/anlegen', [UserController::class, 'store'])->name('user.store');
 
     //Abteilung
     Route::get('/abteilung', [AbteilungController::class, 'index'])->name('abteilung.index');

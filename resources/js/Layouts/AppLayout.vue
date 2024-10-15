@@ -8,9 +8,6 @@ import NavigationMenu from '@/Components/Header/NavbarHeader.vue';
 import DashboardSidebar from '@/Components/Sidebar/DashboardSidebar.vue';
 import ProfileSidebar from '@/Components/Sidebar/ProfileSidebar.vue';
 import OrganisationSidebar from '@/Components/Sidebar/OrganisationSidebar.vue';
-defineProps({
-    title: String,
-});
 
 // Aktuelle Seite/Route
 const page = usePage();
@@ -28,16 +25,12 @@ const currentSidebar = computed(() => {
   return DashboardSidebar; // Standardmäßig DashboardSidebar, wenn kein anderer Pfad passt
 });
 const sidebarOpen = ref(false); // Für die mobile Ansicht Sidebar umschalten
-
+const displayHideTextSidebar = ref(false);
 
 
 </script>
 <script>
 export default {
-    components: {
-
-  },
-
   data() {
     return {
       activeMenu: null, // Tracks the currently open menu
@@ -45,15 +38,19 @@ export default {
       sidebarOpen: false,
       permissions: [],
       roles: [],
+      sidebarTextHidden:[],
     };
   },
   props: {
         href: {
             type: String,
-            required: true, // Hier wird ein Fehler auftreten, wenn href nicht übergeben wird.
+            //required: true, // Hier wird ein Fehler auftreten, wenn href nicht übergeben wird.
             default: '#', // Optional: Standardwert, wenn href nicht angegeben ist
 
         },
+        title:{
+            type: String,
+        }
     },
   methods: {
     toggleMenu(menu) {
@@ -65,20 +62,7 @@ export default {
         this.activeMenu = menu;
       }
     },
-    toggleSidebar() {
-        this.sidebarOpen = !this.sidebarOpen;
-        // Schließe Dropdown wenn Sidebar geöffnet wird
-        if (this.sidebarOpen) {
-            this.showingNavigationDropdown = false;
-        }
-    },
-    toggleNavigationDropdown() {
-        this.showingNavigationDropdown = !this.showingNavigationDropdown;
-        // Schließe Sidebar, wenn Navigation Dropdown geöffnet wird
-        if (this.showingNavigationDropdown) {
-            this.sidebarOpen = false;
-        }
-    },
+
     setLocale(locale) {
             // Ändere die Sprache in Vue i18n
             this.$i18n.locale = locale;
@@ -115,28 +99,26 @@ export default {
         <Banner />
         <div id="app" class="main-wrapper ">
             <div class="min-h-screen bg-gray-100">
-                <NavigationMenu/>
                 <!-- Page Sidebar -->
-                <div class="flex">
-                    <!-- Hamburger Button (nur auf Mobilgeräten sichtbar) -->
-                    <button
-                    @click="sidebarOpen = !sidebarOpen"
-                    class="md:hidden text-black ml-10 p-4 z-50 absolute top-1 left-12"
-                    >
-                    <i class="la la-bars text-2xl"></i> <!-- Icon-Größe angepasst -->
-                    </button>
-
                     <!-- Sidebar -->
-                    <component :is="currentSidebar" :sidebarOpen="sidebarOpen" :activeMenu="activeMenu" :toggleMenu="toggleMenu"/>
+                    <NavigationMenu :sidebar-open="sidebarOpen" :display-hide-text-sidebar="displayHideTextSidebar"
+                            @toggle-sidebar="sidebarOpen = !sidebarOpen"
+                            @toggle-sidebar-text="displayHideTextSidebar = !displayHideTextSidebar"
+                        />
 
-                    <main class="w-full md:w-5/6 bg-gray-100 h-full ">
+                <div class="flex">
+                    <component class=" min-h-screen" :is="currentSidebar" :displayHideTextSidebar="displayHideTextSidebar" :sidebarOpen="sidebarOpen" :activeMenu="activeMenu" :toggleMenu="toggleMenu"/>
+
+                    <main class="w-full bg-gray-100 h-full "
+                        :class="{'hidden sm:block':sidebarOpen}">
+
                         <!-- Page Heading -->
-                        <header v-if="$slots.header" class="bg-white shadow mb-5">
-                            <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+                        <header v-if="$slots.header" class="bg-white fixed w-full shadow mb-5 z-20">
+                            <div class="text-center sm:text-left max-w-7xl mx-auto t  py-6">
                                 <slot name="header" />
                             </div>
                         </header>
-                        <div class="mx-7">
+                        <div class="px-7 mt-20">
                             <slot  />
                         </div>
                     </main>

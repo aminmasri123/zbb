@@ -4,7 +4,6 @@
     "schule": "Schule",
     "schuleübersicht": "Schuleübersicht",
     "abmelden": "Abmelden",
-    "team": "Team",
     "teameinstellung": "Teameinstellung",
     "projekt_wechseln": "Projekt wechseln",
     "sprachen": "Sprachen",
@@ -23,5 +22,31 @@
     "profilinformationen": "Profilinformationen",
     "aktualisieren_sie_die_profilinformationen_und_die_a-Mail-adresse_ihres_Kontos.": "Aktualisieren Sie die Profilinformationen und die E-Mail-Adresse Ihres Kontos.",
     "rollen-_und_berechtigungsmanagement":"Rollen- und Berechtigungsmanagement",
-    "rolle_anlegen": "Rolle anlegen"
+    "rolle_anlegen": "Rolle anlegen",
+    "kooperationspartner": "Kooperationspartner",
+    "partner": "Partner",
+
+    "benutzer_anlegen": "Benutzer anlegen",
+    "personal": "Personal",
+    "personalübersicht": "Personalübersicht",
+    "personal_anlegen": "Personal anlegen",
+    "team": "Team",
+    "teamübersicht": "Teamübersicht",
+    "team_anlegen": "Team anlegen",
+    "alle_rollen": "Alle Rollen",
+    "berechtigungsübersicht": "Berechtigungsübersicht",
+    "berechtigung": "Berechtigung",
+    "Next &raquo;": "»",
+    "&laquo; Previous": "«",
+    " &raquo;": "»",
+    "&laquo; ": "«",
+    "...": "...",
+    "projekte": "Projekte",
+    "alle": "Alle",
+    "id": "ID",
+    "vorname": "Vorname",
+    "nachname": "Nachname",
+    "email": "Email"
+
+
 }

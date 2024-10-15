@@ -2,10 +2,13 @@
 
 namespace Database\Seeders;
 
+use Carbon\Carbon;
 use App\Models\User;
-use Illuminate\Database\Seeder;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Faker\Factory as Faker;
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 
 class UserSeeder extends Seeder
 {
@@ -16,20 +19,455 @@ class UserSeeder extends Seeder
      */
     public function run()
     {
+
+        DB::table('users')->insert([
+            [
+                // id = 1
+                'first_name' => 'Amin',
+                'last_name' => 'Masri',
+                'email' => 'amin.masri@outlook.com',
+                'password' => Hash::make('password'),
+                'lang' => 'de',
+            ],
+            [   // id = 2
+                'first_name' => 'Anika',
+                'last_name' => 'Feller',
+                'email' => 'a.feller@zbb-saar.de',
+                'password' => Hash::make('zbb.bop.hw'),
+                'lang' => 'de',
+            ],
+            [ // id = 3
+                'first_name' => 'Salvatore',
+                'last_name' => 'Gucciardo',
+                'email' => 's.gucciardo@zbb-saar.de',
+                'password' => Hash::make('zbb.bop.ala'),
+                'lang' => 'de',
+            ],
+            [ // id = 4
+                'first_name' => 'Birgitta',
+                'last_name' => 'Lautenschlager',
+                'email' => 'b.lautenschlager@zbb-saar.de',
+                'password' => Hash::make('zbb.al'),
+                'lang' => 'de',
+            ],
+            [ // id = 5
+                'first_name' => 'Chantale',
+                'last_name' => 'Lismann',
+                'email' => 'c.lismann@zbb-saar.de',
+                'password' => Hash::make('zbb.al'),
+                'lang' => 'de',
+            ],
+            [ // id = 6
+                'first_name' => 'Stefanie',
+                'last_name' => 'Wagner',
+                'email' => 's.wagner@zbb-saar.de',
+                'password' => Hash::make('zbb.al'),
+                'lang' => 'de',
+            ],
+            [ // id = 7
+                'first_name' => 'Stefan',
+                'last_name' => 'Haßdenteufel',
+                'email' => 's.haßdenteufel@zbb-saar.de',
+                'password' => Hash::make('zbb.al'),
+                'lang' => 'de',
+            ],
+            [ // id = 8
+                'first_name' => 'Martin',
+                'last_name' => 'Löw',
+                'email' => 'm.loew@zbb-saar.de',
+                'password' => Hash::make('zbb.al'),
+                'lang' => 'de',
+            ],
+
+        ]);
+
         $faker = Faker::create();
-
         // Anzahl der Benutzer, die erstellt werden sollen
-        $numberOfUsers = 10000;
-
-        for ($i = 0; $i < $numberOfUsers; $i++) {
+        $numberOfUsers = 50;
+        for ($i = 0; $i < $numberOfUsers; $i++)
+        {
             User::create([
                 'first_name' => $faker->firstName,
                 'last_name' => $faker->lastName,
                 'email' => $faker->unique()->safeEmail,
                 'password' => bcrypt('password'), // Standardpasswort
-                'created_at' => now(),
-                'updated_at' => now(),
             ]);
+        }
+
+        DB::table('abteilungs')->insert([
+            [ // id = 1
+                'name' => 'Abt. Übergang Schule-Beruf',
+                'user_id' => '4',
+            ],
+            [ // id = 2
+                'name' => 'Abt. Aus- und Weiterbildung',
+                'user_id' => '6',
+            ],
+            [ // id = 3
+                'name' => 'Abt. Arbeit- und Lernen',
+                'user_id' => '7',
+            ],
+            [ // id = 4
+                'Intqra PRO' => 'Abt. Beratung, Integration & Vermittlung',
+                'user_id' => '8',
+            ],
+
+        ]);
+
+        DB::table('projekts')->insert([
+            [ // id = 1
+                'name' => 'Inteqra',
+                'kostenstelle' => '14462',
+                'abteilung_id' => '1',
+            ],
+            [ // id = 2
+                'name' => 'BvB Reha',
+                'kostenstelle' => '14411',
+                'abteilung_id' => '1',
+            ],
+            [ // id = 3
+                'name' => 'Aques',
+                'kostenstelle' => '14422',
+                'abteilung_id' => '1',
+            ],
+            [ // id = 4
+                'name' => 'Intqra PRO',
+                'kostenstelle' => '14463',
+                'abteilung_id' => '1',
+            ],
+
+            [ // id = 5
+                'name' => 'Bop',
+                'kostenstelle' => '14471',
+                'abteilung_id' => '1',
+            ],
+            [ // id = 6
+                'name' => 'Sofia',
+                'kostenstelle' => '14488',
+                'abteilung_id' => '1',
+            ],
+            [ // id = 7
+                'name' => 'BIG Saar',
+                'kostenstelle' => '14240',
+                'abteilung_id' => '1',
+            ],
+            [ // id = 8
+                'name' => 'Familien Info Saarbrücken',
+                'kostenstelle' => '15830',
+                'abteilung_id' => '1',
+            ],
+            [ // id = 9
+                'name' => 'Kakadu',
+                'kostenstelle' => '11700',
+                'abteilung_id' => '1',
+            ],
+        ]);
+
+
+        DB::table('berechtigungskategories')->insert([
+
+            [ // id = 1
+                'name' => 'Dashboard',
+                'beschreibung' => '',
+            ],
+            [ // id = 2
+                'name' => 'Kooperationspartner',
+                'beschreibung' => '',
+            ],
+            [ // id = 3
+                'name' => 'Gruppe',
+                'beschreibung' => '',
+            ],
+            [ // id = 4
+                'name' => 'Bereich',
+                'beschreibung' => '',
+            ],
+            [ // id = 5
+                'name' => 'Teilnehmer',
+                'beschreibung' => '',
+            ],
+            [ // id = 6
+                'name' => 'TLN-GRP',
+                'beschreibung' => '',
+            ],
+            [ // id = 7
+                'name' => 'Rolle',
+                'beschreibung' => '',
+            ],
+            [ // id = 8
+                'name' => 'Permission',
+                'beschreibung' => '',
+            ],
+            [ // id = 9
+                'name' => 'Benutzer',
+                'beschreibung' => '',
+            ],
+            [ // id = 10
+                'name' => 'Auswertung',
+                'beschreibung' => '',
+            ],
+            [ // id = 11
+                'name' => 'Anwesenheitsliste',
+                'beschreibung' => '',
+            ],
+            [ // id = 12
+                'name' => 'Einteilung',
+                'beschreibung' => '',
+            ],
+            [ // id = 13
+                'name' => 'Bereichauswahl',
+                'beschreibung' => '',
+            ],
+            [ // id = 14
+                'name' => 'Dateimanager',
+                'beschreibung' => '',
+            ],
+            [ // id = 15
+                'name' => 'Kalender',
+                'beschreibung' => '',
+            ],
+            [ // id = 16
+                'name' => 'Kontakte',
+                'beschreibung' => '',
+            ],
+            [ // id = 17
+                'name' => 'Taskmanager',
+                'beschreibung' => '',
+            ],
+            [ // id = 18
+                'name' => 'Abteilung',
+                'beschreibung' => '',
+            ],
+            [ // id = 19
+                'name' => 'Projekt',
+                'beschreibung' => '',
+            ],
+            [ // id = 20
+                'name' => 'Geraet',
+                'beschreibung' => '',
+            ],
+
+        ]);
+
+
+        DB::table('roles')->insert([
+            [ // id = 1
+                'name' => 'Administrator',
+                'guard_name' => 'web',
+            ],
+            [ // id = 2
+                'name' => 'Abteilungsleitung',
+                'guard_name' => 'web',
+            ],
+            [ // id = 3
+                'name' => 'Assistenz der Abt.-Leitung',
+                'guard_name' => 'web',
+            ],
+            [ // id = 4
+                'name' => 'Sozialpädagoge',
+                'guard_name' => 'web',
+            ],
+            [ // id = 5
+                'name' => 'Anleiter',
+                'guard_name' => 'web',
+            ],
+            [ // id = 6
+                'name' => 'Sekretariat',
+                'guard_name' => 'web',
+            ],
+            [ // id = 7
+                'name' => 'Developer',
+                'guard_name' => 'web',
+            ],
+
+        ]);
+
+        DB::table('permissions')->insert([
+            [ // id = 1
+                'name' => 'dashboard.index',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '1',
+            ],
+
+            [ // id = 2
+                'name' => 'benutzer.index',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '9',
+
+            ],
+            [ // id = 3
+                'name' => 'benutzer.store',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '9',
+
+            ],
+            [ // id = 4
+                'name' => 'benutzer.update',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '9',
+
+            ],
+            [ // id = 5
+                'name' => 'benutzer.destroy',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '9',
+
+            ],
+
+             [ // id = 2
+                'name' => 'kooperationspartner.index',
+                'beschreibung' => 'web',
+                'berechtigungskategorie_id' => '2',
+
+            ],
+            [ // id = 3
+                'name' => 'kooperationspartner.store',
+                'beschreibung' => 'web',
+                'berechtigungskategorie_id' => '2',
+
+            ],
+            [ // id = 4
+                'name' => 'kooperationspartner.update',
+                'beschreibung' => 'web',
+                'berechtigungskategorie_id' => '2',
+
+            ],
+            [ // id = 5
+                'name' => 'kooperationspartner.destroy',
+                'beschreibung' => 'web',
+                'berechtigungskategorie_id' => '2',
+
+            ],
+
+        ]);
+
+        DB::table('model_has_roles')->insert([
+            [
+                'role_id' => '1',
+                'model_type' => 'App\Models\User',
+                'model_id' => '1'
+            ],
+            [
+                'role_id' => '5',
+                'model_type' => 'App\Models\User',
+                'model_id' => '2'
+            ],
+            [
+                'role_id' => '3',
+                'model_type' => 'App\Models\User',
+                'model_id' => '3'
+            ],
+            [
+                'role_id' => '2',
+                'model_type' => 'App\Models\User',
+                'model_id' => '4'
+            ],
+            [
+                'role_id' => '2',
+                'model_type' => 'App\Models\User',
+                'model_id' => '5'
+            ],
+        ]);
+
+        DB::table('role_has_permissions')->insert([
+            [
+                'permission_id' => '1',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '2',
+                'role_id' => '1',
+            ],
+
+        ]);
+
+        DB::table('role_berechtigungskategories')->insert([
+            [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '1',
+            ],
+            [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '2',
+            ],
+            [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '3',
+            ],
+            [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '4',
+            ],
+            [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '5',
+            ],
+            [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '6',
+            ],
+            [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '7',
+            ],
+            [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '8',
+            ],
+            [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '9',
+            ],
+            [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '10',
+            ],
+            [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '11',
+            ],
+            [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '12',
+            ],
+            [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '13',
+            ],
+            [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '14',
+            ],
+            [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '15',
+            ],
+            [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '16',
+            ],
+            [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '17',
+            ],
+            [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '18',
+            ],
+            [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '19',
+            ],
+            [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '20',
+            ],
+
+
+        ]);
+
+
+
+
     }
-}
 }

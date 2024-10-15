@@ -1,7 +1,7 @@
 import './bootstrap';
 import '../css/app.css';
 import '../../public/css/line-awesome.min.css';
-import '../../public/css/font-awesome.min.css';
+//import '../../public/css/font-awesome.min.css';
 import '../../public/css/css.css';
 
 

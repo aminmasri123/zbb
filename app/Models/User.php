@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Projekt;
 use App\Models\Projekte;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Models\Role;
@@ -75,8 +76,10 @@ class User extends Authenticatable
 
     public function projekte()
     {
-        return $this->belongsToMany(Projekt::class);
+        return $this->belongsToMany(Projekt::class, 'user_has_projekts', 'user_id', 'projekt_id');
+
     }
+
 
 
 
