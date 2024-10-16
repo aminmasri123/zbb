@@ -14,6 +14,12 @@ import { ZiggyVue } from '../../vendor/tightenco/ziggy/dist/vue.m';
 import i18n from './i18n'; // Stelle sicher, dass i18n korrekt importiert wird
 
 
+import PrimeVue from "primevue/config";
+import InputText from 'primevue/inputtext';
+import Button from 'primevue/button';
+import Aura from '@primevue/themes/aura';
+
+
 const appName = window.document.getElementsByTagName('title')[0]?.innerText || 'Laravel';
 
 createInertiaApp({
@@ -25,6 +31,14 @@ createInertiaApp({
             .use(plugin)
             .use(i18n)
             .use(ZiggyVue, Ziggy)
+            .use(PrimeVue, {
+                theme: {
+                    preset: Aura
+                }
+            })
+            .component('InputText', InputText)
+            .component('Button', Button)
+
             .mount(el);
     },
     progress: {

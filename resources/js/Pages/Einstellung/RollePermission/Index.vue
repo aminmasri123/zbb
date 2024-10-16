@@ -1,6 +1,6 @@
 <script setup>
     import { ref, watch } from 'vue';
-    import { router, Link, useForm } from '@inertiajs/vue3';
+    import { router, Link, Head } from '@inertiajs/vue3';
     import AppLayout from '@/Layouts/AppLayout.vue';
     import axios from 'axios';
     import  Modal from '@/Components/ModalForm.vue';
@@ -129,6 +129,7 @@
     };
 </script>
 <template>
+    <Head title="Rolle-Permission" />
     <app-layout>
         <template #header>
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">
@@ -170,7 +171,7 @@
                             </div>
                             <div class="bg-white mt-5 border">
                                 <ul>
-                                    <li v-for="rolle in rollen" :key="rolle.id" class="py-2 pr-3 pl-8">
+                                    <li v-for="rolle in rollen" :key="rolle.id" class="py-2 pr-3 pl-8 hover:font-bold text-gray-600 hover:bg-gray-200">
                                         <Link class="flex justify-between"
                                             :href="route('berechtigung.index', { id: rolle.id })"
                                             :class="{'text-zbb font-bold': rolle.id == roleId}"

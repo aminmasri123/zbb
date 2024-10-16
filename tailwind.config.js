@@ -13,8 +13,8 @@ module.exports = {
     theme: {
         extend: {
             fontFamily: {
-                //'Helvetica'
-                sans: ['Figtree', ...defaultTheme.fontFamily.sans],
+                //'Helvetica, Figtree'
+                sans: ['Helvetica', ...defaultTheme.fontFamily.sans],
             },
             colors:{
                 zbb: '#ff8500',

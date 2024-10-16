@@ -21,8 +21,8 @@
             <li v-if="['benutzer.index', 'benutzer.store'].some(permission => $page.props.permissions.includes(permission))" class="submenu">
                 <a href="#" @click.prevent="toggleMenu('benutzer')" class="flex items-center text-white py-2 hover:bg-gray-700 transition duration-200">
                     <i class="la la-lg la-user mr-2"></i>
-                    <span v-if="!displayHideTextSidebar" >{{$t('team')}}</span>
-                    <span :class="{'rotate-180': activeMenu === 'benutzer', 'hidden': displayHideTextSidebar === true}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
+                    <span v-if="!displayHideTextSidebar">{{$t('team')}}</span>
+                    <span :class="{'rotate-180': activeMenu === 'benutzer', 'hidden': displayHideTextSidebar === true, 'text-zbb': $page.component.startsWith('User')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
                 </a>
                 <ul v-show="activeMenu === 'benutzer'" class="pl-6 mt-2 space-y-2">
                     <li v-if="$page.props.permissions.includes('benutzer.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('user.index')">{{$t('teamübersicht')}}</Link></li>
@@ -36,7 +36,7 @@
                 <a href="#" @click.prevent="toggleMenu('kooperationspartner')" class="flex items-center text-white py-2 hover:bg-gray-700 transition duration-200">
                     <i class="la la-lg la-building mr-2"></i>
                     <span v-if="!displayHideTextSidebar" >{{$t('partner')}}</span>
-                    <span v-if="!displayHideTextSidebar" :class="{'rotate-180': activeMenu === 'kooperationspartner'}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
+                    <span v-if="!displayHideTextSidebar" :class="{'rotate-180': activeMenu === 'kooperationspartner', 'text-zbb': $page.component.startsWith('Partner')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
                 </a>
                 <ul v-show="activeMenu === 'kooperationspartner'" class="pl-6 mt-2 space-y-2">
                     <li v-if="$page.props.permissions.includes('kooperationspartner.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dashboard')">{{$t('benutzerübersicht')}}</Link></li>
@@ -49,7 +49,7 @@
                     <i class="la la-lg la-unlock mr-2"></i>
 
                     <span v-if="!displayHideTextSidebar" >{{$t('berechtigung')}}</span>
-                    <span v-if="!displayHideTextSidebar" :class="{'rotate-180': activeMenu === 'berechtigung'}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
+                    <span v-if="!displayHideTextSidebar" :class="{'rotate-180': activeMenu === 'berechtigung', 'text-zbb': $page.component.startsWith('Einstellung')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
                 </a>
                 <ul v-show="activeMenu === 'berechtigung'" class="pl-6 mt-2 space-y-2">
                     <li v-if="$page.props.permissions.includes('berechtigung.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('berechtigung.index')">{{$t('berechtigungsübersicht')}}</Link></li>

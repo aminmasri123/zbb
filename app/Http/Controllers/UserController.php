@@ -6,6 +6,8 @@ use App\Models\User;
 use Inertia\Inertia;
 use Inertia\Response;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
+use Spatie\Permission\Models\Role;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Auth;
@@ -24,6 +26,7 @@ class UserController extends Controller
      */
     public function index()
     {
+        $rollen = Role::select('id', 'name')->get();
         $search = Request::input('search');
         $selectedProject = Request::input('project');
         $sort = Request::input('sort', 'id');  // Standardmäßig nach ID sortieren
@@ -39,14 +42,15 @@ class UserController extends Controller
         $adminRoles = ['Administrator', 'Geschäftsführer', 'Sekretariat'];
 
         $query = User::query()
-            ->when($search, function ($query, $search) {
-                $query->where(function ($query) use ($search) {
-                    $query->where('first_name', 'like', "%{$search}%")
-                        ->orWhere('last_name', 'like', "%{$search}%")
-                        ->orWhere('email', 'like', "%{$search}%");
-                });
-            })->with('projekte');
-
+        ->when($search, function ($query, $search) {
+            $query->where(function ($query) use ($search) {
+                // Verkette first_name und last_name
+                $query->where(DB::raw("CONCAT(first_name, ' ', last_name)"), 'like', "%{$search}%")
+                    ->orWhere('first_name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%");
+            });
+        })->with('projekte');
         if (!$authUser->roles->whereIn('name', $adminRoles)->count()) {
             $query->whereHas('projekte', function ($query) use ($authUser) {
                 $query->whereIn('projekt_id', $authUser->projekte->pluck('id'));
@@ -65,6 +69,7 @@ class UserController extends Controller
         return Inertia::render('User/Index', [
             'users' => $query->paginate(10),
             'authProjekte' => $authUser->projekte,
+            'rollen' => $rollen, // Verwende 'pluck', um nur die Namen der Rollen zu erhalten
         ]);
     }
     /**

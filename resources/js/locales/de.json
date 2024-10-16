@@ -34,6 +34,7 @@
     "teamübersicht": "Teamübersicht",
     "team_anlegen": "Team anlegen",
     "alle_rollen": "Alle Rollen",
+    "rolle": "Rolle",
     "berechtigungsübersicht": "Berechtigungsübersicht",
     "berechtigung": "Berechtigung",
     "Next &raquo;": "»",
@@ -46,7 +47,8 @@
     "id": "ID",
     "vorname": "Vorname",
     "nachname": "Nachname",
-    "email": "Email"
+    "email": "Email",
+    "Weak": "Gradkjl lk"
 
 
 }

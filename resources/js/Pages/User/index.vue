@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch, computed } from 'vue';
-import { router, Link } from '@inertiajs/vue3';
+import { router, Head, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Pagination from '@/Components/Pagination.vue';
 import Modal from '@/Components/ModalForm.vue';
@@ -8,6 +8,11 @@ import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import Swal from 'sweetalert2';
 import axios from 'axios';
+import MultiSelect from 'primevue/multiselect';
+import InputText from 'primevue/inputtext';
+import FloatLabel from 'primevue/floatlabel';
+import Password from 'primevue/password';
+import Dialog from 'primevue/dialog';
 
 
 // Suchfeld und Dropdown für Projekte
@@ -18,7 +23,7 @@ let isModalOpen = ref(false); // Modal-Zustand
 let sortColumn = ref('');  // Spalte zum Sortieren
 let sortDirection = ref('desc'); // Sortierrichtung ('asc' oder 'desc')
 
-const { users, authProjekte, success, errors } = defineProps({
+const { users, authProjekte, success, errors, rollen } = defineProps({
     users: {
         type: Object,
         default: () => ({ data: [], links: [] })
@@ -26,6 +31,10 @@ const { users, authProjekte, success, errors } = defineProps({
     authProjekte: {
         type: Array,
         default: () => []
+    },
+    rollen: {
+        type: Object,
+        default: () => ({})
     },
     success: {
         type: String,
@@ -120,6 +129,7 @@ const resetForm = () => {
         email: '',
         password: '',
         password_confirmation: '',
+        rolle: '',
     };
 };
 
@@ -191,6 +201,7 @@ let newUser = ref({
     email: '',
     password: '',
     password_confirmation: '',
+    rolle: '',
 });
 
 
@@ -209,10 +220,12 @@ const sortByColumn = (column) => {
 </script>
 
 <template>
+    <Head title="Personal" />
+
     <app-layout>
         <template #header>
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                {{$t('alle_benutzer')}} {{ success }}    {{ errors }}
+                {{$t('Team')}}
             </h2>
         </template>
 
@@ -250,9 +263,9 @@ const sortByColumn = (column) => {
                     </DropdownLink>
                 </template>
             </Dropdown>
-            <div @click="openModal" class="flex items-center">
+            <Link :href="route('user.index')" class="flex items-center">
                 <i class="la la-refresh bg-white border border-gray-300 rounded-r-md px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
-            </div>
+            </Link>
         </div>
 
         <!-- Benutzer Tabelle -->
@@ -295,6 +308,7 @@ const sortByColumn = (column) => {
                 </tbody>
             </table>
 
+
             <!-- Paginierung -->
             <Pagination :pagination="users" />
         </div>
@@ -302,30 +316,76 @@ const sortByColumn = (column) => {
         <!-- Modal für neuen Benutzer -->
         <Modal v-if="isModalOpen" @close="closeModal">
             <template #header>
-                <h2 class="text-lg font-bold text-gray-500 ">Neuen Benutzer hinzufügen</h2>
+                <h2 class="text-lg font-bold text-gray-500 ">Benutzer anlegen</h2>
             </template>
             <template #body>
                 <form @submit.prevent="addUser">
-                    <div class="mb-4">
-                        <label class="block mb-1">Vorname</label>
-                        <input v-model="newUser.first_name" type="text" class="border px-2 py-1 w-full" required />
+                    <div class="flex flex-col sm:flex-row ">
+                        <div class="mb-4 w-full mx-1">
+                            <FloatLabel variant="on">
+                                <InputText id="last_name" v-model="newUser.first_name" class="w-full" />
+                                <label for="last_name">Vorname</label>
+                            </FloatLabel>
+                        </div>
+                        <div class="mb-4 w-full mx-1">
+                            <FloatLabel variant="on">
+                                <InputText id="last_name" v-model="newUser.last_name" class="w-full" />
+                                <label for="last_name">Nachname</label>
+                            </FloatLabel>
+                        </div>
                     </div>
-                    <div class="mb-4">
-                        <label class="block mb-1">Nachname</label>
-                        <input v-model="newUser.last_name" type="text" class="border px-2 py-1 w-full" required />
+                    <div class="mb-4 mx-1">
+                        <FloatLabel variant="on">
+                                <InputText id="last_name" v-model="newUser.email" class="w-full" />
+                                <label for="last_name">E-Mail</label>
+                        </FloatLabel>
+
                     </div>
-                    <div class="mb-4">
-                        <label class="block mb-1">E-Mail</label>
-                        <input v-model="newUser.email" type="email" class="border px-2 py-1 w-full" required />
+                    <div class="flex flex-col sm:flex-row">
+                        <div class="mb-4 w-full mx-1 ">
+                            <FloatLabel variant="on" >
+                                <Password id="password" v-model="newUser.password" toggleMask class="w-full" >
+                                    <template #header >
+                                        <div class="font-semibold text-xm mb-4">Kennwort eingeben</div>
+                                    </template>
+                                    <template #footer>
+                                        <Divider />
+                                        <ul class="pl-2 ml-2 my-0 leading-normal ">
+                                            <li :class="{ 'text-green-500': /[a-z]/.test(newUser.password), 'text-red-500': !/[a-z]/.test(newUser.password) }">
+                                                <span v-if="/[a-z]/.test(newUser.password)">✔️</span> Mindestens ein Kleinbuchstabe
+                                            </li>
+                                            <li :class="{ 'text-green-500': /[A-Z]/.test(newUser.password), 'text-red-500': !/[A-Z]/.test(newUser.password) }">
+                                                <span v-if="/[A-Z]/.test(newUser.password)">✔️</span> Mindestens ein Großbuchstabe
+                                            </li>
+                                            <li :class="{ 'text-green-500': /\d/.test(newUser.password), 'text-red-500': !/\d/.test(newUser.password) }">
+                                                <span v-if="/\d/.test(newUser.password)">✔️</span> Mindestens eine Ziffer
+                                            </li>
+                                            <li :class="{ 'text-green-500': newUser.password.length >= 8, 'text-red-500': newUser.password.length < 8 }">
+                                                <span v-if="newUser.password.length >= 8">✔️</span> Mindestens 8 Zeichen
+                                            </li>
+                                        </ul>
+                                    </template>
+                                </Password>
+                                <label for="password">Passwort</label>
+                            </FloatLabel>
+
+                        </div>
+                        <div class="mb-4 w-full mx-1">
+                            <FloatLabel variant="on">
+                                    <Password id="password_confirmation" v-model="newUser.password_confirmation" :feedback="false" toggleMask class="w-full" />
+                                    <label for="password_confirmation">Passwort bestätigen</label>
+                            </FloatLabel>
+
+                        </div>
                     </div>
-                    <div class="mb-4">
-                        <label class="block mb-1">Passwort</label>
-                        <input v-model="newUser.password" type="password" class="border px-2 py-1 w-full" required />
+                    <div class="mb-4 mx-1">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('rolle') }}</label>
+                        <MultiSelect v-model="newUser.rolle" display="chip"
+                            :options="rollen" optionLabel="name"
+                            filter placeholder="Rollen wählen"
+                            :maxSelectedLabels="6" class="w-full " />
                     </div>
-                    <div class="mb-4">
-                        <label class="block mb-1">Passwort bestätigen</label>
-                        <input v-model="newUser.password_confirmation" type="password" class="border px-2 py-1 w-full" required />
-                    </div>
+
                 </form>
             </template>
             <template #footer>
@@ -333,5 +393,12 @@ const sortByColumn = (column) => {
                 <button @click="addUser" class="bg-zbb text-white px-4 py-2 rounded">Hinzufügen</button>
             </template>
         </Modal>
+
+
     </app-layout>
 </template>
+<style>
+
+
+
+</style>
