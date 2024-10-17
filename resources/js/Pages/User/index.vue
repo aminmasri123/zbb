@@ -307,8 +307,6 @@ const sortByColumn = (column) => {
                     </tr>
                 </tbody>
             </table>
-
-
             <!-- Paginierung -->
             <Pagination :pagination="users" />
         </div>

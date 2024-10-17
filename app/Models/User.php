@@ -3,9 +3,10 @@
 namespace App\Models;
 
 use App\Models\Projekt;
-use App\Models\Projekte;
+use App\Models\Abteilung;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Models\Role;
+use App\Models\Abteilungsassistent;
 use Laravel\Jetstream\HasProfilePhoto;
 use Spatie\Permission\Traits\HasRoles;
 use Illuminate\Notifications\Notifiable;
@@ -38,6 +39,7 @@ class User extends Authenticatable
         'password',
         'eee',
         'lang',
+        'profile_photo_url',
     ];
 
     protected $date = [
@@ -70,9 +72,10 @@ class User extends Authenticatable
      *
      * @var array<int, string>
      */
+    /*
     protected $appends = [
         'profile_photo_url',
-    ];
+    ];*/
 
     public function projekte()
     {
@@ -80,6 +83,14 @@ class User extends Authenticatable
 
     }
 
+    public function abteilung()
+    {
+        return $this->belongsTo(Abteilung::class, 'abteilung_id');
+    }
+    public function abteilungsassistent()
+    {
+        return $this->hasOne(Abteilungsassistent::class);
+    }
 
 
 

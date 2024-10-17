@@ -14,16 +14,21 @@ class Abteilung extends Model
         'name',
     ];
 
-    public function user(): BelongsTo
+    public function user()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class, 'user_id');
     }
 
+    public function abteilungsassistente(): HasMany
+    {
+        return $this->hasMany(Abteilungsassistent::class, 'abteilung_id');
+    }
 
-
-    public function projekte(): HasMany
+    /*public function projekte(): HasMany
     {
         return $this->hasMany(Projekte::class);
-    }
+    }*/
+
+
 
 }

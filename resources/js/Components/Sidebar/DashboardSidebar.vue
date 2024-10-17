@@ -42,6 +42,22 @@
                     <li v-if="$page.props.permissions.includes('kooperationspartner.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dashboard')">{{$t('benutzerübersicht')}}</Link></li>
                 </ul>
             </li>
+            <!-- Abteilung Submenu -->
+            <li v-if="['abteilung.index', 'abteilung.store', 'abteilung.update'].some(permission => $page.props.permissions.includes(permission))" class="submenu">
+                <a href="#" @click.prevent="toggleMenu('abteilung')" class="flex items-center text-white py-2 hover:bg-gray-700 transition duration-200">
+                    <i class="la la-lg la-unlock mr-2"></i>
+
+                    <span v-if="!displayHideTextSidebar" >{{$t('abteilung')}}</span>
+                    <span v-if="!displayHideTextSidebar" :class="{'rotate-180': activeMenu === 'abteilung', 'text-zbb': $page.component.startsWith('Abteilung')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
+                </a>
+                <ul v-show="activeMenu === 'abteilung'" class="pl-6 mt-2 space-y-2">
+                    <li v-if="$page.props.permissions.includes('abteilung.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('abteilung.index')">{{$t('berechtigungsübersicht')}}</Link></li>
+                </ul>
+            </li>
+
+
+
+
 
              <!-- Berechtigung Submenu -->
              <li v-if="['berechtigung.index', 'berechtigung.store', 'berechtigung.update'].some(permission => $page.props.permissions.includes(permission))" class="submenu">
