@@ -1,12 +1,10 @@
 <script setup>
     import AppLayout from '@/Layouts/AppLayout.vue';
-    import { Inertia } from '@inertiajs/inertia';
-    import { ref, reactive, defineProps, watch  } from 'vue';
+    import { ref, defineProps, watch, computed} from 'vue';
     import Swal from 'sweetalert2';
-    import { Link, Head } from '@inertiajs/vue3';
+    import {router, Link, Head } from '@inertiajs/vue3';
     import axios from 'axios';
     import Dropdown from '@/Components/Dropdown.vue';
-    import DropdownLink from '@/Components/DropdownLink.vue';
     import Modal from '@/Components/ModalForm.vue';
     import ModalDestroy from '@/Components/ModalDestroyForm.vue';
     import MultiSelect from 'primevue/multiselect';
@@ -22,47 +20,62 @@
      // Definiere die Props direkt
     const props = defineProps({ abteilungen: Object, users: Object }); // props wird hier definiert
 
-    // Lokale Kopie der Abteilungen erstellen
-    let localAbteilungen = ref([]); // Initialisiere mit einem leeren Array
 
-    // Fülle localAbteilungen mit den Daten aus den Props
-    localAbteilungen.value = [...props.abteilungen.data]; // Kopiere die Abteilungen in eine reaktive Variable
-    // Funktion, um die Abteilungen von der Datenbank abzurufen
-    const fetchAbteilungen = async () => {
+    // Lokale Kopie der Abteilungen erstellen
+    let localAbteilungen = ref([...props.abteilungen.data]);  // Originaldaten
+    let filteredAbteilungen = ref([...localAbteilungen.value]); // Gefilterte Daten
+
+     // Funktion, um die Abteilungen von der Datenbank abzurufen
+     const fetchAbteilungen = async () => {
         try {
-            const response = await axios.get(route('abteilung.index'));
+            const response = await axios.get(route('abteilung.indexAjaxFresh'));
             return response.data.abteilungen;
         } catch (error) {
             console.error('Fehler beim Abrufen der Abteilungen:', error);
             return null;
         }
     };
-    // Funktion zum Vergleichen und Laden der neuen Daten
-    // Funktion zum Vergleichen und Laden der neuen Daten
-    const compareAndReload = async () => {
-        const newAbteilungen = await fetchAbteilungen();
-
-        if (newAbteilungen) {
-            // Überprüfe die aktuellen IDs der lokalen Abteilungen
-            const localIds = localAbteilungen.value.map(abteilung => abteilung.id);
-
-            // Neue Abteilungen hinzufügen, die nicht in der lokalen Liste sind
-            newAbteilungen.data.forEach(newAbteilung => {
-                if (!localIds.includes(newAbteilung.id)) {
-                    localAbteilungen.value.unshift(newAbteilung); // Füge neue Abteilung hinzu
+        // Funktion zum Vergleichen und Laden der neuen Daten
+        const compareAndReload = async () => {
+            const newAbteilungen = await fetchAbteilungen();
+                if (newAbteilungen) {
+                    const localIds = localAbteilungen.value.map(abteilung => abteilung.id);
+                    // Neue Abteilungen hinzufügen
+                    newAbteilungen.data.forEach(newAbteilung => {
+                        if (!localIds.includes(newAbteilung.id)) {
+                            localAbteilungen.value.unshift(newAbteilung);
+                        }
+                    });
+                    // Entferne Abteilungen, die nicht mehr in der Liste sind
+                    localAbteilungen.value = localAbteilungen.value.filter(localAbteilung =>
+                        newAbteilungen.data.some(newAbteilung => newAbteilung.id === localAbteilung.id)
+                    );
+                    // Wende die Suchfilterung an, basierend auf der aktuellen Suchanfrage
+                    applySearchFilter();
                 }
-            });
-
-            // Abteilungen entfernen, die nicht mehr in der neuen Liste sind
-            localAbteilungen.value = localAbteilungen.value.filter(localAbteilung => 
-                newAbteilungen.data.some(newAbteilung => newAbteilung.id === localAbteilung.id)
-            );
-        }
-    };
+        };
 
     // Setze ein Intervall, um die Daten regelmäßig zu überprüfen
     setInterval(compareAndReload, 5000); // Alle 5 Sekunden vergleichen
+  // Funktion, um die Suchergebnisse zu filtern
+  const applySearchFilter = () => {
+        if (search.value) {
+            filteredAbteilungen.value = localAbteilungen.value.filter(abteilung =>
+                abteilung.name.toLowerCase().includes(search.value.toLowerCase())
+            );
+        } else {
+            // Wenn keine Suchanfrage vorliegt, alle Abteilungen anzeigen
+            filteredAbteilungen.value = [...localAbteilungen.value];
+        }
+    };
 
+    // Watch für Änderungen in der Suche
+    watch([search], () => {
+        // Aktualisiere die URL mit der Suchabfrage
+        router.get('/abteilung', { search: search.value }, { preserveState: true, replace: true });
+        // Führe die Filterung durch
+        applySearchFilter();
+    });
 
 // Löschbestätigung anzeigen und Abteilungsnamen speichern
 const confirmDelete = (abteilung) => {
@@ -96,7 +109,6 @@ const handleDelete = (abteilungId) => {
         name: '',
         abteilungsleiter:'',
         assistenten: [],
-        color: '',
     };
 };
 
@@ -192,7 +204,7 @@ export default {
         </div>
         <!-- Benutzerausgabe -->
         <div class="relative overflow-x-auto mb-10">
-            <table id="table" class="w-full text-sm table-auto  text-left rtl:text-right text-gray-500 dark:text-gray-400 shadow-sm">
+            <table id="table" class="w-full text-sm table-auto mb-5 text-left rtl:text-right text-gray-500 dark:text-gray-400 shadow-sm">
                 <thead class="text-md  text-gray-600 uppercase bg-gray-200 dark:bg-gray-700 dark:text-gray-400">
                     <tr class="font-bold ">
                         <th scope="col" class="border border-solid border-gray-300 px-6 py-3 w-10 text-center ">ID.</th>
@@ -203,7 +215,7 @@ export default {
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="abteilung in localAbteilungen" :key="abteilung.id"
+                    <tr v-for="abteilung in filteredAbteilungen" :key="abteilung.id"
                         class="bg-white  border-solid dark:bg-gray-800 dark:border-gray-700">
                         <th scope="row" class="border border-solid border-gray-300 px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white text-center w-10">
                             {{abteilung.id}}
@@ -258,8 +270,6 @@ export default {
                             <label for="name">Bezeichnung</label>
                         </FloatLabel>
                     </div>
-
-
                     <div class="mb-4 w-full mx-1">
                         <FloatLabel variant="on">
                             <Select v-model="newAbteilung.abteilungsleiter"  inputId="id" optionValue="id"  :options="users" optionLabel="full_name" class="w-full" />

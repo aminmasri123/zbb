@@ -1,12 +1,14 @@
 <?php
 
-use App\Http\Controllers\AbteilungController;
-use App\Http\Controllers\BerechtigungController;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Foundation\Application;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\SchuleController;
+use App\Http\Controllers\BereichController;
+use App\Http\Controllers\ProjektController;
+use App\Http\Controllers\AbteilungController;
+use App\Http\Controllers\BerechtigungController;
 
 /*
 |--------------------------------------------------------------------------
@@ -74,11 +76,31 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
     Route::post('/benutzer/anlegen', [UserController::class, 'store'])->name('user.store');
     Route::delete('/benutzer/{id}', [UserController::class, 'destroy'])->name('benutzer.destroy');
 
-    //Abteilung
-    Route::get('/abteilung', [AbteilungController::class, 'index'])->name('abteilung.index');
+    //Bereiche
+    Route::get('/bereich', [BereichController::class, 'index'])->name('bereich.index');
+    Route::get('/bereich/ajaxFresh', [BereichController::class, 'indexAjaxFresh'])->name('bereich.indexAjaxFresh');
 
+    Route::post('/bereich/anlegen', [BereichController::class, 'store'])->name('bereich.store');
+    Route::delete('/bereiche/{id}', [BereichController::class, 'destroy'])->name('bereich.destroy');
+
+
+
+    //Abteilungen
+    Route::get('/abteilung', [AbteilungController::class, 'index'])->name('abteilung.index');
+    Route::get('/abteilung/ajaxFresh', [AbteilungController::class, 'indexAjaxFresh'])->name('abteilung.indexAjaxFresh');
     Route::post('/abteilung/anlegen', [AbteilungController::class, 'store'])->name('abteilung.store');
     Route::delete('/abteilungen/{id}', [AbteilungController::class, 'destroy'])->name('abteilung.destroy');
+
+
+    //Projekte
+    Route::get('/projekt', [ProjektController::class, 'index'])->name('projekt.index');
+    Route::get('/projekt/ajaxFresh', [ProjektController::class, 'indexAjaxFresh'])->name('projekt.indexAjaxFresh');
+    Route::post('/projekt/anlegen', [ProjektController::class, 'store'])->name('projekt.store');
+    Route::delete('/projekt/{id}', [ProjektController::class, 'destroy'])->name('projekt.destroy');
+
+
+
+
 
 
     Route::get('/design/responsive', function () {

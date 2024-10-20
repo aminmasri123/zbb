@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\User;
+use App\Models\Projekt;
 use App\Models\Abteilungsassistent;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -26,12 +27,10 @@ class Abteilung extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
-
-
-    /*public function projekte(): HasMany
+    public function projekte(): HasMany
     {
-        return $this->hasMany(Projekte::class);
-    }*/
+        return $this->hasMany(Projekt::class);
+    }
 
 
 

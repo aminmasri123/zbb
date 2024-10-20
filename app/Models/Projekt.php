@@ -17,10 +17,11 @@ class Projekt extends Model
         'kostenstelle',
         'abteilung_id',
     ];
-    public function abteilung(): BelongsTo
+    public function abteilung()
     {
         return $this->belongsTo(Abteilung::class);
     }
+
 
     public function users()
     {

@@ -336,8 +336,27 @@ class UserSeeder extends Seeder
                 'name' => 'kooperationspartner.destroy',
                 'beschreibung' => 'web',
                 'berechtigungskategorie_id' => '2',
-
             ],
+
+            [ // id = 5
+                'name' => 'bereich.index',
+                'beschreibung' => 'web',
+                'berechtigungskategorie_id' => '2',
+            ],
+            [ // id = 5
+                'name' => 'bereich.store',
+                'beschreibung' => 'web',
+                'berechtigungskategorie_id' => '2',
+            ],
+            [ // id = 5
+                'name' => 'bereich.destroy',
+                'beschreibung' => 'web',
+                'berechtigungskategorie_id' => '2',
+            ],
+
+
+
+
 
         ]);
 

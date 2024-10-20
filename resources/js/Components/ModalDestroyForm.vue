@@ -44,8 +44,8 @@
 
     let deleteInput = ref(''); // Speichert den Text des Eingabefelds für die Löschung
     let toDelete = ref(null); // Speichert den Namen der User, die gelöscht werden soll
-// Define emit
-const emitDelete = defineEmits(['delete']);  // Define the event 'delete'
+    // Define emit
+    const emitDelete = defineEmits(['delete']);  // Define the event 'delete'
    // let localAbteilungen = ref([]); // Initialisiere mit einem leeren Array
 
     const props = defineProps({
@@ -72,6 +72,7 @@ const emitDelete = defineEmits(['delete']);  // Define the event 'delete'
         });
         return; // Stoppe die Funktion, wenn die Eingabe nicht stimmt
     }
+        console.log(toDelete);
     axios.delete(route(props.seite + '.destroy', { id: props.toDelete.id }))
         .then(response => {
 
