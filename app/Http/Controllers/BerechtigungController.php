@@ -19,18 +19,23 @@ class BerechtigungController extends Controller
      */
     public function index($id = null)
     {
-        //default Administrator
+        // Default Rolle ist Administrator, falls kein ID übergeben wurde
         $id = $id ?? 1;
 
+        // Aktuell angemeldeten Benutzer abrufen
+        $user = User::find(Auth::user())->first(); // Auth::user() gibt bereits das Benutzerobjekt zurück
+        $userRoles = $user->getRoleNames();
+        // IDs der Rollen abrufen
+        $userRoleIds = Role::whereIn('name', $userRoles)->pluck('id'); // IDs der Rollen abrufen
 
-        $userRole = Role::where('name', User::findOrFail(Auth::user()->id)->getRoleNames())->first(); // Hier wird die ID der aktuellen Rolle zugewiesen
-        $userRoleId = $userRole->id;
-
-        // Kategorien, auf die der aktuelle Benutzer Berechtigungen hat (Verknüpfung durch rolle_kategories)
-        $kategorienDerUserm = Berechtigungskategorie::whereHas('roles', function ($query) use ($userRoleId) {
-            $query->where('role_id', $userRoleId);
-        })->with('permissions')->get();
-
+        // Berechtigungskategorien abrufen, die den Benutzerrollen zugeordnet sind
+        $berechtigungskategorien = Berechtigungskategorie::with(['permissions' => function($query) {
+            $query->select('id', 'name'); // Optional: spezifische Felder abrufen
+        }])
+        ->whereHas('roles', function($query) use ($userRoleIds) {
+            $query->whereIn('role_id', $userRoleIds); // Filtere nach den Rollen des Benutzers
+        })
+        ->get();
 
         return Inertia::render('Einstellung/RollePermission/Index', [
             'rollen' => Role::query()
@@ -39,17 +44,21 @@ class BerechtigungController extends Controller
                 })
                 ->get(),
 
-            'berechtigungskategorien' => Berechtigungskategorie::with('permissions')->get(),  // Lade alle Berechtigungen
+            'berechtigungskategorien' => $berechtigungskategorien, // Berechtigungen mit Kategorien
+
             'roleSearched' => Role::findById($id),
 
-            // Kategorien, auf die der aktuelle Benutzer Berechtigungen hat (Verknüpfung durch rolle_kategories)
-            'kategorienDerUser' => Berechtigungskategorie::whereHas('roles', function($query) use ($userRoleId) {
-                $query->where('role_id', $userRoleId);
+            // Kategorien, auf die der aktuelle Benutzer Berechtigungen hat
+            'kategorienDerUser' => Berechtigungskategorie::whereHas('roles', function($query) use ($userRoleIds) {
+                $query->whereIn('role_id', $userRoleIds);
             })->with('permissions')->get(),
+
             'alleZugewiesenePermission' => Role::findById($id)->permissions,
+
             'roleId' => $id,
         ]);
     }
+
 
 
 
@@ -78,7 +87,7 @@ class BerechtigungController extends Controller
 
 
 
-
+/*
     public function storeRolle(Request $request)
     {
         $request->validate([
@@ -106,7 +115,7 @@ class BerechtigungController extends Controller
         }
     }
 
-
+*/
 
 
 

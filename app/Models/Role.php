@@ -11,6 +11,7 @@ class Role extends SpatieRole
 {
     use HasFactory;
     protected $fillable = [
+        'color',
         'name',
         'id',
     ];

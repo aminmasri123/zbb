@@ -28,3 +28,8 @@ input.p-inputtext.p-component.p-password-input{
 .p-floatlabel:has(input:focus) label{
     color:black !important;
 }
+
+
+#table{
+    border-radius: 50px !important;
+}

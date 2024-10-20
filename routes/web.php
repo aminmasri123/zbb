@@ -65,16 +65,20 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
     //Einstellung -- Rolle
     Route::get('/berechtigung/{id?}', [BerechtigungController::class, 'index'])->name('berechtigung.index');
     Route::post('/berechtigungZuweisen', [BerechtigungController::class, 'berechtigungZuweisen'])->name('berechtigung.zuweisen');
+    Route::delete('/berechtigung/{id}', [BerechtigungController::class, 'destroy'])->name('rolle.destroy');
 
 
     //Benutzer
     Route::get('/benutzer', [UserController::class, 'index'])->name('user.index');
     Route::get('/benutzer/anlegen', function () { return Inertia::render('User/CreateUser'); })->name('user.create');
     Route::post('/benutzer/anlegen', [UserController::class, 'store'])->name('user.store');
+    Route::delete('/benutzer/{id}', [UserController::class, 'destroy'])->name('benutzer.destroy');
 
     //Abteilung
     Route::get('/abteilung', [AbteilungController::class, 'index'])->name('abteilung.index');
 
+    Route::post('/abteilung/anlegen', [AbteilungController::class, 'store'])->name('abteilung.store');
+    Route::delete('/abteilungen/{id}', [AbteilungController::class, 'destroy'])->name('abteilung.destroy');
 
 
     Route::get('/design/responsive', function () {

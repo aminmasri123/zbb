@@ -2,86 +2,124 @@
 
 namespace App\Http\Controllers;
 
+use Log;
+use App\Models\User;
 use Inertia\Inertia;
 use App\Models\Abteilung;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Http\Request;
 
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Request;
+use Illuminate\Support\Facades\DB;
+use App\Models\Abteilungsassistent;
 
 class AbteilungController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function index()
+    public function index(Request $request)
     {
-        $search = Request::input('search');
-
+        $search = $request->input('search'); // Benutze input(), um den Suchparameter abzurufen
+        $users = User::select('id', DB::raw("CONCAT(first_name, ' ', last_name) AS full_name"))->distinct()->get();
+    
+        // Hole die Abteilungen mit Suchfilter und lade die notwendigen Beziehungen
         $abteilungen = Abteilung::query()
-        ->when($search, function ($query, $search) {
-            $query->where('name', 'like', "%{$search}%");
-        })->with('user:id,first_name,last_name')
-        ->with('abteilungsassistente.user')
-        ->orderBy('name') // Optional: Sortierung nach dem Namen
-        ->paginate(10)    // Paginierung anwenden, bevor die Abfrage ausgeführt wird
-        ->withQueryString(); // Behalte die Query-String-Parameter für die Pagination
+            ->when($search, function ($query) use ($search) {
+                $query->where('name', 'like', "%{$search}%");
+            })
+            ->with('user:id,first_name,last_name') // Lade den Abteilungsleiter
+            ->with('abteilungsassistente.user') // Lade die Abteilungsassistenten
+            ->orderBy('name') // Sortiere nach Name
+            ->paginate(100)    // Wende die Paginierung an
+            ->withQueryString(); // Behalte die Query-String-Parameter für die Pagination
+    
+        // Überprüfe, ob die Anfrage als AJAX-Request gesendet wurde
+        if ($request->ajax()) {
+            return response()->json([
+                'abteilungen' => $abteilungen,
+                'users' => $users,
+            ]);
+        };
+    
+        // Standardmäßige Rückgabe für die Inertia-Ansicht
+        return Inertia::render('Abteilung/Index', [
+            'abteilungen' => $abteilungen,
+            'users' => $users,
+        ]);
+    
+    
 
-    return Inertia::render('Abteilung/Index', [
-        'abteilungen' => $abteilungen,
+
+        /*
+
+                $abteilungen = Abteilung::with('user')
+                    ->when(Request::input('search'), function ($query, $search) {
+                        return $query->where('name', 'like', '%' . $search . '%');
+                    })
+                    ->when(Request::input('trashed') === 'with', function ($query) {
+                        return $query->withTrashed();
+                    })
+                    ->when(Request::input('trashed') === 'only', function ($query) {
+                        return $query->onlyTrashed();
+                    })
+                    ->orderBy('name')
+                    ->paginate(10)
+                    ->withQueryString();
+
+                return Inertia::render('Abteilung/Index', [
+                    'filters' => Request::all('search', 'trashed'),
+                    'abteilungen' => $abteilungen->through(fn ($abteilung) => [
+                        'id' => $abteilung->id,
+                        'name' => $abteilung->name,
+                        'abteilungsleiter' => $abteilung->user ? $abteilung->user->only('name') : null,
+                    ]),
+                ]);
+
+        */
+    }
+
+
+
+    public function store(Request $request)
+{
+    // Validierung
+    $validatedData = $request->validate([
+        'name' => 'required|max:255',
+        'abteilungsleiter' => 'required|exists:users,id',
+        'assistenten' => 'array',
+        'assistenten.*' => 'exists:users,id',
     ]);
 
-
-/*
-
-        $abteilungen = Abteilung::with('user')
-            ->when(Request::input('search'), function ($query, $search) {
-                return $query->where('name', 'like', '%' . $search . '%');
-            })
-            ->when(Request::input('trashed') === 'with', function ($query) {
-                return $query->withTrashed();
-            })
-            ->when(Request::input('trashed') === 'only', function ($query) {
-                return $query->onlyTrashed();
-            })
-            ->orderBy('name')
-            ->paginate(10)
-            ->withQueryString();
-
-        return Inertia::render('Abteilung/Index', [
-            'filters' => Request::all('search', 'trashed'),
-            'abteilungen' => $abteilungen->through(fn ($abteilung) => [
-                'id' => $abteilung->id,
-                'name' => $abteilung->name,
-                'abteilungsleiter' => $abteilung->user ? $abteilung->user->only('name') : null,
-            ]),
+    try {
+        // Abteilung erstellen
+        $abteilung = Abteilung::create([
+            'name' => $validatedData['name'],
+            'user_id' => $validatedData['abteilungsleiter'], // Abteilungsleiter
         ]);
 
-*/
-    }
+        // Abteilungsassistenten hinzufügen, falls vorhanden
+        if (isset($validatedData['assistenten']) && count($validatedData['assistenten']) > 0) {
+            foreach ($validatedData['assistenten'] as $assistentenId) {
+                Abteilungsassistent::create([
+                    'user_id' => $assistentenId,
+                    'abteilung_id' => $abteilung->id,
+                ]);
+            }
+        }
 
-    /**
-     * Show the form for creating a new resource.
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function create()
-    {
-        //
-    }
+        // Lade den Abteilungsleiter und die Assistenten für die Antwort
+        $abteilung->load('user', 'abteilungsassistente.user');
 
-    /**
-     * Store a newly created resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
-     */
-    public function store(Request $request)
-    {
-        //
+        // Erfolgreiche Antwort mit der Abteilung, dem Abteilungsleiter und den Assistenten
+        return response()->json([
+            'message' => 'Abteilung erfolgreich erstellt.',
+            'abteilung' => $abteilung
+        ], 201);
+
+    } catch (\Exception $e) {
+        // Fehlerbehandlung
+        return response()->json(['error' => 'Beim Erstellen der Abteilung ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.'], 500);
     }
+}
+
+
+
 
     /**
      * Display the specified resource.
@@ -117,14 +155,21 @@ class AbteilungController extends Controller
         //
     }
 
-    /**
-     * Remove the specified resource from storage.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
     public function destroy($id)
     {
-        //
+        try {
+            $abteilung = Abteilung::findOrFail($id); // Suche die Abteilung
+
+            // Optional: Überprüfe, ob die Abteilung gelöscht werden kann (z.B. durch Beziehungen)
+            // if ($abteilung->hasRelations()) { ... }
+
+            $abteilung->delete(); // Lösche die Abteilung
+
+            return response()->json(['message' => 'Abteilung erfolgreich gelöscht!'], 200);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['message' => 'Abteilung nicht gefunden.'], 404);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
+        }
     }
 }

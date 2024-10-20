@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\User;
+use App\Models\Abteilungsassistent;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,17 +14,19 @@ class Abteilung extends Model
     use HasFactory;
     protected $fillable = [
         'name',
-    ];
+        'user_id',
 
+    ];
+    public function abteilungsassistente(): HasMany
+    {
+        return $this->hasMany(Abteilungsassistent::class, 'abteilung_id');
+    }
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id');
     }
 
-    public function abteilungsassistente(): HasMany
-    {
-        return $this->hasMany(Abteilungsassistent::class, 'abteilung_id');
-    }
+
 
     /*public function projekte(): HasMany
     {

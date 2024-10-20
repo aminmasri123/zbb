@@ -118,7 +118,7 @@ export default {
                                 <slot name="header" />
                             </div>
                         </header>
-                        <div class="px-7 mt-20">
+                        <div class="px-7 my-20">
                             <slot  />
                         </div>
                     </main>

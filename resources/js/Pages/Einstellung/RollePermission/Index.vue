@@ -4,34 +4,61 @@
     import AppLayout from '@/Layouts/AppLayout.vue';
     import axios from 'axios';
     import  Modal from '@/Components/ModalForm.vue';
+    import ModalDestroy from '@/Components/ModalDestroyForm.vue';
     import Swal from 'sweetalert2';
     import { Inertia } from '@inertiajs/inertia';
     import Dropdown from '@/Components/Dropdown.vue';
     import DropdownLink from '@/Components/DropdownLink.vue';
 
     // Search input state
+    let seite = 'rolle';
     let search = ref('');
-    defineProps({
+    let rolleToDelete = ref(null); // Speichert den Namen der User, die gelöscht werden soll
+    let showModalLöschen = ref(false); // Modal für die Löschung
+
+
+
+
+
+    const props = defineProps({
         rollen: {type: Array, default: () => [] }, // Setzt einen leeren Array als Standardwert
         berechtigungskategorien: { type: Array, default: () => [] }, // Setzt einen leeren Array als Standardwert
         kategorienDerUser:{ type: Array, default: () => [] },
         alleZugewiesenePermission:{ type:Array, default:()=> []},
         roleId:{ type:Number , default:()=> []},
-
     });
 
+
+    console.log(props.rollen)
+
+    // Lokale Kopie der Rollen erstellen
+    let localRollen= ref([]); // Initialisiere mit einem leeren Array
+    // Fülle localAbteilungen mit den Daten aus den Props
+    localRollen.value = [...props.rollen]; // Kopiere die Rollen in eine reaktive Variable
+
+    // Löschbestätigung anzeigen und Abteilungsnamen speichern
+    const confirmDelete = (rolle) => {
+        rolleToDelete.value = {
+            name: rolle.name, // Speichere den Namen der Rolle
+            id: rolle.id      // Speichere die ID der Rolle
+        };
+        showModalLöschen.value = true; // Modal anzeigen
+    };
+    // Event-Handler, um die Rolle aus der lokalen Liste zu löschen
+    const handleDelete = (rolleId) => {
+        // Remove the deleted item from localRolle
+        localRollen.value = localRollen.value.filter(
+            rolle => rolle.id !== rolleId
+        );
+        showModalLöschen.value = false; // Close the delete modal
+    };
 
     // Watch for changes in search and trigger a request
     watch(search, value => {
         router.get('/benutzer', { search: value }, { preserveState: true });
     });
 
-    // Method to handle page navigation
-    const goToPage = (url) => {
-        if (url) {
-            router.get(url, { search: search.value }, { preserveState: true });
-        }
-    };
+
 
 </script>
 
@@ -145,10 +172,9 @@
                         <a  href="#" @click.prevent="toggleListRolle" class="text-center bg-zbb text-black py-2 hover:bg-orange-400 transition duration-200">
                             <span class="text-white pr-5 ">{{$t('alle_rollen')}}</span>
                             <span :class="{'rotate-180': isActiveMenu('rolle')}" class="hover:rotate-90 transform transition-transform duration-300 menu-arrow"></span>
-
                         </a>
                         <ul v-show="isActiveMenu('rolle')" class=" mt-2 space-y-2 pb-5 ">
-                            <li v-for="rolle in rollen" :key="rolle.id" class="text-center mx-auto hover:bg-gray-300 ">
+                            <li v-for="rolle in localRollen" :key="rolle.id" class="text-center mx-auto hover:bg-gray-300 ">
                                 <Link class="text-gray-400 hover:text-black hover:font-bold transition duration-200"
                                     :class="{'text-zbb font-bold': rolle.id == roleId}"
                                     :href="route('berechtigung.index', { id: rolle.id })">
@@ -158,11 +184,8 @@
                         </ul>
                     </li>
                 </ul>
-
-
                 <div class="flex flex-col sm:flex-row">
                     <div class="mb-5 sm:relative sm:w-1/4 ">
-
                         <div class=" hidden sm:block sm:w-1/5 sm:fixed">
                             <div class="w-full bg-orange-500 py-2 rounded-md text-center">
                                 <a href="#" class="text-white">
@@ -171,16 +194,32 @@
                             </div>
                             <div class="bg-white mt-5 border">
                                 <ul>
-                                    <li v-for="rolle in rollen" :key="rolle.id" class="py-2 pr-3 pl-8 hover:font-bold text-gray-600 hover:bg-gray-200">
-                                        <Link class="flex justify-between"
+                                    <li v-for="rolle in localRollen" :key="rolle.id" class="flex justify-between pr-3  hover:font-bold text-gray-600 ">
+                                        <Link class=" hover:bg-gray-200 w-full pl-8  py-2"
                                             :href="route('berechtigung.index', { id: rolle.id })"
                                             :class="{'text-zbb font-bold': rolle.id == roleId}"
                                             >
                                             <div class="cursor-pointer">{{ rolle.name }}</div>
-                                            <span class="cursor-pointer">
-                                                <i class="la la-ellipsis-v la-lg"></i>
-                                            </span>
                                         </Link>
+                                        <span class="cursor-pointer  py-2">
+                                            <!-- Dropdown für Aktion -->
+                                            <Dropdown >
+                                                <template #trigger>
+                                                    <button class=" items-center  text-sm leading-4 font-medium text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
+                                                        <span class="cursor-pointer">
+                                                            <i class="transform transition-transform duration-300  la  la-lg la-ellipsis-v"></i>
+                                                        </span>
+                                                    </button>
+                                                </template>
+
+                                                <template #content >
+                                                    <!-- Gefilterte Projektauswahl -->
+                                                    <span class="flex justify-around cursor-pointer" @click="confirmDelete(rolle)">
+                                                        {{ $t('Löschen') }} <i class="las la-trash-alt"></i>
+                                                    </span>
+                                                </template>
+                                            </Dropdown>
+                                        </span>
                                     </li>
                                 </ul>
                             </div>
@@ -194,10 +233,6 @@
                                     <div class="basis-4/6">Bestätigte Berechtigungen</div>
                                     <div class="basis-1/6">Ermächtigen</div>
                                 </div>
-
-
-
-
                                 <div>
                                     <div v-for="kategorie in kategorienDerUser" :key="kategorie.id">
                                         <div v-if="kategorie.permissions && kategorie.permissions.length">
@@ -228,7 +263,6 @@
                                             </div>
                                         </div>
                                     </div>
-
                                 </div>
                             </div>
                         </div>
@@ -236,5 +270,14 @@
                 </div>
             </div>
         </div>
+
+
+        <!-- Modal für die Löschung der Abteilung-->
+        <ModalDestroy v-if="showModalLöschen"  @delete="handleDelete" @close="showModalLöschen = false" :seite="seite" :toDelete="rolleToDelete" >
+            <!--<template #header>      </template>
+                <template #body>        </template>
+                <template #footer>      </template>
+            -->
+        </ModalDestroy>
     </app-layout>
 </template>

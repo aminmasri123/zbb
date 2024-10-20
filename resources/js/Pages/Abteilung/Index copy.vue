@@ -1,67 +1,35 @@
 <script setup>
     import AppLayout from '@/Layouts/AppLayout.vue';
     import { Inertia } from '@inertiajs/inertia';
-    import { ref, reactive, defineProps, watch  } from 'vue';
+    import { ref, reactive, defineProps  } from 'vue';
     import Swal from 'sweetalert2';
-    import { Link, Head } from '@inertiajs/vue3';
+    import { Link } from '@inertiajs/vue3';
     import axios from 'axios';
     import Dropdown from '@/Components/Dropdown.vue';
     import DropdownLink from '@/Components/DropdownLink.vue';
     import Modal from '@/Components/ModalForm.vue';
     import ModalDestroy from '@/Components/ModalDestroyForm.vue';
+
     import MultiSelect from 'primevue/multiselect';
     import InputText from 'primevue/inputtext';
     import FloatLabel from 'primevue/floatlabel';
     import Select from 'primevue/select';
 
-    let seite = 'abteilung';
     let search = ref('');
     let abteilungToDelete = ref(null); // Speichert den Namen der Abteilung, die gelöscht werden soll
     let showModalLöschen = ref(false); // Modal für die Löschung
+    let deleteInput = ref(''); // Speichert den Text des Eingabefelds für die Löschung
 
-     // Definiere die Props direkt
-    const props = defineProps({ abteilungen: Object, users: Object }); // props wird hier definiert
 
-    // Lokale Kopie der Abteilungen erstellen
-    let localAbteilungen = ref([]); // Initialisiere mit einem leeren Array
 
-    // Fülle localAbteilungen mit den Daten aus den Props
-    localAbteilungen.value = [...props.abteilungen.data]; // Kopiere die Abteilungen in eine reaktive Variable
-    // Funktion, um die Abteilungen von der Datenbank abzurufen
-    const fetchAbteilungen = async () => {
-        try {
-            const response = await axios.get(route('abteilung.index'));
-            return response.data.abteilungen;
-        } catch (error) {
-            console.error('Fehler beim Abrufen der Abteilungen:', error);
-            return null;
-        }
-    };
-    // Funktion zum Vergleichen und Laden der neuen Daten
-    // Funktion zum Vergleichen und Laden der neuen Daten
-    const compareAndReload = async () => {
-        const newAbteilungen = await fetchAbteilungen();
+  // Definiere die Props direkt
+const props = defineProps({ abteilungen: Object, users: Object }); // props wird hier definiert
 
-        if (newAbteilungen) {
-            // Überprüfe die aktuellen IDs der lokalen Abteilungen
-            const localIds = localAbteilungen.value.map(abteilung => abteilung.id);
+// Lokale Kopie der Abteilungen erstellen
+let localAbteilungen = ref([]); // Initialisiere mit einem leeren Array
 
-            // Neue Abteilungen hinzufügen, die nicht in der lokalen Liste sind
-            newAbteilungen.data.forEach(newAbteilung => {
-                if (!localIds.includes(newAbteilung.id)) {
-                    localAbteilungen.value.unshift(newAbteilung); // Füge neue Abteilung hinzu
-                }
-            });
-
-            // Abteilungen entfernen, die nicht mehr in der neuen Liste sind
-            localAbteilungen.value = localAbteilungen.value.filter(localAbteilung => 
-                newAbteilungen.data.some(newAbteilung => newAbteilung.id === localAbteilung.id)
-            );
-        }
-    };
-
-    // Setze ein Intervall, um die Daten regelmäßig zu überprüfen
-    setInterval(compareAndReload, 5000); // Alle 5 Sekunden vergleichen
+// Fülle localAbteilungen mit den Daten aus den Props
+localAbteilungen.value = [...props.abteilungen.data]; // Kopiere die Abteilungen in eine reaktive Variable
 
 
 // Löschbestätigung anzeigen und Abteilungsnamen speichern
@@ -72,13 +40,44 @@ const confirmDelete = (abteilung) => {
     };
     showModalLöschen.value = true; // Modal anzeigen
 };
-// Event-Handler, um die Abteilung aus der lokalen Liste zu löschen
-const handleDelete = (abteilungId) => {
-    // Remove the deleted item from localAbteilungen
-    localAbteilungen.value = localAbteilungen.value.filter(
-        abteilung => abteilung.id !== abteilungId
-    );
-    showModalLöschen.value = false; // Close the delete modal
+
+const deleteItem = () => {
+    if (deleteInput.value !== 'delete') {
+        Swal.fire({
+            title: 'Fehler!',
+            text: 'Bitte geben Sie "delete" ein, um fortzufahren.',
+            icon: 'error',
+            timer: 3000,
+            timerProgressBar: true,
+        });
+        return; // Stoppe die Funktion, wenn die Eingabe nicht stimmt
+    }
+    axios.delete(route('abteilung.destroy', { id: abteilungToDelete.value.id }))
+        .then(response => {
+            // Entferne die gelöschte Abteilung aus der lokalen Kopie
+            localAbteilungen.value = localAbteilungen.value.filter(abteilung => abteilung.id !== abteilungToDelete.value.id);
+            deleteInput.value = '';
+
+            Swal.fire({
+                title: 'Erfolg!',
+                text: 'Abteilung erfolgreich gelöscht!',
+                icon: 'success',
+                timer: 3000,
+                timerProgressBar: true,
+            });
+        })
+        .catch(error => {
+            Swal.fire({
+                title: 'Error!',
+                text: 'Beim Löschen der Abteilung ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.',
+                icon: 'error',
+                timer: 3000,
+                timerProgressBar: true,
+            });
+        })
+        .finally(() => {
+            showModalLöschen.value = false; // Modal schließen
+        });
 };
 
     let isModalOpen = ref(false); // Modal-Zustand
@@ -99,6 +98,7 @@ const handleDelete = (abteilungId) => {
         color: '',
     };
 };
+
 
 // Benutzer hinzufügen
 
@@ -170,8 +170,6 @@ export default {
 </script>
 
 <template>
-        <Head title="Abteilung" />
-
     <app-layout>
         <!-- Header Slot -->
         <template #header>{{$t('abteilungen')}}</template>
@@ -191,7 +189,7 @@ export default {
             </Link>
         </div>
         <!-- Benutzerausgabe -->
-        <div class="relative overflow-x-auto mb-10">
+        <div class="relative overflow-x-auto">
             <table id="table" class="w-full text-sm table-auto  text-left rtl:text-right text-gray-500 dark:text-gray-400 shadow-sm">
                 <thead class="text-md  text-gray-600 uppercase bg-gray-200 dark:bg-gray-700 dark:text-gray-400">
                     <tr class="font-bold ">
@@ -237,6 +235,8 @@ export default {
 
                                 </template>
                             </Dropdown>
+
+
                         </td>
                     </tr>
                 </tbody>
@@ -293,6 +293,28 @@ export default {
 
 
         <!-- Modal für die Löschung der Abteilung-->
-        <ModalDestroy v-if="showModalLöschen" @delete="handleDelete" @close="showModalLöschen = false" :seite="seite"  :toDelete="abteilungToDelete"></ModalDestroy>
+        <Modal v-if="showModalLöschen" @close="showModalLöschen = false" >
+            <template #header>
+                <div class="text-center w-full uppercase text-lg font-bold">
+                    <h3>{{ $t('Bestätigung') }}</h3>
+                </div>
+            </template>
+            <template #body>
+                <div class="text-center">
+                    <p class="mb-4">{{ $t('Sind Sie sicher, dass Sie die Löschung durchführen möchten?') }} : <strong>{{ abteilungToDelete.name }}</strong>?</p>
+                    <FloatLabel variant="on">
+                        <InputText  v-model="deleteInput"  size="small"  class="w-full" />
+                        <label for="abteilungDelete">delete*</label>
+                    </FloatLabel>
+                    <small id="username-help">Bitte geben Sie "delete" ein, um die Löschung zu bestätigen.</small>
+                </div>
+            </template>
+            <template #footer>
+                <div class="w-full flex justify-center">
+                    <button @click="deleteItem" class="bg-zbb text-white mx-2 px-4 py-2 rounded">{{ $t('Löschen') }}</button>
+                    <button @click="showModalLöschen = false" class="border mx-2 border-zbb text-zbb px-4 py-2 rounded">{{ $t('Abbrechen') }}</button>
+                </div>
+            </template>
+        </Modal>
     </app-layout>
 </template>

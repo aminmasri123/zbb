@@ -5,7 +5,7 @@ namespace App\Models;
 use App\Models\Projekt;
 use App\Models\Abteilung;
 use Laravel\Sanctum\HasApiTokens;
-use Spatie\Permission\Models\Role;
+use App\Models\Role;
 use App\Models\Abteilungsassistent;
 use Laravel\Jetstream\HasProfilePhoto;
 use Spatie\Permission\Traits\HasRoles;
@@ -77,10 +77,14 @@ class User extends Authenticatable
         'profile_photo_url',
     ];*/
 
+
+
+
+
+
     public function projekte()
     {
         return $this->belongsToMany(Projekt::class, 'user_has_projekts', 'user_id', 'projekt_id');
-
     }
 
     public function abteilung()

@@ -4,6 +4,7 @@
     "schule": "Schule",
     "schuleübersicht": "Schuleübersicht",
     "abmelden": "Abmelden",
+    "Team": "Team",
     "teameinstellung": "Teameinstellung",
     "projekt_wechseln": "Projekt wechseln",
     "sprachen": "Sprachen",
@@ -48,7 +49,17 @@
     "vorname": "Vorname",
     "nachname": "Nachname",
     "email": "Email",
-    "abteilung": "Abteilung"
+    "abteilung": "Abteilung",
+    "abteilungen": "Abteilungen",
+    "abteilung anlegen": "Abteilung anlegen",
+    "Titel": "Titel",
+    "Assistenten": "Assistenten ",
+    "Löschen": "Löschen",
+    "Bestätigung": "Bestätigung",
+    "Bestätigung der Löschung": "Bestätigung der Löschung",
+    "Abbrechen": "Abbrechen"
+
+
 
 
 }

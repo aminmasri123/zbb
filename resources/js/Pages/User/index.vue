@@ -4,6 +4,7 @@ import { router, Head, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Pagination from '@/Components/Pagination.vue';
 import Modal from '@/Components/ModalForm.vue';
+import ModalDestroy from '@/Components/ModalDestroyForm.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import Swal from 'sweetalert2';
@@ -12,16 +13,19 @@ import MultiSelect from 'primevue/multiselect';
 import InputText from 'primevue/inputtext';
 import FloatLabel from 'primevue/floatlabel';
 import Password from 'primevue/password';
-import Dialog from 'primevue/dialog';
-
 
 // Suchfeld und Dropdown für Projekte
+let seite = 'benutzer';
 let search = ref('');
 let searchProject = ref('');
 let selectedProject = ref(null); // Für das ausgewählte Projekt
 let isModalOpen = ref(false); // Modal-Zustand
 let sortColumn = ref('');  // Spalte zum Sortieren
 let sortDirection = ref('desc'); // Sortierrichtung ('asc' oder 'desc')
+
+let userToDelete = ref(null); // Speichert den Namen der User, die gelöscht werden soll
+let showModalLöschen = ref(false); // Modal für die Löschung
+
 
 const { users, authProjekte, success, errors, rollen } = defineProps({
     users: {
@@ -46,7 +50,17 @@ const { users, authProjekte, success, errors, rollen } = defineProps({
     }
 
 });
-    // Zeige die Erfolgsmeldung an, wenn die Komponente geladen wird
+
+// Löschbestätigung anzeigen und Abteilungsnamen speichern
+const confirmDelete = (user) => {
+    userToDelete.value = {
+        name: user.first_name, // Speichere den Namen der Abteilung
+        id: user.id      // Speichere die ID der Abteilung
+    };
+    showModalLöschen.value = true; // Modal anzeigen
+    console.log('Löschung erfolgreich:', userToDelete.value.id);
+
+};
 
 
 // Zeige die Fehlermeldung an, wenn die Komponente geladen wird
@@ -271,38 +285,78 @@ const sortByColumn = (column) => {
         <!-- Benutzer Tabelle -->
         <div class="overflow-x-auto snap-x">
             <table class="w-full text-sm text-left text-gray-500">
-                <thead class=" text-gray-600 uppercase bg-gray-300">
+                <thead class=" text-gray-600 uppercase bg-gray-200">
                     <tr>
-                        <th @click="sortByColumn('id')" scope="col" class="px-6 py-3">
+                        <th @click="sortByColumn('id')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
                             {{$t('id')}}
                             <i :class="sortColumn === 'id' && sortDirection === 'asc' ? 'las la-lg la-sort-numeric-down-alt' : 'las la-lg la-sort-numeric-up-alt'"></i>
                         </th>
-                        <th @click="sortByColumn('first_name')" scope="col" class="px-6 py-3">
+                        <th @click="sortByColumn('first_name')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
                             {{$t('vorname')}}
                             <i :class="sortColumn === 'first_name' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
                         </th>
-                        <th @click="sortByColumn('last_name')" scope="col" class="px-6 py-3">
+                        <th @click="sortByColumn('last_name')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
                             {{$t('nachname')}}
                             <i :class="sortColumn === 'last_name' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
                         </th>
-                        <th @click="sortByColumn('email')" scope="col" class="px-6 py-3">
+                        <th @click="sortByColumn('email')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
                             {{$t('email')}}
                             <i :class="sortColumn === 'email' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
                         </th>
-                        <th @click="sortByColumn('email')" scope="col" class="px-6 py-3">
+                        <!-- sortByColumn Titel soll noch angepasst werden-->
+
+                        <th @click="sortByColumn('email')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
+                            {{ $t('Titel') }}
+                            <i :class="sortColumn === 'email' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
+                        </th>
+                        <!-- sortByColumn Titel soll noch angepasst werden-->
+
+
+                        <th @click="sortByColumn('email')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
                             {{ $t('projekte') }}
                             <i :class="sortColumn === 'email' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
                         </th>
+                        <th scope="col" class="border w-10 border-solid border-gray-300 text-center px-6 py-3 ">*</th> <!-- Aktionen hinzufügen -->
+
+
                     </tr>
                 </thead>
                 <tbody>
                     <tr v-for="user in filteredUsersByProject" :key="user.id" class="bg-white border-b">
-                        <td class="px-6 py-4">{{ user.id }}</td>
-                        <td class="px-6 py-4">{{ user.first_name }}</td>
-                        <td class="px-6 py-4">{{ user.last_name }}</td>
-                        <td class="px-6 py-4">{{ user.email }}</td>
-                        <td class="px-6 py-4">
+                        <td class="px-6 py-4 border border-solid border-gray-300">{{ user.id }}</td>
+                        <td class="px-6 py-4 border border-solid border-gray-300">{{ user.first_name }}</td>
+                        <td class="px-6 py-4 border border-solid border-gray-300">{{ user.last_name }}</td>
+                        <td class="px-6 py-4 border border-solid border-gray-300">{{ user.email }}</td>
+                        <td class="px-6 py-4 border border-solid border-gray-300">
+                            <span
+                                :class="['mr-2 p-2 rounded text-black text-xs', `bg-${rolle.color}`]"
+                                v-for="rolle in user.roles"
+                                :key="rolle.id">
+                                {{ rolle.name }}
+                            </span>
+                        </td>
+                         <td class="px-6 py-4 border border-solid border-gray-300">
                             <span class="mr-4" v-for="projekt in user.projekte" :key="projekt.id">{{ projekt.name }}</span>
+                        </td>
+                        <td class="w-10 border border-solid border-gray-300 px-6 py-4 text-center m-auto">
+                            <!-- Dropdown für Aktion -->
+                            <Dropdown >
+                                <template #trigger>
+                                    <button class=" items-center  text-sm leading-4 font-medium text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
+                                        <span class="cursor-pointer">
+                                            <i class="transform transition-transform duration-300  la la-ellipsis-v la-lg"></i>
+                                        </span>
+                                    </button>
+                                </template>
+
+                                <template #content >
+                                    <!-- Gefilterte Projektauswahl -->
+                                    <span class="flex justify-around cursor-pointer" @click="confirmDelete(user)">
+                                        {{ $t('Löschen') }} <i class="las la-trash-alt"></i>
+                                    </span>
+
+                                </template>
+                            </Dropdown>
                         </td>
                     </tr>
                 </tbody>
@@ -392,11 +446,16 @@ const sortByColumn = (column) => {
             </template>
         </Modal>
 
+        <!-- Modal für die Löschung der Abteilung-->
+        <ModalDestroy v-if="showModalLöschen" @close="showModalLöschen = false" :seite="seite"  :toDelete="userToDelete">
+            <template #header>
+                <!--  Header Ingalt-->
+            </template>
+            <template #body>
+            </template>
+            <template #footer>
 
+            </template>
+        </ModalDestroy>
     </app-layout>
 </template>
-<style>
-
-
-
-</style>

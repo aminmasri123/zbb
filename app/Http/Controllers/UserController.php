@@ -50,7 +50,8 @@ class UserController extends Controller
                     ->orWhere('last_name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%");
             });
-        })->with('projekte');
+        })->with('projekte')
+            ->with('roles:name,color');
         if (!$authUser->roles->whereIn('name', $adminRoles)->count()) {
             $query->whereHas('projekte', function ($query) use ($authUser) {
                 $query->whereIn('projekt_id', $authUser->projekte->pluck('id'));
@@ -173,6 +174,19 @@ class UserController extends Controller
      */
     public function destroy($id)
     {
-        //
+        try {
+            $user = User::findOrFail($id); // Suche die Abteilung
+
+            // Optional: Überprüfe, ob die Abteilung gelöscht werden kann (z.B. durch Beziehungen)
+            // if ($abteilung->hasRelations()) { ... }
+
+            $user->delete(); // Lösche die Abteilung
+
+            return response()->json(['message' => 'Abteilung erfolgreich gelöscht!'], 200);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['message' => 'Abteilung nicht gefunden.'], 404);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
+        }
     }
 }
