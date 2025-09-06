@@ -23,6 +23,7 @@ class UserSeeder extends Seeder
         DB::table('users')->insert([
             [
                 // id = 1
+                'name' => 'Amin Masri',
                 'first_name' => 'Amin',
                 'last_name' => 'Masri',
                 'email' => 'amin.masri@outlook.com',
@@ -30,6 +31,7 @@ class UserSeeder extends Seeder
                 'lang' => 'de',
             ],
             [   // id = 2
+                'name' => 'Anika Feller',
                 'first_name' => 'Anika',
                 'last_name' => 'Feller',
                 'email' => 'a.feller@zbb-saar.de',
@@ -37,6 +39,7 @@ class UserSeeder extends Seeder
                 'lang' => 'de',
             ],
             [ // id = 3
+                'name' => 'Salvatore Gucciardo',
                 'first_name' => 'Salvatore',
                 'last_name' => 'Gucciardo',
                 'email' => 's.gucciardo@zbb-saar.de',
@@ -44,6 +47,7 @@ class UserSeeder extends Seeder
                 'lang' => 'de',
             ],
             [ // id = 4
+                'name' => 'Brigitta Lautenschlager',
                 'first_name' => 'Birgitta',
                 'last_name' => 'Lautenschlager',
                 'email' => 'b.lautenschlager@zbb-saar.de',
@@ -51,6 +55,7 @@ class UserSeeder extends Seeder
                 'lang' => 'de',
             ],
             [ // id = 5
+                'name' => 'Chantale Lismann',
                 'first_name' => 'Chantale',
                 'last_name' => 'Lismann',
                 'email' => 'c.lismann@zbb-saar.de',
@@ -58,6 +63,7 @@ class UserSeeder extends Seeder
                 'lang' => 'de',
             ],
             [ // id = 6
+                'name' => 'Stefanie Wagner',
                 'first_name' => 'Stefanie',
                 'last_name' => 'Wagner',
                 'email' => 's.wagner@zbb-saar.de',
@@ -65,6 +71,7 @@ class UserSeeder extends Seeder
                 'lang' => 'de',
             ],
             [ // id = 7
+                'name' => 'Stefan Haßdenteufel',
                 'first_name' => 'Stefan',
                 'last_name' => 'Haßdenteufel',
                 'email' => 's.haßdenteufel@zbb-saar.de',
@@ -72,6 +79,7 @@ class UserSeeder extends Seeder
                 'lang' => 'de',
             ],
             [ // id = 8
+                'name' => 'Martin Löw',
                 'first_name' => 'Martin',
                 'last_name' => 'Löw',
                 'email' => 'm.loew@zbb-saar.de',
@@ -87,6 +95,7 @@ class UserSeeder extends Seeder
         for ($i = 0; $i < $numberOfUsers; $i++)
         {
             User::create([
+                'name' => $faker->username,
                 'first_name' => $faker->firstName,
                 'last_name' => $faker->lastName,
                 'email' => $faker->unique()->safeEmail,
@@ -108,8 +117,42 @@ class UserSeeder extends Seeder
                 'user_id' => '7',
             ],
             [ // id = 4
-                'Intqra PRO' => 'Abt. Beratung, Integration & Vermittlung',
+                'name' => 'Abt. Beratung, Integration & Vermittlung',
                 'user_id' => '8',
+            ],
+
+        ]);
+
+        DB::table('bereiches')->insert([
+            [ // id = 1
+                'name' => 'IT-und Mediengestaltung',
+            ],
+            [ // id = 2
+                'name' => 'Friseur/Kosmetik/Körperpflege',
+            ],
+            [ // id = 3
+                'name' => 'Holztechnik',
+            ],
+            [ // id = 4
+                'name' => 'Metaltechnik',
+            ],
+            [ // id = 5
+                'name' => 'Hauswirtschaft',
+            ],
+            [ // id = 6
+                'name' => 'Verkauf und Wirtschaft',
+            ],
+            [ // id = 7
+                'name' => 'Lager und Handel',
+            ],
+            [ // id = 8
+                'name' => 'Maler und Lackierer',
+            ],
+            [ // id = 9
+                'name' => 'Garten und Landschaftsbau',
+            ],
+            [ // id = 10
+                'name' => 'Buromanagement',
             ],
 
         ]);
@@ -254,30 +297,37 @@ class UserSeeder extends Seeder
             [ // id = 1
                 'name' => 'Administrator',
                 'guard_name' => 'web',
+                'color' => 'bg-orange-200',
             ],
             [ // id = 2
                 'name' => 'Abteilungsleitung',
                 'guard_name' => 'web',
+                'color' => 'bg-green-200',
             ],
             [ // id = 3
                 'name' => 'Assistenz der Abt.-Leitung',
                 'guard_name' => 'web',
+                'color' => 'bg-yellow-200',
             ],
             [ // id = 4
                 'name' => 'Sozialpädagoge',
                 'guard_name' => 'web',
+                'color' => 'bg-slate-400',
             ],
             [ // id = 5
                 'name' => 'Anleiter',
                 'guard_name' => 'web',
+                'color' => 'bg-cyan-300',
             ],
             [ // id = 6
                 'name' => 'Sekretariat',
                 'guard_name' => 'web',
+                'color' => 'bg-rose-400',
             ],
             [ // id = 7
                 'name' => 'Developer',
                 'guard_name' => 'web',
+                'color' => 'bg-red-200',
             ],
 
         ]);
@@ -287,6 +337,16 @@ class UserSeeder extends Seeder
                 'name' => 'dashboard.index',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '1',
+            ],
+            [ // id = 1
+                'name' => 'berechtigung.index',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '8',
+            ],
+            [ // id = 1
+                'name' => 'berechtigung.store',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '8',
             ],
 
             [ // id = 2
@@ -336,8 +396,42 @@ class UserSeeder extends Seeder
                 'name' => 'kooperationspartner.destroy',
                 'beschreibung' => 'web',
                 'berechtigungskategorie_id' => '2',
-
             ],
+
+            [ // id = 5
+                'name' => 'bereich.index',
+                'beschreibung' => 'web',
+                'berechtigungskategorie_id' => '2',
+            ],
+            [ // id = 5
+                'name' => 'bereich.store',
+                'beschreibung' => 'web',
+                'berechtigungskategorie_id' => '2',
+            ],
+            [ // id = 5
+                'name' => 'bereich.destroy',
+                'beschreibung' => 'web',
+                'berechtigungskategorie_id' => '2',
+            ],
+            [ // id = 5
+                'name' => 'projekt.index',
+                'beschreibung' => 'web',
+                'berechtigungskategorie_id' => '19',
+            ],
+            [ // id = 5
+                'name' => 'projekt.store',
+                'beschreibung' => 'web',
+                'berechtigungskategorie_id' => '19',
+            ],
+            [ // id = 5
+                'name' => 'projekt.destroy',
+                'beschreibung' => 'web',
+                'berechtigungskategorie_id' => '19',
+            ],
+
+
+
+
 
         ]);
 

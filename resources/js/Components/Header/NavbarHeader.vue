@@ -1,5 +1,6 @@
 <template>
-    <nav class="sticky top-0 w-full bg-white border-b border-gray-100 z-50">
+    <nav class="sticky top-0 w-full bg-white border-b border-gray-100 z-50 dark:bg-gray-800 dark:text-gray-100">
+
         <!-- Primary Navigation Menu -->
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
@@ -8,7 +9,7 @@
                     <!-- Hamburger Button (nur auf Mobilgeräten sichtbar) -->
                     <button
                         @click="$emit('toggle-sidebar')"
-                        class=" text-black pr-4 block md:hidden"
+                        class=" text-black pr-4 block md:hidden dark:text-gray-100"
                         :class="{' ':sidebarOpen}"
                     >
                         <i class="la la-bars text-2xl"></i>
@@ -17,7 +18,7 @@
                     <!-- Knopf Sidebar displayHideTextSidebar -->
                     <button
                         @click="$emit('toggle-sidebar-text')"
-                        class=" text-black  pr-4 hidden md:block"
+                        class=" text-black  pr-4 hidden md:block dark:text-gray-100"
                         :class="{' ':displayHideTextSidebar}"
                     >
                         <i class="la la-bars text-2xl"></i>
@@ -29,27 +30,22 @@
                         </Link>
                     </div>
                 </div>
-
-
-
-
                 <div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex text-center">
-                    <NavLink :href="route('dashboard')" :active="route().current('dashboard')">
+                    <NavLink :href="route('dashboard')" :active="route().current('dashboard')" class="dark:text-gray-100">
                         {{ $t('dashboard') }}
                     </NavLink>
-                    <NavLink :href="route('organisation.index')" :active="route().current('organisation.index')">
+                    <NavLink :href="route('organisation.index')" :active="route().current('organisation.index')" class="dark:text-gray-100">
                         {{ $t('organisation') }}
                     </NavLink>
                 </div>
+
                 <div class="flex items-center sm:ml-6">
                     <!-- Teams Dropdown -->
                     <Dropdown v-if="$page.props.auth.user.projekte" align="right" width="60">
                         <template #trigger>
-                            <span class="inline-flex rounded-md">
                                 <button type="button" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
-                                    <i class="la la-lg la-briefcase" aria-hidden="true"></i>
+                                    <i class="la text-lg la-briefcase" aria-hidden="true"></i>
                                 </button>
-                            </span>
                         </template>
                         <template #content>
                             <div class="w-40 ">
@@ -96,7 +92,7 @@
                     <!-- Sprache Dropdown -->
                     <Dropdown align="right" width="48">
                         <template #trigger >
-                            <button class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
+                            <button class="inline-flex items-center px-3 py-2 mx-1 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
                                 <i class="las la-globe text-lg"></i>
                             </button>
                         </template>
@@ -126,11 +122,17 @@
                         <!-- Dropdown content -->
                     </Dropdown>
 
+                    <button
+                        @click="switchTheme"
+                        class="inline-flex items-center px-3 py-2 mr-1 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
+                            <i class="las la-adjust text-lg"></i>
+                    </button>
+
                     <!-- Settings Dropdown -->
                     <Dropdown align="right" width="48">
                         <template #trigger>
                             <button v-if="$page.props.jetstream.managesProfilePhotos" class="flex text-sm border-2 border-transparent rounded-full focus:outline-none focus:border-gray-300 transition">
-                                <img class="h-8 w-8 rounded-full object-cover" :src="$page.props.auth.user.profile_photo_url" :alt="$page.props.auth.user.name">
+                                <img class="h-8 w-8 rounded-full object-cover"  :src="`/storage/${$page.props.auth.user.profile_photo_path}`"  :alt="$page.props.auth.user.name">
                             </button>
 
                             <span v-else class="inline-flex rounded-md">
@@ -169,7 +171,6 @@
                         <!-- Dropdown content -->
                     </Dropdown>
                 </div>
-
                 <!-- Hamburger Menu -->
                 <div class="-mr-2 flex items-center sm:hidden">
                     <button class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:bg-gray-100 focus:text-gray-500 transition duration-150 ease-in-out" @click="toggleNavigationDropdown">
@@ -214,12 +215,12 @@
             <div class="pt-4 pb-1 border-t border-gray-200">
                 <div class="flex items-center px-4">
                     <div v-if="$page.props.jetstream.managesProfilePhotos" class="shrink-0 mr-3">
-                        <img class="h-10 w-10 rounded-full object-cover" :src="$page.props.auth.user.profile_photo_url" :alt="$page.props.auth.user.name">
+                        <img class="h-10 w-10 rounded-full object-cover"  :src="`/storage/${$page.props.auth.user.profile_photo_path}`"  :alt="$page.props.auth.user.name">
                     </div>
 
                     <div>
                         <div class="font-medium text-sm text-gray-500">{{ $page.props.auth.user.first_name }} {{ $page.props.auth.user.last_name }}</div>
-                        <div class="font-medium text-sm text-gray-500">{{ $page.props.auth.user.email }}</div>
+                        <div class="font-medium text-sm text-gray-500">{{ $page.props.auth.user.email }} </div>
                     </div>
                 </div>
 
@@ -249,6 +250,7 @@
     import DropdownLink from '@/Components/DropdownLink.vue';
 
     import { useI18n } from 'vue-i18n';
+import { switchTheme } from '../../theme';
     const sidebarTextHidden = ref(false);
     const props = defineProps({
     //sidebarOpen: Boolean,

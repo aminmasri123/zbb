@@ -7,6 +7,7 @@
     "Team": "Team",
     "teameinstellung": "Teameinstellung",
     "projekt_wechseln": "Projekt wechseln",
+    "Projekt anlegen": "Projekt anlegen",
     "sprachen": "Sprachen",
     "deutsch": "Deutsch",
     "english": "English",
@@ -26,7 +27,6 @@
     "rolle_anlegen": "Rolle anlegen",
     "kooperationspartner": "Kooperationspartner",
     "partner": "Partner",
-
     "benutzer_anlegen": "Benutzer anlegen",
     "personal": "Personal",
     "personalübersicht": "Personalübersicht",
@@ -37,13 +37,17 @@
     "alle_rollen": "Alle Rollen",
     "rolle": "Rolle",
     "berechtigungsübersicht": "Berechtigungsübersicht",
-    "berechtigung": "Berechtigung",
+    "Berechtigung": "Berechtigung",
+    "Berechtigungen": "Berechtigungen",
     "Next &raquo;": "»",
     "&laquo; Previous": "«",
     " &raquo;": "»",
     "&laquo; ": "«",
     "...": "...",
+    "Projekt": "Projekt",
     "projekte": "Projekte",
+    "Abteilung": "Abteilung",
+
     "alle": "Alle",
     "id": "ID",
     "vorname": "Vorname",
@@ -57,9 +61,21 @@
     "Löschen": "Löschen",
     "Bestätigung": "Bestätigung",
     "Bestätigung der Löschung": "Bestätigung der Löschung",
-    "Abbrechen": "Abbrechen"
-
-
+    "Abbrechen": "Abbrechen",
+    "Bereich": "Bereich",
+    "Bereich anlegen": "Bereich anlegen",
+    "Bereiche": "Bereiche",
+    "Suchen": "Suchen",
+    "Bezeichnung": "Bezeichnung",
+    "Beschreibung": "Beschreibung",
+    "Bereichübersicht": "Bereichübersicht",
+    "Kostenstelle": "Kostenstelle",
+    "Abteilung wählen": "Abteilung wählen",
+    "Antragsdatum": "Antragsdatum",
+    "Starttermin": "Starttermin",
+    "Anfangsdatum": "Anfangsdatum",
+    "Endtermin": "Endtermin",
+    "Enddatum": "Enddatum"
 
 
 }

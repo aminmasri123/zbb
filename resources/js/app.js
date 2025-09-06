@@ -18,6 +18,7 @@ import PrimeVue from "primevue/config";
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import Aura from '@primevue/themes/aura';
+import { setThemeOnLoad } from './theme';
 
 
 const appName = window.document.getElementsByTagName('title')[0]?.innerText || 'Laravel';
@@ -27,9 +28,11 @@ createInertiaApp({
     resolve: (name) => resolvePageComponent(`./Pages/${name}.vue`, import.meta.glob('./Pages/**/*.vue')),
 
     setup({ el, App, props, plugin }) {
+
         return createApp({ render: () => h(App, props) })
             .use(plugin)
             .use(i18n)
+
             .use(ZiggyVue, Ziggy)
             .use(PrimeVue, {
                 theme: {
@@ -47,3 +50,4 @@ createInertiaApp({
 
 });
 
+setThemeOnLoad(); 

@@ -6,7 +6,7 @@
             </li>
             <!-- Dashboard Submenu -->
             <li v-if="['dashboard.index'].some(permission => $page.props.permissions.includes(permission))" class="submenu">
-                <a href="#" @click.prevent="toggleMenu('dashboard')" class="flex items-center text-white py-2 hover:bg-gray-700 transition duration-200">
+                <a href="#" @click.prevent="toggleMenu('dashboard')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                     <i class="la la-dashboard la-lg mr-2"></i>
 
                     <span  v-if="!displayHideTextSidebar" :class="{'pr-16': !displayHideTextSidebar === true}">{{$t('dashboard')}}</span>
@@ -19,7 +19,7 @@
 
             <!-- Benutzer Submenu -->
             <li v-if="['benutzer.index', 'benutzer.store'].some(permission => $page.props.permissions.includes(permission))" class="submenu">
-                <a href="#" @click.prevent="toggleMenu('benutzer')" class="flex items-center text-white py-2 hover:bg-gray-700 transition duration-200">
+                <a href="#" @click.prevent="toggleMenu('benutzer')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                     <i class="la la-lg la-user mr-2"></i>
                     <span v-if="!displayHideTextSidebar">{{$t('team')}}</span>
                     <span :class="{'rotate-180': activeMenu === 'benutzer', 'hidden': displayHideTextSidebar === true, 'text-zbb': $page.component.startsWith('User')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
@@ -33,7 +33,7 @@
 
              <!-- Kooperationspartner Submenu -->
              <li v-if="['kooperationspartner.index', 'kooperationspartner.store', 'kooperationspartner.update'].some(permission => $page.props.permissions.includes(permission))" class="submenu">
-                <a href="#" @click.prevent="toggleMenu('kooperationspartner')" class="flex items-center text-white py-2 hover:bg-gray-700 transition duration-200">
+                <a href="#" @click.prevent="toggleMenu('kooperationspartner')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                     <i class="la la-lg la-building mr-2"></i>
                     <span v-if="!displayHideTextSidebar" >{{$t('partner')}}</span>
                     <span v-if="!displayHideTextSidebar" :class="{'rotate-180': activeMenu === 'kooperationspartner', 'text-zbb': $page.component.startsWith('Partner')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
@@ -44,27 +44,48 @@
             </li>
             <!-- Abteilung Submenu -->
             <li v-if="['abteilung.index', 'abteilung.store', 'abteilung.update'].some(permission => $page.props.permissions.includes(permission))" class="submenu">
-                <a href="#" @click.prevent="toggleMenu('abteilung')" class="flex items-center text-white py-2 hover:bg-gray-700 transition duration-200">
+                <a href="#" @click.prevent="toggleMenu('abteilung')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                     <i class="la la-lg la-unlock mr-2"></i>
 
-                    <span v-if="!displayHideTextSidebar" >{{$t('abteilung')}}</span>
+                    <span v-if="!displayHideTextSidebar" >{{$t('abteilungen')}}</span>
                     <span v-if="!displayHideTextSidebar" :class="{'rotate-180': activeMenu === 'abteilung', 'text-zbb': $page.component.startsWith('Abteilung')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
                 </a>
                 <ul v-show="activeMenu === 'abteilung'" class="pl-6 mt-2 space-y-2">
                     <li v-if="$page.props.permissions.includes('abteilung.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('abteilung.index')">{{$t('berechtigungsübersicht')}}</Link></li>
                 </ul>
             </li>
-
+            <!-- Projekt Submenu -->
+            <li v-if="['projekt.index', 'projekt.store', 'projekt.update'].some(permission => $page.props.permissions.includes(permission))" class="submenu">
+                <a href="#" @click.prevent="toggleMenu('projekt')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
+                    <i class="la la-lg la-project-diagram mr-2"></i>
+                    <span v-if="!displayHideTextSidebar" >{{$t('projekte')}}</span>
+                    <span v-if="!displayHideTextSidebar" :class="{'rotate-180': activeMenu === 'projekt', 'text-zbb': $page.component.startsWith('Projekt')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
+                </a>
+                <ul v-show="activeMenu === 'projekt'" class="pl-6 mt-2 space-y-2">
+                    <li v-if="$page.props.permissions.includes('projekt.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('projekt.index')">{{$t('berechtigungsübersicht')}}</Link></li>
+                </ul>
+            </li>
+            <!-- Bereich Submenu -->
+            <li v-if="['bereich.index', 'bereich.store', 'bereich.update'].some(permission => $page.props.permissions.includes(permission))" class="submenu">
+                <a href="#" @click.prevent="toggleMenu('bereich')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
+                    <i class="la la-lg la-braille mr-2"></i>
+                    <span v-if="!displayHideTextSidebar" >{{$t('Bereiche')}}</span>
+                    <span v-if="!displayHideTextSidebar" :class="{'rotate-180': activeMenu === 'bereich', 'text-zbb': $page.component.startsWith('Bereich')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
+                </a>
+                <ul v-show="activeMenu === 'bereich'" class="pl-6 mt-2 space-y-2">
+                    <li v-if="$page.props.permissions.includes('bereich.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('bereich.index')">{{$t('Bereichübersicht')}}</Link></li>
+                </ul>
+            </li>
 
 
 
 
              <!-- Berechtigung Submenu -->
              <li v-if="['berechtigung.index', 'berechtigung.store', 'berechtigung.update'].some(permission => $page.props.permissions.includes(permission))" class="submenu">
-                <a href="#" @click.prevent="toggleMenu('berechtigung')" class="flex items-center text-white py-2 hover:bg-gray-700 transition duration-200">
+                <a href="#" @click.prevent="toggleMenu('berechtigung')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                     <i class="la la-lg la-unlock mr-2"></i>
 
-                    <span v-if="!displayHideTextSidebar" >{{$t('berechtigung')}}</span>
+                    <span v-if="!displayHideTextSidebar" >{{$t('Berechtigungen')}}</span>
                     <span v-if="!displayHideTextSidebar" :class="{'rotate-180': activeMenu === 'berechtigung', 'text-zbb': $page.component.startsWith('Einstellung')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
                 </a>
                 <ul v-show="activeMenu === 'berechtigung'" class="pl-6 mt-2 space-y-2">

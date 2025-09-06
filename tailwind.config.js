@@ -14,7 +14,8 @@ module.exports = {
         extend: {
             fontFamily: {
                 //'Helvetica, Figtree'
-                sans: ['Helvetica', ...defaultTheme.fontFamily.sans],
+                Helvetica: ['Helvetica', ...defaultTheme.fontFamily.sans],
+                Montserrat: ['Montserrat', 'sans-serif'],
             },
             colors:{
                 zbb: '#ff8500',
