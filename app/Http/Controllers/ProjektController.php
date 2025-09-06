@@ -59,7 +59,6 @@ class ProjektController extends Controller
                 'abteilungen' => $abteilungen
             ]);
         };
-
     }
 
     /**

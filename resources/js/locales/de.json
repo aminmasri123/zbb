@@ -47,7 +47,11 @@
     "Projekt": "Projekt",
     "projekte": "Projekte",
     "Abteilung": "Abteilung",
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 761bc7a7e2ba9a80dd4b302a5940c8827e4459fc
     "alle": "Alle",
     "id": "ID",
     "vorname": "Vorname",
@@ -70,12 +74,17 @@
     "Beschreibung": "Beschreibung",
     "Bereichübersicht": "Bereichübersicht",
     "Kostenstelle": "Kostenstelle",
+<<<<<<< HEAD
     "Abteilung wählen": "Abteilung wählen",
     "Antragsdatum": "Antragsdatum",
     "Starttermin": "Starttermin",
     "Anfangsdatum": "Anfangsdatum",
     "Endtermin": "Endtermin",
     "Enddatum": "Enddatum"
+=======
+    "Abteilung wählen": "Abteilung wählen"
+
+>>>>>>> 761bc7a7e2ba9a80dd4b302a5940c8827e4459fc
 
 
 }

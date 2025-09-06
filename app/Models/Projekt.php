@@ -22,6 +22,7 @@ class Projekt extends Model
         return $this->belongsTo(Abteilung::class);
     }
 
+
     public function users()
     {
         return $this->belongsToMany(User::class);

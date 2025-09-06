@@ -28,13 +28,19 @@ class AbteilungController extends Controller
             ->orderBy('name') // Sortiere nach Name
             ->paginate(100)    // Wende die Paginierung an
             ->withQueryString(); // Behalte die Query-String-Parameter für die Pagination
+<<<<<<< HEAD
 
 
+=======
+    
+   
+>>>>>>> 761bc7a7e2ba9a80dd4b302a5940c8827e4459fc
         // Standardmäßige Rückgabe für die Inertia-Ansicht
         return Inertia::render('Abteilung/Index', [
             'abteilungen' => $abteilungen,
             'users' => $users,
         ]);
+<<<<<<< HEAD
 
     }
     public function indexAjaxFresh(Request $request)
@@ -60,8 +66,34 @@ class AbteilungController extends Controller
                 'users' => $users,
             ]);
         };
+=======
+    
+>>>>>>> 761bc7a7e2ba9a80dd4b302a5940c8827e4459fc
     }
-
+    public function indexAjaxFresh(Request $request)
+    {
+        $search = $request->input('search'); // Benutze input(), um den Suchparameter abzurufen
+        $users = User::select('id', DB::raw("CONCAT(first_name, ' ', last_name) AS full_name"))->distinct()->get();
+    
+        // Hole die Abteilungen mit Suchfilter und lade die notwendigen Beziehungen
+        $abteilungen = Abteilung::query()
+            ->when($search, function ($query) use ($search) {
+                $query->where('name', 'like', "%{$search}%");
+            })
+            ->with('user:id,first_name,last_name') // Lade den Abteilungsleiter
+            ->with('abteilungsassistente.user') // Lade die Abteilungsassistenten
+            ->orderBy('name') // Sortiere nach Name
+            ->paginate(100)    // Wende die Paginierung an
+            ->withQueryString(); // Behalte die Query-String-Parameter für die Pagination
+    
+        // Überprüfe, ob die Anfrage als AJAX-Request gesendet wurde
+        if ($request->ajax()) {
+            return response()->json([
+                'abteilungen' => $abteilungen,
+                'users' => $users,
+            ]);
+        };    
+    }
 
     public function store(Request $request)
     {

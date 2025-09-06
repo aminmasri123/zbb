@@ -13,9 +13,12 @@ class Bereich extends Model
         'name',
         'beschreibung',
     ];
+<<<<<<< HEAD
 
     public function projekte()
     {
         return $this->belongsToMany(Projekt::class);
     }
+=======
+>>>>>>> 761bc7a7e2ba9a80dd4b302a5940c8827e4459fc
 }

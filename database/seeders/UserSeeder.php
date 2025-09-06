@@ -560,8 +560,6 @@ class UserSeeder extends Seeder
 
         ]);
 
-
-
-
     }
+
 }
