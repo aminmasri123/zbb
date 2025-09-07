@@ -30,12 +30,15 @@
                         </Link>
                     </div>
                 </div>
-                <div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex text-center">
+                <div class="hidden space-x-8 sm:-my-px sm:flex text-center">
                     <NavLink :href="route('dashboard')" :active="route().current('dashboard')" class="dark:text-gray-100">
                         {{ $t('dashboard') }}
                     </NavLink>
                     <NavLink :href="route('organisation.index')" :active="route().current('organisation.index')" class="dark:text-gray-100">
                         {{ $t('organisation') }}
+                    </NavLink>
+                    <NavLink :href="route('ressourcen.index')" :active="route().current('ressourcen.index')" class="dark:text-gray-100">
+                        {{ $t('Ressourcen') }}
                     </NavLink>
                 </div>
 

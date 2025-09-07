@@ -4,10 +4,10 @@ import Welcome from '@/Components/Welcome.vue';
 </script>
 
 <template>
-    <AppLayout :title="$t('Organisation')">
+    <AppLayout :title="$t('Ressourcen')">
         <template #header>
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                {{$t('Organisation')}}
+                {{$t('Ressourcen')}}
             </h2>
         </template>
 

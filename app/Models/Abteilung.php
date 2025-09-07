@@ -27,9 +27,9 @@ class Abteilung extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
-    public function projekte(): HasMany
+   public function projekte()
     {
-        return $this->hasMany(Projekt::class);
+        return $this->hasMany(Projekt::class, 'abteilung_id', 'id');
     }
 
 

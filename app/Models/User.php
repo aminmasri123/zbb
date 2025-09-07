@@ -78,8 +78,10 @@ class User extends Authenticatable
     ];*/
 
 
-
-
+    public function adresse()
+    {
+        return $this->hasOne(Adresse::class);
+    }
 
 
     public function projekte()

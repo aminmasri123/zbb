@@ -19,7 +19,7 @@ class Projekt extends Model
     ];
     public function abteilung()
     {
-        return $this->belongsTo(Abteilung::class);
+        return $this->belongsTo(Abteilung::class, 'abteilung_id', 'id');
     }
 
 

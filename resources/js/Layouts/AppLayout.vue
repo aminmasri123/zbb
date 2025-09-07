@@ -8,6 +8,7 @@ import NavigationMenu from '@/Components/Header/NavbarHeader.vue';
 import DashboardSidebar from '@/Components/Sidebar/DashboardSidebar.vue';
 import ProfileSidebar from '@/Components/Sidebar/ProfileSidebar.vue';
 import OrganisationSidebar from '@/Components/Sidebar/OrganisationSidebar.vue';
+import RessourcenSidebar from '@/Components/Sidebar/RessourcenSidebar.vue';
 
 // Aktuelle Seite/Route
 const page = usePage();
@@ -21,8 +22,9 @@ const currentSidebar = computed(() => {
     return ProfileSidebar;
   } else if (url.startsWith('/organisation')) {
     return OrganisationSidebar;
-  }
-  return DashboardSidebar; // Standardmäßig DashboardSidebar, wenn kein anderer Pfad passt
+  } else if (url.startsWith('/ressourcen')) {
+        return RessourcenSidebar;
+    }  return DashboardSidebar; // Standardmäßig DashboardSidebar, wenn kein anderer Pfad passt
 });
 const sidebarOpen = ref(false); // Für die mobile Ansicht Sidebar umschalten
 const displayHideTextSidebar = ref(false);
@@ -127,6 +129,4 @@ export default {
             </div>
         </div>
     </div>
-
-
 </template>

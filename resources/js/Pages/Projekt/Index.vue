@@ -10,10 +10,7 @@
     import InputText from 'primevue/inputtext';
     import FloatLabel from 'primevue/floatlabel';
     import Select from 'primevue/select';
-<<<<<<< HEAD
     import DatePicker from 'primevue/datepicker';
-=======
->>>>>>> 761bc7a7e2ba9a80dd4b302a5940c8827e4459fc
 
     let seite = 'projekt';
     let search = ref('');
@@ -27,7 +24,6 @@
     let localProjekte = ref([...props.projekte.data]);  // Originaldaten
     let filteredProjekte = ref([...localProjekte.value]); // Gefilterte Daten
 
-<<<<<<< HEAD
     const formatDate = (date) => {
     if (!date) return 'Kein Datum verfügbar'; // Überprüfen, ob das Datum vorhanden ist
     const d = new Date(date);
@@ -39,8 +35,6 @@
 
 
 
-=======
->>>>>>> 761bc7a7e2ba9a80dd4b302a5940c8827e4459fc
      // Funktion, um die Projekte von der Datenbank abzurufen
      const fetchProjekte = async () => {
         try {
@@ -51,11 +45,8 @@
             return null;
         }
     };
-<<<<<<< HEAD
 
 
-=======
->>>>>>> 761bc7a7e2ba9a80dd4b302a5940c8827e4459fc
     // Funktion zum Vergleichen und Laden der neuen Daten
     const compareAndReload = async () => {
         const newProjekte = await fetchProjekte();
@@ -125,7 +116,6 @@
         isModalOpen.value = false;
         resetForm();
     };
-<<<<<<< HEAD
     // Neuen Projekt
     let newProjekt = ref({
         name: '',
@@ -149,15 +139,6 @@
             enddatum: '',
         };
     };
-=======
-    const resetForm = () => {
-    newProjekt.value = {
-        name: '',
-        kostenstelle:'',
-        abteilung: '',
-    };
-};
->>>>>>> 761bc7a7e2ba9a80dd4b302a5940c8827e4459fc
 
 // Benutzer hinzufügen
 
@@ -168,10 +149,7 @@ const addProjekt = async () => {
 
         // Logge die vollständige Antwort des Servers, um zu sehen, was tatsächlich zurückkommt
         console.log('API response:', response.data);
-<<<<<<< HEAD
         console.log('API response:', response);
-=======
->>>>>>> 761bc7a7e2ba9a80dd4b302a5940c8827e4459fc
 
         // Prüfe, ob das erstellte Projekt im response vorhanden ist
         if (!response.data.projekt) {
@@ -210,16 +188,6 @@ const addProjekt = async () => {
 };
 
 
-<<<<<<< HEAD
-
-=======
-// Neuen Projekt
-let newProjekt = ref({
-    name: '',
-    kostenstelle:'',
-    abteilung: '',
-});
->>>>>>> 761bc7a7e2ba9a80dd4b302a5940c8827e4459fc
 
 </script>
 
@@ -240,10 +208,6 @@ export default {
     <app-layout>
         <!-- Header Slot -->
         <template #header>{{$t('projekte')}}</template>
-<<<<<<< HEAD
-=======
-        {{ abteilungen }}
->>>>>>> 761bc7a7e2ba9a80dd4b302a5940c8827e4459fc
         <!-- Suchfeld -->
         <div class="flex justify-around items-center mb-3">
             <div @click="openModal" class="flex items-center">
@@ -261,17 +225,11 @@ export default {
         <!-- Benutzerausgabe -->
         <div class="relative overflow-x-auto mb-10">
             <table id="table" class="w-full text-sm table-auto mb-5 text-left rtl:text-right text-gray-500 dark:text-gray-400 shadow-sm">
-<<<<<<< HEAD
                 <thead class="text-xs  text-gray-600 uppercase bg-gray-200 dark:bg-gray-700 dark:text-gray-400">
-=======
-                <thead class="text-md  text-gray-600 uppercase bg-gray-200 dark:bg-gray-700 dark:text-gray-400">
->>>>>>> 761bc7a7e2ba9a80dd4b302a5940c8827e4459fc
                     <tr class="font-bold ">
                         <th scope="col" class="border border-solid border-gray-300 px-6 py-3 w-10 text-center ">ID.</th>
                         <th scope="col" class="border border-solid border-gray-300 px-6 py-3 ">{{$t('Projekt')}}</th>
                         <th scope="col" class="border border-solid border-gray-300 px-6 py-3 ">{{$t('Kostenstelle')}}</th>
-                        <th scope="col" class="border border-solid border-gray-300 px-6 py-3 ">{{$t('Abteilung')}}</th>
-<<<<<<< HEAD
                         <th scope="col" class="border border-solid border-gray-300 px-6 py-3 ">{{$t('Bereiche')}}</th>
                         <th scope="col" class="border border-solid border-gray-300 px-6 py-3 ">{{$t('Antragsdatum')}}</th>
                         <th scope="col" class="border border-solid border-gray-300 px-6 py-3 ">{{$t('Starttermin')}}</th>
@@ -279,32 +237,22 @@ export default {
                         <th scope="col" class="border border-solid border-gray-300 px-6 py-3 ">{{$t('Endtermin')}}</th>
                         <th scope="col" class="border border-solid border-gray-300 px-6 py-3 ">{{$t('Enddatum')}}</th>
                         <th scope="col" class="border w-10 border-solid border-gray-300 text-center px-6 py-3 ">*</th> <!-- Aktionen hinzufügen -->
-=======
-                        <th scope="col" class="border w-10 border-solid border-gray-300 text-center px-6 py-3 ">*</th> <!-- Aktionen hinzufügen -->
-
->>>>>>> 761bc7a7e2ba9a80dd4b302a5940c8827e4459fc
                     </tr>
                 </thead>
                 <tbody>
                     <tr v-for="projekt in filteredProjekte" :key="projekt.id"
                         class="bg-white  border-solid dark:bg-gray-800 dark:border-gray-700">
-<<<<<<< HEAD
                         <th scope="row" class="border border-solid border-gray-300 px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white text-center w-6">
-=======
-                        <th scope="row" class="border border-solid border-gray-300 px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white text-center w-10">
->>>>>>> 761bc7a7e2ba9a80dd4b302a5940c8827e4459fc
                             {{projekt.id}}
                         </th>
                         <td class="border border-solid border-gray-300 px-6 py-4">
-                            {{projekt.name}}
+                            <span class="block">{{projekt.name}}</span>
+                            <span class="text-xs text-zbb">{{projekt.abteilung.name}}</span>
                         </td>
                         <td class="border border-solid border-gray-300 px-6 py-4">
                             {{projekt.kostenstelle}}
                         </td>
-                        <td class="border border-solid border-gray-300 px-6 py-4">
-<<<<<<< HEAD
-                            <p>{{projekt.abteilung.name}}</p>
-                        </td>
+
                         <td class="border border-solid border-gray-300 px-6 py-4">
                             <li v-for="bereich in projekt.bereiche" :key="bereich.id" class="text-xs">{{bereich.name}}</li>
                         </td>
@@ -334,11 +282,6 @@ export default {
                             </div>
                         </td>
                         <td class="w-6 border border-solid border-gray-300 px-6 py-4 text-center m-auto">
-=======
-                            <p>{{projekt.abteilung_name}}</p>
-                        </td>
-                        <td class="w-10 border border-solid border-gray-300 px-6 py-4 text-center m-auto">
->>>>>>> 761bc7a7e2ba9a80dd4b302a5940c8827e4459fc
                             <!-- Dropdown für Aktion -->
                             <Dropdown >
                                 <template #trigger>
@@ -377,7 +320,6 @@ export default {
                             <label for="name">{{$t('Bezeichnung')}}</label>
                         </FloatLabel>
                     </div>
-<<<<<<< HEAD
 
                     <div class="mb-4 w-full mx-1">
                         <FloatLabel variant="on">
@@ -413,18 +355,6 @@ export default {
                         <FloatLabel variant="on">
                             <DatePicker v-model="newProjekt.enddatum" dateFormat="yy-mm-dd"  inputId="enddatum" showIcon iconDisplay="input" />
                             <label for="enddatum">{{$t('Enddatum')}}</label>
-=======
-                    <div class="mb-4 w-full mx-1">
-                        <FloatLabel variant="on">
-                            <InputText id="name" v-model="newProjekt.kostenstelle" class="w-full" />
-                            <label for="name">{{$t('Kostenstelle')}}</label>
-                        </FloatLabel>
-                    </div>
-                    <div class="mb-4 w-full mx-1">
-                        <FloatLabel variant="on">
-                            <Select v-model="newProjekt.abteilung"  inputId="id" optionValue="id"  :options="abteilungen" optionLabel="name" class="w-full" />
-                            <label for="Abteilung">{{$t('Abteilung wählen')}}</label>
->>>>>>> 761bc7a7e2ba9a80dd4b302a5940c8827e4459fc
                         </FloatLabel>
                     </div>
                 </form>

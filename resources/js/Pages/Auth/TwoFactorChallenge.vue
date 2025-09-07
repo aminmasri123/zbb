@@ -38,7 +38,7 @@ const submit = () => {
 </script>
 
 <template>
-    <Head title="Two-factor Confirmation" />
+    <Head title="{{$t('Zwei-Faktor-Bestätigung')}}" />
 
     <AuthenticationCard>
         <template #logo>
@@ -48,19 +48,18 @@ const submit = () => {
             <AuthenticationCardLogo />
 
             <template v-if="! recovery">
-
-                Please confirm access to your account by entering the authentication code provided by your authenticator application.
+                {{ $t('Bitte_bestätigen_Sie_den_Zugriff_auf_Ihr_Konto_indem_Sie_den_Authentifizierungscode_eingeben_der_von_Ihrer_Authentifizierungsanwendung_bereitgestellt_wurde.') }}
             </template>
 
             <template v-else>
-                Please confirm access to your account by entering one of your emergency recovery codes.
+                {{ $t('Bitte_bestätigen_Sie_den_Zugriff_auf_Ihr_Konto_indem_Sie_einen_Ihrer_Notfallwiederherstellungscodes_eingeben.') }}
             </template>
         </div>
 
         <form @submit.prevent="submit">
 
             <div v-if="! recovery">
-                <InputLabel for="code" value="Code" />
+                <InputLabel for="code" value="{{$t('Code')}}" />
                 <TextInput
                     id="code"
                     ref="codeInput"
@@ -75,7 +74,7 @@ const submit = () => {
             </div>
 
             <div v-else>
-                <InputLabel for="recovery_code" value="Recovery Code" />
+                <InputLabel for="recovery_code" value="{{$t('Wiederherstellungscode')}}" />
                 <TextInput
                     id="recovery_code"
                     ref="recoveryCodeInput"
@@ -90,11 +89,11 @@ const submit = () => {
             <div class="flex items-center justify-end mt-4">
                 <button type="button" class="text-sm text-gray-600 hover:text-gray-900 underline cursor-pointer" @click.prevent="toggleRecovery">
                     <template v-if="! recovery">
-                        Use a recovery code
+                        {{$t('Wiederherstellungscode')}}
                     </template>
 
                     <template v-else>
-                        Use an authentication code
+                        {{$t('Wiederherstellungscode_verwenden')}}
                     </template>
                 </button>
 

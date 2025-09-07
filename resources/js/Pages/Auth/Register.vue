@@ -32,7 +32,7 @@ const submit = () => {
             <AuthenticationCardLogo />
 
             <div>
-                <InputLabel for="first_name" value="Vorname" />
+                <InputLabel for="first_name" value="{{$t('Vorname')}}" />
                 <TextInput
                     id="first_name"
                     v-model="form.first_name"
@@ -45,7 +45,7 @@ const submit = () => {
                 <InputError class="mt-2" :message="form.errors.name" />
             </div>
             <div class="mt-4">
-                <InputLabel for="last_name" value="Nachname" />
+                <InputLabel for="last_name" value="{{$t('Nachname')}}" />
                 <TextInput
                     id="last_name"
                     v-model="form.last_name"
@@ -59,7 +59,7 @@ const submit = () => {
             </div>
 
             <div class="mt-4">
-                <InputLabel for="email" value="Email" />
+                <InputLabel for="email" value="{{$t('E-Mail-Adresse')}}" />
                 <TextInput
                     id="email"
                     v-model="form.email"
@@ -72,7 +72,7 @@ const submit = () => {
             </div>
 
             <div class="mt-4">
-                <InputLabel for="password" value="Password" />
+                <InputLabel for="password" value="{{$t('Passwort')}}" />
                 <TextInput
                     id="password"
                     v-model="form.password"
@@ -85,7 +85,7 @@ const submit = () => {
             </div>
 
             <div class="mt-4">
-                <InputLabel for="password_confirmation" value="Confirm Password" />
+                <InputLabel for="password_confirmation" value="{{$t('Passwort_bestätigen')}}" />
                 <TextInput
                     id="password_confirmation"
                     v-model="form.password_confirmation"
@@ -103,7 +103,7 @@ const submit = () => {
                         <Checkbox id="terms" v-model:checked="form.terms" name="terms" required />
 
                         <div class="ml-2">
-                            I agree to the <a target="_blank" :href="route('terms.show')" class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Terms of Service</a> and <a target="_blank" :href="route('policy.show')" class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Privacy Policy</a>
+                            {{$t('Ich_stimme_den')}} <a target="_blank" :href="route('terms.show')" class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">{{ $t('Nutzungsbedingungen') }}</a> {{$t('und')}} <a target="_blank" :href="route('policy.show')" class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">{{ $t('Datenschutzrichtlinie') }}</a> {{$t('zu')}}.
                         </div>
                     </div>
                     <InputError class="mt-2" :message="form.errors.terms" />
@@ -112,11 +112,11 @@ const submit = () => {
 
             <div class="flex items-center justify-end mt-4">
                 <Link :href="route('login')" class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                    Already registered?
+                    {{$t('Bereits_registriert?')}}
                 </Link>
 
                 <PrimaryButton class="ml-4" :class="{ 'opacity-25': form.processing }" :disabled="form.processing">
-                    Register
+                    {{$t('Registrieren')}}
                 </PrimaryButton>
             </div>
         </form>

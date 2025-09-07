@@ -140,7 +140,21 @@ class UserController extends Controller
      */
     public function show($id)
     {
-        //
+       $user = User::with([
+            'roles',
+            'projekte.abteilung',
+        ])->findOrFail($id);
+
+        $abteilungen = $user->projekte
+            ->pluck('abteilung')   // alle Abteilungen der Projekte
+            ->unique('id')         // nur eindeutige
+            ->values();            // Index neu setzen
+
+        return Inertia::render('Profile/Show-Profil', [
+            'user' => $user,
+            'abteilungen' => $abteilungen,
+        ]);
+
     }
 
     /**

@@ -34,12 +34,12 @@ const submit = () => {
         </template>
 
         <div class="mb-4 text-sm text-gray-600">
-            This is a secure area of the application. Please confirm your password before continuing.
+            {{ $t('Dies_ist_ein_sicherer_Bereich_der_Anwendung_Bitte_bestaetigen_Sie_Ihr_Passwort_bevor_Sie_fortfahren') }}
         </div>
 
         <form @submit.prevent="submit">
             <div>
-                <InputLabel for="password" value="Password" />
+                <InputLabel for="password" value="{{$t('passwort')}}"/>
                 <TextInput
                     id="password"
                     ref="passwordInput"
@@ -55,7 +55,7 @@ const submit = () => {
 
             <div class="flex justify-end mt-4">
                 <PrimaryButton class="ml-4" :class="{ 'opacity-25': form.processing }" :disabled="form.processing">
-                    Confirm
+                    {{ $t('Bestätigen') }}
                 </PrimaryButton>
             </div>
         </form>

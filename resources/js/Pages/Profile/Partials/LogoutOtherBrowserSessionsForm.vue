@@ -45,16 +45,16 @@ const closeModal = () => {
 <template>
     <ActionSection>
         <template #title>
-            Browser Sessions
+            {{$t('Browsersitzung')}}
         </template>
 
         <template #description>
-            Manage and log out your active sessions on other browsers and devices.
+            {{ $t('Verwalten_Sie_Ihre_aktiven_Sitzungen_auf_anderen_Browsern_und_Geräten.') }}
         </template>
 
         <template #content>
             <div class="max-w-xl text-sm text-gray-600">
-                If necessary, you may log out of all of your other browser sessions across all of your devices. Some of your recent sessions are listed below; however, this list may not be exhaustive. If you feel your account has been compromised, you should also update your password.
+                {{ $t('Wenn_gewünscht,_können_Sie_sich_aus_allen_anderen_Browsersitzungen_und_auf_allen_Ihren_Geräten_abmelden._Einige_Ihrer_aktiven_Sitzungen_sind_unterhalb_aufgelistet,_aber_diese_Liste_ist_vielleicht_nicht_vollständig._Wenn_Sie_den_Verdacht_haben,_dass_Ihr_Konto_kompromittiert_wurde,_sollten_Sie_auch_Ihr_Passwort_ändern.') }}
             </div>
 
             <!-- Other Browser Sessions -->
@@ -79,8 +79,8 @@ const closeModal = () => {
                             <div class="text-xs text-gray-500">
                                 {{ session.ip_address }},
 
-                                <span v-if="session.is_current_device" class="text-green-500 font-semibold">This device</span>
-                                <span v-else>Last active {{ session.last_active }}</span>
+                                <span v-if="session.is_current_device" class="text-green-500 font-semibold">{{$t('Dieses_Gerät')}}</span>
+                                <span v-else>{{$t('Zuletzt_aktiv')}} {{ session.last_active }}</span>
                             </div>
                         </div>
                     </div>
@@ -89,23 +89,22 @@ const closeModal = () => {
 
             <div class="flex items-center mt-5">
                 <PrimaryButton @click="confirmLogout">
-                    Log Out Other Browser Sessions
+                    {{ $t('Andere_Browsersitzungen_abmelden') }}
                 </PrimaryButton>
 
                 <ActionMessage :on="form.recentlySuccessful" class="ml-3">
-                    Done.
+                    {{ $t('Erledigt.') }}
                 </ActionMessage>
             </div>
 
             <!-- Log Out Other Devices Confirmation Modal -->
             <DialogModal :show="confirmingLogout" @close="closeModal">
                 <template #title>
-                    Log Out Other Browser Sessions
+                    {{ $t('Andere_Browsersitzungen_abmelden') }}
                 </template>
 
                 <template #content>
-                    Please enter your password to confirm you would like to log out of your other browser sessions across all of your devices.
-
+                    {{ $t('Geben_Sie_zur_Bestätigung_Ihres_Wunsches,_sich_aus_allen_anderen_Browsersitzungen_und_auf_allen_Ihren_Geräten_abzumelden,_Ihr_Passwort_ein.') }}
                     <div class="mt-4">
                         <TextInput
                             ref="passwordInput"
@@ -123,7 +122,7 @@ const closeModal = () => {
 
                 <template #footer>
                     <SecondaryButton @click="closeModal">
-                        Cancel
+                        {{ $t('Abbrechen') }}
                     </SecondaryButton>
 
                     <PrimaryButton

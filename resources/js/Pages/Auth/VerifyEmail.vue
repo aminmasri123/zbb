@@ -19,7 +19,7 @@ const verificationLinkSent = computed(() => props.status === 'verification-link-
 </script>
 
 <template>
-    <Head title="Email Verification" />
+    <Head title="{{$t('E-Mail-Bestätigung')}}" />
 
     <AuthenticationCard>
         <template #logo>
@@ -27,17 +27,18 @@ const verificationLinkSent = computed(() => props.status === 'verification-link-
         </template>
 
         <div class="mb-4 text-sm text-gray-600">
-            Before continuing, could you verify your email address by clicking on the link we just emailed to you? If you didn't receive the email, we will gladly send you another.
+            {{ $t('Bevor_Sie_fortfahren_könnten_Sie_bitte_Ihre_E-Mail-Adresse_bestätigen_indem_Sie_auf_den_Link_klicken_den_wir_Ihnen_gerade_per_E-Mail_gesendet_haben._Wenn_Sie_die_E-Mail_nicht_erhalten_haben_senden_wir_Ihnen_gerne_eine_neue.') }}
         </div>
 
         <div v-if="verificationLinkSent" class="mb-4 font-medium text-sm text-green-600">
-            A new verification link has been sent to the email address you provided in your profile settings.
+            {{ $t('Ein_neuer_Bestätigungslink_wurde_an_die_E-Mail-Adresse_gesendet_die_Sie_in_Ihren_Profil-Einstellungen_bereitgestellt_haben.') }}
         </div>
 
         <form @submit.prevent="submit">
             <div class="mt-4 flex items-center justify-between">
                 <PrimaryButton :class="{ 'opacity-25': form.processing }" :disabled="form.processing">
                     Resend Verification Email
+                    {{ $t('Bestätigungs-E-Mail erneut senden') }}
                 </PrimaryButton>
 
                 <div>
@@ -45,7 +46,7 @@ const verificationLinkSent = computed(() => props.status === 'verification-link-
                         :href="route('profile.show')"
                         class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                     >
-                        Edit Profile</Link>
+                        {{ $t('Profil_bearbeiten') }}</Link>
 
                     <Link
                         :href="route('logout')"
@@ -53,7 +54,7 @@ const verificationLinkSent = computed(() => props.status === 'verification-link-
                         as="button"
                         class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ml-2"
                     >
-                        Log Out
+                        {{ $t('Abmelden') }}
                     </Link>
                 </div>
             </div>
