@@ -76,11 +76,21 @@
                     <li v-if="$page.props.permissions.includes('bereich.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('bereich.index')">{{$t('Bereichübersicht')}}</Link></li>
                 </ul>
             </li>
-
-
-
-
-             <!-- Berechtigung Submenu -->
+            <!-- Teilnehmer Submenu -->
+            <li v-if="$page.props.roles.includes('Administrator')" class="submenu" >
+                <a href="#" @click.prevent="toggleMenu('teilnehmer')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
+                    <i class="las la-user-graduate la-lg mr-2"></i>
+                    <span v-if="!displayHideTextSidebar" class="pr-16">{{$t('Teilnehmer')}}</span>
+                    <span :class="{'rotate-180': activeMenu === 'teilnehmer'}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
+                </a>
+                <ul v-show="activeMenu === 'teilnehmer'" class="pl-6 mt-2 space-y-2">
+                    <li><Link class="text-gray-400 hover:text-white transition duration-200" href="#">{{$t('Teilnehmerübersicht')}}</Link></li>
+                </ul>
+                <ul v-show="activeMenu === 'teilnehmer'" class="pl-6 mt-2 space-y-2">
+                    <li><Link class="text-gray-400 hover:text-white transition duration-200" href="#">{{$t('Teilnehmer anlegen')}}</Link></li>
+                </ul>
+            </li>
+            <!-- Berechtigung Submenu -->
              <li v-if="['berechtigung.index', 'berechtigung.store', 'berechtigung.update'].some(permission => $page.props.permissions.includes(permission))" class="submenu">
                 <a href="#" @click.prevent="toggleMenu('berechtigung')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                     <i class="la la-lg la-unlock mr-2"></i>
@@ -92,8 +102,6 @@
                     <li v-if="$page.props.permissions.includes('berechtigung.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('berechtigung.index')">{{$t('berechtigungsübersicht')}}</Link></li>
                 </ul>
             </li>
-
-
 
             <!-- Weitere Menüpunkte -->
         </SidebarLayout>

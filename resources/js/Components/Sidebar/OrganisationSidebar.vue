@@ -37,6 +37,8 @@
                 <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('user.index')">{{$t('benutzerübersicht')}}</Link></li>
             </ul>
         </li>
+
+        
         <!-- Weitere Menüpunkte -->
     </SidebarLayout>
 
