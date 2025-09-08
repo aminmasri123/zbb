@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount  } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import Banner from '@/Components/Banner.vue';
 import NavigationMenu from '@/Components/Header/NavbarHeader.vue';
@@ -29,6 +29,18 @@ const currentSidebar = computed(() => {
 const sidebarOpen = ref(false); // Für die mobile Ansicht Sidebar umschalten
 const displayHideTextSidebar = ref(false);
 
+onMounted(() => {
+    const syncLogout = (event) => {
+        if (event.key === 'logout') {
+            router.visit(route('welcome'))
+        }
+    }
+
+    window.addEventListener('storage', syncLogout)
+    onBeforeUnmount(() => {
+        window.removeEventListener('storage', syncLogout)
+    })
+})
 
 </script>
 <script>

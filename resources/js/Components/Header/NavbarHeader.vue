@@ -273,8 +273,13 @@ const emit = defineEmits(['toggle-sidebar', 'toggle-sidebar-text']);
     };
 
     const logout = () => {
-        router.post(route('logout'));
-    };
+    router.post(route('logout'), {}, {
+        onFinish: () => {
+            // Signal für alle anderen Tabs setzen
+            localStorage.setItem('logout', Date.now());
+        }
+    });
+};
 </script>
 <script>
     export default {
