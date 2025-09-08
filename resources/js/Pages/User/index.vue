@@ -9,10 +9,7 @@ import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import Swal from 'sweetalert2';
 import axios from 'axios';
-import MultiSelect from 'primevue/multiselect';
-import InputText from 'primevue/inputtext';
-import FloatLabel from 'primevue/floatlabel';
-import Password from 'primevue/password';
+import ModalCreateUser from '@/Pages/User/ModalCreateUser.vue';
 
 // Suchfeld und Dropdown für Projekte
 let seite = 'benutzer';
@@ -23,15 +20,14 @@ let isModalOpen = ref(false); // Modal-Zustand
 let sortColumn = ref('');  // Spalte zum Sortieren
 let sortDirection = ref('desc'); // Sortierrichtung ('asc' oder 'desc')
 
+// Lokale Userliste
 let userToDelete = ref(null); // Speichert den Namen der User, die gelöscht werden soll
 let showModalLöschen = ref(false); // Modal für die Löschung
 
 
 const { users, authProjekte, success, errors, rollen } = defineProps({
-    users: {
-        type: Object,
-        default: () => ({ data: [], links: [] })
-    },
+
+    users: { type: Object, default: () => ({ data: [], links: [] }) },
     authProjekte: {
         type: Array,
         default: () => []
@@ -50,6 +46,7 @@ const { users, authProjekte, success, errors, rollen } = defineProps({
     }
 
 });
+let userList = ref([...users.data]); // Initialisiere mit den übergebenen Benutzern
 
 // Löschbestätigung anzeigen und Abteilungsnamen speichern
 const confirmDelete = (user) => {
@@ -113,18 +110,24 @@ const filteredProjects = computed(() => {
 
 // Benutzer nach Projekt filtern
 const filteredUsersByProject = computed(() => {
-    if (!selectedProject.value) {
-        return users.data; // Keine Filterung, wenn kein Projekt ausgewählt wurde
-    }
-    return users.data.filter(user => user.projekte.some(projekt => projekt.name === selectedProject.value));
+  if (!selectedProject.value) {
+    return userList.value   // jetzt wird deine lokale Liste genutzt
+  }
+  return userList.value.filter(user =>
+    user.projekte?.some(projekt => projekt.name === selectedProject.value)
+  )
 });
+
+watch(() => users.data, (newUsers) => {
+  userList.value = [...newUsers]
+});
+
+
 
 // Projekt auswählen
 const selectProject = (projekt) => {
     selectedProject.value = projekt.name;
 };
-
-
 
 // Modal öffnen und schließen
 const openModal = () => {
@@ -140,10 +143,11 @@ const resetForm = () => {
     newUser.value = {
         first_name: '',
         last_name:'',
+        name: '',
         email: '',
         password: '',
         password_confirmation: '',
-        rolle: '',
+        rollen: '',
     };
 };
 
@@ -151,7 +155,7 @@ const resetForm = () => {
 
 const addUser = async () => {
     // Überprüfe, ob alle erforderlichen Felder ausgefüllt sind
-    if (!newUser.value.first_name || !newUser.value.last_name || !newUser.value.email || !newUser.value.password || !newUser.value.password_confirmation) {
+    if (!newUser.value.first_name || !newUser.value.last_name || !newUser.value.name || !newUser.value.email || !newUser.value.password || !newUser.value.password_confirmation) {
         Swal.fire({
             title: 'Error!',
             text: 'Bitte füllen Sie alle erforderlichen Felder aus.',
@@ -177,6 +181,8 @@ const addUser = async () => {
     try {
         // Sende die POST-Anfrage an den Server
         const response = await axios.post(route('user.store'), newUser.value);
+
+        userList.value.unshift(response.data.user);
 
         // Logge die Antwort des Servers
         console.log(response.data);
@@ -212,10 +218,11 @@ const addUser = async () => {
 let newUser = ref({
     first_name: '',
     last_name:'',
+    name: '',
     email: '',
     password: '',
     password_confirmation: '',
-    rolle: '',
+    rollen: [] , // Array, weil mehrere Rollen möglich
 });
 
 
@@ -323,7 +330,7 @@ const sortByColumn = (column) => {
                 </thead>
                 <tbody>
                     <tr v-for="user in filteredUsersByProject" :key="user.id" class="bg-white border-b">
-                        <td class="px-6 py-4 border border-solid border-gray-300">{{ user.id }}</td>
+                         <td class="px-6 py-4 border border-solid border-gray-300">{{ user.id }}</td>
                         <td class="px-6 py-4 border border-solid border-gray-300">{{ user.first_name }}</td>
                         <td class="px-6 py-4 border border-solid border-gray-300">{{ user.last_name }}</td>
                         <td class="px-6 py-4 border border-solid border-gray-300">{{ user.email }}</td>
@@ -359,6 +366,7 @@ const sortByColumn = (column) => {
                             </Dropdown>
                         </td>
                     </tr>
+
                 </tbody>
             </table>
             <!-- Paginierung -->
@@ -366,85 +374,17 @@ const sortByColumn = (column) => {
         </div>
 
         <!-- Modal für neuen Benutzer -->
-        <Modal v-if="isModalOpen" @close="closeModal">
-            <template #header>
-                <h2 class="text-lg font-bold text-gray-500 ">Benutzer anlegen</h2>
-            </template>
-            <template #body>
-                <form @submit.prevent="addUser">
-                    <div class="flex flex-col sm:flex-row ">
-                        <div class="mb-4 w-full mx-1">
-                            <FloatLabel variant="on">
-                                <InputText id="last_name" v-model="newUser.first_name" class="w-full" />
-                                <label for="last_name">Vorname</label>
-                            </FloatLabel>
-                        </div>
-                        <div class="mb-4 w-full mx-1">
-                            <FloatLabel variant="on">
-                                <InputText id="last_name" v-model="newUser.last_name" class="w-full" />
-                                <label for="last_name">Nachname</label>
-                            </FloatLabel>
-                        </div>
-                    </div>
-                    <div class="mb-4 mx-1">
-                        <FloatLabel variant="on">
-                                <InputText id="last_name" v-model="newUser.email" class="w-full" />
-                                <label for="last_name">E-Mail</label>
-                        </FloatLabel>
+            <button @click="openModal" class="bg-blue-500 text-white px-4 py-2 rounded">
+                + Benutzer hinzufügen
+            </button>
 
-                    </div>
-                    <div class="flex flex-col sm:flex-row">
-                        <div class="mb-4 w-full mx-1 ">
-                            <FloatLabel variant="on" >
-                                <Password id="password" v-model="newUser.password" toggleMask class="w-full" >
-                                    <template #header >
-                                        <div class="font-semibold text-xm mb-4">Kennwort eingeben</div>
-                                    </template>
-                                    <template #footer>
-                                        <Divider />
-                                        <ul class="pl-2 ml-2 my-0 leading-normal ">
-                                            <li :class="{ 'text-green-500': /[a-z]/.test(newUser.password), 'text-red-500': !/[a-z]/.test(newUser.password) }">
-                                                <span v-if="/[a-z]/.test(newUser.password)">✔️</span> Mindestens ein Kleinbuchstabe
-                                            </li>
-                                            <li :class="{ 'text-green-500': /[A-Z]/.test(newUser.password), 'text-red-500': !/[A-Z]/.test(newUser.password) }">
-                                                <span v-if="/[A-Z]/.test(newUser.password)">✔️</span> Mindestens ein Großbuchstabe
-                                            </li>
-                                            <li :class="{ 'text-green-500': /\d/.test(newUser.password), 'text-red-500': !/\d/.test(newUser.password) }">
-                                                <span v-if="/\d/.test(newUser.password)">✔️</span> Mindestens eine Ziffer
-                                            </li>
-                                            <li :class="{ 'text-green-500': newUser.password.length >= 8, 'text-red-500': newUser.password.length < 8 }">
-                                                <span v-if="newUser.password.length >= 8">✔️</span> Mindestens 8 Zeichen
-                                            </li>
-                                        </ul>
-                                    </template>
-                                </Password>
-                                <label for="password">Passwort</label>
-                            </FloatLabel>
-
-                        </div>
-                        <div class="mb-4 w-full mx-1">
-                            <FloatLabel variant="on">
-                                    <Password id="password_confirmation" v-model="newUser.password_confirmation" :feedback="false" toggleMask class="w-full" />
-                                    <label for="password_confirmation">Passwort bestätigen</label>
-                            </FloatLabel>
-
-                        </div>
-                    </div>
-                    <div class="mb-4 mx-1">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('rolle') }}</label>
-                        <MultiSelect v-model="newUser.rolle" display="chip"
-                            :options="rollen" optionLabel="name"
-                            filter placeholder="Rollen wählen"
-                            :maxSelectedLabels="6" class="w-full " />
-                    </div>
-
-                </form>
-            </template>
-            <template #footer>
-                <button @click="closeModal" class="mr-2 border border-zbb text-zbb px-4 py-2 rounded">Abbrechen</button>
-                <button @click="addUser" class="bg-zbb text-white px-4 py-2 rounded">Hinzufügen</button>
-            </template>
-        </Modal>
+            <ModalCreateUser
+                :visible="isModalOpen"
+                :newUser="newUser"
+                :rollen="rollen"
+                @close="closeModal"
+                @add-user="addUser"
+            />
 
         <!-- Modal für die Löschung der Abteilung-->
         <ModalDestroy v-if="showModalLöschen" @close="showModalLöschen = false" :seite="seite"  :toDelete="userToDelete">

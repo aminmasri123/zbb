@@ -13,6 +13,7 @@ import  Modal from '@/Components/Modal.vue';
 const form = useForm({
     first_name: '',
     last_name: '',
+    username: '',
     email: '',
     password: '',
     password_confirmation: '',
@@ -60,7 +61,19 @@ const submit = () => {
                     />
                     <InputError class="mt-2" :message="form.errors.name" />
                 </div>
-
+                <div>
+                    <InputLabel for="username" :value="$t('Benutzername')" />
+                    <TextInput
+                        id="username"
+                        v-model="form.username"
+                        type="text"
+                        class="mt-1 block w-full"
+                        required
+                        autofocus
+                        autocomplete="username"
+                    />
+                    <InputError class="mt-2" :message="form.errors.name" />
+                </div>
                 <div class="mt-4">
                     <InputLabel for="email" value="Email" />
                     <TextInput

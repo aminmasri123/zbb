@@ -108,9 +108,10 @@ class UserController extends Controller
      */
     public function store(Request $request)
     {
+
         try {
             // Verwende die Facade für das Abrufen der Eingabedaten
-            $data = Request::only(['first_name', 'last_name', 'email', 'password']); // spezifische Felder abrufen
+            $data = Request::all(); // holt alle Daten
 
             // Validierung der Eingabedaten
             $validatedData = Validator::make($data, [
@@ -118,18 +119,33 @@ class UserController extends Controller
                 'last_name' => ['required', 'max:50'],
                 'email' => ['required', 'max:50', 'email', 'unique:users'],
                 'password' => ['required', 'min:8'],
+                'name' => ['required', 'max:50', 'unique:users'],
+                'rollen' => ['required', 'array'],
+                'rollen.*' => ['exists:roles,id'],
             ])->validate();
+
+
             // Passwort hashen und Benutzer erstellen
               // Passwort hashen und Benutzer erstellen
-        $validatedData['password'] = Hash::make($validatedData['password']);
-        $user = User::create($validatedData);
+            $validatedData['password'] = Hash::make($validatedData['password']);
+            $user = User::create($validatedData);
 
-        return response()->json(['message' => 'Benutzer erfolgreich erstellt!', 'user' => $user], 201);
-    } catch (\Illuminate\Validation\ValidationException $e) {
-        return response()->json(['message' => 'Validation Error', 'errors' => $e->errors()], 422);
-    } catch (\Exception $e) {
-        return response()->json(['message' => 'Ein Fehler ist aufgetreten.'], 500);
-    }
+            // Rollen zuweisen
+            $user->assignRole($validatedData['rollen']);
+
+
+            $user->load('roles'); // falls du Rollen brauchst
+
+
+            return response()->json(['message' => 'Benutzer erfolgreich erstellt!', 'user' => $user], 201);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+             return response()->json(['message' => 'Validation Error', 'errors' => $e->errors()], 422);
+         } catch (\Exception $e) {
+                return response()->json([
+                    'message' => 'Ein Fehler ist aufgetreten.',
+                    'error'   => $e->getMessage(),   // <-- eigentliche Ursache
+                ], 500);
+             }
     }
 
     /**
