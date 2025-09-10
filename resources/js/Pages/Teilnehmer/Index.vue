@@ -3,16 +3,15 @@ import { ref, watch, computed } from 'vue';
 import { router, Head, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Pagination from '@/Components/Pagination.vue';
-import Modal from '@/Components/ModalForm.vue';
 import ModalDestroy from '@/Components/ModalDestroyForm.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import Swal from 'sweetalert2';
 import axios from 'axios';
-import ModalCreateUser from '@/Pages/User/ModalCreateUser.vue';
+import ModalCreateTeilnehmer from '@/Pages/Teilnehmer/ModalCreateTeilnehmer.vue';
 
 // Suchfeld und Dropdown für Projekte
-let seite = 'benutzer';
+let seite = 'Teilnehmer'; // Für die Löschseite
 let search = ref('');
 let searchProject = ref('');
 let selectedProject = ref(null); // Für das ausgewählte Projekt
@@ -20,16 +19,15 @@ let isModalOpen = ref(false); // Modal-Zustand
 let sortColumn = ref('');  // Spalte zum Sortieren
 let sortDirection = ref('desc'); // Sortierrichtung ('asc' oder 'desc')
 
-// Lokale Userliste
-let userToDelete = ref(null); // Speichert den Namen der User, die gelöscht werden soll
+// Lokale Teilnehmerliste
+let teilnehmerToDelete = ref(null); // Speichert den Namen der Teilnehmer, die gelöscht werden sollen
 let showModalLöschen = ref(false); // Modal für die Löschung
 
-
-const { users, authProjekte, rollen } = defineProps({
+const { teilnehmers, authProjekte, rollen } = defineProps({
     pagination: {
         type: Object,
     },
-    users: { type: Object, default: () => ({ data: [], links: [] }) },
+    teilnehmers: { type: Object, default: () => ({ data: [], links: [] }) },
     authProjekte: {
         type: Array,
         default: () => []
@@ -39,22 +37,23 @@ const { users, authProjekte, rollen } = defineProps({
         default: () => ({})
     },
 });
-let userList = ref([...users.data]); // Initialisiere mit den übergebenen Benutzern
+
+const teilnehmerList = computed(() => teilnehmers.data);
 
 // Löschbestätigung anzeigen und Abteilungsnamen speichern
-const confirmDelete = (user) => {
-    userToDelete.value = {
-        name: user.first_name, // Speichere den Namen der Abteilung
-        id: user.id      // Speichere die ID der Abteilung
+const confirmDelete = (teilnehmer) => {
+    teilnehmerToDelete.value = {
+        name: teilnehmer.vorname, // Speichere den Namen der Abteilung
+        id: teilnehmer.id      // Speichere die ID der Abteilung
     };
     showModalLöschen.value = true; // Modal anzeigen
-    console.log('Löschung erfolgreich:', userToDelete.value.id);
+    console.log('Löschung erfolgreich:', teilnehmerToDelete.value.id);
 
 };
 
 // Watch für Änderungen in der Suche
 watch([search, selectedProject, sortColumn, sortDirection], () => {
-    router.get('/benutzer',
+    router.get('/teilnehmer',
         {
             search: search.value,
             project: selectedProject.value,
@@ -67,7 +66,7 @@ watch([search, selectedProject, sortColumn, sortDirection], () => {
 
 // Watch für das ausgewählte Projekt
 watch(selectedProject, value => {
-    router.get('/benutzer', { search: search.value, project: value }, { preserveState: true });
+    router.get('/teilnehmer', { search: search.value, project: value }, { preserveState: true });
 });
 
 // Gefilterte Projekte
@@ -77,20 +76,15 @@ const filteredProjects = computed(() => {
     );
 });
 
-// Benutzer nach Projekt filtern
-const filteredUsersByProject = computed(() => {
+// Teilnehmer nach Projekt filtern
+const filteredTeilnehmerByProject = computed(() => {
   if (!selectedProject.value) {
-    return userList.value   // jetzt wird deine lokale Liste genutzt
+    return teilnehmerList.value   // jetzt wird deine lokale Liste genutzt
   }
-  return userList.value.filter(user =>
-    user.projekte?.some(projekt => projekt.name === selectedProject.value)
+  return teilnehmerList.value.filter(teilnehmer =>
+    teilnehmer.projekte?.some(projekt => projekt.name === selectedProject.value)
   )
 });
-
-watch(() => users.data, (newUsers) => {
-  userList.value = [...newUsers]
-});
-
 
 
 // Projekt auswählen
@@ -105,25 +99,11 @@ const openModal = () => {
 
 const closeModal = () => {
     isModalOpen.value = false;
-    resetForm();
 };
-
-const resetForm = () => {
-    newUser.value = {
-        first_name: '',
-        last_name:'',
-        username: '',
-        email: '',
-        password: '',
-        password_confirmation: '',
-        rollen: '',
-    };
-};
-
-    // Benutzer hinzufügen
-    const addUser = async () => {
+// Teilnehmer hinzufügen
+const addTeilnehmer = async (formData) => {
         // Überprüfe, ob alle erforderlichen Felder ausgefüllt sind
-        if (!newUser.value.first_name || !newUser.value.last_name || !newUser.value.username || !newUser.value.email || !newUser.value.password || !newUser.value.password_confirmation) {
+        if (!formData.vorname || !formData.nachname || !formData.geschlecht) {
             Swal.fire({
                 title: 'Error!',
                 text: 'Bitte füllen Sie alle erforderlichen Felder aus.',
@@ -134,26 +114,11 @@ const resetForm = () => {
             return;
         }
 
-        // Überprüfe, ob das Passwort übereinstimmt
-        if (newUser.value.password !== newUser.value.password_confirmation) {
-            Swal.fire({
-                title: 'Error!',
-                text: 'Bitte geben Sie ein identisches Kennwort ein.',
-                icon: 'error',
-                timer: 3000,
-                timerProgressBar: true,
-            });
-            return;
-        }
-
         try {
             // Sende die POST-Anfrage an den Server
-            const response = await axios.post(route('user.store'), newUser.value);
+            const response = await axios.post(route('teilnehmer.store'), formData);
 
-            userList.value.unshift(response.data.user);
-
-            // Logge die Antwort des Servers
-            console.log(response.data);
+            teilnehmerList.value.unshift(response.data.teilnehmer);
 
             // Zeige eine Erfolgsnachricht an
             Swal.fire({
@@ -165,7 +130,6 @@ const resetForm = () => {
             });
 
             // Optional: Formular zurücksetzen und Modal schließen
-            resetForm();
             closeModal();
         } catch (error) {
             // Fehlerbehandlung hier
@@ -181,17 +145,6 @@ const resetForm = () => {
     };
 
 
-
-// Neuen Benutzer
-let newUser = ref({
-    first_name: '',
-    last_name:'',
-    username: '',
-    email: '',
-    password: '',
-    password_confirmation: '',
-    rollen: [] , // Array, weil mehrere Rollen möglich
-});
 
 
 // Sortierfunktion aufrufen, wenn ein Spaltenkopf angeklickt wird
@@ -209,12 +162,12 @@ const sortByColumn = (column) => {
 </script>
 
 <template>
-    <Head title="Personal" />
+    <Head title="Teilnehmer" />
 
     <app-layout>
         <template #header>
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                {{$t('Team')}}
+                {{$t('Teilnehmerübersicht')}}
             </h2>
         </template>
 
@@ -252,12 +205,12 @@ const sortByColumn = (column) => {
                     </DropdownLink>
                 </template>
             </Dropdown>
-            <Link :href="route('user.index')" class="flex items-center">
+            <Link :href="route('teilnehmer.index')" class="flex items-center">
                 <i class="la la-refresh bg-white border border-gray-300 rounded-r-md px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
             </Link>
         </div>
 
-        <!-- Benutzer Tabelle -->
+        <!-- Teilnehmer Tabelle -->
         <div class="overflow-x-auto snap-x">
             <table class="w-full text-sm text-left text-gray-500">
                 <thead class=" text-gray-600 uppercase bg-gray-200">
@@ -266,52 +219,31 @@ const sortByColumn = (column) => {
                             {{$t('id')}}
                             <i :class="sortColumn === 'id' && sortDirection === 'asc' ? 'las la-lg la-sort-numeric-down-alt' : 'las la-lg la-sort-numeric-up-alt'"></i>
                         </th>
-                        <th @click="sortByColumn('first_name')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
+                        <th @click="sortByColumn('vorname')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
                             {{$t('vorname')}}
-                            <i :class="sortColumn === 'first_name' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
+                            <i :class="sortColumn === 'vorname' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
                         </th>
-                        <th @click="sortByColumn('last_name')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
+                        <th @click="sortByColumn('nachname')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
                             {{$t('nachname')}}
-                            <i :class="sortColumn === 'last_name' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
+                            <i :class="sortColumn === 'nachname' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
                         </th>
-                        <th @click="sortByColumn('email')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
-                            {{$t('email')}}
-                            <i :class="sortColumn === 'email' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
-                        </th>
-                        <!-- sortByColumn Titel soll noch angepasst werden-->
-
-                        <th @click="sortByColumn('email')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
-                            {{ $t('Titel') }}
-                            <i :class="sortColumn === 'email' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
-                        </th>
-                        <!-- sortByColumn Titel soll noch angepasst werden-->
-                        <th @click="sortByColumn('email')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
-                            {{ $t('projekte') }}
-                            <i :class="sortColumn === 'email' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
+                       <th @click="sortByColumn('geschlecht')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
+                            {{ $t('geschlecht') }}
+                            <i :class="sortColumn === 'geschlecht' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
                         </th>
                         <th scope="col" class="border w-10 border-solid border-gray-300 text-center px-6 py-3 ">*</th> <!-- Aktionen hinzufügen -->
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="user in filteredUsersByProject" :key="user.id" class="bg-white border-b">
-                         <td class="px-6 py-4 border border-solid border-gray-300">{{ user.id }}</td>
-                        <td class="px-6 py-4 border border-solid border-gray-300">{{ user.first_name }}</td>
-                        <td class="px-6 py-4 border border-solid border-gray-300">{{ user.last_name }}</td>
-                        <td class="px-6 py-4 border border-solid border-gray-300">{{ user.email }}</td>
-                        <td class="px-6 py-4 border border-solid border-gray-300">
-                            <span
-                                :class="['mr-2 p-2 rounded text-black text-xs', `bg-${rolle.color}`]"
-                                v-for="rolle in user.roles"
-                                :key="rolle.id">
-                                {{ rolle.name }}
-                            </span>
-                        </td>
-                         <td class="px-6 py-4 border border-solid border-gray-300">
-                            <span class="mr-4" v-for="projekt in user.projekte" :key="projekt.id">{{ projekt.name }}</span>
-                        </td>
+                    <tr v-for="teilnehmer in filteredTeilnehmerByProject" :key="teilnehmer.id" class="bg-white border-b">
+                         <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.id }}</td>
+                        <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.vorname }}</td>
+                        <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.nachname }}</td>
+                        <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.geschlecht }}</td>
+
                         <td class="w-10 border border-solid border-gray-300 px-6 py-4 text-left m-auto">
                             <!-- Dropdown für Aktion -->
-                            <Dropdown >
+                            <Dropdown>
                                 <template #trigger>
                                     <button class=" items-center  text-sm leading-4 font-medium text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
                                         <span class="cursor-pointer">
@@ -322,10 +254,10 @@ const sortByColumn = (column) => {
 
                                 <template #content >
                                     <!-- Gefilterte Projektauswahl -->
-                                    <span class="block cursor-pointer hover:bg-slate-100" @click="confirmDelete(user)">
+                                    <span class="block cursor-pointer hover:bg-slate-100" @click="confirmDelete(teilnehmer)">
                                          <i class="ml-8 las la-trash-alt"></i> {{ $t('Löschen') }}
                                     </span>
-                                    <Link class="block" :href="route('user.edit', user.id)">
+                                    <Link class="block" :href="route('teilnehmer.edit', teilnehmer.id)">
                                         <i class="ml-8 las la-edit"></i> {{ $t('Bearbeiten') }}
                                     </Link>
 
@@ -338,14 +270,14 @@ const sortByColumn = (column) => {
             </table>
             <!-- Paginierung -->
 
-            <Pagination :pagination="users" />
+            <Pagination :pagination="teilnehmers" />
         </div>
 
 
-            <ModalCreateUser :visible="isModalOpen" :newUser="newUser" :rollen="rollen" @close="closeModal" @add-user="addUser" />
+            <ModalCreateTeilnehmer :visible="isModalOpen"  @close="closeModal" @add-teilnehmer="addTeilnehmer" />
 
         <!-- Modal für die Löschung der Abteilung-->
-        <ModalDestroy v-if="showModalLöschen" @close="showModalLöschen = false" :seite="seite"  :toDelete="userToDelete">
+        <ModalDestroy v-if="showModalLöschen" @close="showModalLöschen = false" :seite="seite"  :toDelete="teilnehmerToDelete">
             <template #header>
                 <!--  Header Ingalt-->
             </template>

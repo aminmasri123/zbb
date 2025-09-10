@@ -1,7 +1,7 @@
 <template>
     <div class="mt-6 py-5 text-sm  text-black">
             <div class="flex flex-row md:justify-center">
-            <a
+            <Link
                 v-for="link in pagination.links"
                 :key="link.label"
                 :class="{
@@ -14,7 +14,7 @@
                 class="px-3 py-1 mx-1 border rounded"
             >
             <span>{{ isNaN(link.label) ? $t(link.label) : link.label }}</span>
-        </a>
+        </Link>
         </div>
         </div>
 </template>

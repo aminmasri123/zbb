@@ -17,7 +17,7 @@ return new class extends Migration
             $table->id();
             $table->date('bestellungsdatum');
             $table->foreignId('kaeufer')->constrained('users')->onDelete('cascade');
-            $table->enum('status', ['Eingegangen', 'in Bearbeitung', 'Genehmigung austehend', 'Genehmigt', 'Abgelehnt', 'Warten auf Lieferung', 'Versandt', 'Zugestellt', 'Storniert', 'Komplett Zurückgesendet','Komplett Zurückgesendet', 'teils Zurückgesendet', 'Abgeschlossen']);
+            $table->enum('status', ['Eingegangen', 'in Bearbeitung', 'Genehmigung austehend', 'Genehmigt', 'Abgelehnt', 'Warten auf Lieferung', 'Versandt', 'Zugestellt', 'Storniert', 'Komplett Zurückgesendet', 'teils Zurückgesendet', 'Abgeschlossen']);
             $table->timestamps();
         });
     }

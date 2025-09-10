@@ -14,11 +14,6 @@ use Illuminate\Support\Facades\Validator;
 
 class UserController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     *
-     * @return \Illuminate\Http\Response
-     */
      public function index(Request $request)
     {
         $rollen = Role::select('id', 'name')->get();
@@ -64,7 +59,7 @@ class UserController extends Controller
         $query->orderBy($sort, $direction);
 
         return Inertia::render('User/Index', [
-            'users'        => $query->paginate(10),
+            'users'        => $query->paginate(200),
             'authProjekte' => $authUser->projekte,
             'rollen'       => $rollen,
         ]);
@@ -104,18 +99,17 @@ class UserController extends Controller
      */
     public function store(Request $request)
     {
-
         try {
             // Verwende die Facade für das Abrufen der Eingabedaten
-            $data = Request::all(); // holt alle Daten
+            $data = $request->all(); // holt alle Daten
 
             // Validierung der Eingabedaten
             $validatedData = Validator::make($data, [
                 'first_name' => ['required', 'max:50'],
                 'last_name' => ['required', 'max:50'],
-                'email' => ['required', 'max:50', 'email', 'unique:users'],
+                'email' => ['required', 'max:50', 'email', 'unique:users,email'],
                 'password' => ['required', 'min:8'],
-                'name' => ['required', 'max:50', 'unique:users'],
+                'username' => ['required', 'max:50', 'unique:users,username'],
                 'rollen' => ['required', 'array'],
                 'rollen.*' => ['exists:roles,id'],
             ])->validate();
@@ -187,13 +181,7 @@ class UserController extends Controller
         ]);
     }
 
-    /**
-     * Update the specified resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
+
     public function update(Request $request, User $user)
     {
         // Validierung
@@ -221,26 +209,15 @@ class UserController extends Controller
                          ->with('success', 'Benutzer wurde erfolgreich aktualisiert.');
     }
 
-
-    /**
-     * Remove the specified resource from storage.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
     public function destroy($id)
     {
         try {
             $user = User::findOrFail($id); // Suche die Abteilung
-
-            // Optional: Überprüfe, ob die Abteilung gelöscht werden kann (z.B. durch Beziehungen)
-            // if ($abteilung->hasRelations()) { ... }
-
             $user->delete(); // Lösche die Abteilung
 
-            return response()->json(['message' => 'Abteilung erfolgreich gelöscht!'], 200);
+            return response()->json(['message' => 'der Konto von ' . $user->first_name . ' ' . $user->last_name . ' wurde  erfolgreich gelöscht!'], 200);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return response()->json(['message' => 'Abteilung nicht gefunden.'], 404);
+            return response()->json(['message' => 'Der Konto konnte nicht gefunden werden.'], 404);
         } catch (\Exception $e) {
             return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
         }

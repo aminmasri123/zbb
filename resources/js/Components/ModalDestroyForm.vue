@@ -45,7 +45,8 @@
     let deleteInput = ref(''); // Speichert den Text des Eingabefelds für die Löschung
     let toDelete = ref(null); // Speichert den Namen der User, die gelöscht werden soll
     // Define emit
-    const emitDelete = defineEmits(['delete']);  // Define the event 'delete'
+    const emitDelete = defineEmits(['delete', 'close']);  // Define the event 'delete'
+
    // let localAbteilungen = ref([]); // Initialisiere mit einem leeren Array
 
     const props = defineProps({
@@ -73,27 +74,27 @@
         return; // Stoppe die Funktion, wenn die Eingabe nicht stimmt
     }
         console.log(toDelete);
-    axios.delete(route(props.seite + '.destroy', { id: props.toDelete.id }))
+        axios.delete(route(props.seite + '.destroy', { id: props.toDelete.id }))
         .then(response => {
-
-
             emitDelete('delete', props.toDelete.id);
             deleteInput.value = '';
 
             Swal.fire({
                 title: 'Erfolg!',
-                text: 'Abteilung erfolgreich gelöscht!',
+                text: props.toDelete.name + ' \'s Konto wurde erfolgreich gelöscht!',
                 icon: 'success',
                 timer: 3000,
                 timerProgressBar: true,
             });
+            emitDelete('close');
+
 
             //Inertia.reload();
         })
         .catch(error => {
             Swal.fire({
                 title: 'Error!',
-                text: 'Beim Löschen der Abteilung ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.',
+                text: 'Beim Löschen des Kontos ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.',
                 icon: 'error',
                 timer: 3000,
                 timerProgressBar: true,

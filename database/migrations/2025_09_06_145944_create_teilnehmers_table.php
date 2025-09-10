@@ -14,7 +14,7 @@ return new class extends Migration
     public function up()
     {
         Schema::create('teilnehmers', function (Blueprint $table) {
-             $table->id();
+            $table->id();
             $table->string('vorname',30);
             $table->string('nachname',30);
             $table->enum('geschlecht', ['w', 'm', 'd']);

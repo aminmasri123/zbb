@@ -84,10 +84,10 @@
                     <span :class="{'rotate-180': activeMenu === 'teilnehmer'}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
                 </a>
                 <ul v-show="activeMenu === 'teilnehmer'" class="pl-6 mt-2 space-y-2">
-                    <li><Link class="text-gray-400 hover:text-white transition duration-200" href="#">{{$t('Teilnehmerübersicht')}}</Link></li>
+                    <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('teilnehmer.index')">{{$t('Teilnehmerübersicht')}}</Link></li>
                 </ul>
                 <ul v-show="activeMenu === 'teilnehmer'" class="pl-6 mt-2 space-y-2">
-                    <li><Link class="text-gray-400 hover:text-white transition duration-200" href="#">{{$t('Teilnehmer anlegen')}}</Link></li>
+                    <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('teilnehmer.create')">{{$t('Teilnehmer anlegen')}}</Link></li>
                 </ul>
             </li>
             <!-- Berechtigung Submenu -->

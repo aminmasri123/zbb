@@ -1,7 +1,5 @@
 <script setup>
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import AuthenticationCard from '@/Components/AuthenticationCard.vue';
-import AuthenticationCardLogo from '@/Components/AuthenticationCardLogo.vue';
 import Checkbox from '@/Components/Checkbox.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
@@ -29,11 +27,8 @@ const submit = () => {
 
 <template>
     <app-layout>
-
         <Head title="Register" />
-
         <Modal>
-
             <form @submit.prevent="submit">
                 <div>
                     <InputLabel for="first_name" value="Vorname" />
@@ -46,7 +41,7 @@ const submit = () => {
                         autofocus
                         autocomplete="first_name"
                     />
-                    <InputError class="mt-2" :message="form.errors.name" />
+                    <InputError class="mt-2" :message="form.errors.first_name" />
                 </div>
                 <div class="mt-4">
                     <InputLabel for="last_name" value="Nachname" />
@@ -59,7 +54,7 @@ const submit = () => {
                         autofocus
                         autocomplete="last_name"
                     />
-                    <InputError class="mt-2" :message="form.errors.name" />
+                    <InputError class="mt-2" :message="form.errors.last_name" />
                 </div>
                 <div>
                     <InputLabel for="username" :value="$t('Benutzername')" />
@@ -72,7 +67,7 @@ const submit = () => {
                         autofocus
                         autocomplete="username"
                     />
-                    <InputError class="mt-2" :message="form.errors.name" />
+                    <InputError class="mt-2" :message="form.errors.username" />
                 </div>
                 <div class="mt-4">
                     <InputLabel for="email" value="Email" />
@@ -82,7 +77,7 @@ const submit = () => {
                         type="email"
                         class="mt-1 block w-full"
                         required
-                        autocomplete="username"
+                        autocomplete="email"
                     />
                     <InputError class="mt-2" :message="form.errors.email" />
                 </div>

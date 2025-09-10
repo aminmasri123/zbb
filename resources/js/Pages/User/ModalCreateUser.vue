@@ -22,7 +22,7 @@ const emit = defineEmits(['close', 'add-user'])
   <Modal v-if="visible" @close="emit('close')">
     <!-- Header -->
     <template #header>
-      <h2 class="text-lg font-bold text-gray-500">Benutzer anlegen</h2>
+        <h2 class="text-lg font-bold text-gray-500">Benutzer anlegen</h2>
     </template>
 
     <!-- Body -->
@@ -46,7 +46,7 @@ const emit = defineEmits(['close', 'add-user'])
         </div>
         <div class="mb-4 w-full mx-1 pr-2">
             <FloatLabel variant="on">
-              <InputText v-model="newUser.name" class="w-full" />
+              <InputText v-model="newUser.username" class="w-full" />
               <label>Benutzername</label>
             </FloatLabel>
         </div>

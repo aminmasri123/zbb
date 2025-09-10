@@ -6,8 +6,6 @@ import TextInput from '@/Components/TextInput.vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { usePage } from '@inertiajs/vue3';
 
-
-
 const page = usePage();
 
 

@@ -15,7 +15,7 @@ return new class extends Migration
     {
         Schema::create('adresses', function (Blueprint $table) {
             $table->id();
-            $table->string('model');
+            $table->enum('model', ['User', 'Firma', 'Schule', 'Standort', 'Partner', 'Teilnehmer']); //Typ des Modells, z.B. 'User', 'Firma', 'Schule', 'Standorte', 'Partner', 'Teilnehmer'
             $table->unsignedBigInteger('model_id');
             $table->string('strasse')->nullable();
             $table->string('hausnummer', 10)->nullable();
@@ -27,11 +27,6 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     *
-     * @return void
-     */
     public function down()
     {
         Schema::dropIfExists('adresses');

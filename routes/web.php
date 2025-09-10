@@ -8,6 +8,7 @@ use App\Http\Controllers\SchuleController;
 use App\Http\Controllers\BereichController;
 use App\Http\Controllers\ProjektController;
 use App\Http\Controllers\AbteilungController;
+use App\Http\Controllers\TeilnehmerController;
 use App\Http\Controllers\BerechtigungController;
 
 /*
@@ -62,8 +63,7 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
     Route::get('/schule', [SchuleController::class, 'index'])->name('schule.index');
 
 
-
-
+    // Benutzer
     Route::get('/benutzer', [UserController::class, 'index'])->name('user.index');
     Route::get('/benutzer/edit/{id}', [UserController::class, 'edit'])->name('user.edit');
     Route::put('/benutzer/update/{user}', [UserController::class, 'update'])->name('user.update');
@@ -111,7 +111,12 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
     Route::delete('/projekt/{id}', [ProjektController::class, 'destroy'])->name('projekt.destroy');
 
 
-
+    //Teilnehmer
+    Route::get('/teilnehmer', [TeilnehmerController::class, 'index'])->name('teilnehmer.index');
+    Route::get('/teilnehmer/anlegen', function () { return Inertia::render('Teilnehmer/CreateTeilnehmer'); })->name('teilnehmer.create');
+    Route::post('/teilnehmer/anlegen', [TeilnehmerController::class, 'store'])->name('teilnehmer.store');
+    Route::delete('/teilnehmer/{id}', [TeilnehmerController::class, 'destroy'])->name('teilnehmer.destroy');
+    Route::put('/teilnehmer/bearbeiten', [TeilnehmerController::class, 'show'])->name('teilnehmer.edit');
 
 
 
