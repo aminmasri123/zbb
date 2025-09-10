@@ -5,16 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use Inertia\Inertia;
 use Inertia\Response;
-use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
-use Illuminate\Support\Facades\App;
-use Illuminate\Support\Facades\URL;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Http\Request;
+
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Request;
-use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Validator;
 
 class UserController extends Controller
@@ -24,34 +19,36 @@ class UserController extends Controller
      *
      * @return \Illuminate\Http\Response
      */
-    public function index()
+     public function index(Request $request)
     {
         $rollen = Role::select('id', 'name')->get();
-        $search = Request::input('search');
-        $selectedProject = Request::input('project');
-        $sort = Request::input('sort', 'id');  // Standardmäßig nach ID sortieren
-        $direction = Request::input('direction', 'desc'); // Standardmäßig aufsteigend
+        $search = $request->input('search');
+        $selectedProject = $request->input('project');
+        $sort = $request->input('sort', 'id');       // Standardmäßig nach ID sortieren
+        $direction = $request->input('direction', 'desc'); // Standardmäßig absteigend
 
         // Stelle sicher, dass die Sortierspalte nur gültige Spaltennamen enthält
-        $allowedSortColumns = ['id', 'first_name', 'last_name', 'email']; // Erlaubte Spalten
+        $allowedSortColumns = ['id', 'first_name', 'last_name', 'email'];
         if (!in_array($sort, $allowedSortColumns)) {
-            $sort = 'id'; // Fallback auf 'id' falls eine ungültige Spalte übergeben wurde
+            $sort = 'id';
         }
 
         $authUser = auth()->user();
         $adminRoles = ['Administrator', 'Geschäftsführer', 'Sekretariat'];
 
         $query = User::query()
-        ->when($search, function ($query, $search) {
-            $query->where(function ($query) use ($search) {
-                // Verkette first_name und last_name
-                $query->where(DB::raw("CONCAT(first_name, ' ', last_name)"), 'like', "%{$search}%")
-                    ->orWhere('first_name', 'like', "%{$search}%")
-                    ->orWhere('last_name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%");
-            });
-        })->with('projekte')
+            ->when($search, function ($query, $search) {
+                $query->where(function ($query) use ($search) {
+                    // Verkette first_name und last_name
+                    $query->where(DB::raw("CONCAT(first_name, ' ', last_name)"), 'like', "%{$search}%")
+                        ->orWhere('first_name', 'like', "%{$search}%")
+                        ->orWhere('last_name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%");
+                });
+            })
+            ->with('projekte')
             ->with('roles:name,color');
+
         if (!$authUser->roles->whereIn('name', $adminRoles)->count()) {
             $query->whereHas('projekte', function ($query) use ($authUser) {
                 $query->whereIn('projekt_id', $authUser->projekte->pluck('id'));
@@ -64,13 +61,12 @@ class UserController extends Controller
             });
         }
 
-        // Sortierung nach gültiger Spalte und Richtung anwenden
         $query->orderBy($sort, $direction);
 
         return Inertia::render('User/Index', [
-            'users' => $query->paginate(10),
+            'users'        => $query->paginate(10),
             'authProjekte' => $authUser->projekte,
-            'rollen' => $rollen, // Verwende 'pluck', um nur die Namen der Rollen zu erhalten
+            'rollen'       => $rollen,
         ]);
     }
     /**
@@ -181,7 +177,14 @@ class UserController extends Controller
      */
     public function edit($id)
     {
-        //
+        //dd('hello');
+        $user = User::findOrFail($id);
+        $rollen = Role::all();
+
+        return Inertia::render('User/Edit', [
+            'user' => $user,
+            'rollen' => $rollen,
+        ]);
     }
 
     /**
@@ -191,10 +194,33 @@ class UserController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, User $user)
     {
-        //
+        // Validierung
+        $validated = $request->validate([
+            'first_name' => 'required|string|max:255',
+            'last_name'  => 'required|string|max:255',
+            'username'   => 'required|string|max:255|unique:users,username,' . $user->id,
+            'email'      => 'required|email|max:255|unique:users,email,' . $user->id,
+            'password'   => 'nullable|string|min:8|confirmed',
+        ]);
+        // User-Daten aktualisieren
+        $user->first_name = $validated['first_name'];
+        $user->last_name  = $validated['last_name'];
+        $user->username   = $validated['username'];
+        $user->email      = $validated['email'];
+
+        // Passwort nur ändern, wenn eingegeben
+        if (!empty($validated['password'])) {
+            $user->password = Hash::make($validated['password']);
+        }
+
+        $user->save();
+
+        return redirect()->route('user.edit', $user->id)
+                         ->with('success', 'Benutzer wurde erfolgreich aktualisiert.');
     }
+
 
     /**
      * Remove the specified resource from storage.

@@ -30,6 +30,8 @@ const emit = defineEmits(['close', 'add-user'])
       <form @submit.prevent="emit('add-user')">
         <div class="flex flex-col sm:flex-row">
           <div class="mb-4 w-full mx-1">
+              <input type="hidden" name="_token" :value="$page.props.csrf_token">
+
             <FloatLabel variant="on">
               <InputText v-model="newUser.first_name" class="w-full" />
               <label>Vorname</label>
@@ -48,9 +50,6 @@ const emit = defineEmits(['close', 'add-user'])
               <label>Benutzername</label>
             </FloatLabel>
         </div>
-
-
-
         <div class="mb-4 mx-1">
           <FloatLabel variant="on">
             <InputText v-model="newUser.email" class="w-full" />

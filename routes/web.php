@@ -65,6 +65,11 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
 
 
     Route::get('/benutzer', [UserController::class, 'index'])->name('user.index');
+    Route::get('/benutzer/edit/{id}', [UserController::class, 'edit'])->name('user.edit');
+    Route::put('/benutzer/update/{user}', [UserController::class, 'update'])->name('user.update');
+
+
+
 
     Route::post('/toggleCheck', [UserController::class, 'check'])->name('user.check');
 

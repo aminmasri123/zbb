@@ -3,6 +3,8 @@ import { ref, computed, onMounted, onBeforeUnmount  } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import Banner from '@/Components/Banner.vue';
 import NavigationMenu from '@/Components/Header/NavbarHeader.vue';
+import { watch } from 'vue';
+import Swal from 'sweetalert2';
 
 // Sidebar-Komponenten importieren
 import DashboardSidebar from '@/Components/Sidebar/DashboardSidebar.vue';
@@ -10,8 +12,11 @@ import ProfileSidebar from '@/Components/Sidebar/ProfileSidebar.vue';
 import OrganisationSidebar from '@/Components/Sidebar/OrganisationSidebar.vue';
 import RessourcenSidebar from '@/Components/Sidebar/RessourcenSidebar.vue';
 
+import SweetalertSuccessError from '@/Components/Utils/SweetalertSuccessError.vue';
+
 // Aktuelle Seite/Route
 const page = usePage();
+
 
 // Dynamisch die Sidebar auswählen basierend auf der Route oder Seite
 const currentSidebar = computed(() => {
@@ -109,6 +114,10 @@ export default {
 <template>
     <div>
         <Head :title="title" />
+        <!-- Sweetalert Success Error Message -->
+             <SweetalertSuccessError />
+
+        <!-- End Sweetalert Success Error Message -->
 
         <Banner />
         <div id="app" class="main-wrapper ">

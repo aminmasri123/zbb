@@ -143,7 +143,7 @@ const resetForm = () => {
     newUser.value = {
         first_name: '',
         last_name:'',
-        name: '',
+        username: '',
         email: '',
         password: '',
         password_confirmation: '',
@@ -151,66 +151,65 @@ const resetForm = () => {
     };
 };
 
-// Benutzer hinzufügen
+    // Benutzer hinzufügen
+    const addUser = async () => {
+        // Überprüfe, ob alle erforderlichen Felder ausgefüllt sind
+        if (!newUser.value.first_name || !newUser.value.last_name || !newUser.value.username || !newUser.value.email || !newUser.value.password || !newUser.value.password_confirmation) {
+            Swal.fire({
+                title: 'Error!',
+                text: 'Bitte füllen Sie alle erforderlichen Felder aus.',
+                icon: 'error',
+                timer: 3000,
+                timerProgressBar: true,
+            });
+            return;
+        }
 
-const addUser = async () => {
-    // Überprüfe, ob alle erforderlichen Felder ausgefüllt sind
-    if (!newUser.value.first_name || !newUser.value.last_name || !newUser.value.name || !newUser.value.email || !newUser.value.password || !newUser.value.password_confirmation) {
-        Swal.fire({
-            title: 'Error!',
-            text: 'Bitte füllen Sie alle erforderlichen Felder aus.',
-            icon: 'error',
-            timer: 3000,
-            timerProgressBar: true,
-        });
-        return;
-    }
+        // Überprüfe, ob das Passwort übereinstimmt
+        if (newUser.value.password !== newUser.value.password_confirmation) {
+            Swal.fire({
+                title: 'Error!',
+                text: 'Bitte geben Sie ein identisches Kennwort ein.',
+                icon: 'error',
+                timer: 3000,
+                timerProgressBar: true,
+            });
+            return;
+        }
 
-    // Überprüfe, ob das Passwort übereinstimmt
-    if (newUser.value.password !== newUser.value.password_confirmation) {
-        Swal.fire({
-            title: 'Error!',
-            text: 'Bitte geben Sie ein identisches Kennwort ein.',
-            icon: 'error',
-            timer: 3000,
-            timerProgressBar: true,
-        });
-        return;
-    }
+        try {
+            // Sende die POST-Anfrage an den Server
+            const response = await axios.post(route('user.store'), newUser.value);
 
-    try {
-        // Sende die POST-Anfrage an den Server
-        const response = await axios.post(route('user.store'), newUser.value);
+            userList.value.unshift(response.data.user);
 
-        userList.value.unshift(response.data.user);
+            // Logge die Antwort des Servers
+            console.log(response.data);
 
-        // Logge die Antwort des Servers
-        console.log(response.data);
+            // Zeige eine Erfolgsnachricht an
+            Swal.fire({
+                title: 'Erfolg!',
+                text: 'Benutzer erfolgreich erstellt!',
+                icon: 'success',
+                timer: 3000,
+                timerProgressBar: true,
+            });
 
-        // Zeige eine Erfolgsnachricht an
-        Swal.fire({
-            title: 'Erfolg!',
-            text: 'Benutzer erfolgreich erstellt!',
-            icon: 'success',
-            timer: 3000,
-            timerProgressBar: true,
-        });
-
-        // Optional: Formular zurücksetzen und Modal schließen
-        resetForm();
-        closeModal();
-    } catch (error) {
-        // Fehlerbehandlung hier
-        console.error(error);
-        Swal.fire({
-            title: 'Error!',
-            text: error.response.data.message || 'Beim Erstellen des Benutzers ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.',
-            icon: 'error',
-            timer: 3000,
-            timerProgressBar: true,
-        });
-    }
-};
+            // Optional: Formular zurücksetzen und Modal schließen
+            resetForm();
+            closeModal();
+        } catch (error) {
+            // Fehlerbehandlung hier
+            console.error(error);
+            Swal.fire({
+                title: 'Error!',
+                text: error.response.data.message || 'Beim Erstellen des Benutzers ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.',
+                icon: 'error',
+                timer: 3000,
+                timerProgressBar: true,
+            });
+        }
+    };
 
 
 
@@ -218,7 +217,7 @@ const addUser = async () => {
 let newUser = ref({
     first_name: '',
     last_name:'',
-    name: '',
+    username: '',
     email: '',
     password: '',
     password_confirmation: '',
@@ -317,15 +316,11 @@ const sortByColumn = (column) => {
                             <i :class="sortColumn === 'email' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
                         </th>
                         <!-- sortByColumn Titel soll noch angepasst werden-->
-
-
                         <th @click="sortByColumn('email')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
                             {{ $t('projekte') }}
                             <i :class="sortColumn === 'email' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
                         </th>
                         <th scope="col" class="border w-10 border-solid border-gray-300 text-center px-6 py-3 ">*</th> <!-- Aktionen hinzufügen -->
-
-
                     </tr>
                 </thead>
                 <tbody>
@@ -345,7 +340,7 @@ const sortByColumn = (column) => {
                          <td class="px-6 py-4 border border-solid border-gray-300">
                             <span class="mr-4" v-for="projekt in user.projekte" :key="projekt.id">{{ projekt.name }}</span>
                         </td>
-                        <td class="w-10 border border-solid border-gray-300 px-6 py-4 text-center m-auto">
+                        <td class="w-10 border border-solid border-gray-300 px-6 py-4 text-left m-auto">
                             <!-- Dropdown für Aktion -->
                             <Dropdown >
                                 <template #trigger>
@@ -358,9 +353,12 @@ const sortByColumn = (column) => {
 
                                 <template #content >
                                     <!-- Gefilterte Projektauswahl -->
-                                    <span class="flex justify-around cursor-pointer" @click="confirmDelete(user)">
-                                        {{ $t('Löschen') }} <i class="las la-trash-alt"></i>
+                                    <span class="block cursor-pointer hover:bg-slate-100" @click="confirmDelete(user)">
+                                         <i class="ml-8 las la-trash-alt"></i> {{ $t('Löschen') }}
                                     </span>
+                                    <Link class="block" :href="route('user.edit', user.id)">
+                                        <i class="ml-8 las la-edit"></i> {{ $t('Bearbeiten') }}
+                                    </Link>
 
                                 </template>
                             </Dropdown>

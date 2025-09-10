@@ -46,7 +46,7 @@
                     <!-- Teams Dropdown -->
                     <Dropdown v-if="$page.props.auth.user.projekte" align="right" width="60">
                         <template #trigger>
-                                <button type="button" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
+                                <button type="button" class="inline-flex items-center py-2 border border-transparent text-sm leading-4 font-medium rounded-md dark:text-white dark:hover:text-gray-300 hover:text-gray-700 transition ease-in-out duration-150">
                                     <i class="la text-lg la-briefcase" aria-hidden="true"></i>
                                 </button>
                         </template>
@@ -95,7 +95,7 @@
                     <!-- Sprache Dropdown -->
                     <Dropdown align="right" width="48">
                         <template #trigger >
-                            <button class="inline-flex items-center px-3 py-2 mx-1 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
+                            <button class="inline-flex items-center px-3 py-2 mx-1 border border-transparent text-sm leading-4 font-medium rounded-md dark:text-white dark:hover:text-gray-300 hover:text-gray-700 focus:outline-none transition ease-in-out duration-150">
                                 <i class="las la-globe text-lg"></i>
                             </button>
                         </template>
@@ -127,7 +127,7 @@
 
                     <button
                         @click="switchTheme"
-                        class="inline-flex items-center px-3 py-2 mr-1 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
+                        class="inline-flex items-center py-2 mr-1 border border-transparent text-sm leading-4 font-medium rounded-md  dark:text-white dark:hover:text-gray-300 hover:text-gray-700 focus:outline-none transition ease-in-out duration-150">
                             <i class="las la-adjust text-lg"></i>
                     </button>
 
@@ -253,7 +253,7 @@
     import DropdownLink from '@/Components/DropdownLink.vue';
 
     import { useI18n } from 'vue-i18n';
-import { switchTheme } from '../../theme';
+    import { switchTheme } from '../../theme';
     const sidebarTextHidden = ref(false);
     const props = defineProps({
     //sidebarOpen: Boolean,
