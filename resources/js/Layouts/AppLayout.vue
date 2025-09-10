@@ -130,7 +130,7 @@ export default {
                         />
 
                 <div class="flex">
-                    <component class=" min-h-screen" :is="currentSidebar" :displayHideTextSidebar="displayHideTextSidebar" :sidebarOpen="sidebarOpen" :activeMenu="activeMenu" :toggleMenu="toggleMenu"/>
+                    <component class="h-[calc(100vh-4rem-1px)]" :is="currentSidebar" :displayHideTextSidebar="displayHideTextSidebar" :sidebarOpen="sidebarOpen" :activeMenu="activeMenu" :toggleMenu="toggleMenu"/>
 
                     <main class="w-full bg-gray-100 h-full "
                         :class="{'hidden sm:block':sidebarOpen}">

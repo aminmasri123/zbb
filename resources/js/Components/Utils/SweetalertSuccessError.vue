@@ -30,3 +30,7 @@ watch(
 );
 </script>
 
+<template>
+  <!-- Diese Komponente rendert nichts, sie kümmert sich nur um Popups -->
+  <div></div>
+</template>
