@@ -16,7 +16,7 @@ class BereichController extends Controller
     public function index(Request $request)
     {
         $search = $request->input('search'); // Benutze input(), um den Suchparameter abzurufen
-    
+
         // Hole die Abteilungen mit Suchfilter und lade die notwendigen Beziehungen
         $bereiche = Bereich::query()
             ->when($search, function ($query) use ($search) {
@@ -25,7 +25,7 @@ class BereichController extends Controller
             ->orderBy('name') // Sortiere nach Name
             ->paginate(20)    // Wende die Paginierung an
             ->withQueryString(); // Behalte die Query-String-Parameter für die Pagination
-    
+
         // Standardmäßige Rückgabe für die Inertia-Ansicht
         return Inertia::render('Bereich/Index', [
             'bereiche' => $bereiche,
@@ -34,7 +34,7 @@ class BereichController extends Controller
     public function indexAjaxFresh(Request $request)
     {
         $search = $request->input('search'); // Benutze input(), um den Suchparameter abzurufen
-    
+
         // Hole die Abteilungen mit Suchfilter und lade die notwendigen Beziehungen
         $bereiche = Bereich::query()
             ->when($search, function ($query) use ($search) {
@@ -43,7 +43,7 @@ class BereichController extends Controller
             ->orderBy('name') // Sortiere nach Name
             ->paginate(20)    // Wende die Paginierung an
             ->withQueryString(); // Behalte die Query-String-Parameter für die Pagination
-    
+
         // Überprüfe, ob die Anfrage als AJAX-Request gesendet wurde
         if ($request->ajax()) {
             return response()->json([
@@ -73,14 +73,14 @@ class BereichController extends Controller
             'name' => 'required|max:50',
             'beschreibung' => '',
         ]);
-        
+
         try {
             // Abteilung erstellen
             $bereich = Bereich::create([
                 'name' => $validatedData['name'],
                 'beschreibung' => $validatedData['beschreibung'], // Abteilungsleiter
             ]);
-            
+
             //Ajax Automatisch anzeigen
             return response()->json([
                 'message' => 'Abteilung erfolgreich erstellt.',
@@ -115,17 +115,22 @@ class BereichController extends Controller
         //
     }
 
-    /**
-     * Update the specified resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
     public function update(Request $request, $id)
-    {
-        //
-    }
+{
+    $validated = $request->validate([
+        'name' => 'required|max:255',
+        'beschreibung' => 'nullable|string',
+    ]);
+
+    $bereich = Bereich::findOrFail($id);
+    $bereich->update($validated);
+
+    return response()->json([
+        'message' => 'Bereich erfolgreich aktualisiert',
+        'bereich' => $bereich
+    ]);
+}
+
 
     /**
      * Remove the specified resource from storage.
@@ -136,7 +141,7 @@ class BereichController extends Controller
     public function destroy($id)
     {
         try {
-            $bereich = Bereich::findOrFail($id); 
+            $bereich = Bereich::findOrFail($id);
 
             // Optional: Überprüfe, ob die Abteilung gelöscht werden kann (z.B. durch Beziehungen)
             // if ($abteilung->hasRelations()) { ... }

@@ -163,16 +163,12 @@ class UserController extends Controller
 
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
+    
     public function edit($id)
     {
-        //dd('hello');
-        $user = User::findOrFail($id);
+        $user = User::with('roles')->findOrFail($id);
+        
+
         $rollen = Role::all();
 
         return Inertia::render('User/Edit', [
@@ -191,12 +187,16 @@ class UserController extends Controller
             'username'   => 'required|string|max:255|unique:users,username,' . $user->id,
             'email'      => 'required|email|max:255|unique:users,email,' . $user->id,
             'password'   => 'nullable|string|min:8|confirmed',
+            'rollen' => ['required', 'array'],
+            'rollen.*' => ['exists:roles,id'],
         ]);
         // User-Daten aktualisieren
         $user->first_name = $validated['first_name'];
         $user->last_name  = $validated['last_name'];
         $user->username   = $validated['username'];
         $user->email      = $validated['email'];
+        $user->assignRole($validated['rollen']);
+
 
         // Passwort nur ändern, wenn eingegeben
         if (!empty($validated['password'])) {
@@ -212,9 +212,10 @@ class UserController extends Controller
     public function destroy($id)
     {
         try {
+            
             $user = User::findOrFail($id); // Suche die Abteilung
+            
             $user->delete(); // Lösche die Abteilung
-
             return response()->json(['message' => 'der Konto von ' . $user->first_name . ' ' . $user->last_name . ' wurde  erfolgreich gelöscht!'], 200);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return response()->json(['message' => 'Der Konto konnte nicht gefunden werden.'], 404);

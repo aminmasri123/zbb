@@ -61,30 +61,6 @@ class AbteilungController extends Controller
             ]);
         };
     }
-    /* public function indexAjaxFresh(Request $request)
-    {
-        $search = $request->input('search'); // Benutze input(), um den Suchparameter abzurufen
-        $users = User::select('id', DB::raw("CONCAT(first_name, ' ', last_name) AS full_name"))->distinct()->get();
-
-        // Hole die Abteilungen mit Suchfilter und lade die notwendigen Beziehungen
-        $abteilungen = Abteilung::query()
-            ->when($search, function ($query) use ($search) {
-                $query->where('name', 'like', "%{$search}%");
-            })
-            ->with('user:id,first_name,last_name') // Lade den Abteilungsleiter
-            ->with('abteilungsassistente.user') // Lade die Abteilungsassistenten
-            ->orderBy('name') // Sortiere nach Name
-            ->paginate(100)    // Wende die Paginierung an
-            ->withQueryString(); // Behalte die Query-String-Parameter für die Pagination
-
-        // Überprüfe, ob die Anfrage als AJAX-Request gesendet wurde
-        if ($request->ajax()) {
-            return response()->json([
-                'abteilungen' => $abteilungen,
-                'users' => $users,
-            ]);
-        };
-    } */
 
     public function store(Request $request)
     {
@@ -128,15 +104,6 @@ class AbteilungController extends Controller
         }
     }
 
-
-
-
-    /**
-     * Display the specified resource.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
     public function show($id)
     {
         //
@@ -153,17 +120,51 @@ class AbteilungController extends Controller
         //
     }
 
-    /**
-     * Update the specified resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
-    public function update(Request $request, $id)
+    public function update(Request $request, Abteilung $abteilung)
     {
-        //
+        // Validierung
+        $validatedData = $request->validate([
+            'name' => 'required|max:255',
+            'abteilungsleiter' => 'required|exists:users,id',
+            'assistenten' => 'array',
+            'assistenten.*' => 'exists:users,id',
+        ]);
+
+        try {
+            // Abteilungsdaten aktualisieren
+            $abteilung->update([
+                'name' => $validatedData['name'],
+                'user_id' => $validatedData['abteilungsleiter'], // Abteilungsleiter
+            ]);
+
+            // Alte Assistenten löschen
+            $abteilung->abteilungsassistente()->delete();
+
+            // Neue Assistenten speichern
+            if (!empty($validatedData['assistenten'])) {
+                foreach ($validatedData['assistenten'] as $assistentenId) {
+                    Abteilungsassistent::create([
+                        'user_id' => $assistentenId,
+                        'abteilung_id' => $abteilung->id,
+                    ]);
+                }
+            }
+
+            // Abteilungsleiter + Assistenten nachladen
+            $abteilung->load('user', 'abteilungsassistente.user');
+
+            return response()->json([
+                'message' => 'Abteilung erfolgreich aktualisiert.',
+                'abteilung' => $abteilung
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Beim Aktualisieren der Abteilung ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.'
+            ], 500);
+        }
     }
+
 
     public function destroy($id)
     {

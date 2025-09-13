@@ -5,17 +5,16 @@
     import {router, Link, Head } from '@inertiajs/vue3';
     import axios from 'axios';
     import Dropdown from '@/Components/Dropdown.vue';
-    import Modal from '@/Components/ModalForm.vue';
     import ModalDestroy from '@/Components/ModalDestroyForm.vue';
-    import MultiSelect from 'primevue/multiselect';
-    import InputText from 'primevue/inputtext';
-    import FloatLabel from 'primevue/floatlabel';
-    import Select from 'primevue/select';
+    import ModalCreate from '@/Pages/Abteilung/ModalCreate.vue';
+    import ModalEdit from '@/Pages/Abteilung/ModalEdit.vue';
+
 
     let seite = 'abteilung';
     let search = ref('');
     let abteilungToDelete = ref(null); // Speichert den Namen der Abteilung, die gelöscht werden soll
     let showModalLöschen = ref(false); // Modal für die Löschung
+    let abteilungToEdit = ref(null);
 
      // Definiere die Props direkt
     const props = defineProps({ abteilungen: Object, users: Object }); // props wird hier definiert
@@ -85,6 +84,24 @@ const confirmDelete = (abteilung) => {
     };
     showModalLöschen.value = true; // Modal anzeigen
 };
+
+let isModalEditOpen = ref(false); // Modal-Zustand
+
+    // Modal öffnen und schließen
+    const openModalEdit = (abteilung) => {
+        isModalEditOpen.value = true;
+        abteilungToEdit.value = abteilung; // direkt übergeben
+    };
+
+
+
+    const closeModalEdit = () => {
+        isModalEditOpen.value = false;
+        resetForm(); // setzt aber nur newAbteilung zurück, nicht editAbteilung
+    };
+
+
+
 // Event-Handler, um die Abteilung aus der lokalen Liste zu löschen
 const handleDelete = (abteilungId) => {
     // Remove the deleted item from localAbteilungen
@@ -95,6 +112,7 @@ const handleDelete = (abteilungId) => {
 };
 
     let isModalOpen = ref(false); // Modal-Zustand
+
     // Modal öffnen und schließen
     const openModal = () => {
         isModalOpen.value = true;
@@ -104,6 +122,7 @@ const handleDelete = (abteilungId) => {
         isModalOpen.value = false;
         resetForm();
     };
+
     const resetForm = () => {
     newAbteilung.value = {
         name: '',
@@ -186,7 +205,12 @@ export default {
 
     <app-layout>
         <!-- Header Slot -->
-        <template #header>{{$t('abteilungen')}}</template>
+        <template #header>
+
+            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+                {{$t('abteilungen')}}
+            </h2>
+          </template>
 
         <!-- Suchfeld -->
         <div class="flex justify-around items-center mb-3">
@@ -204,7 +228,7 @@ export default {
         </div>
         <!-- Benutzerausgabe -->
         <div class="relative overflow-x-auto mb-10">
-            <table id="table" class="w-full text-sm table-auto mb-5 text-left rtl:text-right text-gray-500 dark:text-gray-400 shadow-sm">
+            <table id="table" class="w-full text-sm table-auto mb-10 text-left rtl:text-right text-gray-500 dark:text-gray-400 shadow-sm">
                 <thead class="text-md  text-gray-600 uppercase bg-gray-200 dark:bg-gray-700 dark:text-gray-400">
                     <tr class="font-bold ">
                         <th scope="col" class="border border-solid border-gray-300 px-6 py-3 w-10 text-center ">ID.</th>
@@ -243,8 +267,11 @@ export default {
 
                                 <template #content >
                                     <!-- Gefilterte Projektauswahl -->
-                                    <span class="flex justify-around cursor-pointer" @click="confirmDelete(abteilung)">
-                                        {{ $t('Löschen') }} <i class="las la-trash-alt"></i>
+                                    <span class="flex justify-between cursor-pointer px-6 items-center" @click="confirmDelete(abteilung)">
+                                        {{ $t('Löschen') }} <i class="las la-trash-alt "></i>
+                                    </span>
+                                    <span class="flex justify-between  cursor-pointer px-6 items-center" @click="openModalEdit(abteilung)">
+                                        {{ $t('Bearbeiten') }}  <i class="las la-edit  "></i>
                                     </span>
 
                                 </template>
@@ -254,53 +281,20 @@ export default {
                 </tbody>
             </table>
         </div>
+        <ModalCreate :visible="isModalOpen" :users="users"  @close="closeModal" @add-abteilung="addAbteilung" />
 
-         <!-- Modal für neue Abteilung -->
-         <Modal v-if="isModalOpen" @close="closeModal">
-            <template #header>
-                <div class="text-center w-full uppercase text-lg font-bold">
-                    <h2 class="text-lg font-bold text-gray-500 ">{{ $t('abteilung anlegen') }}</h2>
-                </div>
-            </template>
-            <template #body>
-                <form @submit.prevent="addAbteilung">
-                    <div class="mb-4 w-full mx-1">
-                        <FloatLabel variant="on">
-                            <InputText id="name" v-model="newAbteilung.name" class="w-full" />
-                            <label for="name">Bezeichnung</label>
-                        </FloatLabel>
-                    </div>
-                    <div class="mb-4 w-full mx-1">
-                        <FloatLabel variant="on">
-                            <Select v-model="newAbteilung.abteilungsleiter"  inputId="id" optionValue="id"  :options="users" optionLabel="full_name" class="w-full" />
-
-                            <label for="abteilungsleiter">Abteilungsleitung wählen</label>
-                        </FloatLabel>
-                    </div>
-                    <div class="mb-4 w-full mx-1">
-                        <MultiSelect
-                            v-model="newAbteilung.assistenten"
-                            inputId="id"
-                            display="chip"
-                            optionLabel="full_name"
-                            :options="users"
-                            optionValue="id"
-                            filter
-                            placeholder="Assistenten wählen*"
-                            :maxSelectedLabels="3"
-                            class="w-full">
-                        </MultiSelect>
-                    </div>
-                </form>
-            </template>
-            <template #footer>
-                <div class="w-full flex justify-center">
-                    <button @click="addAbteilung" class=" mx-2 bg-zbb text-white px-4 py-2 rounded">Hinzufügen</button>
-                    <button @click="closeModal" class="mx-2 border border-zbb text-zbb px-4 py-2 rounded">Abbrechen</button>
-                </div>
-            </template>
-        </Modal>
-
+         <!-- Modal für die Löschung der Abteilung-->
+         <ModalEdit
+            :visible="isModalEditOpen"
+            :users="users"
+            :toEdit="abteilungToEdit"
+            @close="closeModalEdit"
+            @updated="(updatedAbteilung) => {
+                // ersetze Eintrag in localAbteilungen
+                const index = localAbteilungen.findIndex(a => a.id === updatedAbteilung.id);
+                if (index !== -1) localAbteilungen[index] = updatedAbteilung;
+            }"
+        />
 
         <!-- Modal für die Löschung der Abteilung-->
         <ModalDestroy v-if="showModalLöschen" @delete="handleDelete" @close="showModalLöschen = false" :seite="seite"  :toDelete="abteilungToDelete"></ModalDestroy>

@@ -83,7 +83,7 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
     Route::get('/benutzer', [UserController::class, 'index'])->name('user.index');
     Route::get('/benutzer/anlegen', function () { return Inertia::render('User/CreateUser'); })->name('user.create');
     Route::post('/benutzer/anlegen', [UserController::class, 'store'])->name('user.store');
-    Route::delete('/benutzer/{id}', [UserController::class, 'destroy'])->name('benutzer.destroy');
+    Route::delete('/benutzer/entfernen/{id}', [UserController::class, 'destroy'])->name('user.destroy');
 
     //Profile-Benutzer
     Route::get('/user/profile/{id}', [UserController::class, 'show'])->name('user.profil');
@@ -91,7 +91,7 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
     //Bereiche
     Route::get('/bereich', [BereichController::class, 'index'])->name('bereich.index');
     Route::get('/bereich/ajaxFresh', [BereichController::class, 'indexAjaxFresh'])->name('bereich.indexAjaxFresh');
-
+    Route::put('/bereich/{id}', [BereichController::class, 'update'])->name('bereich.update');
     Route::post('/bereich/anlegen', [BereichController::class, 'store'])->name('bereich.store');
     Route::delete('/bereiche/{id}', [BereichController::class, 'destroy'])->name('bereich.destroy');
 
@@ -102,6 +102,7 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
     Route::get('/abteilung/ajaxFresh', [AbteilungController::class, 'indexAjaxFresh'])->name('abteilung.indexAjaxFresh');
     Route::post('/abteilung/anlegen', [AbteilungController::class, 'store'])->name('abteilung.store');
     Route::delete('/abteilungen/{id}', [AbteilungController::class, 'destroy'])->name('abteilung.destroy');
+    Route::put('/abteilung/update/{abteilung}', [AbteilungController::class, 'update'])->name('abteilung.update');
 
 
     //Projekte

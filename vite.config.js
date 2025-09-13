@@ -4,12 +4,8 @@ import vue from '@vitejs/plugin-vue';
 
 export default defineConfig({
     server: {
-        host: '192.168.0.192', //zuhause
-        //host: '192.168.245.56', //ZBB
-        //host: '192.168.101.13', //ZBB
-        //host: '192.168.101.9',//ZBB
-        //host: '172.16.209.173',//Mouad LU
-        //host: '10.114.151.67',//Xiaomi14
+        
+        host: '172.16.209.31',//Mouad LU
 
     },
 

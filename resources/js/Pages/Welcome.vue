@@ -39,7 +39,7 @@ defineProps({
             <p class="md:text-xl sm:text-sm font-semibold text-gray-900">
                 Willkommen bei der ZBB - Phoenix 2 - Anwendung
             </p>
-            <p class="md:text-lg sm:text-sm text-gray-600 dark:text-gray-400">Ihre digitale Lösung zur effizienten Verwaltung und zur Überwindung von Kommunikationsbarrieren.</p>
+            <p class="md:text-lg sm:text-sm text-gray-600">Ihre digitale Lösung zur effizienten Verwaltung und zur Überwindung von Kommunikationsbarrieren.</p>
         </div>
     </div>
 

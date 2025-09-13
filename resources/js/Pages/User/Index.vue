@@ -12,7 +12,7 @@ import axios from 'axios';
 import ModalCreateUser from '@/Pages/User/ModalCreateUser.vue';
 
 // Suchfeld und Dropdown für Projekte
-let seite = 'benutzer';
+let seite = 'user';
 let search = ref('');
 let searchProject = ref('');
 let selectedProject = ref(null); // Für das ausgewählte Projekt

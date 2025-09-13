@@ -23,7 +23,7 @@ class UserSeeder extends Seeder
         DB::table('users')->insert([
             [
                 // id = 1
-                'name' => 'Amin Masri',
+                'username' => 'Amin Masri',
                 'first_name' => 'Amin',
                 'last_name' => 'Masri',
                 'email' => 'amin.masri@outlook.com',
@@ -31,7 +31,7 @@ class UserSeeder extends Seeder
                 'lang' => 'de',
             ],
             [   // id = 2
-                'name' => 'Anika Feller',
+                'username' => 'Anika Feller',
                 'first_name' => 'Anika',
                 'last_name' => 'Feller',
                 'email' => 'a.feller@zbb-saar.de',
@@ -39,7 +39,7 @@ class UserSeeder extends Seeder
                 'lang' => 'de',
             ],
             [ // id = 3
-                'name' => 'Salvatore Gucciardo',
+                'username' => 'Salvatore Gucciardo',
                 'first_name' => 'Salvatore',
                 'last_name' => 'Gucciardo',
                 'email' => 's.gucciardo@zbb-saar.de',
@@ -47,7 +47,7 @@ class UserSeeder extends Seeder
                 'lang' => 'de',
             ],
             [ // id = 4
-                'name' => 'Brigitta Lautenschlager',
+                'username' => 'Brigitta Lautenschlager',
                 'first_name' => 'Birgitta',
                 'last_name' => 'Lautenschlager',
                 'email' => 'b.lautenschlager@zbb-saar.de',
@@ -55,7 +55,7 @@ class UserSeeder extends Seeder
                 'lang' => 'de',
             ],
             [ // id = 5
-                'name' => 'Chantale Lismann',
+                'username' => 'Chantale Lismann',
                 'first_name' => 'Chantale',
                 'last_name' => 'Lismann',
                 'email' => 'c.lismann@zbb-saar.de',
@@ -63,7 +63,7 @@ class UserSeeder extends Seeder
                 'lang' => 'de',
             ],
             [ // id = 6
-                'name' => 'Stefanie Wagner',
+                'username' => 'Stefanie Wagner',
                 'first_name' => 'Stefanie',
                 'last_name' => 'Wagner',
                 'email' => 's.wagner@zbb-saar.de',
@@ -71,7 +71,7 @@ class UserSeeder extends Seeder
                 'lang' => 'de',
             ],
             [ // id = 7
-                'name' => 'Stefan Haßdenteufel',
+                'username' => 'Stefan Haßdenteufel',
                 'first_name' => 'Stefan',
                 'last_name' => 'Haßdenteufel',
                 'email' => 's.haßdenteufel@zbb-saar.de',
@@ -79,7 +79,7 @@ class UserSeeder extends Seeder
                 'lang' => 'de',
             ],
             [ // id = 8
-                'name' => 'Martin Löw',
+                'username' => 'Martin Löw',
                 'first_name' => 'Martin',
                 'last_name' => 'Löw',
                 'email' => 'm.loew@zbb-saar.de',
@@ -89,19 +89,19 @@ class UserSeeder extends Seeder
 
         ]);
 
-        $faker = Faker::create();
+        /*$faker = Faker::create();
         // Anzahl der Benutzer, die erstellt werden sollen
         $numberOfUsers = 50;
         for ($i = 0; $i < $numberOfUsers; $i++)
         {
             User::create([
-                'name' => $faker->username,
+                'username' => $faker->username,
                 'first_name' => $faker->firstName,
                 'last_name' => $faker->lastName,
                 'email' => $faker->unique()->safeEmail,
                 'password' => bcrypt('password'), // Standardpasswort
             ]);
-        }
+        }*/
 
         DB::table('abteilungs')->insert([
             [ // id = 1
@@ -428,7 +428,21 @@ class UserSeeder extends Seeder
                 'beschreibung' => 'web',
                 'berechtigungskategorie_id' => '19',
             ],
-
+            [ // id = 5
+                'name' => 'abteilung.index',
+                'beschreibung' => 'web',
+                'berechtigungskategorie_id' => '18',
+            ],
+            [ // id = 5
+                'name' => 'abteilung.store',
+                'beschreibung' => 'web',
+                'berechtigungskategorie_id' => '18',
+            ],
+            [ // id = 5
+                'name' => 'abteilung.destroy',
+                'beschreibung' => 'web',
+                'berechtigungskategorie_id' => '18',
+            ],
 
 
 

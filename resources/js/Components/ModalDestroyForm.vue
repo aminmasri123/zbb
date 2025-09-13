@@ -72,13 +72,15 @@
             timerProgressBar: true,
         });
         return; // Stoppe die Funktion, wenn die Eingabe nicht stimmt
-    }
-        console.log(toDelete);
-        axios.delete(route(props.seite + '.destroy', { id: props.toDelete.id }))
+    }            
+    console.log(props.seite);
+    console.log(route('user.destroy', props.toDelete.id), {})
+
+    axios.delete(route(props.seite + '.destroy',  props.toDelete.id))
         .then(response => {
             emitDelete('delete', props.toDelete.id);
             deleteInput.value = '';
-
+            
             Swal.fire({
                 title: 'Erfolg!',
                 text: props.toDelete.name + ' \'s Konto wurde erfolgreich gelöscht!',

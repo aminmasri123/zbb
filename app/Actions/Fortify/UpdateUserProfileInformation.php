@@ -31,8 +31,9 @@ class UpdateUserProfileInformation implements UpdatesUserProfileInformation
             $user instanceof MustVerifyEmail) {
             $this->updateVerifiedUser($user, $input);
         } else {
+
             $user->forceFill([
-                'name' => $input['name'],
+                'username' => $input['name'],
                 'email' => $input['email'],
             ])->save();
         }
@@ -46,7 +47,7 @@ class UpdateUserProfileInformation implements UpdatesUserProfileInformation
     protected function updateVerifiedUser(User $user, array $input): void
     {
         $user->forceFill([
-            'name' => $input['name'],
+            'username' => $input['name'],
             'email' => $input['email'],
             'email_verified_at' => null,
         ])->save();

@@ -32,7 +32,7 @@ const submit = () => {
             <AuthenticationCardLogo />
 
             <div>
-                <InputLabel for="first_name" value="{{$t('Vorname')}}" />
+                <InputLabel for="first_name" :value="$t('Vorname')" />
                 <TextInput
                     id="first_name"
                     v-model="form.first_name"
@@ -45,7 +45,7 @@ const submit = () => {
                 <InputError class="mt-2" :message="form.errors.name" />
             </div>
             <div class="mt-4">
-                <InputLabel for="last_name" value="{{$t('Nachname')}}" />
+                <InputLabel for="last_name" :value="$t('Nachname')" />
                 <TextInput
                     id="last_name"
                     v-model="form.last_name"
@@ -59,7 +59,7 @@ const submit = () => {
             </div>
 
             <div class="mt-4">
-                <InputLabel for="email" value="{{$t('E-Mail-Adresse')}}" />
+                <InputLabel for="email" :value="$t('E-Mail Adresse')" />
                 <TextInput
                     id="email"
                     v-model="form.email"
@@ -72,7 +72,7 @@ const submit = () => {
             </div>
 
             <div class="mt-4">
-                <InputLabel for="password" value="{{$t('Passwort')}}" />
+                <InputLabel for="password" :value="$t('Passwort')" />
                 <TextInput
                     id="password"
                     v-model="form.password"
@@ -85,7 +85,7 @@ const submit = () => {
             </div>
 
             <div class="mt-4">
-                <InputLabel for="password_confirmation" value="{{$t('Passwort_bestätigen')}}" />
+                <InputLabel for="password_confirmation" :value="$t('Passwort bestätigen')" />
                 <TextInput
                     id="password_confirmation"
                     v-model="form.password_confirmation"

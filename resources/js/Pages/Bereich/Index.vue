@@ -5,20 +5,46 @@
     import { router, Link, Head } from '@inertiajs/vue3';
     import axios from 'axios';
     import Dropdown from '@/Components/Dropdown.vue';
-    import Modal from '@/Components/ModalForm.vue';
     import ModalDestroy from '@/Components/ModalDestroyForm.vue';
-    import InputText from 'primevue/inputtext';
-    import FloatLabel from 'primevue/floatlabel';
-    import Textarea from 'primevue/textarea';
+    import ModalCreate from '@/Pages/Bereich/ModalCreate.vue';
+    import ModalEdit from '@/Pages/Bereich/ModalEdit.vue';
 
     let seite = 'bereich';
     let search = ref('');
     let bereichToDelete = ref(null); // Speichert den Namen der Abteilung, die gelöscht werden soll
     let showModalLöschen = ref(false); // Modal für die Löschung
+    let isModalCreateOpen = ref(false);
+    let isModalEditOpen = ref(false);
+    let bereichToEdit = ref(null);
 
      // Definiere die Props direkt
     const props = defineProps({ bereiche: Object, }); // props wird hier definiert
     // Lokale Kopie der Bereiche erstellen
+
+
+    const openModalCreate = () => {
+        isModalCreateOpen.value = true;
+    };
+
+    const closeModalCreate = () => {
+        isModalCreateOpen.value = false;
+    };
+
+
+    const openModalEdit = (bereich) => {
+        bereichToEdit.value = bereich;
+        isModalEditOpen.value = true;
+    };
+    const closeModalEdit = () => { isModalEditOpen.value = false; };
+
+
+    const updateBereich = (updatedBereich) => {
+    const index = localBereiche.value.findIndex(b => b.id === updatedBereich.id);
+        if (index !== -1) {
+            localBereiche.value[index] = updatedBereich;
+        }
+    };
+
 
     // Fülle localBereiche mit den Daten aus den Props
     let localBereiche = ref([...props.bereiche.data]);  // Originaldaten
@@ -50,7 +76,7 @@
             });
 
             // Bereiche entfernen, die nicht mehr in der neuen Liste sind
-            localBereiche.value = localBereiche.value.filter(localBereich => 
+            localBereiche.value = localBereiche.value.filter(localBereich =>
                 newBereiche.data.some(newBereich => newBereich.id === localBereich.id)
             );
             applySearchFilter();
@@ -94,16 +120,7 @@ const handleDelete = (bereichId) => {
     showModalLöschen.value = false; // Close the delete modal
 };
 
-    let isModalOpen = ref(false); // Modal-Zustand
-    // Modal öffnen und schließen
-    const openModal = () => {
-        isModalOpen.value = true;
-    };
 
-    const closeModal = () => {
-        isModalOpen.value = false;
-        resetForm();
-    };
     // Neuen Benutzer
         let newBereich = ref({
             name: '',
@@ -118,27 +135,10 @@ const handleDelete = (bereichId) => {
 };
 
 // Benutzer hinzufügen
-const addBereich = async () => {
-    // Überprüfe, ob alle erforderlichen Felder ausgefüllt sind
-    if (!newBereich.value.name) {
-        Swal.fire({
-            title: 'Error!',
-            text: 'Bitte achten Sie darauf, alle erforderlichen Felder auszufüllen.',
-            icon: 'error',
-            timer: 3000,
-            timerProgressBar: true,
-        });
-        return;
-    }
-
+const addBereich = async (data) => {
     try {
-        // Sende die POST-Anfrage an den Server
-        const response = await axios.post(route('bereich.store'), newBereich.value);
+        const response = await axios.post(route('bereich.store'), data);
 
-        // Logge die Antwort des Servers
-        console.log(response.data);
-
-        // Zeige eine Erfolgsnachricht an
         Swal.fire({
             title: 'Erfolg!',
             text: 'Bereich erfolgreich angelegt!',
@@ -146,17 +146,14 @@ const addBereich = async () => {
             timer: 3000,
             timerProgressBar: true,
         });
+
         localBereiche.value.unshift(response.data.bereich);
 
-        // Optional: Formular zurücksetzen und Modal schließen
-        resetForm();
-        closeModal();
     } catch (error) {
-        // Fehlerbehandlung hier
         console.error(error);
         Swal.fire({
             title: 'Error!',
-            text: error.response.data.message || 'Beim Erstellen des Bereiches ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.',
+            text: error.response?.data?.message || 'Beim Erstellen des Bereiches ist ein Fehler aufgetreten.',
             icon: 'error',
             timer: 3000,
             timerProgressBar: true,
@@ -187,7 +184,7 @@ export default {
 
         <!-- Suchfeld -->
         <div class="flex justify-around items-center mb-3">
-            <div @click="openModal" class="flex items-center">
+            <div @click="openModalCreate" class="flex items-center">
                 <i class="la la-plus bg-white border border-gray-300 rounded-l-md px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
             </div>
 
@@ -236,9 +233,13 @@ export default {
 
                                 <template #content >
                                     <!-- Gefilterte Projektauswahl -->
-                                    <span class="flex justify-around cursor-pointer" @click="confirmDelete(bereich)">
-                                        {{ $t('Löschen') }} <i class="las la-trash-alt"></i>
+                                    <span class="flex justify-between cursor-pointer px-6 items-center"  @click="confirmDelete(bereich)">
+                                        {{ $t('Löschen') }} <i class="las la-trash-alt "></i>
                                     </span>
+                                    <span class="flex justify-between cursor-pointer px-6 items-center"  @click="openModalEdit(bereich)">
+                                        {{ $t('Bearbeiten') }}  <i class="las la-edit  "></i>
+                                    </span>
+
                                 </template>
                             </Dropdown>
                         </td>
@@ -248,35 +249,10 @@ export default {
         </div>
 
          <!-- Modal für neue Bereich -->
-         <Modal v-if="isModalOpen" @close="closeModal">
-            <template #header>
-                <div class="text-center w-full uppercase text-lg font-bold">
-                    <h2 class="text-lg font-bold text-gray-500 ">{{ $t('Bereich anlegen') }}</h2>
-                </div>
-            </template>
-            <template #body>
-                <form @submit.prevent="addBereich">
-                    <div class="mb-4 w-full mx-1">
-                        <FloatLabel variant="on">
-                            <InputText id="name" v-model="newBereich.name" class="w-full" />
-                            <label for="name">{{$t('Bezeichnung')}}</label>
-                        </FloatLabel>
-                    </div>
-                    <div class="mb-4 w-full mx-1">                           
-                        <FloatLabel variant="on">
-                            <Textarea id="over_label" v-model="newBereich.beschreibung" rows="5"  class="w-full" style="resize: none" />
-                            <label for="in_label">{{$t('Beschreibung')}}</label>
-                        </FloatLabel>
-                    </div>
-                </form>
-            </template>
-            <template #footer>
-                <div class="w-full flex justify-center">
-                    <button @click="addBereich" class=" mx-2 bg-zbb text-white px-4 py-2 rounded">Hinzufügen</button>
-                    <button @click="closeModal" class="mx-2 border border-zbb text-zbb px-4 py-2 rounded">Abbrechen</button>
-                </div>
-            </template>
-        </Modal>
+
+
+        <ModalCreate :visible="isModalCreateOpen" @close="closeModalCreate" @add-bereich="addBereich"/>
+        <ModalEdit :visible="isModalEditOpen" :toEdit="bereichToEdit" @close="closeModalEdit" @updated="updateBereich"/>
         <!-- Modal für die Löschung des Bereiches-->
         <ModalDestroy v-if="showModalLöschen" @delete="handleDelete" @close="showModalLöschen = false" :seite="seite"  :toDelete="bereichToDelete"></ModalDestroy>
     </app-layout>

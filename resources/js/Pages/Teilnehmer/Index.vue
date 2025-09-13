@@ -11,7 +11,7 @@ import axios from 'axios';
 import ModalCreateTeilnehmer from '@/Pages/Teilnehmer/ModalCreateTeilnehmer.vue';
 
 // Suchfeld und Dropdown für Projekte
-let seite = 'Teilnehmer'; // Für die Löschseite
+let seite = 'teilnehmer'; // Für die Löschseite
 let search = ref('');
 let searchProject = ref('');
 let selectedProject = ref(null); // Für das ausgewählte Projekt

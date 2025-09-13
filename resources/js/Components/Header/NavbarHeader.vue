@@ -3,7 +3,7 @@
 
         <!-- Primary Navigation Menu -->
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16">
+            <div class="flex justify-between h-20 ">
 
                 <div class="flex ">
                     <!-- Hamburger Button (nur auf Mobilgeräten sichtbar) -->
@@ -30,14 +30,14 @@
                         </Link>
                     </div>
                 </div>
-                <div class="hidden space-x-8 sm:-my-px sm:flex text-center">
-                    <NavLink :href="route('dashboard')" :active="route().current('dashboard')" class="dark:text-gray-100">
+                <div class="hidden space-x-8 sm:-my-px sm:flex text-center ">
+                    <NavLink :href="route('dashboard')" :active="route().current('dashboard')" class="dark:text-gray-100 text-[17px] ">
                         {{ $t('dashboard') }}
                     </NavLink>
-                    <NavLink :href="route('organisation.index')" :active="route().current('organisation.index')" class="dark:text-gray-100">
+                    <NavLink :href="route('organisation.index')" :active="route().current('organisation.index')" class="dark:text-gray-100 text-[17px] ">
                         {{ $t('organisation') }}
                     </NavLink>
-                    <NavLink :href="route('ressourcen.index')" :active="route().current('ressourcen.index')" class="dark:text-gray-100">
+                    <NavLink :href="route('ressourcen.index')" :active="route().current('ressourcen.index')" class="dark:text-gray-100  text-[17px] ">
                         {{ $t('Ressourcen') }}
                     </NavLink>
                 </div>
@@ -127,7 +127,7 @@
 
                     <button
                         @click="switchTheme"
-                        class="inline-flex items-center py-2 mr-1 border border-transparent text-sm leading-4 font-medium rounded-md  dark:text-white dark:hover:text-gray-300 hover:text-gray-700 focus:outline-none transition ease-in-out duration-150">
+                        class="inline-flex items-center py-2 mr-3 border border-transparent text-sm leading-4 font-medium rounded-md  dark:text-white dark:hover:text-gray-300 hover:text-gray-700 focus:outline-none transition ease-in-out duration-150">
                             <i class="las la-adjust text-lg"></i>
                     </button>
 
@@ -135,7 +135,7 @@
                     <Dropdown align="right" width="48">
                         <template #trigger>
                             <button v-if="$page.props.jetstream.managesProfilePhotos" class="flex text-sm border-2 border-transparent rounded-full focus:outline-none focus:border-gray-300 transition">
-                                <img class="h-8 w-8 rounded-full object-cover"  :src="`/storage/${$page.props.auth.user.profile_photo_path}`"  :alt="$page.props.auth.user.name">
+                                <img class="h-12 w-12 rounded-full object-cover"  :src="`/storage/${$page.props.auth.user.profile_photo_path}`"  :alt="$page.props.auth.user.name">
                             </button>
 
                             <span v-else class="inline-flex rounded-md">
@@ -211,6 +211,9 @@
                 </ResponsiveNavLink>
                 <ResponsiveNavLink :href="route('organisation.index')" :active="route().current('organisation.index')">
                     {{$t('organisation')}}
+                </ResponsiveNavLink>
+                <ResponsiveNavLink :href="route('ressourcen.index')" :active="route().current('ressourcen.index')">
+                    {{ $t('Ressourcen') }}
                 </ResponsiveNavLink>
             </div>
 

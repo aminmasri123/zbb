@@ -141,9 +141,6 @@ const activeTab = ref('profile') // default Tab
                             </div>
                         </div>
                         
-
-
-
                         <div class="w-full">
                             <!-- Tabs Navigation -->
                             <div class="border-b border-gray-200">
@@ -229,19 +226,8 @@ const activeTab = ref('profile') // default Tab
                             </div>
                             </div>
                         </div>
-
-
-
-
-
-
                     </div>
                 </div>
-
-
-
-
-
 
                 
                 <!-- Modal -->
