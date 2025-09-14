@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Validator;
 
 class TeilnehmerController extends Controller
 {
-    public function index(Request $request)
+    /* public function index(Request $request)
     {
 
         $search   = $request->input('search');
@@ -53,6 +53,51 @@ class TeilnehmerController extends Controller
                 ],
             ]);
 
+    } */
+
+    public function index(Request $request)
+    {
+        $search     = $request->input('search');
+        $sort       = $request->input('sort', 'id');
+        $direction  = strtolower($request->input('direction', 'desc'));
+
+        $sortMap = [
+            'id'         => 'id',
+            'vorname'    => 'vorname',
+            'nachname'   => 'nachname',
+            'geschlecht' => 'geschlecht',
+        ];
+
+        $sortColumn = $sortMap[$sort] ?? 'id';
+        $direction  = in_array($direction, ['asc', 'desc'], true) ? $direction : 'desc';
+
+        $user = auth()->user();
+
+        $query = Teilnehmer::query()
+            // Nur Teilnehmer aus Projekten, die dem User gehören
+            ->whereHas('projekte', function ($q) use ($user) {
+                $q->whereHas('users', function ($q2) use ($user) {
+                    $q2->where('users.id', $user->id);
+                });
+            })
+            ->when($search, function ($q) use ($search) {
+                $q->where(function ($q) use ($search) {
+                    $q->where(DB::raw("CONCAT(vorname, ' ', nachname)"), 'like', "%{$search}%")
+                    ->orWhere(DB::raw("CONCAT(nachname, ' ', vorname)"), 'like', "%{$search}%")
+                    ->orWhere('vorname', 'like', "%{$search}%")
+                    ->orWhere('nachname', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy($sortColumn, $direction);
+
+        return Inertia::render('Teilnehmer/Index', [
+            'teilnehmers' => $query->paginate(200),
+            'filters' => [
+                'search'    => $search,
+                'sort'      => $sort,
+                'direction' => $direction,
+            ],
+        ]);
     }
 
     /**

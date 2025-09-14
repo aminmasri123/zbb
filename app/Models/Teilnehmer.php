@@ -3,8 +3,9 @@
 namespace App\Models;
 
 use App\Models\Adresse;
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Projekt;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
 class Teilnehmer extends Model
 {
@@ -22,4 +23,10 @@ class Teilnehmer extends Model
     {
         return $this->hasOne(Adresse::class);
     }
+
+    public function projekte()
+    {
+        return $this->belongsToMany(Projekt::class, 'projekt_has_teilnehmers', 'teilnehmer_id', 'projekt_id');
+    }
+
 }

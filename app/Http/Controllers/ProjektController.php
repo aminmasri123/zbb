@@ -19,6 +19,7 @@ class ProjektController extends Controller
     public function index(Request $request)
     {
         $search = $request->input('search'); // Benutze input(), um den Suchparameter abzurufen
+
         $abteilungen = Abteilung::select('id', 'name')->get();
         // Hole die Projekte mit Suchfilter und lade die notwendigen Beziehungen
         $projekte = Projekt::query()
@@ -73,7 +74,6 @@ class ProjektController extends Controller
 
     public function store(Request $request)
     {
-        // Validierung der Eingabewerte
         $validatedData = $request->validate([
             'name' => 'required|max:50',
             'kostenstelle' => 'required|max:50',
@@ -102,14 +102,19 @@ class ProjektController extends Controller
                 'enddatum' => $validatedData['enddatum'],
             ]);
 
-            // Erfolgreiche Antwort
+            // 👉 Projekt nochmal mit Relationen laden
+            $projekt->load(['abteilung', 'projektzeitraume']);
+
             return response()->json([
                 'message' => 'Projekt erfolgreich erstellt.',
                 'projekt' => $projekt
             ], 201);
 
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Beim Erstellen des Projektes ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.'], 500);
+            return response()->json([
+                'error' => 'Beim Erstellen des Projektes ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.',
+                'details' => $e->getMessage()
+            ], 500);
         }
     }
 
@@ -144,15 +149,63 @@ class ProjektController extends Controller
      */
     public function update(Request $request, $id)
     {
-        //
+        // Validierung
+        $validatedData = $request->validate([
+            'name' => 'required|max:50',
+            'kostenstelle' => 'required|max:50',
+            'abteilung' => 'required|exists:abteilungs,id',
+            'antragsdatum'  =>  'required|date',
+            'starttermin'  =>  'required|date',
+            'anfangsdatum'  =>  'required|date',
+            'endtermin'  =>  'required|date',
+            'enddatum'  =>  'required|date',
+        ]);
+
+        try {
+            // Projekt finden
+            $projekt = Projekt::findOrFail($id);
+
+            // Basisdaten updaten
+            $projekt->update([
+                'name' => $validatedData['name'],
+                'kostenstelle' => $validatedData['kostenstelle'],
+                'abteilung_id' => $validatedData['abteilung'],
+            ]);
+
+            // Projektzeitraum updaten oder neu anlegen
+            $zeitraum = $projekt->projektzeitraume()->first();
+            if ($zeitraum) {
+                $zeitraum->update([
+                    'antragsdatum' => $validatedData['antragsdatum'],
+                    'starttermin' => $validatedData['starttermin'],
+                    'anfangsdatum' => $validatedData['anfangsdatum'],
+                    'endtermin' => $validatedData['endtermin'],
+                    'enddatum' => $validatedData['enddatum'],
+                ]);
+            } else {
+                $projekt->projektzeitraume()->create([
+                    'antragsdatum' => $validatedData['antragsdatum'],
+                    'starttermin' => $validatedData['starttermin'],
+                    'anfangsdatum' => $validatedData['anfangsdatum'],
+                    'endtermin' => $validatedData['endtermin'],
+                    'enddatum' => $validatedData['enddatum'],
+                ]);
+            }
+
+            return response()->json([
+                'message' => 'Projekt erfolgreich aktualisiert.',
+                'projekt' => $projekt->load('projektzeitraume', 'abteilung') // Relationen nachladen
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Update fehlgeschlagen: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
-    /**
-     * Remove the specified resource from storage.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
+
+
     public function destroy($id)
     {
         try {

@@ -1,15 +1,17 @@
 <?php
 
-use Inertia\Inertia;
-use Illuminate\Support\Facades\Route;
-use Illuminate\Foundation\Application;
-use App\Http\Controllers\UserController;
-use App\Http\Controllers\SchuleController;
-use App\Http\Controllers\BereichController;
-use App\Http\Controllers\ProjektController;
 use App\Http\Controllers\AbteilungController;
-use App\Http\Controllers\TeilnehmerController;
 use App\Http\Controllers\BerechtigungController;
+use App\Http\Controllers\BereichController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\ProjektController;
+use App\Http\Controllers\SchuleController;
+use App\Http\Controllers\TeilnehmerController;
+use App\Http\Controllers\UserController;
+use Illuminate\Foundation\Application;
+use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -109,6 +111,7 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
     Route::get('/projekt', [ProjektController::class, 'index'])->name('projekt.index');
     Route::get('/projekt/ajaxFresh', [ProjektController::class, 'indexAjaxFresh'])->name('projekt.indexAjaxFresh');
     Route::post('/projekt/anlegen', [ProjektController::class, 'store'])->name('projekt.store');
+    Route::put('/projekt/{id}', [ProjektController::class, 'update'])->name('projekt.update');
     Route::delete('/projekt/{id}', [ProjektController::class, 'destroy'])->name('projekt.destroy');
 
 
@@ -124,6 +127,13 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
     Route::get('/design/responsive', function () {
         return Inertia::render('Design/Responsive');
     })->name('responsive');
+
+
+
+    //Notification
+
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead'])
+    ->name('notifications.readAll');
 });
 
 

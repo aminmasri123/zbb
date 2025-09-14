@@ -2,13 +2,16 @@
 
 namespace Database\Seeders;
 
-use Carbon\Carbon;
+use App\Models\Projekt;
+use App\Models\ProjektHasTeilnehmer;
+use App\Models\Teilnehmer;
 use App\Models\User;
+use Carbon\Carbon;
 use Faker\Factory as Faker;
+use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 
 class UserSeeder extends Seeder
 {
@@ -574,6 +577,25 @@ class UserSeeder extends Seeder
 
         ]);
 
+
+
+        $faker = Faker::create();
+        // Anzahl der Benutzer, die erstellt werden sollen
+        $numberOfUsers = 50;
+        for ($i = 0; $i < $numberOfUsers; $i++)
+        {
+            $teilnehmer = Teilnehmer::create([
+                'vorname' => $faker->username,
+                'nachname' => $faker->firstName,
+                'geschlecht' => $faker->randomElement(['m', 'd', 'w']),
+            ]);
+
+             // Projekt-IDs und Teilnehmer-IDs müssen aus DB kommen
+            ProjektHasTeilnehmer::create([
+                'projekt_id'    => $faker->randomElement(Projekt::pluck('id')->toArray()),
+                'teilnehmer_id' => $teilnehmer->id, // gerade erstellter Teilnehmer
+            ]);
+        };
     }
 
 }

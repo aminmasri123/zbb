@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
-use App\Models\User;
 use App\Models\Abteilung;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\Teilnehmer;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Projekt extends Model
 {
@@ -23,9 +24,14 @@ class Projekt extends Model
     }
 
 
+    public function teilnehmer()
+    {
+        return $this->belongsToMany(Teilnehmer::class, 'projekt_has_teilnehmers', 'projekt_id', 'teilnehmer_id');
+    }
+
     public function users()
     {
-        return $this->belongsToMany(User::class);
+        return $this->belongsToMany(User::class, 'user_has_projekts', 'projekt_id', 'user_id');
     }
 
     public function bereiche()

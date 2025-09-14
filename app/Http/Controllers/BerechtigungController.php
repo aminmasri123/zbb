@@ -59,11 +59,6 @@ class BerechtigungController extends Controller
         ]);
     }
 
-
-
-
-
-
     public function berechtigungZuweisen(Request $request)
         {
             $roleId = Request::input('roleId');

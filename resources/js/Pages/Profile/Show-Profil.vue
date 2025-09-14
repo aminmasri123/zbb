@@ -56,7 +56,7 @@ const activeTab = ref('profile') // default Tab
                                     <!-- Profilbild -->
                                     <div class="flex-shrink-0">
                                         <img class="h-24 w-24 rounded-full border"
-                                           :src="`/storage/${$page.props.auth.user.profile_photo_path}`"  
+                                           :src="`/storage/${$page.props.auth.user.profile_photo_path}`"
                                            :alt="$page.props.auth.user.name"
                                         >
                                     </div>
@@ -108,7 +108,7 @@ const activeTab = ref('profile') // default Tab
                                                     <li class="flex">
                                                         <span class="w-32 font-medium">{{ $t('geschlecht') }}:</span>
                                                         <span>
-                                                            <!-- {{ $page.props.auth.user.user_log.geschlecht ?? '---------------------' }} -->                                                            
+                                                            <!-- {{ $page.props.auth.user.user_log.geschlecht ?? '---------------------' }} -->
                                                         </span>
                                                     </li>
                                                     <span class="flex items-center gap-2">
@@ -130,7 +130,7 @@ const activeTab = ref('profile') // default Tab
                                     </div>
 
                                     <!-- Bearbeiten Button -->
-                                    
+
                                         <div>
                                             <a data-target="#profile_edit" data-toggle="modal" href="#"
                                                 class="text-gray-900 hover:text-indigo-600">
@@ -140,7 +140,7 @@ const activeTab = ref('profile') // default Tab
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div class="w-full">
                             <!-- Tabs Navigation -->
                             <div class="border-b border-gray-200">
@@ -229,7 +229,7 @@ const activeTab = ref('profile') // default Tab
                     </div>
                 </div>
 
-                
+
                 <!-- Modal -->
                 <div id="profile_edit"
                     class=" hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

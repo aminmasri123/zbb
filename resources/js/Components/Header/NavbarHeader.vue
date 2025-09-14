@@ -76,8 +76,8 @@
 
                                     <template v-for="team in $page.props.auth.user.projekte" :key="team.id">
                                         <form @submit.prevent="switchToTeam(team)">
-                                            <DropdownLink as="button">
-                                                <div class="flex items-center">
+                                            <DropdownLink as="button" class="border-t  border-gray-200">
+                                                <div class="flex items-center justify-center">
                                                     <svg v-if="team.id == $page.props.auth.user.current_team_id" class="mr-2 h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                                         <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                                     </svg>
@@ -130,6 +130,28 @@
                         class="inline-flex items-center py-2 mr-3 border border-transparent text-sm leading-4 font-medium rounded-md  dark:text-white dark:hover:text-gray-300 hover:text-gray-700 focus:outline-none transition ease-in-out duration-150">
                             <i class="las la-adjust text-lg"></i>
                     </button>
+
+
+
+                    <!-- Notification Dropdown -->
+                    <Dropdown align="right" width="80">
+                        <template #trigger >
+                            <button class="inline-flex items-center py-2 mx-1 border border-transparent text-sm leading-4 font-medium rounded-md dark:text-white dark:hover:text-gray-300 hover:text-gray-700 focus:outline-none transition ease-in-out duration-150">
+                                <i class="las la-bell text-lg"></i>
+                            </button>
+                        </template>
+                        <template #content>
+                            <div class="block px-4 py-2 text-xs text-gray-400 border-b border-gray-200">{{$t('Benachrichtigungen')}}</div>
+                            <li v-for="notification in notifications" :key="notification.id" class="list-none text-sm py-2 px-3 border-b border-gray-200 hover:bg-slate-100 dark:text-gray-700">
+                                {{ notification.data.message }}
+                            </li>
+
+
+
+                            <span @click="markAllAsRead" class=" flex text-xs text-gray-100 justify-center cursor-pointer p-2 bg-gray-700 hover:bg-gray-900">{{$t('Alle als gelesen markieren')}}</span>
+                        </template>
+                        <!-- Dropdown content -->
+                    </Dropdown>
 
                     <!-- Settings Dropdown -->
                     <Dropdown align="right" width="48">
@@ -254,6 +276,9 @@
     import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
     import Dropdown from '@/Components/Dropdown.vue';
     import DropdownLink from '@/Components/DropdownLink.vue';
+    import { usePage } from '@inertiajs/vue3';
+    import axios from 'axios';
+
 
     import { useI18n } from 'vue-i18n';
     import { switchTheme } from '../../theme';
@@ -263,6 +288,19 @@
     displayHideTextSidebar: Boolean,
 });
 
+const page = usePage();
+const notifications = ref(page.props.notify?.notifications || []);
+
+
+const markAllAsRead = async () => {
+    console.log('bin drin');
+  try {
+    await axios.post(route('notifications.readAll'));
+    notifications.value = []; // sofort im Dropdown leeren
+  } catch (error) {
+    console.error('Fehler beim Markieren:', error);
+  }
+}
 const emit = defineEmits(['toggle-sidebar', 'toggle-sidebar-text']);
     const { t, locale } = useI18n();
 

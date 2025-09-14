@@ -3,14 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
-use Inertia\Inertia;
-use Inertia\Response;
-use Illuminate\Support\Facades\DB;
-use Spatie\Permission\Models\Role;
+use App\Notifications\CreateUserNotification;
 use Illuminate\Http\Request;
-
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+
+use Inertia\Inertia;
+use Inertia\Response;
+use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
@@ -99,6 +100,13 @@ class UserController extends Controller
      */
     public function store(Request $request)
     {
+         // 🔔 Alle User mit Rollen benachrichtigen
+         $rollen = ['Abteilungsleitung', 'Assistenz der Abt.-Leitung']; // <- deine Rollennamen
+         $empfaenger = User::role($rollen)->get();
+
+         foreach ($empfaenger as $user) {
+             $user->notify(new CreateUserNotification($user));
+         }
         try {
             // Verwende die Facade für das Abrufen der Eingabedaten
             $data = $request->all(); // holt alle Daten
@@ -163,11 +171,11 @@ class UserController extends Controller
 
     }
 
-    
+
     public function edit($id)
     {
         $user = User::with('roles')->findOrFail($id);
-        
+
 
         $rollen = Role::all();
 
@@ -212,9 +220,9 @@ class UserController extends Controller
     public function destroy($id)
     {
         try {
-            
+
             $user = User::findOrFail($id); // Suche die Abteilung
-            
+
             $user->delete(); // Lösche die Abteilung
             return response()->json(['message' => 'der Konto von ' . $user->first_name . ' ' . $user->last_name . ' wurde  erfolgreich gelöscht!'], 200);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
