@@ -40,6 +40,7 @@ class User extends Authenticatable
         'password',
         'lang',
         'profile_photo_url',
+        'default_projekt_id',
     ];
 
     protected $date = [

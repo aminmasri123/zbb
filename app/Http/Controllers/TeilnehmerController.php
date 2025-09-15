@@ -60,7 +60,28 @@ class TeilnehmerController extends Controller
         $search     = $request->input('search');
         $sort       = $request->input('sort', 'id');
         $direction  = strtolower($request->input('direction', 'desc'));
+        $projektId  = $request->input('projekt_id');
+        $user = auth()->user();
 
+        // Falls kein Projekt ausgewählt wurde → Default-Projekt nehmen
+        if (!$projektId && $user->default_projekt_id) {
+            $projektId = $user->default_projekt_id;
+        }
+        // Prüfen, ob der User überhaupt zu diesem Projekt gehört
+        $allowedProjektIds = $user->projekte()->pluck('id')->toArray();
+
+        if (!$projektId || !in_array($projektId, $allowedProjektIds)) {
+            // Kein Projekt oder User ist nicht berechtigt → nichts anzeigen
+            return Inertia::render('Teilnehmer/Index', [
+                'teilnehmers' => collect([]),
+                'filters' => [
+                    'search'     => $search,
+                    'sort'       => $sort,
+                    'direction'  => $direction,
+                    'projekt_id' => null,
+                ],
+            ]);
+        }
         $sortMap = [
             'id'         => 'id',
             'vorname'    => 'vorname',
@@ -71,19 +92,16 @@ class TeilnehmerController extends Controller
         $sortColumn = $sortMap[$sort] ?? 'id';
         $direction  = in_array($direction, ['asc', 'desc'], true) ? $direction : 'desc';
 
-        $user = auth()->user();
-
         $query = Teilnehmer::query()
-            // Nur Teilnehmer aus Projekten, die dem User gehören
-            ->whereHas('projekte', function ($q) use ($user) {
-                $q->whereHas('users', function ($q2) use ($user) {
-                    $q2->where('users.id', $user->id);
+            ->when($projektId, function ($q) use ($projektId) {
+                $q->whereHas('projekte', function ($q2) use ($projektId) {
+                    $q2->where('projekts.id', $projektId);
                 });
             })
             ->when($search, function ($q) use ($search) {
                 $q->where(function ($q) use ($search) {
-                    $q->where(DB::raw("CONCAT(vorname, ' ', nachname)"), 'like', "%{$search}%")
-                    ->orWhere(DB::raw("CONCAT(nachname, ' ', vorname)"), 'like', "%{$search}%")
+                    $q->whereRaw("CONCAT(vorname, ' ', nachname) LIKE ?", ["%{$search}%"])
+                    ->orWhereRaw("CONCAT(nachname, ' ', vorname) LIKE ?", ["%{$search}%"])
                     ->orWhere('vorname', 'like', "%{$search}%")
                     ->orWhere('nachname', 'like', "%{$search}%");
                 });
@@ -93,12 +111,15 @@ class TeilnehmerController extends Controller
         return Inertia::render('Teilnehmer/Index', [
             'teilnehmers' => $query->paginate(200),
             'filters' => [
-                'search'    => $search,
-                'sort'      => $sort,
-                'direction' => $direction,
+                'search'     => $search,
+                'sort'       => $sort,
+                'direction'  => $direction,
+                'projekt_id' => $projektId,
             ],
         ]);
     }
+
+
 
     /**
      * Show the form for creating a new resource.

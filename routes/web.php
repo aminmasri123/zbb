@@ -117,9 +117,11 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
 
     //Teilnehmer
     Route::get('/teilnehmer', [TeilnehmerController::class, 'index'])->name('teilnehmer.index');
+    Route::get('/teilnehmer/{id}', [TeilnehmerController::class, 'indexNachProjekt'])->name('teilnehmer.projekt.index');
+
     Route::get('/teilnehmer/anlegen', function () { return Inertia::render('Teilnehmer/CreateTeilnehmer'); })->name('teilnehmer.create');
     Route::post('/teilnehmer/anlegen', [TeilnehmerController::class, 'store'])->name('teilnehmer.store');
-    Route::delete('/teilnehmer/{id}', [TeilnehmerController::class, 'destroy'])->name('teilnehmer.destroy');
+    Route::delete('/teilnehmer/entfernen/{id}', [TeilnehmerController::class, 'destroy'])->name('teilnehmer.destroy');
     Route::put('/teilnehmer/bearbeiten', [TeilnehmerController::class, 'show'])->name('teilnehmer.edit');
 
 

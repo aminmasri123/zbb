@@ -95,7 +95,7 @@
     "passwort_bestätigen": "Passwort bestätigen",
     "Zwei-Faktor-Bestätigung": "Zwei-Faktor-Bestätigung",
     "Bitte_bestätigen_Sie_den_Zugriff_auf_Ihr_Konto_indem_Sie_den_Authentifizierungscode_eingeben_der_von_Ihrer_Authentifizierungsanwendung_bereitgestellt_wurde": "Bitte bestätigen Sie den Zugriff auf Ihr Konto, indem Sie den Authentifizierungscode eingeben, der von Ihrer Authentifizierungsanwendung bereitgestellt wurde.",
-    "Bitte_bestätigen_Sie_den_Zugriff_auf_Ihr_Konto_indem_Sie_einen_Ihrer_Notfallwiederherstellungscodes_eingeben.": "Bitte bestätigen Sie den Zugriff auf Ihr Konto, indem Sie einen Ihrer Notfallwiederherstellungscodes eingeben.",
+    "Bitte bestätigen Sie den Zugriff auf Ihr Konto indem Sie einen Ihrer Notfallwiederherstellungscodes eingeben.": "Bitte bestätigen Sie den Zugriff auf Ihr Konto, indem Sie einen Ihrer Notfallwiederherstellungscodes eingeben.",
     "Wiederherstellungscode": "Wiederherstellungscode",
     "Code": "Code",
     "Wiederherstellungscode_verwenden": "Wiederherstellungscode verwenden",
@@ -165,5 +165,7 @@
     "Sind Sie sicher, die Löschung durchführen zu wollen?": "Sind Sie sicher, die Löschung durchführen zu wollen?",
     "Abteilung bearbeiten": "Abteilung bearbeiten",
     "Alle als gelesen markieren": "Alle als gelesen markieren",
-    "Mein Profil": "Mein Profil"
+    "Mein Profil": "Mein Profil",
+    "Bitte bestätigen Sie den Zugriff auf Ihr Konto indem Sie den Authentifizierungscode eingeben der von Ihrer Authentifizierungsanwendung bereitgestellt wurde": "Bitte bestätigen Sie den Zugriff auf Ihr Konto indem Sie den Authentifizierungscode eingeben der von Ihrer Authentifizierungsanwendung bereitgestellt wurde",
+    "Bitte legen Sie ein Standardprojekt fest.": "Bitte legen Sie ein Standardprojekt fest."
 }

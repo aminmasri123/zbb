@@ -23,6 +23,7 @@ class UserSeeder extends Seeder
     public function run()
     {
 
+
         DB::table('users')->insert([
             [
                 // id = 1
@@ -32,6 +33,7 @@ class UserSeeder extends Seeder
                 'email' => 'amin.masri@outlook.com',
                 'password' => Hash::make('password'),
                 'lang' => 'de',
+                'default_projekt_id'  => '5',
             ],
             [   // id = 2
                 'username' => 'Anika Feller',
@@ -40,6 +42,8 @@ class UserSeeder extends Seeder
                 'email' => 'a.feller@zbb-saar.de',
                 'password' => Hash::make('zbb.bop.hw'),
                 'lang' => 'de',
+                'default_projekt_id'  => '5',
+
             ],
             [ // id = 3
                 'username' => 'Salvatore Gucciardo',
@@ -48,6 +52,8 @@ class UserSeeder extends Seeder
                 'email' => 's.gucciardo@zbb-saar.de',
                 'password' => Hash::make('zbb.bop.ala'),
                 'lang' => 'de',
+                'default_projekt_id'  => fake()->randomElement(Projekt::pluck('id')->toArray()),
+
             ],
             [ // id = 4
                 'username' => 'Brigitta Lautenschlager',
@@ -56,6 +62,7 @@ class UserSeeder extends Seeder
                 'email' => 'b.lautenschlager@zbb-saar.de',
                 'password' => Hash::make('zbb.al'),
                 'lang' => 'de',
+                'default_projekt_id'  => fake()->randomElement(Projekt::pluck('id')->toArray()),
             ],
             [ // id = 5
                 'username' => 'Chantale Lismann',
@@ -64,6 +71,7 @@ class UserSeeder extends Seeder
                 'email' => 'c.lismann@zbb-saar.de',
                 'password' => Hash::make('zbb.al'),
                 'lang' => 'de',
+                'default_projekt_id'  => fake()->randomElement(Projekt::pluck('id')->toArray()),
             ],
             [ // id = 6
                 'username' => 'Stefanie Wagner',
@@ -72,6 +80,7 @@ class UserSeeder extends Seeder
                 'email' => 's.wagner@zbb-saar.de',
                 'password' => Hash::make('zbb.al'),
                 'lang' => 'de',
+                'default_projekt_id'  => fake()->randomElement(Projekt::pluck('id')->toArray()),
             ],
             [ // id = 7
                 'username' => 'Stefan Haßdenteufel',
@@ -80,6 +89,7 @@ class UserSeeder extends Seeder
                 'email' => 's.haßdenteufel@zbb-saar.de',
                 'password' => Hash::make('zbb.al'),
                 'lang' => 'de',
+                'default_projekt_id'  => fake()->randomElement(Projekt::pluck('id')->toArray()),
             ],
             [ // id = 8
                 'username' => 'Martin Löw',
@@ -88,6 +98,7 @@ class UserSeeder extends Seeder
                 'email' => 'm.loew@zbb-saar.de',
                 'password' => Hash::make('zbb.al'),
                 'lang' => 'de',
+                'default_projekt_id'  => fake()->randomElement(Projekt::pluck('id')->toArray()),
             ],
 
         ]);
@@ -206,6 +217,17 @@ class UserSeeder extends Seeder
                 'name' => 'Kakadu',
                 'kostenstelle' => '11700',
                 'abteilung_id' => '1',
+            ],
+        ]);
+
+        DB::table('user_has_projekts')->insert([
+            [ // id = 1
+                'user_id' => '1',
+                'projekt_id' => '5',
+            ],
+            [ // id = 2
+                'user_id' => '1',
+                'projekt_id' => '1',
             ],
         ]);
 

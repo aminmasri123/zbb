@@ -286,10 +286,10 @@
     const props = defineProps({
     //sidebarOpen: Boolean,
     displayHideTextSidebar: Boolean,
-});
+    });
 
-const page = usePage();
-const notifications = ref(page.props.notify?.notifications || []);
+    const page = usePage();
+    const notifications = ref(page.props.notify?.notifications || []);
 
 
 const markAllAsRead = async () => {
@@ -321,6 +321,14 @@ const emit = defineEmits(['toggle-sidebar', 'toggle-sidebar-text']);
         }
     });
 };
+
+
+
+
+
+function switchToTeam(team) {
+    router.get(route('teilnehmer.index'), { projekt_id: team.id })
+}
 </script>
 <script>
     export default {
