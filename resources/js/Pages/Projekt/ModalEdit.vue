@@ -58,7 +58,7 @@ const save = async () => {
 
 <template>
   <Modal v-if="visible" @close="emit('close')">
-    <template #header><h2>Projekt bearbeiten</h2></template>
+    <template #header>{{$t('Projekt bearbeiten')}}</template>
     <template #body>
         <div class="grid grid-cols-2 gap-4">
             <div class="mb-4 w-full mx-1">

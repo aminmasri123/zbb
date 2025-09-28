@@ -32,9 +32,7 @@ const close = () => {
 <template>
   <Modal v-if="visible" @close="close">
     <!-- Header -->
-    <template #header>
-        <h2 class="text-lg font-bold text-gray-500">Benutzer anlegen</h2>
-    </template>
+    <template #header>{{$t('Benutzer anlegen')}}</template>
 
     <!-- Body -->
     <template #body>

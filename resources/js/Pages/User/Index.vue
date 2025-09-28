@@ -212,12 +212,7 @@ const sortByColumn = (column) => {
     <Head title="Personal" />
 
     <app-layout>
-        <template #header>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                {{$t('Team')}}
-            </h2>
-        </template>
-
+        <template #header>{{$t('Team')}}</template>
 
         <!-- Suchfeld -->
         <div class="flex justify-around items-center mb-3">

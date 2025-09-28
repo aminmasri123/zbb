@@ -16,10 +16,6 @@
     let rolleToDelete = ref(null); // Speichert den Namen der User, die gelöscht werden soll
     let showModalLöschen = ref(false); // Modal für die Löschung
 
-
-
-
-
     const props = defineProps({
         rollen: {type: Array, default: () => [] }, // Setzt einen leeren Array als Standardwert
         berechtigungskategorien: { type: Array, default: () => [] }, // Setzt einen leeren Array als Standardwert
@@ -27,9 +23,6 @@
         alleZugewiesenePermission:{ type:Array, default:()=> []},
         roleId:{ type:Number , default:()=> []},
     });
-
-
-    console.log(props.rollen)
 
     // Lokale Kopie der Rollen erstellen
     let localRollen= ref([]); // Initialisiere mit einem leeren Array
@@ -158,11 +151,7 @@
 <template>
     <Head title="Rolle-Permission" />
     <app-layout>
-        <template #header>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                {{ $t('rollen-_und_berechtigungsmanagement') }}
-            </h2>
-        </template>
+        <template #header>{{ $t('rollen-_und_berechtigungsmanagement') }}</template>
         <div class="page-wrapper">
             <!-- Page Content -->
             <div class="content container mx-auto">

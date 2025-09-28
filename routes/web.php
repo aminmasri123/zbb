@@ -86,6 +86,8 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
     Route::get('/benutzer/anlegen', function () { return Inertia::render('User/CreateUser'); })->name('user.create');
     Route::post('/benutzer/anlegen', [UserController::class, 'store'])->name('user.store');
     Route::delete('/benutzer/entfernen/{id}', [UserController::class, 'destroy'])->name('user.destroy');
+    Route::post('/benutzer/projekt/switch', [UserController::class, 'switch'])->name('projekt.switch');
+
 
     //Profile-Benutzer
     Route::get('/user/profile/{id}', [UserController::class, 'show'])->name('user.profil');
@@ -121,6 +123,7 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
     Route::post('/teilnehmer/anlegen', [TeilnehmerController::class, 'store'])->name('teilnehmer.store');
     Route::delete('/teilnehmer/{id}', [TeilnehmerController::class, 'destroy'])->name('teilnehmer.destroy');
     Route::put('/teilnehmer/bearbeiten', [TeilnehmerController::class, 'show'])->name('teilnehmer.edit');
+
 
 
 

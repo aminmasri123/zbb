@@ -17,6 +17,7 @@ class Teilnehmer extends Model
         'vorname',
         'nachname',
         'geschlecht',
+        'current_team_id',
 
     ];
     public function adresse()

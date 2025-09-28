@@ -21,9 +21,7 @@ const emit = defineEmits(['close', 'add-user'])
 <template>
   <Modal v-if="visible" @close="emit('close')">
     <!-- Header -->
-    <template #header>
-        <h2 class="text-lg font-bold text-gray-500">Benutzer anlegen</h2>
-    </template>
+    <template #header>{{$t('Benutzer anlegen')}}</template>
 
     <!-- Body -->
     <template #body>

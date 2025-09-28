@@ -5,11 +5,7 @@ import Welcome from '@/Components/Welcome.vue';
 
 <template>
     <AppLayout :title="$t('Ressourcen')">
-        <template #header>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                {{$t('Ressourcen')}}
-            </h2>
-        </template>
+        <template #header>{{$t('Ressourcen')}}</template>
 
         <div class="py-12">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">

@@ -10,7 +10,7 @@
                     <i class="la la-dashboard la-lg mr-2"></i>
 
                     <span  v-if="!displayHideTextSidebar" :class="{'pr-16': !displayHideTextSidebar === true}">{{$t('dashboard')}}</span>
-                    <span  :class="{'rotate-180': activeMenu === 'dashboard', 'hidden': displayHideTextSidebar === true}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
+                    <span  :class="{'rotate-180': activeMenu === 'dashboard', 'hidden': displayHideTextSidebar === true, 'text-zbb': $page.component.startsWith('Dashboard')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
                 </a>
                 <ul v-show="activeMenu === 'dashboard'" class="pl-6 mt-2 space-y-2">
                     <li v-if="$page.props.permissions.includes('dashboard.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dashboard')">{{$t('übersicht')}}</Link></li>

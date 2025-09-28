@@ -3,15 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
-use App\Notifications\CreateUserNotification;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Validator;
-
 use Inertia\Inertia;
 use Inertia\Response;
+use App\Models\Projekt;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
 use Spatie\Permission\Models\Role;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
+use App\Notifications\CreateUserNotification;
 
 class UserController extends Controller
 {
@@ -65,11 +66,27 @@ class UserController extends Controller
             'rollen'       => $rollen,
         ]);
     }
-    /**
-     * Show the form for creating a new resource.
-     *
-     * @return \Illuminate\Http\Response
-     */
+
+   public function switch(Request $request)
+    {
+        $user = User::findOrFail(auth()->id());
+        $projektId = $request->input('projekt_id');
+        $projektName = Projekt::where('id', $projektId)->value('name');
+
+        if ($user->projekte()->where('projekts.id', $projektId)->exists()) {
+            $user->current_team_id = $projektId;
+            $user->save();
+        }
+
+        // Flash setzen
+        session()->flash('success', "Super! \"$projektName\" wurde als aktives Projekt ausgewählt.");
+
+        return back();
+    }
+
+
+
+
     public function check(Request $request) // Typ-Hinweis für die Request-Klasse
     {
         // Erhalte die User-ID aus der Anfrage

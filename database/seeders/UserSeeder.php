@@ -295,7 +295,6 @@ class UserSeeder extends Seeder
 
         ]);
 
-
         DB::table('roles')->insert([
             [ // id = 1
                 'name' => 'Administrator',
@@ -446,10 +445,6 @@ class UserSeeder extends Seeder
                 'beschreibung' => 'web',
                 'berechtigungskategorie_id' => '18',
             ],
-
-
-
-
         ]);
 
         DB::table('model_has_roles')->insert([
@@ -489,6 +484,79 @@ class UserSeeder extends Seeder
                 'permission_id' => '2',
                 'role_id' => '1',
             ],
+            [
+                'permission_id' => '3',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '4',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '5',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '6',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '7',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '8',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '9',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '10',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '11',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '12',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '13',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '14',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '15',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '16',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '17',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '18',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '19',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '20',
+                'role_id' => '1',
+            ],
+
 
         ]);
 
@@ -577,8 +645,26 @@ class UserSeeder extends Seeder
 
         ]);
 
+        DB::table('user_has_projekts')->insert([
+            [
+                'user_id' => '1',
+                'projekt_id' => '1',
+            ],
+            [
+                'user_id' => '1',
+                'projekt_id' => '2',
+            ],
+            [
+                'user_id' => '1',
+                'projekt_id' => '3',
+            ],
+
+        ]);
 
 
+
+
+        //Teilnehmer erstellen und mit Projekten verknüpfen
         $faker = Faker::create();
         // Anzahl der Benutzer, die erstellt werden sollen
         $numberOfUsers = 50;

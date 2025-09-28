@@ -21,7 +21,18 @@ import Aura from '@primevue/themes/aura';
 import { setThemeOnLoad } from './theme';
 
 
-const appName = window.document.getElementsByTagName('title')[0]?.innerText || 'Laravel';
+const appName = window.document.getElementsByTagName('title')[0]?.innerText || 'Phönix ZBB';
+
+
+// Abmelde-Synchronisation über localStorage
+window.addEventListener("storage", (event) => {
+    if (event.key === "logout") {
+        // Benutzer sofort auf Login-Seite umleiten
+        window.location.href = "/login";
+    }
+});
+
+
 
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,
@@ -50,4 +61,4 @@ createInertiaApp({
 
 });
 
-setThemeOnLoad(); 
+setThemeOnLoad();

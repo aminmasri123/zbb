@@ -29,11 +29,9 @@ defineProps({
                 <Link :href="route('login')" class="font-semibold text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">Log in</Link>
                 <Link v-if="canRegister" :href="route('register')" class="ml-4 font-semibold text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">Register</Link>
             </template>
-
-
         </div>
 
-        <div class="bg-white p-8 max-w-2xl w-full border border-zbb dark:border-none rounded-lg shadow-lg text-center">
+        <div class="bg-white dark:bg-gray-100 p-8 max-w-2xl w-full border border-zbb dark:border-none rounded-lg shadow-lg text-center">
                     <ApplicationMark class="block h-20 w-auto mb-6 mx-auto" />
 
             <p class="md:text-xl sm:text-sm font-semibold text-gray-900">

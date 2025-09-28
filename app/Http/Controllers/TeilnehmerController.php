@@ -4,62 +4,21 @@ namespace App\Http\Controllers;
 
 use Inertia\Inertia;
 use App\Models\Teilnehmer;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 
 class TeilnehmerController extends Controller
 {
-    /* public function index(Request $request)
-    {
-
-        $search   = $request->input('search');
-        $sort     = $request->input('sort', 'id');
-        $direction = strtolower($request->input('direction', 'desc'));
-
-        // Map für evtl. Frontend-Bezeichnungen -> DB-Spalten
-        $sortMap = [
-            'id'        => 'id',
-            'vorname'   => 'vorname',
-            'nachname'  => 'nachname',
-            'geschlecht'=> 'geschlecht',
-        ];
-
-        // Whitelist anwenden
-        $sortColumn = $sortMap[$sort] ?? 'id';
-
-        // Richtung absichern
-        $direction = in_array($direction, ['asc', 'desc'], true) ? $direction : 'desc';
-
-        $query = Teilnehmer::query()
-            ->when($search, function ($q) use ($search) {
-                $q->where(function ($q) use ($search) {
-                    // MySQL/MariaDB:
-                    $q->where(DB::raw("CONCAT(vorname, ' ', nachname)"), 'like', "%{$search}%")
-                    ->orwhere(DB::raw("CONCAT(nachname, ' ', vorname)"), 'like', "%{$search}%")
-                    ->orWhere('vorname', 'like', "%{$search}%")
-                    ->orWhere('nachname', 'like', "%{$search}%");
-                });
-            })
-            ->orderBy($sortColumn, $direction);
-
-            return Inertia::render('Teilnehmer/Index', [
-                'teilnehmers' => $query->paginate(200),
-                // optional: die aktuellen Sortierparameter fürs Frontend zurückgeben
-                'filters' => [
-                    'search'    => $search,
-                    'sort'      => $sort,
-                    'direction' => $direction,
-                ],
-            ]);
-
-    } */
-
     public function index(Request $request)
     {
         $search     = $request->input('search');
         $sort       = $request->input('sort', 'id');
         $direction  = strtolower($request->input('direction', 'desc'));
+        $user       = User::findOrFail(Auth::id());
+        $default_projekt = $user->current_team_id;
 
         $sortMap = [
             'id'         => 'id',
@@ -71,12 +30,17 @@ class TeilnehmerController extends Controller
         $sortColumn = $sortMap[$sort] ?? 'id';
         $direction  = in_array($direction, ['asc', 'desc'], true) ? $direction : 'desc';
 
-        $user = auth()->user();
+        // Prüfen, ob das default Projekt dem User zugewiesen ist
+        $user_project_ids = $user->projekte()->pluck('projekts.id')->toArray();
+
+        $use_default_filter = in_array($default_projekt, $user_project_ids);
 
         $query = Teilnehmer::query()
-            // Nur Teilnehmer aus Projekten, die dem User gehören
-            ->whereHas('projekte', function ($q) use ($user) {
-                $q->whereHas('users', function ($q2) use ($user) {
+            ->whereHas('projekte', function ($q) use ($user, $use_default_filter, $default_projekt) {
+                $q->when($use_default_filter, function ($q) use ($default_projekt) {
+                    $q->where('projekts.id', $default_projekt);
+                })
+                ->whereHas('users', function ($q2) use ($user) {
                     $q2->where('users.id', $user->id);
                 });
             })
@@ -91,7 +55,7 @@ class TeilnehmerController extends Controller
             ->orderBy($sortColumn, $direction);
 
         return Inertia::render('Teilnehmer/Index', [
-            'teilnehmers' => $query->paginate(200),
+            'teilnehmers' => $query->paginate(50),
             'filters' => [
                 'search'    => $search,
                 'sort'      => $sort,
@@ -99,6 +63,7 @@ class TeilnehmerController extends Controller
             ],
         ]);
     }
+
 
     /**
      * Show the form for creating a new resource.

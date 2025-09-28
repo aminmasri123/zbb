@@ -1,5 +1,5 @@
 <template>
-    <nav class="sticky top-0 w-full bg-white border-b border-gray-100 z-50 dark:bg-gray-800 dark:text-gray-100">
+    <nav class="sticky top-0 w-full  z-50 dark:bg-gray-800 bg-gray-100 dark:text-gray-100">
 
         <!-- Primary Navigation Menu -->
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -31,7 +31,21 @@
                     </div>
                 </div>
                 <div class="hidden space-x-8 sm:-my-px sm:flex text-center ">
-                    <NavLink :href="route('dashboard')" :active="route().current('dashboard')" class="dark:text-gray-100 text-[17px] ">
+                    <NavLink :href="route('dashboard')"
+                        :active="route().current('dashboard')
+                            || route().current('user.*')
+                            || route().current('kooperationspartner.*')
+                            || route().current('abteilung.*')
+                            || route().current('projekt.*')
+                            || route().current('bereich.*')
+                            "
+
+
+
+
+
+
+                    class="dark:text-gray-100 text-[17px] ">
                         {{ $t('dashboard') }}
                     </NavLink>
                     <NavLink :href="route('organisation.index')" :active="route().current('organisation.index')" class="dark:text-gray-100 text-[17px] ">
@@ -74,19 +88,23 @@
                                         {{$t('projekt_wechseln')}}
                                     </div>
 
-                                    <template v-for="team in $page.props.auth.user.projekte" :key="team.id">
-                                        <form @submit.prevent="switchToTeam(team)">
-                                            <DropdownLink as="button" class="border-t  border-gray-200">
-                                                <div class="flex items-center justify-center">
-                                                    <svg v-if="team.id == $page.props.auth.user.current_team_id" class="mr-2 h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                    </svg>
+                                    <template v-for="projekt in $page.props.auth.user.projekte" :key="projekt.id">
+    <button
+        @click="switchToProjekt(projekt)"
+        class="border-t w-full text-left px-4 py-2"
+    >
+        <div class="flex items-center justify-center">
+            <svg v-if="projekt.id == $page.props.auth.user.current_team_id"
+                 class="mr-2 h-5 w-5 text-green-400"
+                 fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <div>{{ projekt.name }}</div>
+        </div>
+    </button>
+</template>
 
-                                                    <div>{{ team.name }}</div>
-                                                </div>
-                                            </DropdownLink>
-                                        </form>
-                                    </template>
+
                                 </template>
                             </div>
                         </template>
@@ -228,7 +246,7 @@
         <!-- Responsive Navigation Menu -->
         <div :class="{'block': showingNavigationDropdown, 'hidden': !showingNavigationDropdown}" class="sm:hidden">
             <div class="pt-2 pb-3 space-y-1">
-                <ResponsiveNavLink :href="route('dashboard')" :active="route().current('dashboard')">
+                <ResponsiveNavLink :href="route('dashboard')" :active="['dashboard','benutzer','partner','abteilung','projekt','bereich','einstellung'].includes(route().current())">
                     {{$t('dashboard')}}
                 </ResponsiveNavLink>
                 <ResponsiveNavLink :href="route('organisation.index')" :active="route().current('organisation.index')">
@@ -278,15 +296,29 @@
     import DropdownLink from '@/Components/DropdownLink.vue';
     import { usePage } from '@inertiajs/vue3';
     import axios from 'axios';
-
-
     import { useI18n } from 'vue-i18n';
     import { switchTheme } from '../../theme';
+    import { Inertia } from '@inertiajs/inertia'
+
     const sidebarTextHidden = ref(false);
     const props = defineProps({
     //sidebarOpen: Boolean,
     displayHideTextSidebar: Boolean,
 });
+
+
+
+function switchToProjekt(projekt) {
+    Inertia.post(route('projekt.switch'), { projekt_id: projekt.id }, {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => {
+            console.log('Projekt gewechselt, bleibt auf derselben Seite');
+        }
+    })
+}
+
+
 
 const page = usePage();
 const notifications = ref(page.props.notify?.notifications || []);

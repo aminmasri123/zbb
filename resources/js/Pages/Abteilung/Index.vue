@@ -205,12 +205,7 @@ export default {
 
     <app-layout>
         <!-- Header Slot -->
-        <template #header>
-
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                {{$t('abteilungen')}}
-            </h2>
-          </template>
+        <template #header>{{$t('abteilungen')}}</template>
 
         <!-- Suchfeld -->
         <div class="flex justify-around items-center mb-3">

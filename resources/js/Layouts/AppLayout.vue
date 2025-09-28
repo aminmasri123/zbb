@@ -3,9 +3,7 @@ import { ref, computed, onMounted, onBeforeUnmount  } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import Banner from '@/Components/Banner.vue';
 import NavigationMenu from '@/Components/Header/NavbarHeader.vue';
-import { watch } from 'vue';
-import Swal from 'sweetalert2';
-
+import ToastSuccessError from '@/Components/Utils/ToastSuccessError.vue';
 // Sidebar-Komponenten importieren
 import DashboardSidebar from '@/Components/Sidebar/DashboardSidebar.vue';
 import ProfileSidebar from '@/Components/Sidebar/ProfileSidebar.vue';
@@ -16,7 +14,6 @@ import SweetalertSuccessError from '@/Components/Utils/SweetalertSuccessError.vu
 
 // Aktuelle Seite/Route
 const page = usePage();
-
 
 // Dynamisch die Sidebar auswählen basierend auf der Route oder Seite
 const currentSidebar = computed(() => {
@@ -115,19 +112,22 @@ export default {
     <div>
         <Head :title="title" />
         <!-- Sweetalert Success Error Message -->
+             <ToastSuccessError />
+
              <SweetalertSuccessError />
 
-        <!-- End Sweetalert Success Error Message -->
+             <!-- End Sweetalert Success Error Message -->
 
-        <Banner />
-        <div id="app" class="main-wrapper ">
-            <div class="min-h-screen bg-gray-100">
+             <Banner />
+
+             <div id="app" class="main-wrapper ">
+                 <div class="min-h-screen bg-gray-100">
                 <!-- Page Sidebar -->
-                    <!-- Sidebar -->
-                    <NavigationMenu :sidebar-open="sidebarOpen" :display-hide-text-sidebar="displayHideTextSidebar"
-                            @toggle-sidebar="sidebarOpen = !sidebarOpen"
-                            @toggle-sidebar-text="displayHideTextSidebar = !displayHideTextSidebar"
-                        />
+                <!-- Sidebar -->
+                <NavigationMenu :sidebar-open="sidebarOpen" :display-hide-text-sidebar="displayHideTextSidebar"
+                        @toggle-sidebar="sidebarOpen = !sidebarOpen"
+                        @toggle-sidebar-text="displayHideTextSidebar = !displayHideTextSidebar"
+                    />
 
                 <div class="flex">
                     <component class="min-h-screen" :is="currentSidebar" :displayHideTextSidebar="displayHideTextSidebar" :sidebarOpen="sidebarOpen" :activeMenu="activeMenu" :toggleMenu="toggleMenu"/>
@@ -136,12 +136,14 @@ export default {
                         :class="{'hidden sm:block':sidebarOpen}">
 
                         <!-- Page Heading -->
-                        <header v-if="$slots.header" class="bg-white fixed w-full shadow mb-5 z-20">
-                            <div class="text-center sm:text-left max-w-7xl mx-auto t  py-6">
-                                <slot name="header" />
+                        <header v-if="$slots.header" class="bg-white relative w-full shadow mb-5 z-20">
+                            <div class="text-center sm:text-left max-w-7xl mx-36 py-6">
+                                <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+                                    <slot name="header" />
+                                </h2>
                             </div>
                         </header>
-                        <div class="px-7 my-20">
+                        <div class="px-10">
                             <slot  />
                         </div>
                     </main>
@@ -150,4 +152,5 @@ export default {
             </div>
         </div>
     </div>
+
 </template>

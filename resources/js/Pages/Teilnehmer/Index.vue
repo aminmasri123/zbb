@@ -144,9 +144,6 @@ const addTeilnehmer = async (formData) => {
         }
     };
 
-
-
-
 // Sortierfunktion aufrufen, wenn ein Spaltenkopf angeklickt wird
 const sortByColumn = (column) => {
     if (sortColumn.value === column) {
@@ -158,18 +155,13 @@ const sortByColumn = (column) => {
         sortDirection.value = 'asc';
     }
 };
-
 </script>
 
 <template>
     <Head title="Teilnehmer" />
 
     <app-layout>
-        <template #header>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                {{$t('Teilnehmerübersicht')}}
-            </h2>
-        </template>
+        <template #header>{{$t('Teilnehmerübersicht')}}</template>
 
 
         <!-- Suchfeld -->
