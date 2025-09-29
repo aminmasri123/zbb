@@ -27,16 +27,13 @@ const submit = () => {
 </script>
 
 <template>
-    <Head title="{{$t('Passwort_zurücksetzen')}}" />
+    <Head :title="$t('Passwort_zurücksetzen')" />
 
     <AuthenticationCard>
-        <template #logo>
-            <AuthenticationCardLogo />
-        </template>
-
+        <AuthenticationCardLogo />
         <form @submit.prevent="submit">
             <div>
-                <InputLabel for="email" value="{{$t('email')}}" />
+                <InputLabel for="email" :value="$t('Email')" />
                 <TextInput
                     id="email"
                     v-model="form.email"
@@ -50,7 +47,7 @@ const submit = () => {
             </div>
 
             <div class="mt-4">
-                <InputLabel for="password" value="{{$t('password')}}" />
+                <InputLabel for="password" :value="$t('Password')" />
                 <TextInput
                     id="password"
                     v-model="form.password"
@@ -63,7 +60,7 @@ const submit = () => {
             </div>
 
             <div class="mt-4">
-                <InputLabel for="password_confirmation" value="{{$t('passwort_bestätigen')}}" />
+                <InputLabel for="password_confirmation" :value="$t('passwort_bestätigen')" />
                 <TextInput
                     id="password_confirmation"
                     v-model="form.password_confirmation"

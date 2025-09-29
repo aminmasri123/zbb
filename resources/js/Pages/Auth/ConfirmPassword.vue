@@ -29,9 +29,8 @@ const submit = () => {
     <Head title="Secure Area" />
 
     <AuthenticationCard>
-        <template #logo>
-            <AuthenticationCardLogo />
-        </template>
+
+        <AuthenticationCardLogo></AuthenticationCardLogo>
 
         <div class="mb-4 text-sm text-gray-600">
             {{ $t('Dies_ist_ein_sicherer_Bereich_der_Anwendung_Bitte_bestaetigen_Sie_Ihr_Passwort_bevor_Sie_fortfahren') }}
@@ -39,7 +38,7 @@ const submit = () => {
 
         <form @submit.prevent="submit">
             <div>
-                <InputLabel for="password" value="{{$t('passwort')}}"/>
+                <InputLabel for="password" :value="$t('passwort')"/>
                 <TextInput
                     id="password"
                     ref="passwordInput"

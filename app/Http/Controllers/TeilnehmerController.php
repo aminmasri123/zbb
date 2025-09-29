@@ -14,6 +14,7 @@ class TeilnehmerController extends Controller
 {
     public function index(Request $request)
     {
+        dump('TeilnehmerController@index aufgerufen');
         $search     = $request->input('search');
         $sort       = $request->input('sort', 'id');
         $direction  = strtolower($request->input('direction', 'desc'));

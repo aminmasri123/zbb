@@ -41,8 +41,7 @@ const submit = () => {
     <Head title="{{$t('Zwei-Faktor-Bestätigung')}}" />
 
     <AuthenticationCard>
-        <template #logo>
-        </template>
+
 
         <div class="mb-4 text-sm text-gray-600">
             <AuthenticationCardLogo />

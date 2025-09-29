@@ -1,71 +1,49 @@
-<<<<<<< HEAD
-# zbb
-ZBB PROJEKT
-=======
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Projektbeschreibung
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Dieses Projekt ist eine Webanwendung, die mit den folgenden Technologien entwickelt wurde:
 
-## About Laravel
+## Programmiersprachen
+- **PHP**: Für die serverseitige Logik und Backend-Entwicklung.
+- **JavaScript**: Für die clientseitige Interaktivität und dynamische Inhalte.
+- **HTML & CSS**: Für das Markup und das Styling der Benutzeroberfläche.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Verwendete Tools
+- **XAMPP**: Lokale Entwicklungsumgebung mit Apache, MySQL und PHP.
+- **phpMyAdmin**: Verwaltung der MySQL-Datenbank.
+- **Visual Studio Code**: Quelltexteditor für die Entwicklung.
+- **Composer**: Paketverwaltung für PHP-Bibliotheken.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Verwendete Frameworks und Bibliotheken
+- **Laravel**: Modernes PHP-Framework für die Entwicklung von Webanwendungen. Es bietet eine klare Struktur, viele eingebaute Funktionen und eine große Community.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### Vorteile von Laravel
+- **Klar strukturierter Code**: MVC-Architektur sorgt für eine saubere Trennung von Logik und Darstellung.
+- **Viele eingebaute Funktionen**: Authentifizierung, Routing, Caching, E-Mail-Versand und mehr sind direkt integriert.
+- **Große Community & Ökosystem**: Umfangreiche Dokumentation, viele Pakete und schnelle Hilfe bei Problemen.
+- **Hohe Sicherheit**: Schutz vor gängigen Sicherheitslücken wie SQL-Injection, CSRF und XSS.
+- **Einfache Erweiterbarkeit**: Durch Pakete und Middleware kann die Anwendung flexibel erweitert werden.
+- **Moderne Entwicklungstools**: Unterstützung für Migrations, Seeders, Testing und Task Scheduling.
 
-## Learning Laravel
+- **Vue.js**: Fortschrittliches JavaScript-Framework für die Erstellung interaktiver Benutzeroberflächen.
+- **Inertia.js**: Verbindet Laravel und Vue.js, um Single-Page-Anwendungen ohne API zu ermöglichen.
+- **Tailwind CSS**: Utility-First CSS-Framework für ein modernes und flexibles Design.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## Authentifizierungsmethoden
+Die Anwendung nutzt **Laravel Jetstream** und **Laravel Fortify** für die Authentifizierung:
+- **Laravel Jetstream**: Bietet eine vollständige Authentifizierungslösung mit Login, Registrierung, Passwort-Reset, E-Mail-Verifizierung und optional Zwei-Faktor-Authentifizierung.
+- **Laravel Fortify**: Stellt die Backend-Logik für Authentifizierungsprozesse bereit, wie Login, Registrierung, Passwort-Reset und mehr.
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+Die Authentifizierung basiert auf **Sessions**. Nach erfolgreicher Anmeldung wird eine Session gestartet, um den Benutzerstatus zu speichern und zu überprüfen.
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains over 2000 video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Installation auf anderen Rechnern
 
-## Laravel Sponsors
+Um das Programm auf einem anderen Rechner zu installieren, folge diesen Schritten:
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the Laravel [Patreon page](https://patreon.com/taylorotwell).
+1. **Voraussetzungen installieren**: Stelle sicher, dass PHP, Composer, MySQL und ein Webserver (z.B. Apache über XAMPP) installiert sind.
+2. **Projektdateien kopieren**: Kopiere den gesamten Projektordner auf den Zielrechner.
+3. **Abhängigkeiten installieren**: Öffne ein Terminal im Projektordner und führe `composer install` aus, um alle PHP-Abhängigkeiten zu installieren.
+4. **Umgebungsdatei konfigurieren**: Passe die Datei `.env` an (z.B. Datenbankzugangsdaten).
+5. **Datenbank einrichten**: Erstelle eine neue Datenbank und führe `php artisan migrate` aus, um die Tabellen zu erstellen.
+6. **Frontend-Abhängigkeiten (optional)**: Falls verwendet, installiere mit `npm install` und baue die Assets mit `npm run dev`.
+7. **Webserver starten**: Starte den Webserver (z.B. über XAMPP) und rufe die Anwendung im Browser auf.
 
-### Premium Partners
-
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Cubet Techno Labs](https://cubettech.com)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[Many](https://www.many.co.uk)**
-- **[Webdock, Fast VPS Hosting](https://www.webdock.io/en)**
-- **[DevSquad](https://devsquad.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[OP.GG](https://op.gg)**
-- **[WebReinvent](https://webreinvent.com/?utm_source=laravel&utm_medium=github&utm_campaign=patreon-sponsors)**
-- **[Lendio](https://lendio.com)**
-
-## Contributing
-
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
-
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
->>>>>>> 75f72f4 (Initial commit for new project zbb Lavael - Inertia - vuejs)

@@ -24,10 +24,7 @@ const submit = () => {
     <Head title="Forgot Password" />
 
     <AuthenticationCard>
-        <template #logo>
-            <AuthenticationCardLogo />
-        </template>
-
+        <AuthenticationCardLogo />
         <div class="mb-4 text-sm text-gray-600">
             {{ $t('Bitte_geben_Sie_Ihre_E-Mail-Adresse_an_Wir_senden_Ihnen_einen_Link_zum_Zurücksetzen_Ihres_Passworts_zu') }}
         </div>
@@ -38,7 +35,7 @@ const submit = () => {
 
         <form @submit.prevent="submit">
             <div>
-                <InputLabel for="email" value="{{$t('Email')}}" />
+                <InputLabel for="email" :value="$t('Email')" />
                 <TextInput
                     id="email"
                     v-model="form.email"
