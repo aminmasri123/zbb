@@ -228,12 +228,12 @@ const sortByColumn = (column) => {
                 </thead>
                 <tbody>
                     <tr v-for="teilnehmer in filteredTeilnehmerByProject" :key="teilnehmer.id" class="bg-white border-b">
-                         <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.id }}</td>
+                        <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.id }}</td>
                         <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.vorname }}</td>
                         <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.nachname }}</td>
                         <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.geschlecht }}</td>
 
-                        <td class="w-10 border border-solid border-gray-300 px-6 py-4 text-left m-auto">
+                        <td class="border px-6 py-4 text-center">
                             <!-- Dropdown für Aktion -->
                             <Dropdown>
                                 <template #trigger>
@@ -246,11 +246,11 @@ const sortByColumn = (column) => {
 
                                 <template #content >
                                     <!-- Gefilterte Projektauswahl -->
-                                    <span class="block cursor-pointer hover:bg-slate-100" @click="confirmDelete(teilnehmer)">
-                                         <i class="ml-8 las la-trash-alt"></i> {{ $t('Löschen') }}
+                                    <span class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100 " @click="confirmDelete(teilnehmer)">
+                                          {{ $t('Löschen') }} <i class="las la-trash-alt"></i>
                                     </span>
-                                    <Link class="block" :href="route('teilnehmer.edit', teilnehmer.id)">
-                                        <i class="ml-8 las la-edit"></i> {{ $t('Bearbeiten') }}
+                                    <Link class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100" :href="route('teilnehmer.edit', teilnehmer.id)">
+                                       {{ $t('Bearbeiten') }}  <i class="las la-edit"></i>
                                     </Link>
 
                                 </template>

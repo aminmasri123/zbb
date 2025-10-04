@@ -49,6 +49,7 @@
     "projekte": "Projekte",
     "Abteilung": "Abteilung",
     "alle": "Alle",
+    "ID": "ID",
     "id": "ID",
     "vorname": "Vorname",
     "nachname": "Nachname",
@@ -166,5 +167,13 @@
     "Sind Sie sicher, die Löschung durchführen zu wollen?": "Sind Sie sicher, die Löschung durchführen zu wollen?",
     "Abteilung bearbeiten": "Abteilung bearbeiten",
     "Alle als gelesen markieren": "Alle als gelesen markieren",
-    "Mein Profil": "Mein Profil"
+    "Mein Profil": "Mein Profil",
+    "Standort": "Standort",
+    "Standorte": "Standorte",
+    "Standortübersicht": "Standortübersicht",
+    "Standort anlegen": "Standort anlegen",
+    "Standort bearbeiten": "Standort bearbeiten",
+    "Standortname": "Standortname",
+    "Standortbeschreibung": "Standortbeschreibung"
+
 }

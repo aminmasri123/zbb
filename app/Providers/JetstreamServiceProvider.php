@@ -24,7 +24,10 @@ class JetstreamServiceProvider extends ServiceProvider
         $this->configurePermissions();
 
         Jetstream::deleteUsersUsing(DeleteUser::class);
+
     }
+
+ 
 
     /**
      * Configure the permissions that are available within the application.
@@ -38,6 +41,27 @@ class JetstreamServiceProvider extends ServiceProvider
             'read',
             'update',
             'delete',
+            'export',
+            'import',
+            'share',
         ]);
+        Jetstream::role('admin', 'Administrator', [
+            'create',
+            'read',
+            'update',
+            'delete',
+            'export',
+            'import',
+            'share',
+        ])->description('Administrator users can perform any action.');
+
+        Jetstream::role('editor', 'Editor', [
+            'read',
+            'create',
+            'update',
+            'export',
+            'import',
+            'share',
+        ])->description('Editor users have the ability to read, create, and update.');
     }
 }

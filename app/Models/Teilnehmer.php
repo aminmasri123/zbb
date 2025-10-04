@@ -4,8 +4,10 @@ namespace App\Models;
 
 use App\Models\Adresse;
 use App\Models\Projekt;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Models\Standort;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Teilnehmer extends Model
 {
@@ -20,6 +22,12 @@ class Teilnehmer extends Model
         'current_team_id',
 
     ];
+
+     public function standorte(): BelongsToMany
+    {
+        return $this->belongsToMany(Standort::class, 'standort_has_teilnehmers', 'teilnehmer_id', 'standort_id');
+    }
+
     public function adresse()
     {
         return $this->hasOne(Adresse::class);

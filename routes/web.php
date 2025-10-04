@@ -1,16 +1,17 @@
 <?php
 
-use App\Http\Controllers\AbteilungController;
-use App\Http\Controllers\BerechtigungController;
-use App\Http\Controllers\BereichController;
-use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\ProjektController;
-use App\Http\Controllers\SchuleController;
-use App\Http\Controllers\TeilnehmerController;
-use App\Http\Controllers\UserController;
-use Illuminate\Foundation\Application;
-use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Foundation\Application;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\SchuleController;
+use App\Http\Controllers\BereichController;
+use App\Http\Controllers\ProjektController;
+use App\Http\Controllers\StandortController;
+use App\Http\Controllers\AbteilungController;
+use App\Http\Controllers\TeilnehmerController;
+use App\Http\Controllers\BerechtigungController;
+use App\Http\Controllers\NotificationController;
 
 
 /*
@@ -51,7 +52,7 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
 
     Route::get('/dashboard', function () {
         return Inertia::render('Dashboard');
-    })->name('dashboard')->can('dashboard.index');
+    })->name('dashboard');
 
     Route::get('/organisation', function () {
         return Inertia::render('Dashboards/Organisation');
@@ -62,7 +63,15 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
     })->name('ressourcen.index');
 
 
-    Route::get('/schule', [SchuleController::class, 'index'])->name('schule.index');
+    Route::get('/schule', [SchuleController::class, 'index'])->name('schule.index')->can('schule.index');;
+
+    //Standort
+    Route::get('/standort', [App\Http\Controllers\StandortController::class, 'index'])->name('standort.index');
+    Route::get('/standort/anlegen', function () { return Inertia::render('Standort/CreateStandort'); })->name('standort.create')->can('standort.create');;
+    Route::post('/standort/anlegen', [StandortController::class, 'store'])->name('standort.store');
+    Route::delete('/standort/{id}', [StandortController::class, 'destroy'])->name('standort.destroy');
+    Route::put('/standort/{id}', [StandortController::class, 'update'])->name('standort.update')->can('standort.edit');;
+
 
 
     // Benutzer

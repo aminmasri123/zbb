@@ -42,6 +42,26 @@
                     <li v-if="$page.props.permissions.includes('kooperationspartner.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dashboard')">{{$t('benutzerübersicht')}}</Link></li>
                 </ul>
             </li>
+
+
+
+
+
+
+            <!-- Standort Submenu -->
+            <li v-if="['standort.index', 'standort.store', 'standort.update'].some(permission => $page.props.permissions.includes(permission))" class="submenu">
+                <a href="#" @click.prevent="toggleMenu('standort')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
+                    <i class="la la-lg la-map-marker mr-2"></i>
+                    <span v-if="!displayHideTextSidebar" >{{$t('Standorte')}}</span>
+                    <span v-if="!displayHideTextSidebar" :class="{'rotate-180': activeMenu === 'standort', 'text-zbb': $page.component.startsWith('Standort')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
+                </a>
+                <ul v-show="activeMenu === 'standort'" class="pl-6 mt-2 space-y-2">
+                    <li v-if="$page.props.permissions.includes('standort.index')">
+                        <Link class="text-gray-400 hover:text-white transition duration-200" :href="route('standort.index')">{{$t('Standortübersicht')}}</Link></li>
+                </ul>
+            </li>
+
+
             <!-- Abteilung Submenu -->
             <li v-if="['abteilung.index', 'abteilung.store', 'abteilung.update'].some(permission => $page.props.permissions.includes(permission))" class="submenu">
                 <a href="#" @click.prevent="toggleMenu('abteilung')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
@@ -108,6 +128,13 @@
 
   </template>
 
+
+
+
+
+
+
+
 <script setup>
     import { Head, Link, router } from '@inertiajs/vue3';
     import SidebarLayout from '../Sidebar/SidebarLayout.vue';
@@ -128,3 +155,4 @@
 
   }
   </script>
+

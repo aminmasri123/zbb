@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Role;
 use App\Models\Projekt;
+use App\Models\Standort;
 use App\Models\Abteilung;
 use Laravel\Sanctum\HasApiTokens;
 use App\Models\Abteilungsassistent;
@@ -17,7 +18,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     use HasApiTokens;
     use HasFactory;
@@ -77,7 +78,10 @@ class User extends Authenticatable
     protected $appends = [
         'profile_photo_url',
     ];*/
-
+    public function standorte(): BelongsToMany
+    {
+        return $this->belongsToMany(Standort::class, 'standort_has_users', 'user_id', 'standort_id');
+    }
 
     public function adresse()
     {

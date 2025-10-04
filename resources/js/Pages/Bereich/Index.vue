@@ -233,10 +233,10 @@ export default {
 
                                 <template #content >
                                     <!-- Gefilterte Projektauswahl -->
-                                    <span class="flex justify-between cursor-pointer px-6 items-center"  @click="confirmDelete(bereich)">
+                                    <span class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"  @click="confirmDelete(bereich)">
                                         {{ $t('Löschen') }} <i class="las la-trash-alt "></i>
                                     </span>
-                                    <span class="flex justify-between cursor-pointer px-6 items-center"  @click="openModalEdit(bereich)">
+                                    <span class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"  @click="openModalEdit(bereich)">
                                         {{ $t('Bearbeiten') }}  <i class="las la-edit  "></i>
                                     </span>
 

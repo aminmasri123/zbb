@@ -12,13 +12,14 @@ use Illuminate\Support\Facades\Validator;
 
 class TeilnehmerController extends Controller
 {
-    public function index(Request $request)
+    /* public function index(Request $request)
     {
-        dump('TeilnehmerController@index aufgerufen');
         $search     = $request->input('search');
         $sort       = $request->input('sort', 'id');
         $direction  = strtolower($request->input('direction', 'desc'));
         $user       = User::findOrFail(Auth::id());
+        $benutzerDarfAlleTeilnehmerSehen = $user->hasPermissionTo('view_all_teilnehmer');
+
         $default_projekt = $user->current_team_id;
 
         $sortMap = [
@@ -63,14 +64,71 @@ class TeilnehmerController extends Controller
                 'direction' => $direction,
             ],
         ]);
+    } */
+
+
+   public function index(Request $request)
+    {
+        $suchbegriff    = $request->input('search');
+        $sortierung     = $request->input('sort', 'id');
+        $richtung       = strtolower($request->input('direction', 'desc'));
+
+        $benutzer = User::findOrFail(Auth::id());
+
+        // Mapping für erlaubte Sortierspalten
+        $sortierbareSpalten = [
+            'id'         => 'id',
+            'vorname'    => 'vorname',
+            'nachname'   => 'nachname',
+            'geschlecht' => 'geschlecht',
+        ];
+
+        $sortierspalte = $sortierbareSpalten[$sortierung] ?? 'id';
+        $richtung = in_array($richtung, ['asc', 'desc']) ? $richtung : 'desc';
+
+        // Berechtigungsprüfung: Darf Benutzer alle Teilnehmer sehen?
+        $darfAlleTeilnehmerSehen = $benutzer->hasPermissionTo('teilnehmer.view.all');
+
+        // Basis-Query
+        $abfrage = Teilnehmer::query();
+
+        if (!$darfAlleTeilnehmerSehen) {
+            // Wenn Benutzer keine volle Berechtigung hat → einschränken
+            $benutzerProjekt = [$benutzer->current_team_id];
+            $benutzerProjektIds  = $benutzer->projekte()->pluck('projekts.id')->toArray();
+            $benutzerStandortIds = $benutzer->standorte()->pluck('standorts.id')->toArray();
+            $abfrage->whereHas('projekte', function ($query) use ($benutzerProjekt) {
+                $query->whereIn('projekts.id', $benutzerProjekt);
+            })->whereHas('standorte', function ($query) use ($benutzerStandortIds) {
+                $query->whereIn('standorts.id', $benutzerStandortIds);
+            });
+
+        }
+
+        // Suche anwenden
+        $abfrage->when($suchbegriff, function ($query) use ($suchbegriff) {
+            $query->where(function ($unterabfrage) use ($suchbegriff) {
+                $unterabfrage->where(DB::raw("CONCAT(vorname, ' ', nachname)"), 'like', "%{$suchbegriff}%")
+                            ->orWhere(DB::raw("CONCAT(nachname, ' ', vorname)"), 'like', "%{$suchbegriff}%")
+                            ->orWhere('vorname', 'like', "%{$suchbegriff}%")
+                            ->orWhere('nachname', 'like', "%{$suchbegriff}%");
+            });
+        });
+
+        // Sortierung anwenden
+        $abfrage->orderBy($sortierspalte, $richtung);
+
+        // Ergebnis zurückgeben
+        return Inertia::render('Teilnehmer/Index', [
+            'teilnehmers' => $abfrage->paginate(50),
+            'filters' => [
+                'search'    => $suchbegriff,
+                'sort'      => $sortierung,
+                'direction' => $richtung,
+            ],
+        ]);
     }
 
-
-    /**
-     * Show the form for creating a new resource.
-     *
-     * @return \Illuminate\Http\Response
-     */
     public function create()
     {
         //

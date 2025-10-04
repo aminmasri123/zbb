@@ -73,8 +73,6 @@
         });
         return; // Stoppe die Funktion, wenn die Eingabe nicht stimmt
     }            
-    console.log(props.seite);
-    console.log(route('user.destroy', props.toDelete.id), {})
 
     axios.delete(route(props.seite + '.destroy',  props.toDelete.id))
         .then(response => {
