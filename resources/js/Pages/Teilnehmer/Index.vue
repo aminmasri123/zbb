@@ -204,7 +204,7 @@ const sortByColumn = (column) => {
 
         <!-- Teilnehmer Tabelle -->
         <div class="overflow-x-auto snap-x">
-            <div v-if="!$page.props.auth.user.default_projekt_id" class="flex w-full text-red-500 p-3 bg-white">
+            <div v-if="!$page.props.auth.user.current_team_id" class="flex w-full text-red-500 p-3 bg-white">
                 <p >
                     {{ $t('Bitte legen Sie ein Standardprojekt fest.') }}
                 </p>

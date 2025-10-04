@@ -168,7 +168,6 @@
     "Abteilung bearbeiten": "Abteilung bearbeiten",
     "Alle als gelesen markieren": "Alle als gelesen markieren",
     "Mein Profil": "Mein Profil",
-<<<<<<< HEAD
     "Standort": "Standort",
     "Standorte": "Standorte",
     "Standortübersicht": "Standortübersicht",
@@ -177,8 +176,4 @@
     "Standortname": "Standortname",
     "Standortbeschreibung": "Standortbeschreibung"
 
-=======
-    "Bitte bestätigen Sie den Zugriff auf Ihr Konto indem Sie den Authentifizierungscode eingeben der von Ihrer Authentifizierungsanwendung bereitgestellt wurde": "Bitte bestätigen Sie den Zugriff auf Ihr Konto indem Sie den Authentifizierungscode eingeben der von Ihrer Authentifizierungsanwendung bereitgestellt wurde",
-    "Bitte legen Sie ein Standardprojekt fest.": "Bitte legen Sie ein Standardprojekt fest."
->>>>>>> fdca8b45f0516a1740e5116d4cb54714f5437c16
 }

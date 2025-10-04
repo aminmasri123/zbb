@@ -306,7 +306,6 @@
     displayHideTextSidebar: Boolean,
     });
 
-<<<<<<< HEAD
 
 
 function switchToProjekt(projekt) {
@@ -323,10 +322,6 @@ function switchToProjekt(projekt) {
 
 const page = usePage();
 const notifications = ref(page.props.notify?.notifications || []);
-=======
-    const page = usePage();
-    const notifications = ref(page.props.notify?.notifications || []);
->>>>>>> fdca8b45f0516a1740e5116d4cb54714f5437c16
 
 
 const markAllAsRead = async () => {
