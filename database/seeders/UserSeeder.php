@@ -23,7 +23,6 @@ class UserSeeder extends Seeder
     public function run()
     {
 
-<<<<<<< HEAD
         DB::table('abteilungs')->insert([
             [ // id = 1
                 'name' => 'Abt. Übergang Schule-Beruf',
@@ -45,8 +44,6 @@ class UserSeeder extends Seeder
 
 
 
-=======
->>>>>>> fdca8b45f0516a1740e5116d4cb54714f5437c16
 
         DB::table('users')->insert([
             [
@@ -514,7 +511,7 @@ class UserSeeder extends Seeder
                 'name' => 'standort.delete',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '21',
-            ],  
+            ],
         ]);
 
         DB::table('model_has_roles')->insert([
