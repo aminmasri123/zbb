@@ -204,6 +204,11 @@ const sortByColumn = (column) => {
 
         <!-- Teilnehmer Tabelle -->
         <div class="overflow-x-auto snap-x">
+            <div v-if="!$page.props.auth.user.default_projekt_id" class="flex w-full text-red-500 p-3 bg-white">
+                <p >
+                    {{ $t('Bitte legen Sie ein Standardprojekt fest.') }}
+                </p>
+            </div>
             <table class="w-full text-sm text-left text-gray-500">
                 <thead class=" text-gray-600 uppercase bg-gray-200">
                     <tr>
@@ -252,14 +257,14 @@ const sortByColumn = (column) => {
                                     <Link class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100" :href="route('teilnehmer.edit', teilnehmer.id)">
                                        {{ $t('Bearbeiten') }}  <i class="las la-edit"></i>
                                     </Link>
-
                                 </template>
                             </Dropdown>
                         </td>
                     </tr>
-
                 </tbody>
             </table>
+
+
             <!-- Paginierung -->
 
             <Pagination :pagination="teilnehmers" />

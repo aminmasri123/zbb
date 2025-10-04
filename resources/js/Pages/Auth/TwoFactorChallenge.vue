@@ -43,22 +43,22 @@ const submit = () => {
     <AuthenticationCard>
 
 
-        <div class="mb-4 text-sm text-gray-600">
+        <div class="mb-4 text-sm text-gray-600 text-center">
             <AuthenticationCardLogo />
 
             <template v-if="! recovery">
-                {{ $t('Bitte_bestätigen_Sie_den_Zugriff_auf_Ihr_Konto_indem_Sie_den_Authentifizierungscode_eingeben_der_von_Ihrer_Authentifizierungsanwendung_bereitgestellt_wurde.') }}
+                {{ $t('Bitte bestätigen Sie den Zugriff auf Ihr Konto indem Sie den Authentifizierungscode eingeben der von Ihrer Authentifizierungsanwendung bereitgestellt wurde.') }}
             </template>
 
             <template v-else>
-                {{ $t('Bitte_bestätigen_Sie_den_Zugriff_auf_Ihr_Konto_indem_Sie_einen_Ihrer_Notfallwiederherstellungscodes_eingeben.') }}
+                {{ $t('Bitte bestätigen Sie den Zugriff auf Ihr Konto indem Sie einen Ihrer Notfallwiederherstellungscodes eingeben.') }}
             </template>
         </div>
 
         <form @submit.prevent="submit">
 
             <div v-if="! recovery">
-                <InputLabel for="code" value="{{$t('Code')}}" />
+                <InputLabel for="code" :value="$t('Code')" />
                 <TextInput
                     id="code"
                     ref="codeInput"
@@ -73,7 +73,7 @@ const submit = () => {
             </div>
 
             <div v-else>
-                <InputLabel for="recovery_code" value="{{$t('Wiederherstellungscode')}}" />
+                <InputLabel for="recovery_code" :value="$t('Wiederherstellungscode')" />
                 <TextInput
                     id="recovery_code"
                     ref="recoveryCodeInput"

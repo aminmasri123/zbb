@@ -42,6 +42,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'password',
         'lang',
         'profile_photo_url',
+        'default_projekt_id',
     ];
 
     protected $date = [
