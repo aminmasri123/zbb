@@ -17,6 +17,7 @@ class Projekt extends Model
         'name',
         'kostenstelle',
         'abteilung_id',
+        'beschreibung'
     ];
     public function abteilung()
     {
