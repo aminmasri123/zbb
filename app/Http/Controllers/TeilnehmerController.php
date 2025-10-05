@@ -210,7 +210,10 @@ class TeilnehmerController extends Controller
      */
     public function show($id)
     {
-        //
+        return Inertia::render('Teilnehmer/Edit', [
+            'teilnehmer' => Teilnehmer::findOrFail($id),
+            ],
+        );
     }
 
     /**

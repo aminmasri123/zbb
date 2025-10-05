@@ -19,6 +19,11 @@ module.exports = {
             },
             colors:{
                 zbb: '#ff8500',
+                zbbTrp: 'rgba(255, 133, 0, 0.1)',
+                danger: '#ff0000',
+                success: '#16a34a',
+                warning: '#eab308',
+                info: '#3b82f6'
             },
 
         },

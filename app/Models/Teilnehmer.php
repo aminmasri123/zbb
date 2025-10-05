@@ -38,4 +38,9 @@ class Teilnehmer extends Model
         return $this->belongsToMany(Projekt::class, 'projekt_has_teilnehmers', 'teilnehmer_id', 'projekt_id');
     }
 
+    public function kontaktes()
+    {
+        return $this->morphMany(Kontakte::class, 'model', 'model', 'model_id');
+    }
+
 }
