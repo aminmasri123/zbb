@@ -43,6 +43,22 @@ class UserSeeder extends Seeder
         ]);
 
 
+         DB::table('kontakttypens')->insert([
+            [ // id = 1
+                'name' => 'Mobile',
+            ],
+            [ // id = 2
+                'name' => 'Telefon',
+            ],
+            [ // id = 3
+                'name' => 'Email',
+            ],
+            [ // id = 4
+                'name' => 'Linkedin',
+            ],
+        ]);
+
+
 
 
         DB::table('users')->insert([

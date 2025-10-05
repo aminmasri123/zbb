@@ -61,7 +61,6 @@
         },
     });
 
-
     const deleteItem = () => {
     if (deleteInput.value !== 'delete') {
         Swal.fire({
@@ -73,7 +72,7 @@
         });
         return; // Stoppe die Funktion, wenn die Eingabe nicht stimmt
     }            
-
+ 
     axios.delete(route(props.seite + '.destroy',  props.toDelete.id))
         .then(response => {
             emitDelete('delete', props.toDelete.id);

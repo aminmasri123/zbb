@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('kontaktes', function (Blueprint $table) {
             $table->id();
-            $table->enum('model', ['User', 'Firma', 'Schule', 'Standort', 'Partner', 'Teilnehmer']);
+            $table->string('model_type',50);
             $table->unsignedBigInteger('model_id');
             $table->foreignId('kontakttyp_id')->constrained('kontakttypens')->onDelete('cascade');
             $table->string('wert',100);

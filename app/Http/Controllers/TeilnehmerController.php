@@ -2,9 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use Inertia\Inertia;
 use App\Models\Teilnehmer;
-use App\Models\User;
+use App\Models\Kontakttypen;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
@@ -17,15 +18,10 @@ class TeilnehmerController extends Controller
         $search     = $request->input('search');
         $sort       = $request->input('sort', 'id');
         $direction  = strtolower($request->input('direction', 'desc'));
-<<<<<<< HEAD
         $user       = User::findOrFail(Auth::id());
         $benutzerDarfAlleTeilnehmerSehen = $user->hasPermissionTo('view_all_teilnehmer');
 
         $default_projekt = $user->current_team_id;
-=======
-        $projektId  = $request->input('projekt_id');
-        $user = auth()->user();
->>>>>>> fdca8b45f0516a1740e5116d4cb54714f5437c16
 
         // Falls kein Projekt ausgewählt wurde → Default-Projekt nehmen
         if (!$projektId && $user->default_projekt_id) {
@@ -56,7 +52,6 @@ class TeilnehmerController extends Controller
         $sortColumn = $sortMap[$sort] ?? 'id';
         $direction  = in_array($direction, ['asc', 'desc'], true) ? $direction : 'desc';
 
-<<<<<<< HEAD
         // Prüfen, ob das default Projekt dem User zugewiesen ist
         $user_project_ids = $user->projekte()->pluck('projekts.id')->toArray();
 
@@ -69,12 +64,6 @@ class TeilnehmerController extends Controller
                 })
                 ->whereHas('users', function ($q2) use ($user) {
                     $q2->where('users.id', $user->id);
-=======
-        $query = Teilnehmer::query()
-            ->when($projektId, function ($q) use ($projektId) {
-                $q->whereHas('projekte', function ($q2) use ($projektId) {
-                    $q2->where('projekts.id', $projektId);
->>>>>>> fdca8b45f0516a1740e5116d4cb54714f5437c16
                 });
             })
             ->when($search, function ($q) use ($search) {
@@ -210,18 +199,15 @@ class TeilnehmerController extends Controller
      */
     public function show($id)
     {
+        $teilnehmer = Teilnehmer::with(['adresses', 'standorte', 'projekte', 'kontaktes.kontakttyp'])->findOrFail($id);
+        $kontakttypen = Kontakttypen::all();
         return Inertia::render('Teilnehmer/Edit', [
-            'teilnehmer' => Teilnehmer::findOrFail($id),
+            'teilnehmer' => $teilnehmer,
+            'kontakttypen' => $kontakttypen
             ],
         );
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
     public function edit($id)
     {
         //
@@ -252,4 +238,8 @@ class TeilnehmerController extends Controller
             return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
         }
     }
+
+
+
+    
 }

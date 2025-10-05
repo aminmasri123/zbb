@@ -15,7 +15,7 @@ return new class extends Migration
     {
         Schema::create('adresses', function (Blueprint $table) {
             $table->id();
-            $table->enum('model', ['User', 'Firma', 'Schule', 'Standort', 'Partner', 'Teilnehmer']); //Typ des Modells, z.B. 'User', 'Firma', 'Schule', 'Standorte', 'Partner', 'Teilnehmer'
+            $table->string('model_type', 50); // z.B. 'App\Models\Teilnehmer'
             $table->unsignedBigInteger('model_id');
             $table->string('strasse')->nullable();
             $table->string('hausnummer', 10)->nullable();
