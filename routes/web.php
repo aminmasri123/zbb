@@ -14,6 +14,7 @@ use App\Http\Controllers\AbteilungController;
 use App\Http\Controllers\TeilnehmerController;
 use App\Http\Controllers\BerechtigungController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\ProjektHasTeilnehmerController;
 
 
 /*
@@ -148,6 +149,9 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
     Route::post('/teilnehmer/adresse/anlegen', [AdresseController::class, 'store'])->name('adresse.store');
     Route::delete('/teilnehmer/adresse/entfernen/{id}', [AdresseController::class, 'destroy'])->name('adresse.destroy');
 
+
+    //ProjektHasTeilnehmer
+    Route::post('/teilnehmer/Projekt/anlegen', [ProjektHasTeilnehmerController::class, 'store'])->name('projekthasteilnehmer.store');
 
 
 

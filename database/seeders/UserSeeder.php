@@ -22,27 +22,6 @@ class UserSeeder extends Seeder
      */
     public function run()
     {
-
-        DB::table('abteilungs')->insert([
-            [ // id = 1
-                'name' => 'Abt. Übergang Schule-Beruf',
-                'beschreibung' => null,
-            ],
-            [ // id = 2
-                'name' => 'Abt. Aus- und Weiterbildung',
-                'beschreibung' => null,
-            ],
-            [ // id = 3
-                'name' => 'Abt. Arbeit- und Lernen',
-                'beschreibung' => null,
-            ],
-            [ // id = 4
-                'name' => 'Abt. Beratung, Integration & Vermittlung',
-                'beschreibung' => null,
-            ],
-        ]);
-
-
          DB::table('kontakttypens')->insert([
             [ // id = 1
                 'name' => 'Mobile',
@@ -58,13 +37,25 @@ class UserSeeder extends Seeder
             ],
         ]);
 
-
-
+        DB::table('standorts')->insert([
+            [ // id = 1
+                'name' => 'BOP',
+            ],
+            [ // id = 2
+                'name' => 'Verwaltung',
+            ],
+            [ // id = 3
+                'name' => 'Völklingen',
+            ],
+            [ // id = 4
+                'name' => 'Brebach',
+            ],
+        ]);
 
         DB::table('users')->insert([
             [
                 // id = 1
-                'username' => 'Amin Masri',
+                'username' => 'aminmasri',
                 'first_name' => 'Amin',
                 'last_name' => 'Masri',
                 'email' => 'amin.masri@outlook.com',
@@ -138,6 +129,26 @@ class UserSeeder extends Seeder
                 'default_projekt_id'  => fake()->randomElement(Projekt::pluck('id')->toArray()),
             ],
 
+        ]);
+
+        DB::table('standort_has_users')->insert([
+            [ // id = 1
+                'standort_id' => '1',
+                'user_id' => '1',
+
+            ],
+            [ // id = 2
+                'standort_id' => '2',
+                'user_id' => '5',
+            ],
+            [ // id = 3
+                'standort_id' => '1',
+                'user_id' => '2',
+            ],
+            [ // id = 4
+                'standort_id' => '3',
+                'user_id' => '4',
+            ],
         ]);
 
         /*$faker = Faker::create();
@@ -528,6 +539,31 @@ class UserSeeder extends Seeder
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '21',
             ],
+
+            [ // id = 25
+                'name' => 'teilnehmer.index',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '5',
+            ],
+
+            [ // id = 26
+                'name' => 'teilnehmer.store',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '5',
+            ],
+
+            [ // id = 27
+                'name' => 'teilnehmer.view.all',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '5',
+            ],
+
+
+
+
+
+
+
         ]);
 
         DB::table('model_has_roles')->insert([
@@ -774,6 +810,28 @@ class UserSeeder extends Seeder
                 'teilnehmer_id' => $teilnehmer->id, // gerade erstellter Teilnehmer
             ]);
         };
+
+        DB::table('standort_has_teilnehmers')->insert([
+        [ // id = 1
+            'standort_id' => '1',
+            'teilnehmer_id' => '1',
+
+        ],
+        [ // id = 2
+            'standort_id' => '1',
+            'teilnehmer_id' => '2',
+        ],
+        [ // id = 3
+            'standort_id' => '1',
+            'teilnehmer_id' => '3',
+        ],
+        [ // id = 4
+            'standort_id' => '1',
+            'teilnehmer_id' => '4',
+        ],
+         ]);
     }
+
+
 
 }

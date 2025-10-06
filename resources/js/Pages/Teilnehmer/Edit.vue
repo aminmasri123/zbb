@@ -43,12 +43,6 @@
             </button>
           </nav>
 
-
-
-
-
-
-
           <!-- ================= STAMMDATEN ================= -->
           <div v-if="activeTab === 'Stammdaten'">
             <div class="grid grid-cols-3 gap-4">
@@ -169,54 +163,74 @@
           </div>
 
           <!-- =================== MASSNAHMENVERLAUF =================== -->
-          <div v-else-if="activeTab === 'Maßnahmenverlauf'">
-          <table class="min-w-full border border-gray-200 text-sm">
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="th">Maßnahme</th>
-                <th class="th">Von</th>
-                <th class="th">Bis</th>
-                <th class="th">Eintritt</th>
-                <th class="th">Ende</th>
-                <th class="th">ESF</th>
-                <th class="th">JC-Mitarbeiter</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(m, i) in form.massnahmen" :key="i" class="border-t">
-                <td><input v-model="m.name" class="input w-full" /></td>
-                <td><input type="date" v-model="m.von" class="input w-full" /></td>
-                <td><input type="date" v-model="m.bis" class="input w-full" /></td>
-                <td><input v-model="m.eintritt" class="input w-full" /></td>
-                <td><input v-model="m.ende" class="input w-full" /></td>
-                <td class="text-center"><input type="checkbox" v-model="m.esf" /></td>
-                <td><input v-model="m.jc_mitarbeiter" class="input w-full" /></td>
-              </tr>
-            </tbody>
-          </table>
-     
+          <div v-else-if="activeTab === 'Projektverlauf'">
 
-    
-  <!-- Projekt hinzufügen -->
-  <div class="flex items-end gap-3">
-    <div class="flex-1">
-      <label class="text-sm text-gray-600">Projekt auswählen</label>
-      <select v-model="neuesProjektId" class="input mt-1">
-        <option disabled value="">-- Projekt auswählen --</option>
-        <option v-for="projekt in alleProjekte" :key="projekt.id" :value="projekt.id">
-          {{ projekt.name }}
-        </option>
-      </select>
-    </div>
-    <button
-      @click="addProjekt"
-      :disabled="!neuesProjektId || loadingProjekt"
-      class="bg-zbb text-white px-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition"
-    >
-      <span v-if="!loadingProjekt">➕ Zuweisen</span>
-      <span v-else>...</span>
-    </button>
-  </div>
+             <!-- Projekt hinzufügen -->
+            <button @click="showModalProjektzuweisen = true" class="bg-zbb text-white px-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition" >
+                <span v-if="!loadingProjekt">➕ Zuweisen</span>
+                <span v-else>...</span>
+            </button>
+            <table class="min-w-full border border-gray-200 text-sm">
+                <thead class="bg-gray-50">
+                    <tr class="text-center">
+                    <th class="th ">Projekte</th>
+                    <th class="th w-[180px]">Antragsdatum</th>
+                    <th class="th w-[180px]">Anfangsdatum</th>
+                    <th class="th w-[180px]">Enddatum</th>
+                    <th class="th w-[180px]">Starttermin</th>
+                    <th class="th w-[180px]">Endtermin</th>
+                    <th class="th w-[180px]">ESF</th>
+                    <th class="th w-[180px]">JC-Mitarbeiter</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="(projekt, i) in teilnehmer.projekte" :key="i" class="border-t align-middle">
+                    <!-- Projektname -->
+                    <td>
+                        <input v-model="projekt.name" class=" align-middle input-auto" />
+                    </td>
+
+                    <!-- Zeiträume -->
+                    <td colspan="5" class="p-0">
+                        <div class="flex flex-col gap-1">
+                        <div
+                            v-for="zeit in projekt.pivot_model?.zeitraume || []"
+                            :key="zeit.id"
+                            class="flex gap-2 items-center border rounded p-2 bg-gray-50"
+                        >
+                            <input type="date" v-model="zeit.antragsdatum" class="input-auto " />
+                            <input type="date" v-model="zeit.starttermin" class="input-auto " />
+                            <input type="date" v-model="zeit.endtermin" class="input-auto " />
+                            <input type="date" v-model="zeit.anfangsdatum" class="input-auto " />
+                            <input type="date" v-model="zeit.enddatum" class="input-auto " />
+                        </div>
+
+                        <!-- Falls keine Zeiträume vorhanden sind -->
+                        <div
+                            v-if="!projekt.pivot_model?.zeitraume?.length"
+                            class="flex gap-2 items-center border rounded p-2"
+                        >
+                            <input type="date" class="input-auto " />
+                            <input type="date" class="input-auto " />
+                            <input type="date" class="input-auto " />
+                            <input type="date" class="input-auto " />
+                            <input type="date" class="input-auto " />
+                        </div>
+                        </div>
+                    </td>
+
+                    <!-- ESF -->
+                    <td class="text-center">
+                        <input type="checkbox" v-model="projekt.esf" />
+                    </td>
+
+                    <!-- JC-Mitarbeiter -->
+                    <td>
+                        <input v-model="projekt.jc_mitarbeiter" class="input-auto " />
+                    </td>
+                    </tr>
+                </tbody>
+            </table>
 
           </div>
 
@@ -255,7 +269,7 @@
             <textarea v-model="form.notizen" rows="8" class="input"></textarea>
           </div>
 
-          
+
           <!-- ================= KINDER ================= -->
           <div v-else-if="activeTab === 'Kinder'">
             <p class="text-gray-500">Informationen zu Kindern können hier ergänzt werden.</p>
@@ -278,14 +292,14 @@
           <div v-else-if="activeTab === 'Vermittlung'">
               <p class="text-gray-500">Hier kannst du Netzwerkverbindungen pflegen.</p>
                 <textarea v-model="form.vermittlung" rows="6" class="input"></textarea>
-          </div>    
-          
-          
+          </div>
+
+
           <!-- ================= Projekte ================= -->
           <div v-else-if="activeTab === 'Projekte'">
               <p class="text-gray-500">Hier kannst du Projekte verwalten.</p>
                 <textarea v-model="form.projekte" rows="6" class="input"></textarea>
-          </div>  
+          </div>
         </div>
       </div>
     </div>
@@ -293,7 +307,6 @@
 
 
 
-  
 
 
 
@@ -302,7 +315,8 @@
 
 
 
-        <!-- MODAL: Adresse hinzufügen -->
+
+            <!-- MODAL: Adresse hinzufügen -->
             <transition name="fade">
               <div
                 v-if="showModalAdresse"
@@ -346,7 +360,7 @@
               </div>
             </transition>
 
-        <!-- MODAL: Kontakt hinzufügen -->
+            <!-- MODAL: Kontakt hinzufügen -->
             <transition name="fade">
               <div v-if="showModalCreateKontakt" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
                 <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
@@ -402,6 +416,89 @@
 
 
 
+          <!-- MODAL: Projekt zuweisen -->
+            <transition name="fade">
+            <div
+                v-if="showModalProjektzuweisen"
+                class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+            >
+                <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
+                <button
+                    @click="showModalProjektzuweisen = false"
+                    class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl"
+                >
+                    ✕
+                </button>
+
+                <h3 class="text-lg font-semibold mb-4 text-zbb">Projekt zuweisen</h3>
+
+                <div class="space-y-3">
+                    <!-- Projekt-Auswahl -->
+                    <div>
+                    <label class="text-sm text-gray-600">Projekt auswählen</label>
+                    <Multiselect
+                        v-model="neuesProjektId"
+                        :options="props.projekte.map(p => ({ value: p.id, label: p.name }))"
+                        placeholder="Projekt suchen..."
+                        searchable
+                        noOptionsText="Keine Projekte gefunden"
+                        class="input-auto"
+                    />
+                    </div>
+
+                    <!-- Zeiträume -->
+                    <div>
+                        <label>Starttermin</label>
+                        <input type="date" v-model="neuesProjekt.antragsdatum" class="input" />
+                    </div>
+                    <div>
+                        <label>Starttermin</label>
+                        <input type="date" v-model="neuesProjekt.starttermin" class="input" />
+                    </div>
+                    <div>
+                        <label>Endtermin</label>
+                        <input type="date" v-model="neuesProjekt.endtermin" class="input" />
+                    </div>
+                    <div>
+                        <label>Anfangsdatum</label>
+                        <input type="date" v-model="neuesProjekt.anfangsdatum" class="input" />
+                    </div>
+                    <div>
+                        <label>Enddatum</label>
+                        <input type="date" v-model="neuesProjekt.enddatum" class="input" />
+                    </div>
+                </div>
+
+                <!-- Buttons -->
+                <div class="mt-6 flex justify-end space-x-3">
+                    <button
+                    @click="showModalProjektzuweisen = false"
+                    class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100"
+                    >
+                    Abbrechen
+                    </button>
+                    <button
+                    @click="addProjekt"
+                    :disabled="loadingProjekt"
+                    class="px-4 py-2 rounded-md text-sm text-white transition"
+                    :class="loadingProjekt ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
+                    >
+                    <span v-if="!loadingProjekt">Speichern</span>
+                    <span v-else>Speichern...</span>
+                    </button>
+                </div>
+                </div>
+            </div>
+            </transition>
+
+
+
+
+
+
+
+
+
 
 
 
@@ -425,22 +522,35 @@ import { Head, router } from "@inertiajs/vue3";
 import AppLayout from "@/Layouts/AppLayout.vue";
 import { ref, computed } from "vue";
 import ModalDestroy from "@/Components/ModalDestroyForm.vue";
+import Multiselect from '@vueform/multiselect';
+import '@vueform/multiselect/themes/default.css';
 
 
 const props = defineProps({
   teilnehmer: Object,
   kontakttypen: Array,
+  projekte: Array,
 });
+
 
 // Lokale Kopie der Teilnehmerdaten
 const teilnehmer = ref(JSON.parse(JSON.stringify(props.teilnehmer)));
+const neuesProjektId = ref('');
+const loadingProjekt = ref(false);
 
+const neuesProjekt = ref({
+    antragsdatum: '',
+    starttermin: '',
+    endtermin: '',
+    anfangsdatum: '',
+    enddatum: '',
+});
 // Tabs
 const tabs = [
   "Stammdaten",
   "Adresse",
   "Kontaktdaten",
-  "Maßnahmenverlauf",
+  "Projektverlauf",
   "Briefe",
   "Aktennotiz",
   "Notizen",
@@ -448,7 +558,7 @@ const tabs = [
   "Bank",
   "Netzwerke",
   "Vermittlung",
-  
+
   "Projekte",
 ];
 const activeTab = ref("");
@@ -456,6 +566,7 @@ const activeTab = ref("");
 // Formulare & Variablen
 const mitarbeiterListe = ["Test Admin", "Mitarbeiter Test Amin Masri"];
 const showModalAdresse = ref(false);
+const showModalProjektzuweisen = ref(false);
 const showModalCreateKontakt = ref(false);
 const showModalLöschen = ref(false);
 const seite = ref("");
@@ -570,13 +681,73 @@ const brief = ref({
   inhalt: "",
 });
 const vorlagen = ["Einladung", "Abmahnung", "Vertragsangebot"];
+
+
+
+
+
+
+const addProjekt = () => {
+  loadingProjekt.value = true
+  // Hier würdest du deinen Laravel-Request einfügen
+
+router.post(
+    route("projekthasteilnehmer.store"),
+    {
+        teilnehmer_id: props.teilnehmer.id,
+        projekt_id: neuesProjektId.value,
+        ...neuesProjekt.value,
+
+    },
+    {
+      onFinish: () => (loadingProjekt.value = false),
+      onSuccess: () => {
+        // Optional: Lokale Anzeige aktualisieren
+        const projekt = verfuegbareProjekte.value.find(
+          (p) => p.id === neuesProjektId.value
+        );
+        if (projekt) {
+          teilnehmer.value.projekte.push({
+            ...projekt,
+            pivot_model: { zeitraume: [] },
+            esf: false,
+            jc_mitarbeiter: "",
+          });
+        }
+        neuesProjektId.value = "";
+      },
+    }
+  );
+
+
+
+
+
+
+
+  console.log('Projekt speichern:', {
+    projekt_id: neuesProjektId.value,
+    teilnehmer_id: props.teilnehmer.id,
+    ...neuesProjekt.value,
+  })
+  setTimeout(() => {
+    loadingProjekt.value = false
+    showModalProjektzuweisen.value = false
+    neuesProjektId.value = ''
+    neuesProjekt.value = { starttermin: '', endtermin: '', anfangsdatum: '', enddatum: '' }
+  }, 1000)
+}
 </script>
 
 <style scoped>
 .input {
-  @apply mt-1 w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm;
+  @apply mt-1 w-full border-gray-300 rounded-md shadow-sm focus:ring-zbbTrp focus:border-zbb text-sm;
+}
+
+.input-auto {
+  @apply mt-1 w-auto border-gray-300 rounded-md shadow-sm focus:ring-zbbTrp focus:border-zbb text-sm;
 }
 .th {
-  @apply px-2 py-1 text-left text-gray-600 font-medium;
+  @apply px-2 py-1  text-gray-600 font-medium;
 }
 </style>

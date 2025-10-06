@@ -2,10 +2,12 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Models\Zeitraum;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\Pivot;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
-class ProjektHasTeilnehmer extends Model
+class ProjektHasTeilnehmer extends Pivot //Model //Pivot
 {
     use HasFactory;
     public $timestamps = false;
@@ -14,4 +16,12 @@ class ProjektHasTeilnehmer extends Model
         'projekt_id',
         'teilnehmer_id',
     ];
+
+
+
+    public function zeitraume()
+    {
+        return $this->morphMany(Zeitraum::class, 'model');
+    }
+
 }

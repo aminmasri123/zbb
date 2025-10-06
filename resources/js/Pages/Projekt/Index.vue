@@ -135,34 +135,79 @@
             <td class="border px-6 py-4">{{ projekt.abteilung?.name }}</td>
 
             <td class="border px-6 py-4">
-            <div v-for="zeit in projekt.projektzeitraume" :key="zeit.id">
-                {{ formatDate(zeit.antragsdatum) }}
-            </div>
+                <div v-if="projekt && projekt.zeitraume">
+                    <template v-for="zeit in projekt.zeitraume" :key="zeit.id">
+                    <div v-if="zeit && zeit.typ === 'antrag'">
+                        {{ formatDate(zeit.von) }}
+                    </div>
+                    </template>
+                </div>
+
+                <div v-else>
+                    <p>Lade Daten...</p>
+                </div>
+            </td>
+
+
+
+            <td class="border px-6 py-4">
+                <div v-if="projekt && projekt.zeitraume">
+                    <template v-for="zeit in projekt.zeitraume" :key="zeit.id">
+                    <div v-if="zeit && zeit.typ === 'geplant'">
+                        {{ formatDate(zeit.von) }}
+                    </div>
+                    </template>
+                </div>
+
+                <div v-else>
+                    <p>Lade Daten...</p>
+                </div>
+            </td>
+
+
+            <td class="border px-6 py-4">
+                <div v-if="projekt && projekt.zeitraume">
+                    <template v-for="zeit in projekt.zeitraume" :key="zeit.id">
+                    <div v-if="zeit && zeit.typ === 'geplant'">
+                        {{ formatDate(zeit.bis) }}
+                    </div>
+                    </template>
+                </div>
+
+                <div v-else>
+                    <p>Lade Daten...</p>
+                </div>
             </td>
 
             <td class="border px-6 py-4">
-            <div v-for="zeit in projekt.projektzeitraume" :key="zeit.id">
-                {{ formatDate(zeit.starttermin) }}
-            </div>
+                <div v-if="projekt && projekt.zeitraume">
+                    <template v-for="zeit in projekt.zeitraume" :key="zeit.id">
+                    <div v-if="zeit && zeit.typ === 'ist'">
+                        {{ formatDate(zeit.von) }}
+                    </div>
+                    </template>
+                </div>
+
+                <div v-else>
+                    <p>Lade Daten...</p>
+                </div>
             </td>
 
             <td class="border px-6 py-4">
-            <div v-for="zeit in projekt.projektzeitraume" :key="zeit.id">
-                {{ formatDate(zeit.anfangsdatum) }}
-            </div>
+                <div v-if="projekt && projekt.zeitraume">
+                    <template v-for="zeit in projekt.zeitraume" :key="zeit.id">
+                    <div v-if="zeit && zeit.typ === 'ist'">
+                        {{ formatDate(zeit.bis) }}
+                    </div>
+                    </template>
+                </div>
+
+                <div v-else>
+                    <p>Lade Daten...</p>
+                </div>
             </td>
 
-            <td class="border px-6 py-4">
-            <div v-for="zeit in projekt.projektzeitraume" :key="zeit.id">
-                {{ formatDate(zeit.endtermin) }}
-            </div>
-            </td>
-
-            <td class="border px-6 py-4">
-            <div v-for="zeit in projekt.projektzeitraume" :key="zeit.id">
-                {{ formatDate(zeit.enddatum) }}
-            </div>
-            </td>
+           
 
             <td class="border px-6 py-4 text-center">
             <Dropdown>

@@ -27,12 +27,14 @@ class ProjektController extends Controller
             $query->where('projekts.name', 'like', "%{$search}%"); // Beachte: 'projekts.name' ist hier qualifiziert
         })
             ->with('abteilung')
-            ->with('projektzeitraume')
+            //->with('projektzeitraume')
+            ->with('zeitraume')
             ->with('bereiche')
             ->orderBy('projekts.id', 'desc') // Sortiere nach Projektname
             ->paginate(100) // Paginierung
             ->withQueryString();
         // Standardmäßige Rückgabe für die Inertia-Ansicht
+
         return Inertia::render('Projekt/Index', [
             'projekte' => $projekte,
             'abteilungen' => $abteilungen

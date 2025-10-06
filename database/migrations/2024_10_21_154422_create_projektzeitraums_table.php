@@ -13,16 +13,16 @@ return new class extends Migration
      */
     public function up()
     {
-        Schema::create('projektzeitraums', function (Blueprint $table) {
-            $table->id();
-            $table->date('antragsdatum');
-            $table->date('starttermin');
-            $table->date('anfangsdatum');
-            $table->date('endtermin');
-            $table->date('enddatum');
-            $table->foreignId('projekt_id')->constrained()->onDelete('cascade');
-            $table->timestamps();
-        });
+            Schema::create('projektzeitraums', function (Blueprint $table) {
+                $table->id();
+                $table->date('antragsdatum');
+                $table->date('starttermin');
+                $table->date('anfangsdatum');
+                $table->date('endtermin');
+                $table->date('enddatum');
+                $table->foreignId('projekt_id')->constrained()->onDelete('cascade');
+                $table->timestamps();
+            });
     }
 
     /**

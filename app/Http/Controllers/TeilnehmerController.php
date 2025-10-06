@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Inertia\Inertia;
+use App\Models\Projekt;
 use App\Models\Teilnehmer;
 use App\Models\Kontakttypen;
 use Illuminate\Http\Request;
@@ -191,19 +192,27 @@ class TeilnehmerController extends Controller
              }
     }
 
-    /**
-     * Display the specified resource.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
+  
     public function show($id)
     {
-        $teilnehmer = Teilnehmer::with(['adresses', 'standorte', 'projekte', 'kontaktes.kontakttyp'])->findOrFail($id);
+        $teilnehmer = Teilnehmer::with([
+            'adresses',
+            'standorte',
+            'kontaktes.kontakttyp',
+            'projekte',
+        ])->findOrFail($id);
+
+        $projekte = Projekt::all();
+
+        $teilnehmer->projekte->each(function ($projekt) {
+            $projekt->pivotModel->load('zeitraume');
+        });
+
         $kontakttypen = Kontakttypen::all();
         return Inertia::render('Teilnehmer/Edit', [
-            'teilnehmer' => $teilnehmer,
-            'kontakttypen' => $kontakttypen
+            'teilnehmer' => $teilnehmer->toArray(),
+            'kontakttypen' => $kontakttypen,
+            'projekte' => $projekte,
             ],
         );
     }

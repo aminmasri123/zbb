@@ -13,9 +13,11 @@ return new class extends Migration
     {
         Schema::create('zeitraums', function (Blueprint $table) {
             $table->id();
-            $table->date('von')->nullable();
-            $table->date('bis')->nullable();
-            $table->enum('typ', ['geplant', 'ist'])->default('geplant');
+            $table->date('antragsdatum')->nullable();
+            $table->date('starttermin')->nullable();
+            $table->date('endtermin')->nullable();
+            $table->date('anfangsdatum')->nullable();
+            $table->date('enddatum')->nullable();
             $table->string('model_type',50);
             $table->unsignedBigInteger('model_id');
             $table->timestamps();

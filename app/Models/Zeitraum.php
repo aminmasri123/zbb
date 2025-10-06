@@ -9,14 +9,19 @@ class Zeitraum extends Model
 {
     use HasFactory;
     protected $fillable = [
-        'von',
-        'bis',
-        'typ',
+        'antragsdatum',
+        'starttermin',
+        'endtermin',
+        'anfangsdatum',
+        'enddatum',
         'model_type',
         'model_id'
     ];
     protected $dates = [
-        'von',
-        'bis'
+        'antragsdatum',
+        'starttermin',
+        'endtermin',
+        'anfangsdatum',
+        'enddatum'
     ];
 }

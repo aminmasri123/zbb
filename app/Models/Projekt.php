@@ -44,4 +44,10 @@ class Projekt extends Model
     {
         return $this->hasMany(Projektzeitraum::class, 'projekt_id');
     }
+
+
+    public function zeitraume()
+    {
+        return $this->morphMany(Zeitraum::class, 'model');
+    }
 }
