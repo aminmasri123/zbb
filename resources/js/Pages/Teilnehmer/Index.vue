@@ -233,7 +233,7 @@ const sortByColumn = (column) => {
                 </thead>
                 <tbody>
                     <tr v-for="teilnehmer in filteredTeilnehmerByProject" :key="teilnehmer.id" class="bg-white border-b">
-                        <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.id }}</td>
+                        <td class="px-6 py-4 border border-solid border-gray-300"><Link :href="route('teilnehmer.edit', teilnehmer.id)">{{ teilnehmer.id }}</Link> </td>
                         <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.vorname }}</td>
                         <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.nachname }}</td>
                         <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.geschlecht }}</td>
