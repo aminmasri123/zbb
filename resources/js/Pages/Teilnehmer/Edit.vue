@@ -276,12 +276,56 @@
           </div>
 
           <!-- ================= BANK ================= -->
-          <div v-else-if="activeTab === 'Bank'">
-            <div class="grid grid-cols-2 gap-4">
-              <div><label>Bankname</label><input v-model="form.bankname" class="input" /></div>
-              <div><label>IBAN</label><input v-model="form.iban" class="input" /></div>
-            </div>
-          </div>
+        <div v-else-if="activeTab === 'Bank'">
+        <div v-if="teilnehmer.baenke && teilnehmer.baenke.length">
+            <table class="min-w-full border border-gray-200 text-sm">
+            <thead class="bg-gray-50 text-gray-700">
+                <tr>
+                <th class="px-3 py-2 text-left">#</th>
+                <th class="px-3 py-2 text-left">Bankname</th>
+                <th class="px-3 py-2 text-left">IBAN</th>
+                <th class="px-3 py-2 text-left">BLZ</th>
+                <th class="px-3 py-2 text-center">Aktionen</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr
+                v-for="(bank, index) in teilnehmer.baenke"
+                :key="bank.id || index"
+                class="border-t hover:bg-gray-50 transition"
+                >
+                <td class="px-3 py-2">{{ index + 1 }}</td>
+                <td class="px-3 py-2">{{ bank.name }}</td>
+                <td class="px-3 py-2 font-mono">{{ bank.iban }}</td>
+                <td class="px-3 py-2">{{ bank.blz }}</td>
+                <td class="px-3 py-2 text-center">
+                    <button
+                    @click="confirmDeleteBank(bank)"
+                    class="text-red-500 hover:text-red-700 text-sm"
+                    >
+                    <i class="la la-trash"></i> Löschen
+                    </button>
+                </td>
+                </tr>
+            </tbody>
+            </table>
+        </div>
+
+        <!-- Falls keine Bankdaten -->
+        <p v-else class="text-gray-500 italic">Keine Bankdaten vorhanden.</p>
+
+        <div class="mt-4 flex justify-end">
+            <button
+            @click="showModalBank = true"
+            :disabled="loadingBank"
+            class="bg-zbb text-white px-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition"
+            >
+            <span v-if="!loadingBank">➕ Hinzufügen</span>
+            <span v-else>Wird gespeichert...</span>
+            </button>
+        </div>
+        </div>
+
 
           <!-- ================= NETZWERKE ================= -->
           <div v-else-if="activeTab === 'Netzwerke'">
@@ -418,81 +462,119 @@
 
           <!-- MODAL: Projekt zuweisen -->
             <transition name="fade">
-            <div
-                v-if="showModalProjektzuweisen"
-                class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
-            >
-                <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
-                <button
-                    @click="showModalProjektzuweisen = false"
-                    class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl"
+                <div
+                    v-if="showModalProjektzuweisen"
+                    class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
                 >
-                    ✕
-                </button>
-
-                <h3 class="text-lg font-semibold mb-4 text-zbb">Projekt zuweisen</h3>
-
-                <div class="space-y-3">
-                    <!-- Projekt-Auswahl -->
-                    <div>
-                    <label class="text-sm text-gray-600">Projekt auswählen</label>
-                    <Multiselect
-                        v-model="neuesProjektId"
-                        :options="props.projekte.map(p => ({ value: p.id, label: p.name }))"
-                        placeholder="Projekt suchen..."
-                        searchable
-                        noOptionsText="Keine Projekte gefunden"
-                        class="input-auto"
-                    />
-                    </div>
-
-                    <!-- Zeiträume -->
-                    <div>
-                        <label>Starttermin</label>
-                        <input type="date" v-model="neuesProjekt.antragsdatum" class="input" />
-                    </div>
-                    <div>
-                        <label>Starttermin</label>
-                        <input type="date" v-model="neuesProjekt.starttermin" class="input" />
-                    </div>
-                    <div>
-                        <label>Endtermin</label>
-                        <input type="date" v-model="neuesProjekt.endtermin" class="input" />
-                    </div>
-                    <div>
-                        <label>Anfangsdatum</label>
-                        <input type="date" v-model="neuesProjekt.anfangsdatum" class="input" />
-                    </div>
-                    <div>
-                        <label>Enddatum</label>
-                        <input type="date" v-model="neuesProjekt.enddatum" class="input" />
-                    </div>
-                </div>
-
-                <!-- Buttons -->
-                <div class="mt-6 flex justify-end space-x-3">
+                    <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
                     <button
-                    @click="showModalProjektzuweisen = false"
-                    class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100"
+                        @click="showModalProjektzuweisen = false"
+                        class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl"
                     >
-                    Abbrechen
+                        ✕
                     </button>
-                    <button
-                    @click="addProjekt"
-                    :disabled="loadingProjekt"
-                    class="px-4 py-2 rounded-md text-sm text-white transition"
-                    :class="loadingProjekt ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
-                    >
-                    <span v-if="!loadingProjekt">Speichern</span>
-                    <span v-else>Speichern...</span>
-                    </button>
+
+                    <h3 class="text-lg font-semibold mb-4 text-zbb">Projekt zuweisen</h3>
+
+                    <div class="space-y-3">
+                        <!-- Projekt-Auswahl -->
+                        <div>
+                        <label class="text-sm text-gray-600">Projekt auswählen</label>
+                        <Multiselect
+                            v-model="neuesProjektId"
+                            :options="props.projekte.map(p => ({ value: p.id, label: p.name }))"
+                            placeholder="Projekt suchen..."
+                            searchable
+                            noOptionsText="Keine Projekte gefunden"
+                            class="input-auto"
+                        />
+                        </div>
+
+                        <!-- Zeiträume -->
+                        <div>
+                            <label>Starttermin</label>
+                            <input type="date" v-model="neuesProjekt.antragsdatum" class="input" />
+                        </div>
+                        <div>
+                            <label>Starttermin</label>
+                            <input type="date" v-model="neuesProjekt.starttermin" class="input" />
+                        </div>
+                        <div>
+                            <label>Endtermin</label>
+                            <input type="date" v-model="neuesProjekt.endtermin" class="input" />
+                        </div>
+                        <div>
+                            <label>Anfangsdatum</label>
+                            <input type="date" v-model="neuesProjekt.anfangsdatum" class="input" />
+                        </div>
+                        <div>
+                            <label>Enddatum</label>
+                            <input type="date" v-model="neuesProjekt.enddatum" class="input" />
+                        </div>
+                    </div>
+
+                    <!-- Buttons -->
+                    <div class="mt-6 flex justify-end space-x-3">
+                        <button
+                        @click="showModalProjektzuweisen = false"
+                        class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100"
+                        >
+                        Abbrechen
+                        </button>
+                        <button
+                        @click="addProjekt"
+                        :disabled="loadingProjekt"
+                        class="px-4 py-2 rounded-md text-sm text-white transition"
+                        :class="loadingProjekt ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
+                        >
+                        <span v-if="!loadingProjekt">Speichern</span>
+                        <span v-else>Speichern...</span>
+                        </button>
+                    </div>
+                    </div>
                 </div>
-                </div>
-            </div>
             </transition>
 
 
+            <!-- MODAL: Bank hinzufügen -->
+            <transition name="fade">
+              <div v-if="showModalBank" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+                <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
+                  <button @click="showModalBank = false" class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl">✕</button>
+                  <h3 class="text-lg font-semibold mb-4 text-zbb">Neue Bank hinzufügen</h3>
 
+                  <div class="space-y-4">
+
+                    <!-- Dynamische Eingabe je nach Typ -->
+                    <div>
+                      <label class="text-sm text-gray-600">Name<span class="text-danger text-md">*</span> </label>
+                      <input v-model="neueBank.name" class="input mt-1"/>
+                    </div>
+                    <div>
+                      <label class="text-sm text-gray-600">IBAN<span class="text-danger text-md">*</span> </label>
+                      <input v-model="neueBank.iban" class="input mt-1"/>
+                    </div>
+                    <div>
+                      <label class="text-sm text-gray-600">BLZ<span class="text-danger text-md">*</span> </label>
+                      <input v-model="neueBank.blz" class="input mt-1"/>
+                    </div>
+                  </div>
+
+                  <div class="mt-6 flex justify-end space-x-3">
+                    <button @click="showModalBank = false" class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100">Abbrechen</button>
+                    <button
+                      @click="addBank"
+                      :disabled="loadingBank"
+                      class="px-4 py-2 rounded-md text-sm text-white transition"
+                      :class="loadingBank ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
+                    >
+                      <span v-if="!loadingBank">Speichern</span>
+                      <span v-else>Speichern...</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </transition>
 
 
 
@@ -545,6 +627,11 @@ const neuesProjekt = ref({
     anfangsdatum: '',
     enddatum: '',
 });
+
+
+const loadingBank = ref(false)
+const neueBank = ref({ name: '', iban: '', blz: '' })
+
 // Tabs
 const tabs = [
   "Stammdaten",
@@ -566,6 +653,8 @@ const activeTab = ref("");
 // Formulare & Variablen
 const mitarbeiterListe = ["Test Admin", "Mitarbeiter Test Amin Masri"];
 const showModalAdresse = ref(false);
+const showModalBank = ref(false);
+
 const showModalProjektzuweisen = ref(false);
 const showModalCreateKontakt = ref(false);
 const showModalLöschen = ref(false);
@@ -651,6 +740,14 @@ const confirmDeleteKontakt = (kontakt) => {
   seite.value = "kontakt";
   showModalLöschen.value = true;
 };
+const confirmDeleteBank = (bank) => {
+  toDeleteItem.value = { name: bank.name, id: bank.id };
+  seite.value = "bank";
+  showModalLöschen.value = true;
+};
+
+
+
 const confirmDeleteAdresse = (adresse) => {
   toDeleteItem.value = { name: `${adresse.strasse} ${adresse.hausnummer}`, id: adresse.id };
   seite.value = "adresse";
@@ -684,59 +781,99 @@ const vorlagen = ["Einladung", "Abmahnung", "Vertragsangebot"];
 
 
 
-
-
-
 const addProjekt = () => {
-  loadingProjekt.value = true
-  // Hier würdest du deinen Laravel-Request einfügen
+  if (!neuesProjektId.value) return; // Sicherheitsabfrage
 
-router.post(
+  loadingProjekt.value = true;
+
+  router.post(
     route("projekthasteilnehmer.store"),
     {
-        teilnehmer_id: props.teilnehmer.id,
-        projekt_id: neuesProjektId.value,
-        ...neuesProjekt.value,
-
+      teilnehmer_id: props.teilnehmer.id,
+      projekt_id: neuesProjektId.value,
+      model_type: 'App\\Models\\ProjektHasTeilnehmer',
+      ...neuesProjekt.value,
     },
     {
+      preserveScroll: true,
+      preserveState: true,
       onFinish: () => (loadingProjekt.value = false),
       onSuccess: () => {
-        // Optional: Lokale Anzeige aktualisieren
-        const projekt = verfuegbareProjekte.value.find(
+        // Projekt aus den Props suchen
+        const projekt = props.projekte.find(
           (p) => p.id === neuesProjektId.value
         );
+
         if (projekt) {
-          teilnehmer.value.projekte.push({
+          // 🔥 Neues Projekt ganz oben einfügen (nicht unten)
+          teilnehmer.value.projekte.unshift({
             ...projekt,
-            pivot_model: { zeitraume: [] },
+            pivot_model: {
+              zeitraume: [
+                {
+                  antragsdatum: neuesProjekt.value.antragsdatum || null,
+                  starttermin: neuesProjekt.value.starttermin || null,
+                  endtermin: neuesProjekt.value.endtermin || null,
+                  anfangsdatum: neuesProjekt.value.anfangsdatum || null,
+                  enddatum: neuesProjekt.value.enddatum || null,
+                },
+              ],
+            },
             esf: false,
             jc_mitarbeiter: "",
           });
         }
+
+        // Modal schließen & Eingaben zurücksetzen
         neuesProjektId.value = "";
+        neuesProjekt.value = {
+          antragsdatum: "",
+          starttermin: "",
+          endtermin: "",
+          anfangsdatum: "",
+          enddatum: "",
+        };
+        showModalProjektzuweisen.value = false; // ✅ korrekt schließen
       },
     }
   );
+};
 
 
 
 
 
 
+const addBank = () => {
+  if (!neueBank.value.name || !neueBank.value.iban || !neueBank.value.blz) return
+  loadingBank.value = true
 
-  console.log('Projekt speichern:', {
-    projekt_id: neuesProjektId.value,
-    teilnehmer_id: props.teilnehmer.id,
-    ...neuesProjekt.value,
-  })
-  setTimeout(() => {
-    loadingProjekt.value = false
-    showModalProjektzuweisen.value = false
-    neuesProjektId.value = ''
-    neuesProjekt.value = { starttermin: '', endtermin: '', anfangsdatum: '', enddatum: '' }
-  }, 1000)
+  router.post(
+    route('bank.store'),
+    {
+      ...neueBank.value,
+      model_type: 'App\\Models\\Teilnehmer',
+      model_id: teilnehmer.value.id,
+    },
+    {
+      preserveState: true, //
+      onFinish: () => (loadingBank.value = false),
+      onSuccess: () => {
+        // Tabelle sofort aktualisieren
+        teilnehmer.value.baenke.unshift({ ...neueBank.value, id: Date.now() });
+
+        // Eingaben zurücksetzen
+        neueBank.value = { name: '', iban: '', blz: '' };
+
+        // Modal schließen
+        showModalBank.value = false;
+
+      },
+    }
+  )
 }
+
+
 </script>
 
 <style scoped>

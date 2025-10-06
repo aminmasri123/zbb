@@ -192,7 +192,7 @@ class TeilnehmerController extends Controller
              }
     }
 
-  
+
     public function show($id)
     {
         $teilnehmer = Teilnehmer::with([
@@ -200,6 +200,7 @@ class TeilnehmerController extends Controller
             'standorte',
             'kontaktes.kontakttyp',
             'projekte',
+            'baenke'
         ])->findOrFail($id);
 
         $projekte = Projekt::all();
@@ -250,5 +251,5 @@ class TeilnehmerController extends Controller
 
 
 
-    
+
 }

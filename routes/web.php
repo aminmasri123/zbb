@@ -4,6 +4,7 @@ use Inertia\Inertia;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Foundation\Application;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\BaenkeController;
 use App\Http\Controllers\SchuleController;
 use App\Http\Controllers\AdresseController;
 use App\Http\Controllers\BereichController;
@@ -138,11 +139,11 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
     Route::delete('/teilnehmer/entfernen/{id}', [TeilnehmerController::class, 'destroy'])->name('teilnehmer.destroy');
     Route::get('/teilnehmer/bearbeiten/{id}', [TeilnehmerController::class, 'show'])->name('teilnehmer.edit');
 
-    //Kontakte 
-    Route::delete('/teilnehmer/kontakt/entfernen/{id}', [KontaktController::class, 'destroy'])->name('kontakt.destroy');   
+    //Kontakte
+    Route::delete('/teilnehmer/kontakt/entfernen/{id}', [KontaktController::class, 'destroy'])->name('kontakt.destroy');
     Route::post('/teilnehmer/kontakt/anlegen', [KontaktController::class, 'store'])->name('kontakt.store');
-   
-   
+
+
     Route::put('/teilnehmer/bearbeiten/{id}', [TeilnehmerController::class, 'update'])->name('teilnehmer.update');
 
     //Adresse
@@ -151,8 +152,12 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
 
 
     //ProjektHasTeilnehmer
-    Route::post('/teilnehmer/Projekt/anlegen', [ProjektHasTeilnehmerController::class, 'store'])->name('projekthasteilnehmer.store');
+    Route::post('/teilnehmer/projekt/anlegen', [ProjektHasTeilnehmerController::class, 'store'])->name('projekthasteilnehmer.store');
 
+
+    //Teilnehmer Bank
+    Route::post('/teilnehmer/bank/anlegen', [BaenkeController::class, 'store'])->name('bank.store');
+    Route::delete('/teilnehmer/bank/entfernen/{id}', [BaenkeController::class, 'destroy'])->name('bank.destroy');
 
 
 

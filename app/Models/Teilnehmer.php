@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Baenke;
 use App\Models\Adresse;
 use App\Models\Projekt;
 use App\Models\Kontakte;
@@ -35,6 +36,11 @@ class Teilnehmer extends Model
         return $this->morphMany(Adresse::class, 'model');
     }
 
+    public function baenke()
+    {
+        return $this->morphMany(Baenke::class, 'model');
+    }
+
     /* public function projekte()
     {
         return $this->belongsToMany(Projekt::class, 'projekt_has_teilnehmers', 'teilnehmer_id', 'projekt_id');
@@ -53,6 +59,6 @@ class Teilnehmer extends Model
     {
         return $this->morphMany(Kontakte::class, 'model');
     }
-    
+
 
 }

@@ -40,6 +40,7 @@ class ProjektHasTeilnehmerController extends Controller
             'endtermin' => ['nullable', 'date'],
             'anfangsdatum' => ['nullable', 'date'],
             'enddatum' => ['nullable', 'date'],
+            'model_type' => ['required'],
         ]);
 
         DB::beginTransaction();
@@ -61,7 +62,7 @@ class ProjektHasTeilnehmerController extends Controller
                     'endtermin' => $validated['endtermin'] ?? null,
                     'anfangsdatum' => $validated['anfangsdatum'] ?? null,
                     'enddatum' => $validated['enddatum'] ?? null,
-                    'model_type' => 'App\Models\ProjektHasTeilnehmer',
+                    'model_type' => $validated['model_type'],
                     'model_id' => $existingPivot->id,
                 ]);
 
