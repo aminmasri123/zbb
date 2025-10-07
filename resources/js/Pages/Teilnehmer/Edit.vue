@@ -339,9 +339,9 @@
           </div>
 
 
-          <!-- ================= Projekte ================= -->
-          <div v-else-if="activeTab === 'Projekte'">
-              <p class="text-gray-500">Hier kannst du Projekte verwalten.</p>
+          <!-- ================= Praktika ================= -->
+          <div v-else-if="activeTab === 'Praktika'">
+              <p class="text-gray-500">Hier kannst du Praktika verwalten.</p>
                 <textarea v-model="form.projekte" rows="6" class="input"></textarea>
           </div>
         </div>
@@ -645,8 +645,8 @@ const tabs = [
   "Bank",
   "Netzwerke",
   "Vermittlung",
+  "Praktika",
 
-  "Projekte",
 ];
 const activeTab = ref("");
 

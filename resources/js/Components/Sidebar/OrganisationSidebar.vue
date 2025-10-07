@@ -15,15 +15,15 @@
                 <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dashboard')">{{$t('übersicht')}}</Link></li>
             </ul>
         </li>
-        <!-- Schule Submenu -->
+        <!-- Partner Submenu -->
         <li v-if="$page.props.roles.includes('Administrator')" class="submenu" >
-            <a href="#" @click.prevent="toggleMenu('schule')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
-                <i class="la la-dashboard la-lg mr-2"></i>
-                <span v-if="!displayHideTextSidebar" class="pr-16">{{$t('abteilung')}}</span>
-                <span :class="{'rotate-180': activeMenu === 'schule'}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
+            <a href="#" @click.prevent="toggleMenu('partner')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
+                <i class="la la-handshake la-lg mr-2"></i>
+                <span v-if="!displayHideTextSidebar" class="pr-16">{{$t('Partner')}}</span>
+                <span :class="{'rotate-180': activeMenu === 'partner'}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
             </a>
-            <ul v-show="activeMenu === 'schule'" class="pl-6 mt-2 space-y-2">
-                <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('user.index')">{{$t('schuleübersicht')}}</Link></li>
+            <ul v-show="activeMenu === 'partner'" class="pl-6 mt-2 space-y-2">
+                <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('partner.index')">{{$t('Partnerübersicht')}}</Link></li>
             </ul>
         </li>
         <!-- Benutzer Submenu -->
@@ -38,7 +38,7 @@
             </ul>
         </li>
 
-        
+
         <!-- Weitere Menüpunkte -->
     </SidebarLayout>
 

@@ -15,6 +15,7 @@ use App\Http\Controllers\StandortController;
 use App\Http\Controllers\AbteilungController;
 use App\Http\Controllers\TeilnehmerController;
 use App\Http\Controllers\BerechtigungController;
+use App\Http\Controllers\KostenstelleController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProjektHasTeilnehmerController;
 
@@ -161,10 +162,11 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
     Route::delete('/teilnehmer/bank/entfernen/{id}', [BaenkeController::class, 'destroy'])->name('bank.destroy');
 
     //Partner
-    Route::get('/partner', [PartnerController::class, 'index'])->name('partner.index');
+    Route::get('/organisation/partner', [PartnerController::class, 'index'])->name('partner.index');
+        Route::post('/organisation/partner/anlegen', [PartnerController::class, 'store'])->name('partner.store');
 
-    //Partner
-    Route::get('/kostenstelle', [PartnerController::class, 'index'])->name('partner.index');
+    //Kostenstelle
+    Route::get('/kostenstelle', [KostenstelleController::class, 'index'])->name('kostenstelle.index');
 
 
     Route::get('/design/responsive', function () {

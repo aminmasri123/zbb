@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Models\Partner;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Ansprechpartner extends Model
 {
@@ -16,4 +18,9 @@ class Ansprechpartner extends Model
         'typ',
         'partner_id',
     ];
+
+    public function partner(): BelongsTo
+    {
+        return $this->belongsTo(Partner::class, 'partner_id', 'id');
+    }
 }

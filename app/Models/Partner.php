@@ -6,6 +6,7 @@ use App\Models\Ansprechpartner;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Partner extends Model
 {
@@ -13,7 +14,6 @@ class Partner extends Model
 
     protected $fillable = [
         'name',
-        'typ',
         'beschreibung'
     ];
 
@@ -21,5 +21,10 @@ class Partner extends Model
     public function ansprechpartner(): HasMany
     {
         return $this->hasMany(Ansprechpartner::class, 'partner_id', 'id');
+    }
+
+     public function partnerschaftstypens(): BelongsToMany
+    {
+        return $this->belongsToMany(Partnerschaftstypen::class, 'partner_has_partnerschaftstypens', 'partner_id', 'partnerschaftstypen_id');
     }
 }
