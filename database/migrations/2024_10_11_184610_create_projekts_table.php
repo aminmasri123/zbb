@@ -16,7 +16,6 @@ return new class extends Migration
         Schema::create('projekts', function (Blueprint $table) {
             $table->id();
             $table->string('name',30);
-            $table->string('kostenstelle',7)->unique();
             $table->foreignId('abteilung_id')->constrained();
             $table->text('beschreibung')->nullable();
             $table->timestamps();

@@ -15,7 +15,6 @@ class Projekt extends Model
     use HasFactory;
     protected $fillable = [
         'name',
-        'kostenstelle',
         'abteilung_id',
         'beschreibung'
     ];
@@ -24,7 +23,10 @@ class Projekt extends Model
         return $this->belongsTo(Abteilung::class, 'abteilung_id', 'id');
     }
 
-
+    public function kostenstellen()
+    {
+        return $this->belongsToMany(Kostenstelle::class, 'projekt_has_kostenstelles', 'projekt_id', 'kostenstelle_id');
+    }
     public function teilnehmer()
     {
         return $this->belongsToMany(Teilnehmer::class, 'projekt_has_teilnehmers', 'projekt_id', 'teilnehmer_id');

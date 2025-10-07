@@ -9,6 +9,7 @@ use App\Http\Controllers\SchuleController;
 use App\Http\Controllers\AdresseController;
 use App\Http\Controllers\BereichController;
 use App\Http\Controllers\KontaktController;
+use App\Http\Controllers\PartnerController;
 use App\Http\Controllers\ProjektController;
 use App\Http\Controllers\StandortController;
 use App\Http\Controllers\AbteilungController;
@@ -159,7 +160,11 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
     Route::post('/teilnehmer/bank/anlegen', [BaenkeController::class, 'store'])->name('bank.store');
     Route::delete('/teilnehmer/bank/entfernen/{id}', [BaenkeController::class, 'destroy'])->name('bank.destroy');
 
+    //Partner
+    Route::get('/partner', [PartnerController::class, 'index'])->name('partner.index');
 
+    //Partner
+    Route::get('/kostenstelle', [PartnerController::class, 'index'])->name('partner.index');
 
 
     Route::get('/design/responsive', function () {

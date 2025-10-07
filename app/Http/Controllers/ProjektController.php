@@ -30,6 +30,7 @@ class ProjektController extends Controller
             //->with('projektzeitraume')
             ->with('zeitraume')
             ->with('bereiche')
+            ->with('kostenstellen')
             ->orderBy('projekts.id', 'desc') // Sortiere nach Projektname
             ->paginate(100) // Paginierung
             ->withQueryString();

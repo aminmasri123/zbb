@@ -23,6 +23,7 @@
     abteilungen: Object
     });
 
+    console.log(props.projekte)
     // Lokale Liste
     let localProjekte = ref([...props.projekte.data]);
     let filteredProjekte = ref([...localProjekte.value]);
@@ -131,7 +132,7 @@
         >
             <td class="border px-6 py-4">{{ projekt.id }}</td>
             <td class="border px-6 py-4">{{ projekt.name }}</td>
-            <td class="border px-6 py-4">{{ projekt.kostenstelle }}</td>
+            <td class="border px-6 py-4"><span class="bg-zbb mx-1 p-1 rounded text-white" v-for="kostenstelle in projekt.kostenstellen">{{ kostenstelle.kostenstelle }}</span></td>
             <td class="border px-6 py-4">{{ projekt.abteilung?.name }}</td>
 
             <td class="border px-6 py-4">
@@ -207,7 +208,7 @@
                 </div>
             </td>
 
-           
+
 
             <td class="border px-6 py-4 text-center">
             <Dropdown>
