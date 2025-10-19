@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Projekt;
+use App\Models\Personen;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
@@ -12,9 +13,9 @@ class Standort extends Model
     protected $fillable = ['name', 'beschreibung'];
 
 
-    public function teilnehmer()
+    public function personen()
     {
-        return $this->belongsToMany(Teilnehmer::class, 'standort_has_teilnehmers', 'standort_id', 'teilnehmer_id');
+        return $this->belongsToMany(Personen::class, 'standort_has_teilnehmers', 'standort_id', 'personen_id');
     }
 
     public function user()

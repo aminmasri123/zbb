@@ -9,21 +9,23 @@ import DropdownLink from '@/Components/DropdownLink.vue';
 import Swal from 'sweetalert2';
 import axios from 'axios';
 import ModalCreateTeilnehmer from '@/Pages/Teilnehmer/ModalCreateTeilnehmer.vue';
-
+import ZurGruppeHinzufügen from '@/Components/ZurGruppeHinzufuegen.vue';
 // Suchfeld und Dropdown für Projekte
 let seite = 'teilnehmer'; // Für die Löschseite
 let search = ref('');
 let searchProject = ref('');
+let checkBoxListeTeilnehmer = ref(false); //Teilnehmer zur Projekten/Gruppen hinzufügen
 let selectedProject = ref(null); // Für das ausgewählte Projekt
 let isModalOpen = ref(false); // Modal-Zustand
 let sortColumn = ref('');  // Spalte zum Sortieren
 let sortDirection = ref('desc'); // Sortierrichtung ('asc' oder 'desc')
 
+const selected = ref([]);
 // Lokale Teilnehmerliste
 let teilnehmerToDelete = ref(null); // Speichert den Namen der Teilnehmer, die gelöscht werden sollen
 let showModalLöschen = ref(false); // Modal für die Löschung
 
-const { teilnehmers, authProjekte, rollen } = defineProps({
+const { teilnehmers, authProjekte, rollen, gruppen  } = defineProps({
     pagination: {
         type: Object,
     },
@@ -35,6 +37,10 @@ const { teilnehmers, authProjekte, rollen } = defineProps({
     rollen: {
         type: Object,
         default: () => ({})
+    },
+    gruppen: {
+        type: Array,
+        default: () => []
     },
 });
 
@@ -166,8 +172,9 @@ const sortByColumn = (column) => {
 
         <!-- Suchfeld -->
         <div class="flex justify-around items-center mb-3">
+            <div @click="checkBoxListeTeilnehmer = !checkBoxListeTeilnehmer" class="bg-white border border-gray-300 rounded-l-md px-5 py-2 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500">⋮</div>
             <div @click="openModal" class="flex items-center">
-                <i class="la la-plus bg-white border border-gray-300 rounded-l-md px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
+                <i class="la la-plus bg-white border border-gray-300  px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
             </div>
 
             <label for="simple-search" class="sr-only">Search</label>
@@ -202,6 +209,12 @@ const sortByColumn = (column) => {
             </Link>
         </div>
 
+         <ZurGruppeHinzufügen
+            :selected="selected"
+            :gruppen="gruppen"
+            @submitted="selected = []"
+            />
+
         <!-- Teilnehmer Tabelle -->
         <div class="overflow-x-auto snap-x">
             <div v-if="!$page.props.auth.user.current_team_id" class="flex w-full text-red-500 p-3 bg-white">
@@ -212,6 +225,7 @@ const sortByColumn = (column) => {
             <table class="w-full text-sm text-left text-gray-500">
                 <thead class=" text-gray-600 uppercase bg-gray-200">
                     <tr>
+                        <th v-if="checkBoxListeTeilnehmer" class="border border-solid border-gray-300 text-center py-3">⋮</th>
                         <th @click="sortByColumn('id')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
                             {{$t('id')}}
                             <i :class="sortColumn === 'id' && sortDirection === 'asc' ? 'las la-lg la-sort-numeric-down-alt' : 'las la-lg la-sort-numeric-up-alt'"></i>
@@ -233,6 +247,9 @@ const sortByColumn = (column) => {
                 </thead>
                 <tbody>
                     <tr v-for="teilnehmer in filteredTeilnehmerByProject" :key="teilnehmer.id" class="bg-white border-b">
+                        <td v-if="checkBoxListeTeilnehmer" class="text-center py-4 border border-solid border-gray-300">
+                            <input v-model="selected":value="teilnehmer.id" type="checkbox"></input>
+                        </td>
                         <td class="px-6 py-4 border border-solid border-gray-300"><Link :href="route('teilnehmer.edit', teilnehmer.id)">{{ teilnehmer.id }}</Link> </td>
                         <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.vorname }}</td>
                         <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.nachname }}</td>

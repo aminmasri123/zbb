@@ -13,9 +13,8 @@ return new class extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('person_id')->constrained('personens')->cascadeOnDelete();
             $table->string('username', 50);
-            $table->string('first_name', 50);
-            $table->string('last_name', 50);
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
@@ -27,7 +26,6 @@ return new class extends Migration
 
             $table->timestamps();
 
-            $table->index(['first_name', 'last_name']);
             $table->index(['email']);
 
         });

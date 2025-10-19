@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Models\Projekt;
+use App\Models\BereichHasTeilnehmer;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Bereich extends Model
 {
@@ -11,11 +13,17 @@ class Bereich extends Model
     protected $fillable = [
         'id',
         'name',
+        'aktiv',
         'beschreibung',
     ];
 
     public function projekte()
     {
-        return $this->belongsToMany(Projekt::class);
+        return $this->belongsToMany(Projekt::class, 'projekt_has_bereiches', 'bereich_id', 'projekt_id');
+    }
+
+    public function bereichHasTeilnehmer()
+    {
+       return $this->hasMany(BereichHasTeilnehmer::class, 'bereich_id', 'id');
     }
 }

@@ -11,17 +11,16 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('zeitraums', function (Blueprint $table) {
+        Schema::create('gruppes', function (Blueprint $table) {
             $table->id();
-            $table->date('antragsdatum')->nullable();
-            $table->date('starttermin')->nullable();
-            $table->date('endtermin')->nullable();
+            $table->foreignId('personen_id')->constrained()->onDelete('cascade');
+            $table->foreignId('bereich_id')->constrained()->onDelete('cascade');
             $table->date('anfangsdatum')->nullable();
             $table->date('enddatum')->nullable();
-             $table->time('startzeit')->nullable();
+            $table->time('startzeit')->nullable();
             $table->time('endzeit')->nullable();
-            $table->string('model_type',50);
-            $table->unsignedBigInteger('model_id');
+            $table->text('bemerkung')->nullable();
+            $table->timestamps();
         });
     }
 
@@ -30,6 +29,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('zeitraums');
+        Schema::dropIfExists('gruppes');
     }
 };

@@ -6,6 +6,7 @@ use App\Models\Role;
 use App\Models\Projekt;
 use App\Models\Standort;
 use App\Models\Abteilung;
+use App\Models\Teilnehmer;
 use Laravel\Sanctum\HasApiTokens;
 use App\Models\Abteilungsassistent;
 use Laravel\Jetstream\HasProfilePhoto;
@@ -35,8 +36,6 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     protected $fillable = [
         'id',
-        'first_name',
-        'last_name',
         'username',
         'email',
         'password',
@@ -81,7 +80,7 @@ class User extends Authenticatable implements MustVerifyEmail
     ];*/
     public function standorte(): BelongsToMany
     {
-        return $this->belongsToMany(Standort::class, 'standort_has_users', 'user_id', 'standort_id');
+        return $this->belongsToMany(Standort::class, 'standort_has_personens', 'personen_id', 'standort_id');
     }
 
     public function adresse()
@@ -92,7 +91,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function projekte(): BelongsToMany
     {
-        return $this->belongsToMany(Projekt::class, 'user_has_projekts', 'user_id', 'projekt_id');
+        return $this->belongsToMany(Projekt::class, 'projekt_has_personens', 'personen_id', 'projekt_id');
     }
 
 
@@ -103,6 +102,11 @@ class User extends Authenticatable implements MustVerifyEmail
     public function abteilungsassistent()
     {
         return $this->hasOne(Abteilungsassistent::class);
+    }
+
+    public function teilnehmerProfil()
+    {
+        return $this->hasOne(Teilnehmer::class);
     }
 
 

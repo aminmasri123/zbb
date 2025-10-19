@@ -15,16 +15,16 @@ class Abteilung extends Model
     use HasFactory;
     protected $fillable = [
         'name',
-        'user_id',
+        'personen_id',
 
     ];
     public function abteilungsassistente(): HasMany
     {
         return $this->hasMany(Abteilungsassistent::class, 'abteilung_id');
     }
-    public function user()
+    public function personen()
     {
-        return $this->belongsTo(User::class, 'user_id');
+        return $this->belongsTo(Personen::class, 'personen_id');
     }
 
    public function projekte()

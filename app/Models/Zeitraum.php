@@ -22,6 +22,8 @@ class Zeitraum extends Model
         'starttermin',
         'endtermin',
         'anfangsdatum',
-        'enddatum'
+        'enddatum',
+        'startzeit',
+        'endzeit'
     ];
 }

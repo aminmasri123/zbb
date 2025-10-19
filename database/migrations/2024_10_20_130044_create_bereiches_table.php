@@ -17,6 +17,7 @@ return new class extends Migration
             $table->id();
             $table->string('name',30);
             $table->string('beschreibung',200)->nullable();
+            $table->boolean('aktiv')->default(true);
             $table->timestamps();
         });
     }

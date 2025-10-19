@@ -5,98 +5,32 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use Inertia\Inertia;
 use App\Models\Projekt;
+use App\Models\Personen;
 use App\Models\Teilnehmer;
 use App\Models\Kontakttypen;
 use Illuminate\Http\Request;
+use App\Models\BereichHasPersonen;
+use App\Models\Gruppe;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 
 class TeilnehmerController extends Controller
 {
-    /* public function index(Request $request)
+    public function index(Request $request)
     {
-        $search     = $request->input('search');
-        $sort       = $request->input('sort', 'id');
-        $direction  = strtolower($request->input('direction', 'desc'));
-        $user       = User::findOrFail(Auth::id());
-        $benutzerDarfAlleTeilnehmerSehen = $user->hasPermissionTo('view_all_teilnehmer');
 
-        $default_projekt = $user->current_team_id;
-
-        // Falls kein Projekt ausgewählt wurde → Default-Projekt nehmen
-        if (!$projektId && $user->default_projekt_id) {
-            $projektId = $user->default_projekt_id;
-        }
-        // Prüfen, ob der User überhaupt zu diesem Projekt gehört
-        $allowedProjektIds = $user->projekte()->pluck('id')->toArray();
-
-        if (!$projektId || !in_array($projektId, $allowedProjektIds)) {
-            // Kein Projekt oder User ist nicht berechtigt → nichts anzeigen
-            return Inertia::render('Teilnehmer/Index', [
-                'teilnehmers' => collect([]),
-                'filters' => [
-                    'search'     => $search,
-                    'sort'       => $sort,
-                    'direction'  => $direction,
-                    'projekt_id' => null,
-                ],
-            ]);
-        }
-        $sortMap = [
-            'id'         => 'id',
-            'vorname'    => 'vorname',
-            'nachname'   => 'nachname',
-            'geschlecht' => 'geschlecht',
-        ];
-
-        $sortColumn = $sortMap[$sort] ?? 'id';
-        $direction  = in_array($direction, ['asc', 'desc'], true) ? $direction : 'desc';
-
-        // Prüfen, ob das default Projekt dem User zugewiesen ist
-        $user_project_ids = $user->projekte()->pluck('projekts.id')->toArray();
-
-        $use_default_filter = in_array($default_projekt, $user_project_ids);
-
-        $query = Teilnehmer::query()
-            ->whereHas('projekte', function ($q) use ($user, $use_default_filter, $default_projekt) {
-                $q->when($use_default_filter, function ($q) use ($default_projekt) {
-                    $q->where('projekts.id', $default_projekt);
-                })
-                ->whereHas('users', function ($q2) use ($user) {
-                    $q2->where('users.id', $user->id);
-                });
-            })
-            ->when($search, function ($q) use ($search) {
-                $q->where(function ($q) use ($search) {
-                    $q->whereRaw("CONCAT(vorname, ' ', nachname) LIKE ?", ["%{$search}%"])
-                    ->orWhereRaw("CONCAT(nachname, ' ', vorname) LIKE ?", ["%{$search}%"])
-                    ->orWhere('vorname', 'like', "%{$search}%")
-                    ->orWhere('nachname', 'like', "%{$search}%");
-                });
-            })
-            ->orderBy($sortColumn, $direction);
-
-        return Inertia::render('Teilnehmer/Index', [
-            'teilnehmers' => $query->paginate(50),
-            'filters' => [
-                'search'     => $search,
-                'sort'       => $sort,
-                'direction'  => $direction,
-                'projekt_id' => $projektId,
-            ],
-        ]);
-    } */
-
-
-   public function index(Request $request)
-    {
+       
         $suchbegriff    = $request->input('search');
         $sortierung     = $request->input('sort', 'id');
         $richtung       = strtolower($request->input('direction', 'desc'));
 
-        $benutzer = User::findOrFail(Auth::id());
 
+        $benutzer = User::findOrFail(Auth::id());
+        $gruppen = Gruppe::where('personen_id', $benutzer->id)
+        ->with('bereich')
+        ->get();
+        
         // Mapping für erlaubte Sortierspalten
         $sortierbareSpalten = [
             'id'         => 'id',
@@ -112,7 +46,8 @@ class TeilnehmerController extends Controller
         $darfAlleTeilnehmerSehen = $benutzer->hasPermissionTo('teilnehmer.view.all');
 
         // Basis-Query
-        $abfrage = Teilnehmer::query();
+        $abfrage = Personen::query()->where('typ', 'teilnehmer')
+        ->with('projekte');
 
         if (!$darfAlleTeilnehmerSehen) {
             // Wenn Benutzer keine volle Berechtigung hat → einschränken
@@ -127,6 +62,7 @@ class TeilnehmerController extends Controller
 
         }
 
+
         // Suche anwenden
         $abfrage->when($suchbegriff, function ($query) use ($suchbegriff) {
             $query->where(function ($unterabfrage) use ($suchbegriff) {
@@ -139,10 +75,10 @@ class TeilnehmerController extends Controller
 
         // Sortierung anwenden
         $abfrage->orderBy($sortierspalte, $richtung);
-
         // Ergebnis zurückgeben
         return Inertia::render('Teilnehmer/Index', [
             'teilnehmers' => $abfrage->paginate(50),
+            'gruppen' => $gruppen,
             'filters' => [
                 'search'    => $suchbegriff,
                 'sort'      => $sortierung,

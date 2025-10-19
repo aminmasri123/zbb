@@ -96,6 +96,26 @@
                     <li v-if="$page.props.permissions.includes('bereich.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('bereich.index')">{{$t('Bereichübersicht')}}</Link></li>
                 </ul>
             </li>
+
+            <!-- Gruppe Submenu -->
+            <li v-if="$page.props.roles.includes('Administrator')" class="submenu" >
+                <a href="#" @click.prevent="toggleMenu('gruppe')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
+                    <i class="las la-cookie la-lg mr-2"></i>
+                    <span v-if="!displayHideTextSidebar" class="pr-16">{{$t('Gruppe')}}</span>
+                    <span :class="{'rotate-180': activeMenu === 'gruppe'}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
+                </a>
+                <ul v-show="activeMenu === 'gruppe'" class="pl-6 mt-2 space-y-2">
+                    <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('teilnehmer.index')">{{$t('Gruppenübersicht')}}</Link></li>
+                </ul>
+                <ul v-show="activeMenu === 'gruppe'" class="pl-6 mt-2 space-y-2">
+                    <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('teilnehmer.create')">{{$t('Gruppe anlegen')}}</Link></li>
+                </ul>
+            </li>
+
+
+
+
+
             <!-- Teilnehmer Submenu -->
             <li v-if="$page.props.roles.includes('Administrator')" class="submenu" >
                 <a href="#" @click.prevent="toggleMenu('teilnehmer')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">

@@ -2,27 +2,65 @@
 
 namespace Database\Seeders;
 
-use App\Models\Projekt;
-use App\Models\ProjektHasTeilnehmer;
-use App\Models\Teilnehmer;
-use App\Models\User;
 use Carbon\Carbon;
+use App\Models\User;
+use App\Models\Projekt;
+use App\Models\Personen;
+use App\Models\Standort;
 use Faker\Factory as Faker;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use App\Models\ProjektHasPersonen;
 use Illuminate\Support\Facades\DB;
+use App\Models\StandortHasPersonen;
 use Illuminate\Support\Facades\Hash;
 
 class UserSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     *
-     * @return void
-     */
     public function run()
     {
-         DB::table('kontakttypens')->insert([
+
+          $personen =
+        [
+            ['vorname' => 'Amin', 'nachname' => 'Masri', 'geburtsdatum' => '2000-01-01', 'email' => 'amin.masri@outlook.com', 'username' => 'aminmasri', 'password' => 'password'],
+            ['vorname' => 'Anika', 'nachname' => 'Feller', 'geburtsdatum' => '2000-01-01', 'email' => 'a.feller@zbb-saar.de', 'username' => 'Anika Feller', 'password' => 'zbb.bop.hw'],
+            ['vorname' => 'Salvatore', 'nachname' => 'Gucciardo', 'geburtsdatum' => '2000-01-01', 'email' => 's.gucciardo@zbb-saar.de', 'username' => 'Salvatore Gucciardo', 'password' => 'zbb.bop.ala'],
+            ['vorname' => 'Birgitta', 'nachname' => 'Lautenschlager', 'geburtsdatum' => '2000-01-01', 'email' => 'b.lautenschlager@zbb-saar.de', 'username' => 'Brigitta Lautenschlager', 'password' => 'zbb.al'],
+            ['vorname' => 'Chantale', 'nachname' => 'Lismann', 'geburtsdatum' => '2000-01-01', 'email' => 'c.lismann@zbb-saar.de', 'username' => 'Chantale Lismann', 'password' => 'zbb.al'],
+            ['vorname' => 'Stefanie', 'nachname' => 'Wagner', 'geburtsdatum' => '2000-01-01', 'email' => 's.wagner@zbb-saar.de', 'username' => 'Stefanie Wagner', 'password' => 'zbb.al'],
+            ['vorname' => 'Stefan', 'nachname' => 'Haßdenteufel', 'geburtsdatum' => '2000-01-01', 'email' => 's.haßdenteufel@zbb-saar.de', 'username' => 'Stefan Haßdenteufel', 'password' => 'zbb.al'],
+            ['vorname' => 'Martin', 'nachname' => 'Löw', 'geburtsdatum' => '2000-01-01', 'email' => 'm.loew@zbb-saar.de', 'username' => 'Martin Löw', 'password' => 'zbb.al'],
+        ];
+
+        $projektIds = Projekt::pluck('id')->toArray();
+
+        foreach ($personen as $person)
+        {
+            // Person einfügen und ID speichern
+            $personId = DB::table('personens')->insertGetId([
+                'vorname' => $person['vorname'],
+                'nachname' => $person['nachname'],
+                'geburtsdatum' => $person['geburtsdatum'],
+            ]);
+
+                // Passendes Benutzerkonto automatisch anlegen
+                DB::table('users')->insert([
+                    'person_id' => $personId,
+                    'username' => $person['username'],
+                    'email' => $person['email'],
+                    'password' => Hash::make($person['password']),
+                    'lang' => 'de',
+                    'default_projekt_id' => $personId == 1 || $personId == 2 ? 5 : fake()->randomElement($projektIds),
+                ]);
+
+                DB::table('standort_has_personens')->insert([
+                    [ // id = 1
+                        'standort_id' => fake()->randomElement(Standort::pluck('id')->toArray()),
+                        'personen_id' => $personId,
+                    ],
+                ]);
+        }
+
+        DB::table('kontakttypens')->insert([
             [ // id = 1
                 'name' => 'Mobile',
             ],
@@ -35,6 +73,26 @@ class UserSeeder extends Seeder
             [ // id = 4
                 'name' => 'Linkedin',
             ],
+        ]);
+
+        DB::table('abteilungs')->insert([
+            [ // id = 1
+                'name' => 'Abt. Übergang Schule-Beruf',
+                'personen_id' => '4',
+            ],
+            [ // id = 2
+                'name' => 'Abt. Aus- und Weiterbildung',
+                'personen_id' => '6',
+            ],
+            [ // id = 3
+                'name' => 'Abt. Arbeit- und Lernen',
+                'personen_id' => '7',
+            ],
+            [ // id = 4
+                'name' => 'Abt. Beratung, Integration & Vermittlung',
+                'personen_id' => '8',
+            ],
+
         ]);
 
         DB::table('standorts')->insert([
@@ -50,173 +108,6 @@ class UserSeeder extends Seeder
             [ // id = 4
                 'name' => 'Brebach',
             ],
-        ]);
-
-        DB::table('users')->insert([
-            [
-                // id = 1
-                'username' => 'aminmasri',
-                'first_name' => 'Amin',
-                'last_name' => 'Masri',
-                'email' => 'amin.masri@outlook.com',
-                'password' => Hash::make('password'),
-                'lang' => 'de',
-                'default_projekt_id'  => '5',
-            ],
-            [   // id = 2
-                'username' => 'Anika Feller',
-                'first_name' => 'Anika',
-                'last_name' => 'Feller',
-                'email' => 'a.feller@zbb-saar.de',
-                'password' => Hash::make('zbb.bop.hw'),
-                'lang' => 'de',
-                'default_projekt_id'  => '5',
-
-            ],
-            [ // id = 3
-                'username' => 'Salvatore Gucciardo',
-                'first_name' => 'Salvatore',
-                'last_name' => 'Gucciardo',
-                'email' => 's.gucciardo@zbb-saar.de',
-                'password' => Hash::make('zbb.bop.ala'),
-                'lang' => 'de',
-                'default_projekt_id'  => fake()->randomElement(Projekt::pluck('id')->toArray()),
-
-            ],
-            [ // id = 4
-                'username' => 'Brigitta Lautenschlager',
-                'first_name' => 'Birgitta',
-                'last_name' => 'Lautenschlager',
-                'email' => 'b.lautenschlager@zbb-saar.de',
-                'password' => Hash::make('zbb.al'),
-                'lang' => 'de',
-                'default_projekt_id'  => fake()->randomElement(Projekt::pluck('id')->toArray()),
-            ],
-            [ // id = 5
-                'username' => 'Chantale Lismann',
-                'first_name' => 'Chantale',
-                'last_name' => 'Lismann',
-                'email' => 'c.lismann@zbb-saar.de',
-                'password' => Hash::make('zbb.al'),
-                'lang' => 'de',
-                'default_projekt_id'  => fake()->randomElement(Projekt::pluck('id')->toArray()),
-            ],
-            [ // id = 6
-                'username' => 'Stefanie Wagner',
-                'first_name' => 'Stefanie',
-                'last_name' => 'Wagner',
-                'email' => 's.wagner@zbb-saar.de',
-                'password' => Hash::make('zbb.al'),
-                'lang' => 'de',
-                'default_projekt_id'  => fake()->randomElement(Projekt::pluck('id')->toArray()),
-            ],
-            [ // id = 7
-                'username' => 'Stefan Haßdenteufel',
-                'first_name' => 'Stefan',
-                'last_name' => 'Haßdenteufel',
-                'email' => 's.haßdenteufel@zbb-saar.de',
-                'password' => Hash::make('zbb.al'),
-                'lang' => 'de',
-                'default_projekt_id'  => fake()->randomElement(Projekt::pluck('id')->toArray()),
-            ],
-            [ // id = 8
-                'username' => 'Martin Löw',
-                'first_name' => 'Martin',
-                'last_name' => 'Löw',
-                'email' => 'm.loew@zbb-saar.de',
-                'password' => Hash::make('zbb.al'),
-                'lang' => 'de',
-                'default_projekt_id'  => fake()->randomElement(Projekt::pluck('id')->toArray()),
-            ],
-
-        ]);
-
-        DB::table('standort_has_users')->insert([
-            [ // id = 1
-                'standort_id' => '1',
-                'user_id' => '1',
-
-            ],
-            [ // id = 2
-                'standort_id' => '2',
-                'user_id' => '5',
-            ],
-            [ // id = 3
-                'standort_id' => '1',
-                'user_id' => '2',
-            ],
-            [ // id = 4
-                'standort_id' => '3',
-                'user_id' => '4',
-            ],
-        ]);
-
-        /*$faker = Faker::create();
-        // Anzahl der Benutzer, die erstellt werden sollen
-        $numberOfUsers = 50;
-        for ($i = 0; $i < $numberOfUsers; $i++)
-        {
-            User::create([
-                'username' => $faker->username,
-                'first_name' => $faker->firstName,
-                'last_name' => $faker->lastName,
-                'email' => $faker->unique()->safeEmail,
-                'password' => bcrypt('password'), // Standardpasswort
-            ]);
-        }*/
-
-        DB::table('abteilungs')->insert([
-            [ // id = 1
-                'name' => 'Abt. Übergang Schule-Beruf',
-                'user_id' => '4',
-            ],
-            [ // id = 2
-                'name' => 'Abt. Aus- und Weiterbildung',
-                'user_id' => '6',
-            ],
-            [ // id = 3
-                'name' => 'Abt. Arbeit- und Lernen',
-                'user_id' => '7',
-            ],
-            [ // id = 4
-                'name' => 'Abt. Beratung, Integration & Vermittlung',
-                'user_id' => '8',
-            ],
-
-        ]);
-
-        DB::table('bereiches')->insert([
-            [ // id = 1
-                'name' => 'IT-und Mediengestaltung',
-            ],
-            [ // id = 2
-                'name' => 'Friseur/Kosmetik/Körperpflege',
-            ],
-            [ // id = 3
-                'name' => 'Holztechnik',
-            ],
-            [ // id = 4
-                'name' => 'Metaltechnik',
-            ],
-            [ // id = 5
-                'name' => 'Hauswirtschaft',
-            ],
-            [ // id = 6
-                'name' => 'Verkauf und Wirtschaft',
-            ],
-            [ // id = 7
-                'name' => 'Lager und Handel',
-            ],
-            [ // id = 8
-                'name' => 'Maler und Lackierer',
-            ],
-            [ // id = 9
-                'name' => 'Garten und Landschaftsbau',
-            ],
-            [ // id = 10
-                'name' => 'Buromanagement',
-            ],
-
         ]);
 
         DB::table('projekts')->insert([
@@ -268,13 +159,47 @@ class UserSeeder extends Seeder
             ],
         ]);
 
-        DB::table('user_has_projekts')->insert([
+        DB::table('bereiches')->insert([
             [ // id = 1
-                'user_id' => '1',
+                'name' => 'IT-und Mediengestaltung',
+            ],
+            [ // id = 2
+                'name' => 'Friseur/Kosmetik/Körperpflege',
+            ],
+            [ // id = 3
+                'name' => 'Holztechnik',
+            ],
+            [ // id = 4
+                'name' => 'Metaltechnik',
+            ],
+            [ // id = 5
+                'name' => 'Hauswirtschaft',
+            ],
+            [ // id = 6
+                'name' => 'Verkauf und Wirtschaft',
+            ],
+            [ // id = 7
+                'name' => 'Lager und Handel',
+            ],
+            [ // id = 8
+                'name' => 'Maler und Lackierer',
+            ],
+            [ // id = 9
+                'name' => 'Garten und Landschaftsbau',
+            ],
+            [ // id = 10
+                'name' => 'Buromanagement',
+            ],
+
+        ]);
+
+        DB::table('projekt_has_personens')->insert([
+            [ // id = 1
+                'personen_id' => '1',
                 'projekt_id' => '5',
             ],
             [ // id = 2
-                'user_id' => '1',
+                'personen_id' => '1',
                 'projekt_id' => '1',
             ],
         ]);
@@ -773,24 +698,21 @@ class UserSeeder extends Seeder
 
         ]);
 
-        DB::table('user_has_projekts')->insert([
+        DB::table('projekt_has_personens')->insert([
             [
-                'user_id' => '1',
+                'personen_id' => '1',
                 'projekt_id' => '1',
             ],
             [
-                'user_id' => '1',
+                'personen_id' => '1',
                 'projekt_id' => '2',
             ],
             [
-                'user_id' => '1',
+                'personen_id' => '1',
                 'projekt_id' => '3',
             ],
 
         ]);
-
-
-
 
         //Teilnehmer erstellen und mit Projekten verknüpfen
         $faker = Faker::create();
@@ -798,40 +720,25 @@ class UserSeeder extends Seeder
         $numberOfUsers = 50;
         for ($i = 0; $i < $numberOfUsers; $i++)
         {
-            $teilnehmer = Teilnehmer::create([
-                'vorname' => $faker->username,
-                'nachname' => $faker->firstName,
+            $teilnehmer = Personen::create([
+                'vorname' => $faker->firstName,
+                'nachname' => $faker->lastName(),
                 'geschlecht' => $faker->randomElement(['m', 'd', 'w']),
+                'geburtsdatum' => '2000-10-10',
+                'typ' => 'teilnehmer',
             ]);
 
              // Projekt-IDs und Teilnehmer-IDs müssen aus DB kommen
-            ProjektHasTeilnehmer::create([
+            ProjektHasPersonen::create([
                 'projekt_id'    => $faker->randomElement(Projekt::pluck('id')->toArray()),
-                'teilnehmer_id' => $teilnehmer->id, // gerade erstellter Teilnehmer
+                'personen_id' => $teilnehmer->id, // gerade erstellter Teilnehmer
+            ]);
+            StandortHasPersonen::create([
+                'standort_id'    => $faker->randomElement(Standort::pluck('id')->toArray()),
+                'personen_id' => $teilnehmer->id, // gerade erstellter Teilnehmer
+
             ]);
         };
 
-        DB::table('standort_has_teilnehmers')->insert([
-        [ // id = 1
-            'standort_id' => '1',
-            'teilnehmer_id' => '1',
-
-        ],
-        [ // id = 2
-            'standort_id' => '1',
-            'teilnehmer_id' => '2',
-        ],
-        [ // id = 3
-            'standort_id' => '1',
-            'teilnehmer_id' => '3',
-        ],
-        [ // id = 4
-            'standort_id' => '1',
-            'teilnehmer_id' => '4',
-        ],
-         ]);
     }
-
-
-
 }

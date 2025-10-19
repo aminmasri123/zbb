@@ -107,133 +107,95 @@
     </div>
 
     <!-- Tabelle -->
-    <!-- Tabelle -->
     <div class="w-full overflow-x-auto">
-    <table class="min-w-[1200px] w-full text-sm shadow-sm border-collapse">
-        <thead class="text-md text-gray-600 uppercase bg-gray-200 sticky top-0">
-        <tr>
-            <th class="border px-3 py-3 text-left">ID</th>
-            <th class="border px-3 py-3 text-left">Projekt</th>
-            <th class="border px-3 py-3 text-left">Kostenstelle</th>
-            <th class="border px-3 py-3 text-left">Abteilung</th>
-            <th class="border px-3 py-3 text-left">Antragsdatum</th>
-            <th class="border px-3 py-3 text-left">Starttermin</th>
-            <th class="border px-3 py-3 text-left">Anfangsdatum</th>
-            <th class="border px-3 py-3 text-left">Endtermin</th>
-            <th class="border px-3 py-3 text-left">Enddatum</th>
-            <th class="border px-3 py-3 text-center">*</th>
-        </tr>
-        </thead>
-        <tbody>
-        <tr
-            v-for="projekt in filteredProjekte"
-            :key="projekt.id"
-            class="bg-white border hover:bg-gray-50"
-        >
-            <td class="border px-6 py-4">{{ projekt.id }}</td>
-            <td class="border px-6 py-4">{{ projekt.name }}</td>
-            <td class="border px-6 py-4"><span class="bg-zbb mx-1 p-1 rounded text-white" v-for="kostenstelle in projekt.kostenstellen">{{ kostenstelle.kostenstelle }}</span></td>
-            <td class="border px-6 py-4">{{ projekt.abteilung?.name }}</td>
+<table class="min-w-[1200px] w-full text-sm shadow-sm border-collapse">
+  <thead class="text-md text-gray-600 uppercase bg-gray-200 sticky top-0">
+    <tr>
+      <th class="border px-3 py-3 text-left">ID</th>
+      <th class="border px-3 py-3 text-left">Projekt</th>
+      <th class="border px-3 py-3 text-left">Kostenstelle</th>
+      <th class="border px-3 py-3 text-left">Abteilung</th>
+      <th class="border px-3 py-3 text-left">Antragsdatum</th>
+      <th class="border px-3 py-3 text-left">Starttermin</th>
+      <th class="border px-3 py-3 text-left">Anfangsdatum</th>
+      <th class="border px-3 py-3 text-left">Endtermin</th>
+      <th class="border px-3 py-3 text-left">Enddatum</th>
+      <th class="border px-3 py-3 text-center">*</th>
+    </tr>
+  </thead>
 
-            <td class="border px-6 py-4">
-                <div v-if="projekt && projekt.zeitraume">
-                    <template v-for="zeit in projekt.zeitraume" :key="zeit.id">
-                    <div v-if="zeit && zeit.typ === 'antrag'">
-                        {{ formatDate(zeit.von) }}
-                    </div>
-                    </template>
-                </div>
+  <tbody>
+    <template v-for="projekt in filteredProjekte" :key="projekt.id">
+      <tr
+        v-for="(zeit, index) in (projekt.zeitraume && projekt.zeitraume.length ? projekt.zeitraume : [null])"
+        :key="zeit ? zeit.id : 'empty-' + projekt.id"
+        class="bg-white border hover:bg-gray-50"
+      >
+        <!-- Projekt-Daten nur in der ersten Zeile des Projekts -->
+        <td class="border px-6 py-4" v-if="index === 0" :rowspan="projekt.zeitraume?.length || 1">
+          {{ projekt.id }}
+        </td>
+        <td class="border px-6 py-4" v-if="index === 0" :rowspan="projekt.zeitraume?.length || 1">
+          {{ projekt.name }}
+        </td>
+        <td class="border px-6 py-4" v-if="index === 0" :rowspan="projekt.zeitraume?.length || 1">
+          <span
+            v-for="kostenstelle in projekt.kostenstellen"
+            :key="kostenstelle.id"
+            class="bg-zbb mx-1 p-1 rounded text-white"
+          >
+            {{ kostenstelle.kostenstelle }}
+          </span>
+        </td>
+        <td class="border px-6 py-4" v-if="index === 0" :rowspan="projekt.zeitraume?.length || 1">
+          {{ projekt.abteilung?.name }}
+        </td>
 
-                <div v-else>
-                    <p>Lade Daten...</p>
-                </div>
-            </td>
+        <!-- Zeitraum-Daten -->
+        <td class="border px-6 py-4">
+          {{ formatDate(zeit?.antragsdatum) || '-' }}
+        </td>
+        <td class="border px-6 py-4">
+          {{ formatDate(zeit?.starttermin) || '-' }}
+        </td>
+        <td class="border px-6 py-4">
+          {{ formatDate(zeit?.anfangsdatum) || '-' }}
+        </td>
+        <td class="border px-6 py-4">
+          {{ formatDate(zeit?.endtermin) || '-' }}
+        </td>
+        <td class="border px-6 py-4">
+          {{ formatDate(zeit?.enddatum) || '-' }}
+        </td>
 
-
-
-            <td class="border px-6 py-4">
-                <div v-if="projekt && projekt.zeitraume">
-                    <template v-for="zeit in projekt.zeitraume" :key="zeit.id">
-                    <div v-if="zeit && zeit.typ === 'geplant'">
-                        {{ formatDate(zeit.von) }}
-                    </div>
-                    </template>
-                </div>
-
-                <div v-else>
-                    <p>Lade Daten...</p>
-                </div>
-            </td>
-
-
-            <td class="border px-6 py-4">
-                <div v-if="projekt && projekt.zeitraume">
-                    <template v-for="zeit in projekt.zeitraume" :key="zeit.id">
-                    <div v-if="zeit && zeit.typ === 'geplant'">
-                        {{ formatDate(zeit.bis) }}
-                    </div>
-                    </template>
-                </div>
-
-                <div v-else>
-                    <p>Lade Daten...</p>
-                </div>
-            </td>
-
-            <td class="border px-6 py-4">
-                <div v-if="projekt && projekt.zeitraume">
-                    <template v-for="zeit in projekt.zeitraume" :key="zeit.id">
-                    <div v-if="zeit && zeit.typ === 'ist'">
-                        {{ formatDate(zeit.von) }}
-                    </div>
-                    </template>
-                </div>
-
-                <div v-else>
-                    <p>Lade Daten...</p>
-                </div>
-            </td>
-
-            <td class="border px-6 py-4">
-                <div v-if="projekt && projekt.zeitraume">
-                    <template v-for="zeit in projekt.zeitraume" :key="zeit.id">
-                    <div v-if="zeit && zeit.typ === 'ist'">
-                        {{ formatDate(zeit.bis) }}
-                    </div>
-                    </template>
-                </div>
-
-                <div v-else>
-                    <p>Lade Daten...</p>
-                </div>
-            </td>
+        <!-- Dropdown-Menü nur in der ersten Zeile -->
+        <td class="border px-6 py-4 text-center" v-if="index === 0" :rowspan="projekt.zeitraume?.length || 1">
+          <Dropdown>
+            <template #trigger>
+              <i class="la la-ellipsis-v cursor-pointer"></i>
+            </template>
+            <template #content>
+              <span
+                class="flex justify-between cursor-pointer px-6 items-center hover:bg-gray-100"
+                @click="openModalEdit(projekt)"
+              >
+                Bearbeiten <i class="las la-edit"></i>
+              </span>
+              <span
+                class="flex justify-between cursor-pointer px-6 items-center hover:bg-gray-100"
+                @click="confirmDelete(projekt)"
+              >
+                Löschen <i class="las la-trash-alt"></i>
+              </span>
+            </template>
+          </Dropdown>
+        </td>
+      </tr>
+    </template>
+  </tbody>
+</table>
 
 
-
-            <td class="border px-6 py-4 text-center">
-            <Dropdown>
-                <template #trigger>
-                <i class="la la-ellipsis-v cursor-pointer"></i>
-                </template>
-                <template #content>
-                <span
-                    class="flex justify-between cursor-pointer px-6 items-center hover:bg-gray-100"
-                    @click="openModalEdit(projekt)"
-                >
-                    Bearbeiten <i class="las la-edit"></i>
-                </span>
-                <span
-                    class="flex justify-between cursor-pointer px-6 items-center hover:bg-gray-100"
-                    @click="confirmDelete(projekt)"
-                >
-                    Löschen <i class="las la-trash-alt"></i>
-                </span>
-                </template>
-            </Dropdown>
-            </td>
-        </tr>
-        </tbody>
-    </table>
     </div>
 
 

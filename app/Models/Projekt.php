@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\User;
+use App\Models\Bereich;
 use App\Models\Abteilung;
 use App\Models\Teilnehmer;
-use App\Models\User;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Projekt extends Model
 {
@@ -16,7 +17,9 @@ class Projekt extends Model
     protected $fillable = [
         'name',
         'abteilung_id',
-        'beschreibung'
+        'beschreibung',
+        'kostenstelle',
+        'aktiv'
     ];
     public function abteilung()
     {
@@ -42,14 +45,9 @@ class Projekt extends Model
         return $this->belongsToMany(Bereich::class, 'projekt_has_bereiches', 'projekt_id', 'bereich_id');
     }
 
-    public function projektzeitraume(): HasMany
-    {
-        return $this->hasMany(Projektzeitraum::class, 'projekt_id');
-    }
-
 
     public function zeitraume()
     {
-        return $this->morphMany(Zeitraum::class, 'model');
+        return $this->morphMany(Zeitraum::class, 'model')->orderBy('antragsdatum', 'desc');
     }
 }

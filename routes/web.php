@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Foundation\Application;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\BaenkeController;
+use App\Http\Controllers\GruppeController;
 use App\Http\Controllers\SchuleController;
 use App\Http\Controllers\AdresseController;
 use App\Http\Controllers\BereichController;
@@ -17,8 +18,8 @@ use App\Http\Controllers\TeilnehmerController;
 use App\Http\Controllers\BerechtigungController;
 use App\Http\Controllers\KostenstelleController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\GruppeHasTeilnehmerController;
 use App\Http\Controllers\ProjektHasTeilnehmerController;
-
 
 /*
 |--------------------------------------------------------------------------
@@ -131,6 +132,14 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
     Route::put('/projekt/{id}', [ProjektController::class, 'update'])->name('projekt.update');
     Route::delete('/projekt/{id}', [ProjektController::class, 'destroy'])->name('projekt.destroy');
 
+    //Gruppe
+    Route::get('/gruppe', [GruppeController::class, 'index'])->name('gruppe.index');
+
+
+    //GruppeHasTeilnehmer
+    //Route::get('/gruppe', [GruppeController::class, 'index'])->name('gruppe.index');
+    Route::post('/gruppehasteilnehmer/anlegen', [GruppeHasTeilnehmerController::class, 'store'])->name('gruppeHasTeilnehmer.store');
+
 
     //Teilnehmer
     Route::get('/teilnehmer', [TeilnehmerController::class, 'index'])->name('teilnehmer.index');
@@ -141,6 +150,7 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
     Route::delete('/teilnehmer/entfernen/{id}', [TeilnehmerController::class, 'destroy'])->name('teilnehmer.destroy');
     Route::get('/teilnehmer/bearbeiten/{id}', [TeilnehmerController::class, 'show'])->name('teilnehmer.edit');
 
+    
     //Kontakte
     Route::delete('/teilnehmer/kontakt/entfernen/{id}', [KontaktController::class, 'destroy'])->name('kontakt.destroy');
     Route::post('/teilnehmer/kontakt/anlegen', [KontaktController::class, 'store'])->name('kontakt.store');

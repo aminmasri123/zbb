@@ -6,29 +6,29 @@ use App\Models\User;
 use App\Models\Baenke;
 use App\Models\Adresse;
 use App\Models\Projekt;
-use App\Models\Kontakte;
 use App\Models\Standort;
-use App\Models\ProjektHasPersonen;
-use App\Models\ProjektHasTeilnehmer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
-class Teilnehmer extends Model
+class Personen extends Model
 {
     use HasFactory;
-
 
     protected $fillable = [
         'id',
         'vorname',
         'nachname',
         'geschlecht',
-        'user_id',
         'aktiv',
+        'typ'
     ];
- 
-     public function standorte(): BelongsToMany
+    protected $date = [
+        'geburtsdatum',
+    ];
+
+
+    public function standorte(): BelongsToMany
     {
         return $this->belongsToMany(Standort::class, 'standort_has_personens', 'personen_id', 'standort_id');
     }
@@ -43,18 +43,18 @@ class Teilnehmer extends Model
         return $this->morphMany(Baenke::class, 'model');
     }
 
-     /* public function projekte()
+    public function projekte()
     {
         return $this->belongsToMany(Projekt::class, 'projekt_has_personens', 'personen_id', 'projekt_id');
-    } */
+    }
 
-   public function projekte()
+    /* public function projekte()
     {
         return $this->belongsToMany(Projekt::class, 'projekt_has_personens', 'personen_id', 'projekt_id')
             ->using(ProjektHasPersonen::class) // <== Pivot Model verwenden
             ->withPivot('id')                    // <- damit du das Pivot Model findest
             ->as('pivotModel');                  // <- schöner Name für den Pivot-Zugriff
-    }
+    } */
 
     public function kontaktes()
     {
@@ -65,6 +65,5 @@ class Teilnehmer extends Model
     {
         return $this->belongsTo(User::class);
     }
-
 
 }

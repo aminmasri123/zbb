@@ -16,7 +16,7 @@ return new class extends Migration
         Schema::create('abteilungs', function (Blueprint $table) {
             $table->id();
             $table->string('name', 50);
-            $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();         // setzt auf NULL, wenn User gelöscht wird
+            $table->foreignId('personen_id')->nullable()->constrained()->nullOnDelete();         // setzt auf NULL, wenn User gelöscht wird
             $table->timestamps();
         });
     }

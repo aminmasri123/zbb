@@ -34,7 +34,8 @@ class ProjektController extends Controller
             ->orderBy('projekts.id', 'desc') // Sortiere nach Projektname
             ->paginate(100) // Paginierung
             ->withQueryString();
-        // Standardmäßige Rückgabe für die Inertia-Ansicht
+            
+            // Standardmäßige Rückgabe für die Inertia-Ansicht
 
         return Inertia::render('Projekt/Index', [
             'projekte' => $projekte,

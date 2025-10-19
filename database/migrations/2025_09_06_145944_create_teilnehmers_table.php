@@ -18,6 +18,8 @@ return new class extends Migration
             $table->string('vorname',30);
             $table->string('nachname',30);
             $table->enum('geschlecht', ['w', 'm', 'd']);
+            $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete()->default(null); // optionaler Login
+            $table->boolean('aktiv')->default(false);
             $table->timestamps();
         });
     }
