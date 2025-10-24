@@ -81,6 +81,12 @@
 
           <!-- ================= ADRESSEN ================= -->
           <div v-else-if="activeTab === 'Adresse'">
+
+              <button @click="showModalAdresse = true"
+                class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full">
+                ➕ Neue Adresse hinzufügen
+              </button>
+
             <div v-if="teilnehmer.adresses && teilnehmer.adresses.length">
               <table class="min-w-full border border-gray-200 text-sm">
                 <thead class="bg-gray-50 text-gray-700">
@@ -108,7 +114,7 @@
                     <td class="px-3 py-2">{{ adresse.stadt }}</td>
                     <td class="px-3 py-2">
                       <button
-                        @click="confirmDeleteAdresse(adresse)"
+                        @click="confirmDelete(adresse, 'adresse')"
                         class="text-red-500 hover:text-red-700 text-sm"
                       >
                         <i class="la la-trash"></i> Löschen
@@ -119,18 +125,16 @@
               </table>
             </div>
             <p v-else class="text-gray-500 italic">Keine Adressdaten vorhanden.</p>
-            <div class="mt-4">
-              <button
-                @click="showModalAdresse = true"
-                class="bg-zbb text-white px-3 py-2 rounded-md text-sm hover:bg-zbb/80 transition"
-              >
-                ➕ Neue Adresse hinzufügen
-              </button>
-            </div>
+
           </div>
 
           <!-- ================= KONTAKTDATEN ================= -->
           <div v-else-if="activeTab === 'Kontaktdaten'">
+            <button @click="showModalCreateKontakt = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
+                <span v-if="!loadingKontakt">➕ Kontakt hinzufügen</span>
+                <span v-else>...</span>
+            </button>
+
             <div v-if="teilnehmer.kontaktes && teilnehmer.kontaktes.length" class="space-y-3 mb-6">
               <div
                 v-for="kontakt in teilnehmer.kontaktes"
@@ -144,7 +148,7 @@
                   <p class="text-gray-600 text-sm">{{ kontakt.wert }}</p>
                 </div>
                 <button
-                  @click="confirmDeleteKontakt(kontakt)"
+                  @click="confirmDelete(kontakt, 'kontakt')"
                   class="text-red-500 hover:text-red-700 text-sm"
                 >
                   Entfernen
@@ -154,84 +158,113 @@
             <p v-else class="text-gray-400 italic mb-6">
               Noch keine Kontaktdaten vorhanden.
             </p>
-            <button
-              @click="showModalCreateKontakt = true"
-              class="bg-zbb text-white px-3 py-2 rounded-md text-sm hover:bg-zbb/80 transition"
-            >
-              ➕ Kontakt hinzufügen
-            </button>
+
           </div>
 
           <!-- =================== MASSNAHMENVERLAUF =================== -->
           <div v-else-if="activeTab === 'Projektverlauf'">
 
              <!-- Projekt hinzufügen -->
-            <button @click="showModalProjektzuweisen = true" class="bg-zbb text-white px-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition" >
+            <button @click="showModalProjektzuweisen = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
                 <span v-if="!loadingProjekt">➕ Zuweisen</span>
                 <span v-else>...</span>
             </button>
-            <table class="min-w-full border border-gray-200 text-sm">
-                <thead class="bg-gray-50">
-                    <tr class="text-center">
-                    <th class="th ">Projekte</th>
-                    <th class="th w-[180px]">Antragsdatum</th>
-                    <th class="th w-[180px]">Anfangsdatum</th>
-                    <th class="th w-[180px]">Enddatum</th>
-                    <th class="th w-[180px]">Starttermin</th>
-                    <th class="th w-[180px]">Endtermin</th>
-                    <th class="th w-[180px]">ESF</th>
-                    <th class="th w-[180px]">JC-Mitarbeiter</th>
+            <table class="min-w-full border border-gray-300 text-sm text-center">
+                <thead class="bg-gray-100">
+                    <tr>
+                    <th class="px-4 py-2 border">Projekte</th>
+                    <th class="px-4 py-2 border">Antragsdatum</th>
+                    <th class="px-4 py-2 border">Anfangsdatum</th>
+                    <th class="px-4 py-2 border">Enddatum</th>
+                    <th class="px-4 py-2 border">Starttermin</th>
+                    <th class="px-4 py-2 border">Endtermin</th>
+                    <th  class="px-4 py-2 border">*</th>
                     </tr>
                 </thead>
+
                 <tbody>
-                    <tr v-for="(projekt, i) in teilnehmer.projekte" :key="i" class="border-t align-middle">
-                    <!-- Projektname -->
-                    <td>
-                        <input v-model="projekt.name" class=" align-middle input-auto" />
-                    </td>
+                    <!-- Schleife über alle Projekte -->
+                    <template v-for="(projekt, i) in teilnehmer.projekte" :key="i">
 
-                    <!-- Zeiträume -->
-                    <td colspan="5" class="p-0">
-                        <div class="flex flex-col gap-1">
-                        <div
-                            v-for="zeit in projekt.pivot_model?.zeitraume || []"
-                            :key="zeit.id"
-                            class="flex gap-2 items-center border rounded p-2 bg-gray-50"
-                        >
-                            <input type="date" v-model="zeit.antragsdatum" class="input-auto " />
-                            <input type="date" v-model="zeit.starttermin" class="input-auto " />
-                            <input type="date" v-model="zeit.endtermin" class="input-auto " />
-                            <input type="date" v-model="zeit.anfangsdatum" class="input-auto " />
-                            <input type="date" v-model="zeit.enddatum" class="input-auto " />
-                        </div>
+                    <!-- Wenn das Projekt mehrere Zeiträume hat -->
+                    <tr
+                        v-for="(zeit, z) in projekt.pivot_model?.zeitraume || []"
+                        :key="zeit.id"
+                        class="hover:bg-gray-50"
+                    >
+                        <!-- Projektname nur einmal pro Gruppe -->
+                        <td
+                            v-if="z === 0"
+                            :rowspan="projekt.pivot_model?.zeitraume?.length || 1"
+                            class="border px-4 py-2 align-middle font-medium bg-gray-50"
+                            >
+                            {{ projekt.name }}
+                        </td>
 
-                        <!-- Falls keine Zeiträume vorhanden sind -->
-                        <div
-                            v-if="!projekt.pivot_model?.zeitraume?.length"
-                            class="flex gap-2 items-center border rounded p-2"
-                        >
-                            <input type="date" class="input-auto " />
-                            <input type="date" class="input-auto " />
-                            <input type="date" class="input-auto " />
-                            <input type="date" class="input-auto " />
-                            <input type="date" class="input-auto " />
-                        </div>
-                        </div>
-                    </td>
+                        <td class="border px-4 py-2">{{ $formatDate(zeit.antragsdatum) || '-' }}</td>
+                        <td class="border px-4 py-2">{{ $formatDate(zeit.anfangsdatum) || '-' }}</td>
+                        <td class="border px-4 py-2">{{ $formatDate(zeit.enddatum) || '-'  }}</td>
+                        <td class="border px-4 py-2">{{ $formatDate(zeit.starttermin) || '-' }}</td>
+                        <td class="border px-4 py-2">{{ $formatDate(zeit.endtermin) || '-' }}</td>
+                        <td class="border px-6 py-4 text-center">
+                            <!-- Dropdown für Aktion -->
+                            <Dropdown>
+                                <template #trigger>
+                                    <button class=" items-center  text-sm leading-4 font-medium text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
+                                        <span class="cursor-pointer">
+                                            <i class="transform transition-transform duration-300  la la-ellipsis-v la-lg"></i>
+                                        </span>
+                                    </button>
+                                </template>
 
-                    <!-- ESF -->
-                    <td class="text-center">
-                        <input type="checkbox" v-model="projekt.esf" />
-                    </td>
-
-                    <!-- JC-Mitarbeiter -->
-                    <td>
-                        <input v-model="projekt.jc_mitarbeiter" class="input-auto " />
-                    </td>
+                                <template #content >
+                                    <!-- Gefilterte Projektauswahl -->
+                                    <span class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100 " @click="confirmDelete(projekt, 'projekt')">
+                                          {{ $t('Löschen') }} <i class="las la-trash-alt"></i>
+                                    </span>
+                                    <Link class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100" :href="route('teilnehmer.edit', teilnehmer.id)">
+                                       {{ $t('Bearbeiten') }}  <i class="las la-edit"></i>
+                                    </Link>
+                                </template>
+                            </Dropdown>
+                        </td>
                     </tr>
+
+                    <!-- Falls keine Zeiträume vorhanden sind -->
+                    <tr v-if="!projekt.pivot_model?.zeitraume?.length" class="hover:bg-gray-50">
+                        <td class="border px-4 py-2 font-medium bg-gray-50">{{ projekt.name }}</td>
+                        <td colspan="5" class="border px-4 py-2 text-gray-500 italic">
+                        Keine Zeiträume vorhanden
+                        </td>
+                        <td class="border px-6 py-4 text-center">
+                            <!-- Dropdown für Aktion -->
+                            <Dropdown>
+                                <template #trigger>
+                                    <button class=" items-center  text-sm leading-4 font-medium text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
+                                        <span class="cursor-pointer">
+                                            <i class="transform transition-transform duration-300  la la-ellipsis-v la-lg"></i>
+                                        </span>
+                                    </button>
+                                </template>
+
+                                <template #content >
+                                    <!-- Gefilterte Projektauswahl -->
+                                    <span class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100 " @click="confirmDelete(projekt, 'projekt')">
+                                          {{ $t('Löschen') }} <i class="las la-trash-alt"></i>
+                                    </span>
+                                    <Link class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100" :href="route('teilnehmer.edit', teilnehmer.id)">
+                                       {{ $t('Bearbeiten') }}  <i class="las la-edit"></i>
+                                    </Link>
+                                </template>
+                            </Dropdown>
+                        </td>
+                    </tr>
+
+                    </template>
+
+
                 </tbody>
             </table>
-
           </div>
 
           <!-- ================= BRIEFE ================= -->
@@ -277,6 +310,11 @@
 
           <!-- ================= BANK ================= -->
         <div v-else-if="activeTab === 'Bank'">
+            <button @click="showModalBank = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
+                <span v-if="!loadingBank">➕ Hinzufügen</span>
+                <span v-else>...</span>
+            </button>
+
         <div v-if="teilnehmer.baenke && teilnehmer.baenke.length">
             <table class="min-w-full border border-gray-200 text-sm">
             <thead class="bg-gray-50 text-gray-700">
@@ -300,7 +338,7 @@
                 <td class="px-3 py-2">{{ bank.blz }}</td>
                 <td class="px-3 py-2 text-center">
                     <button
-                    @click="confirmDeleteBank(bank)"
+                    @click="confirmDelete(bank, 'bank')"
                     class="text-red-500 hover:text-red-700 text-sm"
                     >
                     <i class="la la-trash"></i> Löschen
@@ -314,16 +352,7 @@
         <!-- Falls keine Bankdaten -->
         <p v-else class="text-gray-500 italic">Keine Bankdaten vorhanden.</p>
 
-        <div class="mt-4 flex justify-end">
-            <button
-            @click="showModalBank = true"
-            :disabled="loadingBank"
-            class="bg-zbb text-white px-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition"
-            >
-            <span v-if="!loadingBank">➕ Hinzufügen</span>
-            <span v-else>Wird gespeichert...</span>
-            </button>
-        </div>
+
         </div>
 
 
@@ -347,17 +376,6 @@
         </div>
       </div>
     </div>
-
-
-
-
-
-
-
-
-
-
-
 
 
             <!-- MODAL: Adresse hinzufügen -->
@@ -443,7 +461,7 @@
                   </div>
 
                   <div class="mt-6 flex justify-end space-x-3">
-                    <button @click="showModalKontakt = false" class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100">Abbrechen</button>
+                    <button @click="showModalCreateKontakt = false" class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100">Abbrechen</button>
                     <button
                       @click="addKontakt"
                       :disabled="loadingKontakt"
@@ -577,43 +595,33 @@
             </transition>
 
 
-
-
-
-
-
-
-
-
-
-
-
     <!-- ================= MODAL LÖSCHEN ================= -->
-    <ModalDestroy
-      v-if="showModalLöschen"
-      @close="showModalLöschen = false"
-      @confirm="deleteItem"
-      :seite="seite"
-      :toDelete="toDeleteItem"
-    />
+
+
+        <ModalDestroy
+            v-if="showModalLöschen"
+            @close="showModalLöschen = false"
+            @delete="handleDelete"
+            :seite="seite"
+            :toDelete="toDeleteItem"
+        />
   </AppLayout>
 </template>
 
 <script setup>
-import { Head, router } from "@inertiajs/vue3";
-import AppLayout from "@/Layouts/AppLayout.vue";
-import { ref, computed } from "vue";
-import ModalDestroy from "@/Components/ModalDestroyForm.vue";
+import AppLayout from '@/Layouts/AppLayout.vue';
+import { ref, defineProps, computed } from 'vue';
+import { router, Head, Link } from '@inertiajs/vue3';
+import Dropdown from '@/Components/Dropdown.vue';
+import ModalDestroy from '@/Components/ModalDestroyForm.vue';
 import Multiselect from '@vueform/multiselect';
 import '@vueform/multiselect/themes/default.css';
-
 
 const props = defineProps({
   teilnehmer: Object,
   kontakttypen: Array,
   projekte: Array,
 });
-
 
 // Lokale Kopie der Teilnehmerdaten
 const teilnehmer = ref(JSON.parse(JSON.stringify(props.teilnehmer)));
@@ -631,6 +639,11 @@ const neuesProjekt = ref({
 
 const loadingBank = ref(false)
 const neueBank = ref({ name: '', iban: '', blz: '' })
+
+
+
+
+
 
 // Tabs
 const tabs = [
@@ -688,7 +701,7 @@ const addAdresse = () => {
     route("adresse.store"),
     {
       ...neueAdresse.value,
-      model_type: "App\\Models\\Teilnehmer",
+      model_type: "App\\Models\\Personen",
       model_id: teilnehmer.value.id,
     },
     {
@@ -716,7 +729,7 @@ const addKontakt = () => {
     {
       kontakttyp_id: neuerKontakt.value.kontakttyp_id,
       wert: neuerKontakt.value.wert,
-      model_type: "App\\Models\\Teilnehmer",
+      model_type: "App\\Models\\Personen",
       model_id: teilnehmer.value.id,
     },
     {
@@ -734,41 +747,31 @@ const addKontakt = () => {
   );
 };
 
-// ======= LÖSCHEN =======
-const confirmDeleteKontakt = (kontakt) => {
-  toDeleteItem.value = { name: kontakt.wert, id: kontakt.id };
-  seite.value = "kontakt";
-  showModalLöschen.value = true;
-};
-const confirmDeleteBank = (bank) => {
-  toDeleteItem.value = { name: bank.name, id: bank.id };
-  seite.value = "bank";
+// ====================== LÖSCHEN ======================
+const confirmDelete = (item, type) => {
+  toDeleteItem.value = { id: item.id, name: item.name || item.wert || item.strasse };
+  seite.value = type;
   showModalLöschen.value = true;
 };
 
+const handleDelete = (id) => {
+  if (seite.value === 'adresse') {
+    teilnehmer.value.adresses = teilnehmer.value.adresses.filter((a) => a.id !== id);
+  }
+  if (seite.value === 'kontakt') {
+    teilnehmer.value.kontaktes = teilnehmer.value.kontaktes.filter((k) => k.id !== id);
+  }
+  if (seite.value === 'bank') {
+    teilnehmer.value.baenke = teilnehmer.value.baenke.filter((b) => b.id !== id);
+  }
+
+  if (seite.value === 'projekt') {
+    teilnehmer.value.projekte = teilnehmer.value.projekte.filter((p) => p.id !== id);
+  }
+  showModalLöschen.value = false;
+};
 
 
-const confirmDeleteAdresse = (adresse) => {
-  toDeleteItem.value = { name: `${adresse.strasse} ${adresse.hausnummer}`, id: adresse.id };
-  seite.value = "adresse";
-  showModalLöschen.value = true;
-};
-const deleteItem = () => {
-  if (!toDeleteItem.value?.id || !seite.value) return;
-  router.delete(route(`${seite.value}.destroy`, toDeleteItem.value.id), {
-    onSuccess: () => {
-      if (seite.value === "adresse")
-        teilnehmer.value.adresses = teilnehmer.value.adresses.filter(
-          (a) => a.id !== toDeleteItem.value.id
-        );
-      if (seite.value === "kontakt")
-        teilnehmer.value.kontaktes = teilnehmer.value.kontaktes.filter(
-          (k) => k.id !== toDeleteItem.value.id
-        );
-      showModalLöschen.value = false;
-    },
-  });
-};
 
 // ======= BRIEFE =======
 const brief = ref({
@@ -779,11 +782,10 @@ const brief = ref({
 });
 const vorlagen = ["Einladung", "Abmahnung", "Vertragsangebot"];
 
-
-
+// ======= PROJEKTE ZUWEISEN =======
 const addProjekt = () => {
   if (!neuesProjektId.value) return; // Sicherheitsabfrage
-
+    console.log("Zuweisen Projekt ID:", neuesProjekt.value);
   loadingProjekt.value = true;
 
   router.post(
@@ -791,7 +793,7 @@ const addProjekt = () => {
     {
       teilnehmer_id: props.teilnehmer.id,
       projekt_id: neuesProjektId.value,
-      model_type: 'App\\Models\\ProjektHasTeilnehmer',
+      model_type: 'App\\Models\\ProjektHasPersonen',
       ...neuesProjekt.value,
     },
     {
@@ -839,11 +841,6 @@ const addProjekt = () => {
   );
 };
 
-
-
-
-
-
 const addBank = () => {
   if (!neueBank.value.name || !neueBank.value.iban || !neueBank.value.blz) return
   loadingBank.value = true
@@ -852,7 +849,7 @@ const addBank = () => {
     route('bank.store'),
     {
       ...neueBank.value,
-      model_type: 'App\\Models\\Teilnehmer',
+      model_type: 'App\\Models\\Personen',
       model_id: teilnehmer.value.id,
     },
     {

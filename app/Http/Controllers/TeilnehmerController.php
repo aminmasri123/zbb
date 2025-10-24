@@ -20,7 +20,7 @@ class TeilnehmerController extends Controller
     public function index(Request $request)
     {
 
-       
+
         $suchbegriff    = $request->input('search');
         $sortierung     = $request->input('sort', 'id');
         $richtung       = strtolower($request->input('direction', 'desc'));
@@ -30,7 +30,7 @@ class TeilnehmerController extends Controller
         $gruppen = Gruppe::where('personen_id', $benutzer->id)
         ->with('bereich')
         ->get();
-        
+
         // Mapping für erlaubte Sortierspalten
         $sortierbareSpalten = [
             'id'         => 'id',
@@ -131,7 +131,7 @@ class TeilnehmerController extends Controller
 
     public function show($id)
     {
-        $teilnehmer = Teilnehmer::with([
+        $personen = personen::with([
             'adresses',
             'standorte',
             'kontaktes.kontakttyp',
@@ -139,15 +139,20 @@ class TeilnehmerController extends Controller
             'baenke'
         ])->findOrFail($id);
 
-        $projekte = Projekt::all();
-
-        $teilnehmer->projekte->each(function ($projekt) {
+        // Pivot + Zeiträume nachladen:
+        $personen->projekte->each(function ($projekt) {
             $projekt->pivotModel->load('zeitraume');
         });
 
+        // Jetzt manuell umwandeln für Inertia:
+         $teilnehmerData = $personen->toArray();
+
+
+        $projekte = Projekt::orderBy('name')->get();
+
         $kontakttypen = Kontakttypen::all();
         return Inertia::render('Teilnehmer/Edit', [
-            'teilnehmer' => $teilnehmer->toArray(),
+            'teilnehmer' => $personen->toArray(),
             'kontakttypen' => $kontakttypen,
             'projekte' => $projekte,
             ],
@@ -174,7 +179,7 @@ class TeilnehmerController extends Controller
     public function destroy($id)
     {
         try {
-            $teilnehmer = Teilnehmer::findOrFail($id); // Suche die Abteilung
+            $teilnehmer = Personen::findOrFail($id); // Suche die Abteilung
             $teilnehmer->delete(); // Lösche die Abteilung
 
             return response()->json(['message' => 'die Daten von ' . $teilnehmer->vorname . ' ' . $teilnehmer->nachname . ' wurde  erfolgreich gelöscht!'], 200);

@@ -62,6 +62,6 @@ class BaenkeController extends Controller
     public function destroy($id)
     {
         Baenke::findOrFail($id)->delete();
-        return back()->with('success', 'Bank gelöscht!');
+        return response()->json(['message' => 'Kontakt erfolgreich entfernt.'], 200);
     }
 }

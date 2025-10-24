@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Zeitraum;
-use App\Models\Teilnehmer;
+use App\Models\Personen;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -33,7 +33,7 @@ class ProjektHasTeilnehmerController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'teilnehmer_id' => ['required', 'exists:teilnehmers,id'],
+            'teilnehmer_id' => ['required', 'exists:personens,id'],
             'projekt_id' => ['required', 'exists:projekts,id'],
             'antragsdatum' => ['nullable', 'date'],
             'starttermin' => ['nullable', 'date'],
@@ -46,17 +46,18 @@ class ProjektHasTeilnehmerController extends Controller
         DB::beginTransaction();
 
         try {
-            $teilnehmer = Teilnehmer::findOrFail($validated['teilnehmer_id']);
+            $teilnehmer = Personen::findOrFail($validated['teilnehmer_id']);
 
             // Prüfen, ob bereits zugewiesen
-            $existingPivot = DB::table('projekt_has_teilnehmers')
-                ->where('teilnehmer_id', $validated['teilnehmer_id'])
+            $existingPivot = DB::table('projekt_has_personens')
+                ->where('personen_id', $validated['teilnehmer_id'])
                 ->where('projekt_id', $validated['projekt_id'])
                 ->first();
 
             if ($existingPivot) {
                 // Falls bereits zugewiesen → nur Zeitraum hinzufügen
-                Zeitraum::create([
+
+               Zeitraum::create([
                     'antragsdatum' => $validated['antragsdatum'] ?? null,
                     'starttermin' => $validated['starttermin'] ?? null,
                     'endtermin' => $validated['endtermin'] ?? null,
@@ -66,7 +67,9 @@ class ProjektHasTeilnehmerController extends Controller
                     'model_id' => $existingPivot->id,
                 ]);
 
+
                 DB::commit();
+
                 return back()->with('success', 'Zeitraum zum bestehenden Projekt hinzugefügt!');
             }
 
@@ -74,8 +77,8 @@ class ProjektHasTeilnehmerController extends Controller
             $teilnehmer->projekte()->attach($validated['projekt_id']);
 
             // Pivot-ID ermitteln
-            $pivotId = DB::table('projekt_has_teilnehmers')
-                ->where('teilnehmer_id', $validated['teilnehmer_id'])
+            $pivotId = DB::table('projekt_has_personens')
+                ->where('personen_id', $validated['teilnehmer_id'])
                 ->where('projekt_id', $validated['projekt_id'])
                 ->latest('id')
                 ->value('id');
@@ -87,7 +90,7 @@ class ProjektHasTeilnehmerController extends Controller
                 'endtermin' => $validated['endtermin'] ?? null,
                 'anfangsdatum' => $validated['anfangsdatum'] ?? null,
                 'enddatum' => $validated['enddatum'] ?? null,
-                'model_type' => 'App\Models\ProjektHasTeilnehmer',
+                'model_type' => $validated['model_type'] ?? null,
                 'model_id' => $pivotId,
             ]);
 

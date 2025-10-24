@@ -19,6 +19,20 @@ class UserSeeder extends Seeder
     public function run()
     {
 
+         DB::table('standorts')->insert([
+            [ // id = 1
+                'name' => 'BOP',
+            ],
+            [ // id = 2
+                'name' => 'Verwaltung',
+            ],
+            [ // id = 3
+                'name' => 'Völklingen',
+            ],
+            [ // id = 4
+                'name' => 'Brebach',
+            ],
+        ]);
           $personen =
         [
             ['vorname' => 'Amin', 'nachname' => 'Masri', 'geburtsdatum' => '2000-01-01', 'email' => 'amin.masri@outlook.com', 'username' => 'aminmasri', 'password' => 'password'],
@@ -54,8 +68,8 @@ class UserSeeder extends Seeder
 
                 DB::table('standort_has_personens')->insert([
                     [ // id = 1
-                        'standort_id' => fake()->randomElement(Standort::pluck('id')->toArray()),
                         'personen_id' => $personId,
+                        'standort_id' => fake()->randomElement(Standort::pluck('id')->toArray()),
                     ],
                 ]);
         }
@@ -95,20 +109,7 @@ class UserSeeder extends Seeder
 
         ]);
 
-        DB::table('standorts')->insert([
-            [ // id = 1
-                'name' => 'BOP',
-            ],
-            [ // id = 2
-                'name' => 'Verwaltung',
-            ],
-            [ // id = 3
-                'name' => 'Völklingen',
-            ],
-            [ // id = 4
-                'name' => 'Brebach',
-            ],
-        ]);
+       
 
         DB::table('projekts')->insert([
             [ // id = 1

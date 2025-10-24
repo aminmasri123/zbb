@@ -7,6 +7,8 @@ use App\Models\Baenke;
 use App\Models\Adresse;
 use App\Models\Projekt;
 use App\Models\Standort;
+use App\Models\ProjektHasPersonen;
+
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -38,23 +40,31 @@ class Personen extends Model
         return $this->morphMany(Adresse::class, 'model');
     }
 
+
+
     public function baenke()
     {
         return $this->morphMany(Baenke::class, 'model');
     }
 
-    public function projekte()
+    /* public function projekte()
     {
         return $this->belongsToMany(Projekt::class, 'projekt_has_personens', 'personen_id', 'projekt_id');
-    }
+    } */
+        /* public function projekte()
+        {
+            return $this->belongsToMany(Projekt::class, 'projekt_has_personens', 'personen_id', 'projekt_id')
+                ->using(ProjektHasPersonen::class) // Pivotmodell aktivieren
+                ->as('pivotModel'); // schöner Name
+        } */
 
-    /* public function projekte()
+    public function projekte()
     {
         return $this->belongsToMany(Projekt::class, 'projekt_has_personens', 'personen_id', 'projekt_id')
             ->using(ProjektHasPersonen::class) // <== Pivot Model verwenden
             ->withPivot('id')                    // <- damit du das Pivot Model findest
             ->as('pivotModel');                  // <- schöner Name für den Pivot-Zugriff
-    } */
+    }
 
     public function kontaktes()
     {

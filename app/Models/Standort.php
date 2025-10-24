@@ -15,7 +15,7 @@ class Standort extends Model
 
     public function personen()
     {
-        return $this->belongsToMany(Personen::class, 'standort_has_teilnehmers', 'standort_id', 'personen_id');
+        return $this->belongsToMany(Personen::class, 'standort_has_personens', 'standort_id', 'personen_id');
     }
 
     public function user()

@@ -67,7 +67,7 @@ class KontaktController extends Controller
         //
     }
 
-   
+
     public function destroy($id)
     {
         try {

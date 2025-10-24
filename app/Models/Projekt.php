@@ -1,7 +1,7 @@
 <?php
 
 namespace App\Models;
-
+use App\Models\zeitraum;
 use App\Models\User;
 use App\Models\Bereich;
 use App\Models\Abteilung;
@@ -32,7 +32,7 @@ class Projekt extends Model
     }
     public function teilnehmer()
     {
-        return $this->belongsToMany(Teilnehmer::class, 'projekt_has_teilnehmers', 'projekt_id', 'teilnehmer_id');
+        return $this->belongsToMany(Personen::class, 'projekt_has_personens', 'projekt_id', 'personen_id');
     }
 
     public function users()

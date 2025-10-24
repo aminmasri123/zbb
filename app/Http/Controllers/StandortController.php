@@ -11,7 +11,7 @@ class StandortController extends Controller
 {
     public function index()
     {
-        $standorte = Standort::with('teilnehmer', 'user.projekte')->orderBy('name')->get();
+        $standorte = Standort::with('personen', 'personen.projekte')->orderBy('name')->get();
 
         return Inertia::render('Standort/Index', ['standorte' => $standorte]);
     }

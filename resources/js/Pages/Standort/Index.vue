@@ -136,7 +136,7 @@ export default {
             <td class="border px-6 py-4">
                 <p>{{ standort.name }}</p>
                 <span
-                    v-for="projekt in einzigartigeProjekte(standort.user)"
+                    v-for="projekt in einzigartigeProjekte(standort.personen)"
                     :key="projekt.id"
                     class="inline-block bg-gray-200 text-xs text-gray-800 rounded px-2 py-1 mr-1"
                 >

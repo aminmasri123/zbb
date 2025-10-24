@@ -2,7 +2,7 @@
     <nav class="sticky top-0 w-full  z-50 dark:bg-gray-800 bg-gray-100 dark:text-gray-100">
 
         <!-- Primary Navigation Menu -->
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-black">
             <div class="flex justify-between h-20 ">
 
                 <div class="flex ">

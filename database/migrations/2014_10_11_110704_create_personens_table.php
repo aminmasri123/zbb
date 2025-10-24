@@ -18,7 +18,7 @@ return new class extends Migration
             $table->enum('geschlecht', ['w', 'm', 'd']);
             $table->date('geburtsdatum')->nullable();
             $table->boolean('aktiv')->default(true);
-            $table->string('typ');
+            $table->string('typ')->nullable();
             $table->timestamps();
         });
     }
