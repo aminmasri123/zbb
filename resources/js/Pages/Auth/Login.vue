@@ -7,6 +7,7 @@ import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
+import LoginRegister from '@/Components/Header/LoginRegister.vue';
 
 defineProps({
     canResetPassword: Boolean,
@@ -31,17 +32,16 @@ const submit = () => {
 
 <template>
     <Head title="Log in" />
-
     <AuthenticationCard>
-
-
         <div v-if="status" class="mb-4 font-medium text-sm text-green-600">
             {{ status }}
         </div>
 
         <form @submit.prevent="submit">
             <AuthenticationCardLogo />
-
+            <div>
+                <h1 class="text-center text-lg font-bold">Zugang zu Ihrem Dashboard</h1>
+            </div>
             <div>
                 <InputLabel for="email" :value="$t('Email')" />
                 <TextInput
@@ -76,12 +76,13 @@ const submit = () => {
                 </label>
             </div>
 
-            <div class="flex items-center justify-end mt-4">
+            <div class="flex items-center justify-between mt-4">
+                <Link :href="route('welcome')" class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zbb">zurück</Link>
                 <Link v-if="canResetPassword" :href="route('password.request')" class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                     {{ $t('Passwort_vergessen?') }}
                 </Link>
 
-                <PrimaryButton class="ml-4" :class="{ 'opacity-25': form.processing }" :disabled="form.processing">
+                <PrimaryButton  :class="{ 'opacity-25': form.processing }" :disabled="form.processing">
                     {{$t('Anmelden')}}
                 </PrimaryButton>
             </div>
