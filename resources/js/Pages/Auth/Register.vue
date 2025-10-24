@@ -103,19 +103,21 @@ const submit = () => {
                         <Checkbox id="terms" v-model:checked="form.terms" name="terms" required />
 
                         <div class="ml-2">
-                            {{$t('Ich_stimme_den')}} <a target="_blank" :href="route('terms.show')" class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">{{ $t('Nutzungsbedingungen') }}</a> {{$t('und')}} <a target="_blank" :href="route('policy.show')" class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">{{ $t('Datenschutzrichtlinie') }}</a> {{$t('zu')}}.
+                            {{$t('Ich_stimme_den')}} <a target="_blank" :href="route('terms.show')" class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zbb">{{ $t('Nutzungsbedingungen') }}</a> {{$t('und')}} <a target="_blank" :href="route('policy.show')" class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zbb">{{ $t('Datenschutzrichtlinie') }}</a> {{$t('zu')}}.
                         </div>
                     </div>
                     <InputError class="mt-2" :message="form.errors.terms" />
                 </InputLabel>
             </div>
 
-            <div class="flex items-center justify-end mt-4">
-                <Link :href="route('login')" class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+            <div class="flex items-center justify-between mt-4">
+                <Link :href="route('welcome')" class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zbb">zurück</Link>
+
+                <Link :href="route('login')" class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zbb">
                     {{$t('Bereits_registriert?')}}
                 </Link>
 
-                <PrimaryButton class="ml-4" :class="{ 'opacity-25': form.processing }" :disabled="form.processing">
+                <PrimaryButton :class="{ 'opacity-25': form.processing }" :disabled="form.processing">
                     {{$t('Registrieren')}}
                 </PrimaryButton>
             </div>
