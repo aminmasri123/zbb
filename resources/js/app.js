@@ -4,6 +4,7 @@ import '../../public/css/line-awesome.min.css';
 //import '../../public/css/font-awesome.min.css';
 import '../../public/css/css.css';
 
+import { formatDate } from '@/utils/dateFormatter.js';
 
 
 
@@ -39,22 +40,27 @@ createInertiaApp({
     resolve: (name) => resolvePageComponent(`./Pages/${name}.vue`, import.meta.glob('./Pages/**/*.vue')),
 
     setup({ el, App, props, plugin }) {
+    const app = createApp({ render: () => h(App, props) })
+        .use(plugin)
+        .use(i18n)
+        .use(ZiggyVue, Ziggy)
+        .use(PrimeVue, {
+            theme: {
+                preset: Aura
+            }
+        })
+        .component('InputText', InputText)
+        .component('Button', Button);
 
-        return createApp({ render: () => h(App, props) })
-            .use(plugin)
-            .use(i18n)
+    // ✅ Hier: globale Funktion hinzufügen
+    app.config.globalProperties.$formatDate = formatDate;
 
-            .use(ZiggyVue, Ziggy)
-            .use(PrimeVue, {
-                theme: {
-                    preset: Aura
-                }
-            })
-            .component('InputText', InputText)
-            .component('Button', Button)
+    // ✅ Und am Ende mounten
+    app.mount(el);
 
-            .mount(el);
-    },
+    return app;
+},
+
     progress: {
         color: '#ff8500',
     },
