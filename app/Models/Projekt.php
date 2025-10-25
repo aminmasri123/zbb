@@ -35,6 +35,11 @@ class Projekt extends Model
         return $this->belongsToMany(Personen::class, 'projekt_has_personens', 'projekt_id', 'personen_id');
     }
 
+    public function mitarbeiter()
+    {
+        return $this->belongsToMany(Personen::class, 'projekt_has_personens', 'projekt_id', 'personen_id')->where('personens.typ', 'mitarbeiter');
+    }
+
     public function users()
     {
         return $this->belongsToMany(User::class, 'user_has_projekts', 'projekt_id', 'user_id');

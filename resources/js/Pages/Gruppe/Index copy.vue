@@ -1,97 +1,79 @@
 <script setup>
-import AppLayout from '@/Layouts/AppLayout.vue';
-import { ref, defineProps, watch } from 'vue';
-import Swal from 'sweetalert2';
-import { router, Link, Head } from '@inertiajs/vue3';
-import Dropdown from '@/Components/Dropdown.vue';
-import ModalDestroy from '@/Components/ModalDestroyForm.vue';
-import ModalCreate from '@/Pages/Gruppe/ModalCreate.vue';
-import ModalEdit from '@/Pages/Gruppe/ModalEdit.vue';
+    import AppLayout from '@/Layouts/AppLayout.vue';
+    import { ref, defineProps, watch } from 'vue';
+    import Swal from 'sweetalert2';
+    import { router, Link, Head } from '@inertiajs/vue3';
+    import Dropdown from '@/Components/Dropdown.vue';
+    import ModalDestroy from '@/Components/ModalDestroyForm.vue';
+    import ModalCreate from '@/Pages/Gruppe/ModalCreate.vue';
+    import ModalEdit from '@/Pages/Gruppe/ModalEdit.vue';
 
-let seite = 'gruppe';
-let search = ref('');
-let gruppeToDelete = ref(null);
-let showModalLöschen = ref(false);
-let isModalCreateOpen = ref(false);
-let isModalEditOpen = ref(false);
-let gruppeToEdit = ref(null);
+    let seite = 'gruppe';
+    let search = ref('');
+    let gruppeToDelete = ref(null);
+    let showModalLöschen = ref(false);
+    let isModalCreateOpen = ref(false);
+    let isModalEditOpen = ref(false);
+    let gruppeToEdit = ref(null);
 
-// Props
-const props = defineProps({
-    gruppen: {
-        type: [Array, Object],
-        required: true,
-    },
+    // Props
+    const props = defineProps({
+        gruppen: Object,
+        abteilungen: Object
+    });
 
-     bereiche: {
-        type: [Array, Object],
-        required: true,
-    },
-    personal: {
-        type: [Array, Object],
-        required: true,
-    },
-});
-console.log('Props gruppen:', props.bereiche);
-// ✅ Lokale Liste – unterstützt Array ODER paginierte Daten
-let localGruppen = ref(
-  Array.isArray(props.gruppen)
-    ? [...props.gruppen]
-    : [...(props.gruppen.data || [])]
-);
-
+// Lokale Liste
+let localGruppen = ref([...props.gruppen.data]);
 let filteredGruppen = ref([...localGruppen.value]);
 
-// 🔹 Modals
+// Modals
 const openModalCreate = () => { isModalCreateOpen.value = true; };
 const closeModalCreate = () => { isModalCreateOpen.value = false; };
 
 const openModalEdit = (gruppe) => {
-  gruppeToEdit.value = gruppe;
-  isModalEditOpen.value = true;
+    gruppeToEdit.value = gruppe;
+    isModalEditOpen.value = true;
 };
 const closeModalEdit = () => { isModalEditOpen.value = false; };
 
-// 🔹 CRUD
+// CRUD
 const addGruppe = (gruppe) => {
-  localGruppen.value.unshift(gruppe);
-  applySearchFilter();
+    localGruppen.value.unshift(gruppe);
+    applySearchFilter();
 };
 
 const updateGruppe = (updatedGruppe) => {
-  const index = localGruppen.value.findIndex(g => g.id === updatedGruppe.id);
-  if (index !== -1) {
-    localGruppen.value[index] = updatedGruppe;
-  }
-  applySearchFilter();
+    const index = localGruppen.value.findIndex(g => g.id === updatedGruppe.id);
+    if (index !== -1) {
+        localGruppen.value[index] = updatedGruppe;
+    }
+    applySearchFilter();
 };
 
-// 🔹 Delete
+// Delete
 const confirmDelete = (gruppe) => {
-  gruppeToDelete.value = { id: gruppe.id, name: gruppe.name };
-  showModalLöschen.value = true;
+    gruppeToDelete.value = { id: gruppe.id, name: gruppe.name };
+    showModalLöschen.value = true;
 };
-
 const handleDelete = (gruppeId) => {
-  localGruppen.value = localGruppen.value.filter(g => g.id !== gruppeId);
-  applySearchFilter();
-  showModalLöschen.value = false;
+    localGruppen.value = localGruppen.value.filter(g => g.id !== gruppeId);
+    applySearchFilter();
+    showModalLöschen.value = false;
 };
 
-// 🔹 Suche
+// Suche
 const applySearchFilter = () => {
-  if (search.value) {
-    filteredGruppen.value = localGruppen.value.filter(g =>
-      g.name?.toLowerCase().includes(search.value.toLowerCase())
-    );
-  } else {
-    filteredGruppen.value = [...localGruppen.value];
-  }
+    if (search.value) {
+        filteredGruppen.value = localGruppen.value.filter(g =>
+            g.name.toLowerCase().includes(search.value.toLowerCase())
+        );
+    } else {
+        filteredGruppen.value = [...localGruppen.value];
+    }
 };
-
-watch(search, () => {
-  router.get('/gruppe', { search: search.value }, { preserveState: true, replace: true });
-  applySearchFilter();
+watch([search], () => {
+    router.get('/gruppe', { search: search.value }, { preserveState: true, replace: true });
+    applySearchFilter();
 });
 </script>
 
@@ -115,24 +97,28 @@ watch(search, () => {
         </div>
 
         <!-- Tabelle -->
-        <div class="w-full">
-            <table class="w-full text-sm shadow-sm border-collapse ">
+        <div class="w-full overflow-x-auto">
+            <table class="min-w-[600px] w-full text-sm shadow-sm border-collapse">
                 <thead class="text-md text-gray-600 uppercase bg-gray-200 sticky top-0">
                     <tr>
                         <th class="border px-3 py-3 text-left">ID</th>
-                        <th class="border px-3 py-3 text-left">Bereich</th>
-                        <th class="border px-3 py-3 text-left">Betreuer</th>
-                        <th class="border px-3 py-3 text-left">Zeitraum</th>
+                        <th class="border px-3 py-3 text-left">Gruppenname</th>
+                        <th class="border px-3 py-3 text-left">Abteilung</th>
+                        <th class="border px-3 py-3 text-left">Mitglieder</th>
                         <th class="border px-3 py-3 text-center">*</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr v-for="gruppe in filteredGruppen" :key="gruppe.id" class="bg-white border hover:bg-gray-50">
                         <td class="border px-6 py-4">{{ gruppe.id }}</td>
-                        <td class="border px-6 py-4">{{ gruppe.bereich.name }}</td>
-                        <td class="border px-6 py-4">{{ gruppe.betreuer?.vorname }} {{ gruppe.betreuer?.vorname }}</td>
-                        <td class="border px-6 py-4">{{ $formatDate(gruppe.anfangsdatum) }} - {{ $formatDate( gruppe.enddatum) }}</td>
-                        <td class="border px-6 py-4 text-center ">
+                        <td class="border px-6 py-4">{{ gruppe.name }}</td>
+                        <td class="border px-6 py-4">{{ gruppe.abteilung?.name }}</td>
+                        <td class="border px-6 py-4">
+                            <span v-for="mitglied in gruppe.mitglieder" :key="mitglied.id" class="bg-zbb mx-1 p-1 rounded text-white">
+                                {{ mitglied.name }}
+                            </span>
+                        </td>
+                        <td class="border px-6 py-4 text-center">
                             <Dropdown>
                                 <template #trigger>
                                     <i class="la la-ellipsis-v cursor-pointer"></i>
@@ -158,22 +144,22 @@ watch(search, () => {
             </table>
         </div>
 
-        <!-- Modals -->
-        <ModalCreate :visible="isModalCreateOpen"
+<!-- Modals -->
+       <!-- <ModalCreate :visible="isModalCreateOpen"
+                                 :abteilungen="props.abteilungen"
                                  @close="isModalCreateOpen = false"
                                  @added="(gruppe) => { localGruppen.unshift(gruppe); applySearchFilter(); }"
         />
         <ModalEdit :visible="isModalEditOpen"
-                            :bereiche="props.bereiche"
-                            :personal="props.personal"
-                            :toEdit="gruppeToEdit"
-                            @close="closeModalEdit"
-                            @updated="updateGruppe"/>
+                             :toEdit="gruppeToEdit"
+                             :abteilungen="props.abteilungen"
+                             @close="closeModalEdit"
+                             @updated="updateGruppe"/>
         <ModalDestroy v-if="showModalLöschen"
                                     @delete="handleDelete"
                                     @close="showModalLöschen = false"
                                     :seite="seite"
-                                    :toDelete="gruppeToDelete"/>
+                                    :toDelete="gruppeToDelete"/> -->
     </app-layout>
 
 </template>

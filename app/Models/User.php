@@ -42,6 +42,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'email',
         'password',
         'lang',
+        'current_team_id',
         'profile_photo_url',
         'default_projekt_id',
     ];

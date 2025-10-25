@@ -13,7 +13,7 @@ class Gruppe extends Model
 {
     use HasFactory;
 
-    public $fillable = 
+    public $fillable =
     [
         'bemerkung',
     ];
@@ -22,6 +22,11 @@ class Gruppe extends Model
     {
         return $this->belongsToMany(Personen::class, 'gruppe_has_personens', 'gruppe_id', 'personen_id')
         ->where('personens.typ', 'teilnehmer');
+    }
+
+    public function betreuer()
+    {
+        return $this->hasOne(Personen::class, 'id', 'personen_id');
     }
 
     public function bereich()

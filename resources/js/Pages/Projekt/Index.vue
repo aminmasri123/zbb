@@ -23,7 +23,7 @@
     abteilungen: Object
     });
 
-    console.log(props.projekte)
+    console.log(props.abteilungen)
     // Lokale Liste
     let localProjekte = ref([...props.projekte.data]);
     let filteredProjekte = ref([...localProjekte.value]);

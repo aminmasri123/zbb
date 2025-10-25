@@ -135,6 +135,7 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
 
     //Gruppe
     Route::get('/gruppe', [GruppeController::class, 'index'])->name('gruppe.index');
+    Route::put('/gruppe/{id}', [GruppeController::class, 'update'])->name('gruppe.update');
 
 
     //GruppeHasTeilnehmer

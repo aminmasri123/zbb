@@ -3,11 +3,17 @@
 namespace App\Http\Controllers;
 
 use Inertia\Inertia;
+use App\Models\Gruppe;
 use App\Models\Bereich;
 use App\Models\Projekt;
+use App\Models\Abteilung;
 use Illuminate\Http\Request;
+use App\Models\ProjektHasBereiche;
+use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\Controller;
 use App\Models\BereichHasTeilnehmer;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class GruppeController extends Controller
 {
@@ -16,22 +22,21 @@ class GruppeController extends Controller
      */
      public function index(Request $request)
     {
-        // Optional: Filter (z. B. aktiv/inaktiv)
-        $status = $request->get('status');
+        $user = Auth()->user();
+        //alle gruppen mit bereich laden
+        $gruppen = Gruppe::with('bereich', 'betreuer')->get();
+        $bereiche = Projekt::with('bereiche')->findOrFail($user->current_team_id);
+        $personal = Projekt::with('mitarbeiter')->findOrFail($user->current_team_id);
 
-        $query = Bereich::with('projekte')
-            ->withCount('bereichHasTeilnehmer'); // zählt Einträge in TeilnehmerBereich
+        //alle gruppen mit bereich laden
+        //$gruppen = Gruppe::with('bereich')->where('personen_id', $user->id )->get();
 
-        if ($status === 'aktiv') {
-            $query->where('aktiv', true);
-        } elseif ($status === 'inaktiv') {
-            $query->where('aktiv', false);
-        }
 
-        $bereiche = $query->get();
 
-        return Inertia::render('Projekt/Index', [
-            'projekte' => $bereiche->toArray(),
+        return Inertia::render('Gruppe/Index', [
+            'gruppen' => $gruppen->toArray(),
+            'bereiche' => $bereiche->bereiche->toArray(),
+            'personal' => $personal->mitarbeiter->toArray(),
             ],
         );
     }
@@ -68,14 +73,59 @@ class GruppeController extends Controller
         //
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, string $id)
+     public function update(Request $request, $id)
     {
-        //
-    }
+        try {
+            // 🔹 Validierung
+            $validated = $request->validate([
+                'bereich' => 'required|integer|exists:bereiches,id',
+                'betreuer' => 'required|integer|exists:personens,id',
+                'anfangsdatum' => 'nullable|date',
+                'enddatum' => 'nullable|date|after_or_equal:anfangsdatum',
+            ]);
 
+            // 🔹 Gruppe finden
+            $gruppe = Gruppe::findOrFail($id);
+
+            // 🔹 Daten speichern (z. B. falls Spalten gleich heißen)
+            $gruppe->bereich_id = $validated['bereich'];
+            $gruppe->personen_id = $validated['betreuer'];
+            $gruppe->anfangsdatum = $validated['anfangsdatum'];
+            $gruppe->enddatum = $validated['enddatum'];
+            $gruppe->save();
+
+            // 🔹 (Optional) Daten für Vue zurückgeben
+            return response()->json([
+                'success' => true,
+                'message' => 'Gruppe erfolgreich aktualisiert.',
+                'projekt' => $gruppe->load(['bereich', 'betreuer'])
+            ], 200);
+
+        } catch (ValidationException $e) {
+            // ⛔ Validierungsfehler
+            return response()->json([
+                'success' => false,
+                'message' => 'Validierungsfehler',
+                'errors' => $e->errors(),
+            ], 422);
+
+        } catch (ModelNotFoundException $e) {
+            // ⛔ Datensatz nicht gefunden
+            return response()->json([
+                'success' => false,
+                'message' => 'Gruppe nicht gefunden.',
+            ], 404);
+
+        } catch (\Exception $e) {
+            // ⛔ Allgemeiner Fehler (z. B. SQL)
+            Log::error('Fehler beim Aktualisieren der Gruppe: '.$e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Ein unerwarteter Fehler ist aufgetreten.',
+            ], 500);
+        }
+    }
     /**
      * Remove the specified resource from storage.
      */
