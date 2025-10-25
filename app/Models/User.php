@@ -3,7 +3,9 @@
 namespace App\Models;
 
 use App\Models\Role;
+use App\Models\Brief;
 use App\Models\Projekt;
+use App\Models\Freigabe;
 use App\Models\Standort;
 use App\Models\Abteilung;
 use App\Models\Teilnehmer;
@@ -78,6 +80,52 @@ class User extends Authenticatable implements MustVerifyEmail
     protected $appends = [
         'profile_photo_url',
     ];*/
+
+
+
+     /**
+     * Freigaben, die dieser Benutzer erhalten hat
+     */
+    public function receivedFreigaben()
+    {
+        return $this->morphMany(Freigabe::class, 'shareable_to');
+    }
+
+    /**
+     * Freigaben, die dieser Benutzer erstellt hat
+     */
+    public function sentFreigaben()
+    {
+        return $this->hasMany(Freigabe::class, 'shared_by');
+    }
+
+    /**
+     * Briefe, die der Benutzer selbst erstellt (an sich freigegeben) hat
+     */
+    public function ownLetters()
+    {
+        return Freigabe::where('shareable_to_type', self::class)
+            ->where('shareable_to_id', $this->id)
+            ->where('shared_by', $this->id)
+            ->where('shareable_from_type', Brief::class)
+            ->with('shareableFrom')
+            ->get()
+            ->pluck('shareableFrom');
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     public function standorte(): BelongsToMany
     {
         return $this->belongsToMany(Standort::class, 'standort_has_personens', 'personen_id', 'standort_id');

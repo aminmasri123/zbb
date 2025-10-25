@@ -4,13 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Inertia\Inertia;
+use App\Models\Brief;
+use App\Models\Gruppe;
 use App\Models\Projekt;
 use App\Models\Personen;
 use App\Models\Teilnehmer;
 use App\Models\Kontakttypen;
 use Illuminate\Http\Request;
 use App\Models\BereichHasPersonen;
-use App\Models\Gruppe;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -19,8 +20,6 @@ class TeilnehmerController extends Controller
 {
     public function index(Request $request)
     {
-
-
         $suchbegriff    = $request->input('search');
         $sortierung     = $request->input('sort', 'id');
         $richtung       = strtolower($request->input('direction', 'desc'));
@@ -131,7 +130,7 @@ class TeilnehmerController extends Controller
 
     public function show($id)
     {
-        $personen = personen::with([
+        $personen = personen::Teilnehmer()->with([
             'adresses',
             'standorte',
             'kontaktes.kontakttyp',
@@ -143,6 +142,17 @@ class TeilnehmerController extends Controller
         $personen->projekte->each(function ($projekt) {
             $projekt->pivotModel->load('zeitraume');
         });
+
+        $erhalteneBriefe = auth()->user()->receivedFreigaben();
+
+        $freigaben = auth()->user()
+            ->receivedFreigaben()
+            ->where('shareable_from_type', Brief::class)
+            ->with('shareableFrom')
+            ->get();
+
+        $erhalteneBriefe = $freigaben->pluck('shareableFrom');
+        $meineBriefe = auth()->user()->ownLetters();
 
         // Jetzt manuell umwandeln für Inertia:
          $teilnehmerData = $personen->toArray();
@@ -163,7 +173,9 @@ class TeilnehmerController extends Controller
             'teilnehmer' => $personen->toArray(),
             'kontakttypen' => $kontakttypen,
             'projekte' => $projekte,
-            'betreuer' => $betreuer
+            'betreuer' => $betreuer,
+            'erhalteneBriefe' => $erhalteneBriefe,
+            'meineBriefe' => $meineBriefe,
             ],
         );
     }

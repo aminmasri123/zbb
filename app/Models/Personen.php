@@ -7,6 +7,7 @@ use App\Models\Baenke;
 use App\Models\Adresse;
 use App\Models\Projekt;
 use App\Models\Standort;
+use App\Models\Brief;
 use App\Models\ProjektHasPersonen;
 
 use Illuminate\Database\Eloquent\Model;
@@ -29,11 +30,22 @@ class Personen extends Model
         'geburtsdatum',
     ];
 
+    public function scopeTeilnehmer($query)
+    {
+        return $query->where('typ', 'teilnehmer');
+    }
+
+    public function scopeActive($query)
+    {
+        return $query->where('aktiv', 1);
+    }
 
     public function standorte(): BelongsToMany
     {
         return $this->belongsToMany(Standort::class, 'standort_has_personens', 'personen_id', 'standort_id');
     }
+
+
 
     public function adresses()
     {

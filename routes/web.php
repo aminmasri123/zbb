@@ -4,6 +4,7 @@ use Inertia\Inertia;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Foundation\Application;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\BriefController;
 use App\Http\Controllers\BaenkeController;
 use App\Http\Controllers\GruppeController;
 use App\Http\Controllers\SchuleController;
@@ -189,6 +190,10 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
 
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead'])
     ->name('notifications.readAll');
+
+
+        Route::post('/brief', [BriefController::class, 'store'])->name('brief.store');
+
 });
 
 

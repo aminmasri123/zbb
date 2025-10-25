@@ -271,7 +271,7 @@
                 </tbody>
             </table>
           </div>
-<!-- ================= BANK ================= -->
+            <!-- ================= BANK ================= -->
             <div v-else-if="activeTab === 'Bank'">
                 <button @click="showModalBank = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
                     <span v-if="!loadingBank">➕ Hinzufügen</span>
@@ -315,26 +315,44 @@
             </div>
           <!-- ================= BRIEFE ================= -->
           <div v-else-if="activeTab === 'Briefe'">
-            <div class="grid grid-cols-3 gap-4">
-              <div><label>Datum</label><input type="date" v-model="brief.datum" class="input" /></div>
-              <div><label>Betreff</label><input v-model="brief.betreff" class="input" /></div>
-              <div><label>Unterschrift</label><input v-model="brief.unterschrift1" class="input" /></div>
-              <div class="col-span-2">
-                <label>Inhalt</label>
-                <textarea v-model="brief.inhalt" rows="6" class="input"></textarea>
-              </div>
-              <div>
-                <label>Vorlagen</label>
-                <ul class="border border-gray-200 rounded p-2 text-sm">
-                  <li
-                    v-for="v in vorlagen"
-                    :key="v"
-                    class="cursor-pointer hover:text-zbb"
-                  >
-                    {{ v }}
-                  </li>
-                </ul>
-              </div>
+            <button @click="showModalBrief = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
+                <span v-if="!loadingBrief">➕ Vorage erstellen</span>
+                <span v-else>...</span>
+            </button>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="col-span-1 border p-4 rounded space-y-4 shadow-sm">
+                    <div><label>Datum</label><input type="date" v-model="brief.datum" class="input" /></div>
+                    <div><label>Betreff</label><input v-model="brief.betreff" class="input" /></div>
+                    <label>Inhalt</label>
+                    <textarea v-model="brief.inhalt" rows="6" class="input"></textarea>
+                </div>
+                <div class="col-span-1 border p-4 rounded space-y-4 shadow-sm">
+                    <div>
+                        <label>Meine</label>
+                        <ul class="border border-gray-200 rounded p-2 text-sm">
+                            <li
+                                v-for="v in props.meineBriefe"
+                                :key="v"
+                                class="cursor-pointer hover:text-zbb"
+                                 @click="setBriefVorlage(v)">
+                                {{ v?.name }}
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div>
+                        <label>Shared</label>
+                        <ul class="border border-gray-200 rounded p-2 text-sm">
+                        <li
+                            v-for="erhalteneBrief in props.erhalteneBriefe"
+                            :key="erhalteneBrief"
+                            class="cursor-pointer hover:text-zbb"
+                             @click="setBriefVorlage(erhalteneBrief)">
+                            {{ erhalteneBrief.name }}
+                        </li>
+                        </ul>
+                    </div>
+                </div>
             </div>
           </div>
 
@@ -378,6 +396,48 @@
       </div>
     </div>
 
+
+            <!-- MODAL: Brief hinzufügen -->
+            <transition name="fade">
+              <div
+                v-if="showModalBrief"
+                class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+              >
+                <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
+                  <button
+                    @click="showModalBrief = false"
+                    class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl"
+                  >
+                    ✕
+                  </button>
+                  <h3 class="text-lg font-semibold mb-4 text-zbb">Neuer Brief</h3>
+
+                  <div class="space-y-3">
+                    <div><label>Name</label><input v-model="neuerBrief.name" class="input" /></div>
+                    <div><label>Titel</label><input v-model="neuerBrief.titel" class="input" /></div>
+                    <div><label>Content</label></div><textarea v-model="neuerBrief.content" rows="2" class="input"></textarea>
+                  </div>
+
+                  <div class="mt-6 flex justify-end space-x-3">
+                    <button
+                      @click="showModalBrief = false"
+                      class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100"
+                    >
+                      Abbrechen
+                    </button>
+                    <button
+                      @click="addBrief"
+                      :disabled="loadingAdresse"
+                      class="px-4 py-2 rounded-md text-sm text-white transition"
+                      :class="loadingAdresse ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
+                    >
+                      <span v-if="!loadingAdresse">Speichern</span>
+                      <span v-else>Speichern...</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </transition>
 
             <!-- MODAL: Adresse hinzufügen -->
             <transition name="fade">
@@ -610,33 +670,35 @@
 </template>
 
 <script setup>
-import AppLayout from '@/Layouts/AppLayout.vue';
-import { ref, defineProps, computed } from 'vue';
-import { router, Head, Link } from '@inertiajs/vue3';
-import Dropdown from '@/Components/Dropdown.vue';
-import ModalDestroy from '@/Components/ModalDestroyForm.vue';
-import Multiselect from '@vueform/multiselect';
-import '@vueform/multiselect/themes/default.css';
+    import AppLayout from '@/Layouts/AppLayout.vue';
+    import { ref, defineProps, computed } from 'vue';
+    import { router, Head, Link } from '@inertiajs/vue3';
+    import Dropdown from '@/Components/Dropdown.vue';
+    import ModalDestroy from '@/Components/ModalDestroyForm.vue';
+    import Multiselect from '@vueform/multiselect';
+    import '@vueform/multiselect/themes/default.css';
 
-const props = defineProps({
-    teilnehmer: Object,
-    kontakttypen: Array,
-    projekte: Array,
-    betreuer: Array,
-});
+    const props = defineProps({
+        teilnehmer: Object,
+        kontakttypen: Array,
+        projekte: Array,
+        betreuer: Array,
+        erhalteneBriefe: Array,
+        meineBriefe: Array,
+    });
+    console.log(props.meineBriefe);
+    // Lokale Kopie der Teilnehmerdaten
+    const teilnehmer = ref(JSON.parse(JSON.stringify(props.teilnehmer)));
+    const neuesProjektId = ref('');
+    const loadingProjekt = ref(false);
 
-// Lokale Kopie der Teilnehmerdaten
-const teilnehmer = ref(JSON.parse(JSON.stringify(props.teilnehmer)));
-const neuesProjektId = ref('');
-const loadingProjekt = ref(false);
-
-const neuesProjekt = ref({
-    antragsdatum: '',
-    starttermin: '',
-    endtermin: '',
-    anfangsdatum: '',
-    enddatum: '',
-});
+    const neuesProjekt = ref({
+        antragsdatum: '',
+        starttermin: '',
+        endtermin: '',
+        anfangsdatum: '',
+        enddatum: '',
+    });
 
 
 const loadingBank = ref(false)
@@ -655,6 +717,8 @@ const form = ref({
     bankname: "",
     iban: "",
 });
+
+
 // Tabs
 const tabs = [
     "Stammdaten",
@@ -676,6 +740,7 @@ const activeTab = ref("");
 // Formulare & Variablen
 const showModalAdresse = ref(false);
 const showModalBank = ref(false);
+const showModalBrief = ref(false);
 
 const showModalProjektzuweisen = ref(false);
 const showModalCreateKontakt = ref(false);
@@ -730,6 +795,65 @@ const saveStammdaten = () => {
         }
     );
 };
+
+
+// ======= Brief =======
+    const neuerBrief = ref({name: "", titel: "", content: ""});
+    const brief = ref({
+        datum: new Date().toISOString().split("T")[0],
+        betreff: "",
+        inhalt: "",
+    });
+    // 🔹 Funktion: generiert automatisch die passende Anrede
+    const generiereAnrede = (teilnehmer) => {
+    if (!teilnehmer) return "";
+
+    if (teilnehmer.geschlecht === "m") {
+        return `Sehr geehrter Herr ${teilnehmer.nachname},\n\n`;
+    } else if (teilnehmer.geschlecht === "w") {
+        return `Sehr geehrte Frau ${teilnehmer.nachname},\n\n`;
+    } else {
+        // neutral / divers / unbekannt
+        return `Sehr geehrte*r ${teilnehmer.vorname} ${teilnehmer.nachname},\n\n`;
+    }
+    };
+    const loadingBrief = ref(false);
+     const setBriefVorlage = (vorlage) => {
+        const anrede = generiereAnrede(props.teilnehmer);
+
+        console.log("Vorlage gewählt:", vorlage);
+        brief.value.betreff = vorlage.title || '';
+        brief.value.inhalt = anrede + (vorlage.content || '');
+    };
+
+const addBrief = () => {
+    if (!neuerBrief.value.name || !neuerBrief.value.titel || !neuerBrief.value.content) return;
+
+    loadingBrief.value = true;
+
+    router.post(
+        route("brief.store"),
+        {
+            name: neuerBrief.value.name,
+            titel: neuerBrief.value.titel,
+            content: neuerBrief.value.content,
+        },
+        {
+            preserveScroll: true,
+    onFinish: () => (loadingBrief.value = false),
+    onSuccess: () => {
+        showModalBrief.value = false;
+        neuerBrief.value = { name: "", titel: "", content: "" };
+    },
+        }
+    );
+};
+
+
+
+
+
+
 
 // ======= ADRESSEN =======
 const neueAdresse = ref({ land: "", strasse: "", hausnummer: "", plz: "", stadt: "" });
@@ -813,14 +937,7 @@ const handleDelete = (id) => {
 
 
 
-// ======= BRIEFE =======
-const brief = ref({
-  datum: new Date().toISOString().split("T")[0],
-  betreff: "",
-  unterschrift1: "",
-  inhalt: "",
-});
-const vorlagen = ["Einladung", "Abmahnung", "Vertragsangebot"];
+
 
 // ======= PROJEKTE ZUWEISEN =======
 const addProjekt = () => {
