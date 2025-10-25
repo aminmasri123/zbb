@@ -45,6 +45,12 @@
 
           <!-- ================= STAMMDATEN ================= -->
           <div v-if="activeTab === 'Stammdaten'">
+            <button @click="saveStammdaten"
+                class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full">
+                ➕ Speichern
+              </button>
+
+
             <div class="grid grid-cols-3 gap-4">
               <div>
                 <label>Vorname</label>
@@ -56,7 +62,7 @@
               </div>
               <div>
                 <label>Geschlecht</label>
-                <select v-model="form.geschlecht" class="input">
+                <select v-model="teilnehmer.geschlecht" class="input">
                   <option value="m">m</option>
                   <option value="w">w</option>
                   <option value="d">divers</option>
@@ -69,19 +75,18 @@
               <div>
                 <label>Betreuer</label>
                 <select v-model="form.betreuer" class="input">
-                  <option v-for="m in mitarbeiterListe" :key="m">{{ m }}</option>
+                  <option v-for="m in props.betreuer" :key="m">{{ m.nachname }} - {{ m.vorname }}</option>
                 </select>
               </div>
               <div class="md:col-span-3">
                 <label>Bemerkungen</label>
-                <textarea v-model="form.bemerkungen" rows="2" class="input"></textarea>
+                <textarea v-model="teilnehmer.bemerkungen" rows="2" class="input"></textarea>
               </div>
             </div>
           </div>
 
           <!-- ================= ADRESSEN ================= -->
           <div v-else-if="activeTab === 'Adresse'">
-
               <button @click="showModalAdresse = true"
                 class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full">
                 ➕ Neue Adresse hinzufügen
@@ -266,7 +271,48 @@
                 </tbody>
             </table>
           </div>
-
+<!-- ================= BANK ================= -->
+            <div v-else-if="activeTab === 'Bank'">
+                <button @click="showModalBank = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
+                    <span v-if="!loadingBank">➕ Hinzufügen</span>
+                    <span v-else>...</span>
+                </button>
+                <div v-if="teilnehmer.baenke && teilnehmer.baenke.length">
+                    <table class="min-w-full border border-gray-200 text-sm">
+                    <thead class="bg-gray-50 text-gray-700">
+                        <tr>
+                        <th class="px-3 py-2 text-left">#</th>
+                        <th class="px-3 py-2 text-left">Bankname</th>
+                        <th class="px-3 py-2 text-left">IBAN</th>
+                        <th class="px-3 py-2 text-left">BLZ</th>
+                        <th class="px-3 py-2 text-center">Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr
+                        v-for="(bank, index) in teilnehmer.baenke"
+                        :key="bank.id || index"
+                        class="border-t hover:bg-gray-50 transition"
+                        >
+                        <td class="px-3 py-2">{{ index + 1 }}</td>
+                        <td class="px-3 py-2">{{ bank.name }}</td>
+                        <td class="px-3 py-2 font-mono">{{ bank.iban }}</td>
+                        <td class="px-3 py-2">{{ bank.blz }}</td>
+                        <td class="px-3 py-2 text-center">
+                            <button
+                            @click="confirmDelete(bank, 'bank')"
+                            class="text-red-500 hover:text-red-700 text-sm"
+                            >
+                            <i class="la la-trash"></i> Löschen
+                            </button>
+                        </td>
+                        </tr>
+                    </tbody>
+                    </table>
+                </div>
+                <!-- Falls keine Bankdaten -->
+                <p v-else class="text-gray-500 italic">Keine Bankdaten vorhanden.</p>
+            </div>
           <!-- ================= BRIEFE ================= -->
           <div v-else-if="activeTab === 'Briefe'">
             <div class="grid grid-cols-3 gap-4">
@@ -308,52 +354,7 @@
             <p class="text-gray-500">Informationen zu Kindern können hier ergänzt werden.</p>
           </div>
 
-          <!-- ================= BANK ================= -->
-        <div v-else-if="activeTab === 'Bank'">
-            <button @click="showModalBank = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
-                <span v-if="!loadingBank">➕ Hinzufügen</span>
-                <span v-else>...</span>
-            </button>
 
-        <div v-if="teilnehmer.baenke && teilnehmer.baenke.length">
-            <table class="min-w-full border border-gray-200 text-sm">
-            <thead class="bg-gray-50 text-gray-700">
-                <tr>
-                <th class="px-3 py-2 text-left">#</th>
-                <th class="px-3 py-2 text-left">Bankname</th>
-                <th class="px-3 py-2 text-left">IBAN</th>
-                <th class="px-3 py-2 text-left">BLZ</th>
-                <th class="px-3 py-2 text-center">Aktionen</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr
-                v-for="(bank, index) in teilnehmer.baenke"
-                :key="bank.id || index"
-                class="border-t hover:bg-gray-50 transition"
-                >
-                <td class="px-3 py-2">{{ index + 1 }}</td>
-                <td class="px-3 py-2">{{ bank.name }}</td>
-                <td class="px-3 py-2 font-mono">{{ bank.iban }}</td>
-                <td class="px-3 py-2">{{ bank.blz }}</td>
-                <td class="px-3 py-2 text-center">
-                    <button
-                    @click="confirmDelete(bank, 'bank')"
-                    class="text-red-500 hover:text-red-700 text-sm"
-                    >
-                    <i class="la la-trash"></i> Löschen
-                    </button>
-                </td>
-                </tr>
-            </tbody>
-            </table>
-        </div>
-
-        <!-- Falls keine Bankdaten -->
-        <p v-else class="text-gray-500 italic">Keine Bankdaten vorhanden.</p>
-
-
-        </div>
 
 
           <!-- ================= NETZWERKE ================= -->
@@ -618,9 +619,10 @@ import Multiselect from '@vueform/multiselect';
 import '@vueform/multiselect/themes/default.css';
 
 const props = defineProps({
-  teilnehmer: Object,
-  kontakttypen: Array,
-  projekte: Array,
+    teilnehmer: Object,
+    kontakttypen: Array,
+    projekte: Array,
+    betreuer: Array,
 });
 
 // Lokale Kopie der Teilnehmerdaten
@@ -642,29 +644,36 @@ const neueBank = ref({ name: '', iban: '', blz: '' })
 
 
 
-
-
-
+const form = ref({
+    geschlecht: "m",
+    geburtsdatum: "1997-05-17",
+    betreuer: "",
+    bemerkungen: "",
+    aktennotiz: "",
+    notizen: "",
+    vermittlung: "",
+    bankname: "",
+    iban: "",
+});
 // Tabs
 const tabs = [
-  "Stammdaten",
-  "Adresse",
-  "Kontaktdaten",
-  "Projektverlauf",
-  "Briefe",
-  "Aktennotiz",
-  "Notizen",
-  "Kinder",
-  "Bank",
-  "Netzwerke",
-  "Vermittlung",
-  "Praktika",
+    "Stammdaten",
+    "Adresse",
+    "Kontaktdaten",
+    "Projektverlauf",
+    "Bank",
+    "Briefe",
+    "Aktennotiz",
+    "Notizen",
+    "Kinder",
+    "Netzwerke",
+    "Vermittlung",
+    "Praktika",
 
 ];
 const activeTab = ref("");
 
 // Formulare & Variablen
-const mitarbeiterListe = ["Test Admin", "Mitarbeiter Test Amin Masri"];
 const showModalAdresse = ref(false);
 const showModalBank = ref(false);
 
@@ -673,17 +682,7 @@ const showModalCreateKontakt = ref(false);
 const showModalLöschen = ref(false);
 const seite = ref("");
 const toDeleteItem = ref(null);
-const form = ref({
-  geschlecht: "m",
-  geburtsdatum: "1997-05-17",
-  betreuer: "",
-  bemerkungen: "",
-  aktennotiz: "",
-  notizen: "",
-  vermittlung: "",
-  bankname: "",
-  iban: "",
-});
+
 const alter = computed(() => {
   const geb = form.value.geburtsdatum;
   if (!geb) return "";
@@ -691,28 +690,69 @@ const alter = computed(() => {
   return Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
 });
 
+// =======  Stammdaten  =======
+const loadingSave = ref(false);
+
+const saveStammdaten = () => {
+
+    // einfache Validierung
+    if (!teilnehmer.value.vorname || !teilnehmer.value.nachname) return;
+
+    loadingSave.value = true;
+    console.log("Speichern Stammdaten:", teilnehmer.value);
+    const payload = {
+        vorname: teilnehmer.value.vorname,
+        nachname: teilnehmer.value.nachname,
+        geschlecht: form.value.geschlecht,
+        geburtsdatum: form.value.geburtsdatum,
+        //betreuer: form.value.betreuer,
+        bemerkungen: form.value.bemerkungen,
+    };
+
+    router.patch(
+        route('teilnehmer.update', teilnehmer.value.id),
+        payload,
+        {
+            preserveState: true,
+            preserveScroll: true,
+            onFinish: () => (loadingSave.value = false),
+            onSuccess: () => {
+                // lokale Kopie mit bestätigten Werten aktualisieren
+                Object.assign(teilnehmer.value, {
+                    vorname: payload.vorname,
+                    nachname: payload.nachname,
+                    geschlecht: payload.geschlecht,
+                    geburtsdatum: payload.geburtsdatum,
+                    betreuer: payload.betreuer,
+                    bemerkungen: payload.bemerkungen,
+                });
+            },
+        }
+    );
+};
+
 // ======= ADRESSEN =======
 const neueAdresse = ref({ land: "", strasse: "", hausnummer: "", plz: "", stadt: "" });
 const loadingAdresse = ref(false);
 const addAdresse = () => {
-  if (!neueAdresse.value.land || !neueAdresse.value.strasse) return;
-  loadingAdresse.value = true;
-  router.post(
-    route("adresse.store"),
-    {
-      ...neueAdresse.value,
-      model_type: "App\\Models\\Personen",
-      model_id: teilnehmer.value.id,
-    },
-    {
-      onFinish: () => (loadingAdresse.value = false),
-      onSuccess: () => {
-        teilnehmer.value.adresses.push({ ...neueAdresse.value, id: Date.now() });
-        showModalAdresse.value = false;
-        neueAdresse.value = { land: "", strasse: "", hausnummer: "", plz: "", stadt: "" };
-      },
-    }
-  );
+    if (!neueAdresse.value.land || !neueAdresse.value.strasse) return;
+    loadingAdresse.value = true;
+    router.post(
+        route("adresse.store"),
+        {
+        ...neueAdresse.value,
+        model_type: "App\\Models\\Personen",
+        model_id: teilnehmer.value.id,
+        },
+        {
+        onFinish: () => (loadingAdresse.value = false),
+        onSuccess: () => {
+            teilnehmer.value.adresses.push({ ...neueAdresse.value, id: Date.now() });
+            showModalAdresse.value = false;
+            neueAdresse.value = { land: "", strasse: "", hausnummer: "", plz: "", stadt: "" };
+        },
+        }
+    );
 };
 
 // ======= KONTAKTE =======

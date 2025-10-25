@@ -147,6 +147,14 @@ class TeilnehmerController extends Controller
         // Jetzt manuell umwandeln für Inertia:
          $teilnehmerData = $personen->toArray();
 
+        //$betreuer = Personen::where('typ', 'mitarbeiter')->orderBy('nachname')->select('nachname', 'vorname')->get();
+        $betreuer = Personen::where('typ', 'mitarbeiter')
+            ->whereHas('projekte', function($query) use ($personen) {
+                $query->whereIn('projekts.id', $personen->projekte->pluck('id'));
+            })
+            ->orderBy('nachname')
+            ->select('nachname', 'vorname', 'id') // id hinzugefügt für Referenz
+            ->get();
 
         $projekte = Projekt::orderBy('name')->get();
 
@@ -155,6 +163,7 @@ class TeilnehmerController extends Controller
             'teilnehmer' => $personen->toArray(),
             'kontakttypen' => $kontakttypen,
             'projekte' => $projekte,
+            'betreuer' => $betreuer
             ],
         );
     }
@@ -173,7 +182,28 @@ class TeilnehmerController extends Controller
      */
     public function update(Request $request, $id)
     {
-        //
+        try {
+            $teilnehmer = Personen::findOrFail($id);
+
+            $validatedData = Validator::make($request->all(), [
+                'vorname' => ['required', 'max:50'],
+                'nachname' => ['required', 'max:50'],
+                'geschlecht' => ['required', 'in:m,w,d'],
+                'geburtsdatum' => ['nullable', 'date'],
+                'bemerkungen' => ['nullable', 'string'],
+            ])->validate();
+
+            $teilnehmer->update($validatedData);
+
+            return back()->with('success', 'Teilnehmer wurde erfolgreich aktualisiert.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json(['message' => 'Validation Error', 'errors' => $e->errors()], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Ein Fehler ist aufgetreten.',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
     }
 
     public function destroy($id)
