@@ -3,13 +3,14 @@
 namespace App\Models;
 
 use App\Models\User;
+use App\Models\Brief;
 use App\Models\Baenke;
 use App\Models\Adresse;
 use App\Models\Projekt;
 use App\Models\Standort;
-use App\Models\Brief;
-use App\Models\ProjektHasPersonen;
+use App\Models\Anwesenheiten;
 
+use App\Models\ProjektHasPersonen;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -30,9 +31,18 @@ class Personen extends Model
         'geburtsdatum',
     ];
 
+    public function anwesenheiten(){
+        return $this->hasMany(Anwesenheiten::class, 'personen_id', 'id');
+    }
+
     public function scopeTeilnehmer($query)
     {
         return $query->where('typ', 'teilnehmer');
+    }
+
+    public function scopeMitarbeiter($query)
+    {
+        return $query->where('typ', 'mitarbeiter');
     }
 
     public function scopeActive($query)

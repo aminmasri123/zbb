@@ -24,7 +24,7 @@ class GruppeController extends Controller
     {
         $user = Auth()->user();
         //alle gruppen mit bereich laden
-        $gruppen = Gruppe::with('bereich', 'betreuer')->get();
+        $gruppen = Gruppe::with('bereich', 'betreuer')->where('projekt_id', $user->current_team_id)->where('personen_id', $user->id)->get();
         $bereiche = Projekt::with('bereiche')->findOrFail($user->current_team_id);
         $personal = Projekt::with('mitarbeiter')->findOrFail($user->current_team_id);
 
@@ -54,7 +54,32 @@ class GruppeController extends Controller
      */
     public function store(Request $request)
     {
-        //
+        $validated = $request->validate([
+            'startDate'   => 'required|date',
+            'endDate'     => 'nullable|date|after_or_equal:startDate',
+            'startZeit' => 'required|date_format:H:i',
+            'endZeit'   => 'required|date_format:H:i|after:startZeit',
+            'bereich'     => 'required|integer|exists:bereiches,id',
+            'betreuer'    => 'required|integer|exists:personens,id',
+        ]);
+
+        $user = Auth()->user();
+
+        $gruppe = Gruppe::create([
+            'personen_id'   => $validated['betreuer'],
+            'bereich_id'    => $validated['bereich'],
+            'projekt_id'    => $user->current_team_id,
+            'anfangsdatum'  => $validated['startDate'],
+            'enddatum'      => $validated['endDate'] ?? null,
+            'startzeit'     => $validated['startZeit'],
+            'endzeit'       => $validated['endZeit'],
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Gruppe erfolgreich erstellt.',
+            'gruppe'  => $gruppe->load(['bereich', 'betreuer'])
+        ], 201);
     }
 
     /**
@@ -129,8 +154,17 @@ class GruppeController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy($id)
     {
-        //
+        try {
+            $gruppe = Gruppe::findOrFail($id);
+            $gruppe->delete();
+
+            return response()->json(['message' => 'Gruppe erfolgreich gelöscht!'], 200);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['message' => 'Gruppe nicht gefunden.'], 404);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
+        }
     }
 }

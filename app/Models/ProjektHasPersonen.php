@@ -11,7 +11,7 @@ class ProjektHasPersonen extends Pivot //Model
 {
 
     use HasFactory;
-    protected $table = 'perojektHasPersonens'; // ✅ wichtig, da Pivot keine Tabelle rät
+    protected $table = 'projekt_has_personens'; // ✅ wichtig, da Pivot keine Tabelle rät
 
 
     protected $fillable = [

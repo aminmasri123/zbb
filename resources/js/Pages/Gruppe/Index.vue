@@ -1,13 +1,13 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { ref, defineProps, watch } from 'vue';
-import Swal from 'sweetalert2';
 import { router, Link, Head } from '@inertiajs/vue3';
 import Dropdown from '@/Components/Dropdown.vue';
 import ModalDestroy from '@/Components/ModalDestroyForm.vue';
 import ModalCreate from '@/Pages/Gruppe/ModalCreate.vue';
 import ModalEdit from '@/Pages/Gruppe/ModalEdit.vue';
-
+import { formatTime } from '@/utils/timeFormat';
+import { formatDate } from '@/utils/dateFormat';
 let seite = 'gruppe';
 let search = ref('');
 let gruppeToDelete = ref(null);
@@ -102,7 +102,7 @@ watch(search, () => {
         <template #header>{{$t('Gruppen')}}</template>
 
         <!-- Toolbar -->
-        <div class="flex justify-around items-center mb-3">
+        <div class="flex justify-around shadow-md items-center w-3/4 mx-auto mb-3">
             <div @click="openModalCreate" class="flex items-center">
                 <i class="la la-plus bg-white border border-gray-300 rounded-l-md px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
             </div>
@@ -115,51 +115,87 @@ watch(search, () => {
         </div>
 
         <!-- Tabelle -->
-        <div class="w-full">
-            <table class="w-full text-sm shadow-sm border-collapse ">
-                <thead class="text-md text-gray-600 uppercase bg-gray-200 sticky top-0">
-                    <tr>
-                        <th class="border px-3 py-3 text-left">ID</th>
-                        <th class="border px-3 py-3 text-left">Bereich</th>
-                        <th class="border px-3 py-3 text-left">Betreuer</th>
-                        <th class="border px-3 py-3 text-left">Zeitraum</th>
-                        <th class="border px-3 py-3 text-center">*</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-for="gruppe in filteredGruppen" :key="gruppe.id" class="bg-white border hover:bg-gray-50">
-                        <td class="border px-6 py-4">{{ gruppe.id }}</td>
-                        <td class="border px-6 py-4">{{ gruppe.bereich.name }}</td>
-                        <td class="border px-6 py-4">{{ gruppe.betreuer?.vorname }} {{ gruppe.betreuer?.vorname }}</td>
-                        <td class="border px-6 py-4">{{ $formatDate(gruppe.anfangsdatum) }} - {{ $formatDate( gruppe.enddatum) }}</td>
-                        <td class="border px-6 py-4 text-center ">
-                            <Dropdown>
-                                <template #trigger>
-                                    <i class="la la-ellipsis-v cursor-pointer"></i>
-                                </template>
-                                <template #content>
-                                    <span
-                                        class="flex justify-between cursor-pointer px-6 items-center hover:bg-gray-100"
-                                        @click="openModalEdit(gruppe)"
-                                    >
-                                        Bearbeiten <i class="las la-edit"></i>
-                                    </span>
-                                    <span
-                                        class="flex justify-between cursor-pointer px-6 items-center hover:bg-gray-100"
-                                        @click="confirmDelete(gruppe)"
-                                    >
-                                        Löschen <i class="las la-trash-alt"></i>
-                                    </span>
-                                </template>
-                            </Dropdown>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+        <!-- Gruppenübersicht -->
+        <div class="bg-white rounded-2xl shadow-md mt-8 p-8 w-3/4 mx-auto">
+        <h2 class="text-lg font-semibold text-gray-800 mb-5">Meine Gruppen</h2>
+
+        <!-- Wenn keine Gruppen -->
+        <div v-if="filteredGruppen.length === 0" class="text-gray-500 italic text-sm">
+            <div class="p-8 text-center text-gray-500">
+                <svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                </svg>
+                <p class="text-lg font-medium">Noch keine Gruppen erstellt</p>
+                <p class="text-sm">Klicken Sie auf "Neue Gruppe" um zu beginnen</p>
+            </div>
         </div>
 
+        <!-- Karten -->
+        <div v-else class="space-y-3">
+            <div
+            v-for="gruppe in filteredGruppen"
+            :key="gruppe.id"
+            class="flex flex-col sm:flex-row justify-between sm:items-center bg-white border border-gray-100 rounded-xl px-5 py-4 shadow-sm hover:shadow-md transition-all duration-200"
+            >
+            <!-- Linker Bereich -->
+            <div>
+                <div class="flex items-center gap-4">
+                <Link
+                    :href="route('gruppeHasTeilnehmer.show', gruppe.id)"
+                    class="font-semibold text-gray-800 hover:text-zbb transition-colors"
+                >
+                    {{ gruppe.bereich.name || '– ohne Namen –' }}
+                </Link>
+
+                <!-- Gruppentyp-Badge -->
+                <span
+                    class="inline-block bg-zbb/10 text-zbb text-xs font-medium px-3 py-1 rounded-full border border-zbb/20"
+                >
+                    {{
+                    gruppe.typ === '1-day' ? '1 Tag' :
+                    gruppe.typ === '2-day' ? '2 Tage' :
+                    gruppe.typ === '3-day' ? '3 Tage' : 'Flexibel'
+                    }}
+                </span>
+                </div>
+                <span class="text-sm p-0 m-0 text-red-500">{{ formatDate(gruppe.anfangsdatum) }} {{ formatDate(gruppe.enddatum) }}   {{ formatTime(gruppe.startzeit) }}-{{ formatTime(gruppe.endzeit) }}</span>
+
+                <!-- Zusatzinfos -->
+                <div class="flex flex-wrap gap-4 text-sm text-gray-500">
+                <div class="flex items-center gap-1">
+                    <i class="la la-users la-2x text-zbb/70"></i>
+                    <span>{{ gruppe.teilnehmer_count || 0 }} Teilnehmer</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <i class="la la-clock la-2x text-zbb/70"></i>
+                    <span>{{ gruppe.anwesend_heute || 0 }} heute anwesend</span>
+                </div>
+                </div>
+            </div>
+
+            <!-- Buttons -->
+            <div class="flex gap-2 mt-4 sm:mt-0">
+                <button
+                @click="openModalEdit(gruppe)"
+                class="px-4 py-2 text-sm font-medium rounded-md bg-zbb text-white shadow-sm hover:bg-zbb/90 transition"
+                >
+                Verwalten
+                </button>
+                <button
+                @click="confirmDelete(gruppe)"
+                class="px-4 py-2 text-sm font-medium rounded-md bg-red-600 text-white shadow-sm hover:bg-red-700 transition"
+                >
+                Löschen
+                </button>
+            </div>
+            </div>
+        </div>
+        </div>
+
+
+
         <!-- Modals -->
-        <ModalCreate :visible="isModalCreateOpen"
+        <ModalCreate :visible="isModalCreateOpen" :bereiche="props.bereiche" :personal="props.personal"
                                  @close="isModalCreateOpen = false"
                                  @added="(gruppe) => { localGruppen.unshift(gruppe); applySearchFilter(); }"
         />

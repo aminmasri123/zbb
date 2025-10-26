@@ -1,9 +1,10 @@
 <?php
 
 namespace App\Models;
-use App\Models\zeitraum;
 use App\Models\User;
+use App\Models\Gruppe;
 use App\Models\Bereich;
+use App\Models\zeitraum;
 use App\Models\Abteilung;
 use App\Models\Teilnehmer;
 use Illuminate\Database\Eloquent\Model;
@@ -21,6 +22,7 @@ class Projekt extends Model
         'kostenstelle',
         'aktiv'
     ];
+
     public function abteilung()
     {
         return $this->belongsTo(Abteilung::class, 'abteilung_id', 'id');
@@ -55,4 +57,5 @@ class Projekt extends Model
     {
         return $this->morphMany(Zeitraum::class, 'model')->orderBy('antragsdatum', 'desc');
     }
+
 }

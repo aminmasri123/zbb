@@ -15,6 +15,8 @@ return new class extends Migration
             $table->id();
             $table->foreignId('personen_id')->constrained()->onDelete('cascade');
             $table->foreignId('bereich_id')->constrained()->onDelete('cascade');
+            $table->foreignId('projekt_id')->constrained('projekts')->onDelete('cascade');
+
             $table->date('anfangsdatum')->nullable();
             $table->date('enddatum')->nullable();
             $table->time('startzeit')->nullable();

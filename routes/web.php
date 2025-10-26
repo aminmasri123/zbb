@@ -55,7 +55,9 @@ Route::post('/set-locale', function () {
 
 
 // Geschützte Routen
-Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProjekte'])->group(function() {
+//Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProjekte'])->group(function() {
+
+Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->group(function() {
 
 
     Route::get('/dashboard', function () {
@@ -136,10 +138,12 @@ Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProje
     //Gruppe
     Route::get('/gruppe', [GruppeController::class, 'index'])->name('gruppe.index');
     Route::put('/gruppe/{id}', [GruppeController::class, 'update'])->name('gruppe.update');
-
+    Route::delete('/gruppe/{id}', [GruppeController::class, 'destroy'])->name('gruppe.destroy');
+    Route::post('/gruppe/anlegen', [GruppeController::class, 'store'])->name('gruppe.store');
 
     //GruppeHasTeilnehmer
-    //Route::get('/gruppe', [GruppeController::class, 'index'])->name('gruppe.index');
+    Route::get('/gruppehasteilnehmer/{id}', [GruppeHasTeilnehmerController::class, 'show'])->name('gruppeHasTeilnehmer.show');
+
     Route::post('/gruppehasteilnehmer/anlegen', [GruppeHasTeilnehmerController::class, 'store'])->name('gruppeHasTeilnehmer.store');
 
 

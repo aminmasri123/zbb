@@ -13,15 +13,14 @@ return new class extends Migration
     {
         Schema::create('anwesenheitens', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('zeitraum_id')->constrained()->onDelete('cascade');
-            $table->foreignId('teilnehmer_id')->constrained()->onDelete('cascade');
+            $table->foreignId('personen_id')->constrained()->onDelete('cascade');
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->date('datum');
             $table->enum('status', ['anwesend', 'krank', 'entschuldigt', 'unentschuldigt', 'urlaub', 'feiertag'])->default('anwesend');
             $table->text('bemerkung')->nullable();
             $table->timestamps();
 
-            $table->unique(['zeitraum_id', 'teilnehmer_id', 'datum'], 'anwesenheit_unique');
+            $table->unique(['personen_id', 'datum'], 'anwesenheit_unique');
         });
     }
 

@@ -4,7 +4,7 @@ import '../../public/css/line-awesome.min.css';
 //import '../../public/css/font-awesome.min.css';
 import '../../public/css/css.css';
 
-import { formatDate } from '@/utils/dateFormatter.js';
+import { formatDate } from '@/utils/dateFormat.js';
 
 
 

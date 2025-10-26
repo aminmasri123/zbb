@@ -15,7 +15,13 @@ class Gruppe extends Model
 
     public $fillable =
     [
-        'bemerkung',
+        'personen_id',
+        'bereich_id',
+        'projekt_id',
+        'anfangsdatum',
+        'enddatum',
+        'startzeit',
+        'endzeit',
     ];
 
     public function teilnehmer()
