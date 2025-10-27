@@ -1,38 +1,33 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { Head } from '@inertiajs/vue3'
+import { Head, router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import InputText from 'primevue/inputtext'
-import FloatLabel from 'primevue/floatlabel';
-import Select from 'primevue/select';
+import FloatLabel from 'primevue/floatlabel'
+import Select from 'primevue/select'
 import MultiSelect from 'primevue/multiselect'
 import Dialog from 'primevue/dialog'
-import { router } from '@inertiajs/vue3'
-import Swal from 'sweetalert2';
+import Button from 'primevue/button' // ✅ FEHLTE
+import Swal from 'sweetalert2'
+import axios from 'axios' // ✅ FEHLTE
 import { formatTime } from '@/utils/timeFormat'
-
-
-// --- Statusarten ---
-const statusArten = [
-  { name: 'anwesend', color: 'bg-green-500' },
-  { name: 'krank', color: 'bg-yellow-400' },
-  { name: 'entschuldigt', color: 'bg-blue-400' },
-  { name: 'unentschuldigt', color: 'bg-red-500' },
-  { name: 'urlaub', color: 'bg-purple-500' },
-  { name: 'feiertag', color: 'bg-gray-400' },
-]
 
 // --- Props ---
 const props = defineProps({
   gruppe: { type: Object, required: true },
-  teilnehmer: { type: Array, required:true},
+  teilnehmer: { type: Array, required: true },
+  anwesenheitsstatuten: { type: Array, required: true },
 })
-
-
+console.log('Props:', props.gruppe)
 // Modal-Steuerung + Auswahl
 const showTeilnehmerModal = ref(false)
 const selectedTeilnehmerIds = ref([])
 
+// --- Hilfsfunktion für Farben je nach Status ---
+const statusFarbe = (status) => {
+  const found = props.anwesenheitsstatuten.find(s => s.status === status)
+  return found ? found.farben || found.color || 'bg-gray-300' : 'bg-gray-300'
+}
 
 // Funktion, um nach Klick auf „Übernehmen“ die ausgewählten Teilnehmer hinzuzufügen
 const confirmTeilnehmer = async () => {
@@ -54,19 +49,16 @@ const confirmTeilnehmer = async () => {
     const data = response.data
 
     if (data.success) {
-      // 🔹 Namen der bereits vorhandenen Teilnehmer formatieren
       let alreadyNames = ''
-      if (data.already && data.already.length > 0) {
+      if (data.already?.length) {
         alreadyNames = data.already.map(t => `${t.vorname} ${t.nachname}`).join(', ')
       }
 
-      // 🔹 Namen der neu hinzugefügten Teilnehmer formatieren
       let addedNames = ''
-      if (data.added && data.added.length > 0) {
+      if (data.added?.length) {
         addedNames = data.added.map(t => `${t.vorname} ${t.nachname}`).join(', ')
       }
 
-      // ✅ SweetAlert mit beiden Informationen
       let message = ''
       if (addedNames) message += `✅ Hinzugefügt: ${addedNames}\n`
       if (alreadyNames) message += `⚠️ Bereits vorhanden: ${alreadyNames}`
@@ -78,16 +70,14 @@ const confirmTeilnehmer = async () => {
         confirmButtonText: 'OK',
       })
 
-      // Modal schließen & Auswahl zurücksetzen
       showTeilnehmerModal.value = false
       selectedTeilnehmerIds.value = []
 
-      // Lokale Tabelle aktualisieren
-      if (data.added && Array.isArray(data.added)) {
+      if (data.added?.length) {
         data.added.forEach(nt => {
-          const existiert = teilnehmer.value.some(t => t.id === nt.id)
+          const existiert = gruppenTeilnehmer.value.some(t => t.id === nt.id)
           if (!existiert) {
-            teilnehmer.value.push({
+            gruppenTeilnehmer.value.push({
               ...nt,
               anwesenheit: tage.value.map(() => 'unentschuldigt'),
             })
@@ -105,10 +95,6 @@ const confirmTeilnehmer = async () => {
   }
 }
 
-
-
-
-console.log(props.teilnehmer)
 // --- Datumsbereich (inkl. Enddatum) ---
 function generateDateRangeInclusive(start, end) {
   const result = []
@@ -122,7 +108,6 @@ function generateDateRangeInclusive(start, end) {
     const weekday = current.toLocaleDateString('de-DE', { weekday: 'short' })
     const day = current.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })
 
-    // Formatierung OHNE Zeitzonen-Verschiebung
     const localDate = [
       current.getFullYear(),
       String(current.getMonth() + 1).padStart(2, '0'),
@@ -132,7 +117,7 @@ function generateDateRangeInclusive(start, end) {
     result.push({
       label: `Tag ${index}`,
       datum: `${weekday}, ${day}.`,
-      date: localDate, // garantiert lokales YYYY-MM-DD
+      date: localDate,
     })
 
     current.setDate(current.getDate() + 1)
@@ -142,47 +127,60 @@ function generateDateRangeInclusive(start, end) {
   return result
 }
 
-
 const tage = computed(() =>
   props.gruppe?.anfangsdatum && props.gruppe?.enddatum
     ? generateDateRangeInclusive(props.gruppe.anfangsdatum, props.gruppe.enddatum)
     : []
 )
 
+
 // --- Teilnehmer vorbereiten ---
-const teilnehmer = ref([])
+const gruppenTeilnehmer = ref([])
+const tag = ref([])
 
 onMounted(() => {
-  teilnehmer.value = props.gruppe.teilnehmer.map(t => ({
+  gruppenTeilnehmer.value = props.gruppe.teilnehmer.map(t => ({
     ...t,
-    // Für jeden Tag prüfen, ob Anwesenheit vorhanden ist, sonst "unentschuldigt"
     anwesenheit: tage.value.map(tag => {
-      const eintrag = t.anwesenheiten?.find(a => a.datum === tag.date)
-      return eintrag ? eintrag.status : 'unentschuldigt'
+      // Prüfen, ob Teilnehmer an diesem Tag einen Eintrag hat
+      const eintrag = t.anwesenheiten?.find(a => a.tag?.datum === tag.date)
+      // Wenn ja → den echten Statusnamen aus der DB nehmen
+      // Wenn nein → Standardstatus setzen (z. B. "unentschuldigt")
+      return eintrag ? eintrag.status.status : 'unentschuldigt'
     }),
   }))
 })
 
-const neuerName = ref('')
-
-// --- Methoden ---
 
 
-const statusFarbe = (status) => {
-  const s = statusArten.find(s => s.name === status)
-  return s ? s.color : 'bg-gray-300'
+const speichernSofort = async (tID, ttag, statusName) => {
+  try {
+    const teilnehmerId = tID
+    const tag = ttag.date
+    const status = props.anwesenheitsstatuten.find(s => s.status === statusName)
+    if (!status) return
+    console.log('speichernSofort aufgerufen mit:', teilnehmerId, tag, status.id);
+    await axios.post('/anwesenheit/update', {
+      personen_id: teilnehmerId,
+      tag: tag, // wichtig: tage muss eine DB-ID haben
+      startzeit: props.gruppe.startzeit, // aus Gruppe oder fix definieren
+      endzeit: props.gruppe.endzeit,
+      anwesenheitsstatuten_id: status.id,
+      bemerkung: null,
+    })
+
+    console.log(`✅ gespeichert → ${statusName}`)
+  } catch (error) {
+    console.error(error)
+    Swal.fire({
+      icon: 'error',
+      title: 'Fehler',
+      text: error.response?.data?.message || 'Fehler beim Speichern der Anwesenheit.',
+    })
+  }
 }
 
-const nextStatus = (current) => {
-  const idx = statusArten.findIndex(s => s.name === current)
-  return statusArten[(idx + 1) % statusArten.length].name
-}
 
-// --- Klick auf Status (optional später: axios speichern)
-const toggleStatus = (tIndex, dayIndex) => {
-  const current = teilnehmer.value[tIndex].anwesenheit[dayIndex]
-  teilnehmer.value[tIndex].anwesenheit[dayIndex] = nextStatus(current)
-}
 </script>
 
 <template>
@@ -193,7 +191,9 @@ const toggleStatus = (tIndex, dayIndex) => {
       Gruppe – Teilnehmer verwalten
       ({{ new Date(props.gruppe.anfangsdatum).toLocaleDateString('de-DE') }}
       –
-      {{ new Date(props.gruppe.enddatum).toLocaleDateString('de-DE') }}) von {{  formatTime(props.gruppe.startzeit) }} bis {{  formatTime(props.gruppe.endzeit) }}
+      {{ new Date(props.gruppe.enddatum).toLocaleDateString('de-DE') }})
+      von {{ formatTime(props.gruppe.startzeit) }}
+      bis {{ formatTime(props.gruppe.endzeit) }}
     </template>
 
     <div class="p-6 space-y-8 bg-white rounded-lg shadow-sm">
@@ -202,24 +202,24 @@ const toggleStatus = (tIndex, dayIndex) => {
         <h3 class="font-semibold mb-3 text-gray-700">Teilnehmer hinzufügen</h3>
 
         <Button
-            label="➕ Teilnehmer hinzufügen"
-            icon="pi pi-users"
-            class="w-full !bg-orange-500 hover:!bg-orange-600 border-none"
-            @click="showTeilnehmerModal = true"
+          label="➕ Teilnehmer hinzufügen"
+          icon="pi pi-users"
+          class="w-full !bg-orange-500 hover:!bg-orange-600 border-none"
+          @click="showTeilnehmerModal = true"
         />
 
         <Dialog
-            v-model:visible="showTeilnehmerModal"
-            modal
-            header="➕ Teilnehmer hinzufügen"
-            :style="{ width: '700px', maxWidth: '95vw' }"
-            :draggable="false"
-            appendTo="body"
-            dismissableMask
+          v-model:visible="showTeilnehmerModal"
+          modal
+          header="➕ Teilnehmer hinzufügen"
+          :style="{ width: '700px', maxWidth: '95vw' }"
+          :draggable="false"
+          appendTo="body"
+          dismissableMask
         >
-            <div class="space-y-4">
+          <div class="space-y-4">
             <FloatLabel variant="on">
-                <MultiSelect
+              <MultiSelect
                 v-model="selectedTeilnehmerIds"
                 :options="props.teilnehmer"
                 :filter="true"
@@ -230,19 +230,24 @@ const toggleStatus = (tIndex, dayIndex) => {
                 class="w-full"
                 appendTo="body"
                 panelClass="z-[9999]"
-                />
+              />
             </FloatLabel>
 
-            <!-- Actions -->
             <div class="flex justify-end gap-2 pt-2">
-                <Button label="Abbrechen" class="p-button-text hover:!bg-zbbTrp !text-zbb" @click="showTeilnehmerModal = false" />
-                <Button label="Übernehmen" icon="pi pi-check" class="!bg-zbb hover:!bg-zbb/80 border-none" @click="confirmTeilnehmer" />
+              <Button
+                label="Abbrechen"
+                class="p-button-text hover:!bg-zbbTrp !text-zbb"
+                @click="showTeilnehmerModal = false"
+              />
+              <Button
+                label="Übernehmen"
+                icon="pi pi-check"
+                class="!bg-zbb hover:!bg-zbb/80 border-none"
+                @click="confirmTeilnehmer"
+              />
             </div>
-            </div>
+          </div>
         </Dialog>
-
-
-
       </div>
 
       <!-- Anwesenheit -->
@@ -252,12 +257,12 @@ const toggleStatus = (tIndex, dayIndex) => {
         <!-- Legende -->
         <div class="flex items-center gap-6 bg-zbbTrp border p-3 rounded">
           <div
-            v-for="s in statusArten"
-            :key="s.name"
+            v-for="s in props.anwesenheitsstatuten"
+            :key="s.status"
             class="flex items-center gap-2 text-sm"
           >
-            <span :class="['w-3 h-3 rounded-full', s.color]"></span>
-            {{ s.name }}
+            <span :class="['w-3 h-3 rounded-full', s.farben || s.color]"></span>
+            {{ s.status }}
           </div>
         </div>
 
@@ -282,7 +287,7 @@ const toggleStatus = (tIndex, dayIndex) => {
 
             <tbody>
               <tr
-                v-for="(t, tIndex) in teilnehmer"
+                v-for="(t, tIndex) in gruppenTeilnehmer"
                 :key="t.id"
                 class="hover:bg-gray-50"
               >
@@ -291,17 +296,37 @@ const toggleStatus = (tIndex, dayIndex) => {
                 </td>
 
                 <td
-                  v-for="(tag, dayIndex) in tage"
+                  v-for="(tttag, dayIndex) in tage"
                   :key="dayIndex"
-                  class="border px-4 py-3 text-center cursor-pointer select-none"
-                  @click="toggleStatus(tIndex, dayIndex)"
+                  class="border px-4 py-3 text-center"
                 >
-                  <div
-                    class="text-sm font-semibold mb-2 px-3 py-1 rounded-full text-white inline-block"
-                    :class="statusFarbe(t.anwesenheit[dayIndex])"
-                  >
-                    {{ t.anwesenheit[dayIndex] }}
-                  </div>
+                  <Select
+                    v-model="gruppenTeilnehmer[tIndex].anwesenheit[dayIndex]"
+                    :options="props.anwesenheitsstatuten"
+                    optionLabel="status"
+                    optionValue="status"
+                    class="w-[200px] text-sm"
+                    @change="speichernSofort(t.id, tttag, gruppenTeilnehmer[tIndex].anwesenheit[dayIndex])"
+                    >
+                    <template #value="slotProps">
+                        <div class="flex items-center gap-2">
+                        <span
+                            :class="['w-3 h-3 rounded-full inline-block', statusFarbe(slotProps.value)]"
+                        ></span>
+                        {{ slotProps.value }}
+                        </div>
+                    </template>
+
+                    <template #option="slotProps">
+                        <div class="flex items-center gap-2">
+                        <span
+                            :class="['w-3 h-3 rounded-full inline-block', slotProps.option.farben]"
+                        ></span>
+                        {{ slotProps.option.status }}
+                        </div>
+                    </template>
+                </Select>
+
                 </td>
               </tr>
             </tbody>

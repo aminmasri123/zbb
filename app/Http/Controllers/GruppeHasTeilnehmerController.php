@@ -8,6 +8,7 @@ use App\Models\Personen;
 use App\Models\Standort;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
+use App\Models\Anwesenheitsstatuten;
 
 class GruppeHasTeilnehmerController extends Controller
 {
@@ -73,13 +74,21 @@ class GruppeHasTeilnehmerController extends Controller
      */
     public function show(string $id)
     {
+       
+        $gruppe = Gruppe::with([
+            'teilnehmer',
+            'teilnehmer.anwesenheiten' => function ($q) {
+                $q->with(['tag', 'status']);
+            }
+        ])->findOrFail($id);
+
+        $anwesenheitsstatuten = Anwesenheitsstatuten::all();
+
         $user = auth()->user();
-        $projekt = $user->current_team_id;
-        $gruppe = Gruppe::with('teilnehmer', 'teilnehmer.anwesenheiten')->findOrFail($id);
 
-        $person = Personen::findOrFail($user->id);
+         $person = Personen::findOrFail($user->id);
         $userStandorte = $person->standorte()->pluck('standorts.id')->toArray();
-
+        $projekt = $user->current_team_id;
         $teilnehmer = Personen::Teilnehmer()
         ->with('standorte', 'projekte')
         ->whereHas('standorte', function($query) use ($userStandorte) {
@@ -89,16 +98,12 @@ class GruppeHasTeilnehmerController extends Controller
         $query->where('projekts.id', $projekt);
         })
         ->get();
-
-
-
-
-
         return Inertia::render('Gruppe/GruppeHasTeilnehmer/Index', [
             'gruppe' => $gruppe,
             'teilnehmer' => $teilnehmer,
-            ],
-        );
+            'anwesenheitsstatuten' => $anwesenheitsstatuten,
+        ]);
+
     }
 
     /**

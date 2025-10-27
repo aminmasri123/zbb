@@ -16,6 +16,7 @@ use App\Http\Controllers\ProjektController;
 use App\Http\Controllers\StandortController;
 use App\Http\Controllers\AbteilungController;
 use App\Http\Controllers\TeilnehmerController;
+use App\Http\Controllers\AnwesenheitController;
 use App\Http\Controllers\BerechtigungController;
 use App\Http\Controllers\KostenstelleController;
 use App\Http\Controllers\NotificationController;
@@ -157,6 +158,13 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::get('/teilnehmer/bearbeiten/{id}', [TeilnehmerController::class, 'show'])->name('teilnehmer.edit');
     Route::patch('/teilnehmer/update/{id}', [TeilnehmerController::class, 'update'])->name('teilnehmer.update');
 
+
+    //Anwesenheiten
+    Route::post('/anwesenheit/speichern', [AnwesenheitController::class, 'store'])
+    ->name('anwesenheit.speichern');
+
+    Route::post('/anwesenheit/update', [AnwesenheitController::class, 'update'])
+    ->name('anwesenheit.update');
 
     //Kontakte
     Route::delete('/teilnehmer/kontakt/entfernen/{id}', [KontaktController::class, 'destroy'])->name('kontakt.destroy');

@@ -5,9 +5,10 @@ namespace App\Http\Controllers;
 use Log;
 use App\Models\User;
 use Inertia\Inertia;
+use App\Models\Personen;
 use App\Models\Abteilung;
-use Illuminate\Http\Request;
 
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\Abteilungsassistent;
 
@@ -15,28 +16,35 @@ class AbteilungController extends Controller
 {
     public function index(Request $request)
     {
-        $search = $request->input('search'); // Benutze input(), um den Suchparameter abzurufen
-        $users = User::select('id', DB::raw("CONCAT(first_name, ' ', last_name) AS full_name"))->distinct()->get();
+        $search = $request->input('search'); // Suchparameter abrufen
+        $users = Personen::where('typ', 'mitarbeiter')
+            ->select('id', DB::raw("CONCAT(vorname, ' ', nachname) AS full_name"))
+            ->get();
 
-        // Hole die Abteilungen mit Suchfilter und lade die notwendigen Beziehungen
+        // Abteilungen mit optionalem Suchfilter und geladenen Relationen
         $abteilungen = Abteilung::query()
-            ->when($search, function ($query) use ($search) {
-                $query->where('name', 'like', "%{$search}%");
-            })
-            ->with('user:id,first_name,last_name') // Lade den Abteilungsleiter
-            ->with('abteilungsassistente.user') // Lade die Abteilungsassistenten
-            ->orderBy('name') // Sortiere nach Name
-            ->paginate(100)    // Wende die Paginierung an
-            ->withQueryString(); // Behalte die Query-String-Parameter für die Pagination
+            ->when($search, fn($query) =>
+                $query->where('name', 'like', "%{$search}%")
+            )
+            ->with([
+                'personen:id,vorname,nachname',      // Abteilungsleiter
+                'abteilungsassistente.personen:id,vorname,nachname', // Assistenten mit Benutzer
+                'personen:id,vorname,nachname'           // Direkter User falls vorhanden
+            ])
+            ->orderBy('name')
+            ->paginate(100)
+            ->withQueryString();
 
 
-        // Standardmäßige Rückgabe für die Inertia-Ansicht
         return Inertia::render('Abteilung/Index', [
             'abteilungen' => $abteilungen,
             'users' => $users,
+            'filters' => [
+                'search' => $search
+            ]
         ]);
-
     }
+
     public function indexAjaxFresh(Request $request)
     {
         $search = $request->input('search'); // Benutze input(), um den Suchparameter abzurufen

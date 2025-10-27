@@ -19,7 +19,10 @@ class UserSeeder extends Seeder
     public function run()
     {
 
-         DB::table('standorts')->insert([
+
+
+
+        DB::table('standorts')->insert([
             [ // id = 1
                 'name' => 'BOP',
             ],
@@ -109,7 +112,7 @@ class UserSeeder extends Seeder
 
         ]);
 
-       
+
 
         DB::table('projekts')->insert([
             [ // id = 1

@@ -11,14 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('anwesenheitens', function (Blueprint $table) {
+        Schema::create('anwesenheitsstatutens', function (Blueprint $table) {
             $table->id();
-            $table->date('datum');
-            $table->time('startzeit')->nullable();
-            $table->time('endzeit')->nullable();
-            $table->timestamps();
+            $table->string('status')->unique();
+            $table->string('farben')->unique();
 
-            $table->unique(['personen_id', 'datum'], 'anwesenheit_unique');
         });
     }
 
@@ -27,6 +24,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('anwesenheitens');
+        Schema::dropIfExists('anwesenheitsstatutens');
     }
 };

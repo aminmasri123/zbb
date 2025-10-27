@@ -12,6 +12,7 @@ use App\Models\Anwesenheiten;
 
 use App\Models\ProjektHasPersonen;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\PersonenHasAnwesenheiten;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
@@ -32,7 +33,7 @@ class Personen extends Model
     ];
 
     public function anwesenheiten(){
-        return $this->hasMany(Anwesenheiten::class, 'personen_id', 'id');
+        return $this->hasMany(PersonenHasAnwesenheiten::class, 'personen_id', 'id');
     }
 
     public function scopeTeilnehmer($query)

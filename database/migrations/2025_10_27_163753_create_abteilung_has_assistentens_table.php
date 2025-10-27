@@ -11,14 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('anwesenheitens', function (Blueprint $table) {
+        Schema::create('abteilung_has_assistentens', function (Blueprint $table) {
             $table->id();
-            $table->date('datum');
-            $table->time('startzeit')->nullable();
-            $table->time('endzeit')->nullable();
+            $table->foreignId('abteilung_id')->constrained()->onDelete('cascade');
+            $table->foreignId('personen_id')->constrained()->onDelete('cascade');
             $table->timestamps();
-
-            $table->unique(['personen_id', 'datum'], 'anwesenheit_unique');
         });
     }
 
@@ -27,6 +24,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('anwesenheitens');
+        Schema::dropIfExists('abteilung_has_assistentens');
     }
 };
