@@ -13,6 +13,7 @@ use App\Models\Kontakttypen;
 use Illuminate\Http\Request;
 use App\Models\BereichHasPersonen;
 use Illuminate\Support\Facades\DB;
+use App\Models\Anwesenheitsstatuten;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 
@@ -133,25 +134,22 @@ class TeilnehmerController extends Controller
         $personen = personen::Teilnehmer()->with([
             'adresses',
             'standorte',
+            'anwesenheiten.tag',
+            'anwesenheiten.zeit',
+            'anwesenheiten.status',
             'kontaktes.kontakttyp',
             'projekte',
             'baenke'
         ])->findOrFail($id);
+        $anwesenheitsstatuten =Anwesenheitsstatuten::all();
 
-        // Pivot + Zeiträume nachladen:
         $personen->projekte->each(function ($projekt) {
             $projekt->pivotModel->load('zeitraume');
         });
 
+
         $erhalteneBriefe = auth()->user()->receivedFreigaben();
 
-        $freigaben = auth()->user()
-            ->receivedFreigaben()
-            ->where('shareable_from_type', Brief::class)
-            ->with('shareableFrom')
-            ->get();
-
-        $erhalteneBriefe = $freigaben->pluck('shareableFrom');
         $meineBriefe = auth()->user()->ownLetters();
 
         // Jetzt manuell umwandeln für Inertia:
@@ -176,6 +174,7 @@ class TeilnehmerController extends Controller
             'betreuer' => $betreuer,
             'erhalteneBriefe' => $erhalteneBriefe,
             'meineBriefe' => $meineBriefe,
+            'anwesenheitsstatuten' => $anwesenheitsstatuten,
             ],
         );
     }
@@ -231,8 +230,4 @@ class TeilnehmerController extends Controller
             return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
         }
     }
-
-
-
-
 }

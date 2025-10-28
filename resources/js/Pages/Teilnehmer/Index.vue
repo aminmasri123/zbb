@@ -222,65 +222,65 @@ const sortByColumn = (column) => {
                     {{ $t('Bitte legen Sie ein Standardprojekt fest.') }}
                 </p>
             </div>
-            <table class="w-full text-sm text-left text-gray-500">
-                <thead class=" text-gray-600 uppercase bg-gray-200">
-                    <tr>
-                        <th v-if="checkBoxListeTeilnehmer" class="border border-solid border-gray-300 text-center py-3">⋮</th>
-                        <th @click="sortByColumn('id')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
-                            {{$t('id')}}
-                            <i :class="sortColumn === 'id' && sortDirection === 'asc' ? 'las la-lg la-sort-numeric-down-alt' : 'las la-lg la-sort-numeric-up-alt'"></i>
-                        </th>
-                        <th @click="sortByColumn('vorname')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
-                            {{$t('vorname')}}
-                            <i :class="sortColumn === 'vorname' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
-                        </th>
-                        <th @click="sortByColumn('nachname')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
-                            {{$t('nachname')}}
-                            <i :class="sortColumn === 'nachname' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
-                        </th>
-                       <th @click="sortByColumn('geschlecht')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
-                            {{ $t('geschlecht') }}
-                            <i :class="sortColumn === 'geschlecht' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
-                        </th>
-                        <th scope="col" class="border w-10 border-solid border-gray-300 text-center px-6 py-3 ">*</th> <!-- Aktionen hinzufügen -->
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-for="teilnehmer in filteredTeilnehmerByProject" :key="teilnehmer.id" class="bg-white border-b">
-                        <td v-if="checkBoxListeTeilnehmer" class="text-center py-4 border border-solid border-gray-300">
-                            <input v-model="selected":value="teilnehmer.id" type="checkbox"></input>
-                        </td>
-                        <td class="px-6 py-4 border border-solid border-gray-300"><Link :href="route('teilnehmer.edit', teilnehmer.id)">{{ teilnehmer.id }}</Link> </td>
-                        <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.vorname }}</td>
-                        <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.nachname }}</td>
-                        <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.geschlecht }}</td>
 
-                        <td class="border px-6 py-4 text-center">
-                            <!-- Dropdown für Aktion -->
-                            <Dropdown>
-                                <template #trigger>
-                                    <button class=" items-center  text-sm leading-4 font-medium text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
-                                        <span class="cursor-pointer">
-                                            <i class="transform transition-transform duration-300  la la-ellipsis-v la-lg"></i>
+                <table class="w-full text-sm text-left text-gray-500 ">
+                    <thead class=" text-gray-600 uppercase bg-gray-200">
+                        <tr >
+                            <th v-if="checkBoxListeTeilnehmer" class="border border-solid border-gray-300 text-center py-3">⋮</th>
+                            <th @click="sortByColumn('id')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
+                                {{$t('id')}}
+                                <i :class="sortColumn === 'id' && sortDirection === 'asc' ? 'las la-lg la-sort-numeric-down-alt' : 'las la-lg la-sort-numeric-up-alt'"></i>
+                            </th>
+                            <th @click="sortByColumn('vorname')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
+                                {{$t('vorname')}}
+                                <i :class="sortColumn === 'vorname' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
+                            </th>
+                            <th @click="sortByColumn('nachname')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
+                                {{$t('nachname')}}
+                                <i :class="sortColumn === 'nachname' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
+                            </th>
+                        <th @click="sortByColumn('geschlecht')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
+                                {{ $t('geschlecht') }}
+                                <i :class="sortColumn === 'geschlecht' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
+                            </th>
+                            <th scope="col" class="border w-10 border-solid border-gray-300 text-center px-6 py-3 ">*</th> <!-- Aktionen hinzufügen -->
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="teilnehmer in filteredTeilnehmerByProject" :key="teilnehmer.id" class="bg-white border-b">
+                            <td v-if="checkBoxListeTeilnehmer" class="text-center py-4 border border-solid border-gray-300">
+                                <input v-model="selected":value="teilnehmer.id" type="checkbox"></input>
+                            </td>
+                            <td class="px-6 py-4 border border-solid border-gray-300"><Link :href="route('teilnehmer.edit', teilnehmer.id)">{{ teilnehmer.id }}</Link> </td>
+                            <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.vorname }}</td>
+                            <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.nachname }}</td>
+                            <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.geschlecht }}</td>
+
+                            <td class="border px-6 py-4 text-center">
+                                <!-- Dropdown für Aktion -->
+                                <Dropdown>
+                                    <template #trigger>
+                                        <button class=" items-center  text-sm leading-4 font-medium text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
+                                            <span class="cursor-pointer">
+                                                <i class="transform transition-transform duration-300  la la-ellipsis-v la-lg"></i>
+                                            </span>
+                                        </button>
+                                    </template>
+
+                                    <template #content >
+                                        <!-- Gefilterte Projektauswahl -->
+                                        <span class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100 " @click="confirmDelete(teilnehmer)">
+                                            {{ $t('Löschen') }} <i class="las la-trash-alt"></i>
                                         </span>
-                                    </button>
-                                </template>
-
-                                <template #content >
-                                    <!-- Gefilterte Projektauswahl -->
-                                    <span class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100 " @click="confirmDelete(teilnehmer)">
-                                          {{ $t('Löschen') }} <i class="las la-trash-alt"></i>
-                                    </span>
-                                    <Link class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100" :href="route('teilnehmer.edit', teilnehmer.id)">
-                                       {{ $t('Bearbeiten') }}  <i class="las la-edit"></i>
-                                    </Link>
-                                </template>
-                            </Dropdown>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-
+                                        <Link class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100" :href="route('teilnehmer.edit', teilnehmer.id)">
+                                        {{ $t('Bearbeiten') }}  <i class="las la-edit"></i>
+                                        </Link>
+                                    </template>
+                                </Dropdown>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
 
             <!-- Paginierung -->
 

@@ -190,7 +190,15 @@
     "bis": "bis",
     "gruppe": "Gruppe",
     "speichern": "speichern",
-    "zur gruppe hinzufügen": "zur gruppe hinzufügen"
+    "zur gruppe hinzufügen": "zur gruppe hinzufügen",
+    "Partner": "Partner",
+    "Partnerübersicht": "Partnerübersicht",
+    "Dienstwagen": "Dienstwagen",
+    "Dienstwagenübersicht": "Dienstwagenübersicht",
+    "Lager": "Lager",
+    "IT-Service": "IT-Service",
+    "Bestellungen": "Bestellungen",
+    "Termine": "Termine"
 
 
 }

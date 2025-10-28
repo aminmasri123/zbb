@@ -1,33 +1,34 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { Head, router } from '@inertiajs/vue3'
-import AppLayout from '@/Layouts/AppLayout.vue'
-import InputText from 'primevue/inputtext'
-import FloatLabel from 'primevue/floatlabel'
-import Select from 'primevue/select'
-import MultiSelect from 'primevue/multiselect'
-import Dialog from 'primevue/dialog'
-import Button from 'primevue/button' // ✅ FEHLTE
-import Swal from 'sweetalert2'
-import axios from 'axios' // ✅ FEHLTE
-import { formatTime } from '@/utils/timeFormat'
+    import { ref, computed, onMounted } from 'vue'
+    import { Head, router } from '@inertiajs/vue3'
+    import AppLayout from '@/Layouts/AppLayout.vue'
+    import InputText from 'primevue/inputtext'
+    import FloatLabel from 'primevue/floatlabel'
+    import Select from 'primevue/select'
+    import MultiSelect from 'primevue/multiselect'
+    import Dialog from 'primevue/dialog'
+    import Button from 'primevue/button' // ✅ FEHLTE
+    import Swal from 'sweetalert2'
+    import axios from 'axios' // ✅ FEHLTE
+    import { formatTime } from '@/utils/timeFormat'
 
-// --- Props ---
-const props = defineProps({
-  gruppe: { type: Object, required: true },
-  teilnehmer: { type: Array, required: true },
-  anwesenheitsstatuten: { type: Array, required: true },
-})
-console.log('Props:', props.gruppe)
-// Modal-Steuerung + Auswahl
-const showTeilnehmerModal = ref(false)
-const selectedTeilnehmerIds = ref([])
+    // --- Props ---
+    const props = defineProps({
+    gruppe: { type: Object, required: true },
+    teilnehmer: { type: Array, required: true },
+    anwesenheitsstatuten: { type: Array, required: true },
+    })
+    console.log('Props:', props.anwesenheitsstatuten)
+    // Modal-Steuerung + Auswahl
+    const showTeilnehmerModal = ref(false)
+    const selectedTeilnehmerIds = ref([])
 
-// --- Hilfsfunktion für Farben je nach Status ---
-const statusFarbe = (status) => {
-  const found = props.anwesenheitsstatuten.find(s => s.status === status)
-  return found ? found.farben || found.color || 'bg-gray-300' : 'bg-gray-300'
-}
+    // --- Hilfsfunktion für Farben je nach Status ---
+    const statusFarbe = (status) => {
+    const found = props.anwesenheitsstatuten.find(s => s.status === status)
+    return found ? found.farben || found.color || 'bg-gray-300' : 'bg-gray-300'
+    }
+
 
 // Funktion, um nach Klick auf „Übernehmen“ die ausgewählten Teilnehmer hinzuzufügen
 const confirmTeilnehmer = async () => {
@@ -254,14 +255,14 @@ const speichernSofort = async (tID, ttag, statusName) => {
       <div class="space-y-4">
         <h3 class="font-semibold text-gray-700">Anwesenheit verwalten</h3>
 
-        <!-- Legende -->
+        <!-- Anwesenheitsstatuten Agenda-->
         <div class="flex items-center gap-6 bg-zbbTrp border p-3 rounded">
           <div
             v-for="s in props.anwesenheitsstatuten"
             :key="s.status"
             class="flex items-center gap-2 text-sm"
           >
-            <span :class="['w-3 h-3 rounded-full', s.farben || s.color]"></span>
+            <span :class="['w-3 h-3 rounded-full ', s.farben ]"></span>
             {{ s.status }}
           </div>
         </div>

@@ -160,11 +160,13 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
 
 
     //Anwesenheiten
-    Route::post('/anwesenheit/speichern', [AnwesenheitController::class, 'store'])
-    ->name('anwesenheit.speichern');
+    /* Route::post('/anwesenheit/speichern', [AnwesenheitController::class, 'store'])
+    ->name('anwesenheit.speichern'); */
+    Route::post('/anwesenheit/speichern', [AnwesenheitController::class, 'store'])->name('anwesenheit.store');
 
-    Route::post('/anwesenheit/update', [AnwesenheitController::class, 'update'])
-    ->name('anwesenheit.update');
+    Route::delete('/anwesenheit/entfernen/{id}', [AnwesenheitController::class, 'destroy'])->name('anwesenheit.destroy');
+
+    Route::post('/anwesenheit/update', [AnwesenheitController::class, 'update'])->name('anwesenheit.update');
 
     //Kontakte
     Route::delete('/teilnehmer/kontakt/entfernen/{id}', [KontaktController::class, 'destroy'])->name('kontakt.destroy');
@@ -206,6 +208,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
 
 
         Route::post('/brief', [BriefController::class, 'store'])->name('brief.store');
+        Route::post('/brief/share', [BriefController::class, 'share'])->name('brief.share');
 
 });
 

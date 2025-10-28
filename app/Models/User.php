@@ -11,6 +11,7 @@ use App\Models\Abteilung;
 use App\Models\Teilnehmer;
 use Laravel\Sanctum\HasApiTokens;
 use App\Models\Abteilungsassistent;
+use Illuminate\Support\Facades\Auth;
 use Laravel\Jetstream\HasProfilePhoto;
 use Spatie\Permission\Traits\HasRoles;
 use Illuminate\Notifications\Notifiable;
@@ -87,9 +88,22 @@ class User extends Authenticatable implements MustVerifyEmail
      /**
      * Freigaben, die dieser Benutzer erhalten hat
      */
+    public function receivedFreigaben2()
+    {
+        return $this->morphMany(Freigabe::class, 'shareable_to')
+            ->where('shareable_to_id', Auth::user())
+            ->where('shareable_to_id', '!=', 'shared_by');
+    }
+
     public function receivedFreigaben()
     {
-        return $this->morphMany(Freigabe::class, 'shareable_to');
+        return Freigabe::where('shareable_to_type', self::class)
+            ->where('shareable_to_id',  Auth::id())
+            ->where('shared_by','!=',  Auth::id())
+            ->where('shareable_from_type', Brief::class)
+
+            ->get()
+            ->pluck('shareableFrom');
     }
 
     /**
@@ -106,10 +120,9 @@ class User extends Authenticatable implements MustVerifyEmail
     public function ownLetters()
     {
         return Freigabe::where('shareable_to_type', self::class)
-            ->where('shareable_to_id', $this->id)
-            ->where('shared_by', $this->id)
+            ->where('shareable_to_id',  Auth::id())
+            ->where('shared_by',  Auth::id())
             ->where('shareable_from_type', Brief::class)
-            ->with('shareableFrom')
             ->get()
             ->pluck('shareableFrom');
     }

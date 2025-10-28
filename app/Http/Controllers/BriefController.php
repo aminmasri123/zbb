@@ -7,6 +7,7 @@ use Exception;
 use App\Models\User;
 use App\Models\Brief;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 
 class BriefController extends Controller
@@ -77,6 +78,32 @@ class BriefController extends Controller
                 ->withInput();
         }
     }
+public function share(Request $request)
+{
+    $validated = $request->validate([
+        'brief_id' => 'required|exists:briefs,id',
+        'betreuer_ids' => 'required|array',
+        'betreuer_ids.*' => 'exists:users,id',
+    ]);
+
+    $brief = Brief::findOrFail($validated['brief_id']);
+
+    // Beispiel: Freigaben in Pivot-Tabelle speichern
+    foreach ($validated['betreuer_ids'] as $userId) {
+        $brief->freigaben()->updateOrCreate(
+        [
+            'shareable_to_id'   => $userId,
+            'shareable_to_type' => User::class,
+        ],
+        [
+            'shared_by' => Auth::id(),
+            'right'     => 'lesen',
+        ]
+    );
+    }
+
+    return back()->with('success', 'Brief wurde erfolgreich freigegeben.');
+}
 
 
     /**

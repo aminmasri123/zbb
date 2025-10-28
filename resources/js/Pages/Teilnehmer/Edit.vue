@@ -271,6 +271,64 @@
                 </tbody>
             </table>
           </div>
+
+            <!-- =================== Anwesenheit =================== -->
+            <div v-else-if="activeTab === 'Anwesenheit'">
+                 <!-- Anwesenheit hinzufügen -->
+                <button @click="showModalAnwesenheit = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
+                    <span v-if="!loadingProjekt">➕ Anwesenheit</span>
+                    <span v-else>...</span>
+                </button>
+                <!-- Tabelle -->
+                <div class="bg-white rounded-2xl shadow-md border mt-8 p-8 w-3/4 mx-auto">
+                    <!-- Wenn keine Anwesenheit -->
+                    <div v-if="teilnehmer.anwesenheiten.length === 0" class="text-gray-500 italic text-sm">
+                        <div class="p-8 text-center text-gray-500">
+                            <div class="mb-4 flex justify-center text-6xl text not-italic">
+                                🕒
+                            </div>
+                            <p class="text-lg font-medium">Noch keine Anwesenheit verfasst </p>
+                            <p class="text-sm">Klicken Sie auf "Anwesenheit erfassen" um zu beginnen</p>
+                        </div>
+                    </div>
+
+                    <!-- Karten -->
+                    <div v-else class="space-y-3">
+                        <div
+                        v-for="anwesenheit in sortierteAnwesenheiten"
+                        :key="anwesenheit.id"
+                        class="flex flex-col sm:flex-row justify-between sm:items-center bg-white border border-gray-100 rounded-xl px-5 py-4 shadow-sm hover:shadow-md transition-all duration-200"
+                        >
+                        <!-- Linker Bereich -->
+                        <div>
+                            <div class="flex items-center gap-6">
+                                <div class="font-semibold   ">
+                                    <span class="text-zbb mr-8">{{ formatDate(anwesenheit.tag.datum) || '– ohne Datum  –' }}</span>
+                                    <span class="text-lg ">🕒</span><span>{{ formatTime(anwesenheit.zeit.startzeit) }}-{{ formatTime(anwesenheit.zeit.endzeit) }}</span>
+                                    <span class="text-lg ml-8">📋</span><span class="text-sm p-0 m-0 "> {{ anwesenheit.status.status || 0 }} </span>
+
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Buttons -->
+                        <div class="flex gap-2 mt-4 sm:mt-0">
+                            <button
+                                @click="openModalEdit(anwesenheit)"
+                                class="px-4 py-2 text-sm font-medium rounded-md bg-zbb text-white shadow-sm hover:bg-zbb/90 transition">
+                                Verwalten
+                            </button>
+                            <button
+                            @click="confirmDelete(anwesenheit, 'anwesenheit')"
+                            class="px-4 py-2 text-sm font-medium rounded-md bg-red-600 text-white shadow-sm hover:bg-red-700 transition">
+                                Löschen
+                            </button>
+                        </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
             <!-- ================= BANK ================= -->
             <div v-else-if="activeTab === 'Bank'">
                 <button @click="showModalBank = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
@@ -330,13 +388,11 @@
                     <div>
                         <label>Meine</label>
                         <ul class="border border-gray-200 rounded p-2 text-sm">
-                            <li
-                                v-for="v in props.meineBriefe"
-                                :key="v"
-                                class="cursor-pointer hover:text-zbb"
-                                 @click="setBriefVorlage(v)">
-                                {{ v?.name }}
+                           <li v-for="v in props.meineBriefe" :key="v.id" @click="setBriefVorlage(v)">
+                                {{ v.name }}
+                                <button @click.stop="() => openFreigabeModal(v)">🔄 Freigeben</button>
                             </li>
+
                         </ul>
                     </div>
 
@@ -398,6 +454,56 @@
 
 
             <!-- MODAL: Brief hinzufügen -->
+             <transition name="fade">
+              <div
+                v-if="showModalBriefFreigeben"
+                class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+              >
+                <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
+                  <button
+                    @click="showModalBriefFreigeben = false"
+                    class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl"
+                  >
+                    ✕
+                  </button>
+                  <h3 class="text-lg font-semibold mb-4 text-zbb">Brief freigeben</h3>
+
+                  <Multiselect
+  required
+  v-model="neuesBriefFreigeben"
+  :options="props.betreuer.map(p => ({ value: p.id, label: `${p.vorname} ${p.nachname}` }))"
+  placeholder="Betreuer auswählen"
+  searchable
+  noOptionsText="Keine Person gefunden"
+  class="input-auto"
+  mode="tags"
+/>
+
+
+
+
+
+                  <div class="mt-6 flex justify-end space-x-3">
+                    <button
+                      @click="showModalBriefFreigeben = false"
+                      class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100"
+                    >
+                      Abbrechen
+                    </button>
+                    <button
+                        @click="briefFreigeben"
+                        :disabled="loadingBriefFreigabe"
+                        class="px-4 py-2 rounded-md text-sm text-white transition"
+                        :class="loadingBriefFreigabe ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
+                        >
+                        <span v-if="!loadingBriefFreigabe">Freigeben</span>
+                        <span v-else>Freigabe läuft...</span>
+                    </button>
+
+                  </div>
+                </div>
+              </div>
+            </transition>
             <transition name="fade">
               <div
                 v-if="showModalBrief"
@@ -615,6 +721,101 @@
             </transition>
 
 
+            <!-- MODAL: Anwesenheit -->
+            <transition name="fade">
+                <div v-if="showModalAnwesenheit" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+                    <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
+                        <button @click="showModalAnwesenheit = false" class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl">✕</button>
+                        <h3 class="text-lg font-semibold mb-4 text-zbb">Anwesenheit erfassen</h3>
+
+                        <div class="space-y-4">
+                            <!-- Datum -->
+                            <div>
+                                <label for="startDate" class="block text-sm font-medium text-gray-700 mb-2" >
+                                    Datum <span class="text-red-500">*</span>
+                                </label>
+                                <input v-model="neueAnwesenheit.dateAnwesenheit" type="date" id="dateAnwesenheit" name="dateAnwesenheit" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
+                            </div>
+                            <!-- Zeitraum -->
+                            <div class="flex space-x-4">
+                                <div class="w-1/2">
+                                    <label for="startTime" class="block text-sm font-medium text-gray-700 mb-2" >
+                                        Startzeit <span class="text-red-500">*</span>
+                                    </label>
+                                    <input v-model="neueAnwesenheit.startTime" type="time" id="startTime" name="startTime" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
+                                </div>
+                                <div class="w-1/2">
+                                    <label for="endTime" class="block text-sm font-medium text-gray-700 mb-2" >
+                                        Endzeit <span class="text-red-500">*</span>
+                                    </label>
+                                    <input v-model="neueAnwesenheit.endTime" type="time" id="endTime" name="endTime" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
+                                </div>
+                            </div>
+                             <div>
+                                <label for="startDate" class="block text-sm font-medium text-gray-700 mb-2" >
+                                        Anwesenheitsstatuten <span class="text-red-500">*</span>
+                                </label>
+                               <Select
+                                    v-model="neueAnwesenheit.anwesenheitsstatus"
+                                    :options="props.anwesenheitsstatuten"
+                                    optionLabel="status"
+                                    optionValue="id"
+                                    class="w-[200px] text-sm w-full px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
+                                    >
+                                    <template #option="slotProps">
+                                        <div class="flex items-center space-x-2">
+                                        <span :class="['w-4 h-4 rounded-full', slotProps.option.farben]"></span>
+                                        <span>{{ slotProps.option.status }}</span>
+                                        </div>
+                                    </template>
+
+                                    <template #value="slotProps">
+                                        <div class="flex items-center space-x-2">
+                                        <span
+                                            :class="[
+                                            'w-3 h-3 rounded-full',
+                                            props.anwesenheitsstatuten.find(s => s.id === slotProps.value)?.farben || 'bg-gray-300'
+                                            ]"
+                                        ></span>
+                                        <span>
+                                            {{ props.anwesenheitsstatuten.find(s => s.id === slotProps.value)?.status || '–' }}
+                                        </span>
+
+
+                                        </div>
+                                    </template>
+                                </Select>
+                            </div>
+                            <div>
+                                <label for="bemerkungen" class="block text-sm font-medium text-gray-700 mb-2" >
+                                    Anwesenheitsstatuten <span class="text-red-500">*</span>
+                                </label>
+                                <textarea v-model="neueAnwesenheit.bemerkungen" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors py-3"></textarea>
+
+                            </div>
+
+
+                        </div>
+
+                        <div class="mt-6 flex justify-end space-x-3">
+                            <button @click="showModalAnwesenheit = false" class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100">Abbrechen</button>
+                            <button
+                            @click="addAnwesenheit"
+                            :disabled="loadingAnwesenheit"
+                            class="px-4 py-2 rounded-md text-sm text-white transition"
+                            :class="loadingAnwesenheit ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
+                            >
+                            <span v-if="!loadingAnwesenheit">Speichern</span>
+                            <span v-else>Speichern...</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </transition>
+
+
+
+
             <!-- MODAL: Bank hinzufügen -->
             <transition name="fade">
               <div v-if="showModalBank" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
@@ -671,12 +872,16 @@
 
 <script setup>
     import AppLayout from '@/Layouts/AppLayout.vue';
-    import { ref, defineProps, computed } from 'vue';
+    import { ref, defineProps, computed, onMounted } from 'vue';
     import { router, Head, Link } from '@inertiajs/vue3';
     import Dropdown from '@/Components/Dropdown.vue';
     import ModalDestroy from '@/Components/ModalDestroyForm.vue';
     import Multiselect from '@vueform/multiselect';
     import '@vueform/multiselect/themes/default.css';
+    import { formatDate } from '@/utils/dateFormat';
+    import { formatTime } from '@/utils/timeFormat';
+    import Select from 'primevue/select';
+    import Swal from 'sweetalert2'
 
     const props = defineProps({
         teilnehmer: Object,
@@ -685,13 +890,14 @@
         betreuer: Array,
         erhalteneBriefe: Array,
         meineBriefe: Array,
+        anwesenheitsstatuten: Array,
     });
     console.log(props.meineBriefe);
     // Lokale Kopie der Teilnehmerdaten
     const teilnehmer = ref(JSON.parse(JSON.stringify(props.teilnehmer)));
     const neuesProjektId = ref('');
     const loadingProjekt = ref(false);
-
+    const neuesBriefFreigeben = ref([]);
     const neuesProjekt = ref({
         antragsdatum: '',
         starttermin: '',
@@ -702,6 +908,8 @@
 
 
 const loadingBank = ref(false)
+const loadingBriefFreigabe = ref(false)
+const loadingAnwesenheit = ref(false)
 const neueBank = ref({ name: '', iban: '', blz: '' })
 
 
@@ -716,8 +924,24 @@ const form = ref({
     vermittlung: "",
     bankname: "",
     iban: "",
+
+
+});
+const neueAnwesenheit = ref({
+    anwesenheitsstatus: null,
+    dateAnwesenheit: '',
+    startTime: '',
+    endTime: '',
+    bemerkungen: '',
 });
 
+const sortierteAnwesenheiten = computed(() => {
+  return [...teilnehmer.value.anwesenheiten].sort((a, b) => {
+    const dateA = new Date(a.tag.datum);
+    const dateB = new Date(b.tag.datum);
+    return dateB - dateA; // absteigend (neuestes Datum zuerst)
+  });
+});
 
 // Tabs
 const tabs = [
@@ -725,6 +949,7 @@ const tabs = [
     "Adresse",
     "Kontaktdaten",
     "Projektverlauf",
+    "Anwesenheit",
     "Bank",
     "Briefe",
     "Aktennotiz",
@@ -740,7 +965,10 @@ const activeTab = ref("");
 // Formulare & Variablen
 const showModalAdresse = ref(false);
 const showModalBank = ref(false);
+const showModalAnwesenheit = ref(false);
 const showModalBrief = ref(false);
+
+const showModalBriefFreigeben = ref("");
 
 const showModalProjektzuweisen = ref(false);
 const showModalCreateKontakt = ref(false);
@@ -754,6 +982,14 @@ const alter = computed(() => {
   const diff = Date.now() - new Date(geb).getTime();
   return Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
 });
+
+onMounted(() => {
+  // Finde den Eintrag "anwesend" aus der Liste
+  const standard = props.anwesenheitsstatuten.find(s => s.status === 'anwesend')
+  if (standard) {
+    neueAnwesenheit.value.anwesenheitsstatus = standard.id
+  }
+})
 
 // =======  Stammdaten  =======
 const loadingSave = ref(false);
@@ -798,6 +1034,11 @@ const saveStammdaten = () => {
 
 
 // ======= Brief =======
+const openFreigabeModal = (briefData) => {
+  brief.value = briefData; // speichert den ausgewählten Brief für die Freigabe
+  showModalBriefFreigeben.value = true;
+};
+
     const neuerBrief = ref({name: "", titel: "", content: ""});
     const brief = ref({
         datum: new Date().toISOString().split("T")[0],
@@ -825,6 +1066,71 @@ const saveStammdaten = () => {
         brief.value.betreff = vorlage.title || '';
         brief.value.inhalt = anrede + (vorlage.content || '');
     };
+
+const briefFreigeben = async () => {
+  // Prüfen, ob ein Betreuer ausgewählt wurde
+  if (!neuesBriefFreigeben.value) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Keine Person ausgewählt',
+      text: 'Bitte wähle mindestens eine Person aus, für die der Brief freigegeben werden soll.',
+    });
+    return;
+  }
+
+  // Prüfen, ob auch ein Brief existiert
+  if (!brief.value || !brief.value.id) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Kein Brief ausgewählt',
+      text: 'Bitte wähle zuerst den Brief aus, den du freigeben möchtest.',
+    });
+    return;
+  }
+
+  loadingBriefFreigabe.value = true;
+
+  try {
+    await router.post(
+      route('brief.share'),
+      {
+        brief_id: brief.value.id, // <-- Hier wird jetzt korrekt die Brief-ID gesendet!
+        betreuer_ids: Array.isArray(neuesBriefFreigeben.value)
+          ? neuesBriefFreigeben.value
+          : [neuesBriefFreigeben.value],
+      },
+      {
+        preserveScroll: true,
+        onFinish: () => (loadingBriefFreigabe.value = false),
+        onSuccess: () => {
+          Swal.fire({
+            icon: 'success',
+            title: 'Freigabe erfolgreich',
+            text: 'Der Brief wurde erfolgreich freigegeben.',
+            timer: 2000,
+            showConfirmButton: false,
+          });
+          showModalBriefFreigeben.value = false;
+            neuesBriefFreigeben.value = [];
+        },
+        onError: (errors) => {
+          Swal.fire({
+            icon: 'error',
+            title: 'Fehler',
+            text: 'Beim Freigeben des Briefes ist ein Fehler aufgetreten.',
+          });
+          console.error(errors);
+        },
+      }
+    );
+  } catch (e) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Fehler',
+      text: e.message || 'Freigabe konnte nicht abgeschlossen werden.',
+    });
+  }
+};
 
 const addBrief = () => {
     if (!neuerBrief.value.name || !neuerBrief.value.titel || !neuerBrief.value.content) return;
@@ -932,10 +1238,119 @@ const handleDelete = (id) => {
   if (seite.value === 'projekt') {
     teilnehmer.value.projekte = teilnehmer.value.projekte.filter((p) => p.id !== id);
   }
+  if (seite.value === 'anwesenheit') {
+    teilnehmer.value.anwesenheiten = teilnehmer.value.anwesenheiten.filter((p) => p.id !== id);
+  }
   showModalLöschen.value = false;
 };
 
 
+// =======  ANWESENHEIT =======
+
+const addAnwesenheit = () => {
+  console.log("Neue Anwesenheit:", neueAnwesenheit.value);
+
+  // ====== Validierung mit SweetAlert ======
+  if (!neueAnwesenheit.value.dateAnwesenheit) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Fehlendes Datum',
+      text: 'Bitte wählen Sie ein Datum für die Anwesenheit aus.',
+    });
+    return;
+  }
+
+  if (!neueAnwesenheit.value.anwesenheitsstatus) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Kein Status gewählt',
+      text: 'Bitte wählen Sie einen Anwesenheitsstatus aus.',
+    });
+    return;
+  }
+
+  if (!neueAnwesenheit.value.startTime || !neueAnwesenheit.value.endTime) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Zeitangabe fehlt',
+      text: 'Bitte geben Sie sowohl Startzeit als auch Endzeit ein.',
+    });
+    return;
+  }
+
+  if (neueAnwesenheit.value.startTime >= neueAnwesenheit.value.endTime) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Ungültige Zeitangabe',
+      text: 'Die Startzeit darf nicht später oder gleich der Endzeit sein.',
+    });
+    return;
+  }
+
+  // ====== Wenn alles OK ======
+  loadingAnwesenheit.value = true;
+
+  router.post(
+    route('anwesenheit.store'),
+    {
+      ...neueAnwesenheit.value,
+      person_id: props.teilnehmer.id,
+    },
+    {
+      preserveState: true,
+      onFinish: () => (loadingAnwesenheit.value = false),
+      onSuccess: () => {
+        // Anwesenheit in Liste einfügen
+        const statusObj = props.anwesenheitsstatuten.find(
+          (s) => s.id === neueAnwesenheit.value.anwesenheitsstatus
+        );
+
+        const neueAnwesenheitEintrag = {
+          id: Date.now(),
+          tag: { datum: neueAnwesenheit.value.dateAnwesenheit },
+          zeit: {
+            startzeit: neueAnwesenheit.value.startTime,
+            endzeit: neueAnwesenheit.value.endTime,
+          },
+          status: {
+            status: statusObj ? statusObj.status : 'unbekannt',
+            farben: statusObj ? statusObj.farben : 'bg-gray-300',
+          },
+          bemerkung: neueAnwesenheit.value.bemerkungen || '',
+        };
+
+        teilnehmer.value.anwesenheiten.unshift(neueAnwesenheitEintrag);
+
+        // Eingaben zurücksetzen
+        neueAnwesenheit.value = {
+          anwesenheitsstatus: null,
+          dateAnwesenheit: '',
+          startTime: '',
+          endTime: '',
+          bemerkungen: '',
+        };
+
+        showModalAnwesenheit.value = false;
+
+        // ✅ Erfolgsnachricht
+        Swal.fire({
+          icon: 'success',
+          title: 'Gespeichert!',
+          text: 'Die Anwesenheit wurde erfolgreich erfasst.',
+          timer: 1800,
+          showConfirmButton: false,
+        });
+      },
+      onError: (errors) => {
+        Swal.fire({
+          icon: 'error',
+          title: 'Fehler beim Speichern',
+          text: 'Bitte überprüfen Sie Ihre Eingaben oder versuchen Sie es erneut.',
+        });
+      },
+    }
+  );
+};
 
 
 
