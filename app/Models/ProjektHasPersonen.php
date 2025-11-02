@@ -3,7 +3,9 @@
 namespace App\Models;
 use App\Models\zeitraum;
 
+use App\Models\Austritttypen;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\ProjektHasTeilnehmerAbschluss;
 use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
@@ -18,6 +20,7 @@ class ProjektHasPersonen extends Pivot //Model
         'id',
         'projekt_id',
         'personen_id',
+        'ergebnisse_id',
         'status',
         'bemerkung'
     ];
@@ -27,5 +30,14 @@ class ProjektHasPersonen extends Pivot //Model
     public function zeitraume()
     {
         return $this->morphMany(Zeitraum::class, 'model');
+    }
+    public function austrittttypen()
+    {
+        return $this->hasOne(Austritttypen::class, 'id', 'austritttypen_id');
+    }
+
+    public function abschluss()
+    {
+        return $this->hasOne(ProjektHasTeilnehmerAbschluss::class, 'projekt_has_person_id', 'id');
     }
 }

@@ -18,6 +18,111 @@ class UserSeeder extends Seeder
 {
     public function run()
     {
+        DB::table('leistungsbezueges')->insert([
+            ['bezeichnung' => 'kein Leistungsbezug'],
+            ['bezeichnung' => 'Arbeitslosengeld I (SGB III)'],
+            ['bezeichnung' => 'Arbeitslosengeld II (SGB II)'],
+            ['bezeichnung' => 'Sozialhilfe (SGB XII)'],
+            ['bezeichnung' => 'Leistungen nach dem Asylbewerberleistungsgesetz'],
+            ['bezeichnung' => 'Kinderzuschlag / Wohngeld'],
+            ['bezeichnung' => 'Übergangsgeld (SGB IX)'],
+            ['bezeichnung' => 'Rentenleistungen'],
+            ['bezeichnung' => 'Sonstige Leistungen'],
+        ]);
+
+        DB::table('austritttypens')->insert([
+            ['name' => 'Kein Abbruch'],
+            ['name' => 'Aufnahme sozialversicherungspflichtiger Beschäftigung'],
+            ['name' => 'Aufnahme geringfügige Beschäftigung'],
+            ['name' => 'Ausbildungsaufnahme'],
+            ['name' => 'weiterer Schulbesuch'],
+            ['name' => 'Aufnahme Studium'],
+            ['name' => 'Selbstständigkeit'],
+            ['name' => 'Kündigung Ausbildungsvertrag'],
+            ['name' => 'vorgezogene Abschlussprüfung'],
+            ['name' => 'sonstiger Abbruchgrund'],
+        ]);
+
+
+        DB::table('abschluesses')->insert([
+
+            // 🏫 Schulabschlüsse
+            ['typ' => 'schule', 'bezeichnung' => 'ohne Hauptschulabschluss'],
+            ['typ' => 'schule', 'bezeichnung' => 'Hauptschulabschluss'],
+            ['typ' => 'schule', 'bezeichnung' => 'mittlere Reife'],
+            ['typ' => 'schule', 'bezeichnung' => 'Fachhochschulreife'],
+            ['typ' => 'schule', 'bezeichnung' => 'Hochschulreife'],
+            ['typ' => 'schule', 'bezeichnung' => 'Berufsfachschule, die zur Hochschulreife/Fachhochschulreife führt'],
+            ['typ' => 'schule', 'bezeichnung' => 'Fachoberschule 1-jährig (nach vorheriger Berufsausbildung)'],
+            ['typ' => 'schule', 'bezeichnung' => 'Berufsoberschule/Technische Oberschule'],
+
+            // ⚙️ Berufs- & Studienabschlüsse
+            ['typ' => 'beruf', 'bezeichnung' => 'ohne Berufsabschluss'],
+            ['typ' => 'beruf', 'bezeichnung' => 'Berufsvorbereitungsjahr'],
+            ['typ' => 'beruf', 'bezeichnung' => 'berufliche Schulen, die zur mittleren Reife führen'],
+            ['typ' => 'beruf', 'bezeichnung' => 'Berufsgrundbildungsjahr'],
+            ['typ' => 'beruf', 'bezeichnung' => 'Berufsfachschule (duales System)'],
+            ['typ' => 'beruf', 'bezeichnung' => 'Berufsfachschulen, die einen Berufsabschluss vermitteln (o. Gesundheits-/Sozialberufe, Erzieherausbildung)'],
+            ['typ' => 'beruf', 'bezeichnung' => 'Einjährige Programme an Ausbildungsstätten/Schulen für Gesundheits-/Sozialberufe'],
+            ['typ' => 'beruf', 'bezeichnung' => 'zwei-/dreijährige Programme an Ausbildungsstätten/Schulen für Gesundheits-/Sozialberufe'],
+            ['typ' => 'beruf', 'bezeichnung' => 'Berufsfachschule (Zweitausbildung nach Erwerb einer Studienberechtigung)'],
+            ['typ' => 'beruf', 'bezeichnung' => 'berufliche Programme, die einen Berufsabschluss aber keine Studienberechtigung vermitteln'],
+            ['typ' => 'beruf', 'bezeichnung' => 'Fachschulen (o. Gesundheits-/Sozialberufe, Erzieherausbildung), inkl. Meisterausbildung, Technikerausbildung'],
+            ['typ' => 'beruf', 'bezeichnung' => 'Ausbildungsstätten/Schulen für Erzieher/-innen'],
+
+            // 🎓 Hochschulabschlüsse
+            ['typ' => 'hochschule', 'bezeichnung' => 'Bachelor'],
+            ['typ' => 'hochschule', 'bezeichnung' => 'zweiter Bachelorstudiengang'],
+            ['typ' => 'hochschule', 'bezeichnung' => 'Diplom (FH)-Studiengang'],
+            ['typ' => 'hochschule', 'bezeichnung' => 'Diplom (Universität)-Studiengang'],
+            ['typ' => 'hochschule', 'bezeichnung' => 'zweiter Diplom-Studiengang'],
+            ['typ' => 'hochschule', 'bezeichnung' => 'Masterstudiengang an Universitäten, Fachhochschulen, Berufsakademien'],
+            ['typ' => 'hochschule', 'bezeichnung' => 'zweiter Masterstudiengang'],
+            ['typ' => 'hochschule', 'bezeichnung' => 'Promotionsstudium'],
+        ]);
+
+        DB::table('zielgruppes')->insert([
+            ['bezeichnung' => 'Arbeitslos'],
+            ['bezeichnung' => 'Langzeitarbeitslos'],
+            ['bezeichnung' => 'Nichterwerbstätig'],
+            ['bezeichnung' => 'Nichterwerbstätige, die keine schriftliche oder berufliche Ausbildung absolvieren'],
+            ['bezeichnung' => 'Erwerbstätige'],
+            ['bezeichnung' => 'Selbstständige'],
+            ['bezeichnung' => 'Auszubildende'],
+            ['bezeichnung' => 'Berufsschüler'],
+            ['bezeichnung' => 'Schüler allgemeinbildender Schulen'],
+            ['bezeichnung' => 'Menschen mit Migrationshintergrund'],
+            ['bezeichnung' => 'Flüchtinge'],
+            ['bezeichnung' => 'KMU'],
+        ]);
+        DB::table('verbleibteilnehmers')->insert([
+            ['bezeichnung' => 'auf Arbeitssuche'],
+            ['bezeichnung' => 'absolviert eine schulische/berufliche Ausbildung'],
+            ['bezeichnung' => 'erlangt eine Qualifizierung'],
+            ['bezeichnung' => 'hat einen Arbeitsplatz'],
+            ['bezeichnung' => 'hat eine Selbstständigkeit aufgenommen / selbstständig'],
+            ['bezeichnung' => 'sonstiger Verbleib'],
+            ['bezeichnung' => 'Wechsel in Folgemaßnahme'],
+        ]);
+
+
+
+        DB::table('ergebnisses')->insert([
+            ['bezeichnung' => 'Teilnahme läuft'],
+            ['bezeichnung' => 'hat eine Qualifizierung erhalten'],
+            ['bezeichnung' => 'einfacher TN-Nachweis'],
+            ['bezeichnung' => 'hat Beratung erhalten'],
+            ['bezeichnung' => 'hat eine Qualifikationsanerkennung erreicht'],
+            ['bezeichnung' => 'absolviert eine schul./berufl. Bildung'],
+            ['bezeichnung' => 'hat einen Arbeitsplatz'],
+            ['bezeichnung' => 'hat einen Ausbildungsabschluss erlangt'],
+            ['bezeichnung' => 'hat ein Studium aufgenommen'],
+            ['bezeichnung' => '(Stufen-)Zeugnis der Berufsfachschule/Ausbildungsvorbereitung/Werkstattschule'],
+            ['bezeichnung' => 'Abschluss erst in Folgemaßnahme'],
+            ['bezeichnung' => 'hat Teilnahme abgebrochen'],
+
+        ]);
+
 
 
 
@@ -117,48 +222,39 @@ class UserSeeder extends Seeder
         DB::table('projekts')->insert([
             [ // id = 1
                 'name' => 'Inteqra',
-                'kostenstelle' => '14462',
                 'abteilung_id' => '1',
             ],
             [ // id = 2
                 'name' => 'BvB Reha',
-                'kostenstelle' => '14411',
                 'abteilung_id' => '1',
             ],
             [ // id = 3
                 'name' => 'Aques',
-                'kostenstelle' => '14422',
                 'abteilung_id' => '1',
             ],
             [ // id = 4
                 'name' => 'Intqra PRO',
-                'kostenstelle' => '14463',
                 'abteilung_id' => '1',
             ],
 
             [ // id = 5
                 'name' => 'Bop',
-                'kostenstelle' => '14471',
                 'abteilung_id' => '1',
             ],
             [ // id = 6
                 'name' => 'Sofia',
-                'kostenstelle' => '14488',
                 'abteilung_id' => '1',
             ],
             [ // id = 7
                 'name' => 'BIG Saar',
-                'kostenstelle' => '14240',
                 'abteilung_id' => '1',
             ],
             [ // id = 8
                 'name' => 'Familien Info Saarbrücken',
-                'kostenstelle' => '15830',
                 'abteilung_id' => '1',
             ],
             [ // id = 9
                 'name' => 'Kakadu',
-                'kostenstelle' => '11700',
                 'abteilung_id' => '1',
             ],
         ]);
@@ -197,16 +293,6 @@ class UserSeeder extends Seeder
 
         ]);
 
-        DB::table('projekt_has_personens')->insert([
-            [ // id = 1
-                'personen_id' => '1',
-                'projekt_id' => '5',
-            ],
-            [ // id = 2
-                'personen_id' => '1',
-                'projekt_id' => '1',
-            ],
-        ]);
 
 
         DB::table('berechtigungskategories')->insert([
@@ -714,6 +800,10 @@ class UserSeeder extends Seeder
             [
                 'personen_id' => '1',
                 'projekt_id' => '3',
+            ],
+            [ // id = 1
+                'personen_id' => '1',
+                'projekt_id' => '5',
             ],
 
         ]);

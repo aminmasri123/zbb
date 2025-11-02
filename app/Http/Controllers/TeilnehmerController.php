@@ -9,12 +9,16 @@ use App\Models\Gruppe;
 use App\Models\Projekt;
 use App\Models\Personen;
 use App\Models\Teilnehmer;
+use App\Models\Abschluesse;
 use App\Models\Kontakttypen;
+use App\Models\SozialeDaten;
 use Illuminate\Http\Request;
+use App\Models\Leistungsbezuege;
 use App\Models\BereichHasPersonen;
 use Illuminate\Support\Facades\DB;
 use App\Models\Anwesenheitsstatuten;
 use Illuminate\Support\Facades\Auth;
+use App\Models\PersonenHasSozialedaten;
 use Illuminate\Support\Facades\Validator;
 
 class TeilnehmerController extends Controller
@@ -139,15 +143,17 @@ class TeilnehmerController extends Controller
             'anwesenheiten.status',
             'kontaktes.kontakttyp',
             'projekte',
-            'baenke'
+            'baenke',
+            'abschluesse',
+            'sozialedaten'
         ])->findOrFail($id);
         $anwesenheitsstatuten =Anwesenheitsstatuten::all();
-
+        $abschluesse = Abschluesse::all();
         $personen->projekte->each(function ($projekt) {
             $projekt->pivotModel->load('zeitraume');
         });
 
-
+        $leistungsbezuege = Leistungsbezuege::all();
         $erhalteneBriefe = auth()->user()->receivedFreigaben();
 
         $meineBriefe = auth()->user()->ownLetters();
@@ -175,6 +181,8 @@ class TeilnehmerController extends Controller
             'erhalteneBriefe' => $erhalteneBriefe,
             'meineBriefe' => $meineBriefe,
             'anwesenheitsstatuten' => $anwesenheitsstatuten,
+            'abschluesse' => $abschluesse,
+            'leistungsbezuege' => $leistungsbezuege,
             ],
         );
     }
@@ -184,13 +192,6 @@ class TeilnehmerController extends Controller
         //
     }
 
-    /**
-     * Update the specified resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
     public function update(Request $request, $id)
     {
         try {
@@ -215,6 +216,43 @@ class TeilnehmerController extends Controller
                 'error'   => $e->getMessage(),
             ], 500);
         }
+    }
+
+    public function updateSozialdaten(Request $request, $id)
+    {
+        // 1) Validierung
+        $validated = $request->validate([
+            'ist_drittstaatsangehoerig' => ['required', 'boolean'],
+            'ist_gefluechtet'           => ['required', 'boolean'],
+            'hat_migrationshintergrund' => ['required', 'boolean'],
+            'hat_behinderung'           => ['required', 'boolean'],
+            'leistungsbezug_id'         => ['nullable', 'exists:leistungsbezueges,id'],
+            'ist_wohnsitz_stabil'       => ['required', 'boolean'],
+            'teilnehmer_id'             => ['required', 'exists:personens,id'],
+        ]);
+
+        // 2) Speichern (create/update anhand person_id)
+       PersonenHasSozialedaten::updateOrCreate(
+            ['person_id' => $validated['teilnehmer_id']],
+            [
+            'wohnsitz_stabil' => $validated['ist_wohnsitz_stabil'],
+            'leistungsbezug_id' => $validated['leistungsbezug_id'],
+            'behinderung' => $validated['hat_behinderung'],
+            'migrationshintergrund' => $validated['hat_migrationshintergrund'],
+            'gefluechtet' => $validated['ist_gefluechtet'],
+            'drittstaatsangehoerig' => $validated['ist_drittstaatsangehoerig'],
+            ]
+        );
+
+    // ↙️ hier kommt die Swal-Nachricht rein
+    return back()->with('swal', [
+        'icon'  => 'success',
+        'title' => 'Gespeichert',
+        'text'  => 'Die Sozialdaten wurden erfolgreich gespeichert.',
+        'timer' => 1600,
+        'showConfirmButton' => false,
+    ]);
+
     }
 
     public function destroy($id)

@@ -47,3 +47,8 @@ Um das Programm auf einem anderen Rechner zu installieren, folge diesen Schritte
 6. **Frontend-Abhängigkeiten (optional)**: Falls verwendet, installiere mit `npm install` und baue die Assets mit `npm run dev`.
 7. **Webserver starten**: Starte den Webserver (z.B. über XAMPP) und rufe die Anwendung im Browser auf.
 
+**php voraussetzungen (php.ini) für phpoffice/phpspreadsheet**
+
+extension=zip
+extension=mbstring
+extension=gd

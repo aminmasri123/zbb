@@ -6,9 +6,11 @@ use Log;
 use Exception;
 use App\Models\User;
 use App\Models\Brief;
+use App\Models\Freigabe;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class BriefController extends Controller
 {
@@ -78,32 +80,33 @@ class BriefController extends Controller
                 ->withInput();
         }
     }
-public function share(Request $request)
-{
-    $validated = $request->validate([
-        'brief_id' => 'required|exists:briefs,id',
-        'betreuer_ids' => 'required|array',
-        'betreuer_ids.*' => 'exists:users,id',
-    ]);
 
-    $brief = Brief::findOrFail($validated['brief_id']);
+    public function share(Request $request)
+    {
+        $validated = $request->validate([
+            'brief_id' => 'required|exists:briefs,id',
+            'betreuer_ids' => 'required|array',
+            'betreuer_ids.*' => 'exists:users,id',
+        ]);
 
-    // Beispiel: Freigaben in Pivot-Tabelle speichern
-    foreach ($validated['betreuer_ids'] as $userId) {
-        $brief->freigaben()->updateOrCreate(
-        [
-            'shareable_to_id'   => $userId,
-            'shareable_to_type' => User::class,
-        ],
-        [
-            'shared_by' => Auth::id(),
-            'right'     => 'lesen',
-        ]
-    );
+        $brief = Brief::findOrFail($validated['brief_id']);
+
+        // Beispiel: Freigaben in Pivot-Tabelle speichern
+        foreach ($validated['betreuer_ids'] as $userId) {
+            $brief->freigaben()->updateOrCreate(
+            [
+                'shareable_to_id'   => $userId,
+                'shareable_to_type' => User::class,
+            ],
+            [
+                'shared_by' => Auth::id(),
+                'right'     => 'lesen',
+            ]
+        );
+        }
+
+        return back()->with('success', 'Brief wurde erfolgreich freigegeben.');
     }
-
-    return back()->with('success', 'Brief wurde erfolgreich freigegeben.');
-}
 
 
     /**
@@ -133,8 +136,90 @@ public function share(Request $request)
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy($id)
     {
-        //
+        $brief = Brief::findOrFail($id);
+        if(!$brief){
+            return response()->json(['message' => 'Brief nicht gefunden.'], 404);
+        }
+
+        try {
+
+            $sharedCount = Freigabe::where('shareable_from_type', Brief::class)
+                ->where('shareable_from_id', $id)
+                ->count();
+
+
+            if($sharedCount > 1 ){
+                $sharedBrief = Freigabe::where('shareable_from_type', Brief::class)
+                    ->where('shareable_from_id', $id)
+                    ->where('shared_by', Auth::id())
+                    ->where('shareable_to_type', User::class)
+                    ->where('shareable_to_id', Auth::id())
+                    ->first();
+                $sharedBrief->delete();
+
+            }
+            else{
+                $sharedBrief = Freigabe::where('shareable_from_type', Brief::class)
+                    ->where('shareable_from_id', $id)
+                    ->where('shared_by', Auth::id())
+                    ->where('shareable_to_type', User::class)
+                    ->where('shareable_to_id', Auth::id())
+                    ->delete();
+
+                    $brief = Brief::findOrFail($id)->delete();
+            }
+
+
+
+            return response()->json(['message' => 'Gruppe erfolgreich gelöscht!'], 200);
+        } catch (ModelNotFoundException $e) {
+            return response()->json(['message' => 'Gruppe nicht gefunden.'], 404);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function SharedDestroy($id)
+    {
+
+        $brief = Brief::findOrFail($id);
+        if(!$brief){
+            return response()->json(['message' => 'Brief nicht gefunden.'], 404);
+        }
+
+        try {
+
+            $sharedCount = Freigabe::where('shareable_from_type', Brief::class)
+                ->where('shareable_from_id', $id)
+                ->count();
+
+
+            if($sharedCount > 1 ){
+                $sharedBrief = Freigabe::where('shareable_from_type', Brief::class)
+                    ->where('shareable_from_id', $id)
+                    ->where('shareable_to_type', User::class)
+                    ->where('shareable_to_id', Auth::id())
+                    ->first();
+                $sharedBrief->delete();
+
+            }
+            else{
+                $sharedBrief = Freigabe::where('shareable_from_type', Brief::class)
+                    ->where('shareable_from_id', $id)
+                    ->where('shareable_to_type', User::class)
+                    ->where('shareable_to_id', Auth::id())
+                    ->delete();
+
+                    $brief = Brief::findOrFail($id)->delete();
+            }
+
+            return response()->json(['message' => 'Gruppe erfolgreich gelöscht!'], 200);
+        } catch (ModelNotFoundException $e) {
+            return response()->json(['message' => 'Gruppe nicht gefunden.'], 404);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
+        }
     }
 }

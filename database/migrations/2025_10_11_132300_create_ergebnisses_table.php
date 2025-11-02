@@ -8,28 +8,22 @@ return new class extends Migration
 {
     /**
      * Run the migrations.
-     *
-     * @return void
      */
-    public function up()
+    public function up(): void
     {
-        Schema::create('projekts', function (Blueprint $table) {
+        Schema::create('ergebnisses', function (Blueprint $table) {
             $table->id();
-            $table->string('name',30);
-            $table->foreignId('abteilung_id')->constrained();
+            $table->string('bezeichnung');
             $table->text('beschreibung')->nullable();
-            $table->boolean('aktiv')->default(true);
             $table->timestamps();
         });
     }
 
     /**
      * Reverse the migrations.
-     *
-     * @return void
      */
-    public function down()
+    public function down(): void
     {
-        Schema::dropIfExists('projekts');
+        Schema::dropIfExists('ergebnisses');
     }
 };

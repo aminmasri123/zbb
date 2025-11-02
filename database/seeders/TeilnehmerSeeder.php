@@ -1,11 +1,13 @@
 <?php
 
 namespace Database\Seeders;
-use Faker\Factory as Faker;
 use App\Models\Projekt;
-use App\Models\ProjektHasTeilnehmer;
+use App\Models\Personen;
 use App\Models\Teilnehmer;
+use Faker\Factory as Faker;
 use Illuminate\Database\Seeder;
+use App\Models\ProjektHasPersonen;
+use App\Models\ProjektHasTeilnehmer;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 
 class TeilnehmerSeeder extends Seeder
@@ -25,16 +27,17 @@ class TeilnehmerSeeder extends Seeder
         $numberOfUsers = 50;
         for ($i = 0; $i < $numberOfUsers; $i++)
         {
-            $teilnehmer = Teilnehmer::create([
+            $teilnehmer = Personen::create([
                 'vorname' => $faker->username,
                 'nachname' => $faker->firstName,
                 'geschlecht' => $faker->randomElement(['m', 'd', 'w']),
+                'typ' => 'teilnehmer',
             ]);
 
              // Projekt-IDs und Teilnehmer-IDs müssen aus DB kommen
-            ProjektHasTeilnehmer::create([
+            ProjektHasPersonen::create([
                 'projekt_id'    => $faker->randomElement(Projekt::pluck('id')->toArray()),
-                'teilnehmer_id' => $teilnehmer->id, // gerade erstellter Teilnehmer
+                'personen_id' => $teilnehmer->id, // gerade erstellter Teilnehmer
             ]);
         };
     }

@@ -8,9 +8,13 @@ use App\Models\Baenke;
 use App\Models\Adresse;
 use App\Models\Projekt;
 use App\Models\Standort;
-use App\Models\Anwesenheiten;
+use App\Models\Zielgruppe;
 
+use App\Models\Abschluesse;
+use App\Models\Anwesenheiten;
 use App\Models\ProjektHasPersonen;
+use App\Models\PersonenHasAbschluesse;
+use App\Models\PersonenHasSozialedaten;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\PersonenHasAnwesenheiten;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -70,23 +74,12 @@ class Personen extends Model
         return $this->morphMany(Baenke::class, 'model');
     }
 
-    /* public function projekte()
-    {
-        return $this->belongsToMany(Projekt::class, 'projekt_has_personens', 'personen_id', 'projekt_id');
-    } */
-        /* public function projekte()
-        {
-            return $this->belongsToMany(Projekt::class, 'projekt_has_personens', 'personen_id', 'projekt_id')
-                ->using(ProjektHasPersonen::class) // Pivotmodell aktivieren
-                ->as('pivotModel'); // schöner Name
-        } */
-
     public function projekte()
     {
         return $this->belongsToMany(Projekt::class, 'projekt_has_personens', 'personen_id', 'projekt_id')
             ->using(ProjektHasPersonen::class) // <== Pivot Model verwenden
-            ->withPivot('id')                    // <- damit du das Pivot Model findest
-            ->as('pivotModel');                  // <- schöner Name für den Pivot-Zugriff
+            ->withPivot('id', 'bemerkung', 'status')                    // <- damit du das Pivot Model findest
+            ->as('pivotModel') ;                 // <- schöner Name für den Pivot-Zugriff
     }
 
     public function kontaktes()
@@ -98,5 +91,24 @@ class Personen extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function abschluesse(): BelongsToMany
+    {
+        return $this->belongsToMany(Abschluesse::class, 'personen_has_abschluesses', 'person_id', 'abschluss_id')
+        ->using(PersonenHasAbschluesse::class) // <== Pivot Model verwenden
+            ->withPivot('bezeichnung', 'start', 'end', 'id')                    // <- damit du das Pivot Model findest
+            ->as('pivotModel');
+    }
+
+    public function sozialedaten(){
+        return $this->hasOne(PersonenHasSozialedaten::class, 'person_id', 'id');
+    }
+    public function zielgruppen(): BelongsToMany
+    {
+        return $this->belongsToMany(Zielgruppe::class, 'personen_has_zielgruppes', 'person_id', 'zielgruppe_id');
+    }
+
+
+
 
 }

@@ -74,38 +74,40 @@ class AnwesenheitController extends Controller
     {
 
         $validated = $request->validate([
-            'anwesenheitsstatus' => 'required|integer',
 
-            'dateAnwesenheit' => 'required|date',
+            'anwesenheitsstatuten_id' => 'required|integer',
 
-            'startTime' => 'required|date_format:H:i',
-            'endTime' => 'required|date_format:H:i|after:startTime',
-            'person_id' => 'required|integer|exists:personens,id',
+            'tag' => 'required|date',
+
+            'startzeit' => 'required',
+            'endzeit' => 'required',
+            'personen_id' => 'required|integer|exists:personens,id',
             'bemerkungen' => 'nullable|string|max:255',
         ]);
+
 
         DB::beginTransaction();
 
         try {
-                $tagId = Tage::where('datum', $validated['dateAnwesenheit'])->value('id');
+                $tagId = Tage::where('datum', $validated['tag'])->value('id');
                 if(!$tagId) {
                     throw new Exception('Ungültiger Tag.');
                 }
                 $zeitenId = Zeiten::firstOrCreate(
                     [
-                        'startzeit' => $validated['startTime'] . ':00',
-                        'endzeit' => $validated['endTime'] . ':00'
+                        'startzeit' => $validated['startzeit'] ,
+                        'endzeit' => $validated['endzeit']
                     ]
                 )->id;
 
                 PersonenHasAnwesenheiten::updateOrCreate(
                     [
-                        'personen_id' => $validated['person_id'],
+                        'personen_id' => $validated['personen_id'],
                         'tage_id' => $tagId,
                         'zeiten_id' => $zeitenId,
                     ],
                     [
-                        'anwesenheitsstatuten_id' => $validated['anwesenheitsstatus'],
+                        'anwesenheitsstatuten_id' => $validated['anwesenheitsstatuten_id'],
                         'user_id' => Auth::id(),
                         'bemerkung' => $validated['bemerkungen'] ?? null,
                     ]
@@ -144,46 +146,45 @@ class AnwesenheitController extends Controller
     {
 
         $validated = $request->validate([
+            'id' => 'required|integer|exists:personen_has_anwesenheitens,id',
             'personen_id' => 'required|integer|exists:personens,id',
             'tag' => 'required|date',
-            'startzeit' => 'required|date_format:H:i:s',
-            'endzeit' => 'required|date_format:H:i:s|after:startzeit',
+            'startzeit' => 'required',
+            'endzeit' => 'required',
             'anwesenheitsstatuten_id' => 'required|integer|exists:anwesenheitsstatutens,id',
             'bemerkung' => 'nullable|string|max:255',
         ]);
 
+
+        // 🔹 Tag-ID ermitteln
         $tagId = Tage::where('datum', $validated['tag'])->value('id');
-        if(!$tagId) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Ungültiger Tag.',
-            ], 400);
+
+
+        if (!$tagId) {
+            return redirect()->back()->with('error', 'Ungültiger Tag.');
         }
+        // 🔹 Zeit-ID ermitteln oder anlegen
+        $zeitId = Zeiten::firstOrCreate([
+            'startzeit' => $validated['startzeit'],
+            'endzeit'   => $validated['endzeit'],
+        ])->id;
 
-        $eintrag = PersonenHasAnwesenheiten::updateOrCreate(
-            [
-                'personen_id' => $validated['personen_id'],
-                'tage_id' => $tagId,
-                'zeiten_id' => Zeiten::firstOrCreate(
-                    [
-                        'startzeit' => $validated['startzeit'],
-                        'endzeit' => $validated['endzeit']
-                    ]
-                )->id,
-            ],
-            [
-                'anwesenheitsstatuten_id' => $validated['anwesenheitsstatuten_id'],
-                'user_id' => Auth::id(),
-                'bemerkung' => $validated['bemerkung'] ?? null,
-            ]
-        );
+        // 🔹 Anwesenheitseintrag finden
+        $anwesenheit = PersonenHasAnwesenheiten::findOrFail($validated['id']);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Anwesenheit erfolgreich gespeichert.',
-            'eintrag' => $eintrag,
+        // 🔹 Eintrag aktualisieren
+        $anwesenheit->update([
+            'personen_id' => $validated['personen_id'],
+            'tage_id' => $tagId,
+            'zeiten_id' => $zeitId,
+            'anwesenheitsstatuten_id' => $validated['anwesenheitsstatuten_id'],
+            'user_id' => Auth::id(),
+            'bemerkung' => $validated['bemerkung'] ?? null,
         ]);
+
+        return redirect()->back()->with('success', 'Anwesenheit erfolgreich geändert.');
     }
+
 
     /**
      * Remove the specified resource from storage.

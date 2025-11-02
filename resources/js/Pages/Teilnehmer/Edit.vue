@@ -1,6 +1,7 @@
 <template>
   <Head title="Teilnehmer" />
   <AppLayout>
+    <Alert/>
     <!-- ================= HEADER ================= -->
     <template #header>
       <div class="flex justify-between items-center">
@@ -83,6 +84,66 @@
                 <textarea v-model="teilnehmer.bemerkungen" rows="2" class="input"></textarea>
               </div>
             </div>
+          </div>
+
+          <!-- ================= Sozialdaten ================= -->
+          <div v-if="activeTab === 'Sozialdaten'">
+            <button @click="saveSozialdaten"
+                class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full">
+                ➕ Speichern
+              </button>
+
+                    <div class="space-y-5  w-96 mx-auto">
+                        <Toggle
+                            v-model="drittstaatsangehoerig"
+                            label="Drittstaatsangehörige?"
+                            hint="Nicht-EU/EWR/Schweiz"
+                        />
+
+                        <Toggle
+                        v-model="behinderung"
+                        label="Liegt eine Behinderung vor?"
+                        hint="Nach §2 SGB IX"
+                        />
+
+                        <Toggle
+                        v-model="gefluechtet"
+                        label="Teilnehmer ist geflüchtet?"
+                        />
+
+                        <div class="flex items-center w-96   justify-between gap-4">
+                        <label class="block text-sm font-medium text-gray-800 leading-6">Leistungsbezug nach SGB</label>
+                        <select
+                            v-model="leistungsbezug_id"
+                            class="input w-64"
+                        >
+                            <option :value="null" disabled>— auswählen —</option>
+                            <option
+                            v-for="m in props.leistungsbezuege"
+                            :key="m.id"
+                            :value="m.id"
+                            >
+                            {{ m.bezeichnung }}
+                            </option>
+                        </select>
+                        </div>
+
+                        <Toggle
+                            v-model="migrationshintergrund"
+                            label="Liegt ein Migrationshintergrund vor?"
+                            />
+
+                            wohnsitz_stabil
+
+                        <Toggle
+                            v-model="wohnsitz_stabil"
+                            label="Wohnsitz stabil?"
+                            />
+                    </div>
+
+
+
+
           </div>
 
           <!-- ================= ADRESSEN ================= -->
@@ -230,6 +291,7 @@
                                     <Link class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100" :href="route('teilnehmer.edit', teilnehmer.id)">
                                        {{ $t('Bearbeiten') }}  <i class="las la-edit"></i>
                                     </Link>
+                                    <a  target="_blank" :href="route('export.excel.esfStammblatt', [props.teilnehmer.id, projekt.id])" class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100" >ESF <i class="las la-file-download"></i></a>
                                 </template>
                             </Dropdown>
                         </td>
@@ -329,6 +391,8 @@
                 </div>
 
             </div>
+
+
             <!-- ================= BANK ================= -->
             <div v-else-if="activeTab === 'Bank'">
                 <button @click="showModalBank = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
@@ -371,10 +435,55 @@
                 <!-- Falls keine Bankdaten -->
                 <p v-else class="text-gray-500 italic">Keine Bankdaten vorhanden.</p>
             </div>
+
+            <!-- =================  Schule/Beruf ================= -->
+
+            <div v-else-if="activeTab === 'Schule/Beruf'">
+            <!-- Button -->
+            <button
+                @click="showModalCreateAbschluss = true"
+                class="bg-zbb text-white px-4 mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full"
+            >
+                <span v-if="!loadingAbschluss">➕ Abschluss hinzufügen</span>
+                <span v-else>...</span>
+            </button>
+
+            <!-- Bestehende Abschlüsse -->
+            <div v-if="teilnehmer.abschluesse && teilnehmer.abschluesse.length" class="space-y-3 mb-6">
+                <div
+                v-for="eintrag in teilnehmer.abschluesse"
+                :key="eintrag.id"
+                class="flex justify-between items-center bg-gray-50 border rounded-lg px-4 py-2"
+                >
+                <div>
+                    <p class="text-sm font-bold text-zbb uppercase">
+                    {{ eintrag.typ }}
+                    </p>
+                    <p class="text-gray-600 text-sm">
+                    🎓 <span class="font-bold">{{ eintrag.bezeichnung }}:</span> {{ eintrag.pivot_model.bezeichnung }}
+                    </p>
+                    <p class="text-gray-600 text-sm">
+                   📆 {{ formatDate(eintrag.pivot_model.start) }} - {{ formatDate(eintrag.pivot_model.end) }}
+                    </p>
+                </div>
+                <button
+                    @click="confirmDelete(eintrag.pivot_model, 'abschluss')"
+                    class="text-red-500 hover:text-red-700 text-sm"
+                >
+                    Entfernen
+                </button>
+                </div>
+            </div>
+
+            <p v-else class="text-gray-400 italic mb-6">
+                Noch keine Schul- oder Berufsabschlüsse vorhanden.
+            </p>
+            </div>
+
           <!-- ================= BRIEFE ================= -->
           <div v-else-if="activeTab === 'Briefe'">
             <button @click="showModalBrief = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
-                <span v-if="!loadingBrief">➕ Vorage erstellen</span>
+                <span v-if="!loadingBrief">➕ Vorlage erstellen</span>
                 <span v-else>...</span>
             </button>
             <div class="grid grid-cols-2 gap-4">
@@ -386,26 +495,86 @@
                 </div>
                 <div class="col-span-1 border p-4 rounded space-y-4 shadow-sm">
                     <div>
-                        <label>Meine</label>
-                        <ul class="border border-gray-200 rounded p-2 text-sm">
-                           <li v-for="v in props.meineBriefe" :key="v.id" @click="setBriefVorlage(v)">
-                                {{ v.name }}
-                                <button @click.stop="() => openFreigabeModal(v)">🔄 Freigeben</button>
-                            </li>
+                        <label>Meine ✍️</label>
+                       <ul class="border border-gray-200 rounded-lg divide-y divide-gray-100 shadow-sm bg-white text-sm">
+                            <template v-if="meineBriefe && meineBriefe.length > 0">
+                                <li
+                                v-for="v in meineBriefe" :key="v.id"
+                                @click="setBriefVorlage(v)"
+                                class="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-blue-50 transition-all rounded-md"
+                                >
+                                <div class="flex items-center gap-2 text-gray-700">
+                                    <span class="font-medium">{{ v.name }}</span>
+                                </div>
+                                <div class="flex space-x-2">
+                                    <button
+                                    @click="confirmDelete(v, 'brief')"
+                                    class="flex items-center gap-1 text-blue-600 hover:text-red-800 bg-red-100 hover:bg-red-200 px-2 py-1 rounded-md text-xs font-medium transition"
+                                >
+                                    <i class="la la-trash"></i> <span>Löschen</span>
+                                </button>
+                                <button
+                                    @click.stop="() => openFreigabeModal(v)"
+                                    class="flex items-center gap-1 text-blue-600 hover:text-blue-800 bg-blue-100 hover:bg-blue-200 px-2 py-1 rounded-md text-xs font-medium transition"
+                                >
+                                    🔄 <span>Freigeben</span>
+                                </button>
+                                </div>
 
+
+                                </li>
+                            </template>
+
+                            <template v-else>
+                                <li class="text-center text-gray-500 italic py-4">
+                                <div class="flex flex-col items-center justify-center space-y-1">
+                                    <span class="text-2xl">📭</span>
+                                    <span> keine Vorlage vorhanden</span>
+                                </div>
+                                </li>
+                            </template>
                         </ul>
                     </div>
 
                     <div>
-                        <label>Shared</label>
-                        <ul class="border border-gray-200 rounded p-2 text-sm">
-                        <li
-                            v-for="erhalteneBrief in props.erhalteneBriefe"
-                            :key="erhalteneBrief"
-                            class="cursor-pointer hover:text-zbb"
-                             @click="setBriefVorlage(erhalteneBrief)">
-                            {{ erhalteneBrief.name }}
-                        </li>
+                        <label>Shared ↩️</label>
+                        <ul class="border border-gray-200 rounded-lg divide-y divide-gray-100 shadow-sm bg-white text-sm">
+                            <template v-if="erhalteneBriefe && erhalteneBriefe.length > 0">
+                                <li
+                                v-for="erhalteneBrief in erhalteneBriefe"
+                                :key="erhalteneBrief.id"
+                                @click="setBriefVorlage(erhalteneBrief)"
+                                class="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-green-50 transition-all rounded-md"
+                                >
+                                <div class="flex items-center gap-2 text-gray-700">
+                                    <span class="font-medium">{{ erhalteneBrief.name }}</span>
+                                </div>
+
+                               <div class="flex space-x-2">
+                                    <button
+                                    @click="confirmDelete(erhalteneBrief, 'briefShared')"
+                                    class="flex items-center gap-1 text-blue-600 hover:text-red-800 bg-red-100 hover:bg-red-200 px-2 py-1 rounded-md text-xs font-medium transition"
+                                >
+                                    <i class="la la-trash"></i> <span>Löschen</span>
+                                </button>
+                                <button
+                                    @click.stop="() => openFreigabeModal(v)"
+                                    class="flex items-center gap-1 text-blue-600 hover:text-blue-800 bg-blue-100 hover:bg-blue-200 px-2 py-1 rounded-md text-xs font-medium transition"
+                                >
+                                    🔄 <span>Freigeben</span>
+                                </button>
+                                </div>
+                                </li>
+                            </template>
+
+                            <template v-else>
+                                <li class="text-center text-gray-500 italic py-10">
+                                <div class="flex flex-col items-center justify-center space-y-2">
+                                    <span class="text-2xl">📧</span>
+                                    <span>Keine freigegebene Briefe vorhanden‼️</span>
+                                </div>
+                                </li>
+                            </template>
                         </ul>
                     </div>
                 </div>
@@ -442,11 +611,45 @@
                 <textarea v-model="form.vermittlung" rows="6" class="input"></textarea>
           </div>
 
-
           <!-- ================= Praktika ================= -->
           <div v-else-if="activeTab === 'Praktika'">
               <p class="text-gray-500">Hier kannst du Praktika verwalten.</p>
                 <textarea v-model="form.projekte" rows="6" class="input"></textarea>
+          </div>
+
+
+
+          <!-- ================= Exportieren ================= -->
+          <div v-else-if="activeTab === 'Exportieren'">
+                <div class="max-w-7xl  mx-auto px-4  flex gap-6 my-24 justify-center">
+
+                    <a :href="route('export.excel.esfStammblatt', props.teilnehmer.id)" class="cursor-pointer" >
+                    <div class="rounded-lg shadow py-6 px-8 flex items-center gap-4 bg-zbb">
+                            <span class="text-5xl">📑</span>
+                            <div>
+                                <div class="text-2xl font-bold">ESF</div>
+                                <div class="text-sm">Stammblatt</div>
+                            </div>
+                        </div>
+                    </a>
+                    <div class="rounded-lg shadow py-6 px-8 flex items-center gap-4 bg-zbb">
+                        <span class="text-5xl">📑</span>
+                        <div>
+                            <div class="text-2xl font-bold">ESF</div>
+                            <div class="text-sm">Stammblatt</div>
+                        </div>
+                    </div>
+
+                    <div class="rounded-lg shadow py-6 px-8 flex items-center gap-4 bg-zbb">
+                        <span class="text-5xl">📑</span>
+                        <div>
+                            <div class="text-2xl font-bold">ESF</div>
+                            <div class="text-sm">Stammblatt</div>
+                        </div>
+                    </div>
+                </div>
+
+
           </div>
         </div>
       </div>
@@ -469,15 +672,15 @@
                   <h3 class="text-lg font-semibold mb-4 text-zbb">Brief freigeben</h3>
 
                   <Multiselect
-  required
-  v-model="neuesBriefFreigeben"
-  :options="props.betreuer.map(p => ({ value: p.id, label: `${p.vorname} ${p.nachname}` }))"
-  placeholder="Betreuer auswählen"
-  searchable
-  noOptionsText="Keine Person gefunden"
-  class="input-auto"
-  mode="tags"
-/>
+                        required
+                        v-model="neuesBriefFreigeben"
+                        :options="props.betreuer.map(p => ({ value: p.id, label: `${p.vorname} ${p.nachname}` }))"
+                        placeholder="Betreuer auswählen"
+                        searchable
+                        noOptionsText="Keine Person gefunden"
+                        class="input-auto"
+                        mode="tags"
+                    />
 
 
 
@@ -720,14 +923,15 @@
                 </div>
             </transition>
 
-
             <!-- MODAL: Anwesenheit -->
+             <!-- ADD Anwesenheit -->
             <transition name="fade">
                 <div v-if="showModalAnwesenheit" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
                     <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
                         <button @click="showModalAnwesenheit = false" class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl">✕</button>
-                        <h3 class="text-lg font-semibold mb-4 text-zbb">Anwesenheit erfassen</h3>
-
+                            <h3 class="text-lg font-semibold mb-4 text-zbb">
+                            {{ editMode ? 'Anwesenheit bearbeiten' : 'Anwesenheit erfassen' }}
+                            </h3>
                         <div class="space-y-4">
                             <!-- Datum -->
                             <div>
@@ -800,21 +1004,22 @@
                         <div class="mt-6 flex justify-end space-x-3">
                             <button @click="showModalAnwesenheit = false" class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100">Abbrechen</button>
                             <button
-                            @click="addAnwesenheit"
-                            :disabled="loadingAnwesenheit"
-                            class="px-4 py-2 rounded-md text-sm text-white transition"
-                            :class="loadingAnwesenheit ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
-                            >
-                            <span v-if="!loadingAnwesenheit">Speichern</span>
-                            <span v-else>Speichern...</span>
+                                @click="addAnwesenheit"
+                                :disabled="loadingAnwesenheit"
+                                class="px-4 py-2 rounded-md text-sm text-white transition"
+                                :class="loadingAnwesenheit ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
+                                >
+                                <span v-if="!loadingAnwesenheit">
+                                    {{ editMode ? 'Änderungen speichern' : 'Speichern' }}
+                                </span>
+                                <span v-else>Speichern...</span>
                             </button>
                         </div>
                     </div>
                 </div>
             </transition>
 
-
-
+            <!-- End MODAL: Anwesenheit -->
 
             <!-- MODAL: Bank hinzufügen -->
             <transition name="fade">
@@ -856,6 +1061,91 @@
               </div>
             </transition>
 
+            <!-- MODAL -->
+            <transition name="fade">
+                <div
+                    v-if="showModalCreateAbschluss"
+                    class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+                >
+                    <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
+                    <button
+                        @click="showModalCreateAbschluss = false"
+                        class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl"
+                    >
+                        ✕
+                    </button>
+                    <h3 class="text-lg font-semibold mb-4 text-zbb">
+                        Neuen Abschluss hinzufügen
+                    </h3>
+
+                    <div class="space-y-4">
+                        <!-- Typauswahl -->
+                        <div>
+                            <label class="text-sm text-gray-600">Abschluss-Typ</label>
+                            <select v-model="neuerAbschluss.typ" class="input mt-1">
+                                <option disabled value="">-- auswählen --</option>
+                                <option value="schule">Schulabschluss</option>
+                                <option value="beruf">Berufsabschluss</option>
+                                <option value="hochschule">Hochschulabschluss</option>
+                                <option value="weiterbildung">Weiterbildung</option>
+                            </select>
+                        </div>
+
+                        <!-- Bezeichnung -->
+                        <div v-if="neuerAbschluss.typ">
+                            <label class="text-sm text-gray-600">Abschluss</label>
+                            <select v-model="neuerAbschluss.abschluss_id" class="input mt-1">
+                                <option disabled value="">-- auswählen --</option>
+                                <option
+                                v-for="a in props.abschluesse.filter(a => a.typ === neuerAbschluss.typ)"
+                                :key="a.id"
+                                :value="a.id"
+                                >
+                                {{ a.bezeichnung }}
+                                </option>
+                            </select>
+                        </div>
+                        <div v-if="neuerAbschluss.typ">
+
+                            <label class="text-sm text-gray-600">Bezeichnung</label>
+                            <input v-model="neuerAbschluss.bezeichnung" class="input" />
+                        </div>
+                        <!-- Startdatum -->
+                        <div>
+                            <label class="text-sm text-gray-600">Startdatum</label>
+                            <input type="date" v-model="neuerAbschluss.start" class="input" />
+                        </div>
+
+                        <!-- Enddatum -->
+                        <div>
+                            <label class="text-sm text-gray-600">Enddatum</label>
+                            <input type="date" v-model="neuerAbschluss.end" class="input" />
+                        </div>
+
+
+                    </div>
+
+                    <!-- Buttons -->
+                    <div class="mt-6 flex justify-end space-x-3">
+                        <button
+                        @click="showModalCreateAbschluss = false"
+                        class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100"
+                        >
+                        Abbrechen
+                        </button>
+                        <button
+                        @click="addAbschluss"
+                        :disabled="loadingAbschluss"
+                        class="px-4 py-2 rounded-md text-sm text-white transition"
+                        :class="loadingAbschluss ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
+                        >
+                        <span v-if="!loadingAbschluss">Speichern</span>
+                        <span v-else>Speichern...</span>
+                        </button>
+                    </div>
+                    </div>
+                </div>
+            </transition>
 
     <!-- ================= MODAL LÖSCHEN ================= -->
 
@@ -872,8 +1162,8 @@
 
 <script setup>
     import AppLayout from '@/Layouts/AppLayout.vue';
-    import { ref, defineProps, computed, onMounted } from 'vue';
-    import { router, Head, Link } from '@inertiajs/vue3';
+    import { ref, defineProps, computed, onMounted, watch, watchEffect } from 'vue';
+    import { router, Head, Link, usePage } from '@inertiajs/vue3';
     import Dropdown from '@/Components/Dropdown.vue';
     import ModalDestroy from '@/Components/ModalDestroyForm.vue';
     import Multiselect from '@vueform/multiselect';
@@ -882,6 +1172,9 @@
     import { formatTime } from '@/utils/timeFormat';
     import Select from 'primevue/select';
     import Swal from 'sweetalert2'
+    import Toggle from '@/Components/Toggle.vue';
+    import Alert from '@/Components/Utils/SweetalertSuccessError.vue'
+    const { flash } = usePage().props
 
     const props = defineProps({
         teilnehmer: Object,
@@ -891,13 +1184,49 @@
         erhalteneBriefe: Array,
         meineBriefe: Array,
         anwesenheitsstatuten: Array,
+        abschluesse: Array, // enthält ALLE Abschlüsse aus Seeder
+        leistungsbezuege: Array,
     });
-    console.log(props.meineBriefe);
+
+watchEffect(() => {
+
+  if (flash?.error) {
+    Swal.fire({
+      icon: "error",
+      title: "Fehler",
+      text: flash.error,
+    });
+  }
+});
+
+    // Tabs
+    const tabs = [
+        "Stammdaten",
+        "Sozialdaten",
+        "Adresse",
+        "Kontaktdaten",
+        "Projektverlauf",
+        "Anwesenheit",
+        "Bank",
+        "Schule/Beruf",
+        "Briefe",
+        "Aktennotiz",
+        "Notizen",
+        "Kinder",
+        "Netzwerke",
+        "Vermittlung",
+        "Praktika",
+        "Exportieren"
+
+    ];
+
     // Lokale Kopie der Teilnehmerdaten
     const teilnehmer = ref(JSON.parse(JSON.stringify(props.teilnehmer)));
     const neuesProjektId = ref('');
     const loadingProjekt = ref(false);
     const neuesBriefFreigeben = ref([]);
+
+
     const neuesProjekt = ref({
         antragsdatum: '',
         starttermin: '',
@@ -943,23 +1272,7 @@ const sortierteAnwesenheiten = computed(() => {
   });
 });
 
-// Tabs
-const tabs = [
-    "Stammdaten",
-    "Adresse",
-    "Kontaktdaten",
-    "Projektverlauf",
-    "Anwesenheit",
-    "Bank",
-    "Briefe",
-    "Aktennotiz",
-    "Notizen",
-    "Kinder",
-    "Netzwerke",
-    "Vermittlung",
-    "Praktika",
 
-];
 const activeTab = ref("");
 
 // Formulare & Variablen
@@ -991,6 +1304,46 @@ onMounted(() => {
   }
 })
 
+// =======  Sozialdaten  =======
+
+
+// script setup (Ausschnitt)
+const drittstaatsangehoerig  = ref(!!props.teilnehmer.sozialedaten?.drittstaatsangehoerig);
+const behinderung            = ref(!!props.teilnehmer.sozialedaten?.behinderung);
+const gefluechtet            = ref(!!props.teilnehmer.sozialedaten?.gefluechtet);
+const migrationshintergrund  = ref(!!props.teilnehmer.sozialedaten?.migrationshintergrund);
+const leistungsbezug_id      = ref(props.teilnehmer.sozialedaten?.leistungsbezug_id);
+const wohnsitz_stabil        = ref(!!props.teilnehmer.sozialedaten?.wohnsitz_stabil);
+
+
+const saveSozialdaten = () => {
+  router.patch(
+    route('person.sozialdaten.update', props.teilnehmer.id),
+    {
+      ist_drittstaatsangehoerig: drittstaatsangehoerig.value,
+      hat_behinderung:          behinderung.value,
+      ist_gefluechtet:          gefluechtet.value,
+      hat_migrationshintergrund:    migrationshintergrund.value,
+      leistungsbezug_id:        leistungsbezug_id.value,
+      ist_wohnsitz_stabil: wohnsitz_stabil.value,
+      teilnehmer_id: props.teilnehmer.id,
+    },
+    {
+      preserveScroll: true,
+      onSuccess: () => {
+        // Optional: nur bestimmte Props neu laden (spart Full-Reload)
+        router.reload({ only: ['teilnehmer'] });
+        Swal.fire({
+        icon: 'success',
+        title: 'Gespeichert!',
+        text: 'Abschluss erfolgreich hinzugefügt.',
+        timer: 1500,
+        showConfirmButton: false,
+      });
+      },
+    }
+  );
+};
 // =======  Stammdaten  =======
 const loadingSave = ref(false);
 
@@ -1000,7 +1353,6 @@ const saveStammdaten = () => {
     if (!teilnehmer.value.vorname || !teilnehmer.value.nachname) return;
 
     loadingSave.value = true;
-    console.log("Speichern Stammdaten:", teilnehmer.value);
     const payload = {
         vorname: teilnehmer.value.vorname,
         nachname: teilnehmer.value.nachname,
@@ -1033,6 +1385,81 @@ const saveStammdaten = () => {
 };
 
 
+// ======= Schule/Beruf
+
+// 🔧 Reaktive Zustände
+const showModalCreateAbschluss = ref(false);
+const loadingAbschluss = ref(false);
+
+// Neues Abschlussobjekt (wird im Modal befüllt)
+const neuerAbschluss = ref({
+  typ: '',
+  abschluss_id: '',
+  bezeichnung: '',
+});
+
+// 🧠 Funktion: Abschluss hinzufügen
+const addAbschluss = () => {
+  if (!neuerAbschluss.value.abschluss_id) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Bitte auswählen',
+      text: 'Wählen Sie einen Abschluss aus.',
+      timer: 1500,
+      showConfirmButton: false,
+    });
+    return;
+  }
+
+  loadingAbschluss.value = true;
+
+  const payload = {
+        person_id: props.teilnehmer.id,
+        abschluss_id: neuerAbschluss.value.abschluss_id,
+        abschluss_typ: neuerAbschluss.value.typ,
+        bezeichnung: neuerAbschluss.value.bezeichnung,
+        start: neuerAbschluss.value.start,
+        end: neuerAbschluss.value.end,
+  };
+
+  router.post(route('abschluss.store'), payload, {
+    onSuccess: () => {
+      // Lokale Liste sofort aktualisieren (Frontend ohne Reload)
+      const selected = props.abschluesse.find(a => a.id === payload.abschluss_id);
+      if (selected) {
+        if (!props.teilnehmer.abschluesse) props.teilnehmer.abschluesse = [];
+            teilnehmer.value.abschluesse.unshift({
+            ...selected,
+            pivot_model: {
+                bezeichnung: payload.bezeichnung,
+                start: payload.start,
+                end: payload.end,
+            },
+        });
+      }
+
+      showModalCreateAbschluss.value = false;
+      neuerAbschluss.value = { typ: '', abschluss_id: '', bezeichnung: '', start: '', end: '' };
+
+      Swal.fire({
+        icon: 'success',
+        title: 'Gespeichert!',
+        text: 'Abschluss erfolgreich hinzugefügt.',
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    },
+    onError: () => {
+      Swal.fire({
+        icon: 'error',
+        title: 'Fehler',
+        text: 'Der Abschluss konnte nicht gespeichert werden.',
+      });
+    },
+    onFinish: () => (loadingAbschluss.value = false),
+  });
+};
+
 // ======= Brief =======
 const openFreigabeModal = (briefData) => {
   brief.value = briefData; // speichert den ausgewählten Brief für die Freigabe
@@ -1062,7 +1489,6 @@ const openFreigabeModal = (briefData) => {
      const setBriefVorlage = (vorlage) => {
         const anrede = generiereAnrede(props.teilnehmer);
 
-        console.log("Vorlage gewählt:", vorlage);
         brief.value.betreff = vorlage.title || '';
         brief.value.inhalt = anrede + (vorlage.content || '');
     };
@@ -1218,8 +1644,13 @@ const addKontakt = () => {
 };
 
 // ====================== LÖSCHEN ======================
+// Lokale Kopien der Brief-Arrays (reaktiv)
+const meineBriefe = ref([...props.meineBriefe]);
+const erhalteneBriefe = ref([...props.erhalteneBriefe]);
+
 const confirmDelete = (item, type) => {
-  toDeleteItem.value = { id: item.id, name: item.name || item.wert || item.strasse };
+    console.log(item.id);
+  toDeleteItem.value = { id: item.id, name: item.name || item.wert || item.strasse || item.bezeichnung };
   seite.value = type;
   showModalLöschen.value = true;
 };
@@ -1241,112 +1672,136 @@ const handleDelete = (id) => {
   if (seite.value === 'anwesenheit') {
     teilnehmer.value.anwesenheiten = teilnehmer.value.anwesenheiten.filter((p) => p.id !== id);
   }
+  if (seite.value === 'brief') {
+    meineBriefe.value = meineBriefe.value.filter((b) => b.id !== id);
+ }
+ if (seite.value === 'briefShared') {
+    erhalteneBriefe.value = erhalteneBriefe.value.filter((b) => b.id !== id);
+ }
+if (seite.value === 'abschluss') {
+  window.location.reload();
+
+}
+
+
+
+
+
+
+
   showModalLöschen.value = false;
 };
 
 
 // =======  ANWESENHEIT =======
+ const editMode = ref(false);
+    const aktuelleAnwesenheit = ref(null);
+const openModalEdit = (anwesenheit) => {
+  editMode.value = true;
+  aktuelleAnwesenheit.value = anwesenheit;
+  showModalAnwesenheit.value = true;
+
+  neueAnwesenheit.value = {
+    dateAnwesenheit: anwesenheit.tag?.datum || '',
+    startTime: anwesenheit.zeit?.startzeit || '',
+    endTime: anwesenheit.zeit?.endzeit || '',
+    anwesenheitsstatus: props.anwesenheitsstatuten.find(
+      s => s.status === anwesenheit.status?.status
+    )?.id || null,
+    bemerkungen: anwesenheit.bemerkung || ''
+  };
+};
 
 const addAnwesenheit = () => {
-  console.log("Neue Anwesenheit:", neueAnwesenheit.value);
-
-  // ====== Validierung mit SweetAlert ======
-  if (!neueAnwesenheit.value.dateAnwesenheit) {
+  // 🧩 Validierung
+  if (
+    !neueAnwesenheit.value.dateAnwesenheit ||
+    !neueAnwesenheit.value.startTime ||
+    !neueAnwesenheit.value.endTime
+  ) {
     Swal.fire({
       icon: 'warning',
-      title: 'Fehlendes Datum',
-      text: 'Bitte wählen Sie ein Datum für die Anwesenheit aus.',
+      title: 'Fehlende Angaben',
+      text: 'Bitte füllen Sie alle Pflichtfelder aus.',
     });
     return;
   }
 
-  if (!neueAnwesenheit.value.anwesenheitsstatus) {
-    Swal.fire({
-      icon: 'warning',
-      title: 'Kein Status gewählt',
-      text: 'Bitte wählen Sie einen Anwesenheitsstatus aus.',
-    });
-    return;
-  }
+  const payload = {
+    id: aktuelleAnwesenheit.value?.id || null,
+    personen_id: props.teilnehmer.id,
+    tag: neueAnwesenheit.value.dateAnwesenheit,
+    startzeit: neueAnwesenheit.value.startTime,
+    endzeit: neueAnwesenheit.value.endTime,
+    anwesenheitsstatuten_id: neueAnwesenheit.value.anwesenheitsstatus,
+    bemerkung: neueAnwesenheit.value.bemerkungen,
+  };
 
-  if (!neueAnwesenheit.value.startTime || !neueAnwesenheit.value.endTime) {
-    Swal.fire({
-      icon: 'warning',
-      title: 'Zeitangabe fehlt',
-      text: 'Bitte geben Sie sowohl Startzeit als auch Endzeit ein.',
-    });
-    return;
-  }
-
-  if (neueAnwesenheit.value.startTime >= neueAnwesenheit.value.endTime) {
-    Swal.fire({
-      icon: 'error',
-      title: 'Ungültige Zeitangabe',
-      text: 'Die Startzeit darf nicht später oder gleich der Endzeit sein.',
-    });
-    return;
-  }
-
-  // ====== Wenn alles OK ======
   loadingAnwesenheit.value = true;
 
   router.post(
-    route('anwesenheit.store'),
+    editMode.value
+      ? route('anwesenheit.update')
+      : route('anwesenheit.store'),
+    payload,
     {
-      ...neueAnwesenheit.value,
-      person_id: props.teilnehmer.id,
-    },
-    {
-      preserveState: true,
-      onFinish: () => (loadingAnwesenheit.value = false),
+      preserveScroll: true,
       onSuccess: () => {
-        // Anwesenheit in Liste einfügen
         const statusObj = props.anwesenheitsstatuten.find(
-          (s) => s.id === neueAnwesenheit.value.anwesenheitsstatus
+          s => s.id === payload.anwesenheitsstatuten_id
         );
 
-        const neueAnwesenheitEintrag = {
-          id: Date.now(),
-          tag: { datum: neueAnwesenheit.value.dateAnwesenheit },
-          zeit: {
-            startzeit: neueAnwesenheit.value.startTime,
-            endzeit: neueAnwesenheit.value.endTime,
-          },
-          status: {
-            status: statusObj ? statusObj.status : 'unbekannt',
-            farben: statusObj ? statusObj.farben : 'bg-gray-300',
-          },
-          bemerkung: neueAnwesenheit.value.bemerkungen || '',
-        };
+        if (editMode.value && aktuelleAnwesenheit.value) {
+          // 🔄 Lokale Aktualisierung (Update)
+          Object.assign(aktuelleAnwesenheit.value, {
+            tag: { datum: payload.tag },
+            zeit: { startzeit: payload.startzeit, endzeit: payload.endzeit },
+            status: statusObj,
+            bemerkung: payload.bemerkung,
+          });
+        } else {
+          // ➕ Neue Anwesenheit hinzufügen (Create)
+          teilnehmer.value.anwesenheiten.unshift({
+            id: Date.now(),
+            tag: { datum: payload.tag },
+            zeit: { startzeit: payload.startzeit, endzeit: payload.endzeit },
+            status: statusObj,
+            bemerkung: payload.bemerkung,
+          });
+        }
 
-        teilnehmer.value.anwesenheiten.unshift(neueAnwesenheitEintrag);
-
-        // Eingaben zurücksetzen
+        // ✅ Modal schließen & zurücksetzen
+        showModalAnwesenheit.value = false;
+        editMode.value = false;
+        aktuelleAnwesenheit.value = null;
         neueAnwesenheit.value = {
-          anwesenheitsstatus: null,
           dateAnwesenheit: '',
           startTime: '',
           endTime: '',
+          anwesenheitsstatus: null,
           bemerkungen: '',
         };
 
-        showModalAnwesenheit.value = false;
-
-        // ✅ Erfolgsnachricht
+        // ✅ Erfolgsmeldung
         Swal.fire({
           icon: 'success',
           title: 'Gespeichert!',
-          text: 'Die Anwesenheit wurde erfolgreich erfasst.',
+          text: editMode.value
+            ? 'Die Anwesenheit wurde aktualisiert.'
+            : 'Neue Anwesenheit wurde hinzugefügt.',
           timer: 1800,
           showConfirmButton: false,
         });
       },
-      onError: (errors) => {
+      onError: () => {
         Swal.fire({
           icon: 'error',
-          title: 'Fehler beim Speichern',
-          text: 'Bitte überprüfen Sie Ihre Eingaben oder versuchen Sie es erneut.',
+          title: 'Fehler',
+          text: 'Beim Speichern ist ein Fehler aufgetreten.',
         });
+      },
+      onFinish: () => {
+        loadingAnwesenheit.value = false;
       },
     }
   );
@@ -1354,10 +1809,25 @@ const addAnwesenheit = () => {
 
 
 
+watch(showModalAnwesenheit, (val) => {
+  if (!val) {
+    editMode.value = false;
+    aktuelleAnwesenheit.value = null;
+    neueAnwesenheit.value = {
+      anwesenheitsstatus: null,
+      dateAnwesenheit: '',
+      startTime: '',
+      endTime: '',
+      bemerkungen: '',
+    };
+  }
+});
+
+
+
 // ======= PROJEKTE ZUWEISEN =======
 const addProjekt = () => {
   if (!neuesProjektId.value) return; // Sicherheitsabfrage
-    console.log("Zuweisen Projekt ID:", neuesProjekt.value);
   loadingProjekt.value = true;
 
   router.post(

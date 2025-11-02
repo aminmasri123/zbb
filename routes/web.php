@@ -15,8 +15,10 @@ use App\Http\Controllers\PartnerController;
 use App\Http\Controllers\ProjektController;
 use App\Http\Controllers\StandortController;
 use App\Http\Controllers\AbteilungController;
+use App\Http\Controllers\AbschlusseController;
 use App\Http\Controllers\TeilnehmerController;
 use App\Http\Controllers\AnwesenheitController;
+use App\Http\Controllers\ExportExcelController;
 use App\Http\Controllers\BerechtigungController;
 use App\Http\Controllers\KostenstelleController;
 use App\Http\Controllers\NotificationController;
@@ -157,6 +159,15 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::delete('/teilnehmer/entfernen/{id}', [TeilnehmerController::class, 'destroy'])->name('teilnehmer.destroy');
     Route::get('/teilnehmer/bearbeiten/{id}', [TeilnehmerController::class, 'show'])->name('teilnehmer.edit');
     Route::patch('/teilnehmer/update/{id}', [TeilnehmerController::class, 'update'])->name('teilnehmer.update');
+    Route::patch('/teilnehmer/{person}/sozialdaten', [TeilnehmerController::class, 'updateSozialdaten'])
+    ->name('person.sozialdaten.update');
+
+    // Personen Has Abschluss
+    Route::post('/teilnehmer/abschluss/anlegen', [AbschlusseController::class, 'store'])->name('abschluss.store');
+    Route::delete('/teilnehmer/abschluss/entfernen/{id}', [AbschlusseController::class, 'destroy'])->name('abschluss.destroy');
+
+
+
 
 
     //Anwesenheiten
@@ -209,6 +220,16 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
 
         Route::post('/brief', [BriefController::class, 'store'])->name('brief.store');
         Route::post('/brief/share', [BriefController::class, 'share'])->name('brief.share');
+        Route::delete('/brief/delete/{id}', [BriefController::class, 'destroy'])->name('brief.destroy');
+        Route::delete('/brief/shared/delete/{id}', [BriefController::class, 'sharedDestroy'])->name('briefShared.destroy');
+
+
+
+
+
+
+        //Export
+        Route::get('/teilnehmer/export/stammblatt/{teilnehmerId}/{projektId}', [ExportExcelController::class, 'esfStammblatt'])->name('export.excel.esfStammblatt');
 
 });
 
