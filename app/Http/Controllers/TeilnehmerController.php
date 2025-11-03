@@ -13,6 +13,7 @@ use App\Models\Abschluesse;
 use App\Models\Kontakttypen;
 use App\Models\SozialeDaten;
 use Illuminate\Http\Request;
+use App\Models\Notizvarianten;
 use App\Models\Leistungsbezuege;
 use App\Models\BereichHasPersonen;
 use Illuminate\Support\Facades\DB;
@@ -145,13 +146,24 @@ class TeilnehmerController extends Controller
             'projekte',
             'baenke',
             'abschluesse',
-            'sozialedaten'
+            'sozialedaten',
+            'notizen.notizkategorie',
+            'notizen.notiztyp',
+            'notizen.notizprioritaet',
+            'notizen.user',
         ])->findOrFail($id);
+
         $anwesenheitsstatuten =Anwesenheitsstatuten::all();
         $abschluesse = Abschluesse::all();
         $personen->projekte->each(function ($projekt) {
             $projekt->pivotModel->load('zeitraume');
         });
+
+        $notiztypen = Notizvarianten::where('typ', 'typ')->get();
+        $notizkategorie = Notizvarianten::where('typ', 'kategorie')->get();
+        $notizprioritaet = Notizvarianten::where('typ', 'prioritaet')->get();
+
+
 
         $leistungsbezuege = Leistungsbezuege::all();
         $erhalteneBriefe = auth()->user()->receivedFreigaben();
@@ -183,6 +195,9 @@ class TeilnehmerController extends Controller
             'anwesenheitsstatuten' => $anwesenheitsstatuten,
             'abschluesse' => $abschluesse,
             'leistungsbezuege' => $leistungsbezuege,
+            'notiztypen' => $notiztypen,
+            'notizkategorie' => $notizkategorie,
+            'notizprioritaet' => $notizprioritaet,
             ],
         );
     }

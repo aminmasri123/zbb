@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Foundation\Application;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\BriefController;
+use App\Http\Controllers\NotizController;
 use App\Http\Controllers\BaenkeController;
 use App\Http\Controllers\GruppeController;
 use App\Http\Controllers\SchuleController;
@@ -217,15 +218,16 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead'])
     ->name('notifications.readAll');
 
-
+    //Brief
         Route::post('/brief', [BriefController::class, 'store'])->name('brief.store');
         Route::post('/brief/share', [BriefController::class, 'share'])->name('brief.share');
         Route::delete('/brief/delete/{id}', [BriefController::class, 'destroy'])->name('brief.destroy');
         Route::delete('/brief/shared/delete/{id}', [BriefController::class, 'sharedDestroy'])->name('briefShared.destroy');
 
 
-
-
+    //Notizen
+        Route::post('/notizen', [NotizController::class, 'store'])->name('notizen.store');
+        Route::delete('/notizen/delete/{id}', [NotizController::class, 'destroy'])->name('notizen.destroy');
 
 
         //Export

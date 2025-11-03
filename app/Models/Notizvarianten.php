@@ -5,14 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Abschluesse extends Model
+class Notizvarianten extends Model
 {
     use HasFactory;
-
      protected $fillable = [
         'typ',
-        'bezeichnung',
+        'name',
+        'beschreibung',
     ];
-
 
 }

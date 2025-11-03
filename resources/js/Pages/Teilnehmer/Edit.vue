@@ -228,8 +228,7 @@
           </div>
 
           <!-- =================== MASSNAHMENVERLAUF =================== -->
-          <div v-else-if="activeTab === 'Projektverlauf'">
-
+        <div v-else-if="activeTab === 'Projektverlauf'">
              <!-- Projekt hinzufügen -->
             <button @click="showModalProjektzuweisen = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
                 <span v-if="!loadingProjekt">➕ Zuweisen</span>
@@ -479,7 +478,6 @@
                 Noch keine Schul- oder Berufsabschlüsse vorhanden.
             </p>
             </div>
-
           <!-- ================= BRIEFE ================= -->
           <div v-else-if="activeTab === 'Briefe'">
             <button @click="showModalBrief = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
@@ -581,15 +579,103 @@
             </div>
           </div>
 
-          <!-- ================= AKTENNOTIZ ================= -->
-          <div v-else-if="activeTab === 'Aktennotiz'">
-            <textarea v-model="form.aktennotiz" rows="8" class="input"></textarea>
-          </div>
+        <!-- ================= NOTIZEN ================= -->
+        <div v-else-if="activeTab === 'Notizen'">
+            <button @click="showModalNotiz = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
+                <span v-if="!loadingNotiz">➕ Notiz erstellen</span>
+                <span v-else>...</span>
+            </button>
 
-          <!-- ================= NOTIZEN ================= -->
-          <div v-else-if="activeTab === 'Notizen'">
-            <textarea v-model="form.notizen" rows="8" class="input"></textarea>
-          </div>
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <form class="grid grid-cols-1 md:grid-cols-4 gap-4">
+
+                <!-- Suche -->
+                <input
+                    type="text"
+                    v-model="filter.suche"
+                    placeholder="Inhalt suchen..."
+                    class="w-full rounded-md border-gray-300 text-sm focus:border-zbb focus:ring-zbb"
+                />
+
+                <!-- Notiztyp -->
+                <select v-model="filter.typ" class="w-full rounded-md border-gray-300 text-sm focus:border-zbb focus:ring-zbb">
+                    <option value="">Alle Typen</option>
+                    <option v-for="t in props.notiztypen" :key="t.id" :value="t.id">{{ t.name }}</option>
+                </select>
+
+                <!-- Priorität -->
+                <select v-model="filter.prioritaet" class="w-full rounded-md border-gray-300 text-sm focus:border-zbb focus:ring-zbb">
+                    <option value="">Alle Prioritäten</option>
+                    <option v-for="p in props.notizprioritaet" :key="p.id" :value="p.id">{{ p.name }}</option>
+                </select>
+
+                <!-- Kategorie -->
+                <select v-model="filter.kategorie" class="w-full rounded-md border-gray-300 text-sm focus:border-zbb focus:ring-zbb">
+                    <option value="">Alle Kategorien</option>
+                    <option v-for="k in props.notizkategorie" :key="k.id" :value="k.id">{{ k.name }}</option>
+                </select>
+
+                </form>
+
+            </div>
+
+
+            <template  v-if="props.teilnehmer && props.teilnehmer.notizen.length > 0">
+                <div v-for="notiz in [...gefilterteNotizen].reverse()" :key="notiz.id" class="bg-white mt-6 rounded-xl border border-gray-200 shadow-sm p-6 flex flex-col gap-4 hover:bg-gray-50">
+                    <!-- Header -->
+                    <div class="flex items-start justify-between">
+                        <div class="flex items-center gap-2">
+                            <span v-if="notiz.notiztyp.name === 'Telefonnotiz'" class="text-purple-400 text-2xl">📞</span>
+                            <span v-if="notiz.notiztyp.name === 'Verlaufsnotiz'" class="text-purple-400 text-2xl">📈</span>
+                            <span v-if="notiz.notiztyp.name === 'Beratungsprotokoll'" class="text-purple-400 text-2xl">💬</span>
+                            <span v-if="notiz.notiztyp.name === 'Aktennotiz'" class="text-purple-400 text-2xl">📋</span>
+                            <div>
+                                <h3 class="font-semibold text-gray-800">{{notiz.titel}}</h3>
+                                <p class="text-xs text-gray-500">{{props.teilnehmer.vorname}} {{props.teilnehmer.nachname}}</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-3">
+                            <span
+                                class="px-2 py-0.5 text-xs rounded-full"
+                                :class="{
+                                    'bg-green-100 text-green-600': notiz.notizprioritaet.name === 'Niedrig',
+                                    'bg-orange-100 text-orange-600': notiz.notizprioritaet.name === 'Mittel',
+                                    'bg-red-100 text-red-600': notiz.notizprioritaet.name === 'Hoch'
+                                }"
+                            >
+                                {{ notiz.notizprioritaet.name }}
+                            </span>
+                            <button @click="confirmDelete(notiz, 'notizen')" class="text-gray-400 hover:text-red-500 transition">
+                                <i class="las la-trash text-lg"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Inhalt -->
+                    <p class="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                        {{notiz.notizinhalt}}
+                    </p>
+
+                    <hr>
+
+                    <!-- Footer -->
+                    <div class="flex justify-between items-center text-xs text-gray-500">
+                        <div class="flex gap-4">
+                            <span>{{notiz.notiztyp.name}}</span>
+                            <span>{{notiz.notizkategorie.name}}</span>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <span>{{notiz.user.vorname}} {{notiz.user.nachname}}</span>
+                            <span>•</span>
+                            <span>{{formatDateTime(notiz.created_at)}}</span>
+                        </div>
+                    </div>
+                </div>
+            </template>
+
+        </div>
 
 
           <!-- ================= KINDER ================= -->
@@ -924,7 +1010,6 @@
             </transition>
 
             <!-- MODAL: Anwesenheit -->
-             <!-- ADD Anwesenheit -->
             <transition name="fade">
                 <div v-if="showModalAnwesenheit" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
                     <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
@@ -1018,7 +1103,6 @@
                     </div>
                 </div>
             </transition>
-
             <!-- End MODAL: Anwesenheit -->
 
             <!-- MODAL: Bank hinzufügen -->
@@ -1061,7 +1145,92 @@
               </div>
             </transition>
 
-            <!-- MODAL -->
+            <!-- MODAL: Notiz -->
+            <transition name="fade">
+                <div v-if="showModalNotiz" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+                    <div class="bg-white rounded-xl shadow-xl w-1/3  p-6 relative">
+                        <button @click="showModalNotiz = false" class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl">✕</button>
+                        <h3 class="text-lg font-semibold mb-4 text-zbb">Neue Notiz erstellen</h3>
+                        <div class="space-y-4">
+                            <div class="flex space-x-4">
+                                <div class="w-1/2">
+                                    <label for="startDate" class="block text-sm font-medium text-gray-700 mb-2" >
+                                        Notiztyp <span class="text-red-500">*</span>
+                                    </label>
+                                     <Select
+                                        v-model="neueNotiz.typ"
+                                        :options="props.notiztypen"
+                                        optionLabel="name"
+                                        optionValue="id"
+                                        class="w-[200px] text-sm w-full px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
+                                        >
+                                    </Select>
+                                </div>
+
+                                <div class="w-1/2">
+                                    <label for="startDate" class="block text-sm font-medium text-gray-700 mb-2" >
+                                        Priorität <span class="text-red-500">*</span>
+                                    </label>
+                                     <Select
+                                        v-model="neueNotiz.prioritaet"
+                                        :options="props.notizprioritaet"
+                                        optionLabel="name"
+                                        optionValue="id"
+                                        class="w-[200px] text-sm w-full px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
+                                        >
+                                    </Select>
+                                </div>
+                            </div>
+
+                             <div>
+                                    <label for="startDate" class="block text-sm font-medium text-gray-700 mb-2" >
+                                        Kategorie <span class="text-red-500">*</span>
+                                    </label>
+                                     <Select
+                                        v-model="neueNotiz.kategorie"
+                                        :options="props.notizkategorie"
+                                        optionLabel="name"
+                                        optionValue="id"
+                                        class="w-[200px] text-sm w-full px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
+                                        >
+                                    </Select>
+                                </div>
+                                <div>
+                                    <label for="titel" class="block text-sm font-medium text-gray-700 mb-2" >
+                                        Notiztitel <span class="text-red-500">*</span>
+                                    </label>
+                                    <input type="text" v-model="neueNotiz.titel" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors py-3"/>
+                                </div>
+
+                            <div>
+                                <label for="inhalt" class="block text-sm font-medium text-gray-700 mb-2" >
+                                    Notizinhalt <span class="text-red-500">*</span>
+                                </label>
+                                <textarea v-model="neueNotiz.inhalt" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors py-3"></textarea>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 flex justify-end space-x-3">
+                            <button @click="showModalNotiz = false" class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100">Abbrechen</button>
+                            <button
+                                @click="addNotiz"
+                                :disabled="loadingNotiz"
+                                class="px-4 py-2 rounded-md text-sm text-white transition"
+                                :class="loadingNotiz ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
+                                >
+                                <span v-if="!loadingNotiz">
+                                    Speichern
+                                </span>
+                                <span v-else>Speichern...</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </transition>
+            <!-- End MODAL: Notiz -->
+
+
+            <!-- MODAL Abschluss-->
             <transition name="fade">
                 <div
                     v-if="showModalCreateAbschluss"
@@ -1170,6 +1339,7 @@
     import '@vueform/multiselect/themes/default.css';
     import { formatDate } from '@/utils/dateFormat';
     import { formatTime } from '@/utils/timeFormat';
+    import {formatDateTime} from '@/utils/dateFormat';
     import Select from 'primevue/select';
     import Swal from 'sweetalert2'
     import Toggle from '@/Components/Toggle.vue';
@@ -1186,7 +1356,13 @@
         anwesenheitsstatuten: Array,
         abschluesse: Array, // enthält ALLE Abschlüsse aus Seeder
         leistungsbezuege: Array,
+        notizprioritaet: Array,
+        notizkategorie: Array,
+        notiztypen:Array,
     });
+
+
+    console.log(JSON.stringify(props.teilnehmer.notizen, null, 2))
 
 watchEffect(() => {
 
@@ -1210,7 +1386,6 @@ watchEffect(() => {
         "Bank",
         "Schule/Beruf",
         "Briefe",
-        "Aktennotiz",
         "Notizen",
         "Kinder",
         "Netzwerke",
@@ -1248,7 +1423,6 @@ const form = ref({
     geburtsdatum: "1997-05-17",
     betreuer: "",
     bemerkungen: "",
-    aktennotiz: "",
     notizen: "",
     vermittlung: "",
     bankname: "",
@@ -1384,6 +1558,105 @@ const saveStammdaten = () => {
     );
 };
 
+// ======= Notizen
+const showModalNotiz = ref(false);
+const loadingNotiz = ref(false);
+const neueNotiz = ref({
+    typ: '',
+    kategorie: '',
+    prioritaet: '',
+    titel: '',
+    inhalt: '',
+});
+const filter = ref({
+  suche: "",
+  typ: "",
+  prioritaet: "",
+  kategorie: ""
+});
+const gefilterteNotizen = computed(() => {
+  return props.teilnehmer.notizen.filter((n) => {
+    const matchSuche =
+      filter.value.suche === "" ||
+      n.notizinhalt.toLowerCase().includes(filter.value.suche.toLowerCase()) ||
+      n.titel.toLowerCase().includes(filter.value.suche.toLowerCase());
+
+    const matchTyp =
+      filter.value.typ === "" || n.notiztyp_id === filter.value.typ;
+
+    const matchPrioritaet =
+      filter.value.prioritaet === "" ||
+      n.prioritaet_id === filter.value.prioritaet;
+
+    const matchKategorie =
+      filter.value.kategorie === "" ||
+      n.kategorie_id === filter.value.kategorie;
+
+    return matchSuche && matchTyp && matchPrioritaet && matchKategorie;
+  });
+});
+
+
+
+
+const addNotiz = () => {
+  if (!neueNotiz.value.typ || !neueNotiz.value.kategorie || !neueNotiz.value.prioritaet || !neueNotiz.value.titel || !neueNotiz.value.inhalt) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Fehldende Daten',
+      text: 'Bitte füllen Sie alle Pflichfelder aus.',
+      timer: 1500,
+      showConfirmButton: false,
+    });
+    return;
+  }
+
+  loadingNotiz.value = true;
+
+  const payload = {
+        person_id: props.teilnehmer.id,
+        notiztyp: neueNotiz.value.typ,
+        notizkategorie: neueNotiz.value.kategorie,
+        prioritaet: neueNotiz.value.prioritaet,
+        titel: neueNotiz.value.titel,
+        inhalt: neueNotiz.value.inhalt,
+  };
+
+  router.post(route('notizen.store'), payload, {
+    onSuccess: () => {
+      // Lokale Liste sofort aktualisieren (Frontend ohne Reload)
+      const selected = props.abschluesse.find(a => a.id === payload.abschluss_id);
+      if (selected) {
+        if (!props.teilnehmer.notizen) props.teilnehmer.notizen = [];
+            teilnehmer.value.notizen.unshift({
+            ...selected,
+
+        });
+      }
+
+      showModalNotiz.value = false;
+        loadingNotiz.value = false;
+
+      neueNotiz.value = { notiztyp: '', notizkategorie: '', prioritaet: '', titel: '', inhalt: '' };
+
+      Swal.fire({
+        icon: 'success',
+        title: 'Gespeichert!',
+        text: 'Abschluss erfolgreich hinzugefügt.',
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    },
+    onError: () => {
+      Swal.fire({
+        icon: 'error',
+        title: 'Fehler',
+        text: 'Der Abschluss konnte nicht gespeichert werden.',
+      });
+    },
+    onFinish: () => (loadingAbschluss.value = false),
+  });
+};
 
 // ======= Schule/Beruf
 
@@ -1650,7 +1923,7 @@ const erhalteneBriefe = ref([...props.erhalteneBriefe]);
 
 const confirmDelete = (item, type) => {
     console.log(item.id);
-  toDeleteItem.value = { id: item.id, name: item.name || item.wert || item.strasse || item.bezeichnung };
+  toDeleteItem.value = { id: item.id, name: item.name || item.wert || item.strasse || item.bezeichnung || item.titel };
   seite.value = type;
   showModalLöschen.value = true;
 };
@@ -1680,7 +1953,9 @@ const handleDelete = (id) => {
  }
 if (seite.value === 'abschluss') {
   window.location.reload();
-
+}
+if (seite.value === 'notizen') {
+  props.teilnehmer.notizen = props.teilnehmer.notizen.filter((n) => n.id !== id);
 }
 
 

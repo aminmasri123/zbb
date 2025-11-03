@@ -12,6 +12,7 @@ use App\Models\Zielgruppe;
 
 use App\Models\Abschluesse;
 use App\Models\Anwesenheiten;
+use App\Models\PersonenHasNotizen;
 use App\Models\ProjektHasPersonen;
 use App\Models\PersonenHasAbschluesse;
 use App\Models\PersonenHasSozialedaten;
@@ -38,6 +39,9 @@ class Personen extends Model
 
     public function anwesenheiten(){
         return $this->hasMany(PersonenHasAnwesenheiten::class, 'personen_id', 'id');
+    }
+    public function notizen(){
+        return $this->hasMany(PersonenHasNotizen::class, 'person_id', 'id');
     }
 
     public function scopeTeilnehmer($query)

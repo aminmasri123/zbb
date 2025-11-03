@@ -24,10 +24,17 @@
     const selectedTeilnehmerIds = ref([])
 
     // --- Hilfsfunktion für Farben je nach Status ---
-    const statusFarbe = (status) => {
-    const found = props.anwesenheitsstatuten.find(s => s.status === status)
-    return found ? found.farben || found.color || 'bg-gray-300' : 'bg-gray-300'
-    }
+const statusFarbe = (statusName) => {
+  if (!statusName) return { backgroundColor: '#d1d5db' } // grau fallback
+
+  const item = props.anwesenheitsstatuten.find(
+    s => s.status?.toLowerCase() === statusName.toLowerCase()
+  )
+
+  return item?.hex ? { backgroundColor: item.hex } : { backgroundColor: '#d1d5db' }
+}
+
+
 
 
 // Funktion, um nach Klick auf „Übernehmen“ die ausgewählten Teilnehmer hinzuzufügen
@@ -137,6 +144,7 @@ const tage = computed(() =>
 
 // --- Teilnehmer vorbereiten ---
 const gruppenTeilnehmer = ref([])
+console.log(gruppenTeilnehmer);
 const tag = ref([])
 
 onMounted(() => {
@@ -169,7 +177,13 @@ const speichernSofort = async (tID, ttag, statusName) => {
       anwesenheitsstatuten_id: status.id,
       bemerkung: null,
     })
-
+        Swal.fire({
+            icon: 'success',
+            title: 'Anwesenheit erfolgreich aktualisiert',
+            text: 'Die Aktualisierung der Anwesenehit wurde erfolgreich gespeichert.',
+            timer: 2000,
+            showConfirmButton: false,
+          });
     console.log(`✅ gespeichert → ${statusName}`)
   } catch (error) {
     console.error(error)
@@ -262,7 +276,7 @@ const speichernSofort = async (tID, ttag, statusName) => {
             :key="s.status"
             class="flex items-center gap-2 text-sm"
           >
-            <span :class="['w-3 h-3 rounded-full ', s.farben ]"></span>
+            <span class="w-3 h-3 rounded-full " :style="statusFarbe(s.status)"></span>
             {{ s.status }}
           </div>
         </div>
@@ -311,21 +325,27 @@ const speichernSofort = async (tID, ttag, statusName) => {
                     >
                     <template #value="slotProps">
                         <div class="flex items-center gap-2">
-                        <span
-                            :class="['w-3 h-3 rounded-full inline-block', statusFarbe(slotProps.value)]"
-                        ></span>
-                        {{ slotProps.value }}
+                            <span
+                            class="w-3 h-3 rounded-full inline-block"
+                            :style="statusFarbe(slotProps.value)"
+                            ></span>
+                            {{ slotProps.value }}
                         </div>
                     </template>
 
+
+
                     <template #option="slotProps">
-                        <div class="flex items-center gap-2">
-                        <span
-                            :class="['w-3 h-3 rounded-full inline-block', slotProps.option.farben]"
-                        ></span>
-                        {{ slotProps.option.status }}
-                        </div>
-                    </template>
+  <div class="flex items-center gap-2">
+    <span
+      class="w-3 h-3 rounded-full inline-block"
+      :style="statusFarbe(slotProps.option.status)"
+    ></span>
+    {{ slotProps.option.status }}
+  </div>
+</template>
+
+
                 </Select>
 
                 </td>

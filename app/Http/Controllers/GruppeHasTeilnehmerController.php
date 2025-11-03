@@ -74,7 +74,7 @@ class GruppeHasTeilnehmerController extends Controller
      */
     public function show(string $id)
     {
-       
+
         $gruppe = Gruppe::with([
             'teilnehmer',
             'teilnehmer.anwesenheiten' => function ($q) {

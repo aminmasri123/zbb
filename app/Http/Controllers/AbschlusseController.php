@@ -32,11 +32,10 @@ class AbschlusseController extends Controller
         $validated = $request->validate([
             'person_id' => 'required|exists:personens,id',
             'abschluss_id' => 'required|exists:abschluesses,id',
-            'bezeichnung' => 'string',
-            'start' => 'nullable|date',
-            'end' => 'nullable|date|after_or_equal:start',
+            'bezeichnung' => 'required|string',
+            'start' => 'required|date',
+            'end' => 'required|date|after_or_equal:start',
         ]);
-
 
         PersonenHasAbschluesse::firstOrCreate([
             'person_id' => $validated['person_id'], // Suchkriterium

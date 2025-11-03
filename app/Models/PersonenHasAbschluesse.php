@@ -17,6 +17,8 @@ class PersonenHasAbschluesse extends Pivot //Model
         'person_id',
         'abschluss_id',
         'bezeichnung',
+        'start',
+        'end'
 
     ];
 

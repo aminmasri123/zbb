@@ -197,6 +197,60 @@ class UserSeeder extends Seeder
             ],
         ]);
 
+         DB::table('notizvariantens')->insert([
+            //Notizkategorie
+            [ // id = 1
+                'typ' => 'kategorie',
+                'name' => 'Beratung',
+            ],
+            [ // id = 2
+                'typ' => 'kategorie',
+                'name' => 'Fortschritt',
+            ],
+            [ // id = 3
+                'typ' => 'kategorie',
+                'name' => 'Problem',
+            ],
+            [ // id = 4
+                'typ' => 'kategorie',
+                'name' => 'Termin',
+            ],
+
+
+            //Notiztyp
+            [ // id = 5
+                'typ' => 'typ',
+                'name' => 'Aktennotiz',
+            ],
+            [ // id = 6
+                'typ' => 'typ',
+                'name' => 'Beratungsprotokoll',
+            ],
+            [ // id = 7
+                'typ' => 'typ',
+                'name' => 'Verlaufsnotiz',
+            ],
+            [ // id = 8
+                'typ' => 'typ',
+                'name' => 'Telefonnotiz',
+            ],
+
+
+            //Priorität
+            [ // id = 9
+                'typ' => 'prioritaet',
+                'name' => 'Niedrig',
+            ],
+            [ // id = 10
+                'typ' => 'prioritaet',
+                'name' => 'Mittel',
+            ],
+            [ // id = 11
+                'typ' => 'prioritaet',
+                'name' => 'Hoch',
+            ],
+        ]);
+
         DB::table('abteilungs')->insert([
             [ // id = 1
                 'name' => 'Abt. Übergang Schule-Beruf',

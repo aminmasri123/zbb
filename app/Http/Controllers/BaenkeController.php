@@ -30,12 +30,12 @@ class BaenkeController extends Controller
     public function store(Request $request)
     {
        $validated = $request->validate([
-        'name' => 'required|string|max:255',
-        'iban' => 'required|string|max:255',
-        'blz' => 'nullable|string|max:20',
-        'model_type' => 'required|string',
-        'model_id' => 'required|integer',
-    ]);
+            'name' => 'required|string|max:255',
+            'iban' => 'required|string|max:255',
+            'blz' => 'nullable|string|max:20',
+            'model_type' => 'required|string',
+            'model_id' => 'required|integer',
+        ]);
 
         Baenke::create($validated);
         return back()->with('success', 'Bank erfolgreich hinzugefügt!');
