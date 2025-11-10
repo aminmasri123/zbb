@@ -6,6 +6,7 @@ use App\Models\Role;
 use App\Models\Brief;
 use App\Models\Projekt;
 use App\Models\Freigabe;
+use App\Models\Personen;
 use App\Models\Standort;
 use App\Models\Abteilung;
 use App\Models\Teilnehmer;
@@ -42,6 +43,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'username',
         'email',
         'password',
+        'person_id',
         'lang',
         'current_team_id',
         'profile_photo_url',
@@ -88,6 +90,11 @@ class User extends Authenticatable implements MustVerifyEmail
      /**
      * Freigaben, die dieser Benutzer erhalten hat
      */
+
+
+     public function person(){
+        return $this->belongsTo(Personen::class);
+     }
     public function receivedFreigaben2()
     {
         return $this->morphMany(Freigabe::class, 'shareable_to')

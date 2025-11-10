@@ -9,6 +9,7 @@ import DashboardSidebar from '@/Components/Sidebar/DashboardSidebar.vue';
 import ProfileSidebar from '@/Components/Sidebar/ProfileSidebar.vue';
 import OrganisationSidebar from '@/Components/Sidebar/OrganisationSidebar.vue';
 import RessourcenSidebar from '@/Components/Sidebar/RessourcenSidebar.vue';
+import FinanzenSidebar from '@/Components/Sidebar/FinanzenSidebar.vue';
 
 import SweetalertSuccessError from '@/Components/Utils/SweetalertSuccessError.vue';
 
@@ -26,7 +27,9 @@ const currentSidebar = computed(() => {
     return OrganisationSidebar;
   } else if (url.startsWith('/ressourcen')) {
         return RessourcenSidebar;
-    }  return DashboardSidebar; // Standardmäßig DashboardSidebar, wenn kein anderer Pfad passt
+    }  else if (url.startsWith('/finanzen')) {
+        return FinanzenSidebar;
+    } return DashboardSidebar; // Standardmäßig DashboardSidebar, wenn kein anderer Pfad passt
 });
 const sidebarOpen = ref(false); // Für die mobile Ansicht Sidebar umschalten
 const displayHideTextSidebar = ref(false);

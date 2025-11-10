@@ -8,6 +8,7 @@ use App\Models\Brief;
 use App\Models\Gruppe;
 use App\Models\Projekt;
 use App\Models\Personen;
+use App\Models\Fahrtarten;
 use App\Models\Teilnehmer;
 use App\Models\Abschluesse;
 use App\Models\Kontakttypen;
@@ -139,12 +140,13 @@ class TeilnehmerController extends Controller
         $personen = personen::Teilnehmer()->with([
             'adresses',
             'standorte',
-            'anwesenheiten.tag',
-            'anwesenheiten.zeit',
-            'anwesenheiten.status',
+            'gruppen',
+            'gruppen.bereich',
             'kontaktes.kontakttyp',
             'projekte',
             'baenke',
+            'fahrtabrechnungen.fahrtarten',
+            'fahrtabrechnungen.personal',
             'abschluesse',
             'sozialedaten',
             'notizen.notizkategorie',
@@ -153,6 +155,15 @@ class TeilnehmerController extends Controller
             'notizen.user',
         ])->findOrFail($id);
 
+        $personen->gruppen->each(function ($t) {
+            $t->zeitgeplant = $t->pivot->zeitgeplant;
+            $t->zeittatsaechlich = $t->pivot->zeittatsaechlich;
+            $t->person = $t->pivot->person;
+            $t->status = $t->pivot->status;
+            $t->tag = $t->pivot->tag;
+            $t->user = $t->pivot->user;
+
+        });
         $anwesenheitsstatuten =Anwesenheitsstatuten::all();
         $abschluesse = Abschluesse::all();
         $personen->projekte->each(function ($projekt) {
@@ -163,7 +174,7 @@ class TeilnehmerController extends Controller
         $notizkategorie = Notizvarianten::where('typ', 'kategorie')->get();
         $notizprioritaet = Notizvarianten::where('typ', 'prioritaet')->get();
 
-
+        $fahrtarten = Fahrtarten::all();
 
         $leistungsbezuege = Leistungsbezuege::all();
         $erhalteneBriefe = auth()->user()->receivedFreigaben();
@@ -183,6 +194,7 @@ class TeilnehmerController extends Controller
             ->get();
 
         $projekte = Projekt::orderBy('name')->get();
+        $gruppen = Gruppe::where('projekt_id', Auth()->user()->current_team_id)->with('bereich', 'betreuer')->get();
 
         $kontakttypen = Kontakttypen::all();
         return Inertia::render('Teilnehmer/Edit', [
@@ -198,6 +210,8 @@ class TeilnehmerController extends Controller
             'notiztypen' => $notiztypen,
             'notizkategorie' => $notizkategorie,
             'notizprioritaet' => $notizprioritaet,
+            'fahrtarten' => $fahrtarten,
+            'gruppen' => $gruppen,
             ],
         );
     }

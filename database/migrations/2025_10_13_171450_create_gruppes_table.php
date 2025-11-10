@@ -16,7 +16,7 @@ return new class extends Migration
             $table->foreignId('personen_id')->constrained()->onDelete('cascade');
             $table->foreignId('bereich_id')->constrained()->onDelete('cascade');
             $table->foreignId('projekt_id')->constrained('projekts')->onDelete('cascade');
-
+            $table->foreignId('raum_id')->constrained('raeumes')->onDelete('cascade');
             $table->date('anfangsdatum')->nullable();
             $table->date('enddatum')->nullable();
             $table->time('startzeit')->nullable();

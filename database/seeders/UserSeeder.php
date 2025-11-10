@@ -435,6 +435,14 @@ class UserSeeder extends Seeder
                 'name' => 'Standort',
                 'beschreibung' => '',
             ],
+            [ // id = 22
+                'name' => 'Fahrkarten',
+                'beschreibung' => '',
+            ],
+            [ // id = 23
+                'name' => 'Printing',
+                'beschreibung' => '',
+            ],
 
         ]);
 
@@ -482,40 +490,47 @@ class UserSeeder extends Seeder
                 'name' => 'dashboard.index',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '1',
+                'beschreibung' => null,
             ],
             [ // id = 2
                 'name' => 'berechtigung.index',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '8',
+                'beschreibung' => null,
             ],
             [ // id = 3
                 'name' => 'berechtigung.store',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '8',
+                'beschreibung' => null,
             ],
 
             [ // id = 4
                 'name' => 'benutzer.index',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '9',
+                'beschreibung' => null,
 
             ],
             [ // id = 5
                 'name' => 'benutzer.store',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '9',
+                'beschreibung' => null,
 
             ],
             [ // id = 6
                 'name' => 'benutzer.update',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '9',
+                'beschreibung' => null,
 
             ],
             [ // id = 7
                 'name' => 'benutzer.destroy',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '9',
+                'beschreibung' => null,
 
             ],
 
@@ -523,109 +538,183 @@ class UserSeeder extends Seeder
                 'name' => 'kooperationspartner.index',
                 'beschreibung' => 'web',
                 'berechtigungskategorie_id' => '2',
+                'beschreibung' => null,
 
             ],
             [ // id = 9
                 'name' => 'kooperationspartner.store',
                 'beschreibung' => 'web',
                 'berechtigungskategorie_id' => '2',
+                'beschreibung' => null,
 
             ],
             [ // id = 10
                 'name' => 'kooperationspartner.update',
                 'beschreibung' => 'web',
                 'berechtigungskategorie_id' => '2',
+                'beschreibung' => null,
 
             ],
             [ // id = 11
                 'name' => 'kooperationspartner.destroy',
                 'beschreibung' => 'web',
                 'berechtigungskategorie_id' => '2',
+                'beschreibung' => null,
             ],
 
             [ // id = 12
                 'name' => 'bereich.index',
                 'beschreibung' => 'web',
                 'berechtigungskategorie_id' => '2',
+                'beschreibung' => null,
             ],
             [ // id = 13
                 'name' => 'bereich.store',
                 'beschreibung' => 'web',
                 'berechtigungskategorie_id' => '2',
+                'beschreibung' => null,
             ],
             [ // id = 14
                 'name' => 'bereich.destroy',
                 'beschreibung' => 'web',
                 'berechtigungskategorie_id' => '2',
+                'beschreibung' => null,
             ],
             [ // id = 15
                 'name' => 'projekt.index',
                 'beschreibung' => 'web',
                 'berechtigungskategorie_id' => '19',
+                'beschreibung' => null,
             ],
             [ // id = 16
                 'name' => 'projekt.store',
                 'beschreibung' => 'web',
                 'berechtigungskategorie_id' => '19',
+                'beschreibung' => null,
             ],
             [ // id = 17
                 'name' => 'projekt.destroy',
                 'beschreibung' => 'web',
                 'berechtigungskategorie_id' => '19',
+                'beschreibung' => null,
             ],
             [ // id = 18
                 'name' => 'abteilung.index',
                 'beschreibung' => 'web',
                 'berechtigungskategorie_id' => '18',
+                'beschreibung' => null,
             ],
             [ // id = 19
                 'name' => 'abteilung.store',
                 'beschreibung' => 'web',
                 'berechtigungskategorie_id' => '18',
+                'beschreibung' => null,
             ],
             [ // id = 20
                 'name' => 'abteilung.destroy',
                 'beschreibung' => 'web',
                 'berechtigungskategorie_id' => '18',
+                'beschreibung' => null,
             ],
             [ // id = 21
                 'name' => 'standort.index',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '21',
+                'beschreibung' => null,
             ],
             [ // id = 22
                 'name' => 'standort.store',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '21',
+                'beschreibung' => null,
             ],
             [ // id = 23
                 'name' => 'standort.update',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '21',
+                'beschreibung' => null,
             ],
             [ // id = 24
-                'name' => 'standort.delete',
+                'name' => 'standort.destroy',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '21',
+                'beschreibung' => null,
             ],
 
             [ // id = 25
                 'name' => 'teilnehmer.index',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '5',
+                'beschreibung' => null,
             ],
 
             [ // id = 26
                 'name' => 'teilnehmer.store',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '5',
+                'beschreibung' => null,
             ],
 
             [ // id = 27
                 'name' => 'teilnehmer.view.all',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '5',
+                'beschreibung' => null,
             ],
+
+
+
+
+             [ // id = 28
+                'name' => 'fahrtarten.index',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '22',
+                'beschreibung' => null,
+            ],
+
+            [ // id = 29
+                'name' => 'fahrtarten.store',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '22',
+                'beschreibung' => null,
+            ],
+            [ // id = 30
+                'name' => 'fahrtarten.update',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '22',
+                'beschreibung' => null,
+            ],
+            [ // id = 31
+                'name' => 'fahrtarten.destroy',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '22',
+                'beschreibung' => null,
+            ],
+           [ // id = 32
+                'name' => 'printing.index',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '23',
+                'beschreibung' => null,
+            ],
+            [ // id = 33
+                'name' => 'printing.store',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '23',
+                'beschreibung' => null,
+            ],
+            [ // id = 34
+                'name' => 'printing.update',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '23',
+                'beschreibung' => null,
+            ],
+            [ // id = 35
+                'name' => 'printing.destroy',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '23',
+                'beschreibung' => null,
+            ],
+
 
 
 
@@ -836,6 +925,15 @@ class UserSeeder extends Seeder
             [
                 'role_id' => '1',
                 'berechtigungskategorie_id' => '21',
+            ],
+            [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '22',
+            ],
+
+             [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '23',
             ],
 
 

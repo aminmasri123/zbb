@@ -9,11 +9,11 @@
 
         <div class="grid grid-cols-2 gap-4 mt-6 mb-4">
             <FloatLabel variant="on">
-                <Select v-model="form.bereich" :options="props.bereiche" optionValue="id" optionLabel="name" class="w-full"/>
+                <Select v-model="form.bereich" :options="props.projekt.bereiche" optionValue="id" optionLabel="name" class="w-full"/>
                 <label>Bereiche</label>
             </FloatLabel>
             <FloatLabel variant="on">
-                <Select v-model="form.betreuer" :options="props.personal" optionValue="id" :optionLabel="(t) => `${t.vorname} ${t.nachname}`" class="w-full"/>
+                <Select v-model="form.betreuer" :options="props.projekt.mitarbeiter" optionValue="id" :optionLabel="(t) => `${t.vorname} ${t.nachname}`" class="w-full"/>
                 <label>Betreuer</label>
             </FloatLabel>
         </div>
@@ -21,6 +21,10 @@
 
         <!-- Gruppentyp -->
         <div class="mb-5">
+            <FloatLabel variant="on">
+                <Select v-model="form.raum_id" :options="props.projekt.raeume" optionValue="id" optionLabel="name" class="w-full"/>
+                <label>Raum</label>
+            </FloatLabel>
             <label for="groupType" class="block text-sm font-medium text-gray-700 mb-3" >
                 Gruppentyp <span class="text-red-500">*</span>
             </label>
@@ -113,9 +117,10 @@ import Swal from 'sweetalert2';
 
 const props = defineProps({
     visible: Boolean,
-    bereiche: Array,
-    personal: Array,
+    projekt: Array,
 })
+
+
 const emit = defineEmits(['close', 'added'])
 
 const close = () => emit('close')
@@ -129,6 +134,7 @@ const form = useForm({
   endDate: '',
   startZeit: '',
   endZeit: '',
+  raum_id: '',
 })
 
 
@@ -148,7 +154,8 @@ const isValid = computed(() => {
     form.startZeit !== '' &&
     form.endZeit !== '' &&
     form.bereich !== '' &&
-    form.betreuer !== ''
+    form.betreuer !== '' &&
+    form.raum_id !== ''
   )
 })
 

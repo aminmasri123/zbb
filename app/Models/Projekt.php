@@ -3,6 +3,7 @@
 namespace App\Models;
 use App\Models\User;
 use App\Models\Gruppe;
+use App\Models\Raeume;
 use App\Models\Bereich;
 use App\Models\zeitraum;
 use App\Models\Abteilung;
@@ -50,6 +51,10 @@ class Projekt extends Model
     public function bereiche()
     {
         return $this->belongsToMany(Bereich::class, 'projekt_has_bereiches', 'projekt_id', 'bereich_id');
+    }
+    public function raeume()
+    {
+        return $this->belongsToMany(Raeume::class, 'projekt_has_raeumes', 'projekt_id', 'raum_id');
     }
 
 

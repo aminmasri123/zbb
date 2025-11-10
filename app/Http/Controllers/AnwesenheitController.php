@@ -6,9 +6,11 @@ use Exception;
 use App\Models\Tage;
 use App\Models\Zeiten;
 use Illuminate\Http\Request;
+use App\Models\GruppeHasPersonen;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use App\Models\PersonenHasAnwesenheiten;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class AnwesenheitController extends Controller
 {
@@ -72,49 +74,60 @@ class AnwesenheitController extends Controller
     } */
     public function store(Request $request)
     {
-
         $validated = $request->validate([
-
             'anwesenheitsstatuten_id' => 'required|integer',
-
             'tag' => 'required|date',
-
-            'startzeit' => 'required',
-            'endzeit' => 'required',
+            'startzeit'   => 'required|date_format:H:i',
+            'endzeit'     => 'required|date_format:H:i|after:startzeit',
+            'tatstartTime'=> 'nullable|date_format:H:i',
+            'tatendTime'  => 'nullable|date_format:H:i|after:tatstartzeit',
             'personen_id' => 'required|integer|exists:personens,id',
             'bemerkungen' => 'nullable|string|max:255',
+            'gruppe_id' => 'nullable|integer|exists:gruppes,id',
+
         ]);
-
-
         DB::beginTransaction();
 
         try {
+
                 $tagId = Tage::where('datum', $validated['tag'])->value('id');
                 if(!$tagId) {
                     throw new Exception('Ungültiger Tag.');
                 }
+
                 $zeitenId = Zeiten::firstOrCreate(
                     [
-                        'startzeit' => $validated['startzeit'] ,
+                        'startzeit' => $validated['startzeit'],
                         'endzeit' => $validated['endzeit']
                     ]
                 )->id;
 
-                PersonenHasAnwesenheiten::updateOrCreate(
+                $tatzeitenId = Zeiten::firstOrCreate(
                     [
-                        'personen_id' => $validated['personen_id'],
-                        'tage_id' => $tagId,
-                        'zeiten_id' => $zeitenId,
-                    ],
-                    [
-                        'anwesenheitsstatuten_id' => $validated['anwesenheitsstatuten_id'],
-                        'user_id' => Auth::id(),
-                        'bemerkung' => $validated['bemerkungen'] ?? null,
+                        'startzeit' => $validated['tatstartTime'],
+                        'endzeit' => $validated['tatendTime']
                     ]
+                )->id;
+
+                GruppeHasPersonen::updateOrCreate(
+                [
+                    'personen_id' => $validated['personen_id'],
+                    'tage_id' => $tagId,
+                    'zeitgeplant_id' => $zeitenId,
+                    'zeittatsaechlich_id' =>  $tatzeitenId,
+                ],
+                [
+
+                    'anwesenheitsstatuten_id' => $validated['anwesenheitsstatuten_id'],
+                    'user_id' => Auth::id(),
+                    'bemerkung' => $validated['bemerkungen'] ?? null,
+                    'gruppe_id' => $validated['gruppe_id'] ?? null,
+                ]
                 );
 
 
             DB::commit();
+
 
                 return redirect()->back()->with('success', 'Anwesenheiten gespeichert.');
         } catch (\Exception $e) {
@@ -123,96 +136,92 @@ class AnwesenheitController extends Controller
         }
     }
 
-    /**
-     * Display the specified resource.
-     */
     public function show(string $id)
     {
         //
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
     public function edit(string $id)
     {
         //
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
     public function update(Request $request)
-{
-    $validated = $request->validate([
-        'personen_id' => 'required|integer|exists:personens,id',
-        'tag' => 'required|date',
-        'startzeit' => 'required',
-        'endzeit' => 'required',
-        'anwesenheitsstatuten_id' => 'required|integer|exists:anwesenheitsstatutens,id',
-        'bemerkung' => 'nullable|string|max:255',
-    ]);
-
-    // 🔹 Tag-ID holen oder Fehler
-    $tagId = Tage::where('datum', $validated['tag'])->value('id');
-
-    if (!$tagId) {
-        return response()->json(['error' => 'Ungültiger Tag!'], 422);
-    }
-
-    // 🔹 Zeit-ID holen oder anlegen
-    $zeitId = Zeiten::firstOrCreate([
-        'startzeit' => $validated['startzeit'],
-        'endzeit'   => $validated['endzeit'],
-    ])->id;
-
-    // 🔹 Prüfen, ob Eintrag existiert
-    $anwesenheit = PersonenHasAnwesenheiten::where('personen_id', $validated['personen_id'])
-        ->where('tage_id', $tagId)
-        ->first();
-
-    if ($anwesenheit) {
-        // ✅ UPDATE
-        $anwesenheit->update([
-            'anwesenheitsstatuten_id' => $validated['anwesenheitsstatuten_id'],
-            'zeiten_id' => $zeitId,
-            'bemerkung' => $validated['bemerkung'] ?? null,
-            'user_id' => Auth::id(),
+    {
+        $validated = $request->validate([
+            'personen_id' => 'required|integer|exists:personens,id',
+            'gruppe_id' => 'required|integer|exists:gruppes,id',
+            'tag' => 'required|date',
+            'startzeit' => 'required',
+            'endzeit' => 'required',
+            'anwesenheitsstatuten_id' => 'required|integer|exists:anwesenheitsstatutens,id',
+            'bemerkung' => 'nullable|string|max:255',
         ]);
 
-        return response()->json(['success' => true, 'message' => 'Anwesenheit aktualisiert (UPDATE).']);
+        // 🔹 Tag-ID holen oder Fehler
+        $tagId = Tage::where('datum', $validated['tag'])->value('id');
+
+        if (!$tagId) {
+            return response()->json(['error' => 'Ungültiger Tag!'], 422);
+        }
+
+        // 🔹 Zeit-ID holen oder anlegen
+        $zeitId = Zeiten::firstOrCreate([
+            'startzeit' => $validated['startzeit'],
+            'endzeit'   => $validated['endzeit'],
+        ])->id;
+
+        // 🔹 Prüfen, ob Eintrag existiert
+        $anwesenheit = GruppeHasPersonen::where('personen_id', $validated['personen_id'])
+            ->where('gruppe_id', $validated['gruppe_id'])
+            ->where('tage_id', $tagId)
+            ->first();
+
+        if ($anwesenheit) {
+            // ✅ UPDATE
+            $anwesenheit->update([
+                'anwesenheitsstatuten_id' => $validated['anwesenheitsstatuten_id'],
+                'zeitgeplant_id' => $zeitId, // falls du das Spaltenfeld nutzt
+                'zeittatsaechlich_id' => $zeitId, // falls du separate Spalten hast
+                'bemerkung' => $validated['bemerkung'] ?? null,
+                'user_id' => Auth::id(),
+            ]);
+
+
+            return response()->json(['success' => true, 'message' => 'Anwesenheit aktualisiert (UPDATE).']);
+        }
+
+        // ✅ INSERT
+        GruppeHasPersonen::create([
+            'personen_id' => $validated['personen_id'],
+            'tage_id' => $tagId,
+            'zeiten_id' => $zeitId,
+            'anwesenheitsstatuten_id' => $validated['anwesenheitsstatuten_id'],
+            'user_id' => Auth::id(),
+            'bemerkung' => $validated['bemerkung'] ?? null,
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Anwesenheit neu eingetragen (INSERT).']);
     }
-
-    // ✅ INSERT
-    PersonenHasAnwesenheiten::create([
-        'personen_id' => $validated['personen_id'],
-        'tage_id' => $tagId,
-        'zeiten_id' => $zeitId,
-        'anwesenheitsstatuten_id' => $validated['anwesenheitsstatuten_id'],
-        'user_id' => Auth::id(),
-        'bemerkung' => $validated['bemerkung'] ?? null,
-    ]);
-
-    return response()->json(['success' => true, 'message' => 'Anwesenheit neu eingetragen (INSERT).']);
-}
 
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy($id)
     {
-        {
-        try {
-            $anwesenheit = PersonenHasAnwesenheiten::findOrFail($id); // Suche die Abteilung
-            $anwesenheit->delete(); // Lösche die Abteilung
 
-            return response()->json(['message' => 'die Anwesenheit wurde  erfolgreich gelöscht!'], 200);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        try {
+
+            GruppeHasPersonen::findOrFail($id)->delete();
+            return response()->json(['message' => 'Kontakt erfolgreich entfernt.'], 200);
+
+
+        } catch (ModelNotFoundException $e) {
             return response()->json(['message' => 'Die Anwesenheit konnte nicht gefunden werden.'], 404);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
         }
-    }
+
     }
 }

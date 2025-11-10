@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Inertia\Inertia;
 use App\Models\Gruppe;
+use App\Models\Raeume;
 use App\Models\Bereich;
 use App\Models\Projekt;
 use App\Models\Abteilung;
@@ -25,18 +26,11 @@ class GruppeController extends Controller
         $user = Auth()->user();
         //alle gruppen mit bereich laden
         $gruppen = Gruppe::with('bereich', 'betreuer')->where('projekt_id', $user->current_team_id)->where('personen_id', $user->id)->get();
-        $bereiche = Projekt::with('bereiche')->findOrFail($user->current_team_id);
-        $personal = Projekt::with('mitarbeiter')->findOrFail($user->current_team_id);
-
-        //alle gruppen mit bereich laden
-        //$gruppen = Gruppe::with('bereich')->where('personen_id', $user->id )->get();
-
-
+        $projekt = Projekt::with('bereiche', 'mitarbeiter', 'raeume')->findOrFail($user->current_team_id);
 
         return Inertia::render('Gruppe/Index', [
             'gruppen' => $gruppen->toArray(),
-            'bereiche' => $bereiche->bereiche->toArray(),
-            'personal' => $personal->mitarbeiter->toArray(),
+            'projekt' => $projekt->toArray(),
             ],
         );
     }
@@ -61,6 +55,7 @@ class GruppeController extends Controller
             'endZeit'   => 'required|date_format:H:i|after:startZeit',
             'bereich'     => 'required|integer|exists:bereiches,id',
             'betreuer'    => 'required|integer|exists:personens,id',
+            'raum_id'    => 'required|integer|exists:raeumes,id',
         ]);
 
         $user = Auth()->user();
@@ -69,6 +64,7 @@ class GruppeController extends Controller
             'personen_id'   => $validated['betreuer'],
             'bereich_id'    => $validated['bereich'],
             'projekt_id'    => $user->current_team_id,
+            'raum_id'       => $validated['raum_id'],
             'anfangsdatum'  => $validated['startDate'],
             'enddatum'      => $validated['endDate'] ?? null,
             'startzeit'     => $validated['startZeit'],

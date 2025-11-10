@@ -54,6 +54,9 @@
                     <NavLink :href="route('ressourcen.index')" :active="route().current('ressourcen.index')" class="dark:text-gray-100  text-[17px] ">
                         {{ $t('Ressourcen') }}
                     </NavLink>
+                    <NavLink :href="route('finanzen.index')" :active="route().current('finanzen.index')" class="dark:text-gray-100  text-[17px] ">
+                        {{ $t('Finanzen') }}
+                    </NavLink>
                 </div>
 
                 <div class="flex items-center sm:ml-6">

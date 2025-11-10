@@ -45,46 +45,8 @@
           </nav>
 
           <!-- ================= STAMMDATEN ================= -->
-          <div v-if="activeTab === 'Stammdaten'">
-            <button @click="saveStammdaten"
-                class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full">
-                ➕ Speichern
-              </button>
+            <Stammdaten v-if="activeTab === 'Stammdaten'" :teilnehmer="teilnehmer" :betreuer="props.betreuer" />
 
-
-            <div class="grid grid-cols-3 gap-4">
-              <div>
-                <label>Vorname</label>
-                <input v-model="teilnehmer.vorname" class="input" />
-              </div>
-              <div>
-                <label>Nachname</label>
-                <input v-model="teilnehmer.nachname" class="input" />
-              </div>
-              <div>
-                <label>Geschlecht</label>
-                <select v-model="teilnehmer.geschlecht" class="input">
-                  <option value="m">m</option>
-                  <option value="w">w</option>
-                  <option value="d">divers</option>
-                </select>
-              </div>
-              <div>
-                <label>Geburtsdatum</label>
-                <input type="date" v-model="form.geburtsdatum" class="input" />
-              </div>
-              <div>
-                <label>Betreuer</label>
-                <select v-model="form.betreuer" class="input">
-                  <option v-for="m in props.betreuer" :key="m">{{ m.nachname }} - {{ m.vorname }}</option>
-                </select>
-              </div>
-              <div class="md:col-span-3">
-                <label>Bemerkungen</label>
-                <textarea v-model="teilnehmer.bemerkungen" rows="2" class="input"></textarea>
-              </div>
-            </div>
-          </div>
 
           <!-- ================= Sozialdaten ================= -->
           <div v-if="activeTab === 'Sozialdaten'">
@@ -93,57 +55,28 @@
                 ➕ Speichern
               </button>
 
-                    <div class="space-y-5  w-96 mx-auto">
-                        <Toggle
-                            v-model="drittstaatsangehoerig"
-                            label="Drittstaatsangehörige?"
-                            hint="Nicht-EU/EWR/Schweiz"
-                        />
+                <div class="space-y-5  w-96 mx-auto">
+                    <Toggle v-model="drittstaatsangehoerig" label="Drittstaatsangehörige?" hint="Nicht-EU/EWR/Schweiz" />
 
-                        <Toggle
-                        v-model="behinderung"
-                        label="Liegt eine Behinderung vor?"
-                        hint="Nach §2 SGB IX"
-                        />
+                    <Toggle v-model="behinderung" label="Liegt eine Behinderung vor?" hint="Nach §2 SGB IX" />
 
-                        <Toggle
-                        v-model="gefluechtet"
-                        label="Teilnehmer ist geflüchtet?"
-                        />
+                    <Toggle v-model="gefluechtet" label="Teilnehmer ist geflüchtet?" />
 
-                        <div class="flex items-center w-96   justify-between gap-4">
+                    <div class="flex items-center w-96   justify-between gap-4">
                         <label class="block text-sm font-medium text-gray-800 leading-6">Leistungsbezug nach SGB</label>
-                        <select
-                            v-model="leistungsbezug_id"
-                            class="input w-64"
-                        >
+                        <select v-model="leistungsbezug_id" class="input w-64" >
                             <option :value="null" disabled>— auswählen —</option>
-                            <option
-                            v-for="m in props.leistungsbezuege"
-                            :key="m.id"
-                            :value="m.id"
-                            >
-                            {{ m.bezeichnung }}
+                            <option v-for="m in props.leistungsbezuege" :key="m.id" :value="m.id" >
+                                {{ m.bezeichnung }}
                             </option>
                         </select>
-                        </div>
-
-                        <Toggle
-                            v-model="migrationshintergrund"
-                            label="Liegt ein Migrationshintergrund vor?"
-                            />
-
-                            wohnsitz_stabil
-
-                        <Toggle
-                            v-model="wohnsitz_stabil"
-                            label="Wohnsitz stabil?"
-                            />
                     </div>
 
+                    <Toggle v-model="migrationshintergrund" label="Liegt ein Migrationshintergrund vor?" />
 
-
-
+                    wohnsitz_stabil
+                    <Toggle v-model="wohnsitz_stabil" label="Wohnsitz stabil?" />
+                </div>
           </div>
 
           <!-- ================= ADRESSEN ================= -->
@@ -336,14 +269,28 @@
             <!-- =================== Anwesenheit =================== -->
             <div v-else-if="activeTab === 'Anwesenheit'">
                  <!-- Anwesenheit hinzufügen -->
-                <button @click="showModalAnwesenheit = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
+                <div class="flex gap-4">
+                    <button @click="showModalAnwesenheit = true" class="bg-zbb text-white px-4 mb-6 mt-4   py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
                     <span v-if="!loadingProjekt">➕ Anwesenheit</span>
-                    <span v-else>...</span>
-                </button>
+                        <span v-else>...</span>
+                    </button>
+                    <div class="mb-6 mt-4">
+                        <select
+                            v-model="selectedMonth"
+                            class="border-zbb rounded-md text-sm focus:ring-zbb focus:border-zbb"
+                        >
+                            <option value="">Alle Monate</option>
+                            <option v-for="monat in verfuegbareMonate" :key="monat" :value="monat">
+                                {{ monat }}
+                            </option>
+                        </select>
+                    </div>
+                </div>
+
                 <!-- Tabelle -->
-                <div class="bg-white rounded-2xl shadow-md border mt-8 p-8 w-3/4 mx-auto">
+                <div class="bg-white rounded-2xl shadow-md border mt-8 p-8 w-5/6 mx-auto">
                     <!-- Wenn keine Anwesenheit -->
-                    <div v-if="teilnehmer.anwesenheiten.length === 0" class="text-gray-500 italic text-sm">
+                    <div v-if="props.teilnehmer.gruppen === 0" class="text-gray-500 italic text-sm">
                         <div class="p-8 text-center text-gray-500">
                             <div class="mb-4 flex justify-center text-6xl text not-italic">
                                 🕒
@@ -355,37 +302,63 @@
 
                     <!-- Karten -->
                     <div v-else class="space-y-3">
+                        <!-- Gruppierte Ausgabe -->
+                        <div v-for="(gruppen, monat) in gruppenNachMonat" :key="monat">
                         <div
-                        v-for="anwesenheit in sortierteAnwesenheiten"
-                        :key="anwesenheit.id"
-                        class="flex flex-col sm:flex-row justify-between sm:items-center bg-white border border-gray-100 rounded-xl px-5 py-4 shadow-sm hover:shadow-md transition-all duration-200"
+                            v-if="!selectedMonth || selectedMonth === monat"
+                            class="mt-8"
                         >
-                        <!-- Linker Bereich -->
-                        <div>
-                            <div class="flex items-center gap-6">
-                                <div class="font-semibold   ">
-                                    <span class="text-zbb mr-8">{{ formatDate(anwesenheit.tag.datum) || '– ohne Datum  –' }}</span>
-                                    <span class="text-lg ">🕒</span><span>{{ formatTime(anwesenheit.zeit.startzeit) }}-{{ formatTime(anwesenheit.zeit.endzeit) }}</span>
-                                    <span class="text-lg ml-8">📋</span><span class="text-sm p-0 m-0 "> {{ anwesenheit.status.status || 0 }} </span>
+                            <h4 class="text-lg font-semibold text-zbb border-b pb-1 mb-3">
+                                📆 {{ monat }}
+                            </h4>
 
+                            <div
+                            v-for="gruppe in gruppen"
+                            :key="gruppe.id"
+                            class="flex flex-col sm:flex-row justify-between sm:items-center bg-white border border-gray-100 rounded-xl px-5 py-4 shadow-sm hover:shadow-md transition-all duration-200 mb-2"
+                            >
+                            <div class="flex">
+                                <div class="items-center gap-6 w-96">
+                                <div class="font-semibold">
+                                    <p class="text-zbb mr-8"><span class="text-lg ml-8">🎨</span> {{ gruppe.bereich.name }}</p>
+                                    <p class="text-zbb mr-8"><span class="text-lg ml-8">📅</span> {{ formatDate(gruppe.pivot.tag.datum) }}</p>
+                                    <p><span class="text-lg ml-8">🕒</span> {{ formatTime(gruppe.startzeit) }} - {{ formatTime(gruppe.endzeit) }}</p>
+                                </div>
+                                </div>
+
+                                <div class="items-center gap-6 w-64 mt-8">
+                                <div class="font-semibold">
+                                    <p class="ml-8 mr-8">🗓️ Geplante Arbeitszeit</p>
+                                    <p><span class="text-lg ml-8">⏰</span> {{ formatTime(gruppe.pivot.zeitgeplant.startzeit) }} - {{ formatTime(gruppe.pivot.zeitgeplant.endzeit) }}</p>
+                                </div>
+                                </div>
+
+                                <div class="items-center gap-6 w-96 mt-8">
+                                <div class="font-semibold">
+                                    <p class="ml-8 mr-8">💼 Tatsächliche Arbeitszeit</p>
+                                    <p><span class="text-lg ml-8">⌛</span> {{ formatTime(gruppe.pivot?.zeittatsaechlich?.startzeit) }} - {{ formatTime(gruppe.pivot?.zeittatsaechlich?.endzeit) }}</p>
+                                </div>
                                 </div>
                             </div>
+
+                            <div class="flex gap-2 mt-4 sm:mt-0">
+                                <button
+                                @click="openModalEdit(gruppe)"
+                                class="px-4 py-2 text-sm font-medium rounded-md bg-zbb text-white shadow-sm hover:bg-zbb/90 transition"
+                                >
+                                Verwalten
+                                </button>
+                                <button
+                                @click="confirmDelete(gruppe.pivot, 'gruppeHasPersonen')"
+                                class="px-4 py-2 text-sm font-medium rounded-md bg-red-600 text-white shadow-sm hover:bg-red-700 transition"
+                                >
+                                Löschen
+                                </button>
+                            </div>
+                            </div>
+                        </div>
                         </div>
 
-                        <!-- Buttons -->
-                        <div class="flex gap-2 mt-4 sm:mt-0">
-                            <button
-                                @click="openModalEdit(anwesenheit)"
-                                class="px-4 py-2 text-sm font-medium rounded-md bg-zbb text-white shadow-sm hover:bg-zbb/90 transition">
-                                Verwalten
-                            </button>
-                            <button
-                            @click="confirmDelete(anwesenheit, 'anwesenheit')"
-                            class="px-4 py-2 text-sm font-medium rounded-md bg-red-600 text-white shadow-sm hover:bg-red-700 transition">
-                                Löschen
-                            </button>
-                        </div>
-                        </div>
                     </div>
                 </div>
 
@@ -438,45 +411,45 @@
             <!-- =================  Schule/Beruf ================= -->
 
             <div v-else-if="activeTab === 'Schule/Beruf'">
-            <!-- Button -->
-            <button
-                @click="showModalCreateAbschluss = true"
-                class="bg-zbb text-white px-4 mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full"
-            >
-                <span v-if="!loadingAbschluss">➕ Abschluss hinzufügen</span>
-                <span v-else>...</span>
-            </button>
-
-            <!-- Bestehende Abschlüsse -->
-            <div v-if="teilnehmer.abschluesse && teilnehmer.abschluesse.length" class="space-y-3 mb-6">
-                <div
-                v-for="eintrag in teilnehmer.abschluesse"
-                :key="eintrag.id"
-                class="flex justify-between items-center bg-gray-50 border rounded-lg px-4 py-2"
-                >
-                <div>
-                    <p class="text-sm font-bold text-zbb uppercase">
-                    {{ eintrag.typ }}
-                    </p>
-                    <p class="text-gray-600 text-sm">
-                    🎓 <span class="font-bold">{{ eintrag.bezeichnung }}:</span> {{ eintrag.pivot_model.bezeichnung }}
-                    </p>
-                    <p class="text-gray-600 text-sm">
-                   📆 {{ formatDate(eintrag.pivot_model.start) }} - {{ formatDate(eintrag.pivot_model.end) }}
-                    </p>
-                </div>
+                <!-- Button -->
                 <button
-                    @click="confirmDelete(eintrag.pivot_model, 'abschluss')"
-                    class="text-red-500 hover:text-red-700 text-sm"
+                    @click="showModalCreateAbschluss = true"
+                    class="bg-zbb text-white px-4 mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full"
                 >
-                    Entfernen
+                    <span v-if="!loadingAbschluss">➕ Abschluss hinzufügen</span>
+                    <span v-else>...</span>
                 </button>
-                </div>
-            </div>
 
-            <p v-else class="text-gray-400 italic mb-6">
-                Noch keine Schul- oder Berufsabschlüsse vorhanden.
-            </p>
+                <!-- Bestehende Abschlüsse -->
+                <div v-if="teilnehmer.abschluesse && teilnehmer.abschluesse.length" class="space-y-3 mb-6">
+                    <div
+                    v-for="eintrag in teilnehmer.abschluesse"
+                    :key="eintrag.id"
+                    class="flex justify-between items-center bg-gray-50 border rounded-lg px-4 py-2"
+                    >
+                    <div>
+                        <p class="text-sm font-bold text-zbb uppercase">
+                        {{ eintrag.typ }}
+                        </p>
+                        <p class="text-gray-600 text-sm">
+                        🎓 <span class="font-bold">{{ eintrag.bezeichnung }}:</span> {{ eintrag.pivot_model.bezeichnung }}
+                        </p>
+                        <p class="text-gray-600 text-sm">
+                    📆 {{ formatDate(eintrag.pivot_model.start) }} - {{ formatDate(eintrag.pivot_model.end) }}
+                        </p>
+                    </div>
+                    <button
+                        @click="confirmDelete(eintrag.pivot_model, 'abschluss')"
+                        class="text-red-500 hover:text-red-700 text-sm"
+                    >
+                        Entfernen
+                    </button>
+                    </div>
+                </div>
+
+                <p v-else class="text-gray-400 italic mb-6">
+                    Noch keine Schul- oder Berufsabschlüsse vorhanden.
+                </p>
             </div>
           <!-- ================= BRIEFE ================= -->
           <div v-else-if="activeTab === 'Briefe'">
@@ -703,6 +676,59 @@
                 <textarea v-model="form.projekte" rows="6" class="input"></textarea>
           </div>
 
+        <!-- ================= Fahrtkosten ================= -->
+          <div v-else-if="activeTab === 'Fahrtkosten'">
+              <button @click="showModalFahrtkosten = true"
+                class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full">
+                ➕ Fahrtkosten anlegen
+              </button>
+
+            <div v-if="teilnehmer.fahrtabrechnungen && teilnehmer.fahrtabrechnungen.length">
+              <table class="min-w-full border border-gray-200 text-sm">
+                <thead class="bg-gray-50 text-gray-700">
+                  <tr>
+                    <th class="px-3 py-2 text-left">#</th>
+                    <th class="px-3 py-2 text-left">Fahrtarten</th>
+                    <th class="px-3 py-2 text-left">Tag</th>
+                    <th class="px-3 py-2 text-left">Start</th>
+                    <th class="px-3 py-2 text-left">Ziel</th>
+                    <th class="px-3 py-2 text-left">Entfernung</th>
+                    <th class="px-3 py-2 text-left">Kostenberechnet</th>
+                    <th class="px-3 py-2 text-left">Status</th>
+                    <th class="px-3 py-2 text-left">Erstellen am</th>
+                    <th class="px-3 py-2 text-left">Personal</th>
+                    <th class="px-3 py-2 text-left">Aktionen</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="(fahrtabrechnung, index) in teilnehmer.fahrtabrechnungen"
+                    :key="fahrtabrechnung.id || index"
+                    class="border-t hover:bg-gray-50 transition"
+                  >
+                    <td class="px-3 py-2">{{ index + 1 }}</td>
+                    <td class="px-3 py-2">{{ fahrtabrechnung.fahrtarten.name }}</td>
+                    <td class="px-3 py-2">{{ formatDate(fahrtabrechnung.datum) }}</td>
+                    <td class="px-3 py-2">{{ fahrtabrechnung.start }}</td>
+                    <td class="px-3 py-2">{{ fahrtabrechnung.ziel }}</td>
+                    <td class="px-3 py-2">{{ fahrtabrechnung.entfernung_km }}</td>
+                    <td class="px-3 py-2">{{ fahrtabrechnung.kosten_berechnet }}</td>
+                    <td class="px-3 py-2">{{ fahrtabrechnung.status }}</td>
+                    <td class="px-3 py-2">{{ formatDateTime(fahrtabrechnung.created_at) }}</td>
+                    <td class="px-3 py-2">{{ fahrtabrechnung.personal.vorname }} {{ fahrtabrechnung.personal.nachname }}</td>
+
+                    <td class="px-3 py-2">
+                        <button @click="confirmDelete(fahrtabrechnung, 'fahrtkostenAbrechnung')" class="text-red-500 hover:text-red-700 text-sm" >
+                            <i class="la la-trash"></i> Löschen
+                        </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p v-else class="text-gray-500 italic">Keine Fahrtkosten vorhanden.</p>
+
+          </div>
 
 
           <!-- ================= Exportieren ================= -->
@@ -834,6 +860,73 @@
               </div>
             </transition>
 
+             <!-- MODAL: Fahrtkosten hinzufügen -->
+            <transition name="fade">
+              <div
+                v-if="showModalFahrtkosten"
+                class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+              >
+                <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
+                  <button
+                    @click="showModalFahrtkosten = false"
+                    class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl"
+                  >
+                    ✕
+                  </button>
+                  <h3 class="text-lg font-semibold mb-4 text-zbb">Neue Fahrtkosten</h3>
+
+                  <div class="space-y-3">
+                    <div>
+                        <label for="startDate">
+                            Fahrtarten <span class="text-red-500">*</span>
+                        </label>
+                      <Select
+                            v-model="neueFahrtkosten.fahrtarten_id"
+                            :options="props.fahrtarten"
+                            optionLabel="name"
+                            optionValue="id"
+                            class="w-[200px] text-sm w-full px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
+                            >
+                        </Select>
+                    </div>
+                    <div>
+                        <label for="startDate">
+                            Fahrtarten <span class="text-red-500">*</span>
+                        </label>
+                        <Select
+                            v-model="neueFahrtkosten.status"
+                            :options="fahrtkostenStatus"
+                            class="w-[200px] text-sm w-full px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
+                            >
+                        </Select>
+                    </div>
+                    <div><label>Tag<span class="text-red-500">*</span></label><input type="date" v-model="neueFahrtkosten.tag" class="input" /></div>
+                    <div><label>Start</label><input v-model="neueFahrtkosten.start" class="input" /></div>
+                    <div><label>Ziel</label><input v-model="neueFahrtkosten.ziel" class="input" /></div>
+                    <div><label>Entfernung</label><input v-model="neueFahrtkosten.entfernung" class="input" /></div>
+                  </div>
+
+                  <div class="mt-6 flex justify-end space-x-3">
+                    <button
+                      @click="showModalFahrtkosten = false"
+                      class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100"
+                    >
+                      Abbrechen
+                    </button>
+                    <button
+                      @click="addFahrtkosten"
+                      :disabled="loadingFahrtkosten"
+                      class="px-4 py-2 rounded-md text-sm text-white transition"
+                      :class="loadingFahrtkosten ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
+                    >
+                      <span v-if="!loadingFahrtkosten">Speichern</span>
+                      <span v-else>Speichern...</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </transition>
+
             <!-- MODAL: Adresse hinzufügen -->
             <transition name="fade">
               <div
@@ -932,8 +1025,6 @@
               </div>
             </transition>
 
-
-
           <!-- MODAL: Projekt zuweisen -->
             <transition name="fade">
                 <div
@@ -1025,20 +1116,49 @@
                                 </label>
                                 <input v-model="neueAnwesenheit.dateAnwesenheit" type="date" id="dateAnwesenheit" name="dateAnwesenheit" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
                             </div>
-                            <!-- Zeitraum -->
+                            <!-- Zeitraum geplant-->
                             <div class="flex space-x-4">
                                 <div class="w-1/2">
                                     <label for="startTime" class="block text-sm font-medium text-gray-700 mb-2" >
-                                        Startzeit <span class="text-red-500">*</span>
+                                        geplante Startzeit <span class="text-red-500">*</span>
                                     </label>
                                     <input v-model="neueAnwesenheit.startTime" type="time" id="startTime" name="startTime" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
                                 </div>
                                 <div class="w-1/2">
                                     <label for="endTime" class="block text-sm font-medium text-gray-700 mb-2" >
-                                        Endzeit <span class="text-red-500">*</span>
+                                        geplante Endzeit <span class="text-red-500">*</span>
                                     </label>
                                     <input v-model="neueAnwesenheit.endTime" type="time" id="endTime" name="endTime" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
                                 </div>
+                            </div>
+
+                            <!-- Zeitraum tatsächlich-->
+                            <div class="flex space-x-4">
+                                <div class="w-1/2">
+                                    <label for="startTime" class="block text-sm font-medium text-gray-700 mb-2" >
+                                        tatsächliche Startzeit
+                                    </label>
+                                    <input v-model="neueAnwesenheit.tatstartTime" type="time" id="startTime" name="startTime" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
+                                </div>
+                                <div class="w-1/2">
+                                    <label for="endTime" class="block text-sm font-medium text-gray-700 mb-2" >
+                                        tatsächliche Endzeit
+                                    </label>
+                                    <input v-model="neueAnwesenheit.tatendTime" type="time" id="endTime" name="endTime" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
+                                </div>
+                            </div>
+                            <div>
+                                <label for="startDate" class="block text-sm font-medium text-gray-700 mb-2" >
+                                        Gruppen <span class="text-red-500">*</span>
+                                </label>
+                               <Select
+                                    v-model="neueAnwesenheit.gruppe"
+                                    :options="props.gruppen"
+                                    :optionLabel="(g) => `${g.bereich.name} (${new Date(g.anfangsdatum).toLocaleDateString('de-DE')} – ${new Date(g.enddatum).toLocaleDateString('de-DE')}) ${g.betreuer.vorname} ${g.betreuer.nachname} `"
+                                    optionValue="id"
+                                    class="w-full text-sm px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
+                                    />
+
                             </div>
                              <div>
                                 <label for="startDate" class="block text-sm font-medium text-gray-700 mb-2" >
@@ -1345,9 +1465,11 @@
     import Toggle from '@/Components/Toggle.vue';
     import Alert from '@/Components/Utils/SweetalertSuccessError.vue'
     const { flash } = usePage().props
+    import Stammdaten from '@/Pages/Teilnehmer/Tabs/StammdatenSection.vue';
 
     const props = defineProps({
         teilnehmer: Object,
+        gruppen: Array,
         kontakttypen: Array,
         projekte: Array,
         betreuer: Array,
@@ -1359,10 +1481,11 @@
         notizprioritaet: Array,
         notizkategorie: Array,
         notiztypen:Array,
+        fahrtarten: Array,
     });
 
 
-    console.log(JSON.stringify(props.teilnehmer.notizen, null, 2))
+    console.log(props.gruppen);
 
 watchEffect(() => {
 
@@ -1391,6 +1514,7 @@ watchEffect(() => {
         "Netzwerke",
         "Vermittlung",
         "Praktika",
+        "Fahrtkosten",
         "Exportieren"
 
     ];
@@ -1438,13 +1562,6 @@ const neueAnwesenheit = ref({
     bemerkungen: '',
 });
 
-const sortierteAnwesenheiten = computed(() => {
-  return [...teilnehmer.value.anwesenheiten].sort((a, b) => {
-    const dateA = new Date(a.tag.datum);
-    const dateB = new Date(b.tag.datum);
-    return dateB - dateA; // absteigend (neuestes Datum zuerst)
-  });
-});
 
 
 const activeTab = ref("");
@@ -1479,8 +1596,6 @@ onMounted(() => {
 })
 
 // =======  Sozialdaten  =======
-
-
 // script setup (Ausschnitt)
 const drittstaatsangehoerig  = ref(!!props.teilnehmer.sozialedaten?.drittstaatsangehoerig);
 const behinderung            = ref(!!props.teilnehmer.sozialedaten?.behinderung);
@@ -1558,105 +1673,184 @@ const saveStammdaten = () => {
     );
 };
 
-// ======= Notizen
-const showModalNotiz = ref(false);
-const loadingNotiz = ref(false);
-const neueNotiz = ref({
-    typ: '',
-    kategorie: '',
-    prioritaet: '',
-    titel: '',
-    inhalt: '',
-});
-const filter = ref({
-  suche: "",
-  typ: "",
-  prioritaet: "",
-  kategorie: ""
-});
-const gefilterteNotizen = computed(() => {
-  return props.teilnehmer.notizen.filter((n) => {
-    const matchSuche =
-      filter.value.suche === "" ||
-      n.notizinhalt.toLowerCase().includes(filter.value.suche.toLowerCase()) ||
-      n.titel.toLowerCase().includes(filter.value.suche.toLowerCase());
+//======= Fahrtkosten abrechnen
+        const showModalFahrtkosten = ref(false);
+        const loadingFahrtkosten = ref(false);
+        const fahrtkostenStatus = ['offen','in bearbeitung', 'abgerechnet', 'bezahlt', 'storniert'];
+        const neueFahrtkosten = ref({
+            fahrtarten_id: '',
+            tag: '',
+            start: '',
+            ziel: '',
+            entfernung: '',
+            kosten: '',
+            status: '',
+        });
 
-    const matchTyp =
-      filter.value.typ === "" || n.notiztyp_id === filter.value.typ;
-
-    const matchPrioritaet =
-      filter.value.prioritaet === "" ||
-      n.prioritaet_id === filter.value.prioritaet;
-
-    const matchKategorie =
-      filter.value.kategorie === "" ||
-      n.kategorie_id === filter.value.kategorie;
-
-    return matchSuche && matchTyp && matchPrioritaet && matchKategorie;
-  });
-});
-
-
-
-
-const addNotiz = () => {
-  if (!neueNotiz.value.typ || !neueNotiz.value.kategorie || !neueNotiz.value.prioritaet || !neueNotiz.value.titel || !neueNotiz.value.inhalt) {
+  const addFahrtkosten = () => {
+  if (!neueFahrtkosten.value.fahrtarten_id || !neueFahrtkosten.value.tag) {
     Swal.fire({
-      icon: 'warning',
-      title: 'Fehldende Daten',
-      text: 'Bitte füllen Sie alle Pflichfelder aus.',
+      icon: "warning",
+      title: "Fehlende Daten",
+      text: "Bitte füllen Sie alle Pflichtfelder aus.",
       timer: 1500,
       showConfirmButton: false,
     });
     return;
   }
 
-  loadingNotiz.value = true;
+  loadingFahrtkosten.value = true;
 
-  const payload = {
-        person_id: props.teilnehmer.id,
-        notiztyp: neueNotiz.value.typ,
-        notizkategorie: neueNotiz.value.kategorie,
-        prioritaet: neueNotiz.value.prioritaet,
-        titel: neueNotiz.value.titel,
-        inhalt: neueNotiz.value.inhalt,
-  };
+  axios.post(route("fahrtkostenAbrechnung.store"), {
+    teilnehmer_id: props.teilnehmer.id,
+    ...neueFahrtkosten.value,
+  })
+  .then((response) => {
+    const fahrtabrechnung = response.data.fahrtabrechnung;
 
-  router.post(route('notizen.store'), payload, {
-    onSuccess: () => {
-      // Lokale Liste sofort aktualisieren (Frontend ohne Reload)
-      const selected = props.abschluesse.find(a => a.id === payload.abschluss_id);
-      if (selected) {
-        if (!props.teilnehmer.notizen) props.teilnehmer.notizen = [];
-            teilnehmer.value.notizen.unshift({
-            ...selected,
+    // ✅ Neues Objekt aus Backend übernehmen (berechnete Werte + Relationen)
+    if (!teilnehmer.value.fahrtabrechnungen) {
+      teilnehmer.value.fahrtabrechnungen = [];
+    }
+    teilnehmer.value.fahrtabrechnungen.unshift(fahrtabrechnung);
 
-        });
-      }
+    // ✅ Formular schließen & zurücksetzen
+    showModalFahrtkosten.value = false;
+    neueFahrtkosten.value = {
+      fahrtarten_id: "",
+      tag: "",
+      start: "",
+      ziel: "",
+      entfernung: "",
+      kosten: "",
+      status: "",
+    };
 
-      showModalNotiz.value = false;
-        loadingNotiz.value = false;
-
-      neueNotiz.value = { notiztyp: '', notizkategorie: '', prioritaet: '', titel: '', inhalt: '' };
-
-      Swal.fire({
-        icon: 'success',
-        title: 'Gespeichert!',
-        text: 'Abschluss erfolgreich hinzugefügt.',
-        timer: 1500,
-        showConfirmButton: false,
-      });
-    },
-    onError: () => {
-      Swal.fire({
-        icon: 'error',
-        title: 'Fehler',
-        text: 'Der Abschluss konnte nicht gespeichert werden.',
-      });
-    },
-    onFinish: () => (loadingAbschluss.value = false),
+    Swal.fire({
+      icon: "success",
+      title: "Gespeichert!",
+      text: response.data.message || "Fahrtkosten erfolgreich hinzugefügt.",
+      timer: 1500,
+      showConfirmButton: false,
+    });
+  })
+  .catch((error) => {
+    Swal.fire({
+      icon: "error",
+      title: "Fehler",
+      text: error.response?.data?.message || "Die Fahrtkosten konnten nicht gespeichert werden.",
+    });
+  })
+  .finally(() => {
+    loadingFahrtkosten.value = false;
   });
 };
+
+
+// ======= End Fahrtkosten abrechnen
+
+
+
+
+
+
+// ======= Notizen
+        const showModalNotiz = ref(false);
+        const loadingNotiz = ref(false);
+        const neueNotiz = ref({
+            typ: '',
+            kategorie: '',
+            prioritaet: '',
+            titel: '',
+            inhalt: '',
+        });
+        const filter = ref({
+        suche: "",
+        typ: "",
+        prioritaet: "",
+        kategorie: ""
+        });
+        const gefilterteNotizen = computed(() => {
+        return props.teilnehmer.notizen.filter((n) => {
+            const matchSuche =
+            filter.value.suche === "" ||
+            n.notizinhalt.toLowerCase().includes(filter.value.suche.toLowerCase()) ||
+            n.titel.toLowerCase().includes(filter.value.suche.toLowerCase());
+
+            const matchTyp =
+            filter.value.typ === "" || n.notiztyp_id === filter.value.typ;
+
+            const matchPrioritaet =
+            filter.value.prioritaet === "" ||
+            n.prioritaet_id === filter.value.prioritaet;
+
+            const matchKategorie =
+            filter.value.kategorie === "" ||
+            n.kategorie_id === filter.value.kategorie;
+
+            return matchSuche && matchTyp && matchPrioritaet && matchKategorie;
+        });
+        });
+
+        const addNotiz = () => {
+        if (!neueNotiz.value.typ || !neueNotiz.value.kategorie || !neueNotiz.value.prioritaet || !neueNotiz.value.titel || !neueNotiz.value.inhalt) {
+            Swal.fire({
+            icon: 'warning',
+            title: 'Fehldende Daten',
+            text: 'Bitte füllen Sie alle Pflichfelder aus.',
+            timer: 1500,
+            showConfirmButton: false,
+            });
+            return;
+        }
+
+        loadingNotiz.value = true;
+
+        const payload = {
+                person_id: props.teilnehmer.id,
+                notiztyp: neueNotiz.value.typ,
+                notizkategorie: neueNotiz.value.kategorie,
+                prioritaet: neueNotiz.value.prioritaet,
+                titel: neueNotiz.value.titel,
+                inhalt: neueNotiz.value.inhalt,
+        };
+
+        router.post(route('notizen.store'), payload, {
+            onSuccess: () => {
+            // Lokale Liste sofort aktualisieren (Frontend ohne Reload)
+            const selected = props.abschluesse.find(a => a.id === payload.abschluss_id);
+            if (selected) {
+                if (!props.teilnehmer.notizen) props.teilnehmer.notizen = [];
+                    teilnehmer.value.notizen.unshift({
+                    ...selected,
+
+                });
+            }
+
+            showModalNotiz.value = false;
+                loadingNotiz.value = false;
+
+            neueNotiz.value = { notiztyp: '', notizkategorie: '', prioritaet: '', titel: '', inhalt: '' };
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Gespeichert!',
+                text: 'Abschluss erfolgreich hinzugefügt.',
+                timer: 1500,
+                showConfirmButton: false,
+            });
+            },
+            onError: () => {
+            Swal.fire({
+                icon: 'error',
+                title: 'Fehler',
+                text: 'Der Abschluss konnte nicht gespeichert werden.',
+            });
+            },
+            onFinish: () => (loadingAbschluss.value = false),
+        });
+    };
+// ======= End Notizen
 
 // ======= Schule/Beruf
 
@@ -1916,59 +2110,34 @@ const addKontakt = () => {
   );
 };
 
-// ====================== LÖSCHEN ======================
-// Lokale Kopien der Brief-Arrays (reaktiv)
-const meineBriefe = ref([...props.meineBriefe]);
-const erhalteneBriefe = ref([...props.erhalteneBriefe]);
-
-const confirmDelete = (item, type) => {
-    console.log(item.id);
-  toDeleteItem.value = { id: item.id, name: item.name || item.wert || item.strasse || item.bezeichnung || item.titel };
-  seite.value = type;
-  showModalLöschen.value = true;
-};
-
-const handleDelete = (id) => {
-  if (seite.value === 'adresse') {
-    teilnehmer.value.adresses = teilnehmer.value.adresses.filter((a) => a.id !== id);
-  }
-  if (seite.value === 'kontakt') {
-    teilnehmer.value.kontaktes = teilnehmer.value.kontaktes.filter((k) => k.id !== id);
-  }
-  if (seite.value === 'bank') {
-    teilnehmer.value.baenke = teilnehmer.value.baenke.filter((b) => b.id !== id);
-  }
-
-  if (seite.value === 'projekt') {
-    teilnehmer.value.projekte = teilnehmer.value.projekte.filter((p) => p.id !== id);
-  }
-  if (seite.value === 'anwesenheit') {
-    teilnehmer.value.anwesenheiten = teilnehmer.value.anwesenheiten.filter((p) => p.id !== id);
-  }
-  if (seite.value === 'brief') {
-    meineBriefe.value = meineBriefe.value.filter((b) => b.id !== id);
- }
- if (seite.value === 'briefShared') {
-    erhalteneBriefe.value = erhalteneBriefe.value.filter((b) => b.id !== id);
- }
-if (seite.value === 'abschluss') {
-  window.location.reload();
-}
-if (seite.value === 'notizen') {
-  props.teilnehmer.notizen = props.teilnehmer.notizen.filter((n) => n.id !== id);
-}
-
-
-
-
-
-
-
-  showModalLöschen.value = false;
-};
 
 
 // =======  ANWESENHEIT =======
+const selectedMonth = ref("");
+// 🧠 Gruppiere Anwesenheiten (bzw. Gruppen) nach Monat
+const gruppenNachMonat = computed(() => {
+  if (!teilnehmer.value?.gruppen) return {}
+
+  const gruppiert = {}
+
+  teilnehmer.value.gruppen.forEach((g) => {
+    const datum = new Date(g.pivot.tag.datum)
+    const monat = datum.toLocaleString("de-DE", { month: "long", year: "numeric" })
+    if (!gruppiert[monat]) gruppiert[monat] = []
+    gruppiert[monat].push(g)
+  })
+
+  for (const key in gruppiert) {
+    gruppiert[key].sort((a, b) => new Date(b.pivot.tag.datum) - new Date(a.pivot.tag.datum))
+  }
+
+  return gruppiert
+})
+
+
+// 🧮 Liste aller verfügbaren Monate für Filter
+const verfuegbareMonate = computed(() => Object.keys(gruppenNachMonat.value))
+
  const editMode = ref(false);
     const aktuelleAnwesenheit = ref(null);
 const openModalEdit = (anwesenheit) => {
@@ -1992,7 +2161,8 @@ const addAnwesenheit = () => {
   if (
     !neueAnwesenheit.value.dateAnwesenheit ||
     !neueAnwesenheit.value.startTime ||
-    !neueAnwesenheit.value.endTime
+    !neueAnwesenheit.value.endTime ||
+    !neueAnwesenheit.value.gruppe
   ) {
     Swal.fire({
       icon: 'warning',
@@ -2010,6 +2180,9 @@ const addAnwesenheit = () => {
     endzeit: neueAnwesenheit.value.endTime,
     anwesenheitsstatuten_id: neueAnwesenheit.value.anwesenheitsstatus,
     bemerkung: neueAnwesenheit.value.bemerkungen,
+    gruppe_id : neueAnwesenheit.value.gruppe,
+    tatstartTime: neueAnwesenheit.value.tatstartTime,
+    tatendTime: neueAnwesenheit.value.tatendTime,
   };
 
   loadingAnwesenheit.value = true;
@@ -2036,13 +2209,19 @@ const addAnwesenheit = () => {
           });
         } else {
           // ➕ Neue Anwesenheit hinzufügen (Create)
-          teilnehmer.value.anwesenheiten.unshift({
-            id: Date.now(),
-            tag: { datum: payload.tag },
-            zeit: { startzeit: payload.startzeit, endzeit: payload.endzeit },
-            status: statusObj,
-            bemerkung: payload.bemerkung,
-          });
+            teilnehmer.value.gruppen.unshift({
+                id: payload.gruppe_id,
+                bereich: props.gruppen.find(g => g.id === payload.gruppe_id)?.bereich || { name: 'Unbekannt' },
+                betreuer: props.gruppen.find(g => g.id === payload.gruppe_id)?.betreuer || {},
+                pivot: {
+                    id: Date.now(), // temporäre ID bis zum Reload
+                    tag: { datum: payload.tag },
+                    zeitgeplant: { startzeit: payload.startzeit, endzeit: payload.endzeit },
+                    zeittatsaechlich: null,
+                    anwesenheitsstatuten_id: payload.anwesenheitsstatuten_id,
+                    bemerkung: payload.bemerkung,
+                },
+            });
         }
 
         // ✅ Modal schließen & zurücksetzen
@@ -2053,6 +2232,8 @@ const addAnwesenheit = () => {
           dateAnwesenheit: '',
           startTime: '',
           endTime: '',
+          tatstartTime: '',
+          tatendTime: '',
           anwesenheitsstatus: null,
           bemerkungen: '',
         };
@@ -2093,7 +2274,10 @@ watch(showModalAnwesenheit, (val) => {
       dateAnwesenheit: '',
       startTime: '',
       endTime: '',
+      tatstartTime: '',
+      tatendTime: '',
       bemerkungen: '',
+      gruppe:'',
     };
   }
 });
@@ -2187,6 +2371,63 @@ const addBank = () => {
   )
 }
 
+
+
+// ====================== LÖSCHEN ======================
+// Lokale Kopien der Brief-Arrays (reaktiv)
+const meineBriefe = ref([...props.meineBriefe]);
+const erhalteneBriefe = ref([...props.erhalteneBriefe]);
+
+const confirmDelete = (item, type) => {
+    console.log(item.id);
+  toDeleteItem.value = { id: item.id, name: item.name || item.wert || item.strasse || item.bezeichnung || item.titel };
+  seite.value = type;
+  showModalLöschen.value = true;
+};
+
+const handleDelete = (id) => {
+  if (seite.value === 'adresse') {
+    teilnehmer.value.adresses = teilnehmer.value.adresses.filter((a) => a.id !== id);
+  }
+  if (seite.value === 'kontakt') {
+    teilnehmer.value.kontaktes = teilnehmer.value.kontaktes.filter((k) => k.id !== id);
+  }
+  if (seite.value === 'bank') {
+    teilnehmer.value.baenke = teilnehmer.value.baenke.filter((b) => b.id !== id);
+  }
+
+  if (seite.value === 'projekt') {
+    teilnehmer.value.projekte = teilnehmer.value.projekte.filter((p) => p.id !== id);
+  }
+  if (seite.value === 'gruppeHasPersonen') {
+   teilnehmer.value.gruppen = teilnehmer.value.gruppen.filter(
+        (g) => g.pivot.id !== id
+      );
+}
+
+
+
+
+  if (seite.value === 'brief') {
+    meineBriefe.value = meineBriefe.value.filter((b) => b.id !== id);
+ }
+ if (seite.value === 'briefShared') {
+    erhalteneBriefe.value = erhalteneBriefe.value.filter((b) => b.id !== id);
+ }
+if (seite.value === 'abschluss') {
+  window.location.reload();
+}
+if (seite.value === 'notizen') {
+  props.teilnehmer.notizen = props.teilnehmer.notizen.filter((n) => n.id !== id);
+}
+if (seite.value === 'fahrtkostenAbrechnung') {
+  teilnehmer.value.fahrtabrechnungen = teilnehmer.value.fahrtabrechnungen.filter(
+    (n) => n.id !== id
+  );
+}
+
+  showModalLöschen.value = false;
+};
 
 </script>
 

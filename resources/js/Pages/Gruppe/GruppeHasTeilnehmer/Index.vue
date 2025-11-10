@@ -18,7 +18,7 @@
     teilnehmer: { type: Array, required: true },
     anwesenheitsstatuten: { type: Array, required: true },
     })
-    console.log('Props:', props.anwesenheitsstatuten)
+    console.log('Props:', props.gruppe)
     // Modal-Steuerung + Auswahl
     const showTeilnehmerModal = ref(false)
     const selectedTeilnehmerIds = ref([])
@@ -35,6 +35,15 @@ const statusFarbe = (statusName) => {
 }
 
 
+const zeitgeplantStart = ref();
+const zeitgeplantEnd = ref();
+const datumgeplantStart = ref();
+const datumgeplantEnd = ref();
+
+zeitgeplantStart.value = formatTime(props.gruppe.startzeit);
+zeitgeplantEnd.value = formatTime(props.gruppe.endzeit);
+datumgeplantStart.value = props.gruppe.anfangsdatum;
+datumgeplantEnd.value =props.gruppe.enddatum;
 
 
 // Funktion, um nach Klick auf „Übernehmen“ die ausgewählten Teilnehmer hinzuzufügen
@@ -52,6 +61,10 @@ const confirmTeilnehmer = async () => {
     const response = await axios.post('/gruppehasteilnehmer/anlegen', {
       gruppe_id: props.gruppe.id,
       teilnehmer: selectedTeilnehmerIds.value,
+      startzeit: zeitgeplantStart.value,
+      endzeit: zeitgeplantEnd.value,
+      startdatum: datumgeplantStart.value,
+      enddatum: datumgeplantEnd.value,
     })
 
     const data = response.data
@@ -148,49 +161,69 @@ console.log(gruppenTeilnehmer);
 const tag = ref([])
 
 onMounted(() => {
-  gruppenTeilnehmer.value = props.gruppe.teilnehmer.map(t => ({
-    ...t,
-    anwesenheit: tage.value.map(tag => {
-      // Prüfen, ob Teilnehmer an diesem Tag einen Eintrag hat
-      const eintrag = t.anwesenheiten?.find(a => a.tag?.datum === tag.date)
-      // Wenn ja → den echten Statusnamen aus der DB nehmen
-      // Wenn nein → Standardstatus setzen (z. B. "unentschuldigt")
-      return eintrag ? eintrag.status.status : 'unentschuldigt'
-    }),
-  }))
+  const gruppiert = {}
+  props.gruppe.teilnehmer.forEach(t => {
+    if (!gruppiert[t.id]) gruppiert[t.id] = []
+    gruppiert[t.id].push(t)
+  })
+
+  gruppenTeilnehmer.value = Object.values(gruppiert).map(teilnehmerGruppe => {
+    const basis = teilnehmerGruppe[0]
+
+    return {
+      ...basis,
+      anwesenheit: tage.value.map(tag => {
+        const eintrag = teilnehmerGruppe.find(tt => tt.pivot?.tag?.datum === tag.date)
+        return eintrag?.pivot?.status?.status || 'unentschuldigt'
+      }),
+      zeiten: tage.value.map(tag => {
+        const eintrag = teilnehmerGruppe.find(tt => tt.pivot?.tag?.datum === tag.date)
+        return {
+          start: eintrag?.pivot?.zeittatsaechlich?.startzeit || props.gruppe.startzeit,
+          ende: eintrag?.pivot?.zeittatsaechlich?.endzeit || props.gruppe.endzeit,
+        }
+      }),
+    }
+  })
 })
 
 
 
-const speichernSofort = async (tID, ttag, statusName) => {
+
+//Anwesenheit speichern
+const speichernSofort = async (tID, ttag, statusName, startzeit, endzeit) => {
   try {
     const teilnehmerId = tID
     const tag = ttag.date
+
     const status = props.anwesenheitsstatuten.find(s => s.status === statusName)
     if (!status) return
-    console.log('speichernSofort aufgerufen mit:', teilnehmerId, tag, status.id);
+
+    console.log('speichernSofort:', { teilnehmerId, tag, statusName, startzeit, endzeit })
+
     await axios.post('/anwesenheit/update', {
       personen_id: teilnehmerId,
-      tag: tag, // wichtig: tage muss eine DB-ID haben
-      startzeit: props.gruppe.startzeit, // aus Gruppe oder fix definieren
-      endzeit: props.gruppe.endzeit,
+      gruppe_id: props.gruppe.id,
+      tag: tag,
+      startzeit: startzeit,
+      endzeit: endzeit,
       anwesenheitsstatuten_id: status.id,
       bemerkung: null,
     })
-        Swal.fire({
-            icon: 'success',
-            title: 'Anwesenheit erfolgreich aktualisiert',
-            text: 'Die Aktualisierung der Anwesenehit wurde erfolgreich gespeichert.',
-            timer: 2000,
-            showConfirmButton: false,
-          });
-    console.log(`✅ gespeichert → ${statusName}`)
+
+    Swal.fire({
+      icon: 'success',
+      title: 'Gespeichert',
+      text: `Status: ${statusName}, Zeit: ${startzeit} – ${endzeit}`,
+      timer: 1500,
+      showConfirmButton: false,
+    })
   } catch (error) {
     console.error(error)
     Swal.fire({
       icon: 'error',
-      title: 'Fehler',
-      text: error.response?.data?.message || 'Fehler beim Speichern der Anwesenheit.',
+      title: 'Fehler beim Speichern',
+      text: error.response?.data?.message || 'Unbekannter Fehler.',
     })
   }
 }
@@ -201,17 +234,13 @@ const speichernSofort = async (tID, ttag, statusName) => {
 <template>
   <Head title="Teilnehmer verwalten" />
 
-  <AppLayout>
+  <AppLayout >
     <template #header>
-      Gruppe – Teilnehmer verwalten
-      ({{ new Date(props.gruppe.anfangsdatum).toLocaleDateString('de-DE') }}
-      –
-      {{ new Date(props.gruppe.enddatum).toLocaleDateString('de-DE') }})
-      von {{ formatTime(props.gruppe.startzeit) }}
-      bis {{ formatTime(props.gruppe.endzeit) }}
+            Teilnehmerverwaltung | {{props.gruppe.bereich.name}} ({{ new Date(props.gruppe.anfangsdatum).toLocaleDateString('de-DE') }} – {{ new Date(props.gruppe.enddatum).toLocaleDateString('de-DE') }}),   von {{ formatTime(props.gruppe.startzeit) }} bis {{ formatTime(props.gruppe.endzeit) }}
+
     </template>
 
-    <div class="p-6 space-y-8 bg-white rounded-lg shadow-sm">
+    <div class="p-6 space-y-8 bg-white rounded-lg shadow-sm ">
       <!-- Teilnehmer hinzufügen -->
       <div class="bg-gray-50 rounded-lg p-4 border shadow-sm">
         <h3 class="font-semibold mb-3 text-gray-700">Teilnehmer hinzufügen</h3>
@@ -233,6 +262,30 @@ const speichernSofort = async (tID, ttag, statusName) => {
           dismissableMask
         >
           <div class="space-y-4">
+             <div class="flex gap-2">
+                <div class="w-full">
+                    <label for="abteilungDelete">Von*</label>
+                    <InputText type="time" v-model="zeitgeplantStart" class="w-full" />
+                </div>
+
+                <div class="w-full">
+                    <label for="abteilungDelete">Bis*</label>
+                    <InputText type="time" v-model="zeitgeplantEnd" class="w-full" />
+                </div>
+            </div>
+
+
+            <div class="flex gap-2">
+                <div class="w-full">
+                    <label for="abteilungDelete">Von*</label>
+                    <InputText type="date" v-model="datumgeplantStart" class="w-full" />
+                </div>
+
+                <div class="w-full">
+                    <label for="abteilungDelete">Bis*</label>
+                    <InputText type="date" v-model="datumgeplantEnd" class="w-full" />
+                </div>
+            </div>
             <FloatLabel variant="on">
               <MultiSelect
                 v-model="selectedTeilnehmerIds"
@@ -247,6 +300,8 @@ const speichernSofort = async (tID, ttag, statusName) => {
                 panelClass="z-[9999]"
               />
             </FloatLabel>
+
+
 
             <div class="flex justify-end gap-2 pt-2">
               <Button
@@ -282,8 +337,8 @@ const speichernSofort = async (tID, ttag, statusName) => {
         </div>
 
         <!-- Tabelle -->
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm border-collapse border shadow-sm">
+        <div class="overflow-x-auto max-w-full">
+          <table class="w-full table-fixed text-sm border-collapse border shadow-sm ">
             <thead class="bg-gray-100 text-gray-700">
               <tr>
                 <th class="border px-3 py-2 text-left">Teilnehmer</th>
@@ -307,48 +362,74 @@ const speichernSofort = async (tID, ttag, statusName) => {
                 class="hover:bg-gray-50"
               >
                 <td class="border px-4 py-3 font-medium text-gray-800">
-                  {{ t.vorname }} {{ t.nachname }}
+                  <p>{{ t.vorname }} {{ t.nachname }}</p>
+                  <span class="text-sm text-zbb">{{ formatTime(t.pivot?.zeitgeplant?.startzeit) }} - {{formatTime(t.pivot?.zeitgeplant?.endzeit)}}</span>
                 </td>
+                <td v-for="(tttag, dayIndex) in tage" :key="dayIndex" class="border px-4 py-3 text-center">
+                    <div class="flex flex-col gap-1 items-center">
 
-                <td
-                  v-for="(tttag, dayIndex) in tage"
-                  :key="dayIndex"
-                  class="border px-4 py-3 text-center"
-                >
-                  <Select
-                    v-model="gruppenTeilnehmer[tIndex].anwesenheit[dayIndex]"
-                    :options="props.anwesenheitsstatuten"
-                    optionLabel="status"
-                    optionValue="status"
-                    class="w-[200px] text-sm"
-                    @change="speichernSofort(t.id, tttag, gruppenTeilnehmer[tIndex].anwesenheit[dayIndex])"
+                        <!-- Anwesenheitsstatus -->
+
+                        <Select
+                        v-model="gruppenTeilnehmer[tIndex].anwesenheit[dayIndex]"
+                        :options="props.anwesenheitsstatuten"
+                        optionLabel="status"
+                        optionValue="status"
+                        class="text-sm"
+                       @change="speichernSofort(
+                            t.id,
+                            tttag,
+                            gruppenTeilnehmer[tIndex].anwesenheit[dayIndex],
+                            t.pivot.zeittatsaechlich.startzeit,
+                            t.pivot.zeittatsaechlich.endzeit
+                        )"
                     >
                     <template #value="slotProps">
                         <div class="flex items-center gap-2">
-                            <span
-                            class="w-3 h-3 rounded-full inline-block"
-                            :style="statusFarbe(slotProps.value)"
-                            ></span>
-                            {{ slotProps.value }}
+                            <span class="w-3 h-3 rounded-full inline-block" :style="statusFarbe(slotProps.value)" >
+
+                            </span> {{ slotProps.value }}
                         </div>
                     </template>
-
-
-
                     <template #option="slotProps">
-  <div class="flex items-center gap-2">
-    <span
-      class="w-3 h-3 rounded-full inline-block"
-      :style="statusFarbe(slotProps.option.status)"
-    ></span>
-    {{ slotProps.option.status }}
-  </div>
-</template>
-
-
+                        <div class="flex items-center gap-2">
+                            <span class="w-3 h-3 rounded-full inline-block" :style="statusFarbe(slotProps.option.status)" ></span>
+                            {{ slotProps.option.status }}
+                        </div>
+                    </template>
                 </Select>
 
+
+                        <!-- Zeiten -->
+                        <div class="flex gap-1 justify-center mt-1">
+                        <InputText
+                            type="time"
+                            v-model="t.zeiten[dayIndex].start"
+                            @blur="speichernSofort(
+                                t.id,
+                                tttag,
+                                gruppenTeilnehmer[tIndex].anwesenheit[dayIndex],
+                                t.zeiten[dayIndex].start,
+                                t.zeiten[dayIndex].ende
+                            )"
+                        />
+
+                        <InputText
+                            type="time"
+                            v-model="t.zeiten[dayIndex].ende"
+                            @blur="speichernSofort(
+                                t.id,
+                                tttag,
+                                gruppenTeilnehmer[tIndex].anwesenheit[dayIndex],
+                                t.zeiten[dayIndex].start,
+                                t.zeiten[dayIndex].ende
+                            )"
+                        />
+
+                        </div>
+                    </div>
                 </td>
+
               </tr>
             </tbody>
           </table>

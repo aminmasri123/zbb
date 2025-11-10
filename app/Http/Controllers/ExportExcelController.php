@@ -129,6 +129,10 @@ if (!empty($errors)) {
             ->last();
         $abschluss = $hoechsterAbschluss?->bezeichnung;
 
+        // ✅ Wenn kein Abschluss existiert → „ohne Hauptschulabschluss“ als Default
+        if (!$abschluss) {
+            $abschluss = 'ohne Hauptschulabschluss';
+        }
         $sheet->setCellValue('H41', $abschluss === 'ohne Hauptschulabschluss' ? 'X' : null);
         $sheet->setCellValue('H42', $abschluss === 'Hauptschulabschluss' ? 'X' : null);
         $sheet->setCellValue('H43', $abschluss === 'mittlere Reife' ? 'X' : null);
@@ -168,6 +172,11 @@ if (!empty($errors)) {
 
 
         $abschluss = $hoechsterAbschluss?->bezeichnung;
+
+        // ✅ Wenn kein Abschluss existiert → „ohne Hauptschulabschluss“ als Default
+        if (!$abschluss) {
+            $abschluss = 'ohne Berufsabschluss';
+        }
 
         $sheet->setCellValue('H50', $abschluss === 'ohne Berufsabschluss' ? 'X' : null);
         $sheet->setCellValue('H51', $abschluss === 'Berufsvorbereitungsjahr' ? 'X' : null);

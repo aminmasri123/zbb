@@ -5,13 +5,16 @@ namespace App\Models;
 use App\Models\User;
 use App\Models\Brief;
 use App\Models\Baenke;
+use App\Models\Gruppe;
 use App\Models\Adresse;
+use App\Models\Fahrten;
 use App\Models\Projekt;
+
 use App\Models\Standort;
 use App\Models\Zielgruppe;
-
 use App\Models\Abschluesse;
 use App\Models\Anwesenheiten;
+use App\Models\GruppeHasPersonen;
 use App\Models\PersonenHasNotizen;
 use App\Models\ProjektHasPersonen;
 use App\Models\PersonenHasAbschluesse;
@@ -37,11 +40,27 @@ class Personen extends Model
         'geburtsdatum',
     ];
 
+
+    public function gruppen()
+    {
+        return $this->belongsToMany(Gruppe::class, 'gruppe_has_personens', 'personen_id', 'gruppe_id')
+            ->using(GruppeHasPersonen::class) // dein Pivot-Modell registrieren
+            ->withPivot(['personen_id', 'gruppe_id', 'user_id','tage_id','anwesenheitsstatuten_id', 'bemerkung', 'zeittatsaechlich_id', 'zeitgeplant_id', 'id'])
+            ->with('bereich');
+    }
+
+
+
+
     public function anwesenheiten(){
         return $this->hasMany(PersonenHasAnwesenheiten::class, 'personen_id', 'id');
     }
     public function notizen(){
         return $this->hasMany(PersonenHasNotizen::class, 'person_id', 'id');
+    }
+
+    public function fahrtabrechnungen(){
+        return $this->hasMany(Fahrten::class, 'person_id', 'id');
     }
 
     public function scopeTeilnehmer($query)

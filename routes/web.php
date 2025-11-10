@@ -17,13 +17,17 @@ use App\Http\Controllers\ProjektController;
 use App\Http\Controllers\StandortController;
 use App\Http\Controllers\AbteilungController;
 use App\Http\Controllers\AbschlusseController;
+use App\Http\Controllers\FahrtartenController;
 use App\Http\Controllers\TeilnehmerController;
 use App\Http\Controllers\AnwesenheitController;
 use App\Http\Controllers\ExportExcelController;
 use App\Http\Controllers\BerechtigungController;
 use App\Http\Controllers\KostenstelleController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\TransportartenController;
+use App\Http\Controllers\FahrtkostensaetzeController;
 use App\Http\Controllers\GruppeHasTeilnehmerController;
+use App\Http\Controllers\FahrtkostenAbrechnenController;
 use App\Http\Controllers\ProjektHasTeilnehmerController;
 
 /*
@@ -76,12 +80,15 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
         return Inertia::render('Dashboards/Ressourcen');
     })->name('ressourcen.index');
 
+    Route::get('/finanzen', function () {
+        return Inertia::render('Dashboards/Finanzen');
+    })->name('finanzen.index');
+
 
     Route::get('/schule', [SchuleController::class, 'index'])->name('schule.index')->can('schule.index');;
 
     //Standort
-    Route::get('/standort', [App\Http\Controllers\StandortController::class, 'index'])->name('standort.index');
-    Route::get('/standort/anlegen', function () { return Inertia::render('Standort/CreateStandort'); })->name('standort.create')->can('standort.create');;
+    Route::get('/standort', [StandortController::class, 'index'])->name('standort.index');
     Route::post('/standort/anlegen', [StandortController::class, 'store'])->name('standort.store');
     Route::delete('/standort/{id}', [StandortController::class, 'destroy'])->name('standort.destroy');
     Route::put('/standort/{id}', [StandortController::class, 'update'])->name('standort.update')->can('standort.edit');;
@@ -150,9 +157,11 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
 
     Route::post('/gruppehasteilnehmer/anlegen', [GruppeHasTeilnehmerController::class, 'store'])->name('gruppeHasTeilnehmer.store');
 
+    Route::delete('/gruppehasteilnehmer/entfernen/{id}', [GruppeHasTeilnehmerController::class, 'destroy'])->name('gruppeHasPersonen.destroy');
 
     //Teilnehmer
     Route::get('/teilnehmer', [TeilnehmerController::class, 'index'])->name('teilnehmer.index');
+
     Route::get('/teilnehmer/{id}', [TeilnehmerController::class, 'indexNachProjekt'])->name('teilnehmer.projekt.index');
 
     Route::get('/teilnehmer/anlegen', function () { return Inertia::render('Teilnehmer/CreateTeilnehmer'); })->name('teilnehmer.create');
@@ -172,8 +181,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
 
 
     //Anwesenheiten
-    /* Route::post('/anwesenheit/speichern', [AnwesenheitController::class, 'store'])
-    ->name('anwesenheit.speichern'); */
+
     Route::post('/anwesenheit/speichern', [AnwesenheitController::class, 'store'])->name('anwesenheit.store');
 
     Route::delete('/anwesenheit/entfernen/{id}', [AnwesenheitController::class, 'destroy'])->name('anwesenheit.destroy');
@@ -232,6 +240,22 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
 
         //Export
         Route::get('/teilnehmer/export/stammblatt/{teilnehmerId}/{projektId}', [ExportExcelController::class, 'esfStammblatt'])->name('export.excel.esfStammblatt');
+
+
+    //Fahrtarten
+    Route::get('/finanzen/fahrtarten', [FahrtartenController::class, 'index'])->name('fahrtarten.index');
+    Route::post('/finanzen/fahrtarten/anlegen', [FahrtartenController::class, 'store'])->name('fahrtarten.store');
+    Route::delete('/finanzen/fahrtarten/delete/{id}', [FahrtartenController::class, 'destroy'])->name('fahrtarten.destroy');
+
+    //Fahrtkosten
+    Route::get('/finanzen/fahrtkosten', [FahrtkostensaetzeController::class, 'index'])->name('fahrtkosten.index');
+    Route::post('/finanzen/fahrtkosten/anlegen', [FahrtkostensaetzeController::class, 'store'])->name('fahrtkosten.store');
+    Route::delete('/finanzen/fahrtkosten/delete/{id}', [FahrtkostensaetzeController::class, 'destroy'])->name('fahrtkosten.destroy');
+
+
+    //Teilnehmer Farhten
+    Route::post('/fahrtkosten/Abrechnen/anlegen', [FahrtkostenAbrechnenController::class, 'store'])->name('fahrtkostenAbrechnung.store');
+    Route::delete('/fahrtkosten/Abrechnen/delete/{id}', [FahrtkostenAbrechnenController::class, 'destroy'])->name('fahrtkostenAbrechnung.destroy');
 
 });
 
