@@ -30,6 +30,20 @@
             </li>
 
 
+            <!-- Räumlichkeiten Submenu -->
+            <li v-if="['räumlichkeiten.index', 'räumlichkeiten.store'].some(permission => $page.props.permissions.includes(permission))" class="submenu">
+                <a href="#" @click.prevent="toggleMenu('räumlichkeiten')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
+                    <i class="las la-door-open la-lg mr-2"></i>
+                    <span v-if="!displayHideTextSidebar">{{$t('Räumlichkeiten')}}</span>
+                    <span :class="{'rotate-180': activeMenu === 'benutzer', 'hidden': displayHideTextSidebar === true, 'text-zbb': $page.component.startsWith('User')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
+                </a>
+                <ul v-show="activeMenu === 'räumlichkeiten'" class="pl-6 mt-2 space-y-2">
+                    <li v-if="$page.props.permissions.includes('räumlichkeiten.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('raumlichkeiten.index')">{{$t('Raumübersicht')}}</Link></li>
+                    <li v-if="$page.props.permissions.includes('räumlichkeiten.store')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('raumlichkeiten.index')">{{$t('Raum anlegen')}}</Link></li>
+                </ul>
+            </li>
+
+
              <!-- Geräte Submenu -->
              <li v-if="['kooperationspartner.index', 'kooperationspartner.store', 'kooperationspartner.update'].some(permission => $page.props.permissions.includes(permission))" class="submenu">
                 <a href="#" @click.prevent="toggleMenu('kooperationspartner')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">

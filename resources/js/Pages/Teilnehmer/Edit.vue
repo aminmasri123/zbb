@@ -56,6 +56,12 @@
               </button>
 
                 <div class="space-y-5  w-96 mx-auto">
+
+
+                    <FloatLabel variant="on">
+                        <InputText  v-model="kundennummer" label="kundennummer?"  size="small"  class="w-full" />
+                        <label for="abteilungDelete">Kundennummer*</label>
+                    </FloatLabel>
                     <Toggle v-model="drittstaatsangehoerig" label="Drittstaatsangehörige?" hint="Nicht-EU/EWR/Schweiz" />
 
                     <Toggle v-model="behinderung" label="Liegt eine Behinderung vor?" hint="Nach §2 SGB IX" />
@@ -732,37 +738,46 @@
 
 
           <!-- ================= Exportieren ================= -->
-          <div v-else-if="activeTab === 'Exportieren'">
-                <div class="max-w-7xl  mx-auto px-4  flex gap-6 my-24 justify-center">
+        <div v-else-if="activeTab === 'Exportieren'">
+            <div class="flex justify-center mx-auto items-center mb-4">
+                <input type="text" v-model="exportSuche" placeholder="🔍 Dokument suchen..." class="w-3/4 rounded-md border-gray-300 text-sm px-3 py-2 focus:ring-zbb focus:border-zbb" />
+            </div>
 
-                    <a :href="route('export.excel.esfStammblatt', props.teilnehmer.id)" class="cursor-pointer" >
-                    <div class="rounded-lg shadow py-6 px-8 flex items-center gap-4 bg-zbb">
-                            <span class="text-5xl">📑</span>
+            <div class="flex flex-wrap">
+                <div v-for="dok in gefilterteDokumente" :key="dok.id" class="w-1/4 cursor-pointer" >
+                    <a
+                        v-if="dok && dok.dateipfadName"
+                        :href="route('export.info_teilnehmende', { id: teilnehmer.id, pfad: dok.dateipfad })"
+                        class="block"
+                    >
+
+                        <div class="rounded-lg shadow m-2 py-6 px-8 min-h-32 flex items-center gap-4 border-4 border-zbb bg-gray-50 hover:bg-gray-100 transition">
+                            <!-- Icon je nach Typ -->
+                             <span class="text-5xl">
+                                <span v-if="dok.typ === 'word'" >
+                                    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAAC/UlEQVR4nO1ZW0hUQRjeoJfojEtFPUgPLvXQ5amEXop6qTMLolBiRDfCQiK6PASCFaIEJmGIUIJmdeZ4SdMwMTRvabWleM0W0WorRNPcTNSzum3rOnH+3R1SFFwLdrT5YJh//ll+vm/nn38OMwaDgICAwLLEqv05oeiAGokwSZKwUo5kZcDAJfbVr1yNle1IVk5KMslAslIjYWUYYUJnt2BTNayLykGSmeyRZCUOyGJiQZg45yIbdAHGiPw1OlmElUuSrKhIVrqQTDwLJRt0AegviM7XTJnaolrYHc2ypAWYMrXAV08IwEIA5U5AoDAJAZjQ3efKWcDEe20zCHXafoDfPTVN10fmMf/NgnfgHxn/SUPMQU6htRG5dNI1BYTyq22MzIaofCDux94LT9lcmaUXfLWtX/nYA83ddiDU9v478+HLlTOW+3z6GzbX0zsKPn0lgp5CCBOaVdYNAR2TbpYSCVkt4NMmf0GfXd7DVszl9oDvaHI9HwLOpllY0G0nSsBX0vAFxjUt/dA3ddnBH37mCfvtlmPFfKTQrrgyRurQtVrw9X7TYHwxoxH6CaebGs0q/Os6hkac/JwDRrPKUuVKdgs1HS4Ce8zhohujH9Jp317eebqUJj9oB7uyqY+PMop87bV1CIKqzz7SmMQ6sJ+3D8CcrX8MxqdSXtDCuk9gp+S+5UvA7cddEFSvSDfyOsFOK/RWmeJ67364VWilHR+GwY72pRoXKYQwobGpL9nhVNHYB/bx6w0wd/VuK4yrmvvp+IQ31TYdKeJLwI7YUiCm5/vngXGwt/oqUkR8FYz7hhze3u7g51MC+Zpe/0c1Fwv+Z5UJPVhAPf6dTCmcxNwJQJjQho5BFnx2lfFvZB1J99vnFBDUFEKY0PRHVkZydpXxb2QdUQnVfApAS/FzGgkBZPmkkEkICABCAP53AsIytVf/3+XufNfrRlkJZ28BPF+vL+aBA2GSqr/GcPvAsXDQFSGyulkyqzFIJikSJhVIJoMBBBAQEBAwLA38BsvuGopgwMs1AAAAAElFTkSuQmCC" alt="ms-word">
+                                </span>
+                                <span v-else-if="dok.typ === 'excel'">
+                                    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAACAElEQVR4nGNgGAWjYBSMgiEJxCYEZ4hNCP4oNjHkP6lY81A96fhg3Uetg3Xp1PQAWY4n2wOHwPgD9TxApuMp9MD/UQ/AwKgHDo16YJh6gLvQooC70OILT5HFf4pwieV/oWaPAfHAF4odD8PFFv95GlwxsOSaVLIxAyFANcfD8KgHUkc98F+4zPb/ndeP/oNA1aZJcHGtlsD/P37/+v/t14//Oq3Bg9cDPEUW/yPmlYE98ObL+/8SlU5gsZVnd4LFGrZOH9wxwAPFu64fBzu4cduM/5Y9sf///vv7//arh+AYGhIeMOmM/P/rz+//7799+n/s3oX///79++81LXvw5wEeJDzl4Ir/MLD8zPahkYl5kPDCE5vgHlhxdgdBD4i7a2FgoWlBZGMGSjzgOTULnGxOPbj8/8jd82BP+M/MHxoeEC6z/X/jxX2wo0Hp3n5CEtgzD98++y9W4Tj4PdC9ZwHY8TuuHYWLbbp0ACzWu3fh4PaAWVcUuPQBFZvWvXFwccOOsP+///4BY6ve2MHrAR4K8KgHpo00D3AXmX+mmgcKzAfAA4XmeVTxRIH5P6Eo/W/i7prv0bFqhgPZmIFaQMJD6z+5WD3NnmzMMOoBKBj1QNqoB0a6B9y1PtLfA3bUm+CQ9NBKk/DQ+kA/D9h9UE2xT6WaB0bBKBgFo4CBGgAA6UC2Ig/cY8oAAAAASUVORK5CYII=" alt="microsoft-excel">
+                                </span>
+                                <span v-else-if="dok.typ === 'pdf'">
+                                    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAACHklEQVR4nO3Xz0uUQRzH8edf8ReJ2iGFDqZ4Euzg1UfLFikTTDxEBhJBCUFmt6gIsSB08SIeokAXEb2FoOlBaDMslFzGiCWy/LXuO8ZhfdLFInNmd2g+MDzPHha+r2e/83xnPc/FRW/wc9Gy6nK6rQUkW8+YQ6ABsP12luSVCjMILQARM4dAF8AUAp0AYQChHSA0I4wAhEaEMYDQhDAKEBoQxgFiPyIrAX+zPAfwHQD7AHdCsLIIP9Yg3G0h4EuMvSR3oLXcIsCl0qD4+dfq2nPZIsD5E7CTUIUvv7MQ4OfCh/mgfWQ6ay0DhO8FbZRIQKjYMkBzGWxtKMD7uSMXT0bnwMy4AkSnoT7PMkBDAcRXgzbqu2nhIJPZ3tq97A609iqLABNDqvDhhzAVUfexj9By2gJAcxlsfFezoK0SLp6C5QWFWHijfp1nt2HkOYwNQiQMj67BuYIsAQw9UMXKTSw/d9RAZIA/ZnI4CwBNJ+FbXBUUnQGxtL/I1J5IZWURlqLqfnM9wwB5hHjZl/5kZfu86IWuBmgsVENObuqDmZ3MEKA+H3pvwOdPQTGyQNnfhx0h5IHvcQe8egqj/er7oZIMAK5Wq435a+Tkla10lLeXbxJwqw7Wvqb3+PWzx1Y82gBy0qZaJi6CU+fg/WMtHm2AC0XpbxQ5vP7hzIPxFnrSqZ6+/PvYf/fQQZS9AN/M8hzAdwAc4L8GuLh4v81P2tZphAMmDCgAAAAASUVORK5CYII=" alt="pdf">
+                                </span>
+
+                                <span v-else>
+                                    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAtElEQVR4nO3WQQrCQBBE0TqFiPc/kiiepiQwCxFcRLpqkun60GQZHukhA6RzReE8AFxXgBDAC8DNCanOjqEY8vx4StdMDbkAuDu+DMUQuDA0QCwYmiByDI2QLRnGDZFhZkAkmFmQcozjz77nbrYEhBUvnB0DGQVSHAPpBmHx/CqQdqvlioF0g1B0uL8LpN1quWIg3SBc5YrCVSCuGMgokOIYyCiQ4hjIKJCjQniQ+btlIAnm3gBxwrjC8DB8AAAAAElFTkSuQmCC" alt="document--v1">                                </span>
+                            </span>
+
                             <div>
-                                <div class="text-2xl font-bold">ESF</div>
-                                <div class="text-sm">Stammblatt</div>
+                                <div class="text-l font-bold">{{ dok.name }}</div>
+                                <div class="text-sm text-gray-600">Version: {{ dok.version }}</div>
                             </div>
                         </div>
                     </a>
-                    <div class="rounded-lg shadow py-6 px-8 flex items-center gap-4 bg-zbb">
-                        <span class="text-5xl">📑</span>
-                        <div>
-                            <div class="text-2xl font-bold">ESF</div>
-                            <div class="text-sm">Stammblatt</div>
-                        </div>
-                    </div>
-
-                    <div class="rounded-lg shadow py-6 px-8 flex items-center gap-4 bg-zbb">
-                        <span class="text-5xl">📑</span>
-                        <div>
-                            <div class="text-2xl font-bold">ESF</div>
-                            <div class="text-sm">Stammblatt</div>
-                        </div>
-                    </div>
                 </div>
+            </div>
+        </div>
 
-
-          </div>
         </div>
       </div>
     </div>
@@ -1466,7 +1481,8 @@
     import Alert from '@/Components/Utils/SweetalertSuccessError.vue'
     const { flash } = usePage().props
     import Stammdaten from '@/Pages/Teilnehmer/Tabs/StammdatenSection.vue';
-
+    import InputText from 'primevue/inputtext';
+    import FloatLabel from 'primevue/floatlabel';
     const props = defineProps({
         teilnehmer: Object,
         gruppen: Array,
@@ -1482,6 +1498,7 @@
         notizkategorie: Array,
         notiztypen:Array,
         fahrtarten: Array,
+        dokumente: Array,
     });
 
 
@@ -1603,8 +1620,8 @@ const gefluechtet            = ref(!!props.teilnehmer.sozialedaten?.gefluechtet)
 const migrationshintergrund  = ref(!!props.teilnehmer.sozialedaten?.migrationshintergrund);
 const leistungsbezug_id      = ref(props.teilnehmer.sozialedaten?.leistungsbezug_id);
 const wohnsitz_stabil        = ref(!!props.teilnehmer.sozialedaten?.wohnsitz_stabil);
-
-
+const kundennummer = ref(props.teilnehmer.sozialedaten?.kundennummer || '');
+console.log('Kundennnummer:' + props.teilnehmer.sozialedaten?.kundennummer )
 const saveSozialdaten = () => {
   router.patch(
     route('person.sozialdaten.update', props.teilnehmer.id),
@@ -1616,6 +1633,7 @@ const saveSozialdaten = () => {
       leistungsbezug_id:        leistungsbezug_id.value,
       ist_wohnsitz_stabil: wohnsitz_stabil.value,
       teilnehmer_id: props.teilnehmer.id,
+      kundennummer: kundennummer.value,
     },
     {
       preserveScroll: true,
@@ -2371,6 +2389,19 @@ const addBank = () => {
   )
 }
 
+// ======= Exportieren  =======
+const exportSuche = ref("");
+
+const gefilterteDokumente = computed(() => {
+  if (!props.dokumente) return [];
+  const term = exportSuche.value.toLowerCase();
+  return props.dokumente.filter(
+    (d) =>
+      d.name.toLowerCase().includes(term) ||
+      d.typ.toLowerCase().includes(term) ||
+      (d.version && d.version.toString().includes(term))
+  );
+});
 
 
 // ====================== LÖSCHEN ======================

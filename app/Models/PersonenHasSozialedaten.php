@@ -16,7 +16,8 @@ class PersonenHasSozialedaten extends Model
         'migrationshintergrund',
         'gefluechtet',
         'drittstaatsangehoerig',
-        'person_id'
+        'person_id',
+        'kundennummer'
     ];
 
 

@@ -7,6 +7,7 @@ use App\Models\Raeume;
 use App\Models\Bereich;
 use App\Models\zeitraum;
 use App\Models\Abteilung;
+use App\Models\Dokumente;
 use App\Models\Teilnehmer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -56,7 +57,10 @@ class Projekt extends Model
     {
         return $this->belongsToMany(Raeume::class, 'projekt_has_raeumes', 'projekt_id', 'raum_id');
     }
-
+    public function dokumente()
+    {
+        return $this->belongsToMany(Dokumente::class, 'projekt_has_dokumentes', 'projekt_id', 'dokument_id');
+    }
 
     public function zeitraume()
     {

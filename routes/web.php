@@ -17,6 +17,7 @@ use App\Http\Controllers\ProjektController;
 use App\Http\Controllers\StandortController;
 use App\Http\Controllers\AbteilungController;
 use App\Http\Controllers\AbschlusseController;
+use App\Http\Controllers\ExportWordController;
 use App\Http\Controllers\FahrtartenController;
 use App\Http\Controllers\TeilnehmerController;
 use App\Http\Controllers\AnwesenheitController;
@@ -24,6 +25,7 @@ use App\Http\Controllers\ExportExcelController;
 use App\Http\Controllers\BerechtigungController;
 use App\Http\Controllers\KostenstelleController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\RaumlichkeitenController;
 use App\Http\Controllers\TransportartenController;
 use App\Http\Controllers\FahrtkostensaetzeController;
 use App\Http\Controllers\GruppeHasTeilnehmerController;
@@ -169,14 +171,17 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::delete('/teilnehmer/entfernen/{id}', [TeilnehmerController::class, 'destroy'])->name('teilnehmer.destroy');
     Route::get('/teilnehmer/bearbeiten/{id}', [TeilnehmerController::class, 'show'])->name('teilnehmer.edit');
     Route::patch('/teilnehmer/update/{id}', [TeilnehmerController::class, 'update'])->name('teilnehmer.update');
-    Route::patch('/teilnehmer/{person}/sozialdaten', [TeilnehmerController::class, 'updateSozialdaten'])
-    ->name('person.sozialdaten.update');
+    Route::patch('/teilnehmer/{person}/sozialdaten', [TeilnehmerController::class, 'updateSozialdaten'])->name('person.sozialdaten.update');
 
     // Personen Has Abschluss
     Route::post('/teilnehmer/abschluss/anlegen', [AbschlusseController::class, 'store'])->name('abschluss.store');
     Route::delete('/teilnehmer/abschluss/entfernen/{id}', [AbschlusseController::class, 'destroy'])->name('abschluss.destroy');
 
 
+
+
+    //Räumlichkeiten
+    Route::get('/raeumlichkeiten/', [RaumlichkeitenController::class, 'index'])->name('raumlichkeiten.index');
 
 
 
@@ -256,6 +261,16 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     //Teilnehmer Farhten
     Route::post('/fahrtkosten/Abrechnen/anlegen', [FahrtkostenAbrechnenController::class, 'store'])->name('fahrtkostenAbrechnung.store');
     Route::delete('/fahrtkosten/Abrechnen/delete/{id}', [FahrtkostenAbrechnenController::class, 'destroy'])->name('fahrtkostenAbrechnung.destroy');
+
+
+
+
+
+
+
+  //Dokumente Exportieren
+    Route::get('/export/dokument/{id}', [ExportWordController::class, 'info_teilnehmende'])->name('export.info_teilnehmende');
+
 
 });
 

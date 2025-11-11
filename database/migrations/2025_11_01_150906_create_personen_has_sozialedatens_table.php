@@ -20,6 +20,7 @@ return new class extends Migration
             $table->boolean('behinderung')->default(false);
             $table->boolean('wohnsitz_stabil')->default(true);
             $table->foreignId('leistungsbezug_id')->nullable()->constrained('leistungsbezueges')->nullOnDelete();
+            $table->string('kundennummer')->nullable();
             $table->timestamps();
         });
     }

@@ -443,6 +443,10 @@ class UserSeeder extends Seeder
                 'name' => 'Printing',
                 'beschreibung' => '',
             ],
+            [ // id = 24
+                'name' => 'Räumlichkeiten',
+                'beschreibung' => '',
+            ],
 
         ]);
 
@@ -662,9 +666,6 @@ class UserSeeder extends Seeder
                 'beschreibung' => null,
             ],
 
-
-
-
              [ // id = 28
                 'name' => 'fahrtarten.index',
                 'guard_name' => 'web',
@@ -712,6 +713,30 @@ class UserSeeder extends Seeder
                 'name' => 'printing.destroy',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '23',
+                'beschreibung' => null,
+            ],
+            [ // id = 36
+                'name' => 'räumlichkeiten.index',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '24',
+                'beschreibung' => null,
+            ],
+            [ // id = 37
+                'name' => 'räumlichkeiten.store',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '24',
+                'beschreibung' => null,
+            ],
+            [ // id = 38
+                'name' => 'räumlichkeiten.update',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '24',
+                'beschreibung' => null,
+            ],
+            [ // id = 39
+                'name' => 'räumlichkeiten.destroy',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '24',
                 'beschreibung' => null,
             ],
 
@@ -934,6 +959,10 @@ class UserSeeder extends Seeder
              [
                 'role_id' => '1',
                 'berechtigungskategorie_id' => '23',
+            ],
+             [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '24',
             ],
 
 

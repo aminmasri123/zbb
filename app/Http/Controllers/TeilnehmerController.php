@@ -196,6 +196,8 @@ class TeilnehmerController extends Controller
         $projekte = Projekt::orderBy('name')->get();
         $gruppen = Gruppe::where('projekt_id', Auth()->user()->current_team_id)->with('bereich', 'betreuer')->get();
 
+        $thisProjekt = Projekt::where('id', auth()->user()->current_team_id)->first();
+        $dokumente = $thisProjekt->dokumente;
         $kontakttypen = Kontakttypen::all();
         return Inertia::render('Teilnehmer/Edit', [
             'teilnehmer' => $personen->toArray(),
@@ -212,6 +214,7 @@ class TeilnehmerController extends Controller
             'notizprioritaet' => $notizprioritaet,
             'fahrtarten' => $fahrtarten,
             'gruppen' => $gruppen,
+            'dokumente' => $dokumente,
             ],
         );
     }
@@ -258,6 +261,7 @@ class TeilnehmerController extends Controller
             'leistungsbezug_id'         => ['nullable', 'exists:leistungsbezueges,id'],
             'ist_wohnsitz_stabil'       => ['required', 'boolean'],
             'teilnehmer_id'             => ['required', 'exists:personens,id'],
+            'kundennummer'              => ['string', 'nullable'],
         ]);
 
         // 2) Speichern (create/update anhand person_id)
@@ -270,17 +274,18 @@ class TeilnehmerController extends Controller
             'migrationshintergrund' => $validated['hat_migrationshintergrund'],
             'gefluechtet' => $validated['ist_gefluechtet'],
             'drittstaatsangehoerig' => $validated['ist_drittstaatsangehoerig'],
+            'kundennummer' =>  $validated['kundennummer'],
             ]
         );
 
-    // ↙️ hier kommt die Swal-Nachricht rein
-    return back()->with('swal', [
-        'icon'  => 'success',
-        'title' => 'Gespeichert',
-        'text'  => 'Die Sozialdaten wurden erfolgreich gespeichert.',
-        'timer' => 1600,
-        'showConfirmButton' => false,
-    ]);
+        // ↙️ hier kommt die Swal-Nachricht rein
+        return back()->with('swal', [
+            'icon'  => 'success',
+            'title' => 'Gespeichert',
+            'text'  => 'Die Sozialdaten wurden erfolgreich gespeichert.',
+            'timer' => 1600,
+            'showConfirmButton' => false,
+        ]);
 
     }
 
