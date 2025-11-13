@@ -2,7 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use Exception;
+use Inertia\Inertia;
+use App\Models\Raeume;
+use App\Models\Standort;
 use Illuminate\Http\Request;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class RaumlichkeitenController extends Controller
 {
@@ -11,7 +16,8 @@ class RaumlichkeitenController extends Controller
      */
     public function index()
     {
-        //
+        $standorte = Standort::with('raeume', 'adresse')->orderBy('name')->get();
+        return Inertia::render('Raum/Index', ['standorte' => $standorte]);
     }
 
     /**
@@ -27,8 +33,45 @@ class RaumlichkeitenController extends Controller
      */
     public function store(Request $request)
     {
-        //
+        // Validierung
+        $validated = $request->validate([
+            'name'          => 'required|string|max:100',
+            'standort_id'   => 'required|exists:standorts,id',
+            'typ'           => 'required|in:Büro,Elektroraum,Unterrichtsraum,Seminarraum,Besprechungsraum,Labor,Werkstatt,Lager,Küche,Aufenthaltsraum,Sanitärraum,Empfang,Serverraum,Archiv,Aula,Bibliothek,Arbeitsplatz,Copyroom,Technikraum,Hauswirtschaftsraum,Holzbereich,Metallbereich',
+            'kapazitaet'    => 'nullable|integer|min:0',
+            'beschreibung'  => 'nullable|string|max:1000',
+        ]);
+
+        try {
+
+            // Raum speichern
+            $raum = Raeume::create([
+                'name'          => $validated['name'],
+                'standort_id'   => $validated['standort_id'],
+                'typ'           => $validated['typ'],
+                'kapazitaet'    => $validated['kapazitaet'] ?? null,
+                'beschreibung'  => $validated['beschreibung'] ?? null,
+            ]);
+
+            // Standort inkl. aller Räume zurückgeben
+            $standort = Standort::with('raeume')->find($validated['standort_id']);
+
+            return response()->json([
+    'message' => 'Raum erfolgreich erstellt.',
+    'raum'    => $raum->load('standort')
+], 201);
+
+
+        } catch (\Exception $e) {
+
+            return response()->json([
+                'error'   => 'Beim Erstellen des Raumes ist ein Fehler aufgetreten.',
+                'details' => $e->getMessage(),
+            ], 500);
+        }
     }
+
+
 
     /**
      * Display the specified resource.
@@ -59,6 +102,15 @@ class RaumlichkeitenController extends Controller
      */
     public function destroy(string $id)
     {
-        //
+        try {
+            $raum = Raeume::findOrFail($id);
+            $raum->delete();
+
+            return response()->json(['message' => 'der Raum: ' . $raum->name . ' wurde  erfolgreich gelöscht!'], 200);
+        } catch (ModelNotFoundException $e) {
+            return response()->json(['message' => 'Die Daten konnte nicht gefunden werden.'], 404);
+        } catch (Exception $e) {
+            return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
+        }
     }
 }

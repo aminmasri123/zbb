@@ -46,6 +46,8 @@ const save = async () => {
     resetForm();
     emit('close');
   } catch (error) {
+      console.log(error.response.data); // <-- GEFÄHRLICH WICHTIG !!
+
     Swal.fire('Fehler', error.response?.data?.message || 'Speichern fehlgeschlagen', 'error');
   }
 };
@@ -76,31 +78,36 @@ const save = async () => {
             </div>
             <div class="mb-4 w-full mx-1">
                 <FloatLabel variant="on">
-                    <DatePicker v-model="form.antragsdatum" dateFormat="yy-mm-dd" class="w-full"/>
+                    <DatePicker v-model="form.antragsdatum" dateFormat="yy-mm-dd" class="w-full" @update:modelValue="(v) => form.antragsdatum = v.toISOString().split('T')[0]"
+/>
                     <label>Antragsdatum</label>
                 </FloatLabel>
             </div>
             <div class="mb-4 w-full mx-1">
                 <FloatLabel variant="on">
-                    <DatePicker v-model="form.starttermin" dateFormat="yy-mm-dd" class="w-full"/>
+                    <DatePicker v-model="form.starttermin" dateFormat="yy-mm-dd" class="w-full" @update:modelValue="(v) => form.starttermin = v.toISOString().split('T')[0]"
+/>
                     <label>Starttermin</label>
                 </FloatLabel>
             </div>
             <div class="mb-4 w-full mx-1">
                 <FloatLabel variant="on">
-                    <DatePicker v-model="form.anfangsdatum" dateFormat="yy-mm-dd" class="w-full"/>
+                    <DatePicker v-model="form.anfangsdatum" dateFormat="yy-mm-dd" class="w-full" @update:modelValue="(v) => form.anfangsdatum = v.toISOString().split('T')[0]"
+/>
                     <label>Anfangsdatum</label>
                 </FloatLabel>
             </div>
             <div class="mb-4 w-full mx-1">
                 <FloatLabel variant="on">
-                    <DatePicker v-model="form.endtermin" dateFormat="yy-mm-dd" class="w-full"/>
+                    <DatePicker v-model="form.endtermin" dateFormat="yy-mm-dd" class="w-full" @update:modelValue="(v) => form.endtermin = v.toISOString().split('T')[0]"
+/>
                     <label>Endtermin</label>
                 </FloatLabel>
             </div>
             <div class="mb-4 w-full mx-1">
                 <FloatLabel variant="on">
-                    <DatePicker v-model="form.enddatum" dateFormat="yy-mm-dd" class="w-full"/>
+                    <DatePicker v-model="form.enddatum" dateFormat="yy-mm-dd" class="w-full" @update:modelValue="(v) => form.enddatum = v.toISOString().split('T')[0]"
+/>
                     <label>Enddatum</label>
                 </FloatLabel>
             </div>

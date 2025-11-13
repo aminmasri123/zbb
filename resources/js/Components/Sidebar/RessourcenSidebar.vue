@@ -38,8 +38,8 @@
                     <span :class="{'rotate-180': activeMenu === 'benutzer', 'hidden': displayHideTextSidebar === true, 'text-zbb': $page.component.startsWith('User')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
                 </a>
                 <ul v-show="activeMenu === 'räumlichkeiten'" class="pl-6 mt-2 space-y-2">
-                    <li v-if="$page.props.permissions.includes('räumlichkeiten.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('raumlichkeiten.index')">{{$t('Raumübersicht')}}</Link></li>
-                    <li v-if="$page.props.permissions.includes('räumlichkeiten.store')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('raumlichkeiten.index')">{{$t('Raum anlegen')}}</Link></li>
+                    <li v-if="$page.props.permissions.includes('räumlichkeiten.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('raeumlichkeiten.index')">{{$t('Raumübersicht')}}</Link></li>
+                    <li v-if="$page.props.permissions.includes('räumlichkeiten.store')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('raeumlichkeiten.index')">{{$t('Raum anlegen')}}</Link></li>
                 </ul>
             </li>
 

@@ -181,7 +181,9 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
 
 
     //Räumlichkeiten
-    Route::get('/raeumlichkeiten/', [RaumlichkeitenController::class, 'index'])->name('raumlichkeiten.index');
+    Route::get('/ressourcen/standort/raeumlichkeiten/', [RaumlichkeitenController::class, 'index'])->name('raeumlichkeiten.index');
+    Route::delete('/ressourcen/standort/raeumlichkeiten/entfernen/{id}', [RaumlichkeitenController::class, 'destroy'])->name('raeumlichkeiten.destroy');
+    Route::post('//essourcen/standort/raeumlichkeiten//anlegen', [RaumlichkeitenController::class, 'store'])->name('raeumlichkeiten.store');
 
 
 
@@ -270,6 +272,9 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
 
   //Dokumente Exportieren
     Route::get('/export/dokument/{id}', [ExportWordController::class, 'info_teilnehmende'])->name('export.info_teilnehmende');
+    Route::get('/export/dokument/bildungsvertrag_inteqra/{id}', [ExportWordController::class, 'bildungsvertrag_inteqra'])->name('export.bildungsvertrag_inteqra');
+    Route::get('/export/dokument/datenschutzhinweis_art13/{id}', [ExportWordController::class, 'datenschutzhinweis_art13'])->name('export.datenschutzhinweis_art13');
+    Route::get('/export/dokument/einverstaendnis_datenschutz_esf/{id}', [ExportWordController::class, 'einverstaendnis_datenschutz_esf'])->name('export.einverstaendnis_datenschutz_esf');
 
 
 });

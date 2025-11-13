@@ -23,7 +23,20 @@ class AdresseController extends Controller
             ]);
 
             // Erstellen der Adresse
-            $adresse = Adresse::create($data);
+            //$adresse = Adresse::create($data);
+            $adresse = Adresse::updateOrCreate(
+    [
+        'model_type' => $data['model_type'],
+        'model_id'   => $data['model_id'],
+    ],
+    [
+        'strasse'     => $data['strasse'],
+        'hausnummer'  => $data['hausnummer'],
+        'plz'         => $data['plz'],
+        'stadt'       => $data['stadt'],
+        'land'        => $data['land'],
+    ]
+);
 
             // Erfolgreiche Rückmeldung an den Nutzer
             return redirect()->back()->with('success', 'Adresse erfolgreich hinzugefügt!');

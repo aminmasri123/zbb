@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Raeume;
+use App\Models\Adresse;
 use App\Models\Projekt;
 use App\Models\Personen;
 use Illuminate\Database\Eloquent\Model;
@@ -28,6 +30,17 @@ class Standort extends Model
     {
         return $this->belongsToMany(User::class, 'standort_has_users', 'standort_id', 'user_id');
     }
+
+    public function raeume(){
+        return $this->hasMany(Raeume::class);
+    }
+
+     public function adresse()
+    {
+        return $this->morphMany(Adresse::class, 'model');
+    }
+
+
 
 
 }

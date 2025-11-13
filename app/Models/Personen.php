@@ -83,14 +83,10 @@ class Personen extends Model
         return $this->belongsToMany(Standort::class, 'standort_has_personens', 'personen_id', 'standort_id');
     }
 
-
-
     public function adresses()
     {
         return $this->morphMany(Adresse::class, 'model');
     }
-
-
 
     public function baenke()
     {

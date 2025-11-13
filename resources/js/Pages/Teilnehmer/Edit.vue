@@ -747,7 +747,7 @@
                 <div v-for="dok in gefilterteDokumente" :key="dok.id" class="w-1/4 cursor-pointer" >
                     <a
                         v-if="dok && dok.dateipfadName"
-                        :href="route('export.info_teilnehmende', { id: teilnehmer.id, pfad: dok.dateipfad })"
+                        :href="route('export.' + dok.dateipfadName, { id: teilnehmer.id, pfad: dok.dateipfad })"
                         class="block"
                     >
 

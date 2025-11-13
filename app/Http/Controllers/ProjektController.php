@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Exception;
 use Inertia\Inertia;
 use App\Models\Projekt;
 use App\Models\Abteilung;
@@ -34,7 +35,7 @@ class ProjektController extends Controller
             ->orderBy('projekts.id', 'desc') // Sortiere nach Projektname
             ->paginate(100) // Paginierung
             ->withQueryString();
-            
+
             // Standardmäßige Rückgabe für die Inertia-Ansicht
 
         return Inertia::render('Projekt/Index', [
@@ -76,51 +77,55 @@ class ProjektController extends Controller
         //
     }
 
-    public function store(Request $request)
+   public function store(Request $request)
     {
+
+        // Validierung
         $validatedData = $request->validate([
-            'name' => 'required|max:50',
+            'name'         => 'required|max:50',
             'kostenstelle' => 'required|max:50',
-            'abteilung' => 'required|exists:abteilungs,id',
-            'antragsdatum'  =>  'required|date',
-            'starttermin'  =>  'required|date',
-            'anfangsdatum'  =>  'required|date',
-            'endtermin'  =>  'required|date',
-            'enddatum'  =>  'required|date',
+            'abteilung'    => 'required|exists:abteilungs,id',
+            'antragsdatum' => 'required|date',
+            'starttermin'  => 'required|date',
+            'anfangsdatum' => 'required|date',
+            'endtermin'    => 'required|date',
+            'enddatum'     => 'required|date',
         ]);
 
         try {
-            // Projekt erstellen
+            // 1️⃣ Projekt erstellen
             $projekt = Projekt::create([
-                'name' => $validatedData['name'],
+                'name'         => $validatedData['name'],
                 'kostenstelle' => $validatedData['kostenstelle'],
                 'abteilung_id' => $validatedData['abteilung'],
             ]);
 
-            // Projektzeitraum erstellen
-            $projekt->projektzeitraume()->create([
+            // 2️⃣ Zeitraum anlegen
+            $projekt->zeitraume()->create([
                 'antragsdatum' => $validatedData['antragsdatum'],
-                'starttermin' => $validatedData['starttermin'],
+                'starttermin'  => $validatedData['starttermin'],
                 'anfangsdatum' => $validatedData['anfangsdatum'],
-                'endtermin' => $validatedData['endtermin'],
-                'enddatum' => $validatedData['enddatum'],
+                'endtermin'    => $validatedData['endtermin'],
+                'enddatum'     => $validatedData['enddatum'],
+                'model_type'   => Projekt::class,
+                'model_id'     => $projekt->id,
             ]);
 
-            // 👉 Projekt nochmal mit Relationen laden
-            $projekt->load(['abteilung', 'projektzeitraume']);
-
+            // 3️⃣ Projekt mit Relationen zurückgeben
             return response()->json([
                 'message' => 'Projekt erfolgreich erstellt.',
-                'projekt' => $projekt
+                'projekt' => $projekt->load(['abteilung', 'zeitraume'])
             ], 201);
 
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
+
             return response()->json([
-                'error' => 'Beim Erstellen des Projektes ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.',
+                'error'   => 'Beim Erstellen des Projekts ist ein Fehler aufgetreten.',
                 'details' => $e->getMessage()
             ], 500);
         }
     }
+
 
     /**
      * Display the specified resource.
