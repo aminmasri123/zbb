@@ -16,18 +16,22 @@ use App\Http\Controllers\PartnerController;
 use App\Http\Controllers\ProjektController;
 use App\Http\Controllers\StandortController;
 use App\Http\Controllers\AbteilungController;
+use App\Http\Controllers\FahrzeugeController;
 use App\Http\Controllers\AbschlusseController;
 use App\Http\Controllers\ExportWordController;
 use App\Http\Controllers\FahrtartenController;
 use App\Http\Controllers\TeilnehmerController;
 use App\Http\Controllers\AnwesenheitController;
+use App\Http\Controllers\DienstwagenController;
 use App\Http\Controllers\ExportExcelController;
 use App\Http\Controllers\BerechtigungController;
 use App\Http\Controllers\KostenstelleController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\RaumlichkeitenController;
 use App\Http\Controllers\TransportartenController;
+use App\Http\Controllers\DienstwagenkostenController;
 use App\Http\Controllers\FahrtkostensaetzeController;
+use App\Http\Controllers\DienstwagenwartungController;
 use App\Http\Controllers\GruppeHasTeilnehmerController;
 use App\Http\Controllers\FahrtkostenAbrechnenController;
 use App\Http\Controllers\ProjektHasTeilnehmerController;
@@ -265,7 +269,35 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::delete('/fahrtkosten/Abrechnen/delete/{id}', [FahrtkostenAbrechnenController::class, 'destroy'])->name('fahrtkostenAbrechnung.destroy');
 
 
+    Route::prefix('ressourcen')->name('dienstwagen.')->group(function () {
+        // Fahrzeuge
+        Route::get('/dienstwagen', [DienstwagenController::class, 'index'])->name('index');
+        Route::get('/dienstwagen/edit/{id}', [DienstwagenController::class, 'edit'])->name('edit');
 
+        Route::get('/dienstwagen/create', [DienstwagenController::class, 'create'])->name('create');
+        Route::post('/dienstwagen', [DienstwagenController::class, 'store'])->name('store');
+        Route::delete('/dienstwagen/{wagen}', [DienstwagenController::class, 'destroy'])->name('destroy');
+
+
+
+        Route::put('dienstwagen/update/{id}', [DienstwagenController::class, 'update'])->name('update');
+
+        // Fahrer
+        Route::get('/drivers', [DienstwagenController::class, 'index'])->name('drivers.index');
+
+        // Wartung
+        Route::get('/wartung', [DienstwagenwartungController::class, 'index'])->name('wartung.index');
+        Route::post('/wartung', [DienstwagenwartungController::class, 'store'])->name('wartung.store');
+        Route::put('/wartung/edit/{id}', [DienstwagenwartungController::class, 'update'])->name('wartung.update');
+        Route::delete('/wartung/{id}', [DienstwagenwartungController::class, 'destroy'])->name('wartung.destroy');
+
+        // Kosten
+        Route::get('/kosten', [DienstwagenkostenController::class, 'index'])->name('kosten.index');
+        Route::post('/kosten', [DienstwagenkostenController::class, 'store'])->name('kosten.store');
+
+        // Berichte
+        Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
+    });
 
 
 

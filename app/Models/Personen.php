@@ -13,10 +13,12 @@ use App\Models\Projekt;
 use App\Models\Standort;
 use App\Models\Zielgruppe;
 use App\Models\Abschluesse;
+use App\Models\Dienstwagen;
 use App\Models\Anwesenheiten;
 use App\Models\GruppeHasPersonen;
 use App\Models\PersonenHasNotizen;
 use App\Models\ProjektHasPersonen;
+use App\Models\Dienstwagenfahrtenbuch;
 use App\Models\PersonenHasAbschluesse;
 use App\Models\PersonenHasSozialedaten;
 use Illuminate\Database\Eloquent\Model;
@@ -127,6 +129,16 @@ class Personen extends Model
         return $this->belongsToMany(Zielgruppe::class, 'personen_has_zielgruppes', 'person_id', 'zielgruppe_id');
     }
 
+
+    public function dienstwagen()
+    {
+        return $this->belongsToMany(Dienstwagen::class, 'dienstwagen_has_personens', 'personen_id', 'dienstwagen_id');
+    }
+
+    public function dienstwagenfahrten()
+    {
+        return $this->hasMany(Dienstwagenfahrtenbuch::class);
+    }
 
 
 

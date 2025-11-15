@@ -17,15 +17,17 @@
             </li>
 
             <!-- Dienstwagen Submenu -->
-            <li v-if="['benutzer.index', 'benutzer.store'].some(permission => $page.props.permissions.includes(permission))" class="submenu">
-                <a href="#" @click.prevent="toggleMenu('benutzer')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
+            <li v-if="['dienstwagen.index', 'dienstwagen.store'].some(permission => $page.props.permissions.includes(permission))" class="submenu">
+                <a href="#" @click.prevent="toggleMenu('dienstwagen')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                     <i class="la la-car la-lg mr-2"></i>
                     <span v-if="!displayHideTextSidebar">{{$t('Dienstwagen')}}</span>
-                    <span :class="{'rotate-180': activeMenu === 'benutzer', 'hidden': displayHideTextSidebar === true, 'text-zbb': $page.component.startsWith('User')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
+                    <span :class="{'rotate-180': activeMenu === 'dienstwagen', 'hidden': displayHideTextSidebar === true, 'text-zbb': $page.component.startsWith('User')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
                 </a>
-                <ul v-show="activeMenu === 'benutzer'" class="pl-6 mt-2 space-y-2">
-                    <li v-if="$page.props.permissions.includes('benutzer.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('user.index')">{{$t('teamübersicht')}}</Link></li>
-                    <li v-if="$page.props.permissions.includes('benutzer.store')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('user.index')">{{$t('team_anlegen')}}</Link></li>
+                <ul v-show="activeMenu === 'dienstwagen'" class="pl-6 mt-2 space-y-2">
+                    <li v-if="$page.props.permissions.includes('dienstwagen.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dienstwagen.index')">{{$t('Dienstwagenübersicht')}}</Link></li>
+                    <li v-if="$page.props.permissions.includes('dienstwagen.store')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dienstwagen.index')">{{$t('Dienstwagen anlegen')}}</Link></li>
+                    <li v-if="$page.props.permissions.includes('dienstwagen.wartung.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dienstwagen.wartung.index')">{{$t('Wartungen ')}}</Link></li>
+
                 </ul>
             </li>
 

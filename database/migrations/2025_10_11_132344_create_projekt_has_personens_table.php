@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('personen_id')->constrained()->onDelete('cascade');
             $table->foreignId('projekt_id')->constrained()->onDelete('cascade');
+
             $table->enum('status', ['angemeldet', 'aktiv', 'pausiert', 'abgeschlossen', 'abgebrochen'])->default('aktiv');
             $table->text('bemerkung')->nullable();
             $table->timestamps();

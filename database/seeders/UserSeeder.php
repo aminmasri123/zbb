@@ -447,6 +447,10 @@ class UserSeeder extends Seeder
                 'name' => 'Räumlichkeiten',
                 'beschreibung' => '',
             ],
+            [ // id = 25
+                'name' => 'Dienstwagen',
+                'beschreibung' => '',
+            ],
 
         ]);
 
@@ -742,6 +746,40 @@ class UserSeeder extends Seeder
 
 
 
+            [ // id = 40
+                'name' => 'dienstwagen.index',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '25',
+                'beschreibung' => null,
+            ],
+            [ // id = 41
+                'name' => 'dienstwagen.store',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '25',
+                'beschreibung' => null,
+            ],
+            [ // id = 42
+                'name' => 'dienstwagen.update',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '25',
+                'beschreibung' => null,
+            ],
+            [ // id = 43
+                'name' => 'dienstwagen.destroy',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '25',
+                'beschreibung' => null,
+            ],
+            [ // id = 44
+                'name' => 'dienstwagen.wartung.index',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '25',
+                'beschreibung' => null,
+            ],
+
+
+
+
 
 
 
@@ -960,9 +998,13 @@ class UserSeeder extends Seeder
                 'role_id' => '1',
                 'berechtigungskategorie_id' => '23',
             ],
-             [
+            [
                 'role_id' => '1',
                 'berechtigungskategorie_id' => '24',
+            ],
+            [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '25',
             ],
 
 

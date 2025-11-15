@@ -198,7 +198,20 @@
     "Lager": "Lager",
     "IT-Service": "IT-Service",
     "Bestellungen": "Bestellungen",
-    "Termine": "Termine"
+    "Termine": "Termine",
+    "Wartungen": "Wartungen",
+    "Wartungsmanagement": "Wartungsmanagement",
+    "Dienstwagenwartungverwaltung": "Dienstwagenwartungverwaltung",
+    "Finanzen": "Finanzen",
+    "Räumlichkeiten": "Räumlichkeiten",
+    "Geräte": "Geräte",
+    "Raumübersicht": "Raumübersicht",
+    "Raum": "Raum",
+    "Raum anlegen": "Raum anlegen",
+    "Raum bearbeiten": "Raum bearbeiten",
+    "Wartungen ": "Wartungen ",
+    "Dienstwagen anlegen": "Dienstwagen anlegen"
+
 
 
 }
