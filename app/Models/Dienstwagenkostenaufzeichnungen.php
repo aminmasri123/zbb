@@ -18,6 +18,10 @@ class Dienstwagenkostenaufzeichnungen extends Model
         'beschreibung'
     ];
 
+    protected $dates = [
+        'datum',
+    ];
+
     public function dienstwagen()
     {
         return $this->belongsTo(Dienstwagen::class);

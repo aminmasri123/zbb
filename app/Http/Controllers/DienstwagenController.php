@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Exception;
+use Carbon\Carbon;
 use Inertia\Inertia;
 use App\Models\Personen;
 use App\Models\Standort;
@@ -43,6 +44,9 @@ class DienstwagenController extends Controller
             'naechste_wartung'  => 'nullable|date',
             //'allowed_drivers' => 'nullable|array',
         ]);
+
+        $data['naechste_wartung'] = Carbon::parse($data['naechste_wartung'])->format('Y-m-d');
+
         $vehicle = Dienstwagen::create($data);
 
         // Fahrerberechtigungen

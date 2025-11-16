@@ -22,21 +22,22 @@ const props = defineProps({
         type: [Array, Object],
         required: true,
     },
+    betreuer: {
+        type: [Array, Object],
+        required: true,
+    },
 
      bereiche: {
         type: [Array, Object],
         required: true,
     },
-    personal: {
-        type: [Array, Object],
-        required: true,
-    },
+
     projekt: {
         type: [Array, Object],
         required: true,
     },
 });
-console.log('Props gruppen:', props.projekt);
+console.log('Props gruppen:', props.betreuer);
 // ✅ Lokale Liste – unterstützt Array ODER paginierte Daten
 let localGruppen = ref(
   Array.isArray(props.gruppen)
@@ -199,7 +200,7 @@ watch(search, () => {
 
 
         <!-- Modals -->
-        <ModalCreate :visible="isModalCreateOpen" :projekt="props.projekt"
+        <ModalCreate :visible="isModalCreateOpen" :projekt="props.projekt" :betreuer="props.betreuer"
                                  @close="isModalCreateOpen = false"
                                  @added="(gruppe) => { localGruppen.unshift(gruppe); applySearchFilter(); }"
         />

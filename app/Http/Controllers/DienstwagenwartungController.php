@@ -28,56 +28,57 @@ class DienstwagenwartungController extends Controller
     /**
      * Neuen Wartungseintrag speichern
      */
-public function store(Request $request)
-{
-    try {
-        // 🔹 Eingabedaten validieren
-        $data = $request->validate([
-            'dienstwagen_id'  => 'required|exists:dienstwagens,id',
-            'art'             => 'required|string|max:255',
-            'datum'           => 'required|date',
-            'kilometerstand'  => 'required|integer|min:0',
-            'werkstatt'       => 'nullable|string|max:255',
-            'kosten'          => 'nullable|numeric|min:0',
-            'notizen'         => 'nullable|string',
-        ]);
+    public function store(Request $request)
+    {
+        try {
+            // 🔹 Eingaben validieren
+            $data = $request->validate([
+                'dienstwagen_id'  => 'required|exists:dienstwagens,id',
+                'art'             => 'required|string|max:255',
+                'datum'           => 'required|date',
+                'kilometerstand'  => 'required|integer|min:0',
+                'werkstatt'       => 'nullable|string|max:255',
+                'kosten'          => 'nullable|numeric|min:0',
+                'notizen'         => 'nullable|string',
+            ]);
 
-        // 🔹 Datum korrigieren (ISO → MySQL-kompatibel)
-        if (!empty($data['datum'])) {
-            try {
-                $data['datum'] = Carbon::parse($data['datum'])->format('Y-m-d');
-            } catch (Exception $e) {
-                throw new Exception("Ungültiges Datumsformat übermittelt: " . $data['datum']);
-            }
+            // 🔹 Datum formatieren (z. B. 2025-11-12)
+            $data['datum'] = Carbon::parse($data['datum'])->format('Y-m-d');
+
+            // 🔹 Datensatz speichern
+            $record = Dienstwagenwartungsaufzeichnungen::create($data);
+
+            // 🔹 Relation laden (Fahrzeug anzeigen)
+            $record->load('dienstwagen');
+
+            // 🔹 JSON-Antwort zurückgeben
+            return response()->json([
+                'success' => true,
+                'message' => '✅ Wartungseintrag erfolgreich hinzugefügt.',
+                'record' => $record,
+            ], 201);
+        } catch (QueryException $e) {
+            Log::error('SQL-Fehler beim Speichern eines Wartungseintrags:', [
+                'error' => $e->getMessage(),
+                'data' => $request->all(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => '❌ Datenbankfehler: ' . $e->getMessage(),
+            ], 500);
+        } catch (Exception $e) {
+            Log::error('Allgemeiner Fehler beim Speichern eines Wartungseintrags:', [
+                'error' => $e->getMessage(),
+                'data' => $request->all(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => '⚠️ ' . $e->getMessage(),
+            ], 500);
         }
-
-        // 🔹 Eintrag speichern
-        Dienstwagenwartungsaufzeichnungen::create($data);
-
-        // 🔹 Erfolgsmeldung an UI zurückgeben
-        return back()->with('success', '✅ Wartungseintrag erfolgreich hinzugefügt.');
     }
-
-    // 🔸 Datenbankfehler abfangen
-    catch (QueryException $e) {
-        Log::error('SQL-Fehler beim Speichern eines Wartungseintrags:', [
-            'error' => $e->getMessage(),
-            'data' => $request->all(),
-        ]);
-
-        return back()->with('error', '❌ Ein Datenbankfehler ist aufgetreten. Bitte erneut versuchen.');
-    }
-
-    // 🔸 Andere Fehler abfangen
-    catch (Exception $e) {
-        Log::error('Allgemeiner Fehler beim Speichern eines Wartungseintrags:', [
-            'error' => $e->getMessage(),
-            'data' => $request->all(),
-        ]);
-
-        return back()->with('error', '⚠️ ' . $e->getMessage());
-    }
-}
 
 public function update(Request $request, $id)
 {

@@ -39,6 +39,7 @@ class GruppeHasTeilnehmerController extends Controller
 
     public function store(Request $request)
     {
+
         $validated = $request->validate([
             'gruppe_id'    => 'required|exists:gruppes,id',
             'teilnehmer'   => 'required|array|min:1',
@@ -120,7 +121,8 @@ class GruppeHasTeilnehmerController extends Controller
                 : 'Keine neuen Teilnehmer hinzugefügt.',
             'added'   => $addedTeilnehmer,
             'already' => $alreadyTeilnehmer,
-        ]);
+        ], 200);
+
     }
 
 

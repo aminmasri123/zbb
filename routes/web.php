@@ -31,6 +31,7 @@ use App\Http\Controllers\RaumlichkeitenController;
 use App\Http\Controllers\TransportartenController;
 use App\Http\Controllers\DienstwagenkostenController;
 use App\Http\Controllers\FahrtkostensaetzeController;
+use App\Http\Controllers\DienstwagenreportsController;
 use App\Http\Controllers\DienstwagenwartungController;
 use App\Http\Controllers\GruppeHasTeilnehmerController;
 use App\Http\Controllers\FahrtkostenAbrechnenController;
@@ -296,7 +297,9 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
         Route::post('/kosten', [DienstwagenkostenController::class, 'store'])->name('kosten.store');
 
         // Berichte
-        Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
+        Route::get('/dienstwagen/reports', [DienstwagenreportsController::class, 'index'])->name('reports.index');
+
+
     });
 
 
@@ -307,8 +310,12 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::get('/export/dokument/bildungsvertrag_inteqra/{id}', [ExportWordController::class, 'bildungsvertrag_inteqra'])->name('export.bildungsvertrag_inteqra');
     Route::get('/export/dokument/datenschutzhinweis_art13/{id}', [ExportWordController::class, 'datenschutzhinweis_art13'])->name('export.datenschutzhinweis_art13');
     Route::get('/export/dokument/einverstaendnis_datenschutz_esf/{id}', [ExportWordController::class, 'einverstaendnis_datenschutz_esf'])->name('export.einverstaendnis_datenschutz_esf');
+    Route::get('/export/dokument/fehlzeitenkonzept/{id}', [ExportWordController::class, 'fehlzeitenkonzept'])->name('export.fehlzeitenkonzept');
 
-
+    Route::get('/export/dokument/einverstaendnis_foto/{id}', [ExportWordController::class, 'einverstaendnis_foto'])->name('export.einverstaendnis_foto');
+    Route::get('/export/dokument/einverstaendnis_elternarbeit/{id}', [ExportWordController::class, 'einverstaendnis_elternarbeit'])->name('export.einverstaendnis_elternarbeit');
+    Route::get('/export/dokument/edv_nutzungsvereinbarung/{id}', [ExportWordController::class, 'edv_nutzungsvereinbarung'])->name('export.edv_nutzungsvereinbarung');
+    Route::get('/export/dokument/hausordnung_v1/{id}', [ExportWordController::class, 'hausordnung_v1'])->name('export.hausordnung_v1');
 });
 
 

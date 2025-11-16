@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onBeforeUnmount  } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import Banner from '@/Components/Banner.vue';
 import NavigationMenu from '@/Components/Header/NavbarHeader.vue';
-import ToastSuccessError from '@/Components/Utils/ToastSuccessError.vue';
+//import ToastSuccessError from '@/Components/Utils/ToastSuccessError.vue';
 // Sidebar-Komponenten importieren
 import DashboardSidebar from '@/Components/Sidebar/DashboardSidebar.vue';
 import ProfileSidebar from '@/Components/Sidebar/ProfileSidebar.vue';
@@ -115,7 +115,7 @@ export default {
     <div>
         <Head :title="title" />
         <!-- Sweetalert Success Error Message -->
-             <ToastSuccessError />
+             <!-- <ToastSuccessError /> -->
 
              <SweetalertSuccessError />
 

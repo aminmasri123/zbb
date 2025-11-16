@@ -20,6 +20,9 @@ class Dienstwagenfahrtenbuch extends Model
         'zweck',
         'ziel'
     ];
+    protected $dates = [
+        'datum',
+    ];
 
     public function dienstwagen()
     {

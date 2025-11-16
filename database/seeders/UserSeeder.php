@@ -347,6 +347,34 @@ class UserSeeder extends Seeder
 
         ]);
 
+        DB::table('projekt_has_bereiches')->insert([
+            [ // id = 1
+                'projekt_id' => 1,
+                'bereich_id' => 1,
+                'aktiv' => 1,
+            ],
+            [ // id = 2
+                'projekt_id' => 1,
+                'bereich_id' => 2,
+                'aktiv' => 1,
+            ],
+            [ // id = 3
+                'projekt_id' => 1,
+                'bereich_id' => 3,
+                'aktiv' => 1,
+            ],
+            [ // id = 4
+                'projekt_id' => 1,
+                'bereich_id' => 4,
+                'aktiv' => 1,
+            ],
+            [ // id = 5
+                'projekt_id' => 1,
+                'bereich_id' => 5,
+                'aktiv' => 1,
+            ],
+        ]);
+
 
 
         DB::table('berechtigungskategories')->insert([
@@ -498,40 +526,41 @@ class UserSeeder extends Seeder
                 'name' => 'dashboard.index',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '1',
-                'beschreibung' => null,
+                'beschreibung' => null
             ],
             [ // id = 2
                 'name' => 'berechtigung.index',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '8',
-                'beschreibung' => null,
+                'beschreibung' => null
             ],
             [ // id = 3
                 'name' => 'berechtigung.store',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '8',
-                'beschreibung' => null,
+                'beschreibung' => null
+
             ],
 
             [ // id = 4
                 'name' => 'benutzer.index',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '9',
-                'beschreibung' => null,
+                'beschreibung' => null
 
             ],
             [ // id = 5
                 'name' => 'benutzer.store',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '9',
-                'beschreibung' => null,
+                'beschreibung' => null
 
             ],
             [ // id = 6
                 'name' => 'benutzer.update',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '9',
-                'beschreibung' => null,
+                'beschreibung' => null
 
             ],
             [ // id = 7
@@ -544,83 +573,83 @@ class UserSeeder extends Seeder
 
              [ // id = 8
                 'name' => 'kooperationspartner.index',
-                'beschreibung' => 'web',
+                'guard_name' => 'web',
                 'berechtigungskategorie_id' => '2',
                 'beschreibung' => null,
 
             ],
             [ // id = 9
                 'name' => 'kooperationspartner.store',
-                'beschreibung' => 'web',
+                'guard_name' => 'web',
                 'berechtigungskategorie_id' => '2',
                 'beschreibung' => null,
 
             ],
             [ // id = 10
                 'name' => 'kooperationspartner.update',
-                'beschreibung' => 'web',
+                'guard_name' => 'web',
                 'berechtigungskategorie_id' => '2',
                 'beschreibung' => null,
 
             ],
             [ // id = 11
                 'name' => 'kooperationspartner.destroy',
-                'beschreibung' => 'web',
+                'guard_name' => 'web',
                 'berechtigungskategorie_id' => '2',
                 'beschreibung' => null,
             ],
 
             [ // id = 12
                 'name' => 'bereich.index',
-                'beschreibung' => 'web',
+                'guard_name' => 'web',
                 'berechtigungskategorie_id' => '2',
                 'beschreibung' => null,
             ],
             [ // id = 13
                 'name' => 'bereich.store',
-                'beschreibung' => 'web',
+                'guard_name' => 'web',
                 'berechtigungskategorie_id' => '2',
                 'beschreibung' => null,
             ],
             [ // id = 14
                 'name' => 'bereich.destroy',
-                'beschreibung' => 'web',
+                'guard_name' => 'web',
                 'berechtigungskategorie_id' => '2',
                 'beschreibung' => null,
             ],
             [ // id = 15
                 'name' => 'projekt.index',
-                'beschreibung' => 'web',
+                'guard_name' => 'web',
                 'berechtigungskategorie_id' => '19',
                 'beschreibung' => null,
             ],
             [ // id = 16
                 'name' => 'projekt.store',
-                'beschreibung' => 'web',
+                'guard_name' => 'web',
                 'berechtigungskategorie_id' => '19',
                 'beschreibung' => null,
             ],
             [ // id = 17
                 'name' => 'projekt.destroy',
-                'beschreibung' => 'web',
+                'guard_name' => 'web',
                 'berechtigungskategorie_id' => '19',
                 'beschreibung' => null,
             ],
             [ // id = 18
                 'name' => 'abteilung.index',
-                'beschreibung' => 'web',
+                'guard_name' => 'web',
                 'berechtigungskategorie_id' => '18',
                 'beschreibung' => null,
             ],
             [ // id = 19
                 'name' => 'abteilung.store',
-                'beschreibung' => 'web',
+                'guard_name' => 'web',
                 'berechtigungskategorie_id' => '18',
                 'beschreibung' => null,
             ],
             [ // id = 20
                 'name' => 'abteilung.destroy',
-                'beschreibung' => 'web',
+                'guard_name' => 'web',
                 'berechtigungskategorie_id' => '18',
                 'beschreibung' => null,
             ],
@@ -776,14 +805,12 @@ class UserSeeder extends Seeder
                 'berechtigungskategorie_id' => '25',
                 'beschreibung' => null,
             ],
-
-
-
-
-
-
-
-
+            [ // id = 45
+                'name' => 'dienstwagen.reports.index',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '25',
+                'beschreibung' => null,
+            ],
 
         ]);
 
@@ -900,7 +927,102 @@ class UserSeeder extends Seeder
                 'permission_id' => '21',
                 'role_id' => '1',
             ],
-
+            [
+                'permission_id' => '22',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '23',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '24',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '25',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '26',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '27',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '28',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '29',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '30',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '31',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '32',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '33',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '34',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '35',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '36',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '37',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '38',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '39',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '40',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '41',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '42',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '43',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '44',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '45',
+                'role_id' => '1',
+            ],
 
         ]);
 

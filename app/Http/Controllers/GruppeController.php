@@ -24,13 +24,25 @@ class GruppeController extends Controller
      public function index(Request $request)
     {
         $user = Auth()->user();
+            if(!$user->current_team_id){
+                return redirect()->back()->with('error', 'Bitte wählen Sie ein Projekt aus.');
+            }
         //alle gruppen mit bereich laden
-        $gruppen = Gruppe::with('bereich', 'betreuer')->where('projekt_id', $user->current_team_id)->where('personen_id', $user->id)->get();
-        $projekt = Projekt::with('bereiche', 'mitarbeiter', 'raeume')->findOrFail($user->current_team_id);
+            $gruppen = Gruppe::with('bereich', 'betreuer')->where('projekt_id', $user->current_team_id)->get();
+            $gruppen = Gruppe::with('bereich', 'betreuer')->where('projekt_id', $user->current_team_id)->where('personen_id', $user->id)->get();
+
+            $projekt = Projekt::with('bereiche', 'mitarbeiter', 'raeume')->findOrFail($user->current_team_id);
+            $betreuer = $projekt->mitarbeiter;
+            if($user->can('projekt.mitarbeiter.view.all')){
+                $betreuer = $projekt->mitarbeiter;
+            } else {
+                $betreuer = $projekt->mitarbeiter->where('id', $user->id);
+            }
 
         return Inertia::render('Gruppe/Index', [
             'gruppen' => $gruppen->toArray(),
             'projekt' => $projekt->toArray(),
+            'betreuer' => $betreuer->toArray(),
             ],
         );
     }

@@ -1,8 +1,9 @@
 <?php
 
 namespace App\Models;
-use App\Models\zeitraum;
+use App\Models\Standort;
 
+use App\Models\zeitraum;
 use App\Models\Austritttypen;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\ProjektHasTeilnehmerAbschluss;
@@ -20,12 +21,16 @@ class ProjektHasPersonen extends Pivot //Model
         'id',
         'projekt_id',
         'personen_id',
+        'standort_id',
         'ergebnisse_id',
         'status',
         'bemerkung'
     ];
 
-
+    public function standort()
+    {
+        return $this->hasOne(Standort::class, 'id', 'standort_id');
+    }
 
     public function zeitraume()
     {

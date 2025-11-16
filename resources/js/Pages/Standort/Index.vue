@@ -84,17 +84,19 @@
 <script>
     export default {
     methods: {
-        einzigartigeProjekte(userArray) {
-        const alleProjekte = userArray.flatMap(user => user.projekte || []);
-        const unique = {};
-        alleProjekte.forEach(projekt => {
-            unique[projekt.id] = projekt;
-        });
-        return Object.values(unique);
+    einzigartigeProjekte(userArray) {
+      if (!Array.isArray(userArray)) return []; // 🧠 Schutz: Kein Array → leere Liste
+      const alleProjekte = userArray.flatMap(user => user.projekte || []);
+      const unique = {};
+      alleProjekte.forEach(projekt => {
+        if (projekt?.id) {
+          unique[projekt.id] = projekt;
         }
+      });
+      return Object.values(unique);
     }
+  }
     }
-
 </script>
 <template>
   <Head title="Standorte" />
@@ -116,7 +118,7 @@
     </div>
 
     <!-- Tabelle -->
-    <div class="w-full overflow-x-auto">
+    <div class="w-full ">
       <table class="min-w-[800px] w-full text-sm shadow-sm border-collapse">
         <thead class="text-md text-gray-600 uppercase bg-gray-200 sticky top-0">
           <tr>

@@ -26,8 +26,8 @@
                 <ul v-show="activeMenu === 'dienstwagen'" class="pl-6 mt-2 space-y-2">
                     <li v-if="$page.props.permissions.includes('dienstwagen.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dienstwagen.index')">{{$t('Dienstwagenübersicht')}}</Link></li>
                     <li v-if="$page.props.permissions.includes('dienstwagen.store')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dienstwagen.index')">{{$t('Dienstwagen anlegen')}}</Link></li>
-                    <li v-if="$page.props.permissions.includes('dienstwagen.wartung.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dienstwagen.wartung.index')">{{$t('Wartungen ')}}</Link></li>
-
+                    <li v-if="$page.props.permissions.includes('dienstwagen.wartung.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dienstwagen.wartung.index')">{{$t('Wartungen')}}</Link></li>
+                    <li v-if="$page.props.permissions.includes('dienstwagen.reports.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dienstwagen.reports.index')">{{$t('Reports')}}</Link></li>
                 </ul>
             </li>
 

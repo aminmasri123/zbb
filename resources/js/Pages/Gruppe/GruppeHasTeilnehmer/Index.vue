@@ -49,12 +49,12 @@ datumgeplantEnd.value =props.gruppe.enddatum;
 // Funktion, um nach Klick auf „Übernehmen“ die ausgewählten Teilnehmer hinzuzufügen
 const confirmTeilnehmer = async () => {
   if (selectedTeilnehmerIds.value.length === 0) {
-    Swal.fire({
+    await Swal.fire({
       icon: 'warning',
       title: 'Keine Auswahl',
       text: 'Bitte wähle mindestens einen Teilnehmer aus.',
-    })
-    return
+    });
+    return;
   }
 
   try {
@@ -65,56 +65,66 @@ const confirmTeilnehmer = async () => {
       endzeit: zeitgeplantEnd.value,
       startdatum: datumgeplantStart.value,
       enddatum: datumgeplantEnd.value,
-    })
+    });
 
-    const data = response.data
+    const data = response.data;
+    console.log('✅ RESPONSE:', data);
 
-    if (data.success) {
-      let alreadyNames = ''
-      if (data.already?.length) {
-        alreadyNames = data.already.map(t => `${t.vorname} ${t.nachname}`).join(', ')
-      }
+    // --- Modal zuerst schließen ---
+    showTeilnehmerModal.value = false;
+    selectedTeilnehmerIds.value = [];
 
-      let addedNames = ''
-      if (data.added?.length) {
-        addedNames = data.added.map(t => `${t.vorname} ${t.nachname}`).join(', ')
-      }
+    // --- Jetzt DOM-Update abwarten, bevor SweetAlert geöffnet wird ---
+    await new Promise(resolve => setTimeout(resolve, 300));
 
-      let message = ''
-      if (addedNames) message += `✅ Hinzugefügt: ${addedNames}\n`
-      if (alreadyNames) message += `⚠️ Bereits vorhanden: ${alreadyNames}`
-
-      Swal.fire({
-        icon: 'success',
-        title: 'Teilnehmer aktualisiert',
-        text: message || data.message,
-        confirmButtonText: 'OK',
-      })
-
-      showTeilnehmerModal.value = false
-      selectedTeilnehmerIds.value = []
-
-      if (data.added?.length) {
-        data.added.forEach(nt => {
-          const existiert = gruppenTeilnehmer.value.some(t => t.id === nt.id)
-          if (!existiert) {
-            gruppenTeilnehmer.value.push({
-              ...nt,
-              anwesenheit: tage.value.map(() => 'unentschuldigt'),
-            })
-          }
-        })
-      }
+    // --- SweetAlert anzeigen ---
+    let message = data.message;
+    if (data.added?.length) {
+      message += `\n✅ Hinzugefügt: ${data.added.map(t => `${t.vorname} ${t.nachname}`).join(', ')}`;
     }
+    if (data.already?.length) {
+      message += `\n⚠️ Bereits vorhanden: ${data.already.map(t => `${t.vorname} ${t.nachname}`).join(', ')}`;
+    }
+
+    await Swal.fire({
+      icon: 'success',
+      title: 'Teilnehmer aktualisiert',
+      text: message,
+      confirmButtonText: 'OK',
+    });
+
+    // --- Tabelle sofort aktualisieren ---
+    if (data.added?.length) {
+      data.added.forEach(nt => {
+        const existiert = gruppenTeilnehmer.value.some(t => t.id === nt.id);
+        if (!existiert) {
+          gruppenTeilnehmer.value.push({
+            ...nt,
+            anwesenheit: tage.value.map(() => 'unentschuldigt'),
+            zeiten: tage.value.map(() => ({
+              start: zeitgeplantStart.value,
+              ende: zeitgeplantEnd.value,
+            })),
+          });
+        }
+      });
+    }
+
   } catch (error) {
-    console.error(error)
-    Swal.fire({
+    console.error('❌ Fehler:', error);
+
+    showTeilnehmerModal.value = false; // sicherheitshalber
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    await Swal.fire({
       icon: 'error',
       title: 'Fehler',
       text: error.response?.data?.message || 'Teilnehmer konnten nicht hinzugefügt werden.',
-    })
+    });
   }
-}
+};
+
+
 
 // --- Datumsbereich (inkl. Enddatum) ---
 function generateDateRangeInclusive(start, end) {

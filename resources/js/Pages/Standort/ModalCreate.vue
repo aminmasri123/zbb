@@ -1,5 +1,5 @@
 <template>
-    <Modal v-if="visible" @close="emit('close')">
+    <Modal v-show="visible" @close="emit('close')">
         <template #header>{{$t('Standort anlegen')}}</template>
 
         <template #body>
@@ -18,7 +18,6 @@
                 </div>
             </div>
         </template>
-
         <template #footer>
             <button @click="save" class="bg-zbb text-white px-4 py-2 rounded hover:bg-zbb-dark transition">
                 Speichern

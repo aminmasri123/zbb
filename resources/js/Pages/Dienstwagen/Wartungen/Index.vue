@@ -12,6 +12,7 @@ import Dialog from 'primevue/dialog';
 import { formatDate } from '@/utils/dateFormat.js';
 import ModalDestroy from '@/Components/ModalDestroyForm.vue';
 import Dropdown from '@/Components/Dropdown.vue';
+import axios from 'axios';
 
 const props = defineProps({
     records: Array,
@@ -83,64 +84,39 @@ function openModalEdit(record) {
     showModal.value = true;
 }
 
-// 🔹 Speichern oder Aktualisieren
-function submit() {
-   if (isEditing.value && editId.value) {
-    router.put(route("dienstwagen.wartung.update", editId.value), form.value, {
-        onSuccess: () => {
-            Swal.fire({
-                icon: "success",
-                title: "Aktualisiert!",
-                text: "Der Wartungseintrag wurde erfolgreich bearbeitet.",
-                timer: 2000,
-                showConfirmButton: false,
-            });
 
-            // 🔹 Direkt lokal updaten
-            const index = localRecords.value.findIndex(r => r.id === editId.value);
-            if (index !== -1) {
-                // 🔍 Neues Fahrzeugobjekt anhand der ID finden
-                const selectedVehicle = props.vehicles.find(v => v.id === form.value.dienstwagen_id);
+// 🟢 Neuer Eintrag mit direktem Hinzufügen
+const submit = async () => {
+  try {
+    const response = await axios.post(route('dienstwagen.wartung.store'), form.value);
 
-                // 🔹 Datensatz im Array aktualisieren
-                localRecords.value[index] = {
-                    ...localRecords.value[index],
-                    ...form.value,
-                    datum: form.value.datum,
-                    dienstwagen: selectedVehicle ? selectedVehicle : localRecords.value[index].dienstwagen // 🔥 Relation aktualisieren
-                };
+    if (response.data.success) {
+      localRecords.value.unshift(response.data.record);
 
-                localRecords.value = [...localRecords.value]; // Reaktivität erzwingen
-            }
-            showModal.value = false;
-        },
-    });
-}
- else {
-        // 🟢 Neuer Eintrag
-        router.post(route("dienstwagen.wartung.store"), form.value, {
-            onSuccess: () => {
-                Swal.fire({
-                    icon: "success",
-                    title: "Gespeichert!",
-                    text: "Wartungseintrag erfolgreich hinzugefügt!",
-                    timer: 2000,
-                    showConfirmButton: false,
-                });
-                showModal.value = false;
-                form.value = {
-                    dienstwagen_id: "",
-                    art: "",
-                    datum: "",
-                    kilometerstand: "",
-                    werkstatt: "",
-                    kosten: "",
-                    notizen: "",
-                };
-            },
-        });
+      Swal.fire({
+        icon: 'success',
+        title: 'Gespeichert!',
+        text: 'Wartungseintrag erfolgreich hinzugefügt!',
+        timer: 2000,
+        showConfirmButton: false,
+      });
+
+      showModal.value = false;
+      form.value = {
+        dienstwagen_id: '',
+        art: '',
+        datum: '',
+        kilometerstand: '',
+        werkstatt: '',
+        kosten: '',
+        notizen: '',
+      };
     }
-}
+  } catch (error) {
+    Swal.fire('Fehler', error.response?.data?.message || 'Speichern fehlgeschlagen', 'error');
+  }
+};
+
 
 // 🔹 Lösch-Modal öffnen
 const confirmDelete = (record) => {

@@ -11,6 +11,7 @@ import InputText from 'primevue/inputtext';
 import Dialog from 'primevue/dialog';
 import ModalDestroy from '@/Components/ModalDestroyForm.vue';
 import Dropdown from '@/Components/Dropdown.vue';
+import { formatDate } from '@/utils/dateFormat.js';
 
 const props = defineProps({
     costs: Array,
@@ -199,7 +200,7 @@ const totalAmount = computed(() =>
                             :key="c.id"
                             class="hover:bg-gray-50 dark:hover:bg-gray-900 transition"
                         >
-                            <td class="table-cell">{{ c.datum }}</td>
+                            <td class="table-cell">{{ formatDate(c.datum) }}</td>
 
                             <td class="table-cell font-semibold">
                                 {{ c.dienstwagen.kennzeichen }}

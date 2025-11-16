@@ -5,19 +5,18 @@
     <template #body>
     <form >
         <!-- Gruppenname -->
-
-
         <div class="grid grid-cols-2 gap-4 mt-6 mb-4">
             <FloatLabel variant="on">
                 <Select v-model="form.bereich" :options="props.projekt.bereiche" optionValue="id" optionLabel="name" class="w-full"/>
                 <label>Bereiche</label>
             </FloatLabel>
+
             <FloatLabel variant="on">
-                <Select v-model="form.betreuer" :options="props.projekt.mitarbeiter" optionValue="id" :optionLabel="(t) => `${t.vorname} ${t.nachname}`" class="w-full"/>
+                <Select v-model="form.betreuer" :options="props.betreuer" optionValue="id" :optionLabel="(t) => `${t.vorname} ${t.nachname}`" class="w-full"/>
                 <label>Betreuer</label>
             </FloatLabel>
-        </div>
 
+        </div>
 
         <!-- Gruppentyp -->
         <div class="mb-5">
@@ -118,6 +117,7 @@ import Swal from 'sweetalert2';
 const props = defineProps({
     visible: Boolean,
     projekt: Array,
+    betreuer: Array,
 })
 
 

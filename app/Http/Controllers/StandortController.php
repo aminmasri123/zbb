@@ -32,7 +32,7 @@ class StandortController extends Controller
             'beschreibung' => $request->beschreibung,
         ]);
 
-        return response()->json(['message' => 'Standort erfolgreich angelegt', 'standort' => $standort], 201);
+        return response()->json(['message' => 'Standort erfolgreich angelegt', 'standort' => $standort]);
     }
 
     public function show(string $id)

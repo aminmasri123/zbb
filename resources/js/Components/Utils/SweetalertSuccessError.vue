@@ -1,36 +1,39 @@
 <script setup>
 import { usePage } from "@inertiajs/vue3";
-import { watch } from "vue";
+import { watchEffect } from "vue";
 import Swal from "sweetalert2";
 
 const page = usePage();
 
-watch(
-  () => page.props.flash,
-  (flash) => {
-    if (flash.success) {
-      Swal.fire({
-        icon: "success",
-        title: "Erfolg",
-        text: flash.success,
-        timer: 3000,
-        showConfirmButton: false,
-      });
-    }
+// 🔹 Automatisch auf Flash-Änderungen reagieren
+watchEffect(() => {
+  const flash = page.props.flash;
 
-    if (flash.error) {
-      Swal.fire({
-        icon: "error",
-        title: "Fehler",
-        text: flash.error,
-      });
-    }
-  },
-  { deep: true }
-);
+  if (flash?.success) {
+    Swal.fire({
+      icon: "success",
+      title: "Erfolg",
+      text: flash.success,
+      timer: 2500,
+      showConfirmButton: false,
+      toast: true,
+      position: "center",
+    });
+  }
+
+  if (flash?.error) {
+    Swal.fire({
+      icon: "error",
+      title: "Fehler",
+      text: flash.error,
+      toast: true,
+      position: "center",
+    });
+  }
+});
 </script>
 
 <template>
-  <!-- Diese Komponente rendert nichts, sie kümmert sich nur um Popups -->
+  <!-- Diese Komponente zeigt selbst nichts an -->
   <div></div>
 </template>
