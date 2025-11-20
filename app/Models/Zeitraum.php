@@ -33,9 +33,5 @@ class Zeitraum extends Pivot //Model
         'endzeit'
     ];
 
-    protected $casts = [
-    'starttermin' => 'date',
-    'endtermin' => 'date',
-    'antragsdatum' => 'date',
-];
+
 }

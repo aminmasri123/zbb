@@ -14,14 +14,14 @@ class Dienstwagenfahrtenbuch extends Model
     protected $fillable = [
         'dienstwagen_id',
         'person_id',
-        'datum',
+        'date',
         'start_km',
-        'ende_km',
+        'end_km',
         'zweck',
         'ziel'
     ];
     protected $dates = [
-        'datum',
+        'date',
     ];
 
     public function dienstwagen()
@@ -31,6 +31,6 @@ class Dienstwagenfahrtenbuch extends Model
 
     public function fahrer()
     {
-        return $this->belongsTo(Personen::class)->where('typ', 'Mitarbeiter');
+        return $this->belongsTo(Personen::class, 'person_id')->where('typ', 'mitarbeiter');
     }
 }

@@ -36,6 +36,7 @@ use App\Http\Controllers\DienstwagenwartungController;
 use App\Http\Controllers\GruppeHasTeilnehmerController;
 use App\Http\Controllers\FahrtkostenAbrechnenController;
 use App\Http\Controllers\ProjektHasTeilnehmerController;
+use App\Http\Controllers\DienstwagenfahrtenbuchController;
 
 /*
 |--------------------------------------------------------------------------
@@ -213,6 +214,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
 
     //ProjektHasTeilnehmer
     Route::post('/teilnehmer/projekt/anlegen', [ProjektHasTeilnehmerController::class, 'store'])->name('projekthasteilnehmer.store');
+    Route::put('/teilnehmer/projekt/edit', [ProjektHasTeilnehmerController::class, 'update'])->name('projekthasteilnehmer.update');
 
 
     //Teilnehmer Bank
@@ -299,7 +301,14 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
         // Berichte
         Route::get('/dienstwagen/reports', [DienstwagenreportsController::class, 'index'])->name('reports.index');
 
-
+        // Fahrtenbuch
+        Route::get('/fahrtenbuch', [DienstwagenfahrtenbuchController::class, 'index'])->name('fahrtenbuch.index');
+        Route::post('/fahrtenbuch', [DienstwagenfahrtenbuchController::class, 'store'])->name('fahrtenbuch.store');
+        Route::put('/fahrtenbuch/edit/{id}', [DienstwagenfahrtenbuchController::class, 'update'])->name('fahrtenbuch.update');
+        Route::delete('/fahrtenbuch/{id}', [DienstwagenfahrtenbuchController::class, 'destroy'])->name('fahrtenbuch.destroy');
+        Route::get('/fahrtenbuch/report', [DienstwagenfahrtenbuchController::class, 'generateFahrtenbuchReport'])->name('fahrtenbuch.report');
+        Route::get('/fahrtenbuch/report/pdf', [DienstwagenfahrtenbuchController::class, 'generateFahrtenbuchPDF'])->name('fahrtenbuch.report.pdf');
+        Route::get('/fahrtenbuch/report/excel', [DienstwagenfahrtenbuchController::class, 'generateFahrtenbuchExcel'])->name('fahrtenbuch.report.excel');
     });
 
 

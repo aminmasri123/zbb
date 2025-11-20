@@ -13,11 +13,10 @@ return new class extends Migration
     {
         Schema::create('projekt_has_personens', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('personen_id')->constrained()->onDelete('cascade');
+            $table->foreignId('personen_id')->constrained()->onDelete('cascade'); //Personal oder Teilnehmer
             $table->foreignId('projekt_id')->constrained()->onDelete('cascade');
             $table->enum('status', ['angemeldet', 'aktiv', 'pausiert', 'abgeschlossen', 'abgebrochen'])->default('aktiv');
             $table->foreignId('standort_id')->constrained('standorts')->onDelete('cascade');
-
             $table->text('bemerkung')->nullable();
             $table->timestamps();
         });

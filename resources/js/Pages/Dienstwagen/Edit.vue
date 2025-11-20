@@ -6,6 +6,7 @@ import Select from 'primevue/select';
 import FloatLabel from 'primevue/floatlabel';
 import InputText from 'primevue/inputtext'; // ❗ Import vergessen
 import Swal from 'sweetalert2';
+import DatePicker from 'primevue/datepicker';
 
 const props = defineProps({
   vehicle: Object,
@@ -180,7 +181,7 @@ function update() {
 
       <!-- Nächste Wartung -->
       <FloatLabel variant="on">
-        <InputText v-model="form.naechste_wartung" type="date" class="w-full" />
+        <DatePicker  v-model="form.naechste_wartung" dateFormat="dd-mm-yy" class="w-full" inputClass="w-full" showIcon iconDisplay="input" />
         <label>Nächste Wartung</label>
       </FloatLabel>
 

@@ -6,8 +6,8 @@ export default defineConfig({
     server: {
 
         //host: '192.168.0.192',
-        host: '192.168.0.167',
-        //host: 'localhost',
+        //host: '172.19.10.18',
+        host: 'localhost',
     },
 
     plugins: [

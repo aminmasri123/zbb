@@ -55,10 +55,20 @@ class ExportWordController extends Controller
             abort(404, 'Der Teilnehmer wurde nicht gefunden. Bitte wenden Sie sich bei technischen Problemen an das Support-Team.');
         }
 
-        $standortAdresse = ProjektHasPersonen::where('personen_id', $teilnehmer->id)
+        $projektHasPersonen = ProjektHasPersonen::where('personen_id', $teilnehmer->id)
             ->where('projekt_id', $projekt->id)
-            ->first()->with('standort.adresse')
-            ->first()->standort->adresse->first();
+            ->with('standort.adresse')
+            ->first();
+
+        $standortAdresse = null;
+        if ($projektHasPersonen && $projektHasPersonen->standort && $projektHasPersonen->standort->adresse && $projektHasPersonen->standort->adresse->isNotEmpty()) {
+            $standortAdresse = $projektHasPersonen->standort->adresse->first();
+        }
+
+        $standortAdresse = null;
+        if ($projektHasPersonen && $projektHasPersonen->standort && $projektHasPersonen->standort->adresse && $projektHasPersonen->standort->adresse->count() > 0) {
+            $standortAdresse = $projektHasPersonen->standort->adresse->first();
+        }
 
         if( !$standortAdresse ){
             return redirect()->back()->with('error', 'Bitte geben Sie das Projekt eine Adresse ein, bevor Sie den Export durchführen.');
@@ -230,8 +240,8 @@ class ExportWordController extends Controller
         $templateProcessor->setValue('plz', $teilnehmer->adresses->last()->plz);
         $templateProcessor->setValue('stadt', $teilnehmer->adresses->last()->stadt);
         $templateProcessor->setValue('projekt', $projekt->name);
-        $templateProcessor->setValue('von', $letzterZeitraum->starttermin->format('d.m.Y'));
-        $templateProcessor->setValue('bis', $letzterZeitraum->endtermin->format('d.m.Y'));
+        $templateProcessor->setValue('von', $letzterZeitraum?->starttermin->format('d.m.Y'));
+        $templateProcessor->setValue('bis', $letzterZeitraum?->endtermin->format('d.m.Y'));
         $templateProcessor->setValue('datum', now()->format('d.m.Y'));
 
         $outputPath = storage_path("app/temp/einverstaendnis_datenschutz_esf_{$id}.docx");

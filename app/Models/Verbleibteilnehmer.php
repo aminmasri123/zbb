@@ -8,4 +8,8 @@ use Illuminate\Database\Eloquent\Model;
 class Verbleibteilnehmer extends Model
 {
     use HasFactory;
+    protected $fillable = [
+        'id',
+        'bezeichnung',
+    ];
 }

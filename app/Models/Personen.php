@@ -34,6 +34,7 @@ class Personen extends Model
         'id',
         'vorname',
         'nachname',
+        'geburtsdatum',
         'geschlecht',
         'aktiv',
         'typ'
@@ -41,6 +42,64 @@ class Personen extends Model
     protected $date = [
         'geburtsdatum',
     ];
+
+    public function scopeMitarbeiter($query)
+    {
+        return $query->where('typ', 'mitarbeiter');
+    }
+
+    public function scopeTeilnehmer($query)
+    {
+        return $query->where('typ', 'teilnehmer');
+    }
+
+    public function scopeVisibleForUser($query, User $user)
+    {
+        // 1. Koordinator = volle Rechte
+        if ($user->can('teilnehmer.view.all')) {
+            return $query;
+        }
+
+        // 2. Abteilungsleitung + Assistenz
+        if ($user->can('teilnehmer.view.abteilung')) {
+            return $query->whereHas('projekte', function ($q) use ($user) {
+                $q->whereIn('abteilung_id', $user->projekte->pluck('abteilung_id'));
+            });
+        }
+
+        // 3. Projektleitung
+        if ($user->can('teilnehmer.view.projekt')) {
+            $projektIds = $user->projekte()->pluck('projekts.id');
+
+            return $query->whereHas('projekte', function ($q) use ($projektIds) {
+                $q->whereIn('projekt_id', $projektIds);
+            });
+        }
+
+        // 4. Sozialpädagoge → Projekte am selben Standort
+        if ($user->can('teilnehmer.view.standort')) {
+            $standortIds = $user->standorte()->pluck('standorts.id');
+                return $query->whereHas('projekte', function ($q) use ($standortIds) {
+                $q->whereIn('standort_id', $standortIds);
+            });
+        }
+
+        // 5. Anleiter → nur eigene Teilnehmer
+            return $query->whereHas('gruppen', function ($q) use ($user) {
+                $q->where('gruppe_has_personens.user_id', $user->id);
+            });
+            dd('Anleiter Bereich - noch nicht fertig');
+        // Fallback: nichts zurück
+        return $query->whereRaw('1=0');
+    }
+
+    public function scopeActive($query)
+    {
+        return $query->where('aktiv', 1);
+    }
+
+
+
 
 
     public function gruppen()
@@ -65,21 +124,6 @@ class Personen extends Model
         return $this->hasMany(Fahrten::class, 'person_id', 'id');
     }
 
-    public function scopeTeilnehmer($query)
-    {
-        return $query->where('typ', 'teilnehmer');
-    }
-
-    public function scopeMitarbeiter($query)
-    {
-        return $query->where('typ', 'mitarbeiter');
-    }
-
-    public function scopeActive($query)
-    {
-        return $query->where('aktiv', 1);
-    }
-
     public function standorte(): BelongsToMany
     {
         return $this->belongsToMany(Standort::class, 'standort_has_personens', 'personen_id', 'standort_id');
@@ -99,7 +143,7 @@ class Personen extends Model
     {
         return $this->belongsToMany(Projekt::class, 'projekt_has_personens', 'personen_id', 'projekt_id')
             ->using(ProjektHasPersonen::class) // <== Pivot Model verwenden
-            ->withPivot('id', 'bemerkung', 'status')                    // <- damit du das Pivot Model findest
+            ->withPivot('id', 'bemerkung', 'status', 'standort_id')                    // <- damit du das Pivot Model findest
             ->as('pivotModel') ;                 // <- schöner Name für den Pivot-Zugriff
     }
 
@@ -132,12 +176,12 @@ class Personen extends Model
 
     public function dienstwagen()
     {
-        return $this->belongsToMany(Dienstwagen::class, 'dienstwagen_has_personens', 'personen_id', 'dienstwagen_id');
+        return $this->belongsToMany(Dienstwagen::class, 'dienstwagen_has_personens', 'person_id', 'dienstwagen_id');
     }
 
     public function dienstwagenfahrten()
     {
-        return $this->hasMany(Dienstwagenfahrtenbuch::class);
+        return $this->hasMany(Dienstwagenfahrtenbuch::class, 'person_id', 'id');
     }
 
 

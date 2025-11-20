@@ -56,13 +56,13 @@ const submit = () => {
                 </div>
                 <div class=" w-full mx-1">
                     <InputLabel for="rollen" value="Rollen" />
-                    <MultiSelect 
-                        required 
-                        v-model="form.rollen" 
-                        :options="rollen" 
-                        optionLabel="name" 
-                        optionValue="id" 
-                        display="chip" 
+                    <MultiSelect
+                        required
+                        v-model="form.rollen"
+                        :options="rollen"
+                        optionLabel="name"
+                        optionValue="id"
+                        display="chip"
                         class="w-full"
                     />
                     <InputError class="mt-2" :message="form.errors.rollen" />
@@ -115,7 +115,7 @@ const submit = () => {
                     />
                     <InputError class="mt-2" :message="form.errors.last_name" />
                 </div>
-                
+
                 <div>
                     <InputLabel for="password" value="Password" />
                     <TextInput
@@ -138,7 +138,7 @@ const submit = () => {
                     />
                     <InputError class="mt-2" :message="form.errors.password_confirmation" />
                 </div>
-                
+
             </div>
             <div class="my-4">
 

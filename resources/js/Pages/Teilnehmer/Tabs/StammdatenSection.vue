@@ -25,6 +25,8 @@
           <option value="w">w</option>
           <option value="d">divers</option>
         </select>
+
+
       </div>
 
       <div>
@@ -32,18 +34,22 @@
         <input type="date" v-model="form.geburtsdatum" class="input" />
       </div>
 
+
+
       <div>
-        <label>Betreuer</label>
-        <select v-model="form.betreuer" class="input">
-          <option
-            v-for="m in betreuer"
-            :key="m.id"
-            :value="m.id"
-          >
-            {{ m.nachname }} - {{ m.vorname }}
-          </option>
-        </select>
-      </div>
+            <label for="startDate">
+                Betreuer <span class="text-red-500">*</span>
+            </label>
+            <Select
+            filter
+                v-model="form.betreuer"
+                :options="betreuer"
+                :optionLabel="(v) => `${v.nachname} ${v.vorname}`"
+                optionValue="id"
+                class="w-[200px] text-sm w-full px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
+                >
+            </Select>
+        </div>
 
       <div class="md:col-span-3">
         <label>Bemerkungen</label>
@@ -57,6 +63,7 @@
 import { ref } from "vue";
 import { router } from "@inertiajs/vue3";
 import Swal from "sweetalert2";
+import Select from 'primevue/select';
 
 const props = defineProps({
   teilnehmer: Object,

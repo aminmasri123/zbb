@@ -40,29 +40,32 @@ class ExportExcelController extends Controller
 
         $errors = [];
 
-if (!$teilnehmer->nachname) $errors[] = 'Nachname fehlt';
-if (!$teilnehmer->vorname) $errors[] = 'Vorname fehlt';
+    if (!$teilnehmer->nachname) $errors[] = 'Nachname fehlt';
+    if (!$teilnehmer->vorname) $errors[] = 'Vorname fehlt';
 
-$adresse = $teilnehmer->adresses->last();
-if (!$adresse) $errors[] = 'Adresse fehlt';
-else {
-    if (!$adresse->strasse) $errors[] = 'Straße fehlt';
-    if (!$adresse->hausnummer) $errors[] = 'Hausnummer fehlt';
-    if (!$adresse->plz) $errors[] = 'PLZ fehlt';
-    if (!$adresse->stadt) $errors[] = 'Stadt fehlt';
-}
+    if (!$projektHasTeilnehmer?->meta?->zielgruppe_id) $errors[] = 'Zielgruppe fehlt';
+    $adresse = $teilnehmer->adresses->last();
+    if (!$adresse) $errors[] = 'Adresse fehlt';
+    else {
+        if (!$adresse->strasse) $errors[] = 'Straße fehlt';
+        if (!$adresse->hausnummer) $errors[] = 'Hausnummer fehlt';
+        if (!$adresse->plz) $errors[] = 'PLZ fehlt';
+        if (!$adresse->stadt) $errors[] = 'Stadt fehlt';
+    }
 
-$email = $teilnehmer->kontaktes->where('kontakttyp.name', 'Email')->last();
-if (!$email) $errors[] = 'E-Mail fehlt';
+        $email = $teilnehmer->kontaktes->where('kontakttyp.name', 'Email')->last();
+        if (!$email) $errors[] = 'E-Mail fehlt';
 
-if (!$teilnehmer->sozialedaten) $errors[] = 'Sozialdaten fehlen';
 
-if (!$projektHasTeilnehmer?->abschluss) $errors[] = 'Abschlussdaten fehlen';
-if (!$projektHasTeilnehmer?->zeitraume->last()) $errors[] = 'Zeitraum (Start/Ende) fehlt';
+        if (!$projektHasTeilnehmer->meta->austritt_id) $errors[] = 'Aaustritt fehlen';
+        if (!$teilnehmer->sozialedaten) $errors[] = 'Sozialdaten fehlen';
+        if (!$projektHasTeilnehmer->meta->projektabschluss_id) $errors[] = 'Projektabschlussdaten fehlen';
+        if (!$projektHasTeilnehmer->meta->verbleib_id) $errors[] = 'Verbleib fehlen';
+        if (!$projektHasTeilnehmer?->zeitraume->last()) $errors[] = 'Zeitraum (Start/Ende) fehlt';
 
-if (!empty($errors)) {
-    return back()->with('error', 'Export abgebrochen. Fehlende Daten: ' . implode(', ', $errors));
-}
+        if (!empty($errors)) {
+            return back()->with('error', 'Export abgebrochen. Fehlende Daten: ' . implode(', ', $errors));
+        }
 
         // Pfad zur vorhandenen Excel-Datei
         $existingFile = storage_path('vorlage/esf/excel/ESF.xlsx');
@@ -204,18 +207,18 @@ if (!empty($errors)) {
         $sheet->setCellValue('H72', $abschluss === 'Hochschulabschluss' ? 'X' : null);
         $sheet->setCellValue('H73', $abschluss === 'Promotionsstudium' ? 'X' : null);
 
-        $sheet->setCellValue('H75', $teilnehmer->zielgruppen?->last()?->bezeichnung === 'Arbeitslos' ? 'X' : null);
-        $sheet->setCellValue('H76', $teilnehmer->zielgruppen?->last()?->bezeichnung === 'Langzeitarbeitslos' ? 'X' : null);
-        $sheet->setCellValue('H77', $teilnehmer->zielgruppen?->last()?->bezeichnung === 'Nichterwerbstätig' ? 'X' : null);
-        $sheet->setCellValue('H78', $teilnehmer->zielgruppen?->last()?->bezeichnung === 'Nichterwerbstätige, die keine schriftliche oder berufliche Ausbildung absolvieren' ? 'X' : null);
-        $sheet->setCellValue('H79', $teilnehmer->zielgruppen?->last()?->bezeichnung === 'Erwerbstätige' ? 'X' : null);
-        $sheet->setCellValue('H80', $teilnehmer->zielgruppen?->last()?->bezeichnung === 'Selbstständige' ? 'X' : null);
-        $sheet->setCellValue('H81', $teilnehmer->zielgruppen?->last()?->bezeichnung === 'Auszubildende' ? 'X' : null);
-        $sheet->setCellValue('H82', $teilnehmer->zielgruppen?->last()?->bezeichnung === 'Berufsschüler' ? 'X' : null);
-        $sheet->setCellValue('H83', $teilnehmer->zielgruppen?->last()?->bezeichnung === 'Schüler allgemeinbildender Schulen' ? 'X' : null);
-        $sheet->setCellValue('H84', $teilnehmer->zielgruppen?->last()?->bezeichnung === 'Menschen mit Migrationshintergrund' ? 'X' : null);
-        $sheet->setCellValue('H85', $teilnehmer->zielgruppen?->last()?->bezeichnung === 'Flüchtinge' ? 'X' : null);
-        $sheet->setCellValue('H86', $teilnehmer->zielgruppen?->last()?->bezeichnung === 'KMU' ? 'X' : null);
+        $sheet->setCellValue('H75', $projektHasTeilnehmer?->meta?->zielgruppe->bezeichnung === 'Arbeitslos' ? 'X' : null);
+        $sheet->setCellValue('H76', $projektHasTeilnehmer?->meta?->zielgruppe->bezeichnung === 'Langzeitarbeitslos' ? 'X' : null);
+        $sheet->setCellValue('H77', $projektHasTeilnehmer?->meta?->zielgruppe->bezeichnung === 'Nichterwerbstätig' ? 'X' : null);
+        $sheet->setCellValue('H78', $projektHasTeilnehmer?->meta?->zielgruppe->bezeichnung === 'Nichterwerbstätige, die keine schriftliche oder berufliche Ausbildung absolvieren' ? 'X' : null);
+        $sheet->setCellValue('H79', $projektHasTeilnehmer?->meta?->zielgruppe->bezeichnung === 'Erwerbstätige' ? 'X' : null);
+        $sheet->setCellValue('H80', $projektHasTeilnehmer?->meta?->zielgruppe->bezeichnung === 'Selbstständige' ? 'X' : null);
+        $sheet->setCellValue('H81', $projektHasTeilnehmer?->meta?->zielgruppe->bezeichnung === 'Auszubildende' ? 'X' : null);
+        $sheet->setCellValue('H82', $projektHasTeilnehmer?->meta?->zielgruppe->bezeichnung === 'Berufsschüler' ? 'X' : null);
+        $sheet->setCellValue('H83', $projektHasTeilnehmer?->meta?->zielgruppe->bezeichnung === 'Schüler allgemeinbildender Schulen' ? 'X' : null);
+        $sheet->setCellValue('H84', $projektHasTeilnehmer?->meta?->zielgruppe->bezeichnung === 'Menschen mit Migrationshintergrund' ? 'X' : null);
+        $sheet->setCellValue('H85', $projektHasTeilnehmer?->meta?->zielgruppe->bezeichnung === 'Flüchtinge' ? 'X' : null);
+        $sheet->setCellValue('H86', $projektHasTeilnehmer?->meta?->zielgruppe->bezeichnung === 'KMU' ? 'X' : null);
 
         $sheet->setCellValue('H89', $teilnehmer->sozialedaten?->wohnsitz_stabil === 1 ? 'X': null );  //SGB XII
         $sheet->setCellValue('H90', $teilnehmer->sozialedaten?->wohnsitz_stabil === 0 ? 'X': null );  //SGB XII
@@ -224,38 +227,39 @@ if (!empty($errors)) {
 
 
 
-
      //Austritt
-        $sheet->setCellValue('H96', $projektHasTeilnehmer->abschluss->austritttypen_id === 1 ? 'X': null );
-        $sheet->setCellValue('H97', $projektHasTeilnehmer->abschluss->austritttypen_id === 2 ? 'X': null );
-        $sheet->setCellValue('H98', $projektHasTeilnehmer->abschluss->austritttypen_id === 3 ? 'X': null );
-        $sheet->setCellValue('H99', $projektHasTeilnehmer->abschluss->austritttypen_id === 4 ? 'X': null );
-        $sheet->setCellValue('H100', $projektHasTeilnehmer->abschluss->austritttypen_id === 5 ? 'X': null );
-        $sheet->setCellValue('H101', $projektHasTeilnehmer->abschluss->austritttypen_id === 6 ? 'X': null );
-        $sheet->setCellValue('H102', $projektHasTeilnehmer->abschluss->austritttypen_id === 7 ? 'X': null );
-        $sheet->setCellValue('H103', $projektHasTeilnehmer->abschluss->austritttypen_id === 8 ? 'X': null );
-        $sheet->setCellValue('H104', $projektHasTeilnehmer->abschluss->austritttypen_id === 9 ? 'X': null );
-        $sheet->setCellValue('H105', $projektHasTeilnehmer->abschluss->austritttypen_id === 10 ? 'X': null );
-
-        $sheet->setCellValue('H107', $projektHasTeilnehmer->abschluss->ergebnisse_id === 2 ? 'X': null );
-        $sheet->setCellValue('H108', $projektHasTeilnehmer->abschluss->ergebnisse_id === 3 ? 'X': null );
-        $sheet->setCellValue('H109', $projektHasTeilnehmer->abschluss->ergebnisse_id === 4 ? 'X': null );
-        $sheet->setCellValue('H110', $projektHasTeilnehmer->abschluss->ergebnisse_id === 5 ? 'X': null );
-        $sheet->setCellValue('H111', $projektHasTeilnehmer->abschluss->ergebnisse_id === 6 ? 'X': null );
-        $sheet->setCellValue('H112', $projektHasTeilnehmer->abschluss->ergebnisse_id === 7 ? 'X': null );
-        $sheet->setCellValue('H113', $projektHasTeilnehmer->abschluss->ergebnisse_id === 8 ? 'X': null );
-        $sheet->setCellValue('H114', $projektHasTeilnehmer->abschluss->ergebnisse_id === 9 ? 'X': null );
-        $sheet->setCellValue('H115', $projektHasTeilnehmer->abschluss->ergebnisse_id === 10 ? 'X': null );
-        $sheet->setCellValue('H116', $projektHasTeilnehmer->abschluss->ergebnisse_id === 11 ? 'X': null );
+    $sheet->setCellValue('H96', $projektHasTeilnehmer->meta->austritt->name === 'Kein Abbruch' ? 'X': null );
+    $sheet->setCellValue('H97', $projektHasTeilnehmer->meta->austritt->name === 'Aufnahme sozialversicherungspflichtiger Beschäftigung' ? 'X': null );
+    $sheet->setCellValue('H98', $projektHasTeilnehmer->meta->austritt->name === 'Aufnahme geringfügige Beschäftigung' ? 'X': null );
+    $sheet->setCellValue('H99', $projektHasTeilnehmer->meta->austritt->name === 'Ausbildungsaufnahme' ? 'X': null );
+    $sheet->setCellValue('H100', $projektHasTeilnehmer->meta->austritt->name === 'weiterer Schulbesuch' ? 'X': null );
+    $sheet->setCellValue('H101', $projektHasTeilnehmer->meta->austritt->name === 'Aufnahme Studium' ? 'X': null );
+    $sheet->setCellValue('H102', $projektHasTeilnehmer->meta->austritt->name === 'Selbstständigkeit' ? 'X': null );
+    $sheet->setCellValue('H103', $projektHasTeilnehmer->meta->austritt->name === 'Kündigung Ausbildungsvertrag' ? 'X': null );
+    $sheet->setCellValue('H104', $projektHasTeilnehmer->meta->austritt->name === 'vorgezogene Abschlussprüfung' ? 'X': null );
+    $sheet->setCellValue('H105', $projektHasTeilnehmer->meta->austritt->name === 'sonstiger Abbruchgrund' ? 'X': null );
 
 
-        $sheet->setCellValue('H118', $projektHasTeilnehmer->abschluss->verbleib_id === 1 ? 'X': null );
-        $sheet->setCellValue('H119', $projektHasTeilnehmer->abschluss->verbleib_id === 2 ? 'X': null );
-        $sheet->setCellValue('H120', $projektHasTeilnehmer->abschluss->verbleib_id === 3 ? 'X': null );
-        $sheet->setCellValue('H121', $projektHasTeilnehmer->abschluss->verbleib_id === 4 ? 'X': null );
-        $sheet->setCellValue('H122', $projektHasTeilnehmer->abschluss->verbleib_id === 5 ? 'X': null );
-        $sheet->setCellValue('H123', $projektHasTeilnehmer->abschluss->verbleib_id === 6 ? 'X': null );
-        $sheet->setCellValue('H124', $projektHasTeilnehmer->abschluss->verbleib_id === 7 ? 'X': null );
+
+        $sheet->setCellValue('H107', $projektHasTeilnehmer->meta->projektabschluss->bezeichnung === 'hat eine Qualifizierung erhalten (qualifizierter TN-Nachweis)' ? 'X': null );
+        $sheet->setCellValue('H108', $projektHasTeilnehmer->meta->projektabschluss->bezeichnung === 'einfacher Teilnahmenachweis' ? 'X': null );
+        $sheet->setCellValue('H109', $projektHasTeilnehmer->meta->projektabschluss->bezeichnung === 'hat qualifizierte Beratung erhalten (Nachweis)' ? 'X': null );
+        $sheet->setCellValue('H110', $projektHasTeilnehmer->meta->projektabschluss->bezeichnung === 'ist in ein Kompetenzfeststellungsverfahren gemündet' ? 'X': null );
+        $sheet->setCellValue('H111', $projektHasTeilnehmer->meta->projektabschluss->bezeichnung === 'hat eine Qualifikationsanerkennung erreicht' ? 'X': null );
+        $sheet->setCellValue('H112', $projektHasTeilnehmer->meta->projektabschluss->bezeichnung === 'absolviert eine schulische/berufliche Ausbildung' ? 'X': null );
+        $sheet->setCellValue('H113', $projektHasTeilnehmer->meta->projektabschluss->bezeichnung === 'hat einen Arbeitsplatz' ? 'X': null );
+        $sheet->setCellValue('H114', $projektHasTeilnehmer->meta->projektabschluss->bezeichnung === 'hat einen Ausbildungsabschluss erlangt' ? 'X': null );
+        $sheet->setCellValue('H115', $projektHasTeilnehmer->meta->projektabschluss->bezeichnung === 'hat ein Studium aufgenommen' ? 'X': null );
+        $sheet->setCellValue('H116', $projektHasTeilnehmer->meta->projektabschluss->bezeichnung === 'hat Teilnehme abgebrochen' ? 'X': null );
+
+
+        $sheet->setCellValue('H118', $projektHasTeilnehmer->meta->verbleib->bezeichnung === 'auf Arbeitssuche' ? 'X': null );
+        $sheet->setCellValue('H119', $projektHasTeilnehmer->meta->verbleib->bezeichnung === 'absolviert eine schulische/berufliche Ausbildung' ? 'X': null );
+        $sheet->setCellValue('H120', $projektHasTeilnehmer->meta->verbleib->bezeichnung === 'erlangt eine Qualifizierung' ? 'X': null );
+        $sheet->setCellValue('H121', $projektHasTeilnehmer->meta->verbleib->bezeichnung === 'hat einen Arbeitsplatz' ? 'X': null );
+        $sheet->setCellValue('H122', $projektHasTeilnehmer->meta->verbleib->bezeichnung === 'hat eine Selbstständigkeit aufgenommen / selbstständig' ? 'X': null );
+        $sheet->setCellValue('H123', $projektHasTeilnehmer->meta->verbleib->bezeichnung === 'sonstiger Verbleib' ? 'X': null );
+        $sheet->setCellValue('H124', $projektHasTeilnehmer->meta->verbleib->bezeichnung === 'Wechsel in Folgemaßnahme' ? 'X': null );
 
         // Excel-Datei speichern
        $filename = 'ESF Stammdaten ' . $teilnehmer->nachname . ' ' . $teilnehmer->vorname . '-' . now()->format('Ymd_His') . '.xlsx';

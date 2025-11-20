@@ -79,8 +79,6 @@
                     </div>
 
                     <Toggle v-model="migrationshintergrund" label="Liegt ein Migrationshintergrund vor?" />
-
-                    wohnsitz_stabil
                     <Toggle v-model="wohnsitz_stabil" label="Wohnsitz stabil?" />
                 </div>
           </div>
@@ -226,9 +224,12 @@
                                     <span class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100 " @click="confirmDelete(projekt, 'projekt')">
                                           {{ $t('Löschen') }} <i class="las la-trash-alt"></i>
                                     </span>
-                                    <Link class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100" :href="route('teilnehmer.edit', teilnehmer.id)">
-                                       {{ $t('Bearbeiten') }}  <i class="las la-edit"></i>
-                                    </Link>
+                                    <span
+                                        class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"
+                                        @click="openProjektEdit(zeit, projekt)"
+                                        >
+                                        {{ $t('Bearbeiten') }} <i class="las la-edit"></i>
+                                    </span>
                                     <a  target="_blank" :href="route('export.excel.esfStammblatt', [props.teilnehmer.id, projekt.id])" class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100" >ESF <i class="las la-file-download"></i></a>
                                 </template>
                             </Dropdown>
@@ -257,17 +258,18 @@
                                     <span class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100 " @click="confirmDelete(projekt, 'projekt')">
                                           {{ $t('Löschen') }} <i class="las la-trash-alt"></i>
                                     </span>
-                                    <Link class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100" :href="route('teilnehmer.edit', teilnehmer.id)">
-                                       {{ $t('Bearbeiten') }}  <i class="las la-edit"></i>
-                                    </Link>
+                                    <span
+                                        class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"
+                                        @click="openProjektEdit(zeit, projekt)"
+                                        >
+                                        {{ $t('Bearbeiten') }} <i class="las la-edit"></i>
+                                    </span>
                                 </template>
                             </Dropdown>
                         </td>
                     </tr>
 
                     </template>
-
-
                 </tbody>
             </table>
           </div>
@@ -1072,7 +1074,7 @@
 
                         <!-- Zeiträume -->
                         <div>
-                            <label>Starttermin</label>
+                            <label>Antragsdatum</label>
                             <input type="date" v-model="neuesProjekt.antragsdatum" class="input" />
                         </div>
                         <div>
@@ -1114,6 +1116,76 @@
                     </div>
                 </div>
             </transition>
+
+
+            <!-- MODAL: PROJEKT BEARBEITEN -->
+            <!-- 🔥 Modal: Projekt bearbeiten -->
+
+            <Modal v-if="showEditZuwseisungModal" @click.self="showEditZuwseisungModal = false">
+                <template #header>{{ $t('Projekt bearbeiten') }}</template>
+
+                <template #body>
+                    <div class="grid grid-cols-2 gap-4">
+
+                        <div class="mb-4 w-full mx-1">
+                            <FloatLabel variant="on">
+                                <InputText v-model="editForm.projektname" class="w-full"/>
+                                <label>Projektname</label>
+                            </FloatLabel>
+                        </div>
+
+                        <div class="mb-4 w-full mx-1">
+                            <FloatLabel variant="on">
+                                <DatePicker v-model="editForm.antragsdatum" dateFormat="yy-mm-dd" class="w-full" inputClass="w-full" manualInput="true" showIcon iconDisplay="input" />
+                                <label>Antragsdatum</label>
+                            </FloatLabel>
+                        </div>
+
+                        <div class="mb-4 w-full mx-1">
+                            <FloatLabel variant="on">
+                                <DatePicker v-model="editForm.starttermin" dateFormat="yy-mm-dd" class="w-full" inputClass="w-full" manualInput="true" showIcon iconDisplay="input" />
+                                <label>Starttermin</label>
+                            </FloatLabel>
+                        </div>
+
+                        <div class="mb-4 w-full mx-1">
+                            <FloatLabel variant="on">
+                                <DatePicker v-model="editForm.anfangsdatum" dateFormat="yy-mm-dd" class="w-full" inputClass="w-full" manualInput="true"  showIcon iconDisplay="input" />
+                                <label>Anfangsdatum</label>
+                            </FloatLabel>
+                        </div>
+
+                        <div class="mb-4 w-full mx-1">
+                            <FloatLabel variant="on">
+                                <DatePicker v-model="editForm.endtermin" dateFormat="yy-mm-dd"  class="w-full" inputClass="w-full" manualInput="true"  showIcon iconDisplay="input" />
+                                <label>Endtermin</label>
+                            </FloatLabel>
+                        </div>
+
+                        <div class="mb-4 w-full mx-1">
+                            <FloatLabel variant="on">
+                                <DatePicker v-model="editForm.enddatum" dateFormat="yy-mm-dd"  class="w-full" inputClass="w-full" manualInput="true" showIcon iconDisplay="input" />
+                                <label>Enddatum</label>
+                            </FloatLabel>
+                        </div>
+
+                    </div>
+                </template>
+
+                <template #footer>
+                    <button @click="saveEdit"
+                            class="bg-zbb text-white px-4 py-2 rounded">
+                        Speichern
+                    </button>
+
+                    <button @click="showEditZuwseisungModal = false"
+                            class="border px-4 py-2 rounded">
+                        Abbrechen
+                    </button>
+                </template>
+            </Modal>
+
+
 
             <!-- MODAL: Anwesenheit -->
             <transition name="fade">
@@ -1479,10 +1551,13 @@
     import Swal from 'sweetalert2'
     import Toggle from '@/Components/Toggle.vue';
     import Alert from '@/Components/Utils/SweetalertSuccessError.vue'
-    const { flash } = usePage().props
     import Stammdaten from '@/Pages/Teilnehmer/Tabs/StammdatenSection.vue';
     import InputText from 'primevue/inputtext';
     import FloatLabel from 'primevue/floatlabel';
+    import DatePicker from 'primevue/datepicker';
+import Modal from '@/Components/ModalForm.vue';
+    const { flash } = usePage().props;
+
     const props = defineProps({
         teilnehmer: Object,
         gruppen: Array,
@@ -1499,10 +1574,8 @@
         notiztypen:Array,
         fahrtarten: Array,
         dokumente: Array,
+        zeitraum: Object,
     });
-
-
-    console.log(props.gruppen);
 
 watchEffect(() => {
 
@@ -1621,7 +1694,6 @@ const migrationshintergrund  = ref(!!props.teilnehmer.sozialedaten?.migrationshi
 const leistungsbezug_id      = ref(props.teilnehmer.sozialedaten?.leistungsbezug_id);
 const wohnsitz_stabil        = ref(!!props.teilnehmer.sozialedaten?.wohnsitz_stabil);
 const kundennummer = ref(props.teilnehmer.sozialedaten?.kundennummer || '');
-console.log('Kundennnummer:' + props.teilnehmer.sozialedaten?.kundennummer )
 const saveSozialdaten = () => {
   router.patch(
     route('person.sozialdaten.update', props.teilnehmer.id),
@@ -2303,6 +2375,9 @@ watch(showModalAnwesenheit, (val) => {
 
 
 // ======= PROJEKTE ZUWEISEN =======
+
+
+
 const addProjekt = () => {
   if (!neuesProjektId.value) return; // Sicherheitsabfrage
   loadingProjekt.value = true;
@@ -2360,6 +2435,104 @@ const addProjekt = () => {
   );
 };
 
+const showEditZuwseisungModal = ref(false);
+
+const editForm = ref({
+    id: null,
+    projektname: "",
+    abteilung_id: "",
+    kostenstelle: "",
+    antragsdatum: "",
+    starttermin: "",
+    anfangsdatum: "",
+    endtermin: "",
+    enddatum: "",
+});
+const openProjektEdit = (zeit, projekt) =>  {
+    showEditZuwseisungModal.value = true;
+
+    editForm.value = {
+        id: projekt.pivot_model.id ?? "",
+        projektname: projekt.name,
+        antragsdatum: zeit?.antragsdatum ?? "",
+        starttermin: zeit?.starttermin ?? "",
+        anfangsdatum: zeit?.anfangsdatum ?? "",
+        endtermin: zeit?.endtermin ?? "",
+        enddatum: zeit?.enddatum ?? "",
+    };
+}
+    const page = usePage();
+    function toLocalDateString(d) {
+    if (!d) return null;
+
+    // Wenn d ein String ist, und schon YYYY-MM-DD, direkt zurück
+    if (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+        return d;
+    }
+
+    // Sicherstellen, dass wir ein Date-Objekt haben
+    const date = (d instanceof Date) ? d : new Date(d);
+
+    // WICHTIG: KEIN .toISOString() verwenden!
+    return [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, "0"),
+        String(date.getDate()).padStart(2, "0")
+    ].join("-");
+}
+function saveEdit() {
+
+
+    const payload = {
+        id: editForm.value.id,
+        antragsdatum: toLocalDateString(editForm.value.antragsdatum),
+        starttermin: toLocalDateString(editForm.value.starttermin),
+        endtermin: toLocalDateString(editForm.value.endtermin),
+        anfangsdatum: toLocalDateString(editForm.value.anfangsdatum),
+        enddatum: toLocalDateString(editForm.value.enddatum),
+    };
+
+    console.log("📤 GESENDET AN BACKEND:", payload);
+
+    axios.put(route("projekthasteilnehmer.update", editForm.value.id), payload)
+        .then(response => {
+
+            const newData = response.data.zeitraum;
+
+            const projekt = teilnehmer.value.projekte.find(
+                p => Number(p.pivot_model.id) === Number(editForm.value.id)
+            );
+
+            if (projekt) {
+                const index = projekt.pivot_model.zeitraume.findIndex(
+                    z => Number(z.id) === Number(newData.id)
+                );
+
+                if (index !== -1) {
+                    projekt.pivot_model.zeitraume[index] = newData;
+                } else {
+                    projekt.pivot_model.zeitraume.push(newData);
+                }
+            }
+
+            showEditZuwseisungModal.value = false;
+
+            Swal.fire({
+                icon: "success",
+                title: "Gespeichert!",
+                timer: 1500,
+                showConfirmButton: false,
+            });
+        })
+        .catch(err => console.error(err));
+}
+
+
+
+
+
+// ======= BANK =======
+
 const addBank = () => {
   if (!neueBank.value.name || !neueBank.value.iban || !neueBank.value.blz) return
   loadingBank.value = true
@@ -2410,7 +2583,6 @@ const meineBriefe = ref([...props.meineBriefe]);
 const erhalteneBriefe = ref([...props.erhalteneBriefe]);
 
 const confirmDelete = (item, type) => {
-    console.log(item.id);
   toDeleteItem.value = { id: item.id, name: item.name || item.wert || item.strasse || item.bezeichnung || item.titel };
   seite.value = type;
   showModalLöschen.value = true;

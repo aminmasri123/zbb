@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Exception;
 use App\Models\User;
 use Inertia\Inertia;
 use App\Models\Brief;
@@ -22,76 +23,94 @@ use App\Models\Anwesenheitsstatuten;
 use Illuminate\Support\Facades\Auth;
 use App\Models\PersonenHasSozialedaten;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 
 class TeilnehmerController extends Controller
 {
     public function index(Request $request)
-    {
-        $suchbegriff    = $request->input('search');
-        $sortierung     = $request->input('sort', 'id');
-        $richtung       = strtolower($request->input('direction', 'desc'));
+{
+    $suchbegriff = $request->input('search');
+    $sortierung  = $request->input('sort', 'id');
+    $richtung    = strtolower($request->input('direction', 'desc'));
 
+    $benutzer = auth()->user();
 
-        $benutzer = User::findOrFail(Auth::id());
-        $gruppen = Gruppe::where('personen_id', $benutzer->id)
+    $gruppen = Gruppe::where('personen_id', $benutzer->id)
         ->with('bereich')
         ->get();
 
-        // Mapping für erlaubte Sortierspalten
-        $sortierbareSpalten = [
-            'id'         => 'id',
-            'vorname'    => 'vorname',
-            'nachname'   => 'nachname',
-            'geschlecht' => 'geschlecht',
-        ];
+    // Mögliche Sortierfelder
+    $sortierbareSpalten = [
+        'id'         => 'id',
+        'vorname'    => 'vorname',
+        'nachname'   => 'nachname',
+        'geschlecht' => 'geschlecht',
+    ];
 
-        $sortierspalte = $sortierbareSpalten[$sortierung] ?? 'id';
-        $richtung = in_array($richtung, ['asc', 'desc']) ? $richtung : 'desc';
+    $sortierspalte = $sortierbareSpalten[$sortierung] ?? 'id';
+    $richtung = in_array($richtung, ['asc', 'desc']) ? $richtung : 'desc';
 
-        // Berechtigungsprüfung: Darf Benutzer alle Teilnehmer sehen?
-        $darfAlleTeilnehmerSehen = $benutzer->hasPermissionTo('teilnehmer.view.all');
+    // Prüfen, ob User ALLE sehen darf
+    $darfAlle = $benutzer->hasPermissionTo('teilnehmer.view.all');
 
-        // Basis-Query
-        $abfrage = Personen::query()->where('typ', 'teilnehmer')
-        ->with('projekte');
+    // Basis-Query (kein ->get() !!)
+    $abfrage = Personen::query()
+        ->teilnehmer()
+        ->active()
+        ->visibleForUser($benutzer)   // <-- dein globaler Berechtigungsscope
+        ->with(['projekte.abteilung', 'standorte']);
 
-        if (!$darfAlleTeilnehmerSehen) {
-            // Wenn Benutzer keine volle Berechtigung hat → einschränken
-            $benutzerProjekt = [$benutzer->current_team_id];
-            $benutzerProjektIds  = $benutzer->projekte()->pluck('projekts.id')->toArray();
-            $benutzerStandortIds = $benutzer->standorte()->pluck('standorts.id')->toArray();
-            $abfrage->whereHas('projekte', function ($query) use ($benutzerProjekt) {
-                $query->whereIn('projekts.id', $benutzerProjekt);
-            })->whereHas('standorte', function ($query) use ($benutzerStandortIds) {
-                $query->whereIn('standorts.id', $benutzerStandortIds);
-            });
+    // Wenn KEINE Vollberechtigung → Projekte + Standorte filtern
+    if (!$darfAlle) {
 
-        }
+        // Projekte des Benutzers
+        $benutzerProjektIds = $benutzer->projekte()->pluck('projekts.id')->toArray();
 
+        // Standorte des Benutzers
+        $benutzerStandortIds = $benutzer->standorte()->pluck('standorts.id')->toArray();
 
-        // Suche anwenden
-        $abfrage->when($suchbegriff, function ($query) use ($suchbegriff) {
-            $query->where(function ($unterabfrage) use ($suchbegriff) {
-                $unterabfrage->where(DB::raw("CONCAT(vorname, ' ', nachname)"), 'like', "%{$suchbegriff}%")
-                            ->orWhere(DB::raw("CONCAT(nachname, ' ', vorname)"), 'like', "%{$suchbegriff}%")
-                            ->orWhere('vorname', 'like', "%{$suchbegriff}%")
-                            ->orWhere('nachname', 'like', "%{$suchbegriff}%");
-            });
+        $abfrage->where(function ($q) use ($benutzerProjektIds, $benutzerStandortIds) {
+
+            // Teilnehmer aus gleichen Projekten
+            if (!empty($benutzerProjektIds)) {
+                $q->whereHas('projekte', function ($sub) use ($benutzerProjektIds) {
+                    $sub->whereIn('projekts.id', $benutzerProjektIds);
+                });
+            }
+
+            // Teilnehmer aus gleichen Standorten
+            if (!empty($benutzerStandortIds)) {
+                $q->orWhereHas('standorte', function ($sub) use ($benutzerStandortIds) {
+                    $sub->whereIn('standorts.id', $benutzerStandortIds);
+                });
+            }
         });
-
-        // Sortierung anwenden
-        $abfrage->orderBy($sortierspalte, $richtung);
-        // Ergebnis zurückgeben
-        return Inertia::render('Teilnehmer/Index', [
-            'teilnehmers' => $abfrage->paginate(50),
-            'gruppen' => $gruppen,
-            'filters' => [
-                'search'    => $suchbegriff,
-                'sort'      => $sortierung,
-                'direction' => $richtung,
-            ],
-        ]);
     }
+
+    // 🔍 Suche
+    if ($suchbegriff) {
+        $abfrage->where(function ($q) use ($suchbegriff) {
+            $q->where(DB::raw("CONCAT(vorname, ' ', nachname)"), 'like', "%{$suchbegriff}%")
+              ->orWhere(DB::raw("CONCAT(nachname, ' ', vorname)"), 'like', "%{$suchbegriff}%")
+              ->orWhere('vorname', 'like', "%{$suchbegriff}%")
+              ->orWhere('nachname', 'like', "%{$suchbegriff}%");
+        });
+    }
+
+    // Sortieren
+    $abfrage->orderBy($sortierspalte, $richtung);
+
+    return Inertia::render('Teilnehmer/Index', [
+        'teilnehmers' => $abfrage->paginate(50)->withQueryString(),
+        'gruppen' => $gruppen,
+        'filters' => [
+            'search'    => $suchbegriff,
+            'sort'      => $sortierung,
+            'direction' => $richtung,
+        ],
+    ]);
+}
+
 
     public function create()
     {
@@ -100,6 +119,7 @@ class TeilnehmerController extends Controller
 
     public function store(Request $request)
     {
+
         try {
             // Verwende die Facade für das Abrufen der Eingabedaten
             $data = $request->all(); // holt alle Daten
@@ -111,10 +131,11 @@ class TeilnehmerController extends Controller
                 'geschlecht' => ['required', 'in:m,w,d'],
             ])->validate();
 
+                 $validatedData['typ'] = 'teilnehmer';
 
             // Passwort hashen und Benutzer erstellen
               // Passwort hashen und Benutzer erstellen
-            $teilnehmer = Teilnehmer::create($validatedData);
+            $teilnehmer = Personen::create($validatedData);
 
 
             return response()->json(['message' => 'Benutzer erfolgreich erstellt!', 'teilnehmer' => $teilnehmer], 201);
@@ -178,19 +199,20 @@ class TeilnehmerController extends Controller
          $teilnehmerData = $personen->toArray();
 
         //$betreuer = Personen::where('typ', 'mitarbeiter')->orderBy('nachname')->select('nachname', 'vorname')->get();
-        $betreuer = Personen::where('typ', 'mitarbeiter')
+        $betreuer = Personen::mitarbeiter()
             ->whereHas('projekte', function($query) use ($personen) {
-                $query->whereIn('projekts.id', $personen->projekte->pluck('id'));
+                $query->where('projekts.id', auth()->user()->current_team_id);
             })
             ->orderBy('nachname')
             ->select('nachname', 'vorname', 'id') // id hinzugefügt für Referenz
             ->get();
 
+
         $projekte = Projekt::orderBy('name')->get();
         $gruppen = Gruppe::where('projekt_id', Auth()->user()->current_team_id)->with('bereich', 'betreuer')->get();
 
         $thisProjekt = Projekt::where('id', auth()->user()->current_team_id)->first();
-        $dokumente = $thisProjekt->dokumente;
+        $dokumente = $thisProjekt?->dokumente;
         $kontakttypen = Kontakttypen::all();
         return Inertia::render('Teilnehmer/Edit', [
             'teilnehmer' => $personen->toArray(),
@@ -220,22 +242,21 @@ class TeilnehmerController extends Controller
     public function update(Request $request, $id)
     {
         try {
-            $teilnehmer = Personen::findOrFail($id);
 
-            $validatedData = Validator::make($request->all(), [
+            $validatedData = $request->validate([
                 'vorname' => ['required', 'max:50'],
                 'nachname' => ['required', 'max:50'],
                 'geschlecht' => ['required', 'in:m,w,d'],
                 'geburtsdatum' => ['nullable', 'date'],
                 'bemerkungen' => ['nullable', 'string'],
-            ])->validate();
-
+            ]);
+            $teilnehmer = Personen::findOrFail($id);
             $teilnehmer->update($validatedData);
 
             return back()->with('success', 'Teilnehmer wurde erfolgreich aktualisiert.');
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             return response()->json(['message' => 'Validation Error', 'errors' => $e->errors()], 422);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return response()->json([
                 'message' => 'Ein Fehler ist aufgetreten.',
                 'error'   => $e->getMessage(),
@@ -256,14 +277,13 @@ class TeilnehmerController extends Controller
             'teilnehmer_id'             => ['required', 'exists:personens,id'],
             'kundennummer'              => ['string', 'nullable'],
         ]);
-
         // 2) Speichern (create/update anhand person_id)
        PersonenHasSozialedaten::updateOrCreate(
             ['person_id' => $validated['teilnehmer_id']],
             [
             'wohnsitz_stabil' => $validated['ist_wohnsitz_stabil'],
-            'leistungsbezug_id' => $validated['leistungsbezug_id'],
-            'behinderung' => $validated['hat_behinderung'],
+            'leistungsbezug_id' => $validated['leistungsbezug_id'] ?? null,
+            'behinderung' => $validated['hat_behinderung']  ,
             'migrationshintergrund' => $validated['hat_migrationshintergrund'],
             'gefluechtet' => $validated['ist_gefluechtet'],
             'drittstaatsangehoerig' => $validated['ist_drittstaatsangehoerig'],

@@ -69,12 +69,13 @@ import Swal from 'sweetalert2'
 import { router } from '@inertiajs/vue3'
 
 const props = defineProps({
-  visible: Boolean,
   isEditing: Boolean,
   form: Object,
   vehicles: Array,
   editId: Number,
 })
+const visible = ref(false)
+
 const emit = defineEmits(['close', 'saved'])
 
 function submit() {

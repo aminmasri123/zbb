@@ -44,7 +44,10 @@ const { teilnehmers, authProjekte, rollen, gruppen  } = defineProps({
     },
 });
 
-const teilnehmerList = computed(() => teilnehmers.data);
+const teilnehmerList = ref([...teilnehmers.data]);
+watch(() => teilnehmers.data, (newValue) => {
+    teilnehmerList.value = [...newValue];
+});
 
 // Löschbestätigung anzeigen und Abteilungsnamen speichern
 const confirmDelete = (teilnehmer) => {
@@ -55,6 +58,24 @@ const confirmDelete = (teilnehmer) => {
     showModalLöschen.value = true; // Modal anzeigen
     console.log('Löschung erfolgreich:', teilnehmerToDelete.value.id);
 
+};
+const deleteTeilnehmer = (id) => {
+    // Sofort aus der lokalen Liste entfernen
+    const index = teilnehmerList.value.findIndex(t => t.id === id);
+    if (index !== -1) {
+        teilnehmerList.value.splice(index, 1);
+    }
+
+    // Modal schließen
+    showModalLöschen.value = false;
+
+    // Optional: Alert
+    Swal.fire({
+        title: 'Erfolg!',
+        text: 'Teilnehmer wurde gelöscht.',
+        icon: 'success',
+        timer: 2000
+    });
 };
 
 // Watch für Änderungen in der Suche
@@ -291,15 +312,8 @@ const sortByColumn = (column) => {
             <ModalCreateTeilnehmer :visible="isModalOpen"  @close="closeModal" @add-teilnehmer="addTeilnehmer" />
 
         <!-- Modal für die Löschung der Abteilung-->
-        <ModalDestroy v-if="showModalLöschen" @close="showModalLöschen = false" :seite="seite"  :toDelete="teilnehmerToDelete">
-            <template #header>
-                <!--  Header Ingalt-->
-            </template>
-            <template #body>
-            </template>
-            <template #footer>
 
-            </template>
-        </ModalDestroy>
+            <ModalDestroy v-if="showModalLöschen"@close="showModalLöschen = false"@delete="deleteTeilnehmer":seite="seite":toDelete="teilnehmerToDelete"/>
+
     </app-layout>
 </template>

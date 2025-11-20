@@ -539,7 +539,6 @@ class UserSeeder extends Seeder
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '8',
                 'beschreibung' => null
-
             ],
 
             [ // id = 4
@@ -547,28 +546,24 @@ class UserSeeder extends Seeder
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '9',
                 'beschreibung' => null
-
             ],
             [ // id = 5
                 'name' => 'benutzer.store',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '9',
                 'beschreibung' => null
-
             ],
             [ // id = 6
                 'name' => 'benutzer.update',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '9',
                 'beschreibung' => null
-
             ],
             [ // id = 7
                 'name' => 'benutzer.destroy',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '9',
                 'beschreibung' => null,
-
             ],
 
              [ // id = 8
@@ -576,21 +571,18 @@ class UserSeeder extends Seeder
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '2',
                 'beschreibung' => null,
-
             ],
             [ // id = 9
                 'name' => 'kooperationspartner.store',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '2',
                 'beschreibung' => null,
-
             ],
             [ // id = 10
                 'name' => 'kooperationspartner.update',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '2',
                 'beschreibung' => null,
-
             ],
             [ // id = 11
                 'name' => 'kooperationspartner.destroy',
@@ -772,9 +764,6 @@ class UserSeeder extends Seeder
                 'berechtigungskategorie_id' => '24',
                 'beschreibung' => null,
             ],
-
-
-
             [ // id = 40
                 'name' => 'dienstwagen.index',
                 'guard_name' => 'web',
@@ -811,7 +800,97 @@ class UserSeeder extends Seeder
                 'berechtigungskategorie_id' => '25',
                 'beschreibung' => null,
             ],
+            [ // id = 46
+                'name' => 'dienstwagen.fahrtenbuch.index',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '25',
+                'beschreibung' => null,
+            ],
+            [ // id = 47
+                'name' => 'dienstwagen.fahrtenbuch.store',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '25',
+                'beschreibung' => null,
+            ],
+            [ // id = 48
+                'name' => 'dienstwagen.fahrtenbuch.update',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '25',
+                'beschreibung' => null,
+            ],
+            [ // id = 49
+                'name' => 'dienstwagen.fahrtenbuch.destroy',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '25',
+                'beschreibung' => null,
+            ],
+            [ // id = 50
+                'name' => 'gruppe.index',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '3',
+                'beschreibung' => null,
+            ],
+            [ // id = 51
+                'name' => 'gruppe.store',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '3',
+                'beschreibung' => null,
+            ],
+            [ // id = 52
+                'name' => 'gruppe.update',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '3',
+                'beschreibung' => null,
+            ],
+            [ // id = 53
+                'name' => 'gruppe.destroy',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '3',
+                'beschreibung' => null,
+            ],
+            [ // id = 54
+                'name' => 'dienstwagen.fahrtenbuch.view.all',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '25',
+                'beschreibung' => null,
+            ],
+            [ // id = 55
+                'name' => 'dienstwagen.fahrtenbuch.view.abteilung',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '5',
+                'beschreibung' => null,
+            ],
+            [ // id = 56
+                'name' => 'dienstwagen.fahrtenbuch.view.projekt',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '18',
+                'beschreibung' => null,
+            ],
+            [ // id = 57
+                'name' => 'finanzen.index',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '10',
+                'beschreibung' => null,
+            ],
 
+            [ // id = 58
+                'name' => 'teilnehmer.view.abteilung',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '5',
+                'beschreibung' => null,
+            ],
+            [ // id = 59
+                'name' => 'teilnehmer.view.projekt',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '5',
+                'beschreibung' => null,
+            ],
+            [ // id = 60
+                'name' => 'teilnehmer.view.standort',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '5',
+                'beschreibung' => null,
+            ],
         ]);
 
         DB::table('model_has_roles')->insert([
@@ -1023,6 +1102,42 @@ class UserSeeder extends Seeder
                 'permission_id' => '45',
                 'role_id' => '1',
             ],
+            [
+                'permission_id' => '46',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '47',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '48',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '49',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '50',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '51',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '52',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '53',
+                'role_id' => '1',
+            ],
+            [
+                'permission_id' => '54',
+                'role_id' => '1',
+            ],
 
         ]);
 
@@ -1137,18 +1252,23 @@ class UserSeeder extends Seeder
             [
                 'personen_id' => '1',
                 'projekt_id' => '1',
+                'standort_id' => '1',
+
             ],
             [
                 'personen_id' => '1',
                 'projekt_id' => '2',
+                'standort_id' => '1',
             ],
             [
                 'personen_id' => '1',
                 'projekt_id' => '3',
+                'standort_id' => '1',
             ],
             [ // id = 1
                 'personen_id' => '1',
                 'projekt_id' => '5',
+                'standort_id' => '1',
             ],
 
         ]);
@@ -1171,6 +1291,7 @@ class UserSeeder extends Seeder
             ProjektHasPersonen::create([
                 'projekt_id'    => $faker->randomElement(Projekt::pluck('id')->toArray()),
                 'personen_id' => $teilnehmer->id, // gerade erstellter Teilnehmer
+                'standort_id'    => '1',
             ]);
             StandortHasPersonen::create([
                 'standort_id'    => $faker->randomElement(Standort::pluck('id')->toArray()),

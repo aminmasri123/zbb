@@ -44,8 +44,10 @@ class DienstwagenController extends Controller
             'naechste_wartung'  => 'nullable|date',
             //'allowed_drivers' => 'nullable|array',
         ]);
+        if (!empty($data['naechste_wartung'])){
 
-        $data['naechste_wartung'] = Carbon::parse($data['naechste_wartung'])->format('Y-m-d');
+            $data['naechste_wartung'] = Carbon::parse($data['naechste_wartung'])->format('Y-m-d');
+        }
 
         $vehicle = Dienstwagen::create($data);
 

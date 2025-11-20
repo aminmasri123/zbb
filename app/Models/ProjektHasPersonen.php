@@ -5,6 +5,7 @@ use App\Models\Standort;
 
 use App\Models\zeitraum;
 use App\Models\Austritttypen;
+use App\Models\ProjektHasPersonenMeta;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\ProjektHasTeilnehmerAbschluss;
 use Illuminate\Database\Eloquent\Relations\Pivot;
@@ -16,6 +17,7 @@ class ProjektHasPersonen extends Pivot //Model
     use HasFactory;
     protected $table = 'projekt_has_personens'; // ✅ wichtig, da Pivot keine Tabelle rät
 
+    public $incrementing = true;  // <-- EXTREM WICHTIG
 
     protected $fillable = [
         'id',
@@ -26,6 +28,10 @@ class ProjektHasPersonen extends Pivot //Model
         'status',
         'bemerkung'
     ];
+    public function meta()
+    {
+        return $this->hasOne(ProjektHasPersonenMeta::class,  'projekt_person_id');
+    }
 
     public function standort()
     {

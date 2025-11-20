@@ -19,53 +19,70 @@ class UserController extends Controller
      public function index(Request $request)
     {
         $rollen = Role::select('id', 'name')->get();
-        $search = $request->input('search');
-        $selectedProject = $request->input('project');
-        $sort = $request->input('sort', 'id');       // Standardmäßig nach ID sortieren
-        $direction = $request->input('direction', 'desc'); // Standardmäßig absteigend
 
-        // Stelle sicher, dass die Sortierspalte nur gültige Spaltennamen enthält
-        $allowedSortColumns = ['id', 'first_name', 'last_name', 'email'];
+        $search          = $request->input('search');
+        $selectedProject = $request->input('project');
+        $sort            = $request->input('sort', 'id');
+        $direction       = $request->input('direction', 'desc');
+
+        // Gültige Sortierspalten
+        $allowedSortColumns = [
+            'id',
+            'username',
+            'email',
+            'vorname',
+            'nachname',
+        ];
+
+        // Ungültige Spalten abfangen
         if (!in_array($sort, $allowedSortColumns)) {
             $sort = 'id';
         }
 
-        $authUser = auth()->user();
+        $authUser   = auth()->user();
         $adminRoles = ['Administrator', 'Geschäftsführer', 'Sekretariat'];
 
         $query = User::query()
+            ->select('users.*') // wichtig für Pagination!
+            ->leftJoin('personens', 'users.person_id', '=', 'personens.id')
             ->when($search, function ($query, $search) {
                 $query->where(function ($query) use ($search) {
-                    // Verkette first_name und last_name
-                    $query->where(DB::raw("CONCAT(first_name, ' ', last_name)"), 'like', "%{$search}%")
-                        ->orWhere('first_name', 'like', "%{$search}%")
-                        ->orWhere('last_name', 'like', "%{$search}%")
-                        ->orWhere('email', 'like', "%{$search}%");
+                    $query
+                        ->where('users.username', 'like', "%{$search}%")
+                        ->orWhere('personens.vorname', 'like', "%{$search}%")
+                        ->orWhere('personens.nachname', 'like', "%{$search}%")
+                        ->orWhere('users.email', 'like', "%{$search}%");
                 });
             })
-            ->with('projekte')
-            ->with('roles:name,color');
+            ->with(['projekte', 'person', 'roles:name,color']);
 
+        // Zugriffsbeschränkung
         if (!$authUser->roles->whereIn('name', $adminRoles)->count()) {
             $query->whereHas('projekte', function ($query) use ($authUser) {
                 $query->whereIn('projekt_id', $authUser->projekte->pluck('id'));
             });
         }
 
+        // Filter nach Projekt
         if ($selectedProject) {
             $query->whereHas('projekte', function ($query) use ($selectedProject) {
                 $query->where('name', $selectedProject);
             });
         }
 
-        $query->orderBy($sort, $direction);
-
+        // Sortierung (JOIN beachten!)
+        if (in_array($sort, ['vorname', 'nachname'])) {
+            $query->orderBy("personens.$sort", $direction);
+        } else {
+            $query->orderBy("users.$sort", $direction);
+        }
         return Inertia::render('User/Index', [
-            'users'        => $query->paginate(200),
+            'users'        => $query->paginate(30)->withQueryString(),
             'authProjekte' => $authUser->projekte,
             'rollen'       => $rollen,
         ]);
     }
+
 
    public function switch(Request $request)
     {
