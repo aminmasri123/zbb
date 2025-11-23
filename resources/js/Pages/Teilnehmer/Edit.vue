@@ -175,6 +175,7 @@
                 <thead class="bg-gray-100">
                     <tr>
                     <th class="px-4 py-2 border">Projekte</th>
+                    <th class="px-4 py-2 border">Projektbegleiter</th>
                     <th class="px-4 py-2 border">Antragsdatum</th>
                     <th class="px-4 py-2 border">Anfangsdatum</th>
                     <th class="px-4 py-2 border">Enddatum</th>
@@ -187,88 +188,92 @@
                 <tbody>
                     <!-- Schleife über alle Projekte -->
                     <template v-for="(projekt, i) in teilnehmer.projekte" :key="i">
+                        <!-- Wenn das Projekt mehrere Zeiträume hat -->
+                        <tr
+                            v-for="(zeit, z) in projekt.pivot_model?.zeitraume || []"
+                            :key="zeit.id"
+                            class="hover:bg-gray-50"
+                        >
+                            <!-- Projektname nur einmal pro Gruppe -->
+                            <td
+                                v-if="z === 0"
+                                :rowspan="projekt.pivot_model?.zeitraume?.length || 1"
+                                class="border px-4 py-2 align-middle font-medium bg-gray-50"
+                                >
+                                {{ projekt.name }}
+                            </td>
+                            <td
+                                v-if="z === 0"
+                                :rowspan="projekt.pivot_model?.zeitraume?.length || 1"
+                                class="border px-4 py-2 align-middle font-medium bg-gray-50"
+                                >
+                                {{ projekt.pivot_model.meta?.massnahmebegleiter }}
+                            </td>
 
-                    <!-- Wenn das Projekt mehrere Zeiträume hat -->
-                    <tr
-                        v-for="(zeit, z) in projekt.pivot_model?.zeitraume || []"
-                        :key="zeit.id"
-                        class="hover:bg-gray-50"
-                    >
-                        <!-- Projektname nur einmal pro Gruppe -->
-                        <td
-                            v-if="z === 0"
-                            :rowspan="projekt.pivot_model?.zeitraume?.length || 1"
-                            class="border px-4 py-2 align-middle font-medium bg-gray-50"
-                            >
-                            {{ projekt.name }}
-                        </td>
+                            <td class="border px-4 py-2">{{ zeit.antragsdatum  || '-' }}</td>
+                            <td class="border px-4 py-2">{{ zeit.anfangsdatum  || '-' }}</td>
+                            <td class="border px-4 py-2">{{ zeit.enddatum || '-'  }}</td>
+                            <td class="border px-4 py-2">{{ zeit.starttermin  || '-' }}</td>
+                            <td class="border px-4 py-2">{{ zeit.endtermin  || '-' }}</td>
+                            <td class="border px-6 py-4 text-center">
+                                <!-- Dropdown für Aktion -->
+                                <Dropdown>
+                                    <template #trigger>
+                                        <button class=" items-center  text-sm leading-4 font-medium text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
+                                            <span class="cursor-pointer">
+                                                <i class="transform transition-transform duration-300  la la-ellipsis-v la-lg"></i>
+                                            </span>
+                                        </button>
+                                    </template>
 
-                        <td class="border px-4 py-2">{{ $formatDate(zeit.antragsdatum) || '-' }}</td>
-                        <td class="border px-4 py-2">{{ $formatDate(zeit.anfangsdatum) || '-' }}</td>
-                        <td class="border px-4 py-2">{{ $formatDate(zeit.enddatum) || '-'  }}</td>
-                        <td class="border px-4 py-2">{{ $formatDate(zeit.starttermin) || '-' }}</td>
-                        <td class="border px-4 py-2">{{ $formatDate(zeit.endtermin) || '-' }}</td>
-                        <td class="border px-6 py-4 text-center">
-                            <!-- Dropdown für Aktion -->
-                            <Dropdown>
-                                <template #trigger>
-                                    <button class=" items-center  text-sm leading-4 font-medium text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
-                                        <span class="cursor-pointer">
-                                            <i class="transform transition-transform duration-300  la la-ellipsis-v la-lg"></i>
+                                    <template #content >
+                                        <!-- Gefilterte Projektauswahl -->
+                                        <span class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100 " @click="confirmDelete(projekt, 'projekt')">
+                                            {{ $t('Löschen') }} <i class="las la-trash-alt"></i>
                                         </span>
-                                    </button>
-                                </template>
-
-                                <template #content >
-                                    <!-- Gefilterte Projektauswahl -->
-                                    <span class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100 " @click="confirmDelete(projekt, 'projekt')">
-                                          {{ $t('Löschen') }} <i class="las la-trash-alt"></i>
-                                    </span>
-                                    <span
-                                        class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"
-                                        @click="openProjektEdit(zeit, projekt)"
-                                        >
-                                        {{ $t('Bearbeiten') }} <i class="las la-edit"></i>
-                                    </span>
-                                    <a  target="_blank" :href="route('export.excel.esfStammblatt', [props.teilnehmer.id, projekt.id])" class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100" >ESF <i class="las la-file-download"></i></a>
-                                </template>
-                            </Dropdown>
-                        </td>
-                    </tr>
-
-                    <!-- Falls keine Zeiträume vorhanden sind -->
-                    <tr v-if="!projekt.pivot_model?.zeitraume?.length" class="hover:bg-gray-50">
-                        <td class="border px-4 py-2 font-medium bg-gray-50">{{ projekt.name }}</td>
-                        <td colspan="5" class="border px-4 py-2 text-gray-500 italic">
-                        Keine Zeiträume vorhanden
-                        </td>
-                        <td class="border px-6 py-4 text-center">
-                            <!-- Dropdown für Aktion -->
-                            <Dropdown>
-                                <template #trigger>
-                                    <button class=" items-center  text-sm leading-4 font-medium text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
-                                        <span class="cursor-pointer">
-                                            <i class="transform transition-transform duration-300  la la-ellipsis-v la-lg"></i>
+                                        <span
+                                            class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"
+                                            @click="openProjektEdit(zeit, projekt)"
+                                            >
+                                            {{ $t('Bearbeiten') }} <i class="las la-edit"></i>
                                         </span>
-                                    </button>
-                                </template>
+                                        <a  target="_blank" :href="route('export.excel.esfStammblatt', [props.teilnehmer.id, projekt.id])" class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100" >ESF <i class="las la-file-download"></i></a>
+                                    </template>
+                                </Dropdown>
+                            </td>
+                        </tr>
 
-                                <template #content >
-                                    <!-- Gefilterte Projektauswahl -->
-                                    <span class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100 " @click="confirmDelete(projekt, 'projekt')">
-                                          {{ $t('Löschen') }} <i class="las la-trash-alt"></i>
-                                    </span>
-                                    <span
-                                        class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"
-                                        @click="openProjektEdit(zeit, projekt)"
-                                        >
-                                        {{ $t('Bearbeiten') }} <i class="las la-edit"></i>
-                                    </span>
-                                </template>
-                            </Dropdown>
-                        </td>
-                    </tr>
+                        <!-- Falls keine Zeiträume vorhanden sind -->
+                        <tr v-if="!projekt.pivot_model?.zeitraume?.length" class="hover:bg-gray-50">
+                            <td class="border px-4 py-2 font-medium bg-gray-50">{{ projekt.name }}</td>
+                            <td class="border px-4 py-2 font-medium bg-gray-50">{{ projekt.pivot_model.meta?.massnahmebegleiter }}</td>
+                            <td colspan="5" class="border px-4 py-2 text-gray-500 italic"> Keine Zeiträume vorhanden</td>
+                            <td class="border px-6 py-4 text-center">
+                                <!-- Dropdown für Aktion -->
+                                <Dropdown>
+                                    <template #trigger>
+                                        <button class=" items-center  text-sm leading-4 font-medium text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
+                                            <span class="cursor-pointer">
+                                                <i class="transform transition-transform duration-300  la la-ellipsis-v la-lg"></i>
+                                            </span>
+                                        </button>
+                                    </template>
 
+                                    <template #content >
+                                        <!-- Gefilterte Projektauswahl -->
+                                        <span class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100 " @click="confirmDelete(projekt, 'projekt')">
+                                            {{ $t('Löschen') }} <i class="las la-trash-alt"></i>
+                                        </span>
+                                        <span
+                                            class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"
+                                            @click="openProjektEdit(zeit, projekt)"
+                                            >
+                                            {{ $t('Bearbeiten') }} <i class="las la-edit"></i>
+                                        </span>
+                                    </template>
+                                </Dropdown>
+                            </td>
+                        </tr>
                     </template>
                 </tbody>
             </table>
@@ -277,10 +282,10 @@
             <!-- =================== Anwesenheit =================== -->
             <div v-else-if="activeTab === 'Anwesenheit'">
                  <!-- Anwesenheit hinzufügen -->
-                <div class="flex gap-4">
-                    <button @click="showModalAnwesenheit = true" class="bg-zbb text-white px-4 mb-6 mt-4   py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
-                    <span v-if="!loadingProjekt">➕ Anwesenheit</span>
-                        <span v-else>...</span>
+                <div class="flex gap-4 text-center justify-center">
+                    <button @click="showModalAnwesenheit = true" class="bg-zbb w-4/6 text-white px-4 mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition" >
+                        <span v-if="!loadingProjekt">➕ Anwesenheit</span>
+                            <span v-else>...</span>
                     </button>
                     <div class="mb-6 mt-4">
                         <select
@@ -296,9 +301,9 @@
                 </div>
 
                 <!-- Tabelle -->
-                <div class="bg-white rounded-2xl shadow-md border mt-8 p-8 w-5/6 mx-auto">
+                <div class="bg-white rounded-2xl shadow-md border mt-8 p-8 mx-auto w-5/6">
                     <!-- Wenn keine Anwesenheit -->
-                    <div v-if="props.teilnehmer.gruppen === 0" class="text-gray-500 italic text-sm">
+                    <div v-if="teilnehmer.anwesenheiten.length === 0" class="text-gray-500 italic text-sm">
                         <div class="p-8 text-center text-gray-500">
                             <div class="mb-4 flex justify-center text-6xl text not-italic">
                                 🕒
@@ -311,65 +316,84 @@
                     <!-- Karten -->
                     <div v-else class="space-y-3">
                         <!-- Gruppierte Ausgabe -->
-                        <div v-for="(gruppen, monat) in gruppenNachMonat" :key="monat">
-                        <div
-                            v-if="!selectedMonth || selectedMonth === monat"
-                            class="mt-8"
-                        >
-                            <h4 class="text-lg font-semibold text-zbb border-b pb-1 mb-3">
-                                📆 {{ monat }}
-                            </h4>
+                        <div v-for="(anwesenheiten, monat) in gruppenNachMonat" :key="monat">
+                            <div v-if="!selectedMonth || selectedMonth === monat" class="mt-8">
+                                <h4 class="text-lg font-semibold text-zbb border-b pb-1 mb-3">📆 {{ monat }}</h4>
+                                <div v-for="anwesenheit in anwesenheiten" :key="anwesenheit.id" class="bg-white border border-gray-200 rounded-xl px-3 py-4 shadow-sm hover:shadow-md mb-4" >
+                                <div class="flex py-4">
+                                    <!-- Bereich & Datum -->
+                                    <div class="w-1/4 font-semibold">
+                                        <p v-if="anwesenheit.gruppe" class="text-zbb"><span class="text-lg ml-8">🎨</span> {{ anwesenheit.gruppe?.bereich.name }}</p>
+                                        <p class="text-zbb"><span class="text-lg ml-8">📅</span> {{ formatDate(anwesenheit.tag.datum) }}</p>
+                                    </div>
 
-                            <div
-                            v-for="gruppe in gruppen"
-                            :key="gruppe.id"
-                            class="flex flex-col sm:flex-row justify-between sm:items-center bg-white border border-gray-100 rounded-xl px-5 py-4 shadow-sm hover:shadow-md transition-all duration-200 mb-2"
-                            >
-                            <div class="flex">
-                                <div class="items-center gap-6 w-96">
-                                <div class="font-semibold">
-                                    <p class="text-zbb mr-8"><span class="text-lg ml-8">🎨</span> {{ gruppe.bereich.name }}</p>
-                                    <p class="text-zbb mr-8"><span class="text-lg ml-8">📅</span> {{ formatDate(gruppe.pivot.tag.datum) }}</p>
-                                    <p><span class="text-lg ml-8">🕒</span> {{ formatTime(gruppe.startzeit) }} - {{ formatTime(gruppe.endzeit) }}</p>
-                                </div>
-                                </div>
-
-                                <div class="items-center gap-6 w-64 mt-8">
-                                <div class="font-semibold">
+                                    <!-- Soll -->
+                                    <div class="w-1/4 font-semibold ">
                                     <p class="ml-8 mr-8">🗓️ Geplante Arbeitszeit</p>
-                                    <p><span class="text-lg ml-8">⏰</span> {{ formatTime(gruppe.pivot.zeitgeplant.startzeit) }} - {{ formatTime(gruppe.pivot.zeitgeplant.endzeit) }}</p>
-                                </div>
-                                </div>
+                                    <p><span class="text-lg ml-8">⏰</span>
+                                        {{ formatTime(anwesenheit.zeitgeplant.startzeit) }} -
+                                        {{ formatTime(anwesenheit.zeitgeplant.endzeit) }}
+                                    </p>
+                                    </div>
 
-                                <div class="items-center gap-6 w-96 mt-8">
-                                <div class="font-semibold">
+                                    <!-- Ist -->
+                                    <div class="w-1/4 font-semibold ">
                                     <p class="ml-8 mr-8">💼 Tatsächliche Arbeitszeit</p>
-                                    <p><span class="text-lg ml-8">⌛</span> {{ formatTime(gruppe.pivot?.zeittatsaechlich?.startzeit) }} - {{ formatTime(gruppe.pivot?.zeittatsaechlich?.endzeit) }}</p>
-                                </div>
-                                </div>
-                            </div>
+                                    <p><span class="text-lg ml-8">⌛</span>
+                                        {{ formatTime(anwesenheit.zeittatsaechlich?.startzeit) }} -
+                                        {{ formatTime(anwesenheit.zeittatsaechlich?.endzeit) }}
+                                    </p>
+                                    </div>
 
-                            <div class="flex gap-2 mt-4 sm:mt-0">
-                                <button
-                                @click="openModalEdit(gruppe)"
-                                class="px-4 py-2 text-sm font-medium rounded-md bg-zbb text-white shadow-sm hover:bg-zbb/90 transition"
-                                >
-                                Verwalten
-                                </button>
-                                <button
-                                @click="confirmDelete(gruppe.pivot, 'gruppeHasPersonen')"
-                                class="px-4 py-2 text-sm font-medium rounded-md bg-red-600 text-white shadow-sm hover:bg-red-700 transition"
-                                >
-                                Löschen
-                                </button>
-                            </div>
+                                    <!-- Abweichung -->
+                                    <div class="w-1/4 font-semibold ">
+                                    <p class="ml-8 mr-8">🔥 Abweichung</p>
+                                        <p class="flex items-center ml-8">
+                                            <span
+                                            class="text-2xl mr-2"
+                                            :class="abweichungsClass(berechneAbweichungMinuten(anwesenheit))"
+                                            >
+                                            {{ abweichungsIcon(berechneAbweichungMinuten(anwesenheit)) }}
+                                            </span>
+
+                                            <span
+                                            class="text-lg font-mono"
+                                            :class="abweichungsClass(berechneAbweichungMinuten(anwesenheit))"
+                                            >
+                                            {{ formatMinutes(berechneAbweichungMinuten(anwesenheit)) }}
+                                            </span>
+                                        </p>
+                                    </div>
+
+                                </div>
+
+                                <!-- Status-Badge + Buttons -->
+                                <div class="flex justify-between mt-8 px-10">
+                                    <div :style="{ backgroundColor: anwesenheit.status.farben }"
+                                        class="py-2 px-4 text-white shadow-lg rounded-full">
+                                    {{ anwesenheit.status.abkuerzung }}
+                                    </div>
+
+                                    <div class="flex gap-2">
+                                    <button @click="openModalEdit(anwesenheit)"
+                                            class="px-4 py-2 text-sm font-medium rounded-md bg-zbb text-white shadow-sm hover:bg-zbb/90">
+                                        Verwalten
+                                    </button>
+
+                                    <button @click="confirmDelete(anwesenheit, 'gruppeHasPersonen')"
+                                            class="px-4 py-2 text-sm font-medium rounded-md bg-red-600 text-white shadow-sm hover:bg-red-700">
+                                        Löschen
+                                    </button>
+                                    </div>
+                                </div>
+
+                                </div>
                             </div>
                         </div>
-                        </div>
+
 
                     </div>
                 </div>
-
             </div>
 
 
@@ -1121,8 +1145,8 @@
             <!-- MODAL: PROJEKT BEARBEITEN -->
             <!-- 🔥 Modal: Projekt bearbeiten -->
 
-            <Modal v-if="showEditZuwseisungModal" @click.self="showEditZuwseisungModal = false">
-                <template #header>{{ $t('Projekt bearbeiten') }}</template>
+            <Modal v-if="showEditZuwseisungModal"   @close="showEditZuwseisungModal = false">
+                <template #header  >{{ $t('Projekt bearbeiten') }}</template>
 
                 <template #body>
                     <div class="grid grid-cols-2 gap-4">
@@ -1133,42 +1157,49 @@
                                 <label>Projektname</label>
                             </FloatLabel>
                         </div>
-
                         <div class="mb-4 w-full mx-1">
                             <FloatLabel variant="on">
-                                <DatePicker v-model="editForm.antragsdatum" dateFormat="yy-mm-dd" class="w-full" inputClass="w-full" manualInput="true" showIcon iconDisplay="input" />
-                                <label>Antragsdatum</label>
+                                <InputText v-model="editForm.massnahmebegleiter" class="w-full"/>
+                                <label>Ansprechpartner</label>
                             </FloatLabel>
                         </div>
+                    </div>
+
+                    <div class="mb-4 w-full mx-1">
+                        <FloatLabel variant="on">
+                            <DatePicker v-model="editForm.antragsdatum" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" :manualInput="true" showIcon iconDisplay="input" />
+                            <label>Antragsdatum</label>
+                        </FloatLabel>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
 
                         <div class="mb-4 w-full mx-1">
                             <FloatLabel variant="on">
-                                <DatePicker v-model="editForm.starttermin" dateFormat="yy-mm-dd" class="w-full" inputClass="w-full" manualInput="true" showIcon iconDisplay="input" />
+                                <DatePicker v-model="editForm.starttermin" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" :manualInput="true" showIcon iconDisplay="input" />
                                 <label>Starttermin</label>
                             </FloatLabel>
                         </div>
 
                         <div class="mb-4 w-full mx-1">
                             <FloatLabel variant="on">
-                                <DatePicker v-model="editForm.anfangsdatum" dateFormat="yy-mm-dd" class="w-full" inputClass="w-full" manualInput="true"  showIcon iconDisplay="input" />
+                                <DatePicker v-model="editForm.anfangsdatum" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" :manualInput="true"  showIcon iconDisplay="input" />
                                 <label>Anfangsdatum</label>
                             </FloatLabel>
                         </div>
 
                         <div class="mb-4 w-full mx-1">
                             <FloatLabel variant="on">
-                                <DatePicker v-model="editForm.endtermin" dateFormat="yy-mm-dd"  class="w-full" inputClass="w-full" manualInput="true"  showIcon iconDisplay="input" />
+                                <DatePicker v-model="editForm.endtermin" dateFormat="dd.mm.yy"  class="w-full" inputClass="w-full" :manualInput="true"  showIcon iconDisplay="input" />
                                 <label>Endtermin</label>
                             </FloatLabel>
                         </div>
 
                         <div class="mb-4 w-full mx-1">
                             <FloatLabel variant="on">
-                                <DatePicker v-model="editForm.enddatum" dateFormat="yy-mm-dd"  class="w-full" inputClass="w-full" manualInput="true" showIcon iconDisplay="input" />
+                                <DatePicker v-model="editForm.enddatum" dateFormat="dd.mm.yy"  class="w-full" inputClass="w-full" showIcon iconDisplay="input" />
                                 <label>Enddatum</label>
                             </FloatLabel>
                         </div>
-
                     </div>
                 </template>
 
@@ -1209,13 +1240,13 @@
                                     <label for="startTime" class="block text-sm font-medium text-gray-700 mb-2" >
                                         geplante Startzeit <span class="text-red-500">*</span>
                                     </label>
-                                    <input v-model="neueAnwesenheit.startTime" type="time" id="startTime" name="startTime" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
+                                    <input v-model="neueAnwesenheit.startTime" type="time" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
                                 </div>
                                 <div class="w-1/2">
                                     <label for="endTime" class="block text-sm font-medium text-gray-700 mb-2" >
                                         geplante Endzeit <span class="text-red-500">*</span>
                                     </label>
-                                    <input v-model="neueAnwesenheit.endTime" type="time" id="endTime" name="endTime" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
+                                    <input v-model="neueAnwesenheit.endTime" type="time"  required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
                                 </div>
                             </div>
 
@@ -1225,23 +1256,25 @@
                                     <label for="startTime" class="block text-sm font-medium text-gray-700 mb-2" >
                                         tatsächliche Startzeit
                                     </label>
-                                    <input v-model="neueAnwesenheit.tatstartTime" type="time" id="startTime" name="startTime" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
+                                    <input v-model="neueAnwesenheit.tatstartTime" type="time" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
                                 </div>
                                 <div class="w-1/2">
                                     <label for="endTime" class="block text-sm font-medium text-gray-700 mb-2" >
                                         tatsächliche Endzeit
                                     </label>
-                                    <input v-model="neueAnwesenheit.tatendTime" type="time" id="endTime" name="endTime" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
+                                    <input v-model="neueAnwesenheit.tatendTime" type="time" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
                                 </div>
                             </div>
+
+                            <!-- Bereiche -->
                             <div>
                                 <label for="startDate" class="block text-sm font-medium text-gray-700 mb-2" >
-                                        Gruppen <span class="text-red-500">*</span>
+                                        Beriech <span class="text-red-500">*</span>
                                 </label>
                                <Select
                                     v-model="neueAnwesenheit.gruppe"
-                                    :options="props.gruppen"
-                                    :optionLabel="(g) => `${g.bereich.name} (${new Date(g.anfangsdatum).toLocaleDateString('de-DE')} – ${new Date(g.enddatum).toLocaleDateString('de-DE')}) ${g.betreuer.vorname} ${g.betreuer.nachname} `"
+                                    :options="props.bereiche"
+                                    optionLabel="name"
                                     optionValue="id"
                                     class="w-full text-sm px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
                                     />
@@ -1544,6 +1577,7 @@
     import ModalDestroy from '@/Components/ModalDestroyForm.vue';
     import Multiselect from '@vueform/multiselect';
     import '@vueform/multiselect/themes/default.css';
+    import { toLocalDateString } from '@/utils/dateFormat';
     import { formatDate } from '@/utils/dateFormat';
     import { formatTime } from '@/utils/timeFormat';
     import {formatDateTime} from '@/utils/dateFormat';
@@ -1555,7 +1589,9 @@
     import InputText from 'primevue/inputtext';
     import FloatLabel from 'primevue/floatlabel';
     import DatePicker from 'primevue/datepicker';
-import Modal from '@/Components/ModalForm.vue';
+    import Modal from '@/Components/ModalForm.vue';
+    import { timeToMinutes, berechneAbweichungMinuten, formatMinutes, abweichungsIcon, abweichungsClass
+} from "@/utils/arbeitszeit.js";
     const { flash } = usePage().props;
 
     const props = defineProps({
@@ -1575,8 +1611,13 @@ import Modal from '@/Components/ModalForm.vue';
         fahrtarten: Array,
         dokumente: Array,
         zeitraum: Object,
+        bereiche: Array,
+
     });
 
+
+
+    console.log(props.bereiche)
 watchEffect(() => {
 
   if (flash?.error) {
@@ -1694,6 +1735,8 @@ const migrationshintergrund  = ref(!!props.teilnehmer.sozialedaten?.migrationshi
 const leistungsbezug_id      = ref(props.teilnehmer.sozialedaten?.leistungsbezug_id);
 const wohnsitz_stabil        = ref(!!props.teilnehmer.sozialedaten?.wohnsitz_stabil);
 const kundennummer = ref(props.teilnehmer.sozialedaten?.kundennummer || '');
+const massnahmebleiter = ref(props.teilnehmer.sozialedaten?.kundennummer || '');
+console.log(props.teilnehmer.projekte)
 const saveSozialdaten = () => {
   router.patch(
     route('person.sozialdaten.update', props.teilnehmer.id),
@@ -2168,211 +2211,249 @@ const addAdresse = () => {
     );
 };
 
-// ======= KONTAKTE =======
-const neuerKontakt = ref({ kontakttyp_id: "", wert: "" });
-const loadingKontakt = ref(false);
-const selectedTyp = computed(() =>
-  props.kontakttypen.find((t) => t.id === neuerKontakt.value.kontakttyp_id)
-);
-const addKontakt = () => {
-  if (!neuerKontakt.value.kontakttyp_id || !neuerKontakt.value.wert) return;
-  loadingKontakt.value = true;
-  router.post(
-    route("kontakt.store"),
-    {
-      kontakttyp_id: neuerKontakt.value.kontakttyp_id,
-      wert: neuerKontakt.value.wert,
-      model_type: "App\\Models\\Personen",
-      model_id: teilnehmer.value.id,
-    },
-    {
-      onFinish: () => (loadingKontakt.value = false),
-      onSuccess: () => {
-        teilnehmer.value.kontaktes.push({
-          id: Date.now(),
-          wert: neuerKontakt.value.wert,
-          kontakttyp: selectedTyp.value,
-        });
-        neuerKontakt.value = { kontakttyp_id: "", wert: "" };
-        showModalCreateKontakt.value = false;
-      },
-    }
-  );
-};
 
-
-
-// =======  ANWESENHEIT =======
-const selectedMonth = ref("");
-// 🧠 Gruppiere Anwesenheiten (bzw. Gruppen) nach Monat
-const gruppenNachMonat = computed(() => {
-  if (!teilnehmer.value?.gruppen) return {}
-
-  const gruppiert = {}
-
-  teilnehmer.value.gruppen.forEach((g) => {
-    const datum = new Date(g.pivot.tag.datum)
-    const monat = datum.toLocaleString("de-DE", { month: "long", year: "numeric" })
-    if (!gruppiert[monat]) gruppiert[monat] = []
-    gruppiert[monat].push(g)
-  })
-
-  for (const key in gruppiert) {
-    gruppiert[key].sort((a, b) => new Date(b.pivot.tag.datum) - new Date(a.pivot.tag.datum))
-  }
-
-  return gruppiert
-})
-
-
-// 🧮 Liste aller verfügbaren Monate für Filter
-const verfuegbareMonate = computed(() => Object.keys(gruppenNachMonat.value))
-
- const editMode = ref(false);
-    const aktuelleAnwesenheit = ref(null);
-const openModalEdit = (anwesenheit) => {
-  editMode.value = true;
-  aktuelleAnwesenheit.value = anwesenheit;
-  showModalAnwesenheit.value = true;
-
-  neueAnwesenheit.value = {
-    dateAnwesenheit: anwesenheit.tag?.datum || '',
-    startTime: anwesenheit.zeit?.startzeit || '',
-    endTime: anwesenheit.zeit?.endzeit || '',
-    anwesenheitsstatus: props.anwesenheitsstatuten.find(
-      s => s.status === anwesenheit.status?.status
-    )?.id || null,
-    bemerkungen: anwesenheit.bemerkung || ''
-  };
-};
-
-const addAnwesenheit = () => {
-  // 🧩 Validierung
-  if (
-    !neueAnwesenheit.value.dateAnwesenheit ||
-    !neueAnwesenheit.value.startTime ||
-    !neueAnwesenheit.value.endTime ||
-    !neueAnwesenheit.value.gruppe
-  ) {
-    Swal.fire({
-      icon: 'warning',
-      title: 'Fehlende Angaben',
-      text: 'Bitte füllen Sie alle Pflichtfelder aus.',
-    });
-    return;
-  }
-
-  const payload = {
-    id: aktuelleAnwesenheit.value?.id || null,
-    personen_id: props.teilnehmer.id,
-    tag: neueAnwesenheit.value.dateAnwesenheit,
-    startzeit: neueAnwesenheit.value.startTime,
-    endzeit: neueAnwesenheit.value.endTime,
-    anwesenheitsstatuten_id: neueAnwesenheit.value.anwesenheitsstatus,
-    bemerkung: neueAnwesenheit.value.bemerkungen,
-    gruppe_id : neueAnwesenheit.value.gruppe,
-    tatstartTime: neueAnwesenheit.value.tatstartTime,
-    tatendTime: neueAnwesenheit.value.tatendTime,
-  };
-
-  loadingAnwesenheit.value = true;
-
-  router.post(
-    editMode.value
-      ? route('anwesenheit.update')
-      : route('anwesenheit.store'),
-    payload,
-    {
-      preserveScroll: true,
-      onSuccess: () => {
-        const statusObj = props.anwesenheitsstatuten.find(
-          s => s.id === payload.anwesenheitsstatuten_id
+    /* ======= KONTAKTE ======= */
+        const neuerKontakt = ref({ kontakttyp_id: "", wert: "" });
+        const loadingKontakt = ref(false);
+        const selectedTyp = computed(() =>
+        props.kontakttypen.find((t) => t.id === neuerKontakt.value.kontakttyp_id)
         );
+        const addKontakt = () => {
+        if (!neuerKontakt.value.kontakttyp_id || !neuerKontakt.value.wert) return;
+        loadingKontakt.value = true;
+        router.post(
+            route("kontakt.store"),
+            {
+            kontakttyp_id: neuerKontakt.value.kontakttyp_id,
+            wert: neuerKontakt.value.wert,
+            model_type: "App\\Models\\Personen",
+            model_id: teilnehmer.value.id,
+            },
+            {
+            onFinish: () => (loadingKontakt.value = false),
+            onSuccess: () => {
+                teilnehmer.value.kontaktes.push({
+                id: Date.now(),
+                wert: neuerKontakt.value.wert,
+                kontakttyp: selectedTyp.value,
+                });
+                neuerKontakt.value = { kontakttyp_id: "", wert: "" };
+                showModalCreateKontakt.value = false;
+            },
+            }
+        );
+        };
+        console.log(props.teilnehmer)
+    /* ======= End KONTAKTE =======*/
 
-        if (editMode.value && aktuelleAnwesenheit.value) {
-          // 🔄 Lokale Aktualisierung (Update)
-          Object.assign(aktuelleAnwesenheit.value, {
-            tag: { datum: payload.tag },
-            zeit: { startzeit: payload.startzeit, endzeit: payload.endzeit },
-            status: statusObj,
-            bemerkung: payload.bemerkung,
-          });
-        } else {
-          // ➕ Neue Anwesenheit hinzufügen (Create)
-            teilnehmer.value.gruppen.unshift({
-                id: payload.gruppe_id,
-                bereich: props.gruppen.find(g => g.id === payload.gruppe_id)?.bereich || { name: 'Unbekannt' },
-                betreuer: props.gruppen.find(g => g.id === payload.gruppe_id)?.betreuer || {},
-                pivot: {
-                    id: Date.now(), // temporäre ID bis zum Reload
-                    tag: { datum: payload.tag },
-                    zeitgeplant: { startzeit: payload.startzeit, endzeit: payload.endzeit },
-                    zeittatsaechlich: null,
-                    anwesenheitsstatuten_id: payload.anwesenheitsstatuten_id,
-                    bemerkung: payload.bemerkung,
-                },
+    // =======  ANWESENHEIT =======
+        const selectedMonth = ref("");
+        // 🧠 Gruppiere Anwesenheiten (bzw. Gruppen) nach Monat
+           const gruppenNachMonat = computed(() => {
+                if (!teilnehmer.value?.anwesenheiten) return {};
+
+                const gruppiert = {};
+
+                teilnehmer.value.anwesenheiten.forEach((a) => {
+                    const datum = new Date(a.tag.datum);
+                    const monat = datum.toLocaleString("de-DE", { month: "long", year: "numeric" });
+
+                    if (!gruppiert[monat]) gruppiert[monat] = [];
+                    gruppiert[monat].push(a);
+                });
+
+                for (const key in gruppiert) {
+                    gruppiert[key].sort((a, b) => new Date(b.tag.datum) - new Date(a.tag.datum));
+                }
+
+                return gruppiert;
             });
-        }
 
-        // ✅ Modal schließen & zurücksetzen
-        showModalAnwesenheit.value = false;
-        editMode.value = false;
-        aktuelleAnwesenheit.value = null;
-        neueAnwesenheit.value = {
-          dateAnwesenheit: '',
-          startTime: '',
-          endTime: '',
-          tatstartTime: '',
-          tatendTime: '',
-          anwesenheitsstatus: null,
-          bemerkungen: '',
+
+        // 🧮 Liste aller verfügbaren Monate für Filter
+        const verfuegbareMonate = computed(() => Object.keys(gruppenNachMonat.value))
+
+        const editMode = ref(false);
+            const aktuelleAnwesenheit = ref(null);
+            const openModalEdit = (anwesenheit) => {
+            console.log(anwesenheit)
+            editMode.value = true;
+            aktuelleAnwesenheit.value = anwesenheit;
+            showModalAnwesenheit.value = true;
+
+            neueAnwesenheit.value = {
+                dateAnwesenheit: anwesenheit.tag?.datum || '',
+                startTime: anwesenheit.zeitgeplant?.startzeit || '',
+                endTime: anwesenheit.zeitgeplant?.endzeit || '',
+                tatstartTime: anwesenheit.zeittatsaechlich?.startzeit || '',
+                tatendTime: anwesenheit.zeittatsaechlich?.endzeit || '',
+                gruppe: anwesenheit.bereich?.id || '',
+
+
+                anwesenheitsstatus: props.anwesenheitsstatuten.find(
+                s => s.status === anwesenheit.status?.status
+                )?.id || null,
+                bemerkungen: anwesenheit.bemerkung || ''
+                };
         };
 
-        // ✅ Erfolgsmeldung
-        Swal.fire({
-          icon: 'success',
-          title: 'Gespeichert!',
-          text: editMode.value
-            ? 'Die Anwesenheit wurde aktualisiert.'
-            : 'Neue Anwesenheit wurde hinzugefügt.',
-          timer: 1800,
-          showConfirmButton: false,
+        const addAnwesenheit = () => {
+        // 🧩 Validierung
+        if (
+            !neueAnwesenheit.value.dateAnwesenheit ||
+            !neueAnwesenheit.value.startTime ||
+            !neueAnwesenheit.value.endTime ||
+             neueAnwesenheit.value.gruppe
+        ) {
+            Swal.fire({
+            icon: 'warning',
+            title: 'Fehlende Angaben',
+            text: 'Bitte füllen Sie alle Pflichtfelder aus.',
+            });
+            return;
+        }
+
+        const payload = {
+            id: aktuelleAnwesenheit.value?.id || null,
+            personen_id: props.teilnehmer.id,
+            tag: neueAnwesenheit.value.dateAnwesenheit,
+            startzeit: formatTime(neueAnwesenheit.value.startTime),
+            endzeit: formatTime(neueAnwesenheit.value.endTime),
+            anwesenheitsstatuten_id: neueAnwesenheit.value.anwesenheitsstatus,
+            bemerkung: neueAnwesenheit.value.bemerkungen,
+            bereich_id : neueAnwesenheit.value.gruppe,
+            tatstartTime: formatTime(neueAnwesenheit.value.tatstartTime),
+            tatendTime: formatTime(neueAnwesenheit.value.tatendTime),
+        };
+
+        loadingAnwesenheit.value = true;
+
+        router.post(
+        editMode.value
+            ? route('anwesenheit.update')
+            : route('anwesenheit.store'),
+        payload,
+        {
+            preserveScroll: true,
+
+            onSuccess: () => {
+                const statusObj = props.anwesenheitsstatuten.find(
+                    s => s.id === payload.anwesenheitsstatuten_id
+                );
+
+            if (editMode.value && aktuelleAnwesenheit.value) {
+
+                // Index im Array finden
+                const index = teilnehmer.value.anwesenheiten.findIndex(
+                    a => a.id === aktuelleAnwesenheit.value.id
+                );
+
+                if (index !== -1) {
+                    // Neue aktualisierte Anwesenheit sauber aufbauen
+                    const updated = {
+                        id: aktuelleAnwesenheit.value.id,
+                        gruppe: props.gruppen.find(g => g.id === payload.bereich_id),
+                        tag: { datum: payload.tag },
+                        zeitgeplant: {
+                            startzeit: payload.startzeit,
+                            endzeit: payload.endzeit
+                        },
+                        zeittatsaechlich: payload.tatstartTime && payload.tatendTime
+                            ? { startzeit: payload.tatstartTime, endzeit: payload.tatendTime }
+                            : null,
+                        status: props.anwesenheitsstatuten.find(
+                            s => s.id === payload.anwesenheitsstatuten_id
+                        ),
+                        bemerkung: payload.bemerkung,
+                    };
+
+                    // === WICHTIG ===
+                    // Element ersetzen -> reaktives Update!
+                    teilnehmer.value.anwesenheiten.splice(index, 1, updated);
+                }
+
+            } else {
+                // CREATE-FALL
+                teilnehmer.value.anwesenheiten.unshift({
+                    id: Date.now(),
+                    gruppe: props.gruppen.find(g => g.id === payload.bereich_id),
+                    tag: { datum: payload.tag },
+                    zeitgeplant: {
+                        startzeit: payload.startzeit,
+                        endzeit: payload.endzeit
+                    },
+                    zeittatsaechlich: payload.tatstartTime && payload.tatendTime
+                        ? { startzeit: payload.tatstartTime, endzeit: payload.tatendTime }
+                        : null,
+                    status: props.anwesenheitsstatuten.find(
+                        s => s.id === payload.anwesenheitsstatuten_id
+                    ),
+                    bemerkung: payload.bemerkung,
+                });
+            }
+
+
+            showModalAnwesenheit.value = false;
+            editMode.value = false;
+            aktuelleAnwesenheit.value = null;
+
+            neueAnwesenheit.value = {
+                dateAnwesenheit: '',
+                startTime: '',
+                endTime: '',
+                tatstartTime: '',
+                tatendTime: '',
+                anwesenheitsstatus: null,
+                bemerkungen: '',
+            };
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Gespeichert!',
+                text: editMode.value
+                ? 'Die Anwesenheit wurde aktualisiert.'
+                : 'Neue Anwesenheit wurde hinzugefügt.',
+                timer: 1800,
+                showConfirmButton: false,
+            });
+            },
+
+            onError: (errors) => {
+            // ❤️ Hier kommen deine Validation Errors direkt rein!
+            Swal.fire({
+                icon: "error",
+                title: "Validierungsfehler",
+                html: Object.values(errors)
+                .flat()
+                .map(msg => `<p>🔸 ${msg}</p>`)
+                .join(""),
+            });
+            },
+
+            onFinish: () => {
+            loadingAnwesenheit.value = false;
+            }
+        }
+        );
+        };
+
+        watch(showModalAnwesenheit, (val) => {
+        if (!val) {
+            editMode.value = false;
+            aktuelleAnwesenheit.value = null;
+            neueAnwesenheit.value = {
+            anwesenheitsstatus: null,
+            dateAnwesenheit: '',
+            startTime: '',
+            endTime: '',
+            tatstartTime: '',
+            tatendTime: '',
+            bemerkungen: '',
+            gruppe:'',
+            };
+        }
         });
-      },
-      onError: () => {
-        Swal.fire({
-          icon: 'error',
-          title: 'Fehler',
-          text: 'Beim Speichern ist ein Fehler aufgetreten.',
-        });
-      },
-      onFinish: () => {
-        loadingAnwesenheit.value = false;
-      },
-    }
-  );
-};
-
-
-
-watch(showModalAnwesenheit, (val) => {
-  if (!val) {
-    editMode.value = false;
-    aktuelleAnwesenheit.value = null;
-    neueAnwesenheit.value = {
-      anwesenheitsstatus: null,
-      dateAnwesenheit: '',
-      startTime: '',
-      endTime: '',
-      tatstartTime: '',
-      tatendTime: '',
-      bemerkungen: '',
-      gruppe:'',
-    };
-  }
-});
-
-
+    // ======= End ANWESENHEIT =======
 
 // ======= PROJEKTE ZUWEISEN =======
 
@@ -2441,6 +2522,7 @@ const editForm = ref({
     id: null,
     projektname: "",
     abteilung_id: "",
+    massnahmebegleiter: "",
     kostenstelle: "",
     antragsdatum: "",
     starttermin: "",
@@ -2454,37 +2536,20 @@ const openProjektEdit = (zeit, projekt) =>  {
     editForm.value = {
         id: projekt.pivot_model.id ?? "",
         projektname: projekt.name,
-        antragsdatum: zeit?.antragsdatum ?? "",
-        starttermin: zeit?.starttermin ?? "",
-        anfangsdatum: zeit?.anfangsdatum ?? "",
-        endtermin: zeit?.endtermin ?? "",
-        enddatum: zeit?.enddatum ?? "",
+        massnahmebegleiter: projekt.pivot_model.meta?.massnahmebegleiter ?? "",
+        antragsdatum: formatDate(zeit?.antragsdatum),
+        starttermin: formatDate(zeit?.starttermin),
+        anfangsdatum: formatDate(zeit?.anfangsdatum),
+        endtermin: formatDate(zeit?.endtermin),
+        enddatum: formatDate(zeit?.enddatum),
     };
 }
     const page = usePage();
-    function toLocalDateString(d) {
-    if (!d) return null;
 
-    // Wenn d ein String ist, und schon YYYY-MM-DD, direkt zurück
-    if (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
-        return d;
-    }
-
-    // Sicherstellen, dass wir ein Date-Objekt haben
-    const date = (d instanceof Date) ? d : new Date(d);
-
-    // WICHTIG: KEIN .toISOString() verwenden!
-    return [
-        date.getFullYear(),
-        String(date.getMonth() + 1).padStart(2, "0"),
-        String(date.getDate()).padStart(2, "0")
-    ].join("-");
-}
 function saveEdit() {
-
-
     const payload = {
         id: editForm.value.id,
+        ansprechpartner: editForm.value.massnahmebegleiter,
         antragsdatum: toLocalDateString(editForm.value.antragsdatum),
         starttermin: toLocalDateString(editForm.value.starttermin),
         endtermin: toLocalDateString(editForm.value.endtermin),

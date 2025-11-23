@@ -39,7 +39,6 @@ class GruppeHasTeilnehmerController extends Controller
 
     public function store(Request $request)
     {
-
         $validated = $request->validate([
             'gruppe_id'    => 'required|exists:gruppes,id',
             'teilnehmer'   => 'required|array|min:1',
@@ -141,7 +140,6 @@ class GruppeHasTeilnehmerController extends Controller
             'bereich',
 
         ])->findOrFail($id);
-
 
         $gruppe->teilnehmer->each(function ($t) {
             $t->zeitgeplant = $t->pivot->zeitgeplant;

@@ -7,6 +7,7 @@ import FloatLabel from 'primevue/floatlabel';
 import InputText from 'primevue/inputtext'; // ❗ Import vergessen
 import Swal from 'sweetalert2';
 import DatePicker from 'primevue/datepicker';
+import { formatDate } from '@/utils/dateFormat.js';
 
 const props = defineProps({
   vehicle: Object,
@@ -51,7 +52,7 @@ const form = ref({
   kilometerstand: props.vehicle.kilometerstand || "",
   standort_id: props.vehicle.standort_id || "",
   status: props.vehicle.status || "verfügbar",
-  naechste_wartung: props.vehicle.naechste_wartung || "",
+  naechste_wartung: formatDate(props.vehicle.naechste_wartung) || "",
   allowed_drivers: Array.isArray(props.vehicle.fahrer)
     ? props.vehicle.fahrer.map(d => typeof d === "object" ? d.id : d)
     : []
@@ -181,7 +182,7 @@ function update() {
 
       <!-- Nächste Wartung -->
       <FloatLabel variant="on">
-        <DatePicker  v-model="form.naechste_wartung" dateFormat="dd-mm-yy" class="w-full" inputClass="w-full" showIcon iconDisplay="input" />
+        <DatePicker  v-model="form.naechste_wartung" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" showIcon iconDisplay="input" />
         <label>Nächste Wartung</label>
       </FloatLabel>
 

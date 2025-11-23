@@ -11,6 +11,7 @@
     import Swal from 'sweetalert2'
     import axios from 'axios' // ✅ FEHLTE
     import { formatTime } from '@/utils/timeFormat'
+    import Dropdown from '@/Components/Dropdown.vue';
 
     // --- Props ---
     const props = defineProps({
@@ -18,7 +19,7 @@
     teilnehmer: { type: Array, required: true },
     anwesenheitsstatuten: { type: Array, required: true },
     })
-    console.log('Props:', props.gruppe)
+    console.log('Props:', props.gruppe    )
     // Modal-Steuerung + Auswahl
     const showTeilnehmerModal = ref(false)
     const selectedTeilnehmerIds = ref([])
@@ -29,10 +30,14 @@ const statusFarbe = (statusName) => {
 
   const item = props.anwesenheitsstatuten.find(
     s => s.status?.toLowerCase() === statusName.toLowerCase()
-  )
+  );
 
-  return item?.hex ? { backgroundColor: item.hex } : { backgroundColor: '#d1d5db' }
+  return item?.farben
+    ? { backgroundColor: item.farben }  // ← HEX Wert aus DB!
+    : { backgroundColor: '#d1d5db' };
 }
+
+
 
 
 const zeitgeplantStart = ref();
@@ -198,8 +203,6 @@ onMounted(() => {
 })
 
 
-
-
 //Anwesenheit speichern
 const speichernSofort = async (tID, ttag, statusName, startzeit, endzeit) => {
   try {
@@ -237,7 +240,33 @@ const speichernSofort = async (tID, ttag, statusName, startzeit, endzeit) => {
     })
   }
 }
+const exportMitTag = async () => {
+    const options = tage.value.map(t => ({
+        value: t.date,
+        label: `${t.label} (${t.datum})`
+    }));
 
+    const { value: ausgewahlt } = await Swal.fire({
+        title: "Welchen Tag exportieren?",
+        input: "select",
+        inputOptions: options.reduce((acc, t) => {
+            acc[t.value] = t.label;
+            return acc;
+        }, {}),
+        inputPlaceholder: "Bitte einen Tag auswählen",
+        showCancelButton: true,
+        confirmButtonText: "Export starten",
+        cancelButtonText: "Abbrechen",
+    });
+
+    if (!ausgewahlt) return;
+
+    // Direkt Download starten
+    window.location.href = route("export.anwesenheitslite_V1", {
+        id: props.gruppe.id,
+        tag: ausgewahlt
+    });
+};
 
 </script>
 
@@ -332,7 +361,29 @@ const speichernSofort = async (tID, ttag, statusName, startzeit, endzeit) => {
 
       <!-- Anwesenheit -->
       <div class="space-y-4">
-        <h3 class="font-semibold text-gray-700">Anwesenheit verwalten</h3>
+        <div class="flex justify-between">
+            <h3 class="font-semibold text-gray-700">Anwesenheit verwalten</h3>
+              <Dropdown align="right" width="80">
+                        <template #trigger >
+                            <button class="inline-flex items-center py-2 mx-1 border border-transparent text-sm leading-4 font-medium rounded-md dark:text-white dark:hover:text-gray-300 bg-zbb text-white p-2 hover:text-gray-700 focus:outline-none transition ease-in-out duration-150">
+                                Exportieren
+                            </button>
+                        </template>
+                        <template #content>
+                            <div class="block px-4 py-2 text-xs text-gray-400 border-b border-gray-200">{{$t('Dateien')}}</div>
+                            <li class="list-none text-sm py-2 px-3 hover:bg-slate-100">
+                                <button @click="exportMitTag()">Anwesenheitsliste</button>
+                            </li>
+                            <li class="list-none text-sm py-2 px-3 border-b border-gray-200 hover:bg-slate-100 dark:text-gray-700">
+                                2
+                            </li>
+
+
+
+                        </template>
+                        <!-- Dropdown content -->
+                    </Dropdown>
+        </div>
 
         <!-- Anwesenheitsstatuten Agenda-->
         <div class="flex items-center gap-6 bg-zbbTrp border p-3 rounded">

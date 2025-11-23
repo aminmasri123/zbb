@@ -41,6 +41,7 @@ import Swal from 'sweetalert2';
 import FloatLabel from 'primevue/floatlabel';
 import InputText from 'primevue/inputtext';
 import axios from 'axios';
+import { router } from '@inertiajs/vue3'
 
 const props = defineProps({
   visible: Boolean,
@@ -66,12 +67,19 @@ watch(() => props.toEdit, (val) => {
 
 const save = async () => {
   try {
-    const response = await axios.put(route('standort.update', form.value.id), form.value);
+    const response = await axios.put(route('standort.update', form.value.id), {
+      name: form.value.name,
+      beschreibung: form.value.beschreibung
+    });
+
     Swal.fire('Gespeichert!', 'Standort wurde aktualisiert!', 'success');
-    emit('updated', response.data.standort);
+
+    emit('updated', response.data.standort ?? null);
     emit('close');
+
   } catch (error) {
     Swal.fire('Fehler', error.response?.data?.message || 'Update fehlgeschlagen', 'error');
   }
 };
+
 </script>

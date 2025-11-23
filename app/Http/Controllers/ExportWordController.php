@@ -65,11 +65,6 @@ class ExportWordController extends Controller
             $standortAdresse = $projektHasPersonen->standort->adresse->first();
         }
 
-        $standortAdresse = null;
-        if ($projektHasPersonen && $projektHasPersonen->standort && $projektHasPersonen->standort->adresse && $projektHasPersonen->standort->adresse->count() > 0) {
-            $standortAdresse = $projektHasPersonen->standort->adresse->first();
-        }
-
         if( !$standortAdresse ){
             return redirect()->back()->with('error', 'Bitte geben Sie das Projekt eine Adresse ein, bevor Sie den Export durchführen.');
         }else{
@@ -406,4 +401,8 @@ class ExportWordController extends Controller
 
         return response()->download($outputPath)->deleteFileAfterSend(true);
     }
+
+
+
+
 }

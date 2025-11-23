@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Raeume;
 use App\Models\Bereich;
+use App\Models\Projekt;
 use App\Models\Personen;
 use App\Models\Zeitraum;
 use App\Models\GruppeHasPersonen;
@@ -42,6 +43,10 @@ class Gruppe extends Model
             ->where('aktiv', 1);
     }
 
+    public function projekt()
+    {
+        return $this->hasOne(Projekt::class, 'id', 'projekt_id');
+    }
     public function betreuer()
     {
         return $this->hasOne(Personen::class, 'id', 'personen_id');

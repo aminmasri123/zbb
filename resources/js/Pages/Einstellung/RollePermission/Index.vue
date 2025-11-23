@@ -48,7 +48,7 @@
 
     // Watch for changes in search and trigger a request
     watch(search, value => {
-        router.get('/benutzer', { search: value }, { preserveState: true });
+        axios.get('/benutzer', { search: value }, { preserveState: true });
     });
 
 
@@ -100,8 +100,6 @@
                                 timerProgressBar: true,
                             });
                             // Setze einen Zustand, z.B. die Checkbox-Statusänderung oder ähnliches
-                            Inertia.reload();
-
                         }
                     }
                 } else {

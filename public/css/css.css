@@ -14,7 +14,7 @@ div#password_overlay.p-password-overlay.p-component{
     top: 55% !important;
 }
 div.p-multiselect-overlay.p-component{
-    position:fixed !important;
+    /* position:fixed !important; */
     display: block !important;
 
 }

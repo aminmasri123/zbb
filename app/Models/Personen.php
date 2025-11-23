@@ -53,6 +53,7 @@ class Personen extends Model
         return $query->where('typ', 'teilnehmer');
     }
 
+
     public function scopeVisibleForUser($query, User $user)
     {
         // 1. Koordinator = volle Rechte
@@ -110,12 +111,11 @@ class Personen extends Model
             ->with('bereich');
     }
 
-
-
-
-    public function anwesenheiten(){
-        return $this->hasMany(PersonenHasAnwesenheiten::class, 'personen_id', 'id');
+    public function anwesenheiten() {
+        return $this->hasMany(GruppeHasPersonen::class, 'personen_id', 'id')
+            ->with(['gruppe.bereich', 'zeitgeplant', 'zeittatsaechlich', 'status']);
     }
+
     public function notizen(){
         return $this->hasMany(PersonenHasNotizen::class, 'person_id', 'id');
     }
@@ -142,9 +142,9 @@ class Personen extends Model
     public function projekte()
     {
         return $this->belongsToMany(Projekt::class, 'projekt_has_personens', 'personen_id', 'projekt_id')
-            ->using(ProjektHasPersonen::class) // <== Pivot Model verwenden
-            ->withPivot('id', 'bemerkung', 'status', 'standort_id')                    // <- damit du das Pivot Model findest
-            ->as('pivotModel') ;                 // <- schöner Name für den Pivot-Zugriff
+            ->using(ProjektHasPersonen::class)
+            ->withPivot('id', 'bemerkung', 'status', 'standort_id')
+            ->as('pivotModel');
     }
 
     public function kontaktes()
@@ -173,7 +173,6 @@ class Personen extends Model
         return $this->belongsToMany(Zielgruppe::class, 'personen_has_zielgruppes', 'person_id', 'zielgruppe_id');
     }
 
-
     public function dienstwagen()
     {
         return $this->belongsToMany(Dienstwagen::class, 'dienstwagen_has_personens', 'person_id', 'dienstwagen_id');
@@ -184,6 +183,9 @@ class Personen extends Model
         return $this->hasMany(Dienstwagenfahrtenbuch::class, 'person_id', 'id');
     }
 
-
-
+    public function projektStandorte()
+    {
+        return $this->belongsToMany(Standort::class, 'projekt_has_personens', 'personen_id', 'standort_id')
+            ->withPivot('projekt_id');
+    }
 }

@@ -141,23 +141,29 @@ class ProjektHasTeilnehmerController extends Controller
      */
     public function update(Request $request)
     {
-
-
         $validated = $request->validate([
             'id'            => ['required', 'exists:projekt_has_personens,id'],
+            'ansprechpartner' => ['nullable', 'string'],
             'antragsdatum'  => ['nullable', 'date'],
             'starttermin'   => ['nullable', 'date'],
             'endtermin'     => ['nullable', 'date'],
             'anfangsdatum'  => ['nullable', 'date'],
             'enddatum'      => ['nullable', 'date'],
         ]);
+
         DB::beginTransaction();
         try {
             // 🟩 Pivot holen
             $pivot = ProjektHasPersonen::findOrFail($validated['id']);
+
             if (!$pivot) {
                 return back()->with('error', 'Projektzuweisung nicht gefunden.');
             }
+            $pivot->meta->update(
+                [
+                    'massnahmebegleiter' => $validated['ansprechpartner'] ?? "",
+                ]
+                );
 
 
 
@@ -194,7 +200,6 @@ class ProjektHasTeilnehmerController extends Controller
                 'success' => true,
                 'zeitraum' => $zeitraum
             ]);
-
 
         return redirect()->back()
             ->with('success', 'Projektzuweisung erfolgreich aktualisiert!')

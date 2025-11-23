@@ -58,16 +58,29 @@
         );
     }
 
-function toYMD(d) {
+
+    export function toLocalDateString(d) {
     if (!d) return null;
 
-    if (d instanceof Date) {
-        return d.toISOString().slice(0, 10);  // => YYYY-MM-DD
+    // Wenn schon korrektes Format YYYY-MM-DD → direkt zurückgeben
+    if (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+        return d;
     }
 
-    if (typeof d === "string" && d.includes("T")) {
-        return d.slice(0, 10);                // ISO kürzen
+    // Falls deutsches Format dd.mm.yyyy → korrekt umwandeln
+    if (typeof d === "string" && /^\d{2}\.\d{2}\.\d{4}$/.test(d)) {
+        const [tag, monat, jahr] = d.split(".");
+        return `${jahr}-${monat}-${tag}`;
     }
 
-    return d;
+    // Falls Date-Objekt → konvertieren
+    if (d instanceof Date && !isNaN(d)) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+    }
+
+    // Wenn alles andere schiefgeht
+    return null;
 }

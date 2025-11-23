@@ -7,6 +7,7 @@ use App\Models\User;
 use Inertia\Inertia;
 use App\Models\Brief;
 use App\Models\Gruppe;
+use App\Models\Bereich;
 use App\Models\Projekt;
 use App\Models\Personen;
 use App\Models\Fahrtarten;
@@ -18,6 +19,7 @@ use Illuminate\Http\Request;
 use App\Models\Notizvarianten;
 use App\Models\Leistungsbezuege;
 use App\Models\BereichHasPersonen;
+use App\Models\ProjektHasPersonen;
 use Illuminate\Support\Facades\DB;
 use App\Models\Anwesenheitsstatuten;
 use Illuminate\Support\Facades\Auth;
@@ -28,88 +30,94 @@ use Illuminate\Validation\ValidationException;
 class TeilnehmerController extends Controller
 {
     public function index(Request $request)
-{
-    $suchbegriff = $request->input('search');
-    $sortierung  = $request->input('sort', 'id');
-    $richtung    = strtolower($request->input('direction', 'desc'));
+    {
+        $suchbegriff = $request->input('search');
+        $sortierung  = $request->input('sort', 'id');
+        $richtung    = strtolower($request->input('direction', 'desc'));
 
-    $benutzer = auth()->user();
 
-    $gruppen = Gruppe::where('personen_id', $benutzer->id)
-        ->with('bereich')
-        ->get();
+        $benutzer = auth()->user();
+        $projekte = $benutzer->projekte;
+        $standorte = $benutzer->standorte;
+        $defaultProjekt = $benutzer->current_team_id;
+        $gruppen = Gruppe::where('personen_id', $benutzer->id)
+            ->with('bereich')
+            ->get();
 
-    // Mögliche Sortierfelder
-    $sortierbareSpalten = [
-        'id'         => 'id',
-        'vorname'    => 'vorname',
-        'nachname'   => 'nachname',
-        'geschlecht' => 'geschlecht',
-    ];
+        // Mögliche Sortierfelder
+        $sortierbareSpalten = [
+            'id'         => 'id',
+            'vorname'    => 'vorname',
+            'nachname'   => 'nachname',
+            'geschlecht' => 'geschlecht',
+        ];
 
-    $sortierspalte = $sortierbareSpalten[$sortierung] ?? 'id';
-    $richtung = in_array($richtung, ['asc', 'desc']) ? $richtung : 'desc';
+        $sortierspalte = $sortierbareSpalten[$sortierung] ?? 'id';
+        $richtung = in_array($richtung, ['asc', 'desc']) ? $richtung : 'desc';
 
-    // Prüfen, ob User ALLE sehen darf
-    $darfAlle = $benutzer->hasPermissionTo('teilnehmer.view.all');
+        // Prüfen, ob User ALLE sehen darf
+        $darfAlle = $benutzer->hasPermissionTo('teilnehmer.view.all');
 
-    // Basis-Query (kein ->get() !!)
-    $abfrage = Personen::query()
-        ->teilnehmer()
-        ->active()
-        ->visibleForUser($benutzer)   // <-- dein globaler Berechtigungsscope
-        ->with(['projekte.abteilung', 'standorte']);
+        // Basis-Query (kein ->get() !!)
+        $abfrage = Personen::query()
+            ->teilnehmer()
+            ->active()
+            ->visibleForUser($benutzer)   // <-- dein globaler Berechtigungsscope
+            ->with(['projekte.abteilung', 'standorte']);
 
-    // Wenn KEINE Vollberechtigung → Projekte + Standorte filtern
-    if (!$darfAlle) {
+        // Wenn KEINE Vollberechtigung → Projekte + Standorte filtern
+        if (!$darfAlle) {
 
-        // Projekte des Benutzers
-        $benutzerProjektIds = $benutzer->projekte()->pluck('projekts.id')->toArray();
+            // Projekte des Benutzers
+            $benutzerProjektIds = $benutzer->projekte()->pluck('projekts.id')->toArray();
 
-        // Standorte des Benutzers
-        $benutzerStandortIds = $benutzer->standorte()->pluck('standorts.id')->toArray();
+            // Standorte des Benutzers
+            $benutzerStandortIds = $benutzer->standorte()->pluck('standorts.id')->toArray();
 
-        $abfrage->where(function ($q) use ($benutzerProjektIds, $benutzerStandortIds) {
+            $abfrage->where(function ($q) use ($benutzerProjektIds, $benutzerStandortIds) {
 
-            // Teilnehmer aus gleichen Projekten
-            if (!empty($benutzerProjektIds)) {
-                $q->whereHas('projekte', function ($sub) use ($benutzerProjektIds) {
-                    $sub->whereIn('projekts.id', $benutzerProjektIds);
-                });
-            }
+                // Teilnehmer aus gleichen Projekten
+                if (!empty($benutzerProjektIds)) {
+                    $q->whereHas('projekte', function ($sub) use ($benutzerProjektIds) {
+                        $sub->whereIn('projekts.id', $benutzerProjektIds);
+                    });
+                }
 
-            // Teilnehmer aus gleichen Standorten
-            if (!empty($benutzerStandortIds)) {
-                $q->orWhereHas('standorte', function ($sub) use ($benutzerStandortIds) {
-                    $sub->whereIn('standorts.id', $benutzerStandortIds);
-                });
-            }
-        });
+                // Teilnehmer aus gleichen Standorten
+                if (!empty($benutzerStandortIds)) {
+                    $q->orWhereHas('standorte', function ($sub) use ($benutzerStandortIds) {
+                        $sub->whereIn('standorts.id', $benutzerStandortIds);
+                    });
+                }
+            });
+        }
+
+        // 🔍 Suche
+        if ($suchbegriff) {
+            $abfrage->where(function ($q) use ($suchbegriff) {
+                $q->where(DB::raw("CONCAT(vorname, ' ', nachname)"), 'like', "%{$suchbegriff}%")
+                ->orWhere(DB::raw("CONCAT(nachname, ' ', vorname)"), 'like', "%{$suchbegriff}%")
+                ->orWhere('vorname', 'like', "%{$suchbegriff}%")
+                ->orWhere('nachname', 'like', "%{$suchbegriff}%");
+            });
+        }
+
+
+        // Sortieren
+        $abfrage->orderBy($sortierspalte, $richtung);
+        return Inertia::render('Teilnehmer/Index', [
+            'teilnehmers' => $abfrage->paginate(50)->withQueryString(),
+            'projekte' => $projekte,
+            'standorte' => $standorte,
+            'gruppen' => $gruppen,
+            'defaultProjekt' => $defaultProjekt,
+            'filters' => [
+                'search'    => $suchbegriff,
+                'sort'      => $sortierung,
+                'direction' => $richtung,
+            ],
+        ]);
     }
-
-    // 🔍 Suche
-    if ($suchbegriff) {
-        $abfrage->where(function ($q) use ($suchbegriff) {
-            $q->where(DB::raw("CONCAT(vorname, ' ', nachname)"), 'like', "%{$suchbegriff}%")
-              ->orWhere(DB::raw("CONCAT(nachname, ' ', vorname)"), 'like', "%{$suchbegriff}%")
-              ->orWhere('vorname', 'like', "%{$suchbegriff}%")
-              ->orWhere('nachname', 'like', "%{$suchbegriff}%");
-        });
-    }
-
-    // Sortieren
-    $abfrage->orderBy($sortierspalte, $richtung);
-
-    return Inertia::render('Teilnehmer/Index', [
-        'teilnehmers' => $abfrage->paginate(50)->withQueryString(),
-        'gruppen' => $gruppen,
-        'filters' => [
-            'search'    => $suchbegriff,
-            'sort'      => $sortierung,
-            'direction' => $richtung,
-        ],
-    ]);
-}
 
 
     public function create()
@@ -119,40 +127,70 @@ class TeilnehmerController extends Controller
 
     public function store(Request $request)
     {
-
         try {
-            // Verwende die Facade für das Abrufen der Eingabedaten
-            $data = $request->all(); // holt alle Daten
 
-            // Validierung der Eingabedaten
-            $validatedData = Validator::make($data, [
-                'vorname' => ['required', 'max:50'],
-                'nachname' => ['required', 'max:50'],
-                'geschlecht' => ['required', 'in:m,w,d'],
-            ])->validate();
+            // Daten validieren
+            $validatedData = $request->validate([
+                'vorname'   => ['required', 'max:50'],
+                'nachname'  => ['required', 'max:50'],
+                'geschlecht'=> ['required', 'in:m,w,d'],
+                'projekt'   => ['required', 'integer', 'exists:projekts,id'],
+                'standort'  => ['required', 'integer', 'exists:standorts,id'],
+            ]);
 
-                 $validatedData['typ'] = 'teilnehmer';
+            // Teilnehmer erstellen
+            $teilnehmer = Personen::create([
+                'vorname'   => $validatedData['vorname'],
+                'nachname'  => $validatedData['nachname'],
+                'geschlecht'=> $validatedData['geschlecht'],
+                'typ'       => 'teilnehmer',
+                'aktiv'     => 1,
+            ]);
 
-            // Passwort hashen und Benutzer erstellen
-              // Passwort hashen und Benutzer erstellen
-            $teilnehmer = Personen::create($validatedData);
-
-
-            return response()->json(['message' => 'Benutzer erfolgreich erstellt!', 'teilnehmer' => $teilnehmer], 201);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-             return response()->json(['message' => 'Validation Error', 'errors' => $e->errors()], 422);
-         } catch (\Exception $e) {
+            // Sicherheitscheck
+            if (!$teilnehmer) {
                 return response()->json([
-                    'message' => 'Ein Fehler ist aufgetreten.',
-                    'error'   => $e->getMessage(),   // <-- eigentliche Ursache
-                ], 500);
-             }
+                    'message' => 'Fehler',
+                    'errors'  => 'Teilnehmer konnte nicht erstellt werden'
+                ], 422);
+            }
+
+            // Beziehung korrekt erstellen
+           $teilnehmer->projekte()->attach(
+                $validatedData['projekt'], // projekt_id
+                [
+                    'standort_id' => $validatedData['standort']
+                ]
+            );
+
+
+            return response()->json([
+                'message'    => 'Benutzer erfolgreich erstellt!',
+                'teilnehmer' => $teilnehmer
+            ], 201);
+
+        } catch (ValidationException $e) {
+
+            return response()->json([
+                'message' => 'Validation Error',
+                'errors'  => $e->errors(),
+            ], 422);
+
+        } catch (Exception $e) {
+
+            return response()->json([
+                'message' => 'Ein Fehler ist aufgetreten.',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
     }
+
 
     public function show($id)
     {
         $personen = personen::Teilnehmer()->with([
             'adresses',
+            'anwesenheiten',
             'standorte',
             'gruppen',
             'gruppen.bereich',
@@ -178,10 +216,11 @@ class TeilnehmerController extends Controller
             $t->user = $t->pivot->user;
 
         });
+        $bereiche = Bereich::all();
         $anwesenheitsstatuten =Anwesenheitsstatuten::all();
         $abschluesse = Abschluesse::all();
         $personen->projekte->each(function ($projekt) {
-            $projekt->pivotModel->load('zeitraume');
+            $projekt->pivotModel->load('zeitraume', 'meta');
         });
 
         $notiztypen = Notizvarianten::where('typ', 'typ')->get();
@@ -214,7 +253,8 @@ class TeilnehmerController extends Controller
         $thisProjekt = Projekt::where('id', auth()->user()->current_team_id)->first();
         $dokumente = $thisProjekt?->dokumente;
         $kontakttypen = Kontakttypen::all();
-        return Inertia::render('Teilnehmer/Edit', [
+/*         dd($personen);
+ */        return Inertia::render('Teilnehmer/Edit', [
             'teilnehmer' => $personen->toArray(),
             'kontakttypen' => $kontakttypen,
             'projekte' => $projekte,
@@ -230,6 +270,7 @@ class TeilnehmerController extends Controller
             'fahrtarten' => $fahrtarten,
             'gruppen' => $gruppen,
             'dokumente' => $dokumente,
+            'bereiche' => $bereiche,
             ],
         );
     }

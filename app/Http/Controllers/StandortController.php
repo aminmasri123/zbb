@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use Exception;
 use Inertia\Inertia;
 use App\Models\Standort;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\Controller;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class StandortController extends Controller
 {
@@ -45,10 +49,38 @@ class StandortController extends Controller
         //
     }
 
-    public function update(Request $request, string $id)
-    {
-        //
+   public function update(Request $request, $id)
+{
+    try {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'beschreibung' => 'nullable|string',
+        ]);
+
+        $standort = Standort::findOrFail($id);
+
+        $standort->update([
+            'name' => $validated['name'],
+            'beschreibung' => $validated['beschreibung'] ?? null,
+        ]);
+
+        // 🔥 WICHTIG: Projekte sofort mit zurücksenden
+        $standort->load('personen', 'personen.projekte');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Standort erfolgreich aktualisiert.',
+            'standort' => $standort
+        ], 200);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Fehler beim Aktualisieren.'
+        ], 500);
     }
+}
+
 
     public function destroy(string $id)
     {

@@ -479,6 +479,10 @@ class UserSeeder extends Seeder
                 'name' => 'Dienstwagen',
                 'beschreibung' => '',
             ],
+            [ // id = 26
+                'name' => 'Personal',
+                'beschreibung' => '',
+            ],
 
         ]);
 
@@ -565,6 +569,7 @@ class UserSeeder extends Seeder
                 'berechtigungskategorie_id' => '9',
                 'beschreibung' => null,
             ],
+
 
              [ // id = 8
                 'name' => 'kooperationspartner.index',
@@ -889,6 +894,30 @@ class UserSeeder extends Seeder
                 'name' => 'teilnehmer.view.standort',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '5',
+                'beschreibung' => null,
+            ],
+            [ // id = 70
+                'name' => 'personal.index',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '26',
+                'beschreibung' => null
+            ],
+            [ // id = 71
+                'name' => 'personal.store',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '26',
+                'beschreibung' => null
+            ],
+            [ // id = 72
+                'name' => 'personal.update',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '26',
+                'beschreibung' => null
+            ],
+            [ // id = 73
+                'name' => 'personal.destroy',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '26',
                 'beschreibung' => null,
             ],
         ]);
@@ -1243,9 +1272,10 @@ class UserSeeder extends Seeder
                 'role_id' => '1',
                 'berechtigungskategorie_id' => '25',
             ],
-
-
-
+            [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '26',
+            ],
         ]);
 
         DB::table('projekt_has_personens')->insert([

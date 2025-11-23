@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Tage;
+use App\Models\Gruppe;
 use App\Models\Zeiten;
 use App\Models\Personen;
 use App\Models\Zeitraum;
@@ -24,10 +25,16 @@ class GruppeHasPersonen extends Pivot
     protected $fillable = ['id', 'personen_id', 'gruppe_id', 'user_id','tage_id','anwesenheitsstatuten_id', 'bemerkung', 'zeittatsaechlich_id', 'zeitgeplant_id'];
 
 
-    public function person()
+     public function teilnehmer() //muss durch teilnehmer ersetzt werden
     {
         return $this->belongsTo(Personen::class, 'personen_id')->where('typ', 'teilnehmer');
     }
+
+    public function gruppe() //muss durch teilnehmer ersetzt werden
+    {
+        return $this->belongsTo(Gruppe::class, 'gruppe_id');
+    }
+
 
     public function user()
     {

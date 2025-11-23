@@ -13,5 +13,6 @@ class Anwesenheitsstatuten extends Model
     protected $fillable = [
         'status',
         'farben',
+        'abkuerzung',
     ];
 }

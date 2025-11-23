@@ -16,8 +16,10 @@ class ProjektHasPersonen extends Pivot //Model
 
     use HasFactory;
     protected $table = 'projekt_has_personens'; // ✅ wichtig, da Pivot keine Tabelle rät
+    protected $primaryKey = 'id'; // ✅ notwendig
+    public $incrementing = true;  // ✅ Pivot darf eine eigene ID haben
+    protected $keyType = 'int';   // ✅ integer ID
 
-    public $incrementing = true;  // <-- EXTREM WICHTIG
 
     protected $fillable = [
         'id',
@@ -35,7 +37,7 @@ class ProjektHasPersonen extends Pivot //Model
 
     public function standort()
     {
-        return $this->hasOne(Standort::class, 'id', 'standort_id');
+        return $this->hasOne(Standort::class, 'standort_id');
     }
 
     public function zeitraume()

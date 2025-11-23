@@ -30,26 +30,33 @@ class TageSeeder extends Seeder
         DB::table('anwesenheitsstatutens')->insert([
             [ // id = 1
                 'status' => 'anwesend',
+                'abkuerzung' => 'A',
                 'farben' => 'bg-green-500',
             ],
             [ // id = 2
                 'status' => 'krank',
+                'abkuerzung' => 'K',
+
                 'farben' => 'bg-yellow-400',
             ],
             [ // id = 3
                 'status' => 'entschuldigt',
+                'abkuerzung' => 'E',
                 'farben' => 'bg-blue-400',
             ],
             [ // id = 4
                 'status' => 'unentschuldigt',
+                'abkuerzung' => 'U',
                 'farben' => 'bg-red-500',
             ],
             [ // id = 5
                 'status' => 'urlaub',
+                'abkuerzung' => 'UR',
                 'farben' => 'bg-purple-500',
             ],
             [ // id = 6
                 'status' => 'feiertag',
+                'abkuerzung' => 'FT',
                 'farben' => 'bg-gray-400',
             ]
         ]);

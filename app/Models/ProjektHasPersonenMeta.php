@@ -21,6 +21,7 @@ class ProjektHasPersonenMeta extends Model
         'austritt_id',
         'zielgruppe_id',
         'projektabschluss_id',
+        'massnahmebegleiter',
     ];
 
 

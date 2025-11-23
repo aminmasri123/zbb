@@ -20,6 +20,7 @@ module.exports = {
             colors:{
                 zbb: '#ff8500',
                 zbbTrp: 'rgba(255, 133, 0, 0.1)',
+                chip: '#FFF3E0',
                 danger: '#ff0000',
                 success: '#16a34a',
                 warning: '#eab308',

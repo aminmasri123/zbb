@@ -39,12 +39,6 @@
                             || route().current('projekt.*')
                             || route().current('bereich.*')
                             "
-
-
-
-
-
-
                     class="dark:text-gray-100 text-[17px] ">
                         {{ $t('dashboard') }}
                     </NavLink>

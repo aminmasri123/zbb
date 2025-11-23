@@ -137,20 +137,11 @@ class User extends Authenticatable implements MustVerifyEmail
 
 
 
-
-
-
-
-
-
-
-
-
-
     public function standorte(): BelongsToMany
     {
         return $this->belongsToMany(Standort::class, 'standort_has_personens', 'personen_id', 'standort_id');
     }
+
 
     public function adresse()
     {
@@ -160,7 +151,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function projekte(): BelongsToMany
     {
-        return $this->belongsToMany(Projekt::class, 'projekt_has_personens', 'personen_id', 'projekt_id');
+        return $this->belongsToMany(Projekt::class, 'projekt_has_personens', 'personen_id', 'projekt_id')->distinct();
     }
 
 

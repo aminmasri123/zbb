@@ -184,6 +184,7 @@
             @close="closeModalEdit"
             @updated="updateStandort"/>
 
+
     <ModalDestroy v-if="showModalLöschen"
                   @delete="handleDelete"
                   @close="showModalLöschen = false"

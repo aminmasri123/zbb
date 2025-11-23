@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::create('anwesenheitsstatutens', function (Blueprint $table) {
             $table->id();
             $table->string('status')->unique();
+            $table->string('abkuerzung')->unique();
             $table->string('farben')->unique();
 
         });

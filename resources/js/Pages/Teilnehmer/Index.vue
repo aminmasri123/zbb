@@ -25,7 +25,7 @@ const selected = ref([]);
 let teilnehmerToDelete = ref(null); // Speichert den Namen der Teilnehmer, die gelöscht werden sollen
 let showModalLöschen = ref(false); // Modal für die Löschung
 
-const { teilnehmers, authProjekte, rollen, gruppen  } = defineProps({
+const { teilnehmers, authProjekte, rollen, gruppen, projekte, standorte, defaultProjekt  } = defineProps({
     pagination: {
         type: Object,
     },
@@ -42,6 +42,16 @@ const { teilnehmers, authProjekte, rollen, gruppen  } = defineProps({
         type: Array,
         default: () => []
     },
+    projekte: {
+        type: Array,
+        default: () => []
+    },
+    standorte: {
+        type: Array,
+        default: () => []
+    },
+     defaultProjekt: { type: Number, default: null },
+
 });
 
 const teilnehmerList = ref([...teilnehmers.data]);
@@ -56,8 +66,6 @@ const confirmDelete = (teilnehmer) => {
         id: teilnehmer.id      // Speichere die ID der Abteilung
     };
     showModalLöschen.value = true; // Modal anzeigen
-    console.log('Löschung erfolgreich:', teilnehmerToDelete.value.id);
-
 };
 const deleteTeilnehmer = (id) => {
     // Sofort aus der lokalen Liste entfernen
@@ -98,7 +106,7 @@ watch(selectedProject, value => {
 
 // Gefilterte Projekte
 const filteredProjects = computed(() => {
-    return authProjekte.filter(projekt =>
+    return projekte.filter(projekt =>
         projekt.name.toLowerCase().includes(searchProject.value.toLowerCase())
     );
 });
@@ -143,6 +151,7 @@ const addTeilnehmer = async (formData) => {
 
         try {
             // Sende die POST-Anfrage an den Server
+            //const response = await axios.post(route('teilnehmer.store'), formData);
             const response = await axios.post(route('teilnehmer.store'), formData);
 
             teilnehmerList.value.unshift(response.data.teilnehmer);
@@ -309,7 +318,7 @@ const sortByColumn = (column) => {
         </div>
 
 
-            <ModalCreateTeilnehmer :visible="isModalOpen"  @close="closeModal" @add-teilnehmer="addTeilnehmer" />
+            <ModalCreateTeilnehmer :visible="isModalOpen" :projekte="projekte" :standorte="standorte" :defaultProjekt="defaultProjekt"  @close="closeModal" @add-teilnehmer="addTeilnehmer" />
 
         <!-- Modal für die Löschung der Abteilung-->
 

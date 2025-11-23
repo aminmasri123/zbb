@@ -6,6 +6,7 @@ use App\Models\Gruppe;
 use App\Models\Raeume;
 use App\Models\Bereich;
 use App\Models\Personen;
+use App\Models\Standort;
 use App\Models\zeitraum;
 use App\Models\Abteilung;
 use App\Models\Dokumente;
@@ -32,6 +33,13 @@ class Projekt extends Model
         return $this->belongsTo(Abteilung::class, 'abteilung_id', 'id');
     }
 
+ /*    public function personenStandorte()
+    {
+        return $this->belongsToMany(Standort::class, 'projekt_has_personens', 'projekt_id', 'standort_id')
+            ->withPivot('personen_id');
+    }
+ */
+
     public function kostenstellen()
     {
         return $this->belongsToMany(Kostenstelle::class, 'projekt_has_kostenstelles', 'projekt_id', 'kostenstelle_id');
@@ -47,6 +55,11 @@ class Projekt extends Model
         return $this->belongsToMany(Personen::class, 'projekt_has_personens', 'projekt_id', 'personen_id')
             ->where('personens.typ', 'mitarbeiter')
             ->withPivot(['standort_id', 'status']);
+    }
+
+    public function standorte(){
+        return $this->belongsToMany(Standort::class, 'projekt_has_personens', 'projekt_id', 'standort_id')
+            ->withPivot(['personen_id']);
     }
 
     public function users()
@@ -71,5 +84,7 @@ class Projekt extends Model
     {
         return $this->morphMany(Zeitraum::class, 'model')->orderBy('antragsdatum', 'desc');
     }
+
+
 
 }

@@ -70,7 +70,10 @@ class BerechtigungController extends Controller
             if ($action === 'addPermission') {
                 // Die Berechtigung zur Rolle hinzufügen
                 $role->givePermissionTo($permission);
-                return response()->json(['success' => true, 'message' => 'Berechtigung zur Rolle hinzugefügt.']);
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Berechtigung wurde erfolgreich zur Rolle hinzugefügt.',
+                ]);
             } elseif ($action === 'removePermission') {
                 // Die Berechtigung von der Rolle entfernen
                 $role->revokePermissionTo($permission);

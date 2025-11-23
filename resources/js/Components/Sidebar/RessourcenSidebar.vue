@@ -16,6 +16,19 @@
                 </ul>
             </li>
 
+               <!-- Personal Submenu -->
+            <li v-if="['personal.index', 'personal.store'].some(permission => $page.props.permissions.includes(permission))" class="submenu">
+                <a href="#" @click.prevent="toggleMenu('personal')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
+                    <i class="la la-lg la-user mr-2"></i>
+                    <span v-if="!displayHideTextSidebar">{{$t('Personal')}}</span>
+                    <span :class="{'rotate-180': activeMenu === 'personal', 'hidden': displayHideTextSidebar === true, 'text-zbb': $page.component.startsWith('Personal')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
+                </a>
+                <ul v-show="activeMenu === 'personal'" class="pl-6 mt-2 space-y-2">
+                    <li v-if="$page.props.permissions.includes('personal.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('personal.index')">{{$t('Personalübersicht')}}</Link></li>
+                    <li v-if="$page.props.permissions.includes('personal.store')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('personal.index')">{{$t('Personal anlegen')}}</Link></li>
+                </ul>
+            </li>
+
             <!-- Dienstwagen Submenu -->
             <li v-if="['dienstwagen.index', 'dienstwagen.store'].some(permission => $page.props.permissions.includes(permission))" class="submenu">
                 <a href="#" @click.prevent="toggleMenu('dienstwagen')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">

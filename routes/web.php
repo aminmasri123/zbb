@@ -14,6 +14,7 @@ use App\Http\Controllers\BereichController;
 use App\Http\Controllers\KontaktController;
 use App\Http\Controllers\PartnerController;
 use App\Http\Controllers\ProjektController;
+use App\Http\Controllers\PersonalController;
 use App\Http\Controllers\StandortController;
 use App\Http\Controllers\AbteilungController;
 use App\Http\Controllers\FahrzeugeController;
@@ -33,6 +34,7 @@ use App\Http\Controllers\DienstwagenkostenController;
 use App\Http\Controllers\FahrtkostensaetzeController;
 use App\Http\Controllers\DienstwagenreportsController;
 use App\Http\Controllers\DienstwagenwartungController;
+use App\Http\Controllers\ProjektHasPersonenController;
 use App\Http\Controllers\GruppeHasTeilnehmerController;
 use App\Http\Controllers\FahrtkostenAbrechnenController;
 use App\Http\Controllers\ProjektHasTeilnehmerController;
@@ -99,16 +101,15 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::get('/standort', [StandortController::class, 'index'])->name('standort.index');
     Route::post('/standort/anlegen', [StandortController::class, 'store'])->name('standort.store');
     Route::delete('/standort/{id}', [StandortController::class, 'destroy'])->name('standort.destroy');
-    Route::put('/standort/{id}', [StandortController::class, 'update'])->name('standort.update')->can('standort.edit');;
+    Route::put('/standort/{id}', [StandortController::class, 'update'])->name('standort.update');
 
 
 
-    // Benutzer
-    Route::get('/benutzer', [UserController::class, 'index'])->name('user.index');
-    Route::get('/benutzer/edit/{id}', [UserController::class, 'edit'])->name('user.edit');
-    Route::put('/benutzer/update/{user}', [UserController::class, 'update'])->name('user.update');
 
-
+    // Personal
+    Route::get('ressourcen/personal', [PersonalController::class, 'index'])->name('personal.index');
+    Route::get('ressourcen/personal/edit/{id}', [PersonalController::class, 'edit'])->name('personal.edit');
+    Route::put('ressourcen/personal/update/{user}', [PersonalController::class, 'update'])->name('personal.update');
 
 
     Route::post('/toggleCheck', [UserController::class, 'check'])->name('user.check');
@@ -125,7 +126,8 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::post('/benutzer/anlegen', [UserController::class, 'store'])->name('user.store');
     Route::delete('/benutzer/entfernen/{id}', [UserController::class, 'destroy'])->name('user.destroy');
     Route::post('/benutzer/projekt/switch', [UserController::class, 'switch'])->name('projekt.switch');
-
+    Route::get('/benutzer/edit/{id}', [UserController::class, 'edit'])->name('user.edit');
+    Route::put('/benutzer/update/{user}', [UserController::class, 'update'])->name('user.update');
 
     //Profile-Benutzer
     Route::get('/user/profile/{id}', [UserController::class, 'show'])->name('user.profil');
@@ -215,6 +217,10 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     //ProjektHasTeilnehmer
     Route::post('/teilnehmer/projekt/anlegen', [ProjektHasTeilnehmerController::class, 'store'])->name('projekthasteilnehmer.store');
     Route::put('/teilnehmer/projekt/edit', [ProjektHasTeilnehmerController::class, 'update'])->name('projekthasteilnehmer.update');
+
+    //ProjektHasPersonen
+    Route::post('/personen/projekt/zuweisen', [ProjektHasPersonenController::class, 'store'])->name('projekthaspersonen.store');
+    Route::delete('/personen/projekt/entfernen/{id}', [ProjektHasPersonenController::class, 'destroy'])->name('projekthaspersonen.destroy');
 
 
     //Teilnehmer Bank
@@ -325,6 +331,11 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::get('/export/dokument/einverstaendnis_elternarbeit/{id}', [ExportWordController::class, 'einverstaendnis_elternarbeit'])->name('export.einverstaendnis_elternarbeit');
     Route::get('/export/dokument/edv_nutzungsvereinbarung/{id}', [ExportWordController::class, 'edv_nutzungsvereinbarung'])->name('export.edv_nutzungsvereinbarung');
     Route::get('/export/dokument/hausordnung_v1/{id}', [ExportWordController::class, 'hausordnung_v1'])->name('export.hausordnung_v1');
+
+
+    Route::get('/export/dokument/anwesenheitslite_V1/{id}', [ExportExcelController::class, 'anwesenheitslite_V1'])->name('export.anwesenheitslite_V1');
+
+
 });
 
 

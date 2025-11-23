@@ -8,7 +8,11 @@ import Modal from '@/Components/ModalForm.vue';   // <---- das fehlte
 // Props (Daten von außen übergeben)
 const props = defineProps({
   visible: { type: Boolean, default: false },
+  projekte: Array,
+  standorte: Array,
+  defaultProjekt: { type: Number, default: null },
 })
+
 
 // Events an die Eltern-Komponente
 const emit = defineEmits(["close", "add-teilnehmer"]);
@@ -17,15 +21,17 @@ let form = ref({
   vorname: "",
   nachname: "",
   geschlecht: "",
+  projekt: props.defaultProjekt,
+  standort: "",
 });
 const submitForm = () => {
   emit("add-teilnehmer", form.value); // sende die Daten zurück an Parent
-  form.value = { vorname: "", nachname: "", geschlecht: "" };
+  form.value = { vorname: "", nachname: "", geschlecht: "", projekt: "", standort: "" };
 };
 
 const close = () => {
   emit("close");
-  form.value = { vorname: "", nachname: "", geschlecht: "" }; // reset beim Schließen
+  form.value = { vorname: "", nachname: "", geschlecht: "", projekt: "", standort: "" }; // reset beim Schließen
 };
 </script>
 
@@ -53,7 +59,8 @@ const close = () => {
             </FloatLabel>
           </div>
         </div>
-        <div class="mb-4 w-full mx-1">
+
+           <div class="mb-4 w-full mx-1">
             <FloatLabel variant="on">
 
                 <Select
@@ -71,6 +78,34 @@ const close = () => {
                 <label>Geschlecht</label>
             </FloatLabel>
           </div>
+        <div class="mb-4 w-full mx-1">
+            <FloatLabel variant="on">
+                <Select
+                    v-model="form.standort"
+                    :options="props.standorte"
+                    optionLabel="name"
+                    optionValue="id"
+                    class="w-full"
+                />
+                <label>Standort wählen</label>
+            </FloatLabel>
+          </div>
+
+           <div class="mb-4 w-full mx-1">
+            <FloatLabel variant="on">
+
+                <Select
+                    v-model="form.projekt"
+                    :options="props.projekte"
+                    optionLabel="name"
+                    optionValue="id"
+                    class="w-full"
+                />
+
+                <label>Projekt wählen</label>
+            </FloatLabel>
+          </div>
+
       </form>
     </template>
 
