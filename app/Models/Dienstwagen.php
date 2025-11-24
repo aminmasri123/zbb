@@ -27,6 +27,10 @@ class Dienstwagen extends Model
         'naechste_wartung',
     ];
 
+    public function scopeAktiv($query)
+    {
+        return $query->where('status','!=', 'passiv')->where('status','!=', 'verkäuft');
+    }
 
     public function fahrer()
     {

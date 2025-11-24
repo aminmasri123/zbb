@@ -1,44 +1,46 @@
 <?php
 
-use Inertia\Inertia;
-use Illuminate\Support\Facades\Route;
-use Illuminate\Foundation\Application;
-use App\Http\Controllers\UserController;
-use App\Http\Controllers\BriefController;
-use App\Http\Controllers\NotizController;
-use App\Http\Controllers\BaenkeController;
-use App\Http\Controllers\GruppeController;
-use App\Http\Controllers\SchuleController;
-use App\Http\Controllers\AdresseController;
-use App\Http\Controllers\BereichController;
-use App\Http\Controllers\KontaktController;
-use App\Http\Controllers\PartnerController;
-use App\Http\Controllers\ProjektController;
-use App\Http\Controllers\PersonalController;
-use App\Http\Controllers\StandortController;
-use App\Http\Controllers\AbteilungController;
-use App\Http\Controllers\FahrzeugeController;
 use App\Http\Controllers\AbschlusseController;
-use App\Http\Controllers\ExportWordController;
-use App\Http\Controllers\FahrtartenController;
-use App\Http\Controllers\TeilnehmerController;
+use App\Http\Controllers\AbteilungController;
+use App\Http\Controllers\AdresseController;
 use App\Http\Controllers\AnwesenheitController;
-use App\Http\Controllers\DienstwagenController;
-use App\Http\Controllers\ExportExcelController;
+use App\Http\Controllers\BaenkeController;
 use App\Http\Controllers\BerechtigungController;
-use App\Http\Controllers\KostenstelleController;
-use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\RaumlichkeitenController;
-use App\Http\Controllers\TransportartenController;
+use App\Http\Controllers\BereichController;
+use App\Http\Controllers\BriefController;
+use App\Http\Controllers\DashbaordController;
+use App\Http\Controllers\DienstwagenController;
+use App\Http\Controllers\DienstwagenfahrtenbuchController;
 use App\Http\Controllers\DienstwagenkostenController;
-use App\Http\Controllers\FahrtkostensaetzeController;
 use App\Http\Controllers\DienstwagenreportsController;
 use App\Http\Controllers\DienstwagenwartungController;
-use App\Http\Controllers\ProjektHasPersonenController;
-use App\Http\Controllers\GruppeHasTeilnehmerController;
+use App\Http\Controllers\ExportExcelController;
+use App\Http\Controllers\ExportWordController;
+use App\Http\Controllers\FahrtartenController;
 use App\Http\Controllers\FahrtkostenAbrechnenController;
+use App\Http\Controllers\FahrtkostensaetzeController;
+use App\Http\Controllers\FahrzeugeController;
+use App\Http\Controllers\GruppeController;
+use App\Http\Controllers\GruppeHasTeilnehmerController;
+use App\Http\Controllers\KontaktController;
+use App\Http\Controllers\KostenstelleController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\NotizController;
+use App\Http\Controllers\PartnerController;
+use App\Http\Controllers\PersonalController;
+use App\Http\Controllers\ProjektController;
+use App\Http\Controllers\ProjektHasPersonenController;
 use App\Http\Controllers\ProjektHasTeilnehmerController;
-use App\Http\Controllers\DienstwagenfahrtenbuchController;
+use App\Http\Controllers\RaumlichkeitenController;
+use App\Http\Controllers\SchuleController;
+use App\Http\Controllers\StandortController;
+use App\Http\Controllers\TeilnehmerController;
+use App\Http\Controllers\TransportartenController;
+use App\Http\Controllers\UserController;
+use Illuminate\Foundation\Application;
+use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -78,9 +80,10 @@ Route::post('/set-locale', function () {
 Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->group(function() {
 
 
-    Route::get('/dashboard', function () {
-        return Inertia::render('Dashboard');
-    })->name('dashboard');
+
+
+    Route::get('/dashboard', [DashbaordController::class, 'dashboard'])->name('dashboard');
+
 
     Route::get('/organisation', function () {
         return Inertia::render('Dashboards/Organisation');

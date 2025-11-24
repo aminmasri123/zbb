@@ -57,10 +57,9 @@ class RaumlichkeitenController extends Controller
             $standort = Standort::with('raeume')->find($validated['standort_id']);
 
             return response()->json([
-    'message' => 'Raum erfolgreich erstellt.',
-    'raum'    => $raum->load('standort')
-], 201);
-
+                'message' => 'Raum erfolgreich erstellt.',
+                'raum'    => $raum->load('standort')
+            ], 201);
 
         } catch (\Exception $e) {
 
@@ -95,7 +94,6 @@ class RaumlichkeitenController extends Controller
     public function update(Request $request, $id)
 {
 
-dd($request);
     // Validierung
     $validated = $request->validate([
         'name'          => 'required|string|max:100',
@@ -104,6 +102,9 @@ dd($request);
         'kapazitaet'    => 'nullable|integer|min:0',
         'beschreibung'  => 'nullable|string|max:1000',
     ]);
+
+
+
 
     try {
         // Raum finden

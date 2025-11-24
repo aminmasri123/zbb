@@ -15,6 +15,7 @@ class Raeume extends Model
         'beschreibung',
         'id',
         'kapazitaet',
+        'typ',
     ];
 
 

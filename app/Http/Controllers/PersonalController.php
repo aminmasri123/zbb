@@ -54,7 +54,7 @@ class PersonalController extends Controller
                 'standorte.adresse',
             ])
             ->mitarbeiter()
-            ->active()
+            ->aktiv()
             ->when($search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('vorname', 'like', "%$search%")

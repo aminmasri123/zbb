@@ -12,6 +12,16 @@ class TageSeeder extends Seeder
     public function run(): void
     {
 
+        ##################################################
+
+        /* Flls Composer noch nicht eingegen ist, bitte ausfhren:
+        composer require azuyalabs/yasumi
+
+        betrieblich freier Tag
+        Vom Arbeitgeber oder Betrieb freiwillig festgelegt (z. B. Brückentage, Betriebsruhe).
+        extension=zip
+         */
+
         DB::table('zeitens')->insert([
             [ // id = 1
                 'startzeit' => '08:00:00',
@@ -62,15 +72,6 @@ class TageSeeder extends Seeder
         ]);
 
 
-        ##################################################
-
-
-
-        /* Flls Composer noch nicht eingegen ist, bitte ausfhren:
-        composer require azuyalabs/yasumi
-
-        betrieblich freier Tag
-        Vom Arbeitgeber oder Betrieb freiwillig festgelegt (z. B. Brückentage, Betriebsruhe). */
         $jahr = now()->year;
         $start = Carbon::create($jahr, 1, 1);
         $end = Carbon::create($jahr, 12, 31);

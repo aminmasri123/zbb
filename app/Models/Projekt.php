@@ -28,6 +28,13 @@ class Projekt extends Model
         'aktiv'
     ];
 
+
+    public function scopeAktiv($query)
+    {
+        return $query->where('aktiv', 1);
+    }
+
+
     public function abteilung()
     {
         return $this->belongsTo(Abteilung::class, 'abteilung_id', 'id');

@@ -94,7 +94,7 @@ class Personen extends Model
         return $query->whereRaw('1=0');
     }
 
-    public function scopeActive($query)
+    public function scopeAktiv($query)
     {
         return $query->where('aktiv', 1);
     }

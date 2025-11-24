@@ -61,7 +61,7 @@ class TeilnehmerController extends Controller
         // Basis-Query (kein ->get() !!)
         $abfrage = Personen::query()
             ->teilnehmer()
-            ->active()
+            ->aktiv()
             ->visibleForUser($benutzer)   // <-- dein globaler Berechtigungsscope
             ->with(['projekte.abteilung', 'standorte']);
 

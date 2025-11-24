@@ -2,14 +2,23 @@
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Welcome from '@/Components/Welcome.vue';
 
+   // Props
+    const props = defineProps({
+    projekte: Number,
+    dienstwagen: Number,
+    raeume: Number,
+    geraete: Number,
+    teilnehmer: Number,
+    });
 
+    console.log(props.projekte);
 // Beispiel-Daten (später dynamisch ersetzen)
 const stats = [
-  { label: 'Projekte', value: 7, icon: '📁', color: 'bg-blue-100 text-blue-800' },
-  { label: 'Teilnehmer', value: 120, icon: '👥', color: 'bg-green-100 text-green-800' },
-  { label: 'Räumlichkeiten', value: 5, icon: '🏢', color: 'bg-yellow-100 text-yellow-800' },
-  { label: 'Dienstwagen', value: 3, icon: '🚗', color: 'bg-red-100 text-red-800' },
-  { label: 'Geräte', value: 42, icon: '💻', color: 'bg-purple-100 text-purple-800' },
+  { label: 'Projekte', value: props.projekte || 0, icon: '📁', color: 'bg-blue-100 text-blue-800' },
+  { label: 'Teilnehmer', value: props.teilnehmer || 0, icon: '👥', color: 'bg-green-100 text-green-800' },
+  { label: 'Räumlichkeiten', value: props.raeume || 0, icon: '🏢', color: 'bg-yellow-100 text-yellow-800' },
+  { label: 'Dienstwagen', value: props.dienstwagen || 0, icon: '🚗', color: 'bg-red-100 text-red-800' },
+  { label: 'Geräte', value: props.geraete || 0, icon: '💻', color: 'bg-purple-100 text-purple-800' },
 ];
 
 

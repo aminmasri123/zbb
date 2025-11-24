@@ -34,7 +34,7 @@ return new class extends Migration
             $table->integer('kilometerstand')->default(0);
 
             // Status: verfügbar, in Nutzung, Werkstatt, außer Betrieb
-            $table->enum('status', ['verfügbar', 'in Nutzung', 'Werkstatt', 'außer Betrieb'])->default('verfügbar');
+            $table->enum('status', ['verfügbar', 'in Nutzung', 'Werkstatt', 'außer Betrieb', 'verkaüft', 'passiv'])->default('verfügbar');
 
             // Verknüpfung zum Standort (optional)
             $table->foreignId('standort_id')->constrained('standorts')->cascadeOnDelete()->nullable();
