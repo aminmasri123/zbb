@@ -60,7 +60,7 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
-    'asset_url' => env('ASSET_URL', 'http://localhost'), //zbb
+    'asset_url' => env('ASSET_URL', 'http://192.168.0.167'), //zbb
     //'asset_url' => env('ASSET_URL', 'http://192.168.101.13'),
     //'asset_url' => env('ASSET_URL', 'http://192.168.0.192'), //zuhause
     //'asset_url' => env('ASSET_URL', 'http://192.168.245.56/vue'),

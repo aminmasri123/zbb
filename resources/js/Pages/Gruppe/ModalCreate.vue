@@ -11,7 +11,7 @@
                 <label>Bereiche</label>
             </FloatLabel>
 
-            <FloatLabel variant="on">
+           <FloatLabel variant="on">
                 <Select v-model="form.betreuer" :options="props.betreuer" optionValue="id" :optionLabel="(t) => `${t.vorname} ${t.nachname}`" class="w-full"/>
                 <label>Betreuer</label>
             </FloatLabel>
@@ -116,10 +116,17 @@ import Swal from 'sweetalert2';
 
 const props = defineProps({
     visible: Boolean,
-    projekt: Array,
-    betreuer: Array,
+    projekt: {
+        type: Object,
+        required: true,
+    },
+    betreuer: {
+        type: [Array, Object],
+            required: true,
+        },
 })
 
+console.log('Props gruppen:', props.betreuer);
 
 const emit = defineEmits(['close', 'added'])
 
@@ -144,7 +151,7 @@ const groupTypes = [
   { value: '3-day', label: '3 Tage', desc: 'Dreitägiges Event', icon: '🗓️' },
   { value: 'unlimited', label: 'Flexibel', desc: 'Beliebige Dauer', icon: '♾️' },
 ]
-
+console.log(groupTypes)
 // 🔹 Validierung
 const isValid = computed(() => {
   return (

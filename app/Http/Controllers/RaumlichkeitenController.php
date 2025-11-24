@@ -92,10 +92,46 @@ class RaumlichkeitenController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
-    {
-        //
+    public function update(Request $request, $id)
+{
+
+dd($request);
+    // Validierung
+    $validated = $request->validate([
+        'name'          => 'required|string|max:100',
+        'standort_id'   => 'required|exists:standorts,id',
+        'typ'           => 'required|in:Büro,Elektroraum,Unterrichtsraum,Seminarraum,Besprechungsraum,Labor,Werkstatt,Lager,Küche,Aufenthaltsraum,Sanitärraum,Empfang,Serverraum,Archiv,Aula,Bibliothek,Arbeitsplatz,Copyroom,Technikraum,Hauswirtschaftsraum,Holzbereich,Metallbereich',
+        'kapazitaet'    => 'nullable|integer|min:0',
+        'beschreibung'  => 'nullable|string|max:1000',
+    ]);
+
+    try {
+        // Raum finden
+        $raum = Raeume::findOrFail($id);
+
+        // Raum aktualisieren
+        $raum->update([
+            'name'          => $validated['name'],
+            'standort_id'   => $validated['standort_id'],
+            'typ'           => $validated['typ'],
+            'kapazitaet'    => $validated['kapazitaet'] ?? null,
+            'beschreibung'  => $validated['beschreibung'] ?? null,
+        ]);
+
+        // aktualisiertes Modell + Standort zurückgeben
+        return response()->json([
+            'message' => 'Raum erfolgreich aktualisiert.',
+            'raum'    => $raum->load('standort'),
+        ], 200);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'error'   => 'Beim Aktualisieren des Raumes ist ein Fehler aufgetreten.',
+            'details' => $e->getMessage(),
+        ], 500);
     }
+}
+
 
     /**
      * Remove the specified resource from storage.

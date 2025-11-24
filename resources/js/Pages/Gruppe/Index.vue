@@ -29,7 +29,7 @@ const props = defineProps({
 
      bereiche: {
         type: [Array, Object],
-        required: true,
+        required: false,
     },
 
     projekt: {
@@ -37,7 +37,6 @@ const props = defineProps({
         required: true,
     },
 });
-console.log('Props gruppen:', props.betreuer);
 // ✅ Lokale Liste – unterstützt Array ODER paginierte Daten
 let localGruppen = ref(
   Array.isArray(props.gruppen)

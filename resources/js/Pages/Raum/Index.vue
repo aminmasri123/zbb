@@ -85,12 +85,13 @@
 
                                 <!-- Aktionen -->
                                 <div class="flex gap-2 pt-4 border-t border-slate-200">
-                                    <Link
-                                        :href="`/raum/${raum.id}/edit`"
+                                   <button
+                                        @click="openEditModal(raum)"
                                         class="flex-1 text-center bg-zbbTrp hover:bg-orange-200 text-zbb font-semibold py-2 rounded-lg transition duration-300"
                                     >
                                         ✏️ Bearbeiten
-                                    </Link>
+                                    </button>
+
                                     <button
                                         @click="confirmDelete(raum)"
                                         class="flex-1 bg-red-50 hover:bg-red-100 text-red-600 font-semibold py-2 rounded-lg transition duration-300"
@@ -111,6 +112,14 @@
              @close="isModalCreateOpen = false"
              @added="addRaum"
         />
+        <ModalEdit
+    :visible="isModalEditOpen"
+    :standorte="localStandorte"
+    :raum="raumToEdit"
+    @close="isModalEditOpen = false"
+    @updated="updateRaum"
+/>
+
 
 
         <ModalDestroy
@@ -129,6 +138,7 @@ import ModalDestroy from '@/Components/ModalDestroyForm.vue'
 import { ref, computed } from 'vue'
 import { Link, Head, router } from '@inertiajs/vue3'
 import ModalCreate from '@/Pages/Raum/ModalCreate.vue';
+import ModalEdit from '@/Pages/Raum/ModalEdit.vue'
 
 const props = defineProps({
     standorte: { type: Array, default: () => [] },
@@ -141,7 +151,17 @@ const visibleStandorte = ref(new Set())
 const raumToDelete = ref(null)
 const showModalLöschen = ref(false)
 let isModalCreateOpen = ref(false);
+const isModalEditOpen = ref(false)
+const raumToEdit = ref(null)
 
+const openEditModal = (raum) => {
+    raumToEdit.value = JSON.parse(JSON.stringify(raum)) // Kopie
+    isModalEditOpen.value = true
+}
+
+const closeEditModal = () => {
+    isModalEditOpen.value = false
+}
 const openModalCreate = () => { isModalCreateOpen.value = true; };
 const closeModalCreate = () => { isModalCreateOpen.value = false; };
 // ✅ Lokale Kopie der Standorte (damit wir Räume direkt entfernen können)
@@ -246,6 +266,15 @@ const emojiMap = {
 function getEmoji(type) {
   return emojiMap[type] || "🏠";
 }
+
+const updateRaum = (updatedRaum) => {
+    localStandorte.value.forEach((standort) => {
+        const index = standort.raeume.findIndex(r => r.id === updatedRaum.id);
+        if (index !== -1) {
+            standort.raeume[index] = updatedRaum;
+        }
+    });
+};
 
 
 </script>

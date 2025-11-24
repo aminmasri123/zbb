@@ -42,6 +42,8 @@ const statusFarbe = (statusName) => {
 
 const zeitgeplantStart = ref();
 const zeitgeplantEnd = ref();
+const tatstartTime  = ref();
+const tatendTime = ref();
 const datumgeplantStart = ref();
 const datumgeplantEnd = ref();
 
@@ -204,7 +206,7 @@ onMounted(() => {
 
 
 //Anwesenheit speichern
-const speichernSofort = async (tID, ttag, statusName, startzeit, endzeit) => {
+const speichernSofort = async (tID, ttag, statusName, tatstartTime, tatendTime) => {
   try {
     const teilnehmerId = tID
     const tag = ttag.date
@@ -212,14 +214,15 @@ const speichernSofort = async (tID, ttag, statusName, startzeit, endzeit) => {
     const status = props.anwesenheitsstatuten.find(s => s.status === statusName)
     if (!status) return
 
-    console.log('speichernSofort:', { teilnehmerId, tag, statusName, startzeit, endzeit })
+    console.log('speichernSofort:', { teilnehmerId, tag, statusName, tatstartTime , tatendTime })
 
-    await axios.post('/anwesenheit/update', {
+    //await axios.post('/anwesenheit/update', {
+    router.post('/anwesenheit/update', {
       personen_id: teilnehmerId,
       gruppe_id: props.gruppe.id,
       tag: tag,
-      startzeit: startzeit,
-      endzeit: endzeit,
+      tatstartTime: formatTime(tatstartTime),
+      tatendTime: formatTime(tatendTime),
       anwesenheitsstatuten_id: status.id,
       bemerkung: null,
     })
@@ -227,7 +230,7 @@ const speichernSofort = async (tID, ttag, statusName, startzeit, endzeit) => {
     Swal.fire({
       icon: 'success',
       title: 'Gespeichert',
-      text: `Status: ${statusName}, Zeit: ${startzeit} – ${endzeit}`,
+      text: `Status: ${statusName}, Zeit: ${tatstartTime} – ${tatendTime}`,
       timer: 1500,
       showConfirmButton: false,
     })
@@ -304,12 +307,12 @@ const exportMitTag = async () => {
              <div class="flex gap-2">
                 <div class="w-full">
                     <label for="abteilungDelete">Von*</label>
-                    <InputText type="time" v-model="zeitgeplantStart" class="w-full" />
+                    <InputText type="time" v-model="tatstartTime" class="w-full" />
                 </div>
 
                 <div class="w-full">
                     <label for="abteilungDelete">Bis*</label>
-                    <InputText type="time" v-model="zeitgeplantEnd" class="w-full" />
+                    <InputText type="time" v-model="tatendTime" class="w-full" />
                 </div>
             </div>
 

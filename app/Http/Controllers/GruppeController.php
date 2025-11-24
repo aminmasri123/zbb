@@ -7,6 +7,7 @@ use App\Models\Gruppe;
 use App\Models\Raeume;
 use App\Models\Bereich;
 use App\Models\Projekt;
+use App\Models\Personen;
 use App\Models\Abteilung;
 use Illuminate\Http\Request;
 use App\Models\ProjektHasBereiche;
@@ -34,15 +35,17 @@ class GruppeController extends Controller
             $projekt = Projekt::with('bereiche', 'mitarbeiter', 'raeume')->findOrFail($user->current_team_id);
             $betreuer = $projekt->mitarbeiter;
             if($user->can('projekt.mitarbeiter.view.all')){
-                $betreuer = $projekt->mitarbeiter;
+                $betreuer = $projekt->mitarbeiter->values();
             } else {
-                $betreuer = $projekt->mitarbeiter->where('id', $user->id);
+                //$betreuer = $projekt->mitarbeiter->where('id', $user->id)->first();
+                $betreuer = collect([$user->person]);
             }
 
-        return Inertia::render('Gruppe/Index', [
+
+            return Inertia::render('Gruppe/Index', [
             'gruppen' => $gruppen->toArray(),
             'projekt' => $projekt->toArray(),
-            'betreuer' => $betreuer->toArray(),
+            'betreuer' => $betreuer,
             ],
         );
     }
@@ -55,11 +58,9 @@ class GruppeController extends Controller
         //
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
+
         $validated = $request->validate([
             'startDate'   => 'required|date',
             'endDate'     => 'nullable|date|after_or_equal:startDate',
@@ -69,7 +70,6 @@ class GruppeController extends Controller
             'betreuer'    => 'required|integer|exists:personens,id',
             'raum_id'    => 'required|integer|exists:raeumes,id',
         ]);
-
         $user = Auth()->user();
 
         $gruppe = Gruppe::create([
