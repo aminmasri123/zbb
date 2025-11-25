@@ -16,7 +16,7 @@ return new class extends Migration
             $table->foreignId('gruppe_id')->nullable()->constrained()->onDelete('cascade');
             $table->foreignId('tage_id')->constrained()->onDelete('cascade');
             $table->foreignId('zeitgeplant_id')->constrained('zeitens')->onDelete('cascade');
-            $table->foreignId('zeittatsaechlich_id')->constrained('zeitens')->onDelete('cascade');
+            $table->foreignId('zeittatsaechlich_id')->nullable()->constrained('zeitens')->onDelete('cascade');
              $table->foreignId('anwesenheitsstatuten_id')->constrained()->onDelete('cascade');
             $table->string('bemerkung')->nullable();
             $table->timestamps();

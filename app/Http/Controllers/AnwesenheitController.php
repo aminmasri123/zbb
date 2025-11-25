@@ -76,7 +76,6 @@ class AnwesenheitController extends Controller
     {
 
         $validated = $request->validate([
-           /*  'anwesenheitsstatuten_id' => 'required|integer', */
             'anwesenheitsstatuten_id' => 'required|integer|exists:anwesenheitsstatutens,id',
             'tag' => 'required|date|exists:tages,datum',
             'startzeit'   => 'required|date_format:H:i',
@@ -99,6 +98,7 @@ class AnwesenheitController extends Controller
                     return redirect()->back()->with('error', 'Ungültiger Tag');
                 }
 
+                $tatzeitenId = null;
                 $zeitenId = Zeiten::firstOrCreate(
                     [
                         'startzeit' => $validated['startzeit'],
@@ -106,12 +106,14 @@ class AnwesenheitController extends Controller
                     ]
                 )->id;
 
-                $tatzeitenId = Zeiten::firstOrCreate(
-                    [
-                        'startzeit' => $validated['tatstartTime'],
-                        'endzeit' => $validated['tatendTime']
-                    ]
-                )->id;
+                if (!empty($validated['tatstartTime']) && !empty($validated['tatendTime'])) {
+                    $tatzeitenId = Zeiten::firstOrCreate(
+                        [
+                            'startzeit' => $validated['tatstartTime'],
+                            'endzeit'   => $validated['tatendTime']
+                        ]
+                    )->id;
+                }
 
                 GruppeHasPersonen::updateOrCreate(
                 [
@@ -134,7 +136,7 @@ class AnwesenheitController extends Controller
 
 
                 return redirect()->back()->with('success', 'Anwesenheiten gespeichert.');
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             DB::rollBack();
         return redirect()->back()->with('error', 'Fehler beim Speichern: ' . $e->getMessage());
         }

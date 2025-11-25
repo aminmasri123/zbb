@@ -1284,36 +1284,45 @@
                                 <label for="startDate" class="block text-sm font-medium text-gray-700 mb-2" >
                                         Anwesenheitsstatuten <span class="text-red-500">*</span>
                                 </label>
-                               <Select
-                                    v-model="neueAnwesenheit.anwesenheitsstatus"
-                                    :options="props.anwesenheitsstatuten"
-                                    optionLabel="status"
-                                    optionValue="id"
-                                    class="w-[200px] text-sm w-full px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
-                                    >
-                                    <template #option="slotProps">
-                                        <div class="flex items-center space-x-2">
-                                        <span :class="['w-4 h-4 rounded-full', slotProps.option.farben]"></span>
-                                        <span>{{ slotProps.option.status }}</span>
-                                        </div>
-                                    </template>
+                              <Select
+                                v-model="neueAnwesenheit.anwesenheitsstatus"
+                                :options="props.anwesenheitsstatuten"
+                                optionLabel="status"
+                                optionValue="id"
+                                class="w-[200px] text-sm w-full px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
+                            >
 
-                                    <template #value="slotProps">
-                                        <div class="flex items-center space-x-2">
+                                <!-- DROPDOWN OPTION -->
+                                <template #option="slotProps">
+                                    <div class="flex items-center space-x-2">
                                         <span
-                                            :class="[
-                                            'w-3 h-3 rounded-full',
-                                            props.anwesenheitsstatuten.find(s => s.id === slotProps.value)?.farben || 'bg-gray-300'
-                                            ]"
+                                            class="w-4 h-4 rounded-full"
+                                            :style="{ backgroundColor: slotProps.option.farben }"
                                         ></span>
+
+                                        <span>{{ slotProps.option.status }}</span>
+                                    </div>
+                                </template>
+
+                                <!-- AUSGEWÄHLTER WERT -->
+                                <template #value="slotProps">
+                                    <div class="flex items-center space-x-2">
+                                        <span
+                                            class="w-3 h-3 rounded-full"
+                                            :style="{
+                                                backgroundColor: props.anwesenheitsstatuten.find(s => s.id === slotProps.value)?.farben
+                                                    || '#cccccc'
+                                            }"
+                                        ></span>
+
                                         <span>
                                             {{ props.anwesenheitsstatuten.find(s => s.id === slotProps.value)?.status || '–' }}
                                         </span>
+                                    </div>
+                                </template>
 
+                            </Select>
 
-                                        </div>
-                                    </template>
-                                </Select>
                             </div>
                             <div>
                                 <label for="bemerkungen" class="block text-sm font-medium text-gray-700 mb-2" >
@@ -2302,8 +2311,7 @@ const addAdresse = () => {
         if (
             !neueAnwesenheit.value.dateAnwesenheit ||
             !neueAnwesenheit.value.startTime ||
-            !neueAnwesenheit.value.endTime ||
-             neueAnwesenheit.value.gruppe
+            !neueAnwesenheit.value.endTime
         ) {
             Swal.fire({
             icon: 'warning',

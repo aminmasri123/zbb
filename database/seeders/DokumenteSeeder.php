@@ -38,6 +38,10 @@ class DokumenteSeeder extends Seeder
             [ 'name' => 'Bewerbungsübersicht', 'typ' => 'excel', 'version' => '23.09.2025', 'dateipfad' => '/storage/dokumente/Inteqra/bewerbungsuebersicht_inteqra.xlsx', 'dateipfadName' => '', 'beschreibung' => null ],
             [ 'name' => 'Qualifizierte Teilnahmebescheinigung', 'typ' => 'rtf', 'version' => '23.09.2025', 'dateipfad' => '/storage/dokumente/Inteqra/teilnahmebescheinigung_inteqra.rtf', 'dateipfadName' => '', 'beschreibung' => null ],
             [ 'name' => 'Einverständniserklärung Fotoverwendung', 'typ' => 'word', 'version' => '22.08.2025', 'dateipfad' => '/vorlage/projekte/einverstaendnis_foto.docx', 'dateipfadName' => '', 'beschreibung' => null ],
+
+
+            [ 'name' => 'Einverständniserklärung Fotoverwendung', 'typ' => 'excel', 'version' => '22.08.2025', 'dateipfad' => '/vorlage/projekte/excel/anwesenheitliste_monat_projekt_gruppe.xlsx', 'dateipfadName' => 'anwesenheitliste_monat_projekt_gruppe', 'beschreibung' => null ],
+
         ]);
 
     }

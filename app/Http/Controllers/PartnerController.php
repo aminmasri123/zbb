@@ -4,8 +4,11 @@ namespace App\Http\Controllers;
 
 use Inertia\Inertia;
 use App\Models\Partner;
+use App\Models\Personen;
 use Illuminate\Http\Request;
+use App\Models\Partnerschaftstypen;
 use App\Http\Controllers\Controller;
+use App\Models\PartnerHasPartnerschaftstypen;
 
 class PartnerController extends Controller
 {
@@ -18,6 +21,7 @@ class PartnerController extends Controller
         $search = $request->input('search'); // Benutze input(), um den Suchparameter abzurufen
 
         // Hole die Abteilungen mit Suchfilter und lade die notwendigen Beziehungen
+        $partnerschaftstypen = Partnerschaftstypen::all();
         $partners = Partner::query()
             ->when($search, function ($query) use ($search) {
                 $query->where('name', 'like', "%{$search}%");
@@ -29,6 +33,7 @@ class PartnerController extends Controller
 
             return Inertia::render('Partner/Index', [
             'partners' => $partners,
+            'partnerschaftstypen' => $partnerschaftstypen,
         ]);
     }
 
@@ -40,47 +45,97 @@ class PartnerController extends Controller
         //
     }
 
-   public function store(Request $request)
-{
-    $data = $request->validate([
-        'name' => 'required|string',
-        'typ' => 'nullable|string',
-        'beschreibung' => 'nullable|string',
-        'ansprechpartner' => 'array',
-        'ansprechpartner.*.vorname' => 'required|string',
-        'ansprechpartner.*.nachname' => 'required|string',
-        'ansprechpartner.*.geschlecht' => 'nullable|string',
-        'ansprechpartner.*.typ' => 'nullable|string',
-    ]);
+    public function store(Request $request)
+    {
+        $data = $request->validate([
+            'name'              => 'required|string|max:255',
+            'beschreibung'      => 'nullable|string',
+            'typ'               => 'required|array',      // partnerschaftstypen
+            'typ.*'             => 'integer|exists:partnerschaftstypens,id',
 
-    // Partner anlegen
-    $partner = Partner::create($data);
+            'ansprechpartner' => 'array',
+            'ansprechpartner.*.vorname'     => 'required|string|max:100',
+            'ansprechpartner.*.nachname'    => 'required|string|max:100',
+            'ansprechpartner.*.geschlecht'  => 'nullable|string',
+            'ansprechpartner.*.typ'         => 'nullable|string|max:255', // = Rolle/Funktion
+        ]);
 
-    // Ansprechpartner mit Kurzform speichern
-    foreach ($data['ansprechpartner'] as $person) {
-        // Geschlecht-Umwandlung
-        $geschlecht = strtolower($person['geschlecht'] ?? '');
+        // 1️⃣ Partner anlegen
+        $partner = Partner::create([
+            'name' => $data['name'],
+            'beschreibung' => $data['beschreibung'] ?? null
+        ]);
 
-        switch ($geschlecht) {
-            case 'männlich':
-                $person['geschlecht'] = 'm';
-                break;
-            case 'weiblich':
-                $person['geschlecht'] = 'w';
-                break;
-            case 'divers':
-                $person['geschlecht'] = 'd';
-                break;
-            default:
-                $person['geschlecht'] = null; // falls nichts angegeben
+        // 2️⃣ Partnerschaftstypen zuordnen (Pivot ohne Ansprechpartner)
+        foreach ($data['typ'] as $typId) {
+            PartnerHasPartnerschaftstypen::create([
+                'partner_id'             => $partner->id,
+                'partnerschaftstypen_id' => $typId,
+                'ansprechpartner_id'     => null,
+                'rolle'                  => null,
+            ]);
         }
 
-        $partner->ansprechpartner()->create($person);
+        // 3️⃣ Ansprechpartner speichern & ihnen die Rollen pro Typ zuordnen
+        if (!empty($data['ansprechpartner'])) {
+
+            foreach ($data['ansprechpartner'] as $personData) {
+
+                // Geschlecht normalisieren
+                $geschlecht = strtolower($personData['geschlecht'] ?? '');
+                $personData['geschlecht'] = match($geschlecht) {
+                    'männlich' => 'm',
+                    'weiblich' => 'w',
+                    'divers'   => 'd',
+                    default    => null,
+                };
+
+                // Person anlegen
+                $person = Personen::create([
+                    'vorname'    => $personData['vorname'],
+                    'nachname'   => $personData['nachname'],
+                    'geschlecht' => $personData['geschlecht'],
+                    'typ'        => 'ansprechpartner'
+                ]);
+
+                // Ansprechpartner bekommt Rolle pro Typ
+                foreach ($data['typ'] as $typId) {
+
+                    PartnerHasPartnerschaftstypen::where('partner_id', $partner->id)
+                        ->where('partnerschaftstypen_id', $typId)
+                        ->update([
+                            'ansprechpartner_id' => $person->id,
+                            'rolle'              => $personData['typ'] ?? null
+                        ]);
+                }
+            }
+        }
+
+       return response()->json([
+    'success' => true,
+    'partner' => $partner
+        ->refresh()   // <<< WICHTIG!
+        ->load([
+            'partnerschaftstypens',
+            'partnerschaftstypenZuordnung.ansprechpartner'
+        ])
+]);
+
     }
 
+
+
+public function indexAjaxFresh()
+{
+    $partners = Partner::with([
+        'partnerschaftstypens',
+        'partnerschaftstypenZuordnung.ansprechpartner'
+    ])
+    ->orderBy('id')
+    ->paginate(20);
+
     return response()->json([
-        'success' => true,
-        'partner' => $partner->load('ansprechpartner')
+        'partners' => $partners
     ]);
 }
 
@@ -105,10 +160,89 @@ class PartnerController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
+   public function update(Request $request, $id)
     {
-        //
+        $data = $request->validate([
+            'name'              => 'required|string|max:255',
+            'beschreibung'      => 'nullable|string',
+
+            // Partnerschaftstypen (MultiSelect)
+            'typ'               => 'required|array',
+            'typ.*'             => 'integer|exists:partnerschaftstypens,id',
+
+            // Ansprechpartner
+            'ansprechpartner' => 'array',
+            'ansprechpartner.*.vorname'     => 'required|string|max:100',
+            'ansprechpartner.*.nachname'    => 'required|string|max:100',
+            'ansprechpartner.*.geschlecht'  => 'nullable|string',
+            'ansprechpartner.*.typ'         => 'nullable|string|max:255',
+        ]);
+
+        // 1️⃣ Partner laden
+        $partner = Partner::findOrFail($id);
+
+        // 2️⃣ Partner aktualisieren
+        $partner->update([
+            'name' => $data['name'],
+            'beschreibung' => $data['beschreibung'] ?? null,
+        ]);
+
+        // 3️⃣ ALLE vorhandenen Zuordnungen löschen (Neuaufbau ist einfacher & sicherer)
+        PartnerHasPartnerschaftstypen::where('partner_id', $partner->id)->delete();
+
+        // 4️⃣ Partnerschaftstypen neu anlegen
+        foreach ($data['typ'] as $typId) {
+            PartnerHasPartnerschaftstypen::create([
+                'partner_id'             => $partner->id,
+                'partnerschaftstypen_id' => $typId,
+                'ansprechpartner_id'     => null,
+                'rolle'                  => null
+            ]);
+        }
+
+        // 5️⃣ Ansprechpartner neu speichern + rollen zuordnen
+        if (!empty($data['ansprechpartner'])) {
+
+            foreach ($data['ansprechpartner'] as $personData) {
+
+                // Geschlecht normalisieren
+                $geschlecht = strtolower($personData['geschlecht'] ?? '');
+                $personData['geschlecht'] = match($geschlecht) {
+                    'männlich' => 'm',
+                    'weiblich' => 'w',
+                    'divers'   => 'd',
+                    default    => null,
+                };
+
+                // Prüfen ob Person existiert → sonst neu erstellen
+                $person = Personen::create([
+                    'vorname'    => $personData['vorname'],
+                    'nachname'   => $personData['nachname'],
+                    'geschlecht' => $personData['geschlecht'],
+                    'typ'        => 'ansprechpartner'
+                ]);
+
+                // Rolle auf alle ausgewählten Partnerschaftstypen anwenden
+                foreach ($data['typ'] as $typId) {
+                    PartnerHasPartnerschaftstypen::where('partner_id', $partner->id)
+                        ->where('partnerschaftstypen_id', $typId)
+                        ->update([
+                            'ansprechpartner_id' => $person->id,
+                            'rolle'              => $personData['typ'] ?? null,
+                        ]);
+                }
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'partner' => $partner->load([
+                'partnerschaftstypens',
+                'partnerschaftstypenZuordnung.ansprechpartner'
+            ])
+        ]);
     }
+
 
     /**
      * Remove the specified resource from storage.

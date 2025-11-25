@@ -2,11 +2,11 @@
 
 namespace App\Models;
 
-use App\Models\Ansprechpartner;
+use App\Models\Personen;
+use App\Models\Partnerschaftstypen;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\PartnerHasPartnerschaftstypen;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Partner extends Model
 {
@@ -18,13 +18,40 @@ class Partner extends Model
     ];
 
 
-    public function ansprechpartner(): HasMany
+
+    public function partnerschaftstypens()
     {
-        return $this->hasMany(Ansprechpartner::class, 'partner_id', 'id');
+        return $this->belongsToMany(
+            Partnerschaftstypen::class,
+            'partner_has_partnerschaftstypens',
+            'partner_id',
+            'partnerschaftstypen_id'
+        )->withPivot('ansprechpartner_id', 'rolle');
     }
 
-     public function partnerschaftstypens(): BelongsToMany
+
+    /**
+     * Pivot Zuordnungen (Typ + Ansprechpartner + Rolle)
+     */
+    public function partnerschaftstypenZuordnung()
     {
-        return $this->belongsToMany(Partnerschaftstypen::class, 'partner_has_partnerschaftstypens', 'partner_id', 'partnerschaftstypen_id');
+        return $this->hasMany(
+            PartnerHasPartnerschaftstypen::class,
+            'partner_id',
+            'id'
+        );
+    }
+
+    /**
+     * Nur falls du später direkte Ansprechpartner brauchst
+     */
+    public function ansprechpartnerDirekt()
+    {
+        return $this->belongsToMany(
+            Personen::class,
+            'partner_has_personens',
+            'partner_id',
+            'ansprechpartner_id'
+        );
     }
 }

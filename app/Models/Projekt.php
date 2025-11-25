@@ -40,12 +40,7 @@ class Projekt extends Model
         return $this->belongsTo(Abteilung::class, 'abteilung_id', 'id');
     }
 
- /*    public function personenStandorte()
-    {
-        return $this->belongsToMany(Standort::class, 'projekt_has_personens', 'projekt_id', 'standort_id')
-            ->withPivot('personen_id');
-    }
- */
+
 
     public function kostenstellen()
     {

@@ -8,6 +8,7 @@
     import ModalCreate from '@/Pages/Partner/ModalCreate.vue';
     /* import ModalDestroy from '@/Components/ModalDestroyForm.vue';
     import ModalEdit from '@/Pages/Partner/ModalEdit.vue'; */
+    import ModalEdit from '@/Pages/Partner/ModalEdit.vue';
 
     let seite = 'partner';
     let search = ref('');
@@ -18,10 +19,10 @@
     let partnerToEdit = ref(null);
 
      // Definiere die Props direkt
-    const props = defineProps({ partners: Object, }); // props wird hier definiert
-    // Lokale Kopie der partner erstellen
-    console.log(props.partners)
-
+    const props = defineProps({
+        partners: Object,
+        partnerschaftstypen: Array,
+    });
     const openModalCreate = () => {
         isModalCreateOpen.value = true;
     };
@@ -138,7 +139,7 @@ const handleDelete = (partnerId) => {
 const addPartner = async (data) => {
     try {
         const response = await axios.post(route('partner.store'), data);
-
+         //const response = router.post(route('partner.store'), data);
         Swal.fire({
             title: 'Erfolg!',
             text: ' erfolgreich angelegt!',
@@ -147,7 +148,8 @@ const addPartner = async (data) => {
             timerProgressBar: true,
         });
 
-        localPartners.value.unshift(response.data.partner);
+        await compareAndReload();
+
 
     } catch (error) {
         console.error(error);
@@ -161,6 +163,25 @@ const addPartner = async (data) => {
     }
 };
 
+const updatePartner = async (form) => {
+    try {
+        const response = await axios.put(route('partner.update', partnerToEdit.value.id), form);
+
+        Swal.fire("Erfolg!", "Partner aktualisiert!", "success");
+
+        const updated = response.data.partner;
+
+        localPartners.value = localPartners.value.map(p =>
+            p.id === updated.id ? updated : p
+        );
+
+        isModalEditOpen.value = false;
+
+    } catch (error) {
+        console.error(error);
+        Swal.fire("Fehler", "Update fehlgeschlagen", "error");
+    }
+};
 
 </script>
 
@@ -197,7 +218,7 @@ export default {
             </Link>
         </div>
         <!-- Partnerausgabe -->
-        <div class="relative overflow-x-auto mb-10">
+        <div class="relative  mb-10">
             <table id="table" class="w-full text-sm table-auto mb-5 text-left rtl:text-right text-gray-500 dark:text-gray-400 shadow-sm">
                 <thead class="text-md  text-gray-600 uppercase bg-gray-200 dark:bg-gray-700 dark:text-gray-400">
                     <tr class="font-bold ">
@@ -255,9 +276,16 @@ export default {
          <!-- Modal für neue Partner -->
 
 
-        <ModalCreate :visible="isModalCreateOpen" @close="closeModalCreate" @add-partner="addPartner"/>
-        <!-- <ModalEdit :visible="isModalEditOpen" :toEdit="partnerToEdit" @close="closeModalEdit" @updated="updatePartner"/>
-        <ModalDestroy v-if="showModalLöschen" @delete="handleDelete" @close="showModalLöschen = false" :seite="seite"  :toDelete="partnerToDelete"></ModalDestroy>
+        <ModalCreate :visible="isModalCreateOpen" :partnerschaftstypen="partnerschaftstypen" @close="closeModalCreate" @add-partner="addPartner"/>
+       <!-- <ModalDestroy v-if="showModalLöschen" @delete="handleDelete" @close="showModalLöschen = false" :seite="seite"  :toDelete="partnerToDelete"></ModalDestroy>
  -->
+        <ModalEdit
+    :visible="isModalEditOpen"
+    :partnerschaftstypen="partnerschaftstypen"
+    :toEdit="partnerToEdit"
+    @close="closeModalEdit"
+    @updated="updatePartner"
+/>
+
     </app-layout>
 </template>

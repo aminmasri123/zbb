@@ -8,8 +8,9 @@ use App\Models\Baenke;
 use App\Models\Gruppe;
 use App\Models\Adresse;
 use App\Models\Fahrten;
-use App\Models\Projekt;
+use App\Models\Partner;
 
+use App\Models\Projekt;
 use App\Models\Standort;
 use App\Models\Zielgruppe;
 use App\Models\Abschluesse;
@@ -23,6 +24,7 @@ use App\Models\PersonenHasAbschluesse;
 use App\Models\PersonenHasSozialedaten;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\PersonenHasAnwesenheiten;
+use App\Models\PartnerHasPartnerschaftstypen;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
@@ -98,6 +100,11 @@ class Personen extends Model
     {
         return $query->where('aktiv', 1);
     }
+
+    public function partnerTyp()
+{
+    return $this->hasMany(PartnerHasPartnerschaftstypen::class, 'ansprechpartner_id');
+}
 
 
 

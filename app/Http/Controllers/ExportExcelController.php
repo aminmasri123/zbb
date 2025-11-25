@@ -2,16 +2,20 @@
 
 namespace App\Http\Controllers;
 
+use Exception;
+use Carbon\Carbon;
 use App\Models\Tage;
 use App\Models\Gruppe;
+
+use App\Models\Projekt;
 use App\Models\Personen;
 use Illuminate\Http\Request;
-
 use App\Models\GruppeHasPersonen;
 use App\Models\ProjektHasPersonen;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 
 class ExportExcelController extends Controller
 {
@@ -271,7 +275,6 @@ class ExportExcelController extends Controller
             return response()->download($path)->deleteFileAfterSend(true);
     }
 
-
     public function anwesenheitslite_V1(Request $request, $id){
 
         $tag = Tage::where('datum', $request->query('tag'))->first();
@@ -329,4 +332,127 @@ class ExportExcelController extends Controller
 
             return response()->download($path)->deleteFileAfterSend(true);
     }
+
+
+
+
+    public function anwesenheitliste_monat_projekt_gruppe(Request $request, $id)
+    {
+        // --- 1) Projekt prüfen ---
+        if (!$projekt = Projekt::where('id', $id)->first()) {
+            abort(404, 'Projekt existiert nicht.');
+        }
+        // --- 2) Monat + Jahr validieren ---
+        $data = $request->validate([
+            'monat' => 'required|integer|min:1|max:12',
+            'jahr'  => 'required|integer|min:2000|max:2100',
+        ]);
+
+        $monat = $data['monat'];
+        $jahr  = $data['jahr'];
+
+        // --- 3) Start/Ende AUTOMATISCH berechnen ---
+        $start = Carbon::create($jahr, $monat, 1)->format('Y-m-d');
+        $ende  = Carbon::create($jahr, $monat, 1)->endOfMonth()->format('Y-m-d');
+
+        // --- 4) Teilnehmer + Zeiträume + Anwesenheiten laden ---
+        $projektHasTeilnehmer = ProjektHasPersonen::with([
+                'teilnehmer',
+                'zeitraume',
+                'meta',
+                'teilnehmer.sozialedaten',
+                'teilnehmer.anwesenheiten.tag',
+                'teilnehmer.anwesenheiten.status'
+            ])
+            ->where('projekt_id', $id)
+            ->whereHas('zeitraume', function ($q) use ($start, $ende) {
+                $q->whereDate('anfangsdatum', '<=', $ende)
+                ->whereDate('enddatum', '>=', $start);
+            })
+            ->get();
+
+        if ($projektHasTeilnehmer->isEmpty()) {
+            abort(400, 'Keine Teilnehmer im ausgewählten Zeitraum.');
+        }
+
+        // --- 5) Excel-Vorlage laden ---
+        $existingFile = storage_path('vorlage/projekte/excel/anwesenheitliste_monat_projekt_gruppe.xlsx');
+
+        if (!file_exists($existingFile)) {
+            abort(500, 'Excel-Vorlage nicht gefunden: ' . $existingFile);
+        }
+
+        $spreadsheet = IOFactory::load($existingFile);
+        $sheet = $spreadsheet->getActiveSheet();
+
+        // --- 6) Tage zwischen Start und Ende erstellen ---
+        $tage = [];
+        $tag = Carbon::parse($start);
+
+        while ($tag->lte(Carbon::parse($ende))) {
+            $tage[] = $tag->format('Y-m-d');
+            $tag->addDay();
+        }
+
+        // --- 7) Spalten M → AQ zuordnen ---
+        $columns = [];
+        $colIndex = 13; // M
+
+        foreach ($tage as $datum) {
+            if ($colIndex > 43) break; // Spalte AQ = 42
+            $columns[$datum] = Coordinate::stringFromColumnIndex($colIndex);
+            $colIndex++;
+        }
+        // --- 8) Teilnehmer eintragen ---
+        $sheet->setCellValue("S1", Carbon::create()->month($data['monat'])->locale('de')->monthName . ' ' . $jahr  ?? '');
+        $sheet->setCellValue("AA1", 'ZBB gGmbH ' . $projekt->name ?? '');
+
+        $row = 3;
+        foreach ($projektHasTeilnehmer as $eintrag) {
+            $person = $eintrag->teilnehmer;
+
+            // Personendaten
+            $sheet->setCellValue("B$row", $person->nachname . ', ' . $person->vorname);
+            $sheet->setCellValue("H$row", $person->sozialedaten?->kundennummer ?? '');
+            $sheet->setCellValue("I$row", $person->geburtsdatum ? Carbon::parse($person->geburtsdatum)->format('d.m.Y') : '' );
+            $sheet->setCellValue("J$row", $eintrag?->zeitraume?->first()?->starttermin ? Carbon::parse($eintrag->zeitraume->first()->starttermin)->format('d.m.Y') : '' );
+            $sheet->setCellValue("K$row", $eintrag?->zeitraume?->first()?->endtermin ?  Carbon::parse($eintrag->zeitraume->first()->endtermin)->format('d.m.Y') : '' );
+            $sheet->setCellValue("L$row", $eintrag?->zeitraume?->first()?->enddatum ? Carbon::parse($eintrag->zeitraume->first()->enddatum)->format('d.m.Y') : '');
+            $sheet->setCellValue("BC$row", $eintrag->meta?->massnahmebegleiter ?? ''); //JC Arbeitsvermitler
+
+            $sheet->setCellValue( "BD$row", $eintrag->meta?->betreuer ? trim( ((['m' => 'Herr', 'w' => 'Frau'][$eintrag->meta?->betreuer->geschlecht] ?? '') . ' ' . $eintrag->meta?->betreuer?->vorname . ' ' . $eintrag->meta?->betreuer?->nachname) ) : '');
+            // Anwesenheiten
+            $anwesenheiten = $person->anwesenheiten;
+
+            foreach ($tage as $datum) {
+
+                $found = $anwesenheiten->first(function ($a) use ($datum) {
+                    return $a->tag->datum === $datum;
+                });
+
+                $kuerzel = $found ? ($found->status->abkuerzung ?? '') : '';
+
+                $col = $columns[$datum];
+
+                // NICHT Formelspalten überschreiben
+                if ($col !== 'AR') {
+                    $sheet->setCellValue($col . $row, $kuerzel);
+                }
+            }
+
+            $row++;
+        }
+
+        // --- 9) Datei herunterladen ---
+        $filename = 'Anwesenheitsliste_' . now()->format('Ymd_His') . '.xlsx';
+        $writer = new Xlsx($spreadsheet);
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $filename);
+    }
+
+
+
+
 }

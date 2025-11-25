@@ -18,6 +18,94 @@ class UserSeeder extends Seeder
 {
     public function run()
     {
+        DB::table('partnerschaftstypens')->insert([
+            [
+                'bezeichnung' => 'Bildungspartner',
+                'beschreibung' => 'Schulen, Hochschulen oder Bildungseinrichtungen, mit denen organisatorisch zusammengearbeitet wird.',
+            ],
+
+            [
+                'bezeichnung' => 'Praktikumspartner',
+                'beschreibung' => 'Unternehmen, die regelmäßig Praktikumsplätze zur Verfügung stellen.',
+            ],
+
+            [
+                'bezeichnung' => 'Kooperationsbetrieb',
+                'beschreibung' => 'Langfristige betriebliche Zusammenarbeit im Rahmen von Projekten oder Ausbildungsprogrammen.',
+            ],
+
+            [
+                'bezeichnung' => 'Förderpartner',
+                'beschreibung' => 'Partner, die finanzielle oder materielle Unterstützung leisten.',
+            ],
+
+            [
+                'bezeichnung' => 'Projektpartner',
+                'beschreibung' => 'Externe Einrichtungen, die an gemeinsamen Projekten beteiligt sind.',
+            ],
+
+            [
+                'bezeichnung' => 'Sozialer Träger',
+                'beschreibung' => 'Sozialdienste, Jugendämter oder Hilfsorganisationen mit enger Zusammenarbeit.',
+            ],
+
+            [
+                'bezeichnung' => 'Beratungspartner',
+                'beschreibung' => 'Externe Beratungsstellen oder Experten, die fachliche Unterstützung leisten.',
+            ],
+
+            [
+                'bezeichnung' => 'Netzwerkpartner',
+                'beschreibung' => 'Teil eines gemeinsamen Netzwerks zur beruflichen oder sozialen Förderung.',
+            ],
+
+            [
+                'bezeichnung' => 'Bildungscoach / Mentor',
+                'beschreibung' => 'Einrichtungen oder Personen, die Coaching oder Mentoring anbieten.',
+            ],
+
+            [
+                'bezeichnung' => 'Reha-Partner',
+                'beschreibung' => 'Kooperation im Rahmen beruflicher Rehabilitation (z. B. Reha-Träger).',
+            ],
+
+            [
+                'bezeichnung' => 'Wirtschaftspartner',
+                'beschreibung' => 'Unternehmen oder Verbände aus der regionalen Wirtschaft.',
+            ],
+
+            [
+                'bezeichnung' => 'Arbeitsvermittlungs-Partner',
+                'beschreibung' => 'Partner, die bei der Vermittlung in Arbeit oder Ausbildung unterstützen.',
+            ],
+
+            [
+                'bezeichnung' => 'Weiterbildungspartner',
+                'beschreibung' => 'Organisationen, die Weiterbildungsangebote bereitstellen.',
+            ],
+
+            [
+                'bezeichnung' => 'Integrationspartner',
+                'beschreibung' => 'Partner zur Integration in Arbeit, Ausbildung oder Gesellschaft.',
+            ],
+
+            [
+                'bezeichnung' => 'Gesundheitspartner',
+                'beschreibung' => 'Ärzte, Kliniken, Gesundheitsdienste oder Beratungen.',
+            ],
+
+            [
+                'bezeichnung' => 'Kommunaler Partner',
+                'beschreibung' => 'Ämter, Behörden oder kommunale Stellen.',
+            ],
+
+            [
+                'bezeichnung' => 'Bildungsförderung',
+                'beschreibung' => 'Organisationen, die Bildung finanziell oder materiell unterstützen.',
+            ],
+
+        ]);
+
         DB::table('leistungsbezueges')->insert([
             ['bezeichnung' => 'kein Leistungsbezug'],
             ['bezeichnung' => 'Arbeitslosengeld I (SGB III)'],
@@ -42,7 +130,6 @@ class UserSeeder extends Seeder
             ['name' => 'vorgezogene Abschlussprüfung'],
             ['name' => 'sonstiger Abbruchgrund'],
         ]);
-
 
         DB::table('abschluesses')->insert([
 
@@ -105,8 +192,6 @@ class UserSeeder extends Seeder
             ['bezeichnung' => 'Wechsel in Folgemaßnahme'],
         ]);
 
-
-
         DB::table('ergebnisses')->insert([
             ['bezeichnung' => 'Teilnahme läuft'],
             ['bezeichnung' => 'hat eine Qualifizierung erhalten'],
@@ -122,10 +207,6 @@ class UserSeeder extends Seeder
             ['bezeichnung' => 'hat Teilnahme abgebrochen'],
 
         ]);
-
-
-
-
 
         DB::table('standorts')->insert([
             [ // id = 1

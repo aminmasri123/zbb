@@ -32,7 +32,13 @@ class ProjektHasPersonen extends Pivot //Model
     ];
     public function meta()
     {
-        return $this->hasOne(ProjektHasPersonenMeta::class,  'projekt_person_id');
+        return $this->hasOne(ProjektHasPersonenMeta::class,  'projekt_person_id')
+            ->with('betreuer');
+    }
+
+    public function teilnehmer()
+    {
+        return $this->belongsTo(Personen::class, 'personen_id')->where('typ', 'teilnehmer');
     }
 
     public function standort()

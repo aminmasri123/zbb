@@ -9,7 +9,7 @@
     import ModalDestroy from '@/Components/ModalDestroyForm.vue';
     import ModalCreate from '@/Pages/Projekt/ModalCreate.vue';
     import ModalEdit from '@/Pages/Projekt/ModalEdit.vue';
-
+    import ModalExportAnwesenheitlisteZeitraum from '@/Pages/Projekt/ModalExportAnwesenheitlisteZeitraum.vue';
     let seite = 'projekt';
     let search = ref('');
     let projektToDelete = ref(null);
@@ -44,7 +44,18 @@
     projektToEdit.value = projekt;
     isModalEditOpen.value = true;
     };
+
     const closeModalEdit = () => { isModalEditOpen.value = false; };
+
+
+    let isModalExportAnwesenheitlisteOpen = ref(false);
+    let projektForExport = ref(null);
+    const openModalExportAnwesenheitliste = (projekt) => {
+        projektForExport.value = projekt;
+        isModalExportAnwesenheitlisteOpen.value = true;
+    };
+
+
 
     // CRUD
     const addProjekt = (projekt) => {
@@ -182,12 +193,19 @@
                     >
                         Bearbeiten <i class="las la-edit"></i>
                     </span>
+                     <span
+                        class="flex justify-between cursor-pointer px-6 items-center hover:bg-gray-100"
+                        @click="openModalExportAnwesenheitliste(projekt)"
+                    >
+                        Anwesenheitsliste <i class="las la-edit"></i>
+                    </span>
                     <span
                         class="flex justify-between cursor-pointer px-6 items-center hover:bg-gray-100"
                         @click="confirmDelete(projekt)"
                     >
                         Löschen <i class="las la-trash-alt"></i>
                     </span>
+
                     </template>
                 </Dropdown>
                 </td>
@@ -195,12 +213,7 @@
             </template>
         </tbody>
         </table>
-
-
     </div>
-
-
-
 
     <!-- Modals -->
     <ModalCreate :visible="isModalCreateOpen"
@@ -213,6 +226,16 @@
                :abteilungen="props.abteilungen"
                @close="closeModalEdit"
                @updated="updateProjekt"/>
+
+
+
+    <ModalExportAnwesenheitlisteZeitraum
+        :visible="isModalExportAnwesenheitlisteOpen"
+        :projekt="projektForExport"
+        @close="isModalExportAnwesenheitlisteOpen = false"
+    />
+
+
     <ModalDestroy v-if="showModalLöschen"
                   @delete="handleDelete"
                   @close="showModalLöschen = false"

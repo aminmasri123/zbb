@@ -41,35 +41,40 @@ class TageSeeder extends Seeder
             [ // id = 1
                 'status' => 'anwesend',
                 'abkuerzung' => 'A',
-                'farben' => 'bg-green-500',
+                'farben' => '#22c55e', // green-500
             ],
             [ // id = 2
                 'status' => 'krank',
                 'abkuerzung' => 'K',
-
-                'farben' => 'bg-yellow-400',
+                'farben' => '#facc15', // yellow-400
             ],
             [ // id = 3
-                'status' => 'entschuldigt',
-                'abkuerzung' => 'E',
-                'farben' => 'bg-blue-400',
+                'status' => 'Kind krank',
+                'abkuerzung' => 'KK',
+                'farben' => '#facc15', // yellow-400
             ],
             [ // id = 4
-                'status' => 'unentschuldigt',
-                'abkuerzung' => 'U',
-                'farben' => 'bg-red-500',
+                'status' => 'entschuldigt',
+                'abkuerzung' => 'E',
+                'farben' => '#60a5fa', // blue-400
             ],
             [ // id = 5
-                'status' => 'urlaub',
-                'abkuerzung' => 'UR',
-                'farben' => 'bg-purple-500',
+                'status' => 'unentschuldigt',
+                'abkuerzung' => 'F',
+                'farben' => '#ef4444', // red-500
             ],
             [ // id = 6
+                'status' => 'urlaub',
+                'abkuerzung' => 'U',
+                'farben' => '#a855f7', // purple-500
+            ],
+            [ // id = 7
                 'status' => 'feiertag',
                 'abkuerzung' => 'FT',
-                'farben' => 'bg-gray-400',
-            ]
+                'farben' => '#9ca3af', // gray-400
+            ],
         ]);
+
 
 
         $jahr = now()->year;

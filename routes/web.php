@@ -235,6 +235,14 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::get('/organisation/partner', [PartnerController::class, 'index'])->name('partner.index');
         Route::post('/organisation/partner/anlegen', [PartnerController::class, 'store'])->name('partner.store');
 
+Route::get('/organisation/partner/ajax/fresh',
+    [PartnerController::class, 'indexAjaxFresh']
+)->name('partner.indexAjaxFresh');
+
+
+
+
+
     //Kostenstelle
     Route::get('/kostenstelle', [KostenstelleController::class, 'index'])->name('kostenstelle.index');
 
@@ -338,6 +346,8 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
 
 
     Route::get('/export/dokument/anwesenheitslite_V1/{id}', [ExportExcelController::class, 'anwesenheitslite_V1'])->name('export.anwesenheitslite_V1');
+
+    Route::get('/export/dokument/anwesenheitliste_monat_projekt_gruppe/{id}', [ExportExcelController::class, 'anwesenheitliste_monat_projekt_gruppe'])->name('export.projekt.anwesenheit.periode');
 
 
 });

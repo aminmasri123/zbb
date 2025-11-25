@@ -1,6 +1,6 @@
 <script setup>
 import Modal from '@/Components/ModalForm.vue';
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import Swal from 'sweetalert2';
 
 import FloatLabel from 'primevue/floatlabel';
@@ -12,47 +12,54 @@ import MultiSelect from 'primevue/multiselect';
 const props = defineProps({
     visible: Boolean,
     partnerschaftstypen: Array,
+    toEdit: Object,
 });
 
-const emit = defineEmits(['close', 'add-partner']);
+const emit = defineEmits(['close', 'updated']);
 
 let form = ref({
     name: '',
     beschreibung: '',
-    typ: [], // IDs der partnerschaftstypen
-    ansprechpartner: [
-        { vorname: '', nachname: '', geschlecht: '', typ: '' }
-    ]
+    typ: [],
+    ansprechpartner: [],
 });
 
+// 🔄 Daten laden, sobald Modal geöffnet wird
+watch(
+    () => props.toEdit,
+    (val) => {
+        if (!val) return;
+
+        form.value = {
+            name: val.name,
+            beschreibung: val.beschreibung,
+            typ: val.partnerschaftstypens.map(t => t.id), // IDs extrahieren
+            ansprechpartner: val.partnerschaftstypenZuordnung?.map(x => ({
+                vorname: x.ansprechpartner?.vorname ?? '',
+                nachname: x.ansprechpartner?.nachname ?? '',
+                geschlecht: x.ansprechpartner?.geschlecht ?? '',
+                typ: x.rolle ?? ''
+            })) || []
+        };
+    },
+    { immediate: true }
+);
+
 const addAnsprechpartner = () => {
-    form.value.ansprechpartner.push({ vorname: '', nachname: '', geschlecht: '', typ: '' });
+    form.value.ansprechpartner.push({
+        vorname: '',
+        nachname: '',
+        geschlecht: '',
+        typ: ''
+    });
 };
 
 const removeAnsprechpartner = (i) => {
     form.value.ansprechpartner.splice(i, 1);
 };
 
-const resetForm = () => {
-    form.value = {
-        name: '',
-        beschreibung: '',
-        typ: [],
-        ansprechpartner: [
-            { vorname: '', nachname: '', geschlecht: '', typ: '' }
-        ]
-    };
-};
-
 const save = () => {
-    if (!form.value.name) {
-        Swal.fire("Fehler", "Bitte Partnername eingeben!", "error");
-        return;
-    }
-
-    emit("add-partner", { ...form.value });
-    resetForm();
-    emit("close");
+    emit("updated", JSON.parse(JSON.stringify(form.value)));
 };
 </script>
 
@@ -60,43 +67,39 @@ const save = () => {
   <Modal v-if="visible" @close="emit('close')">
 
     <template #header>
-        <h2 class="text-lg font-bold text-gray-600">Partner anlegen</h2>
+        <h2 class="text-lg font-bold text-gray-600">Partner bearbeiten</h2>
     </template>
 
     <template #body>
 
       <div class="max-h-[70vh] overflow-y-auto pr-3">
 
-        <!-- Partnername -->
         <FloatLabel class="mb-3">
             <InputText v-model="form.name" class="w-full" />
             <label>Partnername</label>
         </FloatLabel>
 
-        <!-- Typen -->
         <FloatLabel class="mb-3">
             <MultiSelect
                 v-model="form.typ"
-                :options="props.partnerschaftstypen"
+                :options="partnerschaftstypen"
                 optionLabel="bezeichnung"
                 optionValue="id"
                 display="chip"
                 filter
                 class="w-full"
             />
-            <label>Partnerschaftstypen wählen</label>
+            <label>Partnerschaftstypen</label>
         </FloatLabel>
 
-        <!-- Beschreibung -->
         <FloatLabel class="mb-3">
-            <Textarea v-model="form.beschreibung" class="w-full" rows="4" />
+            <Textarea v-model="form.beschreibung" rows="4" class="w-full" />
             <label>Beschreibung</label>
         </FloatLabel>
 
         <hr class="my-4" />
 
-        <!-- Ansprechpartner -->
-        <h3 class="text-md font-semibold mb-2">Ansprechpartner</h3>
+        <h3 class="font-semibold text-gray-600 mb-2">Ansprechpartner</h3>
 
         <div
           v-for="(p, index) in form.ansprechpartner"
