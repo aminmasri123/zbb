@@ -19,6 +19,7 @@ use App\Models\Anwesenheiten;
 use App\Models\GruppeHasPersonen;
 use App\Models\PersonenHasNotizen;
 use App\Models\ProjektHasPersonen;
+use App\Models\Partnerschaftstypen;
 use App\Models\Dienstwagenfahrtenbuch;
 use App\Models\PersonenHasAbschluesse;
 use App\Models\PersonenHasSozialedaten;
@@ -54,6 +55,15 @@ class Personen extends Model
     {
         return $query->where('typ', 'teilnehmer');
     }
+    public function scopeArbeitsvermittler($query)
+    {
+        return $query->where('typ', 'ansprechpartner')
+            ->whereHas('partnerTyp', function ($q) {
+                $q->where('bezeichnung', 'Arbeitsvermittler');
+            })
+            ->with('partnerTyp');
+    }
+
 
 
     public function scopeVisibleForUser($query, User $user)
@@ -102,9 +112,9 @@ class Personen extends Model
     }
 
     public function partnerTyp()
-{
-    return $this->hasMany(PartnerHasPartnerschaftstypen::class, 'ansprechpartner_id');
-}
+    {
+        return $this->belongsToMany(Partnerschaftstypen::class, 'partner_has_partnerschaftstypens', 'ansprechpartner_id', 'partnerschaftstypen_id');
+    }
 
 
 

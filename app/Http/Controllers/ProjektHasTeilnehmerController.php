@@ -36,32 +36,36 @@ class ProjektHasTeilnehmerController extends Controller
      */
     public function store(Request $request)
     {
+                //dd($request);
+
         $validated = $request->validate([
-            'teilnehmer_id' => ['required', 'exists:personens,id'],
-            'projekt_id'    => ['required', 'exists:projekts,id'],
-            'antragsdatum'  => ['nullable', 'date'],
-            'starttermin'   => ['nullable', 'date'],
-            'endtermin'     => ['nullable', 'date'],
-            'anfangsdatum'  => ['nullable', 'date'],
-            'enddatum'      => ['nullable', 'date'],
-            'model_type'    => ['required'],
+            'teilnehmer_id'       => ['required', 'exists:personens,id'],
+            'massnahmebegleiter'  => ['nullable', 'exists:personens,id'],
+            'betreuer'            => ['nullable', 'exists:personens,id'],
+            'projekt_id'          => ['required', 'exists:projekts,id'],
+            'antragsdatum'        => ['nullable', 'date'],
+            'starttermin'         => ['nullable', 'date'],
+            'endtermin'           => ['nullable', 'date'],
+            'anfangsdatum'        => ['nullable', 'date'],
+            'enddatum'            => ['nullable', 'date'],
+            'model_type'          => ['required'],
         ]);
+
 
         DB::beginTransaction();
 
         try {
             $teilnehmer = Personen::findOrFail($validated['teilnehmer_id']);
 
-            // Prüfen: Schon zugewiesen?
+            // 🔹 Prüfen: Projekt bereits zugewiesen?
             $existingPivot = ProjektHasPersonen::where('personen_id', $validated['teilnehmer_id'])
                 ->where('projekt_id', $validated['projekt_id'])
                 ->first();
 
             // ---------------------------------------------------------
-            // 🔵 Fall 1: Projektzuordnung existiert schon → Zeitraum anhängen
+            // 🔵 FALL 1: Bestehende Projektzuweisung → Zeitraum anhängen
             // ---------------------------------------------------------
-            if ($existingPivot) {
-
+            /* if ($existingPivot) {
                 Zeitraum::create([
                     'antragsdatum' => $validated['antragsdatum'] ?? null,
                     'starttermin'  => $validated['starttermin'] ?? null,
@@ -72,16 +76,28 @@ class ProjektHasTeilnehmerController extends Controller
                     'model_id'     => $existingPivot->id,
                 ]);
 
+                // 🟢 Meta prüfen oder anlegen/aktualisieren
+                $meta = $existingPivot->meta;
+                if (!$meta) {
+                    $existingPivot->meta()->create([
+                        'projekt_person_id'   => $existingPivot->id,
+                        'projektbegleiter_id' => $validated['massnahmebegleiter'] ?? null,
+                        'betreuer_id'         => $validated['betreuer'] ?? null,
+                    ]);
+                } else {
+                    $meta->update([
+                        'projektbegleiter_id' => $validated['massnahmebegleiter'] ?? $meta->projektbegleiter_id,
+                        'betreuer_id'         => $validated['betreuer'] ?? $meta->betreuer_id,
+                    ]);
+                }
+
                 DB::commit();
-
                 return back()->with('success', 'Zeitraum zum bestehenden Projekt hinzugefügt!');
-            }
+            } */
 
             // ---------------------------------------------------------
-            // 🔵 Fall 2: Neues Projekt → Pivot anlegen
+            // 🔵 FALL 2: Neues Projekt → Pivot + Meta + Zeitraum anlegen
             // ---------------------------------------------------------
-
-            // Standort automatisch aus Projekt holen
             $projekt = Projekt::find($validated['projekt_id']);
             $standortId = $projekt?->abteilung?->standort_id ?? 1;
 
@@ -89,7 +105,14 @@ class ProjektHasTeilnehmerController extends Controller
                 'personen_id' => $validated['teilnehmer_id'],
                 'projekt_id'  => $validated['projekt_id'],
                 'status'      => 'aktiv',
-                'standort_id' => $standortId, // sauberer statt "1"
+                'standort_id' => $standortId,
+            ]);
+
+            // 🟢 Meta sofort anlegen
+            $pivot->meta()->create([
+                'projekt_person_id'   => $pivot->id,
+                'projektbegleiter_id' => $validated['massnahmebegleiter'] ?? null,
+                'betreuer_id'         => $validated['betreuer'] ?? null,
             ]);
 
             // Zeitraum anlegen
@@ -104,11 +127,13 @@ class ProjektHasTeilnehmerController extends Controller
             ]);
 
             DB::commit();
-
             return back()->with('success', 'Projekt erfolgreich zugewiesen!');
+        }
 
-        } catch (\Throwable $e) {
-
+        // ---------------------------------------------------------
+        // 🔴 Fehlerbehandlung
+        // ---------------------------------------------------------
+        catch (Throwable $e) {
             DB::rollBack();
 
             Log::error("Projekt-Zuweisung FEHLER: " . $e->getMessage(), [
@@ -119,9 +144,6 @@ class ProjektHasTeilnehmerController extends Controller
             return back()->with('error', 'Fehler beim Zuweisen des Projekts.');
         }
     }
-
-
-
 
     public function show(string $id)
     {
@@ -143,14 +165,14 @@ class ProjektHasTeilnehmerController extends Controller
     {
         $validated = $request->validate([
             'id'            => ['required', 'exists:projekt_has_personens,id'],
-            'ansprechpartner' => ['nullable', 'string'],
+            'projektbegleiter_id' => ['nullable', 'exists:personens,id'],
+            'betreuer_id' => ['nullable', 'exists:personens,id'],
             'antragsdatum'  => ['nullable', 'date'],
             'starttermin'   => ['nullable', 'date'],
             'endtermin'     => ['nullable', 'date'],
             'anfangsdatum'  => ['nullable', 'date'],
             'enddatum'      => ['nullable', 'date'],
         ]);
-
         DB::beginTransaction();
         try {
             // 🟩 Pivot holen
@@ -159,19 +181,34 @@ class ProjektHasTeilnehmerController extends Controller
             if (!$pivot) {
                 return back()->with('error', 'Projektzuweisung nicht gefunden.');
             }
-            $pivot->meta->update(
-                [
-                    'massnahmebegleiter' => $validated['ansprechpartner'] ?? "",
-                ]
-                );
 
+           // Prüfen, ob Meta existiert (angenommen: Relation heißt "meta")
+            $meta = $pivot->meta;
+                if (!$meta && ($validated['projektbegleiter_id'] ?? null || $validated['betreuer_id'] ?? null)) {
+                    // 🟢 1. Kein Meta vorhanden + einer der beiden Werte existiert → ERSTELLEN
+                    $meta = $pivot->meta()->create([
+                        'projekt_person_id'   => $pivot->id,
+                        'projektbegleiter_id' => $validated['projektbegleiter_id'] ?? null,
+                        'betreuer_id'         => $validated['betreuer_id'] ?? null,
+                    ]);
+
+                } elseif ($meta && ($validated['projektbegleiter_id'] ?? null || $validated['betreuer_id'] ?? null)) {
+                    // 🟡 2. Meta existiert + einer der Werte gesetzt → UPDATE
+                    $meta->update([
+                        'projektbegleiter_id' => $validated['projektbegleiter_id'] ?? $meta->projektbegleiter_id,
+                        'betreuer_id'         => $validated['betreuer_id'] ?? $meta->betreuer_id,
+                    ]);
+
+                } elseif (!$meta && empty($validated['projektbegleiter_id']) && empty($validated['betreuer_id'])) {
+                    // 🔴 3. Kein Meta vorhanden + beide Werte NULL → NICHTS TUN
+                    // (absichtlich leer)
+                }
 
 
             // 🟩 Letzten Zeitraum holen — **richtige Sortierung (id statt created_at)**
             $zeitraum = $pivot->zeitraume()
                 ->orderBy('id', 'desc')
                 ->first();
-
             // 🟧 Wenn vorhanden → aktualisieren
             if ($zeitraum) {
 
@@ -198,14 +235,10 @@ class ProjektHasTeilnehmerController extends Controller
             DB::commit();
             return response()->json([
                 'success' => true,
-                'zeitraum' => $zeitraum
+                'zeitraum' => $zeitraum ?? null,
+                'meta'     => $meta ? $meta->load('projektbegleiter', 'betreuer') : null,
             ]);
-
-        return redirect()->back()
-            ->with('success', 'Projektzuweisung erfolgreich aktualisiert!')
-            ->with('zeitraum', $zeitraum);   // ← wichtig!
-
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
 
             DB::rollBack();
 

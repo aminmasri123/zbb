@@ -1,45 +1,46 @@
 <?php
 
-use App\Http\Controllers\AbschlusseController;
-use App\Http\Controllers\AbteilungController;
-use App\Http\Controllers\AdresseController;
-use App\Http\Controllers\AnwesenheitController;
-use App\Http\Controllers\BaenkeController;
-use App\Http\Controllers\BerechtigungController;
-use App\Http\Controllers\BereichController;
+use Inertia\Inertia;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Foundation\Application;
+use App\Http\Controllers\UserController;
 use App\Http\Controllers\BriefController;
+use App\Http\Controllers\NotizController;
+use App\Http\Controllers\BaenkeController;
+use App\Http\Controllers\GruppeController;
+use App\Http\Controllers\SchuleController;
+use App\Http\Controllers\AdresseController;
+use App\Http\Controllers\BereichController;
+use App\Http\Controllers\KontaktController;
+use App\Http\Controllers\PartnerController;
+use App\Http\Controllers\ProjektController;
+use App\Http\Controllers\PersonalController;
+use App\Http\Controllers\StandortController;
+use App\Http\Controllers\AbteilungController;
 use App\Http\Controllers\DashbaordController;
-use App\Http\Controllers\DienstwagenController;
-use App\Http\Controllers\DienstwagenfahrtenbuchController;
-use App\Http\Controllers\DienstwagenkostenController;
-use App\Http\Controllers\DienstwagenreportsController;
-use App\Http\Controllers\DienstwagenwartungController;
-use App\Http\Controllers\ExportExcelController;
+use App\Http\Controllers\FahrzeugeController;
+use App\Http\Controllers\AbschlusseController;
 use App\Http\Controllers\ExportWordController;
 use App\Http\Controllers\FahrtartenController;
-use App\Http\Controllers\FahrtkostenAbrechnenController;
-use App\Http\Controllers\FahrtkostensaetzeController;
-use App\Http\Controllers\FahrzeugeController;
-use App\Http\Controllers\GruppeController;
-use App\Http\Controllers\GruppeHasTeilnehmerController;
-use App\Http\Controllers\KontaktController;
+use App\Http\Controllers\TeilnehmerController;
+use App\Http\Controllers\AnwesenheitController;
+use App\Http\Controllers\DienstwagenController;
+use App\Http\Controllers\ExportExcelController;
+use App\Http\Controllers\BerechtigungController;
 use App\Http\Controllers\KostenstelleController;
 use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\NotizController;
-use App\Http\Controllers\PartnerController;
-use App\Http\Controllers\PersonalController;
-use App\Http\Controllers\ProjektController;
-use App\Http\Controllers\ProjektHasPersonenController;
-use App\Http\Controllers\ProjektHasTeilnehmerController;
 use App\Http\Controllers\RaumlichkeitenController;
-use App\Http\Controllers\SchuleController;
-use App\Http\Controllers\StandortController;
-use App\Http\Controllers\TeilnehmerController;
 use App\Http\Controllers\TransportartenController;
-use App\Http\Controllers\UserController;
-use Illuminate\Foundation\Application;
-use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
+use App\Http\Controllers\DienstwagenkostenController;
+use App\Http\Controllers\FahrtkostensaetzeController;
+use App\Http\Controllers\DienstwagenreportsController;
+use App\Http\Controllers\DienstwagenwartungController;
+use App\Http\Controllers\ProjektHasPersonenController;
+use App\Http\Controllers\GruppeHasTeilnehmerController;
+use App\Http\Controllers\FahrtkostenAbrechnenController;
+use App\Http\Controllers\ProjektHasTeilnehmerController;
+use App\Http\Controllers\DienstwagenfahrtenbuchController;
+use App\Http\Controllers\ProjektHasTeilnehmerLuvController;
 
 
 /*
@@ -222,6 +223,9 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::post('/teilnehmer/projekt/anlegen', [ProjektHasTeilnehmerController::class, 'store'])->name('projekthasteilnehmer.store');
     Route::put('/teilnehmer/projekt/edit', [ProjektHasTeilnehmerController::class, 'update'])->name('projekthasteilnehmer.update');
 
+    //ProjektHasTeilnehmerLuv
+    Route::post('/teilnehmer/projekt/luv/anlegen', [ProjektHasTeilnehmerLuvController::class, 'store'])->name('projekthasteilnehmer.luv.store');
+    Route::put('/teilnehmer/projekt/luv/edit', [ProjektHasTeilnehmerLuvController::class, 'update'])->name('projekthasteilnehmer.luv.update');
     //ProjektHasPersonen
     Route::post('/personen/projekt/zuweisen', [ProjektHasPersonenController::class, 'store'])->name('projekthaspersonen.store');
     Route::delete('/personen/projekt/entfernen/{id}', [ProjektHasPersonenController::class, 'destroy'])->name('projekthaspersonen.destroy');
@@ -233,11 +237,11 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
 
     //Partner
     Route::get('/organisation/partner', [PartnerController::class, 'index'])->name('partner.index');
-        Route::post('/organisation/partner/anlegen', [PartnerController::class, 'store'])->name('partner.store');
+    Route::post('/organisation/partner/anlegen', [PartnerController::class, 'store'])->name('partner.store');
+    Route::delete('/organisation/partner/entfernen/{id}', [PartnerController::class, 'destroy'])->name('partner.destroy');
+    Route::put('/organisation/partner/edit/{id}', [PartnerController::class, 'update'])->name('partner.update');
 
-Route::get('/organisation/partner/ajax/fresh',
-    [PartnerController::class, 'indexAjaxFresh']
-)->name('partner.indexAjaxFresh');
+    Route::get('/organisation/partner/ajax/fresh', [PartnerController::class, 'indexAjaxFresh'])->name('partner.indexAjaxFresh');
 
 
 

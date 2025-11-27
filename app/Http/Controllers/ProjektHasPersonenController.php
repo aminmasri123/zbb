@@ -32,57 +32,54 @@ class ProjektHasPersonenController extends Controller
      * Store a newly created resource in storage.
      */
     public function store(Request $request)
-{
-    $validated = $request->validate([
-        'user_id' => ['required', 'exists:personens,id'],
-        'zuweisungen' => ['required', 'array'],
+    {
+        $validated = $request->validate([
+            'user_id' => ['required', 'exists:personens,id'],
+            'zuweisungen' => ['required', 'array'],
 
-        'zuweisungen.*.projekt_id' => ['required', 'exists:projekts,id'],
-        'zuweisungen.*.standort_id' => ['required', 'array'],
-        'zuweisungen.*.standort_id.*' => ['exists:standorts,id'],
-    ]);
-
-    DB::beginTransaction();
-
-    try {
-
-        $person = Personen::findOrFail($validated['user_id']);
-
-        foreach ($validated['zuweisungen'] as $zw) {
-
-            foreach ($zw['standort_id'] as $standortId) {
-
-                ProjektHasPersonen::create([
-                    'personen_id' => $person->id,
-                    'projekt_id'  => $zw['projekt_id'],
-                    'standort_id' => $standortId,
-                    'status'      => 'aktiv',
-                ]);
-            }
-        }
-
-        DB::commit();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Projekte erfolgreich zugewiesen.',
+            'zuweisungen.*.projekt_id' => ['required', 'exists:projekts,id'],
+            'zuweisungen.*.standort_id' => ['required', 'array'],
+            'zuweisungen.*.standort_id.*' => ['exists:standorts,id'],
         ]);
 
-    } catch (Throwable $e) {
+        DB::beginTransaction();
 
-        DB::rollBack();
-        report($e);
+        try {
 
-        return response()->json([
-            'success' => false,
-            'message' => 'Fehler beim Speichern.',
-            'error'   => $e->getMessage(),
-        ], 500);
+            $person = Personen::findOrFail($validated['user_id']);
+
+            foreach ($validated['zuweisungen'] as $zw) {
+
+                foreach ($zw['standort_id'] as $standortId) {
+
+                    ProjektHasPersonen::create([
+                        'personen_id' => $person->id,
+                        'projekt_id'  => $zw['projekt_id'],
+                        'standort_id' => $standortId,
+                        'status'      => 'aktiv',
+                    ]);
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Projekte erfolgreich zugewiesen.',
+            ]);
+
+        } catch (Throwable $e) {
+
+            DB::rollBack();
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Fehler beim Speichern.',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
     }
-}
-
-
-
 
     /**
      * Display the specified resource.

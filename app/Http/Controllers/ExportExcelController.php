@@ -408,6 +408,7 @@ class ExportExcelController extends Controller
         $sheet->setCellValue("AA1", 'ZBB gGmbH ' . $projekt->name ?? '');
 
         $row = 3;
+
         foreach ($projektHasTeilnehmer as $eintrag) {
             $person = $eintrag->teilnehmer;
 
@@ -418,7 +419,13 @@ class ExportExcelController extends Controller
             $sheet->setCellValue("J$row", $eintrag?->zeitraume?->first()?->starttermin ? Carbon::parse($eintrag->zeitraume->first()->starttermin)->format('d.m.Y') : '' );
             $sheet->setCellValue("K$row", $eintrag?->zeitraume?->first()?->endtermin ?  Carbon::parse($eintrag->zeitraume->first()->endtermin)->format('d.m.Y') : '' );
             $sheet->setCellValue("L$row", $eintrag?->zeitraume?->first()?->enddatum ? Carbon::parse($eintrag->zeitraume->first()->enddatum)->format('d.m.Y') : '');
-            $sheet->setCellValue("BC$row", $eintrag->meta?->massnahmebegleiter ?? ''); //JC Arbeitsvermitler
+            $sheet->setCellValue("BC$row",
+                ($eintrag->meta?->projektbegleiter
+                    ? (($eintrag->meta?->projektbegleiter->geschlecht === 'w' ? 'Frau' : 'Herr')
+                        . ' ' . $eintrag->meta?->projektbegleiter->vorname
+                        . ' ' . $eintrag->meta?->projektbegleiter->nachname)
+                    : '')
+            );
 
             $sheet->setCellValue( "BD$row", $eintrag->meta?->betreuer ? trim( ((['m' => 'Herr', 'w' => 'Frau'][$eintrag->meta?->betreuer->geschlecht] ?? '') . ' ' . $eintrag->meta?->betreuer?->vorname . ' ' . $eintrag->meta?->betreuer?->nachname) ) : '');
             // Anwesenheiten

@@ -19,7 +19,7 @@ return new class extends Migration
             $table->foreignId('zielgruppe_id')->nullable()->constrained('zielgruppes')->onDelete('set null');
             $table->foreignId('projektabschluss_id')->nullable()->constrained('ergebnisses')->onDelete('set null');
             $table->foreignId('verbleib_id')->nullable()->constrained('verbleibteilnehmers')->onDelete('set null');
-            $table->string('massnahmebegleiter')->nullable();
+            $table->foreignId('massnahmebegleiter_id')->nullable()->constrained('personens')->onDelete('set null');
             $table->timestamps();
         });
     }

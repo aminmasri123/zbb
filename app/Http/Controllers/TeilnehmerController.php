@@ -188,6 +188,8 @@ class TeilnehmerController extends Controller
 
     public function show($id)
     {
+        $userProjektAktivId = Auth()->user()->current_team_id;
+
         $personen = personen::Teilnehmer()->with([
             'adresses',
             'anwesenheiten',
@@ -206,7 +208,6 @@ class TeilnehmerController extends Controller
             'notizen.notizprioritaet',
             'notizen.user',
         ])->findOrFail($id);
-
         $personen->gruppen->each(function ($t) {
             $t->zeitgeplant = $t->pivot->zeitgeplant;
             $t->zeittatsaechlich = $t->pivot->zeittatsaechlich;
@@ -214,14 +215,21 @@ class TeilnehmerController extends Controller
             $t->status = $t->pivot->status;
             $t->tag = $t->pivot->tag;
             $t->user = $t->pivot->user;
-
         });
+        $personen->projekte->each(function ($projekt) {
+            $projekt->pivotModel->load('zeitraume', 'meta', 'luv');
+        });
+
+        $berechtigt = $personen->projekte->pluck('id')->contains($userProjektAktivId);
+        if(!$berechtigt) abort(403, "Sie sind nicht berechtigt, die Daten des Teilnehmers zu sehen.");
+
+        $arbeitsvermittler = Personen::arbeitsvermittler()->get();
         $bereiche = Bereich::all();
         $anwesenheitsstatuten =Anwesenheitsstatuten::all();
         $abschluesse = Abschluesse::all();
-        $personen->projekte->each(function ($projekt) {
-            $projekt->pivotModel->load('zeitraume', 'meta');
-        });
+
+
+        //dd($personen);
 
         $notiztypen = Notizvarianten::where('typ', 'typ')->get();
         $notizkategorie = Notizvarianten::where('typ', 'kategorie')->get();
@@ -245,7 +253,6 @@ class TeilnehmerController extends Controller
             ->orderBy('nachname')
             ->select('nachname', 'vorname', 'id') // id hinzugefügt für Referenz
             ->get();
-
 
         $projekte = Projekt::orderBy('name')->get();
         $gruppen = Gruppe::where('projekt_id', Auth()->user()->current_team_id)->with('bereich', 'betreuer')->get();
@@ -271,6 +278,7 @@ class TeilnehmerController extends Controller
             'gruppen' => $gruppen,
             'dokumente' => $dokumente,
             'bereiche' => $bereiche,
+            'arbeitsvermittler' => $arbeitsvermittler,
             ],
         );
     }

@@ -75,7 +75,7 @@ class UserSeeder extends Seeder
             ],
 
             [
-                'bezeichnung' => 'Arbeitsvermittlungs-Partner',
+                'bezeichnung' => 'Arbeitsvermittler',
                 'beschreibung' => 'Partner, die bei der Vermittlung in Arbeit oder Ausbildung unterstützen.',
             ],
 
@@ -224,14 +224,14 @@ class UserSeeder extends Seeder
         ]);
           $personen =
         [
-            ['vorname' => 'Amin', 'nachname' => 'Masri', 'geburtsdatum' => '2000-01-01', 'email' => 'amin.masri@outlook.com', 'username' => 'aminmasri', 'password' => 'password'],
-            ['vorname' => 'Anika', 'nachname' => 'Feller', 'geburtsdatum' => '2000-01-01', 'email' => 'a.feller@zbb-saar.de', 'username' => 'Anika Feller', 'password' => 'zbb.bop.hw'],
-            ['vorname' => 'Salvatore', 'nachname' => 'Gucciardo', 'geburtsdatum' => '2000-01-01', 'email' => 's.gucciardo@zbb-saar.de', 'username' => 'Salvatore Gucciardo', 'password' => 'zbb.bop.ala'],
-            ['vorname' => 'Birgitta', 'nachname' => 'Lautenschlager', 'geburtsdatum' => '2000-01-01', 'email' => 'b.lautenschlager@zbb-saar.de', 'username' => 'Brigitta Lautenschlager', 'password' => 'zbb.al'],
-            ['vorname' => 'Chantale', 'nachname' => 'Lismann', 'geburtsdatum' => '2000-01-01', 'email' => 'c.lismann@zbb-saar.de', 'username' => 'Chantale Lismann', 'password' => 'zbb.al'],
-            ['vorname' => 'Stefanie', 'nachname' => 'Wagner', 'geburtsdatum' => '2000-01-01', 'email' => 's.wagner@zbb-saar.de', 'username' => 'Stefanie Wagner', 'password' => 'zbb.al'],
-            ['vorname' => 'Stefan', 'nachname' => 'Haßdenteufel', 'geburtsdatum' => '2000-01-01', 'email' => 's.haßdenteufel@zbb-saar.de', 'username' => 'Stefan Haßdenteufel', 'password' => 'zbb.al'],
-            ['vorname' => 'Martin', 'nachname' => 'Löw', 'geburtsdatum' => '2000-01-01', 'email' => 'm.loew@zbb-saar.de', 'username' => 'Martin Löw', 'password' => 'zbb.al'],
+            ['vorname' => 'Amin', 'nachname' => 'Masri', 'geschlecht' => 'm', 'geburtsdatum' => '2000-01-01', 'email' => 'amin.masri@outlook.com', 'username' => 'aminmasri', 'password' => 'password'],
+            ['vorname' => 'Anika', 'nachname' => 'Feller', 'geschlecht' => 'w', 'geburtsdatum' => '2000-01-01', 'email' => 'a.feller@zbb-saar.de', 'username' => 'Anika Feller', 'password' => 'zbb.bop.hw'],
+            ['vorname' => 'Salvatore', 'nachname' => 'Gucciardo', 'geschlecht' => 'm', 'geburtsdatum' => '2000-01-01', 'email' => 's.gucciardo@zbb-saar.de', 'username' => 'Salvatore Gucciardo', 'password' => 'zbb.bop.ala'],
+            ['vorname' => 'Birgitta', 'nachname' => 'Lautenschlager', 'geschlecht' => 'w', 'geburtsdatum' => '2000-01-01', 'email' => 'b.lautenschlager@zbb-saar.de', 'username' => 'Brigitta Lautenschlager', 'password' => 'zbb.al'],
+            ['vorname' => 'Chantale', 'nachname' => 'Lismann', 'geschlecht' => 'w', 'geburtsdatum' => '2000-01-01', 'email' => 'c.lismann@zbb-saar.de', 'username' => 'Chantale Lismann', 'password' => 'zbb.al'],
+            ['vorname' => 'Stefanie', 'nachname' => 'Wagner', 'geschlecht' => 'w', 'geburtsdatum' => '2000-01-01', 'email' => 's.wagner@zbb-saar.de', 'username' => 'Stefanie Wagner', 'password' => 'zbb.al'],
+            ['vorname' => 'Stefan', 'nachname' => 'Haßdenteufel', 'geschlecht' => 'm', 'geburtsdatum' => '2000-01-01', 'email' => 's.haßdenteufel@zbb-saar.de', 'username' => 'Stefan Haßdenteufel', 'password' => 'zbb.al'],
+            ['vorname' => 'Martin', 'nachname' => 'Löw', 'geschlecht' => 'm', 'geburtsdatum' => '2000-01-01', 'email' => 'm.loew@zbb-saar.de', 'username' => 'Martin Löw', 'password' => 'zbb.al'],
         ];
 
         $projektIds = Projekt::pluck('id')->toArray();
@@ -243,6 +243,8 @@ class UserSeeder extends Seeder
                 'vorname' => $person['vorname'],
                 'nachname' => $person['nachname'],
                 'geburtsdatum' => $person['geburtsdatum'],
+                'geschlecht' => $person['geschlecht'],
+
             ]);
 
                 // Passendes Benutzerkonto automatisch anlegen

@@ -25,1549 +25,1651 @@
 
     <!-- ================= INHALT ================= -->
     <div class="bg-gray-50 ">
-      <div class="bg-gray-100  space-y-6 -mt-6">
-        <!-- =================== TABS =================== -->
-        <div class="bg-white shadow-md rounded-xl p-6 border border-gray-200">
-          <nav class="flex flex-wrap gap-2 border-b pb-2 mb-4 justify-center">
-            <button
-              v-for="tab in tabs"
-              :key="tab"
-              @click="activeTab = activeTab === tab ? '' : tab"
-              :class="[
-                'px-3 py-1 text-sm font-medium rounded-t-md',
-                activeTab === tab
-                  ? 'bg-zbbTrp text-zbb border-b-2 border-zbb'
-                  : 'text-gray-600 hover:text-zbb',
-              ]"
-            >
-              {{ tab }}
-            </button>
-          </nav>
-
-          <!-- ================= STAMMDATEN ================= -->
-            <Stammdaten v-if="activeTab === 'Stammdaten'" :teilnehmer="teilnehmer" :betreuer="props.betreuer" />
-
-
-          <!-- ================= Sozialdaten ================= -->
-          <div v-if="activeTab === 'Sozialdaten'">
-            <button @click="saveSozialdaten"
-                class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full">
-                ➕ Speichern
-              </button>
-
-                <div class="space-y-5  w-96 mx-auto">
-
-
-                    <FloatLabel variant="on">
-                        <InputText  v-model="kundennummer" label="kundennummer?"  size="small"  class="w-full" />
-                        <label for="abteilungDelete">Kundennummer*</label>
-                    </FloatLabel>
-                    <Toggle v-model="drittstaatsangehoerig" label="Drittstaatsangehörige?" hint="Nicht-EU/EWR/Schweiz" />
-
-                    <Toggle v-model="behinderung" label="Liegt eine Behinderung vor?" hint="Nach §2 SGB IX" />
-
-                    <Toggle v-model="gefluechtet" label="Teilnehmer ist geflüchtet?" />
-
-                    <div class="flex items-center w-96   justify-between gap-4">
-                        <label class="block text-sm font-medium text-gray-800 leading-6">Leistungsbezug nach SGB</label>
-                        <select v-model="leistungsbezug_id" class="input w-64" >
-                            <option :value="null" disabled>— auswählen —</option>
-                            <option v-for="m in props.leistungsbezuege" :key="m.id" :value="m.id" >
-                                {{ m.bezeichnung }}
-                            </option>
-                        </select>
-                    </div>
-
-                    <Toggle v-model="migrationshintergrund" label="Liegt ein Migrationshintergrund vor?" />
-                    <Toggle v-model="wohnsitz_stabil" label="Wohnsitz stabil?" />
-                </div>
-          </div>
-
-          <!-- ================= ADRESSEN ================= -->
-          <div v-else-if="activeTab === 'Adresse'">
-              <button @click="showModalAdresse = true"
-                class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full">
-                ➕ Neue Adresse hinzufügen
-              </button>
-
-            <div v-if="teilnehmer.adresses && teilnehmer.adresses.length">
-              <table class="min-w-full border border-gray-200 text-sm">
-                <thead class="bg-gray-50 text-gray-700">
-                  <tr>
-                    <th class="px-3 py-2 text-left">#</th>
-                    <th class="px-3 py-2 text-left">Land</th>
-                    <th class="px-3 py-2 text-left">Straße</th>
-                    <th class="px-3 py-2 text-left">Hausnummer</th>
-                    <th class="px-3 py-2 text-left">PLZ</th>
-                    <th class="px-3 py-2 text-left">Ort</th>
-                    <th class="px-3 py-2 text-left">Aktionen</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="(adresse, index) in teilnehmer.adresses"
-                    :key="adresse.id || index"
-                    class="border-t hover:bg-gray-50 transition"
-                  >
-                    <td class="px-3 py-2">{{ index + 1 }}</td>
-                    <td class="px-3 py-2">{{ adresse.land }}</td>
-                    <td class="px-3 py-2">{{ adresse.strasse }}</td>
-                    <td class="px-3 py-2">{{ adresse.hausnummer }}</td>
-                    <td class="px-3 py-2">{{ adresse.plz }}</td>
-                    <td class="px-3 py-2">{{ adresse.stadt }}</td>
-                    <td class="px-3 py-2">
-                      <button
-                        @click="confirmDelete(adresse, 'adresse')"
-                        class="text-red-500 hover:text-red-700 text-sm"
-                      >
-                        <i class="la la-trash"></i> Löschen
-                      </button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <p v-else class="text-gray-500 italic">Keine Adressdaten vorhanden.</p>
-
-          </div>
-
-          <!-- ================= KONTAKTDATEN ================= -->
-          <div v-else-if="activeTab === 'Kontaktdaten'">
-            <button @click="showModalCreateKontakt = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
-                <span v-if="!loadingKontakt">➕ Kontakt hinzufügen</span>
-                <span v-else>...</span>
-            </button>
-
-            <div v-if="teilnehmer.kontaktes && teilnehmer.kontaktes.length" class="space-y-3 mb-6">
-              <div
-                v-for="kontakt in teilnehmer.kontaktes"
-                :key="kontakt.id"
-                class="flex justify-between items-center bg-gray-50 border rounded-lg px-4 py-2"
-              >
-                <div>
-                  <p class="text-sm font-semibold text-gray-800">
-                    {{ kontakt.kontakttyp?.name || "Unbekannt" }}
-                  </p>
-                  <p class="text-gray-600 text-sm">{{ kontakt.wert }}</p>
-                </div>
-                <button
-                  @click="confirmDelete(kontakt, 'kontakt')"
-                  class="text-red-500 hover:text-red-700 text-sm"
-                >
-                  Entfernen
-                </button>
-              </div>
-            </div>
-            <p v-else class="text-gray-400 italic mb-6">
-              Noch keine Kontaktdaten vorhanden.
-            </p>
-
-          </div>
-
-          <!-- =================== MASSNAHMENVERLAUF =================== -->
-        <div v-else-if="activeTab === 'Projektverlauf'">
-             <!-- Projekt hinzufügen -->
-            <button @click="showModalProjektzuweisen = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
-                <span v-if="!loadingProjekt">➕ Zuweisen</span>
-                <span v-else>...</span>
-            </button>
-            <table class="min-w-full border border-gray-300 text-sm text-center">
-                <thead class="bg-gray-100">
-                    <tr>
-                    <th class="px-4 py-2 border">Projekte</th>
-                    <th class="px-4 py-2 border">Projektbegleiter</th>
-                    <th class="px-4 py-2 border">Antragsdatum</th>
-                    <th class="px-4 py-2 border">Anfangsdatum</th>
-                    <th class="px-4 py-2 border">Enddatum</th>
-                    <th class="px-4 py-2 border">Starttermin</th>
-                    <th class="px-4 py-2 border">Endtermin</th>
-                    <th  class="px-4 py-2 border">*</th>
-                    </tr>
-                </thead>
-
-                <tbody>
-                    <!-- Schleife über alle Projekte -->
-                    <template v-for="(projekt, i) in teilnehmer.projekte" :key="i">
-                        <!-- Wenn das Projekt mehrere Zeiträume hat -->
-                        <tr
-                            v-for="(zeit, z) in projekt.pivot_model?.zeitraume || []"
-                            :key="zeit.id"
-                            class="hover:bg-gray-50"
-                        >
-                            <!-- Projektname nur einmal pro Gruppe -->
-                            <td
-                                v-if="z === 0"
-                                :rowspan="projekt.pivot_model?.zeitraume?.length || 1"
-                                class="border px-4 py-2 align-middle font-medium bg-gray-50"
-                                >
-                                {{ projekt.name }}
-                            </td>
-                            <td
-                                v-if="z === 0"
-                                :rowspan="projekt.pivot_model?.zeitraume?.length || 1"
-                                class="border px-4 py-2 align-middle font-medium bg-gray-50"
-                                >
-                                {{ projekt.pivot_model.meta?.massnahmebegleiter }}
-                            </td>
-
-                            <td class="border px-4 py-2">{{ zeit.antragsdatum  || '-' }}</td>
-                            <td class="border px-4 py-2">{{ zeit.anfangsdatum  || '-' }}</td>
-                            <td class="border px-4 py-2">{{ zeit.enddatum || '-'  }}</td>
-                            <td class="border px-4 py-2">{{ zeit.starttermin  || '-' }}</td>
-                            <td class="border px-4 py-2">{{ zeit.endtermin  || '-' }}</td>
-                            <td class="border px-6 py-4 text-center">
-                                <!-- Dropdown für Aktion -->
-                                <Dropdown>
-                                    <template #trigger>
-                                        <button class=" items-center  text-sm leading-4 font-medium text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
-                                            <span class="cursor-pointer">
-                                                <i class="transform transition-transform duration-300  la la-ellipsis-v la-lg"></i>
-                                            </span>
-                                        </button>
-                                    </template>
-
-                                    <template #content >
-                                        <!-- Gefilterte Projektauswahl -->
-                                        <span class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100 " @click="confirmDelete(projekt, 'projekt')">
-                                            {{ $t('Löschen') }} <i class="las la-trash-alt"></i>
-                                        </span>
-                                        <span
-                                            class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"
-                                            @click="openProjektEdit(zeit, projekt)"
-                                            >
-                                            {{ $t('Bearbeiten') }} <i class="las la-edit"></i>
-                                        </span>
-                                        <a  target="_blank" :href="route('export.excel.esfStammblatt', [props.teilnehmer.id, projekt.id])" class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100" >ESF <i class="las la-file-download"></i></a>
-                                    </template>
-                                </Dropdown>
-                            </td>
-                        </tr>
-
-                        <!-- Falls keine Zeiträume vorhanden sind -->
-                        <tr v-if="!projekt.pivot_model?.zeitraume?.length" class="hover:bg-gray-50">
-                            <td class="border px-4 py-2 font-medium bg-gray-50">{{ projekt.name }}</td>
-                            <td class="border px-4 py-2 font-medium bg-gray-50">{{ projekt.pivot_model.meta?.massnahmebegleiter }}</td>
-                            <td colspan="5" class="border px-4 py-2 text-gray-500 italic"> Keine Zeiträume vorhanden</td>
-                            <td class="border px-6 py-4 text-center">
-                                <!-- Dropdown für Aktion -->
-                                <Dropdown>
-                                    <template #trigger>
-                                        <button class=" items-center  text-sm leading-4 font-medium text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
-                                            <span class="cursor-pointer">
-                                                <i class="transform transition-transform duration-300  la la-ellipsis-v la-lg"></i>
-                                            </span>
-                                        </button>
-                                    </template>
-
-                                    <template #content >
-                                        <!-- Gefilterte Projektauswahl -->
-                                        <span class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100 " @click="confirmDelete(projekt, 'projekt')">
-                                            {{ $t('Löschen') }} <i class="las la-trash-alt"></i>
-                                        </span>
-                                        <span
-                                            class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"
-                                            @click="openProjektEdit(zeit, projekt)"
-                                            >
-                                            {{ $t('Bearbeiten') }} <i class="las la-edit"></i>
-                                        </span>
-                                    </template>
-                                </Dropdown>
-                            </td>
-                        </tr>
-                    </template>
-                </tbody>
-            </table>
-          </div>
-
-            <!-- =================== Anwesenheit =================== -->
-            <div v-else-if="activeTab === 'Anwesenheit'">
-                 <!-- Anwesenheit hinzufügen -->
-                <div class="flex gap-4 text-center justify-center">
-                    <button @click="showModalAnwesenheit = true" class="bg-zbb w-4/6 text-white px-4 mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition" >
-                        <span v-if="!loadingProjekt">➕ Anwesenheit</span>
-                            <span v-else>...</span>
-                    </button>
-                    <div class="mb-6 mt-4">
-                        <select
-                            v-model="selectedMonth"
-                            class="border-zbb rounded-md text-sm focus:ring-zbb focus:border-zbb"
-                        >
-                            <option value="">Alle Monate</option>
-                            <option v-for="monat in verfuegbareMonate" :key="monat" :value="monat">
-                                {{ monat }}
-                            </option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Tabelle -->
-                <div class="bg-white rounded-2xl shadow-md border mt-8 p-8 mx-auto w-5/6">
-                    <!-- Wenn keine Anwesenheit -->
-                    <div v-if="teilnehmer.anwesenheiten.length === 0" class="text-gray-500 italic text-sm">
-                        <div class="p-8 text-center text-gray-500">
-                            <div class="mb-4 flex justify-center text-6xl text not-italic">
-                                🕒
-                            </div>
-                            <p class="text-lg font-medium">Noch keine Anwesenheit verfasst </p>
-                            <p class="text-sm">Klicken Sie auf "Anwesenheit erfassen" um zu beginnen</p>
-                        </div>
-                    </div>
-
-                    <!-- Karten -->
-                    <div v-else class="space-y-3">
-                        <!-- Gruppierte Ausgabe -->
-                        <div v-for="(anwesenheiten, monat) in gruppenNachMonat" :key="monat">
-                            <div v-if="!selectedMonth || selectedMonth === monat" class="mt-8">
-                                <h4 class="text-lg font-semibold text-zbb border-b pb-1 mb-3">📆 {{ monat }}</h4>
-                                <div v-for="anwesenheit in anwesenheiten" :key="anwesenheit.id" class="bg-white border border-gray-200 rounded-xl px-3 py-4 shadow-sm hover:shadow-md mb-4" >
-                                <div class="flex py-4">
-                                    <!-- Bereich & Datum -->
-                                    <div class="w-1/4 font-semibold">
-                                        <p v-if="anwesenheit.gruppe" class="text-zbb"><span class="text-lg ml-8">🎨</span> {{ anwesenheit.gruppe?.bereich.name }}</p>
-                                        <p class="text-zbb"><span class="text-lg ml-8">📅</span> {{ formatDate(anwesenheit.tag.datum) }}</p>
-                                    </div>
-
-                                    <!-- Soll -->
-                                    <div class="w-1/4 font-semibold ">
-                                    <p class="ml-8 mr-8">🗓️ Geplante Arbeitszeit</p>
-                                    <p><span class="text-lg ml-8">⏰</span>
-                                        {{ formatTime(anwesenheit.zeitgeplant.startzeit) }} -
-                                        {{ formatTime(anwesenheit.zeitgeplant.endzeit) }}
-                                    </p>
-                                    </div>
-
-                                    <!-- Ist -->
-                                    <div class="w-1/4 font-semibold ">
-                                    <p class="ml-8 mr-8">💼 Tatsächliche Arbeitszeit</p>
-                                    <p><span class="text-lg ml-8">⌛</span>
-                                        {{ formatTime(anwesenheit.zeittatsaechlich?.startzeit) }} -
-                                        {{ formatTime(anwesenheit.zeittatsaechlich?.endzeit) }}
-                                    </p>
-                                    </div>
-
-                                    <!-- Abweichung -->
-                                    <div class="w-1/4 font-semibold ">
-                                    <p class="ml-8 mr-8">🔥 Abweichung</p>
-                                        <p class="flex items-center ml-8">
-                                            <span
-                                            class="text-2xl mr-2"
-                                            :class="abweichungsClass(berechneAbweichungMinuten(anwesenheit))"
-                                            >
-                                            {{ abweichungsIcon(berechneAbweichungMinuten(anwesenheit)) }}
-                                            </span>
-
-                                            <span
-                                            class="text-lg font-mono"
-                                            :class="abweichungsClass(berechneAbweichungMinuten(anwesenheit))"
-                                            >
-                                            {{ formatMinutes(berechneAbweichungMinuten(anwesenheit)) }}
-                                            </span>
-                                        </p>
-                                    </div>
-
-                                </div>
-
-                                <!-- Status-Badge + Buttons -->
-                                <div class="flex justify-between mt-8 px-10">
-                                    <div :style="{ backgroundColor: anwesenheit.status.farben }"
-                                        class="py-2 px-4 text-white shadow-lg rounded-full">
-                                    {{ anwesenheit.status.abkuerzung }}
-                                    </div>
-
-                                    <div class="flex gap-2">
-                                    <button @click="openModalEdit(anwesenheit)"
-                                            class="px-4 py-2 text-sm font-medium rounded-md bg-zbb text-white shadow-sm hover:bg-zbb/90">
-                                        Verwalten
-                                    </button>
-
-                                    <button @click="confirmDelete(anwesenheit, 'gruppeHasPersonen')"
-                                            class="px-4 py-2 text-sm font-medium rounded-md bg-red-600 text-white shadow-sm hover:bg-red-700">
-                                        Löschen
-                                    </button>
-                                    </div>
-                                </div>
-
-                                </div>
-                            </div>
-                        </div>
-
-
-                    </div>
-                </div>
-            </div>
-
-
-            <!-- ================= BANK ================= -->
-            <div v-else-if="activeTab === 'Bank'">
-                <button @click="showModalBank = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
-                    <span v-if="!loadingBank">➕ Hinzufügen</span>
-                    <span v-else>...</span>
-                </button>
-                <div v-if="teilnehmer.baenke && teilnehmer.baenke.length">
-                    <table class="min-w-full border border-gray-200 text-sm">
-                    <thead class="bg-gray-50 text-gray-700">
-                        <tr>
-                        <th class="px-3 py-2 text-left">#</th>
-                        <th class="px-3 py-2 text-left">Bankname</th>
-                        <th class="px-3 py-2 text-left">IBAN</th>
-                        <th class="px-3 py-2 text-left">BLZ</th>
-                        <th class="px-3 py-2 text-center">Aktionen</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr
-                        v-for="(bank, index) in teilnehmer.baenke"
-                        :key="bank.id || index"
-                        class="border-t hover:bg-gray-50 transition"
-                        >
-                        <td class="px-3 py-2">{{ index + 1 }}</td>
-                        <td class="px-3 py-2">{{ bank.name }}</td>
-                        <td class="px-3 py-2 font-mono">{{ bank.iban }}</td>
-                        <td class="px-3 py-2">{{ bank.blz }}</td>
-                        <td class="px-3 py-2 text-center">
-                            <button
-                            @click="confirmDelete(bank, 'bank')"
-                            class="text-red-500 hover:text-red-700 text-sm"
-                            >
-                            <i class="la la-trash"></i> Löschen
-                            </button>
-                        </td>
-                        </tr>
-                    </tbody>
-                    </table>
-                </div>
-                <!-- Falls keine Bankdaten -->
-                <p v-else class="text-gray-500 italic">Keine Bankdaten vorhanden.</p>
-            </div>
-
-            <!-- =================  Schule/Beruf ================= -->
-
-            <div v-else-if="activeTab === 'Schule/Beruf'">
-                <!-- Button -->
-                <button
-                    @click="showModalCreateAbschluss = true"
-                    class="bg-zbb text-white px-4 mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full"
-                >
-                    <span v-if="!loadingAbschluss">➕ Abschluss hinzufügen</span>
-                    <span v-else>...</span>
-                </button>
-
-                <!-- Bestehende Abschlüsse -->
-                <div v-if="teilnehmer.abschluesse && teilnehmer.abschluesse.length" class="space-y-3 mb-6">
-                    <div
-                    v-for="eintrag in teilnehmer.abschluesse"
-                    :key="eintrag.id"
-                    class="flex justify-between items-center bg-gray-50 border rounded-lg px-4 py-2"
-                    >
-                    <div>
-                        <p class="text-sm font-bold text-zbb uppercase">
-                        {{ eintrag.typ }}
-                        </p>
-                        <p class="text-gray-600 text-sm">
-                        🎓 <span class="font-bold">{{ eintrag.bezeichnung }}:</span> {{ eintrag.pivot_model.bezeichnung }}
-                        </p>
-                        <p class="text-gray-600 text-sm">
-                    📆 {{ formatDate(eintrag.pivot_model.start) }} - {{ formatDate(eintrag.pivot_model.end) }}
-                        </p>
-                    </div>
+        <div class="bg-gray-100  space-y-6 -mt-6">
+            <!-- =================== TABS =================== -->
+            <div class="bg-white shadow-md rounded-xl p-6 border border-gray-200">
+                <nav class="flex flex-wrap gap-1 border-b pb-2 mb-4 justify-center">
                     <button
-                        @click="confirmDelete(eintrag.pivot_model, 'abschluss')"
-                        class="text-red-500 hover:text-red-700 text-sm"
+                    v-for="tab in tabs"
+                    :key="tab"
+                    @click="activeTab = activeTab === tab ? '' : tab"
+                    :class="[
+                        'px-3 py-1 text-sm font-medium rounded-t-md',
+                        activeTab === tab
+                        ? 'bg-zbbTrp text-zbb border-b-2 border-zbb'
+                        : 'text-gray-600 hover:text-zbb',
+                    ]"
                     >
-                        Entfernen
+                    {{ tab }}
                     </button>
-                    </div>
-                </div>
+                </nav>
 
-                <p v-else class="text-gray-400 italic mb-6">
-                    Noch keine Schul- oder Berufsabschlüsse vorhanden.
-                </p>
-            </div>
-          <!-- ================= BRIEFE ================= -->
-          <div v-else-if="activeTab === 'Briefe'">
-            <button @click="showModalBrief = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
-                <span v-if="!loadingBrief">➕ Vorlage erstellen</span>
-                <span v-else>...</span>
-            </button>
-            <div class="grid grid-cols-2 gap-4">
-                <div class="col-span-1 border p-4 rounded space-y-4 shadow-sm">
-                    <div><label>Datum</label><input type="date" v-model="brief.datum" class="input" /></div>
-                    <div><label>Betreff</label><input v-model="brief.betreff" class="input" /></div>
-                    <label>Inhalt</label>
-                    <textarea v-model="brief.inhalt" rows="6" class="input"></textarea>
-                </div>
-                <div class="col-span-1 border p-4 rounded space-y-4 shadow-sm">
-                    <div>
-                        <label>Meine ✍️</label>
-                       <ul class="border border-gray-200 rounded-lg divide-y divide-gray-100 shadow-sm bg-white text-sm">
-                            <template v-if="meineBriefe && meineBriefe.length > 0">
-                                <li
-                                v-for="v in meineBriefe" :key="v.id"
-                                @click="setBriefVorlage(v)"
-                                class="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-blue-50 transition-all rounded-md"
-                                >
-                                <div class="flex items-center gap-2 text-gray-700">
-                                    <span class="font-medium">{{ v.name }}</span>
-                                </div>
-                                <div class="flex space-x-2">
-                                    <button
-                                    @click="confirmDelete(v, 'brief')"
-                                    class="flex items-center gap-1 text-blue-600 hover:text-red-800 bg-red-100 hover:bg-red-200 px-2 py-1 rounded-md text-xs font-medium transition"
-                                >
-                                    <i class="la la-trash"></i> <span>Löschen</span>
-                                </button>
-                                <button
-                                    @click.stop="() => openFreigabeModal(v)"
-                                    class="flex items-center gap-1 text-blue-600 hover:text-blue-800 bg-blue-100 hover:bg-blue-200 px-2 py-1 rounded-md text-xs font-medium transition"
-                                >
-                                    🔄 <span>Freigeben</span>
-                                </button>
-                                </div>
+                <!-- ================= STAMMDATEN ================= -->
+                <Stammdaten v-if="activeTab === 'Stammdaten'" :teilnehmer="teilnehmer" :betreuer="props.betreuer" />
+
+                <!-- ================= Sozialdaten ================= -->
+                <div v-if="activeTab === 'Sozialdaten'">
+                    <button @click="saveSozialdaten"
+                        class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full">
+                        ➕ Speichern
+                    </button>
+
+                        <div class="space-y-5  w-96 mx-auto">
 
 
-                                </li>
-                            </template>
+                            <FloatLabel variant="on">
+                                <InputText  v-model="kundennummer" label="kundennummer?"  size="small"  class="w-full" />
+                                <label for="abteilungDelete">Kundennummer*</label>
+                            </FloatLabel>
+                            <Toggle v-model="drittstaatsangehoerig" label="Drittstaatsangehörige?" hint="Nicht-EU/EWR/Schweiz" />
 
-                            <template v-else>
-                                <li class="text-center text-gray-500 italic py-4">
-                                <div class="flex flex-col items-center justify-center space-y-1">
-                                    <span class="text-2xl">📭</span>
-                                    <span> keine Vorlage vorhanden</span>
-                                </div>
-                                </li>
-                            </template>
-                        </ul>
-                    </div>
+                            <Toggle v-model="behinderung" label="Liegt eine Behinderung vor?" hint="Nach §2 SGB IX" />
 
-                    <div>
-                        <label>Shared ↩️</label>
-                        <ul class="border border-gray-200 rounded-lg divide-y divide-gray-100 shadow-sm bg-white text-sm">
-                            <template v-if="erhalteneBriefe && erhalteneBriefe.length > 0">
-                                <li
-                                v-for="erhalteneBrief in erhalteneBriefe"
-                                :key="erhalteneBrief.id"
-                                @click="setBriefVorlage(erhalteneBrief)"
-                                class="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-green-50 transition-all rounded-md"
-                                >
-                                <div class="flex items-center gap-2 text-gray-700">
-                                    <span class="font-medium">{{ erhalteneBrief.name }}</span>
-                                </div>
+                            <Toggle v-model="gefluechtet" label="Teilnehmer ist geflüchtet?" />
 
-                               <div class="flex space-x-2">
-                                    <button
-                                    @click="confirmDelete(erhalteneBrief, 'briefShared')"
-                                    class="flex items-center gap-1 text-blue-600 hover:text-red-800 bg-red-100 hover:bg-red-200 px-2 py-1 rounded-md text-xs font-medium transition"
-                                >
-                                    <i class="la la-trash"></i> <span>Löschen</span>
-                                </button>
-                                <button
-                                    @click.stop="() => openFreigabeModal(v)"
-                                    class="flex items-center gap-1 text-blue-600 hover:text-blue-800 bg-blue-100 hover:bg-blue-200 px-2 py-1 rounded-md text-xs font-medium transition"
-                                >
-                                    🔄 <span>Freigeben</span>
-                                </button>
-                                </div>
-                                </li>
-                            </template>
-
-                            <template v-else>
-                                <li class="text-center text-gray-500 italic py-10">
-                                <div class="flex flex-col items-center justify-center space-y-2">
-                                    <span class="text-2xl">📧</span>
-                                    <span>Keine freigegebene Briefe vorhanden‼️</span>
-                                </div>
-                                </li>
-                            </template>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-          </div>
-
-        <!-- ================= NOTIZEN ================= -->
-        <div v-else-if="activeTab === 'Notizen'">
-            <button @click="showModalNotiz = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
-                <span v-if="!loadingNotiz">➕ Notiz erstellen</span>
-                <span v-else>...</span>
-            </button>
-
-            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                <form class="grid grid-cols-1 md:grid-cols-4 gap-4">
-
-                <!-- Suche -->
-                <input
-                    type="text"
-                    v-model="filter.suche"
-                    placeholder="Inhalt suchen..."
-                    class="w-full rounded-md border-gray-300 text-sm focus:border-zbb focus:ring-zbb"
-                />
-
-                <!-- Notiztyp -->
-                <select v-model="filter.typ" class="w-full rounded-md border-gray-300 text-sm focus:border-zbb focus:ring-zbb">
-                    <option value="">Alle Typen</option>
-                    <option v-for="t in props.notiztypen" :key="t.id" :value="t.id">{{ t.name }}</option>
-                </select>
-
-                <!-- Priorität -->
-                <select v-model="filter.prioritaet" class="w-full rounded-md border-gray-300 text-sm focus:border-zbb focus:ring-zbb">
-                    <option value="">Alle Prioritäten</option>
-                    <option v-for="p in props.notizprioritaet" :key="p.id" :value="p.id">{{ p.name }}</option>
-                </select>
-
-                <!-- Kategorie -->
-                <select v-model="filter.kategorie" class="w-full rounded-md border-gray-300 text-sm focus:border-zbb focus:ring-zbb">
-                    <option value="">Alle Kategorien</option>
-                    <option v-for="k in props.notizkategorie" :key="k.id" :value="k.id">{{ k.name }}</option>
-                </select>
-
-                </form>
-
-            </div>
-
-
-            <template  v-if="props.teilnehmer && props.teilnehmer.notizen.length > 0">
-                <div v-for="notiz in [...gefilterteNotizen].reverse()" :key="notiz.id" class="bg-white mt-6 rounded-xl border border-gray-200 shadow-sm p-6 flex flex-col gap-4 hover:bg-gray-50">
-                    <!-- Header -->
-                    <div class="flex items-start justify-between">
-                        <div class="flex items-center gap-2">
-                            <span v-if="notiz.notiztyp.name === 'Telefonnotiz'" class="text-purple-400 text-2xl">📞</span>
-                            <span v-if="notiz.notiztyp.name === 'Verlaufsnotiz'" class="text-purple-400 text-2xl">📈</span>
-                            <span v-if="notiz.notiztyp.name === 'Beratungsprotokoll'" class="text-purple-400 text-2xl">💬</span>
-                            <span v-if="notiz.notiztyp.name === 'Aktennotiz'" class="text-purple-400 text-2xl">📋</span>
-                            <div>
-                                <h3 class="font-semibold text-gray-800">{{notiz.titel}}</h3>
-                                <p class="text-xs text-gray-500">{{props.teilnehmer.vorname}} {{props.teilnehmer.nachname}}</p>
+                            <div class="flex items-center w-96   justify-between gap-4">
+                                <label class="block text-sm font-medium text-gray-800 leading-6">Leistungsbezug nach SGB</label>
+                                <select v-model="leistungsbezug_id" class="input w-64" >
+                                    <option :value="null" disabled>— auswählen —</option>
+                                    <option v-for="m in props.leistungsbezuege" :key="m.id" :value="m.id" >
+                                        {{ m.bezeichnung }}
+                                    </option>
+                                </select>
                             </div>
-                        </div>
 
-                        <div class="flex items-center gap-3">
-                            <span
-                                class="px-2 py-0.5 text-xs rounded-full"
-                                :class="{
-                                    'bg-green-100 text-green-600': notiz.notizprioritaet.name === 'Niedrig',
-                                    'bg-orange-100 text-orange-600': notiz.notizprioritaet.name === 'Mittel',
-                                    'bg-red-100 text-red-600': notiz.notizprioritaet.name === 'Hoch'
-                                }"
+                            <Toggle v-model="migrationshintergrund" label="Liegt ein Migrationshintergrund vor?" />
+                            <Toggle v-model="wohnsitz_stabil" label="Wohnsitz stabil?" />
+                        </div>
+                </div>
+
+                <!-- ================= ADRESSEN ================= -->
+                <div v-else-if="activeTab === 'Adresse'">
+                    <button @click="showModalAdresse = true"
+                        class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full">
+                        ➕ Neue Adresse hinzufügen
+                    </button>
+
+                    <div v-if="teilnehmer.adresses && teilnehmer.adresses.length">
+                    <table class="min-w-full border border-gray-200 text-sm">
+                        <thead class="bg-gray-50 text-gray-700">
+                        <tr>
+                            <th class="px-3 py-2 text-left">#</th>
+                            <th class="px-3 py-2 text-left">Land</th>
+                            <th class="px-3 py-2 text-left">Straße</th>
+                            <th class="px-3 py-2 text-left">Hausnummer</th>
+                            <th class="px-3 py-2 text-left">PLZ</th>
+                            <th class="px-3 py-2 text-left">Ort</th>
+                            <th class="px-3 py-2 text-left">Aktionen</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr
+                            v-for="(adresse, index) in teilnehmer.adresses"
+                            :key="adresse.id || index"
+                            class="border-t hover:bg-gray-50 transition"
+                        >
+                            <td class="px-3 py-2">{{ index + 1 }}</td>
+                            <td class="px-3 py-2">{{ adresse.land }}</td>
+                            <td class="px-3 py-2">{{ adresse.strasse }}</td>
+                            <td class="px-3 py-2">{{ adresse.hausnummer }}</td>
+                            <td class="px-3 py-2">{{ adresse.plz }}</td>
+                            <td class="px-3 py-2">{{ adresse.stadt }}</td>
+                            <td class="px-3 py-2">
+                            <button
+                                @click="confirmDelete(adresse, 'adresse')"
+                                class="text-red-500 hover:text-red-700 text-sm"
                             >
-                                {{ notiz.notizprioritaet.name }}
-                            </span>
-                            <button @click="confirmDelete(notiz, 'notizen')" class="text-gray-400 hover:text-red-500 transition">
-                                <i class="las la-trash text-lg"></i>
+                                <i class="la la-trash"></i> Löschen
                             </button>
-                        </div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
                     </div>
+                    <p v-else class="text-gray-500 italic">Keine Adressdaten vorhanden.</p>
 
-                    <!-- Inhalt -->
-                    <p class="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
-                        {{notiz.notizinhalt}}
+                </div>
+
+                <!-- ================= KONTAKTDATEN ================= -->
+                <div v-else-if="activeTab === 'Kontaktdaten'">
+                    <button @click="showModalCreateKontakt = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
+                        <span v-if="!loadingKontakt">➕ Kontakt hinzufügen</span>
+                        <span v-else>...</span>
+                    </button>
+
+                    <div v-if="teilnehmer.kontaktes && teilnehmer.kontaktes.length" class="space-y-3 mb-6">
+                    <div
+                        v-for="kontakt in teilnehmer.kontaktes"
+                        :key="kontakt.id"
+                        class="flex justify-between items-center bg-gray-50 border rounded-lg px-4 py-2"
+                    >
+                        <div>
+                        <p class="text-sm font-semibold text-gray-800">
+                            {{ kontakt.kontakttyp?.name || "Unbekannt" }}
+                        </p>
+                        <p class="text-gray-600 text-sm">{{ kontakt.wert }}</p>
+                        </div>
+                        <button
+                        @click="confirmDelete(kontakt, 'kontakt')"
+                        class="text-red-500 hover:text-red-700 text-sm"
+                        >
+                        Entfernen
+                        </button>
+                    </div>
+                    </div>
+                    <p v-else class="text-gray-400 italic mb-6">
+                    Noch keine Kontaktdaten vorhanden.
                     </p>
 
-                    <hr>
-
-                    <!-- Footer -->
-                    <div class="flex justify-between items-center text-xs text-gray-500">
-                        <div class="flex gap-4">
-                            <span>{{notiz.notiztyp.name}}</span>
-                            <span>{{notiz.notizkategorie.name}}</span>
-                        </div>
-
-                        <div class="flex items-center gap-2">
-                            <span>{{notiz.user.vorname}} {{notiz.user.nachname}}</span>
-                            <span>•</span>
-                            <span>{{formatDateTime(notiz.created_at)}}</span>
-                        </div>
-                    </div>
                 </div>
-            </template>
 
-        </div>
-
-
-          <!-- ================= KINDER ================= -->
-          <div v-else-if="activeTab === 'Kinder'">
-            <p class="text-gray-500">Informationen zu Kindern können hier ergänzt werden.</p>
-          </div>
-
-
-
-
-          <!-- ================= NETZWERKE ================= -->
-          <div v-else-if="activeTab === 'Netzwerke'">
-            <p class="text-gray-500">Hier kannst du Netzwerkverbindungen pflegen.</p>
-          </div>
-
-          <!-- ================= VERMITTLUNG ================= -->
-          <div v-else-if="activeTab === 'Vermittlung'">
-              <p class="text-gray-500">Hier kannst du Netzwerkverbindungen pflegen.</p>
-                <textarea v-model="form.vermittlung" rows="6" class="input"></textarea>
-          </div>
-
-          <!-- ================= Praktika ================= -->
-          <div v-else-if="activeTab === 'Praktika'">
-              <p class="text-gray-500">Hier kannst du Praktika verwalten.</p>
-                <textarea v-model="form.projekte" rows="6" class="input"></textarea>
-          </div>
-
-        <!-- ================= Fahrtkosten ================= -->
-          <div v-else-if="activeTab === 'Fahrtkosten'">
-              <button @click="showModalFahrtkosten = true"
-                class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full">
-                ➕ Fahrtkosten anlegen
-              </button>
-
-            <div v-if="teilnehmer.fahrtabrechnungen && teilnehmer.fahrtabrechnungen.length">
-              <table class="min-w-full border border-gray-200 text-sm">
-                <thead class="bg-gray-50 text-gray-700">
-                  <tr>
-                    <th class="px-3 py-2 text-left">#</th>
-                    <th class="px-3 py-2 text-left">Fahrtarten</th>
-                    <th class="px-3 py-2 text-left">Tag</th>
-                    <th class="px-3 py-2 text-left">Start</th>
-                    <th class="px-3 py-2 text-left">Ziel</th>
-                    <th class="px-3 py-2 text-left">Entfernung</th>
-                    <th class="px-3 py-2 text-left">Kostenberechnet</th>
-                    <th class="px-3 py-2 text-left">Status</th>
-                    <th class="px-3 py-2 text-left">Erstellen am</th>
-                    <th class="px-3 py-2 text-left">Personal</th>
-                    <th class="px-3 py-2 text-left">Aktionen</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="(fahrtabrechnung, index) in teilnehmer.fahrtabrechnungen"
-                    :key="fahrtabrechnung.id || index"
-                    class="border-t hover:bg-gray-50 transition"
-                  >
-                    <td class="px-3 py-2">{{ index + 1 }}</td>
-                    <td class="px-3 py-2">{{ fahrtabrechnung.fahrtarten.name }}</td>
-                    <td class="px-3 py-2">{{ formatDate(fahrtabrechnung.datum) }}</td>
-                    <td class="px-3 py-2">{{ fahrtabrechnung.start }}</td>
-                    <td class="px-3 py-2">{{ fahrtabrechnung.ziel }}</td>
-                    <td class="px-3 py-2">{{ fahrtabrechnung.entfernung_km }}</td>
-                    <td class="px-3 py-2">{{ fahrtabrechnung.kosten_berechnet }}</td>
-                    <td class="px-3 py-2">{{ fahrtabrechnung.status }}</td>
-                    <td class="px-3 py-2">{{ formatDateTime(fahrtabrechnung.created_at) }}</td>
-                    <td class="px-3 py-2">{{ fahrtabrechnung.personal.vorname }} {{ fahrtabrechnung.personal.nachname }}</td>
-
-                    <td class="px-3 py-2">
-                        <button @click="confirmDelete(fahrtabrechnung, 'fahrtkostenAbrechnung')" class="text-red-500 hover:text-red-700 text-sm" >
-                            <i class="la la-trash"></i> Löschen
-                        </button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <p v-else class="text-gray-500 italic">Keine Fahrtkosten vorhanden.</p>
-
-          </div>
-
-
-          <!-- ================= Exportieren ================= -->
-        <div v-else-if="activeTab === 'Exportieren'">
-            <div class="flex justify-center mx-auto items-center mb-4">
-                <input type="text" v-model="exportSuche" placeholder="🔍 Dokument suchen..." class="w-3/4 rounded-md border-gray-300 text-sm px-3 py-2 focus:ring-zbb focus:border-zbb" />
-            </div>
-
-            <div class="flex flex-wrap">
-                <div v-for="dok in gefilterteDokumente" :key="dok.id" class="w-1/4 cursor-pointer" >
-                    <a
-                        v-if="dok && dok.dateipfadName"
-                        :href="route('export.' + dok.dateipfadName, { id: teilnehmer.id, pfad: dok.dateipfad })"
-                        class="block"
-                    >
-
-                        <div class="rounded-lg shadow m-2 py-6 px-8 min-h-32 flex items-center gap-4 border-4 border-zbb bg-gray-50 hover:bg-gray-100 transition">
-                            <!-- Icon je nach Typ -->
-                             <span class="text-5xl">
-                                <span v-if="dok.typ === 'word'" >
-                                    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAAC/UlEQVR4nO1ZW0hUQRjeoJfojEtFPUgPLvXQ5amEXop6qTMLolBiRDfCQiK6PASCFaIEJmGIUIJmdeZ4SdMwMTRvabWleM0W0WorRNPcTNSzum3rOnH+3R1SFFwLdrT5YJh//ll+vm/nn38OMwaDgICAwLLEqv05oeiAGokwSZKwUo5kZcDAJfbVr1yNle1IVk5KMslAslIjYWUYYUJnt2BTNayLykGSmeyRZCUOyGJiQZg45yIbdAHGiPw1OlmElUuSrKhIVrqQTDwLJRt0AegviM7XTJnaolrYHc2ypAWYMrXAV08IwEIA5U5AoDAJAZjQ3efKWcDEe20zCHXafoDfPTVN10fmMf/NgnfgHxn/SUPMQU6htRG5dNI1BYTyq22MzIaofCDux94LT9lcmaUXfLWtX/nYA83ddiDU9v478+HLlTOW+3z6GzbX0zsKPn0lgp5CCBOaVdYNAR2TbpYSCVkt4NMmf0GfXd7DVszl9oDvaHI9HwLOpllY0G0nSsBX0vAFxjUt/dA3ddnBH37mCfvtlmPFfKTQrrgyRurQtVrw9X7TYHwxoxH6CaebGs0q/Os6hkac/JwDRrPKUuVKdgs1HS4Ce8zhohujH9Jp317eebqUJj9oB7uyqY+PMop87bV1CIKqzz7SmMQ6sJ+3D8CcrX8MxqdSXtDCuk9gp+S+5UvA7cddEFSvSDfyOsFOK/RWmeJ67364VWilHR+GwY72pRoXKYQwobGpL9nhVNHYB/bx6w0wd/VuK4yrmvvp+IQ31TYdKeJLwI7YUiCm5/vngXGwt/oqUkR8FYz7hhze3u7g51MC+Zpe/0c1Fwv+Z5UJPVhAPf6dTCmcxNwJQJjQho5BFnx2lfFvZB1J99vnFBDUFEKY0PRHVkZydpXxb2QdUQnVfApAS/FzGgkBZPmkkEkICABCAP53AsIytVf/3+XufNfrRlkJZ28BPF+vL+aBA2GSqr/GcPvAsXDQFSGyulkyqzFIJikSJhVIJoMBBBAQEBAwLA38BsvuGopgwMs1AAAAAElFTkSuQmCC" alt="ms-word">
-                                </span>
-                                <span v-else-if="dok.typ === 'excel'">
-                                    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAACAElEQVR4nGNgGAWjYBSMgiEJxCYEZ4hNCP4oNjHkP6lY81A96fhg3Uetg3Xp1PQAWY4n2wOHwPgD9TxApuMp9MD/UQ/AwKgHDo16YJh6gLvQooC70OILT5HFf4pwieV/oWaPAfHAF4odD8PFFv95GlwxsOSaVLIxAyFANcfD8KgHUkc98F+4zPb/ndeP/oNA1aZJcHGtlsD/P37/+v/t14//Oq3Bg9cDPEUW/yPmlYE98ObL+/8SlU5gsZVnd4LFGrZOH9wxwAPFu64fBzu4cduM/5Y9sf///vv7//arh+AYGhIeMOmM/P/rz+//7799+n/s3oX///79++81LXvw5wEeJDzl4Ir/MLD8zPahkYl5kPDCE5vgHlhxdgdBD4i7a2FgoWlBZGMGSjzgOTULnGxOPbj8/8jd82BP+M/MHxoeEC6z/X/jxX2wo0Hp3n5CEtgzD98++y9W4Tj4PdC9ZwHY8TuuHYWLbbp0ACzWu3fh4PaAWVcUuPQBFZvWvXFwccOOsP+///4BY6ve2MHrAR4K8KgHpo00D3AXmX+mmgcKzAfAA4XmeVTxRIH5P6Eo/W/i7prv0bFqhgPZmIFaQMJD6z+5WD3NnmzMMOoBKBj1QNqoB0a6B9y1PtLfA3bUm+CQ9NBKk/DQ+kA/D9h9UE2xT6WaB0bBKBgFo4CBGgAA6UC2Ig/cY8oAAAAASUVORK5CYII=" alt="microsoft-excel">
-                                </span>
-                                <span v-else-if="dok.typ === 'pdf'">
-                                    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAACHklEQVR4nO3Xz0uUQRzH8edf8ReJ2iGFDqZ4Euzg1UfLFikTTDxEBhJBCUFmt6gIsSB08SIeokAXEb2FoOlBaDMslFzGiCWy/LXuO8ZhfdLFInNmd2g+MDzPHha+r2e/83xnPc/FRW/wc9Gy6nK6rQUkW8+YQ6ABsP12luSVCjMILQARM4dAF8AUAp0AYQChHSA0I4wAhEaEMYDQhDAKEBoQxgFiPyIrAX+zPAfwHQD7AHdCsLIIP9Yg3G0h4EuMvSR3oLXcIsCl0qD4+dfq2nPZIsD5E7CTUIUvv7MQ4OfCh/mgfWQ6ay0DhO8FbZRIQKjYMkBzGWxtKMD7uSMXT0bnwMy4AkSnoT7PMkBDAcRXgzbqu2nhIJPZ3tq97A609iqLABNDqvDhhzAVUfexj9By2gJAcxlsfFezoK0SLp6C5QWFWHijfp1nt2HkOYwNQiQMj67BuYIsAQw9UMXKTSw/d9RAZIA/ZnI4CwBNJ+FbXBUUnQGxtL/I1J5IZWURlqLqfnM9wwB5hHjZl/5kZfu86IWuBmgsVENObuqDmZ3MEKA+H3pvwOdPQTGyQNnfhx0h5IHvcQe8egqj/er7oZIMAK5Wq435a+Tkla10lLeXbxJwqw7Wvqb3+PWzx1Y82gBy0qZaJi6CU+fg/WMtHm2AC0XpbxQ5vP7hzIPxFnrSqZ6+/PvYf/fQQZS9AN/M8hzAdwAc4L8GuLh4v81P2tZphAMmDCgAAAAASUVORK5CYII=" alt="pdf">
-                                </span>
-
-                                <span v-else>
-                                    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAtElEQVR4nO3WQQrCQBBE0TqFiPc/kiiepiQwCxFcRLpqkun60GQZHukhA6RzReE8AFxXgBDAC8DNCanOjqEY8vx4StdMDbkAuDu+DMUQuDA0QCwYmiByDI2QLRnGDZFhZkAkmFmQcozjz77nbrYEhBUvnB0DGQVSHAPpBmHx/CqQdqvlioF0g1B0uL8LpN1quWIg3SBc5YrCVSCuGMgokOIYyCiQ4hjIKJCjQniQ+btlIAnm3gBxwrjC8DB8AAAAAElFTkSuQmCC" alt="document--v1">                                </span>
-                            </span>
-
-                            <div>
-                                <div class="text-l font-bold">{{ dok.name }}</div>
-                                <div class="text-sm text-gray-600">Version: {{ dok.version }}</div>
-                            </div>
-                        </div>
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        </div>
-      </div>
-    </div>
-
-
-            <!-- MODAL: Brief hinzufügen -->
-             <transition name="fade">
-              <div
-                v-if="showModalBriefFreigeben"
-                class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
-              >
-                <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
-                  <button
-                    @click="showModalBriefFreigeben = false"
-                    class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl"
-                  >
-                    ✕
-                  </button>
-                  <h3 class="text-lg font-semibold mb-4 text-zbb">Brief freigeben</h3>
-
-                  <Multiselect
-                        required
-                        v-model="neuesBriefFreigeben"
-                        :options="props.betreuer.map(p => ({ value: p.id, label: `${p.vorname} ${p.nachname}` }))"
-                        placeholder="Betreuer auswählen"
-                        searchable
-                        noOptionsText="Keine Person gefunden"
-                        class="input-auto"
-                        mode="tags"
-                    />
-
-
-
-
-
-                  <div class="mt-6 flex justify-end space-x-3">
-                    <button
-                      @click="showModalBriefFreigeben = false"
-                      class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100"
-                    >
-                      Abbrechen
+                <!-- =================== MASSNAHMENVERLAUF =================== -->
+                <div v-else-if="activeTab === 'Projektverlauf'">
+                    <!-- Projekt hinzufügen -->
+                    <button @click="showModalProjektzuweisen = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
+                        <span v-if="!loadingProjekt">➕ Zuweisen</span>
+                        <span v-else>...</span>
                     </button>
-                    <button
-                        @click="briefFreigeben"
-                        :disabled="loadingBriefFreigabe"
-                        class="px-4 py-2 rounded-md text-sm text-white transition"
-                        :class="loadingBriefFreigabe ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
-                        >
-                        <span v-if="!loadingBriefFreigabe">Freigeben</span>
-                        <span v-else>Freigabe läuft...</span>
-                    </button>
-
-                  </div>
-                </div>
-              </div>
-            </transition>
-            <transition name="fade">
-              <div
-                v-if="showModalBrief"
-                class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
-              >
-                <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
-                  <button
-                    @click="showModalBrief = false"
-                    class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl"
-                  >
-                    ✕
-                  </button>
-                  <h3 class="text-lg font-semibold mb-4 text-zbb">Neuer Brief</h3>
-
-                  <div class="space-y-3">
-                    <div><label>Name</label><input v-model="neuerBrief.name" class="input" /></div>
-                    <div><label>Titel</label><input v-model="neuerBrief.titel" class="input" /></div>
-                    <div><label>Content</label></div><textarea v-model="neuerBrief.content" rows="2" class="input"></textarea>
-                  </div>
-
-                  <div class="mt-6 flex justify-end space-x-3">
-                    <button
-                      @click="showModalBrief = false"
-                      class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100"
-                    >
-                      Abbrechen
-                    </button>
-                    <button
-                      @click="addBrief"
-                      :disabled="loadingAdresse"
-                      class="px-4 py-2 rounded-md text-sm text-white transition"
-                      :class="loadingAdresse ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
-                    >
-                      <span v-if="!loadingAdresse">Speichern</span>
-                      <span v-else>Speichern...</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </transition>
-
-             <!-- MODAL: Fahrtkosten hinzufügen -->
-            <transition name="fade">
-              <div
-                v-if="showModalFahrtkosten"
-                class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
-              >
-                <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
-                  <button
-                    @click="showModalFahrtkosten = false"
-                    class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl"
-                  >
-                    ✕
-                  </button>
-                  <h3 class="text-lg font-semibold mb-4 text-zbb">Neue Fahrtkosten</h3>
-
-                  <div class="space-y-3">
-                    <div>
-                        <label for="startDate">
-                            Fahrtarten <span class="text-red-500">*</span>
-                        </label>
-                      <Select
-                            v-model="neueFahrtkosten.fahrtarten_id"
-                            :options="props.fahrtarten"
-                            optionLabel="name"
-                            optionValue="id"
-                            class="w-[200px] text-sm w-full px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
-                            >
-                        </Select>
-                    </div>
-                    <div>
-                        <label for="startDate">
-                            Fahrtarten <span class="text-red-500">*</span>
-                        </label>
-                        <Select
-                            v-model="neueFahrtkosten.status"
-                            :options="fahrtkostenStatus"
-                            class="w-[200px] text-sm w-full px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
-                            >
-                        </Select>
-                    </div>
-                    <div><label>Tag<span class="text-red-500">*</span></label><input type="date" v-model="neueFahrtkosten.tag" class="input" /></div>
-                    <div><label>Start</label><input v-model="neueFahrtkosten.start" class="input" /></div>
-                    <div><label>Ziel</label><input v-model="neueFahrtkosten.ziel" class="input" /></div>
-                    <div><label>Entfernung</label><input v-model="neueFahrtkosten.entfernung" class="input" /></div>
-                  </div>
-
-                  <div class="mt-6 flex justify-end space-x-3">
-                    <button
-                      @click="showModalFahrtkosten = false"
-                      class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100"
-                    >
-                      Abbrechen
-                    </button>
-                    <button
-                      @click="addFahrtkosten"
-                      :disabled="loadingFahrtkosten"
-                      class="px-4 py-2 rounded-md text-sm text-white transition"
-                      :class="loadingFahrtkosten ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
-                    >
-                      <span v-if="!loadingFahrtkosten">Speichern</span>
-                      <span v-else>Speichern...</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </transition>
-
-            <!-- MODAL: Adresse hinzufügen -->
-            <transition name="fade">
-              <div
-                v-if="showModalAdresse"
-                class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
-              >
-                <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
-                  <button
-                    @click="showModalAdresse = false"
-                    class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl"
-                  >
-                    ✕
-                  </button>
-                  <h3 class="text-lg font-semibold mb-4 text-zbb">Neue Adresse</h3>
-
-                  <div class="space-y-3">
-                    <div><label>Land</label><input v-model="neueAdresse.land" class="input" /></div>
-                    <div><label>Straße</label><input v-model="neueAdresse.strasse" class="input" /></div>
-                    <div><label>Hausnummer</label><input v-model="neueAdresse.hausnummer" class="input" /></div>
-                    <div><label>PLZ</label><input v-model="neueAdresse.plz" class="input" /></div>
-                    <div><label>Ort</label><input v-model="neueAdresse.stadt" class="input" /></div>
-                  </div>
-
-                  <div class="mt-6 flex justify-end space-x-3">
-                    <button
-                      @click="showModalAdresse = false"
-                      class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100"
-                    >
-                      Abbrechen
-                    </button>
-                    <button
-                      @click="addAdresse"
-                      :disabled="loadingAdresse"
-                      class="px-4 py-2 rounded-md text-sm text-white transition"
-                      :class="loadingAdresse ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
-                    >
-                      <span v-if="!loadingAdresse">Speichern</span>
-                      <span v-else>Speichern...</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </transition>
-
-            <!-- MODAL: Kontakt hinzufügen -->
-            <transition name="fade">
-              <div v-if="showModalCreateKontakt" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-                <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
-                  <button @click="showModalCreateKontakt = false" class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl">✕</button>
-                  <h3 class="text-lg font-semibold mb-4 text-zbb">Neuen Kontakt hinzufügen</h3>
-
-                  <div class="space-y-4">
-                    <div>
-                      <label class="text-sm text-gray-600">Kontakttyp</label>
-                      <select v-model="neuerKontakt.kontakttyp_id" class="input mt-1">
-                        <option disabled value="">-- auswählen --</option>
-                        <option v-for="kt in props.kontakttypen" :key="kt.id" :value="kt.id">{{ kt.name }}</option>
-                      </select>
-                    </div>
-
-                    <!-- Dynamische Eingabe je nach Typ -->
-                    <div v-if="selectedTyp?.name === 'Telefon'">
-                      <label class="text-sm text-gray-600">Telefonnummer</label>
-                      <input v-model="neuerKontakt.wert" class="input mt-1" placeholder="+49 ..." />
-                    </div>
-
-                    <div v-else-if="selectedTyp?.name === 'E-Mail'">
-                      <label class="text-sm text-gray-600">E-Mail</label>
-                      <input v-model="neuerKontakt.wert" type="email" class="input mt-1" placeholder="beispiel@mail.de" />
-                    </div>
-
-                    <div v-else-if="selectedTyp?.name === 'Adresse'">
-                      <label class="text-sm text-gray-600">Adresse</label>
-                      <input v-model="neuerKontakt.wert" class="input mt-1" placeholder="Straße, Ort ..." />
-                    </div>
-
-                    <div v-else-if="selectedTyp">
-                      <label class="text-sm text-gray-600">Wert</label>
-                      <input v-model="neuerKontakt.wert" class="input mt-1" />
-                    </div>
-                  </div>
-
-                  <div class="mt-6 flex justify-end space-x-3">
-                    <button @click="showModalCreateKontakt = false" class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100">Abbrechen</button>
-                    <button
-                      @click="addKontakt"
-                      :disabled="loadingKontakt"
-                      class="px-4 py-2 rounded-md text-sm text-white transition"
-                      :class="loadingKontakt ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
-                    >
-                      <span v-if="!loadingKontakt">Speichern</span>
-                      <span v-else>Speichern...</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </transition>
-
-          <!-- MODAL: Projekt zuweisen -->
-            <transition name="fade">
-                <div
-                    v-if="showModalProjektzuweisen"
-                    class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
-                >
-                    <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
-                    <button
-                        @click="showModalProjektzuweisen = false"
-                        class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl"
-                    >
-                        ✕
-                    </button>
-
-                    <h3 class="text-lg font-semibold mb-4 text-zbb">Projekt zuweisen</h3>
-
-                    <div class="space-y-3">
-                        <!-- Projekt-Auswahl -->
-                        <div>
-                        <label class="text-sm text-gray-600">Projekt auswählen</label>
-                        <Multiselect
-                            v-model="neuesProjektId"
-                            :options="props.projekte.map(p => ({ value: p.id, label: p.name }))"
-                            placeholder="Projekt suchen..."
-                            searchable
-                            noOptionsText="Keine Projekte gefunden"
-                            class="input-auto"
-                        />
-                        </div>
-
-                        <!-- Zeiträume -->
-                        <div>
-                            <label>Antragsdatum</label>
-                            <input type="date" v-model="neuesProjekt.antragsdatum" class="input" />
-                        </div>
-                        <div>
-                            <label>Starttermin</label>
-                            <input type="date" v-model="neuesProjekt.starttermin" class="input" />
-                        </div>
-                        <div>
-                            <label>Endtermin</label>
-                            <input type="date" v-model="neuesProjekt.endtermin" class="input" />
-                        </div>
-                        <div>
-                            <label>Anfangsdatum</label>
-                            <input type="date" v-model="neuesProjekt.anfangsdatum" class="input" />
-                        </div>
-                        <div>
-                            <label>Enddatum</label>
-                            <input type="date" v-model="neuesProjekt.enddatum" class="input" />
-                        </div>
-                    </div>
-
-                    <!-- Buttons -->
-                    <div class="mt-6 flex justify-end space-x-3">
-                        <button
-                        @click="showModalProjektzuweisen = false"
-                        class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100"
-                        >
-                        Abbrechen
-                        </button>
-                        <button
-                        @click="addProjekt"
-                        :disabled="loadingProjekt"
-                        class="px-4 py-2 rounded-md text-sm text-white transition"
-                        :class="loadingProjekt ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
-                        >
-                        <span v-if="!loadingProjekt">Speichern</span>
-                        <span v-else>Speichern...</span>
-                        </button>
-                    </div>
-                    </div>
-                </div>
-            </transition>
-
-
-            <!-- MODAL: PROJEKT BEARBEITEN -->
-            <!-- 🔥 Modal: Projekt bearbeiten -->
-
-            <Modal v-if="showEditZuwseisungModal"   @close="showEditZuwseisungModal = false">
-                <template #header  >{{ $t('Projekt bearbeiten') }}</template>
-
-                <template #body>
-                    <div class="grid grid-cols-2 gap-4">
-
-                        <div class="mb-4 w-full mx-1">
-                            <FloatLabel variant="on">
-                                <InputText v-model="editForm.projektname" class="w-full"/>
-                                <label>Projektname</label>
-                            </FloatLabel>
-                        </div>
-                        <div class="mb-4 w-full mx-1">
-                            <FloatLabel variant="on">
-                                <InputText v-model="editForm.massnahmebegleiter" class="w-full"/>
-                                <label>Ansprechpartner</label>
-                            </FloatLabel>
-                        </div>
-                    </div>
-
-                    <div class="mb-4 w-full mx-1">
-                        <FloatLabel variant="on">
-                            <DatePicker v-model="editForm.antragsdatum" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" :manualInput="true" showIcon iconDisplay="input" />
-                            <label>Antragsdatum</label>
-                        </FloatLabel>
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
-
-                        <div class="mb-4 w-full mx-1">
-                            <FloatLabel variant="on">
-                                <DatePicker v-model="editForm.starttermin" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" :manualInput="true" showIcon iconDisplay="input" />
-                                <label>Starttermin</label>
-                            </FloatLabel>
-                        </div>
-
-                        <div class="mb-4 w-full mx-1">
-                            <FloatLabel variant="on">
-                                <DatePicker v-model="editForm.anfangsdatum" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" :manualInput="true"  showIcon iconDisplay="input" />
-                                <label>Anfangsdatum</label>
-                            </FloatLabel>
-                        </div>
-
-                        <div class="mb-4 w-full mx-1">
-                            <FloatLabel variant="on">
-                                <DatePicker v-model="editForm.endtermin" dateFormat="dd.mm.yy"  class="w-full" inputClass="w-full" :manualInput="true"  showIcon iconDisplay="input" />
-                                <label>Endtermin</label>
-                            </FloatLabel>
-                        </div>
-
-                        <div class="mb-4 w-full mx-1">
-                            <FloatLabel variant="on">
-                                <DatePicker v-model="editForm.enddatum" dateFormat="dd.mm.yy"  class="w-full" inputClass="w-full" showIcon iconDisplay="input" />
-                                <label>Enddatum</label>
-                            </FloatLabel>
-                        </div>
-                    </div>
-                </template>
-
-                <template #footer>
-                    <button @click="saveEdit"
-                            class="bg-zbb text-white px-4 py-2 rounded">
-                        Speichern
-                    </button>
-
-                    <button @click="showEditZuwseisungModal = false"
-                            class="border px-4 py-2 rounded">
-                        Abbrechen
-                    </button>
-                </template>
-            </Modal>
-
-
-
-            <!-- MODAL: Anwesenheit -->
-            <transition name="fade">
-                <div v-if="showModalAnwesenheit" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-                    <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
-                        <button @click="showModalAnwesenheit = false" class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl">✕</button>
-                            <h3 class="text-lg font-semibold mb-4 text-zbb">
-                            {{ editMode ? 'Anwesenheit bearbeiten' : 'Anwesenheit erfassen' }}
-                            </h3>
-                        <div class="space-y-4">
-                            <!-- Datum -->
-                            <div>
-                                <label for="startDate" class="block text-sm font-medium text-gray-700 mb-2" >
-                                    Datum <span class="text-red-500">*</span>
-                                </label>
-                                <input v-model="neueAnwesenheit.dateAnwesenheit" type="date" id="dateAnwesenheit" name="dateAnwesenheit" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
-                            </div>
-                            <!-- Zeitraum geplant-->
-                            <div class="flex space-x-4">
-                                <div class="w-1/2">
-                                    <label for="startTime" class="block text-sm font-medium text-gray-700 mb-2" >
-                                        geplante Startzeit <span class="text-red-500">*</span>
-                                    </label>
-                                    <input v-model="neueAnwesenheit.startTime" type="time" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
-                                </div>
-                                <div class="w-1/2">
-                                    <label for="endTime" class="block text-sm font-medium text-gray-700 mb-2" >
-                                        geplante Endzeit <span class="text-red-500">*</span>
-                                    </label>
-                                    <input v-model="neueAnwesenheit.endTime" type="time"  required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
-                                </div>
-                            </div>
-
-                            <!-- Zeitraum tatsächlich-->
-                            <div class="flex space-x-4">
-                                <div class="w-1/2">
-                                    <label for="startTime" class="block text-sm font-medium text-gray-700 mb-2" >
-                                        tatsächliche Startzeit
-                                    </label>
-                                    <input v-model="neueAnwesenheit.tatstartTime" type="time" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
-                                </div>
-                                <div class="w-1/2">
-                                    <label for="endTime" class="block text-sm font-medium text-gray-700 mb-2" >
-                                        tatsächliche Endzeit
-                                    </label>
-                                    <input v-model="neueAnwesenheit.tatendTime" type="time" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
-                                </div>
-                            </div>
-
-                            <!-- Bereiche -->
-                            <div>
-                                <label for="startDate" class="block text-sm font-medium text-gray-700 mb-2" >
-                                        Beriech <span class="text-red-500">*</span>
-                                </label>
-                               <Select
-                                    v-model="neueAnwesenheit.gruppe"
-                                    :options="props.bereiche"
-                                    optionLabel="name"
-                                    optionValue="id"
-                                    class="w-full text-sm px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
-                                    />
-
-                            </div>
-                             <div>
-                                <label for="startDate" class="block text-sm font-medium text-gray-700 mb-2" >
-                                        Anwesenheitsstatuten <span class="text-red-500">*</span>
-                                </label>
-                              <Select
-                                v-model="neueAnwesenheit.anwesenheitsstatus"
-                                :options="props.anwesenheitsstatuten"
-                                optionLabel="status"
-                                optionValue="id"
-                                class="w-[200px] text-sm w-full px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
-                            >
-
-                                <!-- DROPDOWN OPTION -->
-                                <template #option="slotProps">
-                                    <div class="flex items-center space-x-2">
-                                        <span
-                                            class="w-4 h-4 rounded-full"
-                                            :style="{ backgroundColor: slotProps.option.farben }"
-                                        ></span>
-
-                                        <span>{{ slotProps.option.status }}</span>
-                                    </div>
-                                </template>
-
-                                <!-- AUSGEWÄHLTER WERT -->
-                                <template #value="slotProps">
-                                    <div class="flex items-center space-x-2">
-                                        <span
-                                            class="w-3 h-3 rounded-full"
-                                            :style="{
-                                                backgroundColor: props.anwesenheitsstatuten.find(s => s.id === slotProps.value)?.farben
-                                                    || '#cccccc'
-                                            }"
-                                        ></span>
-
-                                        <span>
-                                            {{ props.anwesenheitsstatuten.find(s => s.id === slotProps.value)?.status || '–' }}
-                                        </span>
-                                    </div>
-                                </template>
-
-                            </Select>
-
-                            </div>
-                            <div>
-                                <label for="bemerkungen" class="block text-sm font-medium text-gray-700 mb-2" >
-                                    Anwesenheitsstatuten <span class="text-red-500">*</span>
-                                </label>
-                                <textarea v-model="neueAnwesenheit.bemerkungen" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors py-3"></textarea>
-
-                            </div>
-
-
-                        </div>
-
-                        <div class="mt-6 flex justify-end space-x-3">
-                            <button @click="showModalAnwesenheit = false" class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100">Abbrechen</button>
-                            <button
-                                @click="addAnwesenheit"
-                                :disabled="loadingAnwesenheit"
-                                class="px-4 py-2 rounded-md text-sm text-white transition"
-                                :class="loadingAnwesenheit ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
+                    <table class="min-w-full border border-gray-300 text-sm text-center">
+                        <thead class="bg-gray-100">
+                            <tr>
+                            <th class="px-4 py-2 border">Projekte</th>
+                            <th class="px-4 py-2 border">Betreuer</th>
+                            <th class="px-4 py-2 border">Projektbegleiter</th>
+                            <th class="px-4 py-2 border">Antragsdatum</th>
+                            <th class="px-4 py-2 border">Anfangsdatum</th>
+                            <th class="px-4 py-2 border">Enddatum</th>
+                            <th class="px-4 py-2 border">Starttermin</th>
+                            <th class="px-4 py-2 border">Endtermin</th>
+                            <th  class="px-4 py-2 border">*</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Schleife über alle Projekte -->
+                            <template v-for="(projekt, i) in teilnehmer.projekte" :key="i">
+                                <!-- Wenn das Projekt mehrere Zeiträume hat -->
+                                <tr
+                                    v-for="(zeit, z) in projekt.pivot_model?.zeitraume || []"
+                                    :key="zeit.id"
+                                    class="hover:bg-gray-50"
                                 >
-                                <span v-if="!loadingAnwesenheit">
-                                    {{ editMode ? 'Änderungen speichern' : 'Speichern' }}
-                                </span>
-                                <span v-else>Speichern...</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </transition>
-            <!-- End MODAL: Anwesenheit -->
-
-            <!-- MODAL: Bank hinzufügen -->
-            <transition name="fade">
-              <div v-if="showModalBank" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-                <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
-                  <button @click="showModalBank = false" class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl">✕</button>
-                  <h3 class="text-lg font-semibold mb-4 text-zbb">Neue Bank hinzufügen</h3>
-
-                  <div class="space-y-4">
-
-                    <!-- Dynamische Eingabe je nach Typ -->
-                    <div>
-                      <label class="text-sm text-gray-600">Name<span class="text-danger text-md">*</span> </label>
-                      <input v-model="neueBank.name" class="input mt-1"/>
-                    </div>
-                    <div>
-                      <label class="text-sm text-gray-600">IBAN<span class="text-danger text-md">*</span> </label>
-                      <input v-model="neueBank.iban" class="input mt-1"/>
-                    </div>
-                    <div>
-                      <label class="text-sm text-gray-600">BLZ<span class="text-danger text-md">*</span> </label>
-                      <input v-model="neueBank.blz" class="input mt-1"/>
-                    </div>
-                  </div>
-
-                  <div class="mt-6 flex justify-end space-x-3">
-                    <button @click="showModalBank = false" class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100">Abbrechen</button>
-                    <button
-                      @click="addBank"
-                      :disabled="loadingBank"
-                      class="px-4 py-2 rounded-md text-sm text-white transition"
-                      :class="loadingBank ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
-                    >
-                      <span v-if="!loadingBank">Speichern</span>
-                      <span v-else>Speichern...</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </transition>
-
-            <!-- MODAL: Notiz -->
-            <transition name="fade">
-                <div v-if="showModalNotiz" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-                    <div class="bg-white rounded-xl shadow-xl w-1/3  p-6 relative">
-                        <button @click="showModalNotiz = false" class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl">✕</button>
-                        <h3 class="text-lg font-semibold mb-4 text-zbb">Neue Notiz erstellen</h3>
-                        <div class="space-y-4">
-                            <div class="flex space-x-4">
-                                <div class="w-1/2">
-                                    <label for="startDate" class="block text-sm font-medium text-gray-700 mb-2" >
-                                        Notiztyp <span class="text-red-500">*</span>
-                                    </label>
-                                     <Select
-                                        v-model="neueNotiz.typ"
-                                        :options="props.notiztypen"
-                                        optionLabel="name"
-                                        optionValue="id"
-                                        class="w-[200px] text-sm w-full px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
+                                    <!-- Projektname nur einmal pro Gruppe -->
+                                    <td
+                                        v-if="z === 0"
+                                        :rowspan="projekt.pivot_model?.zeitraume?.length || 1"
+                                        class="border px-4 py-2 align-middle font-medium bg-gray-50"
                                         >
-                                    </Select>
-                                </div>
+                                        {{ projekt.name }}
+                                    </td>
+                                    <td class="border px-4 py-2">{{ projekt.pivot_model.meta?.betreuer?.geschlecht == 'w' ? 'Frau' : (projekt.pivot_model.meta?.betreuer?.geschlecht == 'm' ? 'Herr' : '') }} {{ projekt.pivot_model.meta?.betreuer?.vorname }} {{ projekt.pivot_model.meta?.betreuer?.nachname }}</td>
+                                    <td class="border px-4 py-2">{{ projekt.pivot_model.meta?.projektbegleiter?.geschlecht == 'w' ? 'Frau' : (projekt.pivot_model.meta?.projektbegleiter?.geschlecht == 'm' ? 'Herr' : '') }} {{ projekt.pivot_model.meta?.projektbegleiter?.vorname }} {{ projekt.pivot_model.meta?.projektbegleiter?.nachname }}</td>
+                                    <td class="border px-4 py-2">{{ formatDate(zeit.antragsdatum)  || '-' }}</td>
+                                    <td class="border px-4 py-2">{{ formatDate(zeit.anfangsdatum)  || '-' }}</td>
+                                    <td class="border px-4 py-2">{{ formatDate(zeit.enddatum) || '-'  }}</td>
+                                    <td class="border px-4 py-2">{{ formatDate(zeit.starttermin)  || '-' }}</td>
+                                    <td class="border px-4 py-2">{{ formatDate(zeit.endtermin)  || '-' }}</td>
+                                    <td class="border px-6 py-4 text-center">
+                                        <!-- Dropdown für Aktion -->
+                                        <Dropdown>
+                                            <template #trigger>
+                                                <button class=" items-center  text-sm leading-4 font-medium text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
+                                                    <span class="cursor-pointer">
+                                                        <i class="transform transition-transform duration-300  la la-ellipsis-v la-lg"></i>
+                                                    </span>
+                                                </button>
+                                            </template>
 
-                                <div class="w-1/2">
-                                    <label for="startDate" class="block text-sm font-medium text-gray-700 mb-2" >
-                                        Priorität <span class="text-red-500">*</span>
-                                    </label>
-                                     <Select
-                                        v-model="neueNotiz.prioritaet"
-                                        :options="props.notizprioritaet"
-                                        optionLabel="name"
-                                        optionValue="id"
-                                        class="w-[200px] text-sm w-full px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
-                                        >
-                                    </Select>
-                                </div>
-                            </div>
+                                            <template #content >
+                                                <!-- Gefilterte Projektauswahl -->
+                                                <span class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100 " @click="confirmDelete(projekt, 'projekt')">
+                                                    {{ $t('Löschen') }} <i class="las la-trash-alt"></i>
+                                                </span>
+                                                <span
+                                                    class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"
+                                                    @click="openProjektEdit(zeit, projekt)"
+                                                    >
+                                                    {{ $t('Bearbeiten') }} <i class="las la-edit"></i>
+                                                </span>
+                                                <a  target="_blank" :href="route('export.excel.esfStammblatt', [props.teilnehmer.id, projekt.id])" class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100" >ESF <i class="las la-file-download"></i></a>
+                                            </template>
+                                        </Dropdown>
+                                    </td>
+                                </tr>
 
-                             <div>
-                                    <label for="startDate" class="block text-sm font-medium text-gray-700 mb-2" >
-                                        Kategorie <span class="text-red-500">*</span>
-                                    </label>
-                                     <Select
-                                        v-model="neueNotiz.kategorie"
-                                        :options="props.notizkategorie"
-                                        optionLabel="name"
-                                        optionValue="id"
-                                        class="w-[200px] text-sm w-full px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
-                                        >
-                                    </Select>
-                                </div>
-                                <div>
-                                    <label for="titel" class="block text-sm font-medium text-gray-700 mb-2" >
-                                        Notiztitel <span class="text-red-500">*</span>
-                                    </label>
-                                    <input type="text" v-model="neueNotiz.titel" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors py-3"/>
-                                </div>
+                                <!-- Falls keine Zeiträume vorhanden sind -->
+                                <tr v-if="!projekt.pivot_model?.zeitraume?.length" class="hover:bg-gray-50">
+                                    <td class="border px-4 py-2 font-medium bg-gray-50">{{ projekt.name }}</td>
+                                    <td class="border px-4 py-2">{{ projekt.pivot_model.meta?.betreuer?.geschlecht == 'w' ? 'Frau' : (projekt.pivot_model.meta?.betreuer?.geschlecht == 'm' ? 'Herr' : '------') }} {{ projekt.pivot_model.meta?.betreuer?.vorname }} {{ projekt.pivot_model.meta?.betreuer?.nachname }}</td>
+                                    <td class="border px-4 py-2 font-medium bg-gray-50">{{ projekt.pivot_model.meta?.projektbegleiter?.geschlecht == 'w' ? 'Frau' : 'Herr' }} {{ projekt.pivot_model.meta?.projektbegleiter?.vorname }} {{ projekt.pivot_model.meta?.projektbegleiter?.nachname }}</td>
+                                    <td colspan="5" class="border px-4 py-2 text-gray-500 italic"> Keine Zeiträume vorhanden</td>
+                                    <td class="border px-6 py-4 text-center">
+                                        <!-- Dropdown für Aktion -->
+                                        <Dropdown>
+                                            <template #trigger>
+                                                <button class=" items-center  text-sm leading-4 font-medium text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
+                                                    <span class="cursor-pointer">
+                                                        <i class="transform transition-transform duration-300  la la-ellipsis-v la-lg"></i>
+                                                    </span>
+                                                </button>
+                                            </template>
 
-                            <div>
-                                <label for="inhalt" class="block text-sm font-medium text-gray-700 mb-2" >
-                                    Notizinhalt <span class="text-red-500">*</span>
-                                </label>
-                                <textarea v-model="neueNotiz.inhalt" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors py-3"></textarea>
-                            </div>
-                        </div>
-
-                        <div class="mt-6 flex justify-end space-x-3">
-                            <button @click="showModalNotiz = false" class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100">Abbrechen</button>
-                            <button
-                                @click="addNotiz"
-                                :disabled="loadingNotiz"
-                                class="px-4 py-2 rounded-md text-sm text-white transition"
-                                :class="loadingNotiz ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
-                                >
-                                <span v-if="!loadingNotiz">
-                                    Speichern
-                                </span>
-                                <span v-else>Speichern...</span>
-                            </button>
-                        </div>
-                    </div>
+                                            <template #content >
+                                                <!-- Gefilterte Projektauswahl -->
+                                                <span class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100 " @click="confirmDelete(projekt, 'projekt')">
+                                                    {{ $t('Löschen') }} <i class="las la-trash-alt"></i>
+                                                </span>
+                                                <span
+                                                    class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"
+                                                    @click="openProjektEdit(zeit, projekt)"
+                                                    >
+                                                    {{ $t('Bearbeiten') }} <i class="las la-edit"></i>
+                                                </span>
+                                            </template>
+                                        </Dropdown>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
                 </div>
-            </transition>
-            <!-- End MODAL: Notiz -->
 
-
-            <!-- MODAL Abschluss-->
-            <transition name="fade">
-                <div
-                    v-if="showModalCreateAbschluss"
-                    class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
-                >
-                    <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
-                    <button
-                        @click="showModalCreateAbschluss = false"
-                        class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl"
-                    >
-                        ✕
-                    </button>
-                    <h3 class="text-lg font-semibold mb-4 text-zbb">
-                        Neuen Abschluss hinzufügen
-                    </h3>
-
-                    <div class="space-y-4">
-                        <!-- Typauswahl -->
-                        <div>
-                            <label class="text-sm text-gray-600">Abschluss-Typ</label>
-                            <select v-model="neuerAbschluss.typ" class="input mt-1">
-                                <option disabled value="">-- auswählen --</option>
-                                <option value="schule">Schulabschluss</option>
-                                <option value="beruf">Berufsabschluss</option>
-                                <option value="hochschule">Hochschulabschluss</option>
-                                <option value="weiterbildung">Weiterbildung</option>
-                            </select>
-                        </div>
-
-                        <!-- Bezeichnung -->
-                        <div v-if="neuerAbschluss.typ">
-                            <label class="text-sm text-gray-600">Abschluss</label>
-                            <select v-model="neuerAbschluss.abschluss_id" class="input mt-1">
-                                <option disabled value="">-- auswählen --</option>
-                                <option
-                                v-for="a in props.abschluesse.filter(a => a.typ === neuerAbschluss.typ)"
-                                :key="a.id"
-                                :value="a.id"
-                                >
-                                {{ a.bezeichnung }}
+                <!-- =================== Anwesenheit =================== -->
+                <div v-else-if="activeTab === 'Anwesenheit'">
+                    <!-- Anwesenheit hinzufügen -->
+                    <div class="flex gap-4 text-center justify-center">
+                        <button @click="showModalAnwesenheit = true" class="bg-zbb w-4/6 text-white px-4 mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition" >
+                            <span v-if="!loadingProjekt">➕ Anwesenheit</span>
+                                <span v-else>...</span>
+                        </button>
+                        <div class="mb-6 mt-4">
+                            <select
+                                v-model="selectedMonth"
+                                class="border-zbb rounded-md text-sm focus:ring-zbb focus:border-zbb"
+                            >
+                                <option value="">Alle Monate</option>
+                                <option v-for="monat in verfuegbareMonate" :key="monat" :value="monat">
+                                    {{ monat }}
                                 </option>
                             </select>
                         </div>
-                        <div v-if="neuerAbschluss.typ">
-
-                            <label class="text-sm text-gray-600">Bezeichnung</label>
-                            <input v-model="neuerAbschluss.bezeichnung" class="input" />
-                        </div>
-                        <!-- Startdatum -->
-                        <div>
-                            <label class="text-sm text-gray-600">Startdatum</label>
-                            <input type="date" v-model="neuerAbschluss.start" class="input" />
-                        </div>
-
-                        <!-- Enddatum -->
-                        <div>
-                            <label class="text-sm text-gray-600">Enddatum</label>
-                            <input type="date" v-model="neuerAbschluss.end" class="input" />
-                        </div>
-
-
                     </div>
 
-                    <!-- Buttons -->
-                    <div class="mt-6 flex justify-end space-x-3">
-                        <button
-                        @click="showModalCreateAbschluss = false"
-                        class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100"
-                        >
-                        Abbrechen
-                        </button>
-                        <button
-                        @click="addAbschluss"
-                        :disabled="loadingAbschluss"
-                        class="px-4 py-2 rounded-md text-sm text-white transition"
-                        :class="loadingAbschluss ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
-                        >
-                        <span v-if="!loadingAbschluss">Speichern</span>
-                        <span v-else>Speichern...</span>
-                        </button>
-                    </div>
+                    <!-- Tabelle -->
+                    <div class="bg-white rounded-2xl shadow-md border mt-8 p-8 mx-auto w-5/6">
+                        <!-- Wenn keine Anwesenheit -->
+                        <div v-if="teilnehmer.anwesenheiten.length === 0" class="text-gray-500 italic text-sm">
+                            <div class="p-8 text-center text-gray-500">
+                                <div class="mb-4 flex justify-center text-6xl text not-italic">
+                                    🕒
+                                </div>
+                                <p class="text-lg font-medium">Noch keine Anwesenheit verfasst </p>
+                                <p class="text-sm">Klicken Sie auf "Anwesenheit erfassen" um zu beginnen</p>
+                            </div>
+                        </div>
+
+                        <!-- Karten -->
+                        <div v-else class="space-y-3">
+                            <!-- Gruppierte Ausgabe -->
+                            <div v-for="(anwesenheiten, monat) in gruppenNachMonat" :key="monat">
+                                <div v-if="!selectedMonth || selectedMonth === monat" class="mt-8">
+                                    <h4 class="text-lg font-semibold text-zbb border-b pb-1 mb-3">📆 {{ monat }}</h4>
+                                    <div v-for="anwesenheit in anwesenheiten" :key="anwesenheit.id" class="bg-white border border-gray-200 rounded-xl px-3 py-4 shadow-sm hover:shadow-md mb-4" >
+                                    <div class="flex py-4">
+                                        <!-- Bereich & Datum -->
+                                        <div class="w-1/4 font-semibold">
+                                            <p v-if="anwesenheit.gruppe" class="text-zbb"><span class="text-lg ml-8">🎨</span> {{ anwesenheit.gruppe?.bereich.name }}</p>
+                                            <p class="text-zbb"><span class="text-lg ml-8">📅</span> {{ formatDate(anwesenheit.tag.datum) }}</p>
+                                        </div>
+
+                                        <!-- Soll -->
+                                        <div class="w-1/4 font-semibold ">
+                                        <p class="ml-8 mr-8">🗓️ Geplante Arbeitszeit</p>
+                                        <p><span class="text-lg ml-8">⏰</span>
+                                            {{ formatTime(anwesenheit.zeitgeplant.startzeit) }} -
+                                            {{ formatTime(anwesenheit.zeitgeplant.endzeit) }}
+                                        </p>
+                                        </div>
+
+                                        <!-- Ist -->
+                                        <div class="w-1/4 font-semibold ">
+                                        <p class="ml-8 mr-8">💼 Tatsächliche Arbeitszeit</p>
+                                        <p><span class="text-lg ml-8">⌛</span>
+                                            {{ formatTime(anwesenheit.zeittatsaechlich?.startzeit) }} -
+                                            {{ formatTime(anwesenheit.zeittatsaechlich?.endzeit) }}
+                                        </p>
+                                        </div>
+
+                                        <!-- Abweichung -->
+                                        <div class="w-1/4 font-semibold ">
+                                        <p class="ml-8 mr-8">🔥 Abweichung</p>
+                                            <p class="flex items-center ml-8">
+                                                <span
+                                                class="text-2xl mr-2"
+                                                :class="abweichungsClass(berechneAbweichungMinuten(anwesenheit))"
+                                                >
+                                                {{ abweichungsIcon(berechneAbweichungMinuten(anwesenheit)) }}
+                                                </span>
+
+                                                <span
+                                                class="text-lg font-mono"
+                                                :class="abweichungsClass(berechneAbweichungMinuten(anwesenheit))"
+                                                >
+                                                {{ formatMinutes(berechneAbweichungMinuten(anwesenheit)) }}
+                                                </span>
+                                            </p>
+                                        </div>
+
+                                    </div>
+
+                                    <!-- Status-Badge + Buttons -->
+                                    <div class="flex justify-between mt-8 px-10">
+                                        <div :style="{ backgroundColor: anwesenheit.status.farben }"
+                                            class="py-2 px-4 text-white shadow-lg rounded-full">
+                                        {{ anwesenheit.status.abkuerzung }}
+                                        </div>
+
+                                        <div class="flex gap-2">
+                                        <button @click="openModalEdit(anwesenheit)"
+                                                class="px-4 py-2 text-sm font-medium rounded-md bg-zbb text-white shadow-sm hover:bg-zbb/90">
+                                            Verwalten
+                                        </button>
+
+                                        <button @click="confirmDelete(anwesenheit, 'gruppeHasPersonen')"
+                                                class="px-4 py-2 text-sm font-medium rounded-md bg-red-600 text-white shadow-sm hover:bg-red-700">
+                                            Löschen
+                                        </button>
+                                        </div>
+                                    </div>
+
+                                    </div>
+                                </div>
+                            </div>
+
+
+                        </div>
                     </div>
                 </div>
-            </transition>
+                <!-- ================= BANK ================= -->
+                <div v-else-if="activeTab === 'Bank'">
+                    <button @click="showModalBank = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
+                        <span v-if="!loadingBank">➕ Hinzufügen</span>
+                        <span v-else>...</span>
+                    </button>
+                    <div v-if="teilnehmer.baenke && teilnehmer.baenke.length">
+                        <table class="min-w-full border border-gray-200 text-sm">
+                        <thead class="bg-gray-50 text-gray-700">
+                            <tr>
+                            <th class="px-3 py-2 text-left">#</th>
+                            <th class="px-3 py-2 text-left">Bankname</th>
+                            <th class="px-3 py-2 text-left">IBAN</th>
+                            <th class="px-3 py-2 text-left">BLZ</th>
+                            <th class="px-3 py-2 text-center">Aktionen</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr
+                            v-for="(bank, index) in teilnehmer.baenke"
+                            :key="bank.id || index"
+                            class="border-t hover:bg-gray-50 transition"
+                            >
+                            <td class="px-3 py-2">{{ index + 1 }}</td>
+                            <td class="px-3 py-2">{{ bank.name }}</td>
+                            <td class="px-3 py-2 font-mono">{{ bank.iban }}</td>
+                            <td class="px-3 py-2">{{ bank.blz }}</td>
+                            <td class="px-3 py-2 text-center">
+                                <button
+                                @click="confirmDelete(bank, 'bank')"
+                                class="text-red-500 hover:text-red-700 text-sm"
+                                >
+                                <i class="la la-trash"></i> Löschen
+                                </button>
+                            </td>
+                            </tr>
+                        </tbody>
+                        </table>
+                    </div>
+                    <!-- Falls keine Bankdaten -->
+                    <p v-else class="text-gray-500 italic">Keine Bankdaten vorhanden.</p>
+                </div>
+                <!-- =================  Schule/Beruf ================= -->
 
+                <div v-else-if="activeTab === 'Schule/Beruf'">
+                    <!-- Button -->
+                    <button
+                        @click="showModalCreateAbschluss = true"
+                        class="bg-zbb text-white px-4 mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full"
+                    >
+                        <span v-if="!loadingAbschluss">➕ Abschluss hinzufügen</span>
+                        <span v-else>...</span>
+                    </button>
+
+                    <!-- Bestehende Abschlüsse -->
+                    <div v-if="teilnehmer.abschluesse && teilnehmer.abschluesse.length" class="space-y-3 mb-6">
+                        <div
+                        v-for="eintrag in teilnehmer.abschluesse"
+                        :key="eintrag.id"
+                        class="flex justify-between items-center bg-gray-50 border rounded-lg px-4 py-2"
+                        >
+                        <div>
+                            <p class="text-sm font-bold text-zbb uppercase">
+                            {{ eintrag.typ }}
+                            </p>
+                            <p class="text-gray-600 text-sm">
+                            🎓 <span class="font-bold">{{ eintrag.bezeichnung }}:</span> {{ eintrag.pivot_model.bezeichnung }}
+                            </p>
+                            <p class="text-gray-600 text-sm">
+                        📆 {{ formatDate(eintrag.pivot_model.start) }} - {{ formatDate(eintrag.pivot_model.end) }}
+                            </p>
+                        </div>
+                        <button
+                            @click="confirmDelete(eintrag.pivot_model, 'abschluss')"
+                            class="text-red-500 hover:text-red-700 text-sm"
+                        >
+                            Entfernen
+                        </button>
+                        </div>
+                    </div>
+
+                    <p v-else class="text-gray-400 italic mb-6">
+                        Noch keine Schul- oder Berufsabschlüsse vorhanden.
+                    </p>
+                </div>
+                <!-- ================= BRIEFE ================= -->
+                <div v-else-if="activeTab === 'Briefe'">
+                    <button @click="showModalBrief = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
+                        <span v-if="!loadingBrief">➕ Vorlage erstellen</span>
+                        <span v-else>...</span>
+                    </button>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="col-span-1 border p-4 rounded space-y-4 shadow-sm">
+                            <div><label>Datum</label><input type="date" v-model="brief.datum" class="input" /></div>
+                            <div><label>Betreff</label><input v-model="brief.betreff" class="input" /></div>
+                            <label>Inhalt</label>
+                            <textarea v-model="brief.inhalt" rows="6" class="input"></textarea>
+                        </div>
+                        <div class="col-span-1 border p-4 rounded space-y-4 shadow-sm">
+                            <div>
+                                <label>Meine ✍️</label>
+                            <ul class="border border-gray-200 rounded-lg divide-y divide-gray-100 shadow-sm bg-white text-sm">
+                                    <template v-if="meineBriefe && meineBriefe.length > 0">
+                                        <li
+                                        v-for="v in meineBriefe" :key="v.id"
+                                        @click="setBriefVorlage(v)"
+                                        class="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-blue-50 transition-all rounded-md"
+                                        >
+                                        <div class="flex items-center gap-2 text-gray-700">
+                                            <span class="font-medium">{{ v.name }}</span>
+                                        </div>
+                                        <div class="flex space-x-2">
+                                            <button
+                                            @click="confirmDelete(v, 'brief')"
+                                            class="flex items-center gap-1 text-blue-600 hover:text-red-800 bg-red-100 hover:bg-red-200 px-2 py-1 rounded-md text-xs font-medium transition"
+                                        >
+                                            <i class="la la-trash"></i> <span>Löschen</span>
+                                        </button>
+                                        <button
+                                            @click.stop="() => openFreigabeModal(v)"
+                                            class="flex items-center gap-1 text-blue-600 hover:text-blue-800 bg-blue-100 hover:bg-blue-200 px-2 py-1 rounded-md text-xs font-medium transition"
+                                        >
+                                            🔄 <span>Freigeben</span>
+                                        </button>
+                                        </div>
+
+
+                                        </li>
+                                    </template>
+
+                                    <template v-else>
+                                        <li class="text-center text-gray-500 italic py-4">
+                                        <div class="flex flex-col items-center justify-center space-y-1">
+                                            <span class="text-2xl">📭</span>
+                                            <span> keine Vorlage vorhanden</span>
+                                        </div>
+                                        </li>
+                                    </template>
+                                </ul>
+                            </div>
+
+                            <div>
+                                <label>Shared ↩️</label>
+                                <ul class="border border-gray-200 rounded-lg divide-y divide-gray-100 shadow-sm bg-white text-sm">
+                                    <template v-if="erhalteneBriefe && erhalteneBriefe.length > 0">
+                                        <li
+                                        v-for="erhalteneBrief in erhalteneBriefe"
+                                        :key="erhalteneBrief.id"
+                                        @click="setBriefVorlage(erhalteneBrief)"
+                                        class="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-green-50 transition-all rounded-md"
+                                        >
+                                        <div class="flex items-center gap-2 text-gray-700">
+                                            <span class="font-medium">{{ erhalteneBrief.name }}</span>
+                                        </div>
+
+                                    <div class="flex space-x-2">
+                                            <button
+                                            @click="confirmDelete(erhalteneBrief, 'briefShared')"
+                                            class="flex items-center gap-1 text-blue-600 hover:text-red-800 bg-red-100 hover:bg-red-200 px-2 py-1 rounded-md text-xs font-medium transition"
+                                        >
+                                            <i class="la la-trash"></i> <span>Löschen</span>
+                                        </button>
+                                        <button
+                                            @click.stop="() => openFreigabeModal(v)"
+                                            class="flex items-center gap-1 text-blue-600 hover:text-blue-800 bg-blue-100 hover:bg-blue-200 px-2 py-1 rounded-md text-xs font-medium transition"
+                                        >
+                                            🔄 <span>Freigeben</span>
+                                        </button>
+                                        </div>
+                                        </li>
+                                    </template>
+
+                                    <template v-else>
+                                        <li class="text-center text-gray-500 italic py-10">
+                                        <div class="flex flex-col items-center justify-center space-y-2">
+                                            <span class="text-2xl">📧</span>
+                                            <span>Keine freigegebene Briefe vorhanden‼️</span>
+                                        </div>
+                                        </li>
+                                    </template>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ================= NOTIZEN ================= -->
+                <div v-else-if="activeTab === 'Notizen'">
+                    <button @click="showModalNotiz = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
+                        <span v-if="!loadingNotiz">➕ Notiz erstellen</span>
+                        <span v-else>...</span>
+                    </button>
+
+                    <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                        <form class="grid grid-cols-1 md:grid-cols-4 gap-4">
+
+                        <!-- Suche -->
+                        <input
+                            type="text"
+                            v-model="filter.suche"
+                            placeholder="Inhalt suchen..."
+                            class="w-full rounded-md border-gray-300 text-sm focus:border-zbb focus:ring-zbb"
+                        />
+
+                        <!-- Notiztyp -->
+                        <select v-model="filter.typ" class="w-full rounded-md border-gray-300 text-sm focus:border-zbb focus:ring-zbb">
+                            <option value="">Alle Typen</option>
+                            <option v-for="t in props.notiztypen" :key="t.id" :value="t.id">{{ t.name }}</option>
+                        </select>
+
+                        <!-- Priorität -->
+                        <select v-model="filter.prioritaet" class="w-full rounded-md border-gray-300 text-sm focus:border-zbb focus:ring-zbb">
+                            <option value="">Alle Prioritäten</option>
+                            <option v-for="p in props.notizprioritaet" :key="p.id" :value="p.id">{{ p.name }}</option>
+                        </select>
+
+                        <!-- Kategorie -->
+                        <select v-model="filter.kategorie" class="w-full rounded-md border-gray-300 text-sm focus:border-zbb focus:ring-zbb">
+                            <option value="">Alle Kategorien</option>
+                            <option v-for="k in props.notizkategorie" :key="k.id" :value="k.id">{{ k.name }}</option>
+                        </select>
+
+                        </form>
+
+                    </div>
+
+
+                    <template  v-if="props.teilnehmer && props.teilnehmer.notizen.length > 0">
+                        <div v-for="notiz in [...gefilterteNotizen].reverse()" :key="notiz.id" class="bg-white mt-6 rounded-xl border border-gray-200 shadow-sm p-6 flex flex-col gap-4 hover:bg-gray-50">
+                            <!-- Header -->
+                            <div class="flex items-start justify-between">
+                                <div class="flex items-center gap-2">
+                                    <span v-if="notiz.notiztyp.name === 'Telefonnotiz'" class="text-purple-400 text-2xl">📞</span>
+                                    <span v-if="notiz.notiztyp.name === 'Verlaufsnotiz'" class="text-purple-400 text-2xl">📈</span>
+                                    <span v-if="notiz.notiztyp.name === 'Beratungsprotokoll'" class="text-purple-400 text-2xl">💬</span>
+                                    <span v-if="notiz.notiztyp.name === 'Aktennotiz'" class="text-purple-400 text-2xl">📋</span>
+                                    <div>
+                                        <h3 class="font-semibold text-gray-800">{{notiz.titel}}</h3>
+                                        <p class="text-xs text-gray-500">{{props.teilnehmer.vorname}} {{props.teilnehmer.nachname}}</p>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center gap-3">
+                                    <span
+                                        class="px-2 py-0.5 text-xs rounded-full"
+                                        :class="{
+                                            'bg-green-100 text-green-600': notiz.notizprioritaet.name === 'Niedrig',
+                                            'bg-orange-100 text-orange-600': notiz.notizprioritaet.name === 'Mittel',
+                                            'bg-red-100 text-red-600': notiz.notizprioritaet.name === 'Hoch'
+                                        }"
+                                    >
+                                        {{ notiz.notizprioritaet.name }}
+                                    </span>
+                                    <button @click="confirmDelete(notiz, 'notizen')" class="text-gray-400 hover:text-red-500 transition">
+                                        <i class="las la-trash text-lg"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Inhalt -->
+                            <p class="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                                {{notiz.notizinhalt}}
+                            </p>
+
+                            <hr>
+
+                            <!-- Footer -->
+                            <div class="flex justify-between items-center text-xs text-gray-500">
+                                <div class="flex gap-4">
+                                    <span>{{notiz.notiztyp.name}}</span>
+                                    <span>{{notiz.notizkategorie.name}}</span>
+                                </div>
+
+                                <div class="flex items-center gap-2">
+                                    <span>{{notiz.user.vorname}} {{notiz.user.nachname}}</span>
+                                    <span>•</span>
+                                    <span>{{formatDateTime(notiz.created_at)}}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
+                </div>
+
+                <!-- ================= KINDER ================= -->
+                <div v-else-if="activeTab === 'Kinder'">
+                    <p class="text-gray-500">Informationen zu Kindern können hier ergänzt werden.</p>
+                </div>
+
+                <!-- ================= NETZWERKE ================= -->
+                <div v-else-if="activeTab === 'Netzwerke'">
+                    <p class="text-gray-500">Hier kannst du Netzwerkverbindungen pflegen.</p>
+                </div>
+
+                <!-- ================= VERMITTLUNG ================= -->
+                <div v-else-if="activeTab === 'Vermittlung'">
+                    <p class="text-gray-500">Hier kannst du Netzwerkverbindungen pflegen.</p>
+                        <textarea v-model="form.vermittlung" rows="6" class="input"></textarea>
+                </div>
+
+                <!-- ================= Praktika ================= -->
+                <div v-else-if="activeTab === 'Praktika'">
+                    <p class="text-gray-500">Hier kannst du Praktika verwalten.</p>
+                        <textarea v-model="form.projekte" rows="6" class="input"></textarea>
+                </div>
+
+                <!-- ================= Fahrtkosten ================= -->
+                <div v-else-if="activeTab === 'Fahrtkosten'">
+                    <button @click="showModalFahrtkosten = true"
+                        class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full">
+                        ➕ Fahrtkosten anlegen
+                    </button>
+
+                    <div v-if="teilnehmer.fahrtabrechnungen && teilnehmer.fahrtabrechnungen.length">
+                    <table class="min-w-full border border-gray-200 text-sm">
+                        <thead class="bg-gray-50 text-gray-700">
+                        <tr>
+                            <th class="px-3 py-2 text-left">#</th>
+                            <th class="px-3 py-2 text-left">Fahrtarten</th>
+                            <th class="px-3 py-2 text-left">Tag</th>
+                            <th class="px-3 py-2 text-left">Start</th>
+                            <th class="px-3 py-2 text-left">Ziel</th>
+                            <th class="px-3 py-2 text-left">Entfernung</th>
+                            <th class="px-3 py-2 text-left">Kostenberechnet</th>
+                            <th class="px-3 py-2 text-left">Status</th>
+                            <th class="px-3 py-2 text-left">Erstellen am</th>
+                            <th class="px-3 py-2 text-left">Personal</th>
+                            <th class="px-3 py-2 text-left">Aktionen</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr
+                            v-for="(fahrtabrechnung, index) in teilnehmer.fahrtabrechnungen"
+                            :key="fahrtabrechnung.id || index"
+                            class="border-t hover:bg-gray-50 transition"
+                        >
+                            <td class="px-3 py-2">{{ index + 1 }}</td>
+                            <td class="px-3 py-2">{{ fahrtabrechnung.fahrtarten.name }}</td>
+                            <td class="px-3 py-2">{{ formatDate(fahrtabrechnung.datum) }}</td>
+                            <td class="px-3 py-2">{{ fahrtabrechnung.start }}</td>
+                            <td class="px-3 py-2">{{ fahrtabrechnung.ziel }}</td>
+                            <td class="px-3 py-2">{{ fahrtabrechnung.entfernung_km }}</td>
+                            <td class="px-3 py-2">{{ fahrtabrechnung.kosten_berechnet }}</td>
+                            <td class="px-3 py-2">{{ fahrtabrechnung.status }}</td>
+                            <td class="px-3 py-2">{{ formatDateTime(fahrtabrechnung.created_at) }}</td>
+                            <td class="px-3 py-2">{{ fahrtabrechnung.personal.vorname }} {{ fahrtabrechnung.personal.nachname }}</td>
+
+                            <td class="px-3 py-2">
+                                <button @click="confirmDelete(fahrtabrechnung, 'fahrtkostenAbrechnung')" class="text-red-500 hover:text-red-700 text-sm" >
+                                    <i class="la la-trash"></i> Löschen
+                                </button>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                    </div>
+                    <p v-else class="text-gray-500 italic">Keine Fahrtkosten vorhanden.</p>
+
+                </div>
+
+                <!-- ================= Exportieren ================= -->
+                <div v-else-if="activeTab === 'Exportieren'">
+                    <div class="flex justify-center mx-auto items-center mb-4">
+                        <input type="text" v-model="exportSuche" placeholder="🔍 Dokument suchen..." class="w-3/4 rounded-md border-gray-300 text-sm px-3 py-2 focus:ring-zbb focus:border-zbb" />
+                    </div>
+
+                    <div class="flex flex-wrap">
+                        <div v-for="dok in gefilterteDokumente" :key="dok.id" class="w-1/4 cursor-pointer" >
+                            <a
+                                v-if="dok && dok.dateipfadName"
+                                :href="route('export.' + dok.dateipfadName, { id: teilnehmer.id, pfad: dok.dateipfad })"
+                                class="block"
+                            >
+
+                                <div class="rounded-lg shadow m-2 py-6 px-8 min-h-32 flex items-center gap-4 border-4 border-zbb bg-gray-50 hover:bg-gray-100 transition">
+                                    <!-- Icon je nach Typ -->
+                                    <span class="text-5xl">
+                                        <span v-if="dok.typ === 'word'" >
+                                            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAAC/UlEQVR4nO1ZW0hUQRjeoJfojEtFPUgPLvXQ5amEXop6qTMLolBiRDfCQiK6PASCFaIEJmGIUIJmdeZ4SdMwMTRvabWleM0W0WorRNPcTNSzum3rOnH+3R1SFFwLdrT5YJh//ll+vm/nn38OMwaDgICAwLLEqv05oeiAGokwSZKwUo5kZcDAJfbVr1yNle1IVk5KMslAslIjYWUYYUJnt2BTNayLykGSmeyRZCUOyGJiQZg45yIbdAHGiPw1OlmElUuSrKhIVrqQTDwLJRt0AegviM7XTJnaolrYHc2ypAWYMrXAV08IwEIA5U5AoDAJAZjQ3efKWcDEe20zCHXafoDfPTVN10fmMf/NgnfgHxn/SUPMQU6htRG5dNI1BYTyq22MzIaofCDux94LT9lcmaUXfLWtX/nYA83ddiDU9v478+HLlTOW+3z6GzbX0zsKPn0lgp5CCBOaVdYNAR2TbpYSCVkt4NMmf0GfXd7DVszl9oDvaHI9HwLOpllY0G0nSsBX0vAFxjUt/dA3ddnBH37mCfvtlmPFfKTQrrgyRurQtVrw9X7TYHwxoxH6CaebGs0q/Os6hkac/JwDRrPKUuVKdgs1HS4Ce8zhohujH9Jp317eebqUJj9oB7uyqY+PMop87bV1CIKqzz7SmMQ6sJ+3D8CcrX8MxqdSXtDCuk9gp+S+5UvA7cddEFSvSDfyOsFOK/RWmeJ67364VWilHR+GwY72pRoXKYQwobGpL9nhVNHYB/bx6w0wd/VuK4yrmvvp+IQ31TYdKeJLwI7YUiCm5/vngXGwt/oqUkR8FYz7hhze3u7g51MC+Zpe/0c1Fwv+Z5UJPVhAPf6dTCmcxNwJQJjQho5BFnx2lfFvZB1J99vnFBDUFEKY0PRHVkZydpXxb2QdUQnVfApAS/FzGgkBZPmkkEkICABCAP53AsIytVf/3+XufNfrRlkJZ28BPF+vL+aBA2GSqr/GcPvAsXDQFSGyulkyqzFIJikSJhVIJoMBBBAQEBAwLA38BsvuGopgwMs1AAAAAElFTkSuQmCC" alt="ms-word">
+                                        </span>
+                                        <span v-else-if="dok.typ === 'excel'">
+                                            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAACAElEQVR4nGNgGAWjYBSMgiEJxCYEZ4hNCP4oNjHkP6lY81A96fhg3Uetg3Xp1PQAWY4n2wOHwPgD9TxApuMp9MD/UQ/AwKgHDo16YJh6gLvQooC70OILT5HFf4pwieV/oWaPAfHAF4odD8PFFv95GlwxsOSaVLIxAyFANcfD8KgHUkc98F+4zPb/ndeP/oNA1aZJcHGtlsD/P37/+v/t14//Oq3Bg9cDPEUW/yPmlYE98ObL+/8SlU5gsZVnd4LFGrZOH9wxwAPFu64fBzu4cduM/5Y9sf///vv7//arh+AYGhIeMOmM/P/rz+//7799+n/s3oX///79++81LXvw5wEeJDzl4Ir/MLD8zPahkYl5kPDCE5vgHlhxdgdBD4i7a2FgoWlBZGMGSjzgOTULnGxOPbj8/8jd82BP+M/MHxoeEC6z/X/jxX2wo0Hp3n5CEtgzD98++y9W4Tj4PdC9ZwHY8TuuHYWLbbp0ACzWu3fh4PaAWVcUuPQBFZvWvXFwccOOsP+///4BY6ve2MHrAR4K8KgHpo00D3AXmX+mmgcKzAfAA4XmeVTxRIH5P6Eo/W/i7prv0bFqhgPZmIFaQMJD6z+5WD3NnmzMMOoBKBj1QNqoB0a6B9y1PtLfA3bUm+CQ9NBKk/DQ+kA/D9h9UE2xT6WaB0bBKBgFo4CBGgAA6UC2Ig/cY8oAAAAASUVORK5CYII=" alt="microsoft-excel">
+                                        </span>
+                                        <span v-else-if="dok.typ === 'pdf'">
+                                            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAACHklEQVR4nO3Xz0uUQRzH8edf8ReJ2iGFDqZ4Euzg1UfLFikTTDxEBhJBCUFmt6gIsSB08SIeokAXEb2FoOlBaDMslFzGiCWy/LXuO8ZhfdLFInNmd2g+MDzPHha+r2e/83xnPc/FRW/wc9Gy6nK6rQUkW8+YQ6ABsP12luSVCjMILQARM4dAF8AUAp0AYQChHSA0I4wAhEaEMYDQhDAKEBoQxgFiPyIrAX+zPAfwHQD7AHdCsLIIP9Yg3G0h4EuMvSR3oLXcIsCl0qD4+dfq2nPZIsD5E7CTUIUvv7MQ4OfCh/mgfWQ6ay0DhO8FbZRIQKjYMkBzGWxtKMD7uSMXT0bnwMy4AkSnoT7PMkBDAcRXgzbqu2nhIJPZ3tq97A609iqLABNDqvDhhzAVUfexj9By2gJAcxlsfFezoK0SLp6C5QWFWHijfp1nt2HkOYwNQiQMj67BuYIsAQw9UMXKTSw/d9RAZIA/ZnI4CwBNJ+FbXBUUnQGxtL/I1J5IZWURlqLqfnM9wwB5hHjZl/5kZfu86IWuBmgsVENObuqDmZ3MEKA+H3pvwOdPQTGyQNnfhx0h5IHvcQe8egqj/er7oZIMAK5Wq435a+Tkla10lLeXbxJwqw7Wvqb3+PWzx1Y82gBy0qZaJi6CU+fg/WMtHm2AC0XpbxQ5vP7hzIPxFnrSqZ6+/PvYf/fQQZS9AN/M8hzAdwAc4L8GuLh4v81P2tZphAMmDCgAAAAASUVORK5CYII=" alt="pdf">
+                                        </span>
+
+                                        <span v-else>
+                                            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAtElEQVR4nO3WQQrCQBBE0TqFiPc/kiiepiQwCxFcRLpqkun60GQZHukhA6RzReE8AFxXgBDAC8DNCanOjqEY8vx4StdMDbkAuDu+DMUQuDA0QCwYmiByDI2QLRnGDZFhZkAkmFmQcozjz77nbrYEhBUvnB0DGQVSHAPpBmHx/CqQdqvlioF0g1B0uL8LpN1quWIg3SBc5YrCVSCuGMgokOIYyCiQ4hjIKJCjQniQ+btlIAnm3gBxwrjC8DB8AAAAAElFTkSuQmCC" alt="document--v1">                                </span>
+                                    </span>
+
+                                    <div>
+                                        <div class="text-l font-bold">{{ dok.name }}</div>
+                                        <div class="text-sm text-gray-600">Version: {{ dok.version }}</div>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ================= LuV ================= -->
+                <div v-else-if="activeTab === 'LuV'">
+                    <!-- Projekt hinzufügen -->
+                    <button @click="showModalLuvCreate = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
+                        <span v-if="!loadingProjekt">➕ Luv erstellen</span>
+                        <span v-else>...</span>
+                    </button>
+                    <div class="border p-6 bg-gray-50 rounded-lg">
+                        <template v-for="(projekt, i) in teilnehmer.projekte" :key="i">
+                        <div v-for="(luv, z) in (projekt.pivot_model?.luv || []).slice().reverse()" :key="luv.id" class="mb-4">
+                            <!-- Kopfzeile / Klickbereich -->
+                            <div
+                            class="flex justify-between items-center bg-white rounded-lg border border-gray-200 p-4 shadow-sm hover:shadow-md cursor-pointer transition"
+                            @click="toggleLuv(luv.id)"
+                            >
+                            <div>
+                                <h3 class="font-semibold text-zbb">📄 {{ luv.typ }} </h3>
+
+                                <h3 class="font-semibold text-zbb">Bericht vom {{ formatDate(luv.von) }} bis {{ formatDate(luv.bis) }}</h3>
+                                <p class="text-xs text-gray-500">Erstellt am: {{ formatDateTime(luv.updated_at) }}</p>
+                            </div>
+
+                            <div class="flex items-center space-x-3">
+                                <button
+                                @click.stop="showModalLuvBearbeiten = true"
+                                class="w-9 h-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition"
+                                title="Bearbeiten"
+                                >
+                                ✏️
+                                </button>
+                                <button
+                                @click.stop="showModalLuvLöschen = true"
+                                class="w-9 h-9 flex items-center justify-center bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition"
+                                title="Löschen"
+                                >
+                                🗑️
+                                </button>
+
+                                <span
+                                class="text-gray-500 text-lg transition-transform duration-300"
+                                :class="{ 'rotate-180': expandedLuv === luv.id }"
+                                >
+                                ⬇️
+                                </span>
+                            </div>
+                            </div>
+
+                            <!-- Inhalt -->
+                            <transition name="fade">
+                            <div
+                                v-if="expandedLuv === luv.id"
+                                class="mt-3 bg-white rounded-lg border border-gray-200 shadow-inner p-4 space-y-4"
+                            >
+                                <div class="border p-4 rounded bg-blue-50">
+                                <h4 class="text-zbb font-semibold mb-1">🎯 Darstellung der individuellen Ausgangssituation</h4>
+                                <p class="text-gray-700 leading-relaxed text-sm">{{ luv.ausgangssituation || 'Keine Angaben' }}</p>
+                                </div>
+
+                                <div class="border p-4 rounded bg-yellow-50">
+                                <h4 class="text-zbb font-semibold mb-1">🧭 Schritte zur Zielvereinbarung</h4>
+                                <p class="text-gray-700 leading-relaxed text-sm">{{ luv.zielvereinbarung || 'Keine Angaben' }}</p>
+                                </div>
+
+                                <div class="border p-4 rounded bg-red-50">
+                                <h4 class="text-zbb font-semibold mb-1">🎓 Im Berichtszeitraum erworbene Qualifikationen</h4>
+                                <p class="text-gray-700 leading-relaxed text-sm">{{ luv.qualifikationen || 'Keine Angaben' }}</p>
+                                </div>
+                            </div>
+                            </transition>
+                        </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- MODAL: Brief hinzufügen -->
+        <transition name="fade">
+        <div
+        v-if="showModalBriefFreigeben"
+        class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+        >
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
+            <button
+            @click="showModalBriefFreigeben = false"
+            class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl"
+            >
+            ✕
+            </button>
+            <h3 class="text-lg font-semibold mb-4 text-zbb">Brief freigeben</h3>
+
+            <Multiselect
+                required
+                v-model="neuesBriefFreigeben"
+                :options="props.betreuer.map(p => ({ value: p.id, label: `${p.vorname} ${p.nachname}` }))"
+                placeholder="Betreuer auswählen"
+                searchable
+                noOptionsText="Keine Person gefunden"
+                class="input-auto"
+                mode="tags"
+            />
+
+            <div class="mt-6 flex justify-end space-x-3">
+            <button
+                @click="showModalBriefFreigeben = false"
+                class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100"
+            >
+                Abbrechen
+            </button>
+            <button
+                @click="briefFreigeben"
+                :disabled="loadingBriefFreigabe"
+                class="px-4 py-2 rounded-md text-sm text-white transition"
+                :class="loadingBriefFreigabe ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
+                >
+                <span v-if="!loadingBriefFreigabe">Freigeben</span>
+                <span v-else>Freigabe läuft...</span>
+            </button>
+
+            </div>
+        </div>
+        </div>
+    </transition>
+    <transition name="fade">
+        <div
+        v-if="showModalBrief"
+        class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+        >
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
+            <button
+            @click="showModalBrief = false"
+            class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl"
+            >
+            ✕
+            </button>
+            <h3 class="text-lg font-semibold mb-4 text-zbb">Neuer Brief</h3>
+
+            <div class="space-y-3">
+            <div><label>Name</label><input v-model="neuerBrief.name" class="input" /></div>
+            <div><label>Titel</label><input v-model="neuerBrief.titel" class="input" /></div>
+            <div><label>Content</label></div><textarea v-model="neuerBrief.content" rows="2" class="input"></textarea>
+            </div>
+
+            <div class="mt-6 flex justify-end space-x-3">
+            <button
+                @click="showModalBrief = false"
+                class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100"
+            >
+                Abbrechen
+            </button>
+            <button
+                @click="addBrief"
+                :disabled="loadingAdresse"
+                class="px-4 py-2 rounded-md text-sm text-white transition"
+                :class="loadingAdresse ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
+            >
+                <span v-if="!loadingAdresse">Speichern</span>
+                <span v-else>Speichern...</span>
+            </button>
+            </div>
+        </div>
+        </div>
+    </transition>
+
+        <!-- MODAL: Fahrtkosten hinzufügen -->
+    <transition name="fade">
+        <div
+        v-if="showModalFahrtkosten"
+        class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+        >
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
+            <button
+            @click="showModalFahrtkosten = false"
+            class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl"
+            >
+            ✕
+            </button>
+            <h3 class="text-lg font-semibold mb-4 text-zbb">Neue Fahrtkosten</h3>
+
+            <div class="space-y-3">
+            <div>
+                <label for="startDate">
+                    Fahrtarten <span class="text-red-500">*</span>
+                </label>
+                <Select
+                    v-model="neueFahrtkosten.fahrtarten_id"
+                    :options="props.fahrtarten"
+                    optionLabel="name"
+                    optionValue="id"
+                    class="w-[200px] text-sm w-full px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
+                    >
+                </Select>
+            </div>
+            <div>
+                <label for="startDate">
+                    Fahrtarten <span class="text-red-500">*</span>
+                </label>
+                <Select
+                    v-model="neueFahrtkosten.status"
+                    :options="fahrtkostenStatus"
+                    class="w-[200px] text-sm w-full px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
+                    >
+                </Select>
+            </div>
+            <div><label>Tag<span class="text-red-500">*</span></label><input type="date" v-model="neueFahrtkosten.tag" class="input" /></div>
+            <div><label>Start</label><input v-model="neueFahrtkosten.start" class="input" /></div>
+            <div><label>Ziel</label><input v-model="neueFahrtkosten.ziel" class="input" /></div>
+            <div><label>Entfernung</label><input v-model="neueFahrtkosten.entfernung" class="input" /></div>
+            </div>
+
+            <div class="mt-6 flex justify-end space-x-3">
+            <button
+                @click="showModalFahrtkosten = false"
+                class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100"
+            >
+                Abbrechen
+            </button>
+            <button
+                @click="addFahrtkosten"
+                :disabled="loadingFahrtkosten"
+                class="px-4 py-2 rounded-md text-sm text-white transition"
+                :class="loadingFahrtkosten ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
+            >
+                <span v-if="!loadingFahrtkosten">Speichern</span>
+                <span v-else>Speichern...</span>
+            </button>
+            </div>
+        </div>
+        </div>
+    </transition>
+
+    <!-- MODAL: Adresse hinzufügen -->
+    <transition name="fade">
+        <div
+        v-if="showModalAdresse"
+        class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+        >
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
+            <button
+            @click="showModalAdresse = false"
+            class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl"
+            >
+            ✕
+            </button>
+            <h3 class="text-lg font-semibold mb-4 text-zbb">Neue Adresse</h3>
+
+            <div class="space-y-3">
+            <div><label>Land</label><input v-model="neueAdresse.land" class="input" /></div>
+            <div><label>Straße</label><input v-model="neueAdresse.strasse" class="input" /></div>
+            <div><label>Hausnummer</label><input v-model="neueAdresse.hausnummer" class="input" /></div>
+            <div><label>PLZ</label><input v-model="neueAdresse.plz" class="input" /></div>
+            <div><label>Ort</label><input v-model="neueAdresse.stadt" class="input" /></div>
+            </div>
+
+            <div class="mt-6 flex justify-end space-x-3">
+            <button
+                @click="showModalAdresse = false"
+                class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100"
+            >
+                Abbrechen
+            </button>
+            <button
+                @click="addAdresse"
+                :disabled="loadingAdresse"
+                class="px-4 py-2 rounded-md text-sm text-white transition"
+                :class="loadingAdresse ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
+            >
+                <span v-if="!loadingAdresse">Speichern</span>
+                <span v-else>Speichern...</span>
+            </button>
+            </div>
+        </div>
+        </div>
+    </transition>
+
+    <!-- MODAL: Kontakt hinzufügen -->
+    <transition name="fade">
+        <div v-if="showModalCreateKontakt" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
+            <button @click="showModalCreateKontakt = false" class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl">✕</button>
+            <h3 class="text-lg font-semibold mb-4 text-zbb">Neuen Kontakt hinzufügen</h3>
+
+            <div class="space-y-4">
+            <div>
+                <label class="text-sm text-gray-600">Kontakttyp</label>
+                <select v-model="neuerKontakt.kontakttyp_id" class="input mt-1">
+                <option disabled value="">-- auswählen --</option>
+                <option v-for="kt in props.kontakttypen" :key="kt.id" :value="kt.id">{{ kt.name }}</option>
+                </select>
+            </div>
+
+            <!-- Dynamische Eingabe je nach Typ -->
+            <div v-if="selectedTyp?.name === 'Telefon'">
+                <label class="text-sm text-gray-600">Telefonnummer</label>
+                <input v-model="neuerKontakt.wert" class="input mt-1" placeholder="+49 ..." />
+            </div>
+
+            <div v-else-if="selectedTyp?.name === 'E-Mail'">
+                <label class="text-sm text-gray-600">E-Mail</label>
+                <input v-model="neuerKontakt.wert" type="email" class="input mt-1" placeholder="beispiel@mail.de" />
+            </div>
+
+            <div v-else-if="selectedTyp?.name === 'Adresse'">
+                <label class="text-sm text-gray-600">Adresse</label>
+                <input v-model="neuerKontakt.wert" class="input mt-1" placeholder="Straße, Ort ..." />
+            </div>
+
+            <div v-else-if="selectedTyp">
+                <label class="text-sm text-gray-600">Wert</label>
+                <input v-model="neuerKontakt.wert" class="input mt-1" />
+            </div>
+            </div>
+
+            <div class="mt-6 flex justify-end space-x-3">
+            <button @click="showModalCreateKontakt = false" class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100">Abbrechen</button>
+            <button
+                @click="addKontakt"
+                :disabled="loadingKontakt"
+                class="px-4 py-2 rounded-md text-sm text-white transition"
+                :class="loadingKontakt ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
+            >
+                <span v-if="!loadingKontakt">Speichern</span>
+                <span v-else>Speichern...</span>
+            </button>
+            </div>
+        </div>
+        </div>
+    </transition>
+
+    <!-- MODAL: Projekt zuweisen -->
+    <transition name="fade">
+        <div
+            v-if="showModalProjektzuweisen"
+            class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+        >
+            <div class="bg-white rounded-xl shadow-xl w-full max-w-3xl p-6 relative">
+            <!-- Schließen-Button -->
+            <button
+                @click="showModalProjektzuweisen = false"
+                class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl"
+            >
+                ✕
+            </button>
+
+            <!-- Titel -->
+            <h3 class="text-lg font-semibold mb-4 text-zbb">Projekt zuweisen</h3>
+
+            <!-- GRID: Zwei Spalten -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Projekt -->
+                <div class="col-span-2">
+                <label class="text-sm text-gray-600">Projekt auswählen</label>
+                <Multiselect
+                    v-model="neuesProjektId"
+                    :options="props.projekte.map(p => ({ value: p.id, label: p.name }))"
+                    placeholder="Projekt suchen..."
+                    searchable
+                    noOptionsText="Keine Projekte gefunden"
+                    class="input-auto"
+                />
+                </div>
+
+                <!-- Betreuer -->
+                <div>
+                <FloatLabel variant="on">
+                    <Select
+                    v-model="neuesProjekt.betreuer"
+                    :options="props.betreuer"
+                    optionValue="id"
+                    :optionLabel="t => `${t.vorname} ${t.nachname}`"
+                    class="w-full"
+                    />
+                    <label>Betreuer</label>
+                </FloatLabel>
+                </div>
+
+                <!-- Ansprechpartner -->
+                <div>
+                <FloatLabel variant="on">
+                    <Select
+                    v-model="neuesProjekt.massnahmebegleiter"
+                    :options="props.arbeitsvermittler"
+                    optionValue="id"
+                    :optionLabel="t => `${t.vorname} ${t.nachname}`"
+                    class="w-full"
+                    />
+                    <label>Ansprechpartner</label>
+                </FloatLabel>
+                </div>
+
+                <!-- Antragsdatum -->
+                <div>
+                <label>Antragsdatum</label>
+                <input type="date" v-model="neuesProjekt.antragsdatum" class="input" />
+                </div>
+
+                <!-- Starttermin -->
+                <div>
+                <label>Starttermin</label>
+                <input type="date" v-model="neuesProjekt.starttermin" class="input" />
+                </div>
+
+                <!-- Endtermin -->
+                <div>
+                <label>Endtermin</label>
+                <input type="date" v-model="neuesProjekt.endtermin" class="input" />
+                </div>
+
+                <!-- Anfangsdatum -->
+                <div>
+                <label>Anfangsdatum</label>
+                <input type="date" v-model="neuesProjekt.anfangsdatum" class="input" />
+                </div>
+
+                <!-- Enddatum -->
+                <div>
+                <label>Enddatum</label>
+                <input type="date" v-model="neuesProjekt.enddatum" class="input" />
+                </div>
+            </div>
+
+            <!-- Buttons -->
+            <div class="mt-6 flex justify-end space-x-3">
+                <button
+                @click="showModalProjektzuweisen = false"
+                class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100"
+                >
+                Abbrechen
+                </button>
+                <button
+                @click="addProjekt"
+                :disabled="loadingProjekt"
+                class="px-4 py-2 rounded-md text-sm text-white transition"
+                :class="loadingProjekt ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
+                >
+                <span v-if="!loadingProjekt">Speichern</span>
+                <span v-else>Speichern...</span>
+                </button>
+            </div>
+            </div>
+        </div>
+    </transition>
+
+    <!-- MODAL: PROJEKT BEARBEITEN -->
+    <!-- 🔥 Modal: Projekt bearbeiten -->
+
+    <Modal v-if="showEditZuwseisungModal"   @close="showEditZuwseisungModal = false">
+        <template #header  >{{ $t('Projekt bearbeiten') }}</template>
+
+        <template #body>
+            <div class="grid grid-cols-2 gap-4">
+
+                <div class="mb-4 w-full mx-1">
+
+                    <FloatLabel variant="on">
+                        <Select v-model="editForm.projektname" disabled :options="props.projekte" optionValue="id" optionLabel="name" class="w-full"/>
+
+                        <label>Projektname</label>
+                    </FloatLabel>
+                </div>
+                <div class="mb-4 w-full mx-1">
+                    <FloatLabel variant="on">
+                        <DatePicker v-model="editForm.antragsdatum" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" :manualInput="true" showIcon iconDisplay="input" />
+                        <label>Antragsdatum</label>
+                    </FloatLabel>
+                </div>
+                <div class="mb-4 w-full mx-1">
+                    <FloatLabel variant="on">
+                        <Select v-model="editForm.betreuer" :options="props.betreuer" optionValue="id" :optionLabel="(t) => `${t.vorname} ${t.nachname}`" class="w-full"/>
+
+                        <label>Betreuer</label>
+                    </FloatLabel>
+                </div>
+                <div class="mb-4 w-full mx-1">
+                    <FloatLabel variant="on">
+                        <Select v-model="editForm.massnahmebegleiter" :options="props.arbeitsvermittler" optionValue="id" :optionLabel="(t) => `${t.vorname} ${t.nachname}`" class="w-full"/>
+
+                        <label>Ansprechpartner</label>
+                    </FloatLabel>
+                </div>
+            </div>
+
+
+            <div class="grid grid-cols-2 gap-4">
+
+                <div class="mb-4 w-full mx-1">
+                    <FloatLabel variant="on">
+                        <DatePicker v-model="editForm.starttermin" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" :manualInput="true" showIcon iconDisplay="input" />
+                        <label>Starttermin</label>
+                    </FloatLabel>
+                </div>
+
+                <div class="mb-4 w-full mx-1">
+                    <FloatLabel variant="on">
+                        <DatePicker v-model="editForm.anfangsdatum" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" :manualInput="true"  showIcon iconDisplay="input" />
+                        <label>Anfangsdatum</label>
+                    </FloatLabel>
+                </div>
+
+                <div class="mb-4 w-full mx-1">
+                    <FloatLabel variant="on">
+                        <DatePicker v-model="editForm.endtermin" dateFormat="dd.mm.yy"  class="w-full" inputClass="w-full" :manualInput="true"  showIcon iconDisplay="input" />
+                        <label>Endtermin</label>
+                    </FloatLabel>
+                </div>
+
+                <div class="mb-4 w-full mx-1">
+                    <FloatLabel variant="on">
+                        <DatePicker v-model="editForm.enddatum" dateFormat="dd.mm.yy"  class="w-full" inputClass="w-full" showIcon iconDisplay="input" />
+                        <label>Enddatum</label>
+                    </FloatLabel>
+                </div>
+            </div>
+        </template>
+
+        <template #footer>
+            <button @click="saveEdit"
+                    class="bg-zbb text-white px-4 py-2 rounded">
+                Speichern
+            </button>
+
+            <button @click="showEditZuwseisungModal = false"
+                    class="border px-4 py-2 rounded">
+                Abbrechen
+            </button>
+        </template>
+    </Modal>
+
+    <!-- MODAL: Anwesenheit -->
+    <transition name="fade">
+        <div v-if="showModalAnwesenheit" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
+                <button @click="showModalAnwesenheit = false" class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl">✕</button>
+                    <h3 class="text-lg font-semibold mb-4 text-zbb">
+                    {{ editMode ? 'Anwesenheit bearbeiten' : 'Anwesenheit erfassen' }}
+                    </h3>
+                <div class="space-y-4">
+                    <!-- Datum -->
+                    <div>
+                        <label for="startDate" class="block text-sm font-medium text-gray-700 mb-2" >
+                            Datum <span class="text-red-500">*</span>
+                        </label>
+                        <input v-model="neueAnwesenheit.dateAnwesenheit" type="date" id="dateAnwesenheit" name="dateAnwesenheit" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
+                    </div>
+                    <!-- Zeitraum geplant-->
+                    <div class="flex space-x-4">
+                        <div class="w-1/2">
+                            <label for="startTime" class="block text-sm font-medium text-gray-700 mb-2" >
+                                geplante Startzeit <span class="text-red-500">*</span>
+                            </label>
+                            <input v-model="neueAnwesenheit.startTime" type="time" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
+                        </div>
+                        <div class="w-1/2">
+                            <label for="endTime" class="block text-sm font-medium text-gray-700 mb-2" >
+                                geplante Endzeit <span class="text-red-500">*</span>
+                            </label>
+                            <input v-model="neueAnwesenheit.endTime" type="time"  required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
+                        </div>
+                    </div>
+
+                    <!-- Zeitraum tatsächlich-->
+                    <div class="flex space-x-4">
+                        <div class="w-1/2">
+                            <label for="startTime" class="block text-sm font-medium text-gray-700 mb-2" >
+                                tatsächliche Startzeit
+                            </label>
+                            <input v-model="neueAnwesenheit.tatstartTime" type="time" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
+                        </div>
+                        <div class="w-1/2">
+                            <label for="endTime" class="block text-sm font-medium text-gray-700 mb-2" >
+                                tatsächliche Endzeit
+                            </label>
+                            <input v-model="neueAnwesenheit.tatendTime" type="time" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors" />
+                        </div>
+                    </div>
+
+                    <!-- Bereiche -->
+                    <div>
+                        <label for="startDate" class="block text-sm font-medium text-gray-700 mb-2" >
+                                Beriech <span class="text-red-500">*</span>
+                        </label>
+                        <Select
+                            v-model="neueAnwesenheit.gruppe"
+                            :options="props.bereiche"
+                            optionLabel="name"
+                            optionValue="id"
+                            class="w-full text-sm px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
+                            />
+
+                    </div>
+                        <div>
+                        <label for="startDate" class="block text-sm font-medium text-gray-700 mb-2" >
+                                Anwesenheitsstatuten <span class="text-red-500">*</span>
+                        </label>
+                        <Select
+                        v-model="neueAnwesenheit.anwesenheitsstatus"
+                        :options="props.anwesenheitsstatuten"
+                        optionLabel="status"
+                        optionValue="id"
+                        class="w-[200px] text-sm w-full px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
+                    >
+
+                        <!-- DROPDOWN OPTION -->
+                        <template #option="slotProps">
+                            <div class="flex items-center space-x-2">
+                                <span
+                                    class="w-4 h-4 rounded-full"
+                                    :style="{ backgroundColor: slotProps.option.farben }"
+                                ></span>
+
+                                <span>{{ slotProps.option.status }}</span>
+                            </div>
+                        </template>
+
+                        <!-- AUSGEWÄHLTER WERT -->
+                        <template #value="slotProps">
+                            <div class="flex items-center space-x-2">
+                                <span
+                                    class="w-3 h-3 rounded-full"
+                                    :style="{
+                                        backgroundColor: props.anwesenheitsstatuten.find(s => s.id === slotProps.value)?.farben
+                                            || '#cccccc'
+                                    }"
+                                ></span>
+
+                                <span>
+                                    {{ props.anwesenheitsstatuten.find(s => s.id === slotProps.value)?.status || '–' }}
+                                </span>
+                            </div>
+                        </template>
+
+                    </Select>
+
+                    </div>
+                    <div>
+                        <label for="bemerkungen" class="block text-sm font-medium text-gray-700 mb-2" >
+                            Anwesenheitsstatuten <span class="text-red-500">*</span>
+                        </label>
+                        <textarea v-model="neueAnwesenheit.bemerkungen" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors py-3"></textarea>
+
+                    </div>
+
+
+                </div>
+
+                <div class="mt-6 flex justify-end space-x-3">
+                    <button @click="showModalAnwesenheit = false" class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100">Abbrechen</button>
+                    <button
+                        @click="addAnwesenheit"
+                        :disabled="loadingAnwesenheit"
+                        class="px-4 py-2 rounded-md text-sm text-white transition"
+                        :class="loadingAnwesenheit ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
+                        >
+                        <span v-if="!loadingAnwesenheit">
+                            {{ editMode ? 'Änderungen speichern' : 'Speichern' }}
+                        </span>
+                        <span v-else>Speichern...</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </transition>
+    <!-- End MODAL: Anwesenheit -->
+
+    <!-- MODAL: Bank hinzufügen -->
+    <transition name="fade">
+        <div v-if="showModalBank" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
+            <button @click="showModalBank = false" class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl">✕</button>
+            <h3 class="text-lg font-semibold mb-4 text-zbb">Neue Bank hinzufügen</h3>
+
+            <div class="space-y-4">
+
+            <!-- Dynamische Eingabe je nach Typ -->
+            <div>
+                <label class="text-sm text-gray-600">Name<span class="text-danger text-md">*</span> </label>
+                <input v-model="neueBank.name" class="input mt-1"/>
+            </div>
+            <div>
+                <label class="text-sm text-gray-600">IBAN<span class="text-danger text-md">*</span> </label>
+                <input v-model="neueBank.iban" class="input mt-1"/>
+            </div>
+            <div>
+                <label class="text-sm text-gray-600">BLZ<span class="text-danger text-md">*</span> </label>
+                <input v-model="neueBank.blz" class="input mt-1"/>
+            </div>
+            </div>
+
+            <div class="mt-6 flex justify-end space-x-3">
+            <button @click="showModalBank = false" class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100">Abbrechen</button>
+            <button
+                @click="addBank"
+                :disabled="loadingBank"
+                class="px-4 py-2 rounded-md text-sm text-white transition"
+                :class="loadingBank ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
+            >
+                <span v-if="!loadingBank">Speichern</span>
+                <span v-else>Speichern...</span>
+            </button>
+            </div>
+        </div>
+        </div>
+    </transition>
+
+    <!-- MODAL: Notiz -->
+    <transition name="fade">
+        <div v-if="showModalNotiz" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div class="bg-white rounded-xl shadow-xl w-1/3  p-6 relative">
+                <button @click="showModalNotiz = false" class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl">✕</button>
+                <h3 class="text-lg font-semibold mb-4 text-zbb">Neue Notiz erstellen</h3>
+                <div class="space-y-4">
+                    <div class="flex space-x-4">
+                        <div class="w-1/2">
+                            <label for="startDate" class="block text-sm font-medium text-gray-700 mb-2" >
+                                Notiztyp <span class="text-red-500">*</span>
+                            </label>
+                                <Select
+                                v-model="neueNotiz.typ"
+                                :options="props.notiztypen"
+                                optionLabel="name"
+                                optionValue="id"
+                                class="w-[200px] text-sm w-full px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
+                                >
+                            </Select>
+                        </div>
+
+                        <div class="w-1/2">
+                            <label for="startDate" class="block text-sm font-medium text-gray-700 mb-2" >
+                                Priorität <span class="text-red-500">*</span>
+                            </label>
+                                <Select
+                                v-model="neueNotiz.prioritaet"
+                                :options="props.notizprioritaet"
+                                optionLabel="name"
+                                optionValue="id"
+                                class="w-[200px] text-sm w-full px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
+                                >
+                            </Select>
+                        </div>
+                    </div>
+
+                        <div>
+                            <label for="startDate" class="block text-sm font-medium text-gray-700 mb-2" >
+                                Kategorie <span class="text-red-500">*</span>
+                            </label>
+                                <Select
+                                v-model="neueNotiz.kategorie"
+                                :options="props.notizkategorie"
+                                optionLabel="name"
+                                optionValue="id"
+                                class="w-[200px] text-sm w-full px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
+                                >
+                            </Select>
+                        </div>
+                        <div>
+                            <label for="titel" class="block text-sm font-medium text-gray-700 mb-2" >
+                                Notiztitel <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" v-model="neueNotiz.titel" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors py-3"/>
+                        </div>
+
+                    <div>
+                        <label for="inhalt" class="block text-sm font-medium text-gray-700 mb-2" >
+                            Notizinhalt <span class="text-red-500">*</span>
+                        </label>
+                        <textarea v-model="neueNotiz.inhalt" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors py-3"></textarea>
+                    </div>
+                </div>
+
+                <div class="mt-6 flex justify-end space-x-3">
+                    <button @click="showModalNotiz = false" class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100">Abbrechen</button>
+                    <button
+                        @click="addNotiz"
+                        :disabled="loadingNotiz"
+                        class="px-4 py-2 rounded-md text-sm text-white transition"
+                        :class="loadingNotiz ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
+                        >
+                        <span v-if="!loadingNotiz">
+                            Speichern
+                        </span>
+                        <span v-else>Speichern...</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </transition>
+    <!-- End MODAL: Notiz -->
+
+
+    <!-- MODAL Abschluss-->
+    <transition name="fade">
+        <div
+            v-if="showModalCreateAbschluss"
+            class="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+        >
+            <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
+            <button
+                @click="showModalCreateAbschluss = false"
+                class="absolute top-2 right-3 text-gray-400 hover:text-gray-600 text-xl"
+            >
+                ✕
+            </button>
+            <h3 class="text-lg font-semibold mb-4 text-zbb">
+                Neuen Abschluss hinzufügen
+            </h3>
+
+            <div class="space-y-4">
+                <!-- Typauswahl -->
+                <div>
+                    <label class="text-sm text-gray-600">Abschluss-Typ</label>
+                    <select v-model="neuerAbschluss.typ" class="input mt-1">
+                        <option disabled value="">-- auswählen --</option>
+                        <option value="schule">Schulabschluss</option>
+                        <option value="beruf">Berufsabschluss</option>
+                        <option value="hochschule">Hochschulabschluss</option>
+                        <option value="weiterbildung">Weiterbildung</option>
+                    </select>
+                </div>
+
+                <!-- Bezeichnung -->
+                <div v-if="neuerAbschluss.typ">
+                    <label class="text-sm text-gray-600">Abschluss</label>
+                    <select v-model="neuerAbschluss.abschluss_id" class="input mt-1">
+                        <option disabled value="">-- auswählen --</option>
+                        <option
+                        v-for="a in props.abschluesse.filter(a => a.typ === neuerAbschluss.typ)"
+                        :key="a.id"
+                        :value="a.id"
+                        >
+                        {{ a.bezeichnung }}
+                        </option>
+                    </select>
+                </div>
+                <div v-if="neuerAbschluss.typ">
+
+                    <label class="text-sm text-gray-600">Bezeichnung</label>
+                    <input v-model="neuerAbschluss.bezeichnung" class="input" />
+                </div>
+                <!-- Startdatum -->
+                <div>
+                    <label class="text-sm text-gray-600">Startdatum</label>
+                    <input type="date" v-model="neuerAbschluss.start" class="input" />
+                </div>
+
+                <!-- Enddatum -->
+                <div>
+                    <label class="text-sm text-gray-600">Enddatum</label>
+                    <input type="date" v-model="neuerAbschluss.end" class="input" />
+                </div>
+
+
+            </div>
+
+            <!-- Buttons -->
+            <div class="mt-6 flex justify-end space-x-3">
+                <button
+                @click="showModalCreateAbschluss = false"
+                class="px-4 py-2 border rounded-md text-sm text-gray-600 hover:bg-gray-100"
+                >
+                Abbrechen
+                </button>
+                <button
+                @click="addAbschluss"
+                :disabled="loadingAbschluss"
+                class="px-4 py-2 rounded-md text-sm text-white transition"
+                :class="loadingAbschluss ? 'bg-gray-400 cursor-not-allowed' : 'bg-zbb hover:bg-zbb/80'"
+                >
+                <span v-if="!loadingAbschluss">Speichern</span>
+                <span v-else>Speichern...</span>
+                </button>
+            </div>
+            </div>
+        </div>
+    </transition>
+
+    <!-- ================= MODAL Luv ================= -->
+        <ModalLuvCreate v-if="showModalLuvCreate" :visible="showModalLuvCreate" :teilnehmer="props.teilnehmer" @close="showModalLuvCreate = false" />
     <!-- ================= MODAL LÖSCHEN ================= -->
-
-
         <ModalDestroy
             v-if="showModalLöschen"
             @close="showModalLöschen = false"
@@ -1599,6 +1701,7 @@
     import FloatLabel from 'primevue/floatlabel';
     import DatePicker from 'primevue/datepicker';
     import Modal from '@/Components/ModalForm.vue';
+    import ModalLuvCreate from '@/Pages/Teilnehmer/Tabs/LuV/LuVModalCreate.vue';
     import { timeToMinutes, berechneAbweichungMinuten, formatMinutes, abweichungsIcon, abweichungsClass
 } from "@/utils/arbeitszeit.js";
     const { flash } = usePage().props;
@@ -1621,12 +1724,10 @@
         dokumente: Array,
         zeitraum: Object,
         bereiche: Array,
-
+        arbeitsvermittler: Array,
     });
 
 
-
-    console.log(props.bereiche)
 watchEffect(() => {
 
   if (flash?.error) {
@@ -1655,6 +1756,7 @@ watchEffect(() => {
         "Vermittlung",
         "Praktika",
         "Fahrtkosten",
+        "LuV",
         "Exportieren"
 
     ];
@@ -1672,6 +1774,8 @@ watchEffect(() => {
         endtermin: '',
         anfangsdatum: '',
         enddatum: '',
+        betreuer: "",
+        massnahmebegleiter: "",
     });
 
 
@@ -1744,8 +1848,6 @@ const migrationshintergrund  = ref(!!props.teilnehmer.sozialedaten?.migrationshi
 const leistungsbezug_id      = ref(props.teilnehmer.sozialedaten?.leistungsbezug_id);
 const wohnsitz_stabil        = ref(!!props.teilnehmer.sozialedaten?.wohnsitz_stabil);
 const kundennummer = ref(props.teilnehmer.sozialedaten?.kundennummer || '');
-const massnahmebleiter = ref(props.teilnehmer.sozialedaten?.kundennummer || '');
-console.log(props.teilnehmer.projekte)
 const saveSozialdaten = () => {
   router.patch(
     route('person.sozialdaten.update', props.teilnehmer.id),
@@ -1890,11 +1992,6 @@ const saveStammdaten = () => {
 
 
 // ======= End Fahrtkosten abrechnen
-
-
-
-
-
 
 // ======= Notizen
         const showModalNotiz = ref(false);
@@ -2252,7 +2349,6 @@ const addAdresse = () => {
             }
         );
         };
-        console.log(props.teilnehmer)
     /* ======= End KONTAKTE =======*/
 
     // =======  ANWESENHEIT =======
@@ -2472,56 +2568,68 @@ const addProjekt = () => {
   loadingProjekt.value = true;
 
   router.post(
-    route("projekthasteilnehmer.store"),
-    {
-      teilnehmer_id: props.teilnehmer.id,
-      projekt_id: neuesProjektId.value,
-      model_type: 'App\\Models\\ProjektHasPersonen',
-      ...neuesProjekt.value,
-    },
-    {
-      preserveScroll: true,
-      preserveState: true,
-      onFinish: () => (loadingProjekt.value = false),
-      onSuccess: () => {
-        // Projekt aus den Props suchen
-        const projekt = props.projekte.find(
-          (p) => p.id === neuesProjektId.value
-        );
+  route("projekthasteilnehmer.store"),
+  {
+    teilnehmer_id: props.teilnehmer.id,
+    projekt_id: neuesProjektId.value,
+    model_type: 'App\\Models\\ProjektHasPersonen',
+    ...neuesProjekt.value,
+  },
+  {
+    preserveScroll: true,
+    preserveState: true,
+    onFinish: () => (loadingProjekt.value = false),
+    onSuccess: (page) => {
+      const projekt = props.projekte.find(
+        (p) => p.id === neuesProjektId.value
+      );
 
-        if (projekt) {
-          // 🔥 Neues Projekt ganz oben einfügen (nicht unten)
-          teilnehmer.value.projekte.unshift({
-            ...projekt,
-            pivot_model: {
-              zeitraume: [
-                {
-                  antragsdatum: neuesProjekt.value.antragsdatum || null,
-                  starttermin: neuesProjekt.value.starttermin || null,
-                  endtermin: neuesProjekt.value.endtermin || null,
-                  anfangsdatum: neuesProjekt.value.anfangsdatum || null,
-                  enddatum: neuesProjekt.value.enddatum || null,
-                },
-              ],
+      if (projekt) {
+        // 🔥 Neues Projekt in lokale Liste einfügen
+        teilnehmer.value.projekte.unshift({
+          ...projekt,
+          pivot_model: {
+            zeitraume: [
+              {
+                antragsdatum: neuesProjekt.value.antragsdatum || null,
+                starttermin: neuesProjekt.value.starttermin || null,
+                endtermin: neuesProjekt.value.endtermin || null,
+                anfangsdatum: neuesProjekt.value.anfangsdatum || null,
+                enddatum: neuesProjekt.value.enddatum || null,
+              },
+            ],
+            // 🔹 direkt die meta-Daten hinzufügen (frontend-seitig sichtbar)
+            meta: {
+              betreuer: props.betreuer.find(
+                (b) => b.id === neuesProjekt.value.betreuer
+              ) || { vorname: "", nachname: "" },
+              projektbegleiter: props.arbeitsvermittler.find(
+                (m) => m.id === neuesProjekt.value.massnahmebegleiter
+              ) || { vorname: "", nachname: "" },
             },
-            esf: false,
-            jc_mitarbeiter: "",
-          });
-        }
+          },
+          esf: false,
+          jc_mitarbeiter: "",
+        });
+      }
 
-        // Modal schließen & Eingaben zurücksetzen
-        neuesProjektId.value = "";
-        neuesProjekt.value = {
-          antragsdatum: "",
-          starttermin: "",
-          endtermin: "",
-          anfangsdatum: "",
-          enddatum: "",
-        };
-        showModalProjektzuweisen.value = false; // ✅ korrekt schließen
-      },
-    }
-  );
+      // ✅ Eingaben zurücksetzen
+      neuesProjektId.value = "";
+      neuesProjekt.value = {
+        antragsdatum: "",
+        starttermin: "",
+        endtermin: "",
+        anfangsdatum: "",
+        enddatum: "",
+        betreuer: "",
+        massnahmebegleiter: "",
+      };
+
+      showModalProjektzuweisen.value = false; // Modal schließen
+    },
+  }
+);
+
 };
 
 const showEditZuwseisungModal = ref(false);
@@ -2540,11 +2648,11 @@ const editForm = ref({
 });
 const openProjektEdit = (zeit, projekt) =>  {
     showEditZuwseisungModal.value = true;
-
     editForm.value = {
         id: projekt.pivot_model.id ?? "",
-        projektname: projekt.name,
-        massnahmebegleiter: projekt.pivot_model.meta?.massnahmebegleiter ?? "",
+        betreuer: projekt.pivot_model.meta?.betreuer.id ?? "",
+        massnahmebegleiter: projekt.pivot_model.meta?.projektbegleiter.id ?? "",
+        projektname: projekt.id,
         antragsdatum: formatDate(zeit?.antragsdatum),
         starttermin: formatDate(zeit?.starttermin),
         anfangsdatum: formatDate(zeit?.anfangsdatum),
@@ -2557,7 +2665,8 @@ const openProjektEdit = (zeit, projekt) =>  {
 function saveEdit() {
     const payload = {
         id: editForm.value.id,
-        ansprechpartner: editForm.value.massnahmebegleiter,
+        projektbegleiter_id: editForm.value.massnahmebegleiter,
+        betreuer_id: editForm.value.betreuer,
         antragsdatum: toLocalDateString(editForm.value.antragsdatum),
         starttermin: toLocalDateString(editForm.value.starttermin),
         endtermin: toLocalDateString(editForm.value.endtermin),
@@ -2565,12 +2674,12 @@ function saveEdit() {
         enddatum: toLocalDateString(editForm.value.enddatum),
     };
 
-    console.log("📤 GESENDET AN BACKEND:", payload);
-
-    axios.put(route("projekthasteilnehmer.update", editForm.value.id), payload)
+   axios.put(route("projekthasteilnehmer.update", editForm.value.id), payload)
+   //router.put(route("projekthasteilnehmer.update", editForm.value.id), payload)
         .then(response => {
 
             const newData = response.data.zeitraum;
+            const newMeta = response.data.meta;
 
             const projekt = teilnehmer.value.projekte.find(
                 p => Number(p.pivot_model.id) === Number(editForm.value.id)
@@ -2586,6 +2695,8 @@ function saveEdit() {
                 } else {
                     projekt.pivot_model.zeitraume.push(newData);
                 }
+                 // 🔹 Projektbegleiter im Meta-Objekt aktualisieren
+                projekt.pivot_model.meta = newMeta;
             }
 
             showEditZuwseisungModal.value = false;
@@ -2648,6 +2759,14 @@ const gefilterteDokumente = computed(() => {
       (d.version && d.version.toString().includes(term))
   );
 });
+
+// ====================== LuV ======================
+const expandedLuv = ref(null); // speichert die aktuell geöffnete LUV-ID
+const showModalLuvCreate = ref(false);
+
+const toggleLuv = (id) => {
+  expandedLuv.value = expandedLuv.value === id ? null : id;
+};
 
 
 // ====================== LÖSCHEN ======================

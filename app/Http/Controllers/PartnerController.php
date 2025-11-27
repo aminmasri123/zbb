@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Exception;
 use Inertia\Inertia;
 use App\Models\Partner;
 use App\Models\Personen;
@@ -9,6 +10,7 @@ use Illuminate\Http\Request;
 use App\Models\Partnerschaftstypen;
 use App\Http\Controllers\Controller;
 use App\Models\PartnerHasPartnerschaftstypen;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class PartnerController extends Controller
 {
@@ -112,32 +114,31 @@ class PartnerController extends Controller
         }
 
        return response()->json([
-    'success' => true,
-    'partner' => $partner
-        ->refresh()   // <<< WICHTIG!
-        ->load([
-            'partnerschaftstypens',
-            'partnerschaftstypenZuordnung.ansprechpartner'
-        ])
-]);
-
+            'success' => true,
+            'partner' => $partner
+                ->refresh()   // <<< WICHTIG!
+                ->load([
+                    'partnerschaftstypens',
+                    'partnerschaftstypenZuordnung.ansprechpartner'
+                ])
+        ]);
     }
 
 
 
-public function indexAjaxFresh()
-{
-    $partners = Partner::with([
-        'partnerschaftstypens',
-        'partnerschaftstypenZuordnung.ansprechpartner'
-    ])
-    ->orderBy('id')
-    ->paginate(20);
+    public function indexAjaxFresh()
+    {
+        $partners = Partner::with([
+            'partnerschaftstypens',
+            'partnerschaftstypenZuordnung.ansprechpartner'
+        ])
+        ->orderBy('id')
+        ->paginate(20);
 
-    return response()->json([
-        'partners' => $partners
-    ]);
-}
+        return response()->json([
+            'partners' => $partners
+        ]);
+    }
 
 
 
@@ -249,6 +250,17 @@ public function indexAjaxFresh()
      */
     public function destroy(string $id)
     {
-        //
+         try {
+            $partner = Partner::findOrFail($id);
+
+            $partner->delete(); // Lösche die Partner
+
+            return response()->json(['message' => 'Partner erfolgreich gelöscht!'], 200);
+        } catch (ModelNotFoundException $e) {
+            return response()->json(['message' => 'Partner nicht gefunden.'], 404);
+        } catch (Exception $e) {
+            return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
+        }
     }
+
 }

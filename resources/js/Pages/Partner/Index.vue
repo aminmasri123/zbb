@@ -6,8 +6,7 @@
     import axios from 'axios';
     import Dropdown from '@/Components/Dropdown.vue';
     import ModalCreate from '@/Pages/Partner/ModalCreate.vue';
-    /* import ModalDestroy from '@/Components/ModalDestroyForm.vue';
-    import ModalEdit from '@/Pages/Partner/ModalEdit.vue'; */
+    import ModalDestroy from '@/Components/ModalDestroyForm.vue';
     import ModalEdit from '@/Pages/Partner/ModalEdit.vue';
 
     let seite = 'partner';
@@ -165,6 +164,7 @@ const addPartner = async (data) => {
 
 const updatePartner = async (form) => {
     try {
+        //const response = router.put(route('partner.update', partnerToEdit.value.id), form);
         const response = await axios.put(route('partner.update', partnerToEdit.value.id), form);
 
         Swal.fire("Erfolg!", "Partner aktualisiert!", "success");
@@ -277,15 +277,9 @@ export default {
 
 
         <ModalCreate :visible="isModalCreateOpen" :partnerschaftstypen="partnerschaftstypen" @close="closeModalCreate" @add-partner="addPartner"/>
-       <!-- <ModalDestroy v-if="showModalLöschen" @delete="handleDelete" @close="showModalLöschen = false" :seite="seite"  :toDelete="partnerToDelete"></ModalDestroy>
- -->
-        <ModalEdit
-    :visible="isModalEditOpen"
-    :partnerschaftstypen="partnerschaftstypen"
-    :toEdit="partnerToEdit"
-    @close="closeModalEdit"
-    @updated="updatePartner"
-/>
+        <ModalDestroy v-if="showModalLöschen" @delete="handleDelete" @close="showModalLöschen = false" :seite="seite"  :toDelete="partnerToDelete"></ModalDestroy>
+
+        <ModalEdit :visible="isModalEditOpen" :partnerschaftstypen="partnerschaftstypen" :toEdit="partnerToEdit" @close="closeModalEdit" @updated="updatePartner"/>
 
     </app-layout>
 </template>

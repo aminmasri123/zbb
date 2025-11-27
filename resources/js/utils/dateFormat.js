@@ -1,3 +1,4 @@
+    /*
     export function formatDate(value) {
         if (!value) return '-'
 
@@ -9,6 +10,26 @@
             month: '2-digit',
             year: 'numeric'
         })
+    } */
+
+
+    export function formatDate(value)
+    {
+        if (!value || value === '-' || value === '--' || value === '') {
+            return null; // Wichtig!
+        }
+
+        const date = new Date(value);
+
+        if (isNaN(date.getTime())) {
+            return null;
+        }
+
+        return date.toLocaleDateString('de-DE', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
     }
 
     export function formatDateTime(value) {

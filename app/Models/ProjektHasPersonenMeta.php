@@ -21,8 +21,9 @@ class ProjektHasPersonenMeta extends Model
         'austritt_id',
         'zielgruppe_id',
         'projektabschluss_id',
-        'massnahmebegleiter',
+        'projektbegleiter_id',
     ];
+
 
 
     /**
@@ -40,6 +41,11 @@ class ProjektHasPersonenMeta extends Model
     public function betreuer()
     {
         return $this->belongsTo(Personen::class, 'betreuer_id');
+    }
+
+    public function projektbegleiter()
+    {
+        return $this->belongsTo(Personen::class, 'projektbegleiter_id');
     }
 
     /**
