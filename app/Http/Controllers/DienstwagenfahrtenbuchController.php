@@ -43,7 +43,7 @@ class DienstwagenfahrtenbuchController extends Controller
             ->get();
 
         $fahrer = Personen::mitarbeiter()
-            ->active()
+            ->aktiv()
             ->with(['dienstwagen', 'dienstwagenfahrten'])
             ->orderBy('nachname')->orderBy('vorname')
             ->get();

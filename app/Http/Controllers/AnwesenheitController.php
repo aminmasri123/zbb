@@ -156,8 +156,8 @@ class AnwesenheitController extends Controller
     {
         $validated = $request->validate([
             'personen_id' => 'required|integer|exists:personens,id',
-            'gruppe_id'   => 'nullable|integer|exists:gruppes,id',
-            'tag'         => 'required|date',
+            'anwesenheitsstatuten_id' => 'required|integer|exists:anwesenheitsstatutens,id',
+            'tag'   => 'required|date|exists:tages,datum',
 
             'startzeit'   => 'nullable|date_format:H:i',
             'endzeit'     => 'nullable|date_format:H:i|after:startzeit',
@@ -165,29 +165,25 @@ class AnwesenheitController extends Controller
             'tatstartTime'=> 'nullable|date_format:H:i',
             'tatendTime'  => 'nullable|date_format:H:i|after:tatstartTime',
 
-            'anwesenheitsstatuten_id' => 'required|integer|exists:anwesenheitsstatutens,id',
-            'bemerkung'    => 'nullable|string|max:255',
+            'bemerkung' => 'nullable|string|max:255',
         ]);
 
-        // 🔹 Tag-ID holen
+        // Tag-ID abrufen
         $tagId = Tage::where('datum', $validated['tag'])->value('id');
-        if (!$tagId) {
-            return response()->json(['error' => 'Ungültiges Datum!'], 422);
-        }
 
-        // 🔹 Bestehenden Datensatz abrufen
+        // Bestehende Anwesenheit suchen (ohne Gruppe!)
         $anwesenheit = GruppeHasPersonen::where('personen_id', $validated['personen_id'])
             ->where('tage_id', $tagId)
-            ->when($validated['gruppe_id'], fn($q) => $q->where('gruppe_id', $validated['gruppe_id']))
             ->first();
 
-        /**
-         * 🔹 Zeit IDs NUR setzen, wenn Zeiten wirklich im Request vorhanden sind
-         * und nur dann neue Zeitblöcke erstellen.
-         */
+        // ==========================
+        // Geplante Zeit setzen
+        // ==========================
         $zeitgeplantId = $anwesenheit->zeitgeplant_id ?? null;
+
         if (!empty($validated['startzeit']) && !empty($validated['endzeit'])) {
-            // Nur neue Zeit anlegen, falls sich etwas geändert hat
+
+            // Nur neue Zeit anlegen, wenn Werte sich geändert haben
             if (
                 !$anwesenheit ||
                 $anwesenheit->zeitgeplant?->startzeit !== $validated['startzeit'] ||
@@ -195,14 +191,18 @@ class AnwesenheitController extends Controller
             ) {
                 $zeitgeplantId = Zeiten::firstOrCreate([
                     'startzeit' => $validated['startzeit'],
-                    'endzeit'   => $validated['endzeit'],
+                    'endzeit'   => $validated['endzeit']
                 ])->id;
             }
         }
 
-        // 🔹 Tatsächliche Zeit
+        // ==========================
+        // Tatsächliche Zeit setzen
+        // ==========================
         $zeittatsaechlichId = $anwesenheit->zeittatsaechlich_id ?? null;
+
         if (!empty($validated['tatstartTime']) && !empty($validated['tatendTime'])) {
+
             if (
                 !$anwesenheit ||
                 $anwesenheit->zeittatsaechlich?->startzeit !== $validated['tatstartTime'] ||
@@ -210,12 +210,14 @@ class AnwesenheitController extends Controller
             ) {
                 $zeittatsaechlichId = Zeiten::firstOrCreate([
                     'startzeit' => $validated['tatstartTime'],
-                    'endzeit'   => $validated['tatendTime'],
+                    'endzeit'   => $validated['tatendTime']
                 ])->id;
             }
         }
 
-        // 🔹 UPDATE
+        // ==========================
+        // UPDATE
+        // ==========================
         if ($anwesenheit) {
 
             $anwesenheit->update([
@@ -229,20 +231,22 @@ class AnwesenheitController extends Controller
             return redirect()->back()->with('success', 'Anwesenheit aktualisiert.');
         }
 
-        // 🔹 SONST → NEU ANLEGEN
+        // ==========================
+        // NEU ANLEGEN
+        // ==========================
         GruppeHasPersonen::create([
-            'personen_id'              => $validated['personen_id'],
-            'tage_id'                  => $tagId,
-            'gruppe_id'                => $validated['gruppe_id'] ?? null,
-            'zeitgeplant_id'           => $zeitgeplantId,
-            'zeittatsaechlich_id'      => $zeittatsaechlichId,
-            'anwesenheitsstatuten_id'  => $validated['anwesenheitsstatuten_id'],
-            'bemerkung'                => $validated['bemerkung'] ?? null,
-            'user_id'                  => Auth::id(),
+            'personen_id'             => $validated['personen_id'],
+            'tage_id'                 => $tagId,
+            'zeitgeplant_id'          => $zeitgeplantId,
+            'zeittatsaechlich_id'     => $zeittatsaechlichId,
+            'anwesenheitsstatuten_id' => $validated['anwesenheitsstatuten_id'],
+            'bemerkung'               => $validated['bemerkung'] ?? null,
+            'user_id'                 => Auth::id(),
         ]);
 
         return redirect()->back()->with('success', 'Anwesenheit hinzugefügt.');
     }
+
 
 
 

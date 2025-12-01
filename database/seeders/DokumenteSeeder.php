@@ -15,7 +15,7 @@ class DokumenteSeeder extends Seeder
     {
         DB::table('dokumentes')->insert([
             [ 'name' => 'Information für Teilnehmende', 'typ' => 'word', 'version' => '22.08.2025', 'dateipfad' => '/vorlage/projekte/inteqra/info_teilnehmende.docx', 'dateipfadName' => 'info_teilnehmende', 'beschreibung' => null ],
-            [ 'name' => 'Bildungsvertrag INTEQRA', 'typ' => 'word', 'version' => '06.08.2025', 'dateipfad' => '/vorlage/projekte/inteqra/bildungsvertrag_inteqra.docx', 'dateipfadName' => 'bildungsvertrag_inteqra.docx', 'beschreibung' => null ],
+            [ 'name' => 'Bildungsvertrag INTEQRA', 'typ' => 'word', 'version' => '06.08.2025', 'dateipfad' => '/vorlage/projekte/inteqra/bildungsvertrag_inteqra.docx', 'dateipfadName' => 'bildungsvertrag_inteqra', 'beschreibung' => null ],
             [ 'name' => 'Datenschutzhinweis (Art. 13 DSGVO)', 'typ' => 'word', 'version' => '22.08.2025', 'dateipfad' => '/vorlage/projekte/inteqra/datenschutzhinweis_art13.docx', 'dateipfadName' => 'datenschutzhinweis_art13', 'beschreibung' => null ],
             [ 'name' => 'Einverständniserklärung Datenschutz ESF', 'typ' => 'word', 'version' => '11.09.2024', 'dateipfad' => '/vorlage/projekte/inteqra/einverstaendnis_datenschutz_esf.docx', 'dateipfadName' => 'einverstaendnis_datenschutz_esf', 'beschreibung' => null ],
             [ 'name' => 'Ganzheitliches Fehlzeitenkonzept', 'typ' => 'word', 'version' => '22.08.2025', 'dateipfad' => '/vorlage/projekte/fehlzeitenkonzept.docx', 'dateipfadName' => 'fehlzeitenkonzept', 'beschreibung' => null ],

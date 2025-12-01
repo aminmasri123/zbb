@@ -26,6 +26,7 @@ use App\Models\PersonenHasSozialedaten;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\PersonenHasAnwesenheiten;
 use App\Models\PartnerHasPartnerschaftstypen;
+use App\Models\PersonenHasBildungsmassnahmen;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
@@ -45,6 +46,10 @@ class Personen extends Model
     protected $date = [
         'geburtsdatum',
     ];
+    protected $casts = [
+        'geburtsdatum' => 'date',
+    ];
+
 
     public function scopeMitarbeiter($query)
     {
@@ -116,10 +121,6 @@ class Personen extends Model
         return $this->belongsToMany(Partnerschaftstypen::class, 'partner_has_partnerschaftstypens', 'ansprechpartner_id', 'partnerschaftstypen_id');
     }
 
-
-
-
-
     public function gruppen()
     {
         return $this->belongsToMany(Gruppe::class, 'gruppe_has_personens', 'personen_id', 'gruppe_id')
@@ -131,6 +132,9 @@ class Personen extends Model
     public function anwesenheiten() {
         return $this->hasMany(GruppeHasPersonen::class, 'personen_id', 'id')
             ->with(['gruppe.bereich', 'zeitgeplant', 'zeittatsaechlich', 'status']);
+    }
+     public function praktika() {
+        return $this->hasMany(PersonenHasBildungsmassnahmen::class, 'person_id', 'id');
     }
 
     public function notizen(){

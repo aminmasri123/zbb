@@ -173,6 +173,7 @@ class ProjektHasTeilnehmerController extends Controller
             'anfangsdatum'  => ['nullable', 'date'],
             'enddatum'      => ['nullable', 'date'],
         ]);
+
         DB::beginTransaction();
         try {
             // 🟩 Pivot holen
@@ -184,6 +185,7 @@ class ProjektHasTeilnehmerController extends Controller
 
            // Prüfen, ob Meta existiert (angenommen: Relation heißt "meta")
             $meta = $pivot->meta;
+
                 if (!$meta && ($validated['projektbegleiter_id'] ?? null || $validated['betreuer_id'] ?? null)) {
                     // 🟢 1. Kein Meta vorhanden + einer der beiden Werte existiert → ERSTELLEN
                     $meta = $pivot->meta()->create([

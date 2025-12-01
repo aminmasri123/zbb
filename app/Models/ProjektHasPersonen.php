@@ -1,8 +1,9 @@
 <?php
 
 namespace App\Models;
-use App\Models\Standort;
+use App\Models\Projekt;
 
+use App\Models\Standort;
 use App\Models\zeitraum;
 use App\Models\Austritttypen;
 use App\Models\ProjektHasPersonenMeta;
@@ -44,7 +45,12 @@ class ProjektHasPersonen extends Pivot //Model
 
     public function standort()
     {
-        return $this->hasOne(Standort::class, 'standort_id');
+        //return $this->hasOne(Standort::class, 'standort_id');
+        return $this->hasOne(Standort::class, 'id');
+    }
+    public function projekt()
+    {
+        return $this->belongsTo(Projekt::class);
     }
 
     public function zeitraume()

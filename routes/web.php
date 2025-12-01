@@ -41,6 +41,7 @@ use App\Http\Controllers\FahrtkostenAbrechnenController;
 use App\Http\Controllers\ProjektHasTeilnehmerController;
 use App\Http\Controllers\DienstwagenfahrtenbuchController;
 use App\Http\Controllers\ProjektHasTeilnehmerLuvController;
+use App\Http\Controllers\PersonenHasBildungsmassnahmenController;
 
 
 /*
@@ -189,7 +190,8 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::post('/teilnehmer/abschluss/anlegen', [AbschlusseController::class, 'store'])->name('abschluss.store');
     Route::delete('/teilnehmer/abschluss/entfernen/{id}', [AbschlusseController::class, 'destroy'])->name('abschluss.destroy');
 
-
+    // Personen Has Praktikum
+    Route::post('/teilnehmer/praktikum/anlegen', [PersonenHasBildungsmassnahmenController::class, 'store'])->name('teilnehmer.praktikum.store');
 
 
     //Räumlichkeiten
@@ -226,6 +228,9 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     //ProjektHasTeilnehmerLuv
     Route::post('/teilnehmer/projekt/luv/anlegen', [ProjektHasTeilnehmerLuvController::class, 'store'])->name('projekthasteilnehmer.luv.store');
     Route::put('/teilnehmer/projekt/luv/edit', [ProjektHasTeilnehmerLuvController::class, 'update'])->name('projekthasteilnehmer.luv.update');
+    Route::delete('/teilnehmer/projekt/luv/entfernen/{id}', [ProjektHasTeilnehmerLuvController::class, 'destroy'])->name('projekthasteilnehmer.luv.destroy');
+    Route::get('/teilnehmer/projekt/luv/export/{id}', [ProjektHasTeilnehmerLuvController::class, 'export'])->name('projekthasteilnehmer.luv.export');
+
     //ProjektHasPersonen
     Route::post('/personen/projekt/zuweisen', [ProjektHasPersonenController::class, 'store'])->name('projekthaspersonen.store');
     Route::delete('/personen/projekt/entfernen/{id}', [ProjektHasPersonenController::class, 'destroy'])->name('projekthaspersonen.destroy');

@@ -143,8 +143,8 @@ class TeilnehmerController extends Controller
                 'vorname'   => $validatedData['vorname'],
                 'nachname'  => $validatedData['nachname'],
                 'geschlecht'=> $validatedData['geschlecht'],
-                'typ'       => 'teilnehmer',
-                'aktiv'     => 1,
+                'typ'       => 'required|in:Start, Verlauf, Abschluss',
+                'aktiv'=> 1,
             ]);
 
             // Sicherheitscheck
@@ -197,6 +197,7 @@ class TeilnehmerController extends Controller
             'gruppen',
             'gruppen.bereich',
             'kontaktes.kontakttyp',
+            'praktika',
             'projekte',
             'baenke',
             'fahrtabrechnungen.fahrtarten',
@@ -219,7 +220,7 @@ class TeilnehmerController extends Controller
         $personen->projekte->each(function ($projekt) {
             $projekt->pivotModel->load('zeitraume', 'meta', 'luv');
         });
-
+        //dd($personen);
         $berechtigt = $personen->projekte->pluck('id')->contains($userProjektAktivId);
         if(!$berechtigt) abort(403, "Sie sind nicht berechtigt, die Daten des Teilnehmers zu sehen.");
 

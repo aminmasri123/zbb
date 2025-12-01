@@ -691,8 +691,54 @@
 
                 <!-- ================= Praktika ================= -->
                 <div v-else-if="activeTab === 'Praktika'">
-                    <p class="text-gray-500">Hier kannst du Praktika verwalten.</p>
-                        <textarea v-model="form.projekte" rows="6" class="input"></textarea>
+
+                        <button @click="showModalPraktikumCreate = true" class="bg-zbb text-white px-4 mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
+                            <span>➕ Praktikum hinzufügen</span>
+
+                        </button>
+                        <div v-if="teilnehmer.praktika && teilnehmer.praktika.length" class="space-y-3 mb-6">
+                            <div
+                            v-for="praktikum in (teilnehmer.praktika || []).slice().reverse()"
+                                :key="praktikum.id"
+                                class="flex justify-between items-start bg-gray-50 border rounded-lg px-4 py-3"
+                            >
+                                <div class="flex-1">
+                                    <p class="text-sm font-bold text-zbb uppercase">
+                                        {{ praktikum.typ }}
+                                    </p>
+                                    <p class="text-gray-600 text-sm">
+                                        📍 <span class="font-semibold">{{ praktikum.traeger || 'Keine Angabe' }}</span>
+                                    </p>
+                                    <p class="text-gray-600 text-sm">
+                                        📅 {{ formatDate(praktikum.start) }} - {{ formatDate(praktikum.end) }}
+                                    </p>
+                                    <p
+                                        class="text-xs font-medium mt-2 px-2 py-1 rounded-full inline-block"
+                                        :class="{
+                                            'bg-blue-100 text-blue-700': praktikum.status === 'geplant',
+                                            'bg-yellow-100 text-yellow-700': praktikum.status === 'laufend',
+                                            'bg-green-100 text-green-700': praktikum.status === 'abgeschlossen',
+                                            'bg-red-100 text-red-700': praktikum.status === 'abgebrochen',
+                                        }"
+                                    >
+                                        {{ praktikum.status }}
+                                    </p>
+                                    <p v-if="praktikum.bemerkung" class="text-gray-600 text-sm mt-2 italic">
+                                        💬 {{ praktikum.bemerkung }}
+                                    </p>
+                                </div>
+                                <button
+                                    @click="confirmDelete(praktikum, 'praktika')"
+                                    class="text-red-500 hover:text-red-700 text-sm ml-4"
+                                >
+                                    Entfernen
+                                </button>
+                            </div>
+                        </div>
+                        <p v-else class="text-gray-400 italic mb-6">
+                            Noch keine Praktika vorhanden.
+                        </p>
+
                 </div>
 
                 <!-- ================= Fahrtkosten ================= -->
@@ -821,12 +867,14 @@
                                 ✏️
                                 </button>
                                 <button
-                                @click.stop="showModalLuvLöschen = true"
+                                    @click="confirmDelete(luv, 'projekthasteilnehmer.luv')"
                                 class="w-9 h-9 flex items-center justify-center bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition"
                                 title="Löschen"
                                 >
                                 🗑️
                                 </button>
+
+                                <a  target="_blank" :href="route('projekthasteilnehmer.luv.export', [luv.id])" class="flex justify-center w-9 h-9 rounded-full bg-green-100 cursor-pointer py-1 items-center hover:bg-green-150" >💾</a>
 
                                 <span
                                 class="text-gray-500 text-lg transition-transform duration-300"
@@ -845,12 +893,12 @@
                             >
                                 <div class="border p-4 rounded bg-blue-50">
                                 <h4 class="text-zbb font-semibold mb-1">🎯 Darstellung der individuellen Ausgangssituation</h4>
-                                <p class="text-gray-700 leading-relaxed text-sm">{{ luv.ausgangssituation || 'Keine Angaben' }}</p>
+                                <p class="text-gray-700 leading-relaxed text-sm leading-relaxed text-sm whitespace-pre-line">{{ luv.ausgangssituation || 'Keine Angaben' }}</p>
                                 </div>
 
                                 <div class="border p-4 rounded bg-yellow-50">
                                 <h4 class="text-zbb font-semibold mb-1">🧭 Schritte zur Zielvereinbarung</h4>
-                                <p class="text-gray-700 leading-relaxed text-sm">{{ luv.zielvereinbarung || 'Keine Angaben' }}</p>
+                                <p class="text-gray-700 leading-relaxed text-sm leading-relaxed whitespace-pre-line">{{ luv.zielvereinbarung || 'Keine Angaben' }}</p>
                                 </div>
 
                                 <div class="border p-4 rounded bg-red-50">
@@ -1668,7 +1716,24 @@
     </transition>
 
     <!-- ================= MODAL Luv ================= -->
-        <ModalLuvCreate v-if="showModalLuvCreate" :visible="showModalLuvCreate" :teilnehmer="props.teilnehmer" @close="showModalLuvCreate = false" />
+    <ModalLuvCreate
+        :visible="showModalLuvCreate"
+        :teilnehmer="props.teilnehmer"
+        @close="showModalLuvCreate = false"
+    />
+
+
+     <!-- ================= MODAL Praktikum ================= -->
+    <ModalPraktikumCreate
+        :visible="showModalPraktikumCreate"
+        :teilnehmer="teilnehmer"
+
+        @close="showModalPraktikumCreate = false"
+        @added="praktikumAdded"
+    />
+
+
+
     <!-- ================= MODAL LÖSCHEN ================= -->
         <ModalDestroy
             v-if="showModalLöschen"
@@ -1702,8 +1767,9 @@
     import DatePicker from 'primevue/datepicker';
     import Modal from '@/Components/ModalForm.vue';
     import ModalLuvCreate from '@/Pages/Teilnehmer/Tabs/LuV/LuVModalCreate.vue';
-    import { timeToMinutes, berechneAbweichungMinuten, formatMinutes, abweichungsIcon, abweichungsClass
-} from "@/utils/arbeitszeit.js";
+    import ModalPraktikumCreate from '@/Pages/Teilnehmer/Tabs/Praktikum/PraktikumModalCreate.vue';
+    import { timeToMinutes, berechneAbweichungMinuten, formatMinutes, abweichungsIcon, abweichungsClass} from "@/utils/arbeitszeit.js";
+
     const { flash } = usePage().props;
 
     const props = defineProps({
@@ -2650,8 +2716,8 @@ const openProjektEdit = (zeit, projekt) =>  {
     showEditZuwseisungModal.value = true;
     editForm.value = {
         id: projekt.pivot_model.id ?? "",
-        betreuer: projekt.pivot_model.meta?.betreuer.id ?? "",
-        massnahmebegleiter: projekt.pivot_model.meta?.projektbegleiter.id ?? "",
+        betreuer: projekt.pivot_model.meta?.betreuer_id ?? "",
+        massnahmebegleiter: projekt.pivot_model.meta?.projektbegleiter_id ?? "",
         projektname: projekt.id,
         antragsdatum: formatDate(zeit?.antragsdatum),
         starttermin: formatDate(zeit?.starttermin),
@@ -2769,12 +2835,24 @@ const toggleLuv = (id) => {
 };
 
 
+// ====================== Praktikum ======================
+const showModalPraktikumCreate = ref(false);
+
+const praktikumAdded = (daten) => {
+    if (!teilnehmer.value.praktika) {  // ← "value" hinzufügen
+        teilnehmer.value.praktika = [];
+    }
+    teilnehmer.value.praktika.push(daten);  // ← "value" hinzufügen
+};
+
+
 // ====================== LÖSCHEN ======================
 // Lokale Kopien der Brief-Arrays (reaktiv)
 const meineBriefe = ref([...props.meineBriefe]);
 const erhalteneBriefe = ref([...props.erhalteneBriefe]);
 
 const confirmDelete = (item, type) => {
+    console.log(item)
   toDeleteItem.value = { id: item.id, name: item.name || item.wert || item.strasse || item.bezeichnung || item.titel };
   seite.value = type;
   showModalLöschen.value = true;
@@ -2798,6 +2876,17 @@ const handleDelete = (id) => {
    teilnehmer.value.gruppen = teilnehmer.value.gruppen.filter(
         (g) => g.pivot.id !== id
       );
+}
+if (seite.value === 'projekthasteilnehmer.luv') {
+
+  // Durch alle Projekte des Teilnehmers loopen
+  teilnehmer.value.projekte.forEach((projekt) => {
+    if (projekt.pivot_model?.luv) {
+      projekt.pivot_model.luv = projekt.pivot_model.luv.filter(
+        (l) => l.id !== id
+      );
+    }
+  });
 }
 
 

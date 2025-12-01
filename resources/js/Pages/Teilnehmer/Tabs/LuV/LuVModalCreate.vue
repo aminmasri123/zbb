@@ -139,15 +139,45 @@ const luvTypen = [
 
 const save = async () => {
   try {
-    //const response = await axios.post(route('projekthasteilnehmer.luv.storeluv.store'), formLuV.value);
-    const response = router.post(route('projekthasteilnehmer.luv.store'), formLuV.value);
+    const response = await axios.post(route('projekthasteilnehmer.luv.store'), formLuV.value);
 
-    Swal.fire('Erfolg!', 'LuV erfolgreich angelegt!', 'success');
-    emit('added', response.data.luv);
-    resetForm();
-    emit('close');
+    if (response.data.success) {
+
+      // ✅ Erfolgsmeldung
+      Swal.fire({
+        icon: "success",
+        title: "Erfolg!",
+        text: response.data.message || "Eintrag erfolgreich gespeichert!",
+        timer: 2500,
+        showConfirmButton: false,
+        toast: true,
+        position: "center"
+      });
+
+      emit('added', response.data.luv);
+      resetForm();
+      emit('close');  // ← Modal schließt jetzt zuverlässig!
+    }
+
   } catch (error) {
-    Swal.fire('Fehler', error.response?.data?.message || 'Speichern fehlgeschlagen', 'error');
+
+    // ❌ Validierungsfehler
+    if (error.response?.status === 422) {
+      Swal.fire({
+        icon: "error",
+        title: "Validierungsfehler",
+        html: Object.values(error.response.data.errors).join("<br>"),
+      });
+      return;
+    }
+
+    // ❌ sonstige Fehler
+    Swal.fire({
+      icon: "error",
+      title: "Fehler",
+      text: "Es ist ein unerwarteter Fehler aufgetreten.",
+    });
   }
 };
+
 </script>

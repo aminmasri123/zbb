@@ -51,7 +51,7 @@ class TageSeeder extends Seeder
             [ // id = 3
                 'status' => 'Kind krank',
                 'abkuerzung' => 'KK',
-                'farben' => '#facc15', // yellow-400
+                'farben' => '#aafa15ff', // yellow-400
             ],
             [ // id = 4
                 'status' => 'entschuldigt',

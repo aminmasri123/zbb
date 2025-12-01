@@ -334,8 +334,6 @@ class ExportExcelController extends Controller
     }
 
 
-
-
     public function anwesenheitliste_monat_projekt_gruppe(Request $request, $id)
     {
         // --- 1) Projekt prüfen ---

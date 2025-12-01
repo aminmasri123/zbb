@@ -2,13 +2,15 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Models\Personen;
+use App\Models\ProjektHasPersonen;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class ProjektHasTeilnehmerLuv extends Model
 {
     use HasFactory;
-     protected $fillable = [
+    protected $fillable = [
         'typ',
         'projekt_person_id',
         'von',
@@ -17,8 +19,15 @@ class ProjektHasTeilnehmerLuv extends Model
         'zielvereinbarung',
     ];
 
-        protected $dates = [
-        'von',
-        'bis',
-        ];
+   protected $casts = [
+        'von' => 'date',
+        'bis' => 'date',
+    ];
+
+
+    public function projektHasTeilnehmer(){
+        return $this->belongsTo(ProjektHasPersonen::class, 'projekt_person_id' );
+    }
+
+
 }
