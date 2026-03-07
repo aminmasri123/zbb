@@ -2,7 +2,6 @@
 import Modal from '@/Components/ModalForm.vue';
 import { ref } from 'vue';
 import Swal from 'sweetalert2';
-
 import FloatLabel from 'primevue/floatlabel';
 import InputText from 'primevue/inputtext';
 import Textarea from 'primevue/textarea';
@@ -12,6 +11,7 @@ import MultiSelect from 'primevue/multiselect';
 const props = defineProps({
     visible: Boolean,
     partnerschaftstypen: Array,
+    projektName: String,
 });
 
 const emit = defineEmits(['close', 'add-partner']);
@@ -19,14 +19,51 @@ const emit = defineEmits(['close', 'add-partner']);
 let form = ref({
     name: '',
     beschreibung: '',
-    typ: [], // IDs der partnerschaftstypen
+    typ: [],
     ansprechpartner: [
-        { vorname: '', nachname: '', geschlecht: '', typ: '' }
+        {
+            vorname: '',
+            nachname: '',
+            geschlecht: '',
+            typ: '',
+            adresse: {
+                strasse: '',
+                hausnummer: '',
+                plz: '',
+                stadt: '',
+                land: 'Deutschland',
+                zusatzinfo: ''
+            },
+            email: '',
+            tel: '',
+            handy: ''
+        }
     ]
 });
 
+const addKontakt = (index) => {
+    form.value.ansprechpartner[index].kontakte.push({ kontakttyp_id: null, wert: '', bemerkung: '' });
+};
+
+const removeKontakt = (aIndex, kIndex) => {
+    form.value.ansprechpartner[aIndex].kontakte.splice(kIndex, 1);
+};
+
 const addAnsprechpartner = () => {
-    form.value.ansprechpartner.push({ vorname: '', nachname: '', geschlecht: '', typ: '' });
+    form.value.ansprechpartner.push({
+        vorname: '',
+        nachname: '',
+        geschlecht: '',
+        typ: '',
+        adresse: {
+            strasse: '',
+            hausnummer: '',
+            plz: '',
+            stadt: '',
+            land: 'Deutschland',
+            zusatzinfo: ''
+        }
+    });
 };
 
 const removeAnsprechpartner = (i) => {
@@ -39,7 +76,13 @@ const resetForm = () => {
         beschreibung: '',
         typ: [],
         ansprechpartner: [
-            { vorname: '', nachname: '', geschlecht: '', typ: '' }
+            {
+                vorname: '',
+                nachname: '',
+                geschlecht: '',
+                typ: '',
+                adresse: { strasse: '', hausnummer: '', plz: '', stadt: '', land: 'Deutschland', zusatzinfo: '' }
+            }
         ]
     };
 };
@@ -57,7 +100,7 @@ const save = () => {
 </script>
 
 <template>
-  <Modal v-if="visible" @close="emit('close')">
+ <Modal v-if="visible" @close="emit('close')">
 
     <template #header>
         <h2 class="text-lg font-bold text-gray-600">Partner anlegen</h2>
@@ -68,6 +111,9 @@ const save = () => {
       <div class="max-h-[70vh] overflow-y-auto pr-3">
 
         <!-- Partnername -->
+         <FloatLabel class="mb-3 ">
+            <InputText :value="`Projekt: ${props.projektName}`"  class="w-full" disabled />
+        </FloatLabel>
         <FloatLabel class="mb-3">
             <InputText v-model="form.name" class="w-full" />
             <label>Partnername</label>
@@ -106,19 +152,19 @@ const save = () => {
             <h4 class="font-bold text-gray-600 mb-2">Ansprechpartner {{ index + 1 }}</h4>
 
             <div class="grid grid-cols-2 gap-2 mb-2">
-                <FloatLabel>
+                <FloatLabel variant="in">
                     <InputText v-model="p.vorname" class="w-full"/>
                     <label>Vorname</label>
                 </FloatLabel>
 
-                <FloatLabel>
+                <FloatLabel variant="in">
                     <InputText v-model="p.nachname" class="w-full"/>
                     <label>Nachname</label>
                 </FloatLabel>
             </div>
 
             <div class="grid grid-cols-2 gap-2 mb-2">
-                <FloatLabel>
+                <FloatLabel variant="in">
                     <Dropdown
                         v-model="p.geschlecht"
                         :options="['männlich','weiblich','divers']"
@@ -127,11 +173,57 @@ const save = () => {
                     <label>Geschlecht</label>
                 </FloatLabel>
 
-                <FloatLabel>
+                <FloatLabel variant="in">
                     <InputText v-model="p.typ" class="w-full"/>
                     <label>Rolle / Funktion</label>
                 </FloatLabel>
+
+                <FloatLabel variant="in">
+                    <InputText v-model="p.email" class="w-full"/>
+                    <label>E-Mail</label>
+                </FloatLabel>
+
+                <FloatLabel variant="in">
+                    <InputText v-model="p.tel" class="w-full"/>
+                    <label>Telefon</label>
+                </FloatLabel>
+                <FloatLabel variant="in">
+                    <InputText v-model="p.handy" class="w-full"/>
+                    <label>Handy</label>
+                </FloatLabel>
+                <FloatLabel variant="in">
+                    <InputText v-model="p.adresse.land" class="w-full"/>
+                    <label>Land</label>
+                </FloatLabel>
+
+                 <FloatLabel variant="in">
+                    <InputText v-model="p.adresse.strasse" class="w-full"/>
+                    <label>Straße</label>
+                </FloatLabel>
+
+                <FloatLabel variant="in">
+                    <InputText v-model="p.adresse.hausnummer" class="w-full"/>
+                    <label>Hausnummer</label>
+                </FloatLabel>
+
+                <FloatLabel variant="in">
+                    <InputText v-model="p.adresse.plz" class="w-full"/>
+                    <label>PLZ</label>
+                </FloatLabel>
+
+                <FloatLabel variant="in">
+                    <InputText v-model="p.adresse.stadt" class="w-full"/>
+                    <label>Stadt</label>
+                </FloatLabel>
+
+
+
+                <FloatLabel variant="in">
+                    <InputText v-model="p.adresse.zusatzinfo" class="w-full"/>
+                    <label>Zusatzinfo</label>
+                </FloatLabel>
             </div>
+
 
             <button
               v-if="form.ansprechpartner.length > 1"

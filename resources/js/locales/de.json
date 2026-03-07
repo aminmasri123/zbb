@@ -221,7 +221,22 @@
     "Benutzer anlegen": "Benutzer anlegen",
     "Dienstwagenverwaltung": "Dienstwagenverwaltung",
     "Fahrzeug bearbeiten": "Fahrzeug bearbeiten",
-    "Partnerschaftstypen": "Partnerschaftstypen"
+    "Partnerschaftstypen": "Partnerschaftstypen",
+    "Ansprechpartner": "Ansprechpartner",
+     "Aktionen": "Aktionen",
+     "Partner anlegen": "Partner anlegen",
+     "Partner bearbeiten": "Partner bearbeiten",
+     "Partner löschen": "Partner löschen",
+     "Möchten Sie diesen Partner wirklich löschen?": "Möchten Sie diesen Partner wirklich löschen?",
+     "Ja, Partner löschen": "Ja, Partner löschen",
+     "Nein, Partner behalten": "Nein, Partner behalten",
+    "Adresse": "Adresse",
+     "Straße": "Straße",
+     "Hausnummer": "Hausnummer",
+     "PLZ": "PLZ",
+     "Stadt": "Stadt",
+     "Land": "Land",
+     "Zusatzinfo": "Zusatzinfo"
 
 
 

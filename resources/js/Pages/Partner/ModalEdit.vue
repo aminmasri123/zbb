@@ -6,59 +6,97 @@ import Swal from 'sweetalert2';
 import FloatLabel from 'primevue/floatlabel';
 import InputText from 'primevue/inputtext';
 import Textarea from 'primevue/textarea';
-import Dropdown from 'primevue/dropdown';
 import MultiSelect from 'primevue/multiselect';
+import Dropdown from 'primevue/dropdown';
 
 const props = defineProps({
     visible: Boolean,
     partnerschaftstypen: Array,
     toEdit: Object,
+    kontaktypens: Array,
 });
-
+    console.log(props.toEdit);
 const emit = defineEmits(['close', 'updated']);
 
 let form = ref({
     name: '',
     beschreibung: '',
     typ: [],
-    ansprechpartner: [],
+
+    adresse: {
+        strasse: '',
+        hausnummer: '',
+        plz: '',
+        stadt: ''
+    },
+
+    kontakte: [],
+
+    ansprechpartner: []
 });
 
 // 🔄 Daten laden, sobald Modal geöffnet wird
 watch(
-    () => props.toEdit,
-    (val) => {
-        if (!val) return;
+  () => props.toEdit,
+  (val) => {
+    if (!val) return;
 
-        form.value = {
-            name: val.name,
-            beschreibung: val.beschreibung,
-            typ: val.partnerschaftstypens.map(t => t.id), // IDs extrahieren
-            ansprechpartner: val.partnerschaftstypenZuordnung?.map(x => ({
-                vorname: x.ansprechpartner?.vorname ?? '',
-                nachname: x.ansprechpartner?.nachname ?? '',
-                geschlecht: x.ansprechpartner?.geschlecht ?? '',
-                typ: x.rolle ?? ''
-            })) || []
-        };
-    },
-    { immediate: true }
+    form.value = {
+      name: val.name ?? '',
+      beschreibung: val.beschreibung ?? '',
+      typ: val.partnerschaftstypens
+        ? val.partnerschaftstypens.map(t => t.id)
+        : [],
+
+      ansprechpartner: val.ansprechpartners?.map(p => ({
+        id: p.id ?? null,
+        vorname: p.vorname ?? '',
+        nachname: p.nachname ?? '',
+        geschlecht: p.geschlecht ?? '',
+        typ: p.rolle ?? '',
+
+        adresse: {
+          strasse: p.adresses?.[0]?.strasse ?? '',
+          hausnummer: p.adresses?.[0]?.hausnummer ?? '',
+          plz: p.adresses?.[0]?.plz ?? '',
+          stadt: p.adresses?.[0]?.stadt ?? ''
+        },
+
+        kontakte: p.kontaktes?.map(k => ({
+          kontakttyp_id: k.kontakttyp_id ?? '',
+          wert: k.wert ?? '',
+          bemerkung: k.bemerkung ?? ''
+        })) ?? []
+      })) ?? []
+    };
+  },
+  { immediate: true }
 );
-
 const addAnsprechpartner = () => {
-    form.value.ansprechpartner.push({
-        vorname: '',
-        nachname: '',
-        geschlecht: '',
-        typ: ''
-    });
+  form.value.ansprechpartner.push({
+    id: null,
+    vorname: '',
+    nachname: '',
+    geschlecht: '',
+    typ: '',
+    adresse: { strasse:'', hausnummer:'', plz:'', stadt:'' },
+    kontakte: []
+  });
 };
 
 const removeAnsprechpartner = (i) => {
     form.value.ansprechpartner.splice(i, 1);
 };
 
+// Save-Funktion
 const save = () => {
+    // Alle leeren Felder initialisieren
+    form.value.ansprechpartner = form.value.ansprechpartner.map(p => ({
+        ...p,
+        adresse: p.adresse ?? { strasse:'', hausnummer:'', plz:'', stadt:'' },
+        kontakte: p.kontakte ?? []
+    }));
+
     emit("updated", JSON.parse(JSON.stringify(form.value)));
 };
 </script>
@@ -102,48 +140,110 @@ const save = () => {
         <h3 class="font-semibold text-gray-600 mb-2">Ansprechpartner</h3>
 
         <div
-          v-for="(p, index) in form.ansprechpartner"
-          :key="index"
-          class="border p-3 rounded bg-gray-50 mb-3"
-        >
-            <h4 class="font-bold text-gray-600 mb-2">Ansprechpartner {{ index + 1 }}</h4>
-
-            <div class="grid grid-cols-2 gap-2 mb-2">
-                <FloatLabel>
-                    <InputText v-model="p.vorname" class="w-full"/>
-                    <label>Vorname</label>
-                </FloatLabel>
-
-                <FloatLabel>
-                    <InputText v-model="p.nachname" class="w-full"/>
-                    <label>Nachname</label>
-                </FloatLabel>
-            </div>
-
-            <div class="grid grid-cols-2 gap-2 mb-2">
-                <FloatLabel>
-                    <Dropdown
-                        v-model="p.geschlecht"
-                        :options="['männlich','weiblich','divers']"
-                        class="w-full"
-                    />
-                    <label>Geschlecht</label>
-                </FloatLabel>
-
-                <FloatLabel>
-                    <InputText v-model="p.typ" class="w-full"/>
-                    <label>Rolle / Funktion</label>
-                </FloatLabel>
-            </div>
-
-            <button
-              v-if="form.ansprechpartner.length > 1"
-              @click="removeAnsprechpartner(index)"
-              class="text-red-500 text-sm"
+            v-for="(p, index) in form.ansprechpartner"
+            :key="p.id ?? index"
+            class="bg-white border rounded-lg shadow-sm p-4 mb-4"
             >
-              Ansprechpartner entfernen
-            </button>
-        </div>
+
+<h4 class="font-semibold text-gray-700 mb-3">
+    Ansprechpartner {{ index + 1 }}
+</h4>
+
+<!-- PERSON -->
+<div class="grid grid-cols-2 gap-3 mb-4">
+
+    <FloatLabel variant="in">
+        <InputText v-model="p.vorname" class="w-full"/>
+        <label>Vorname</label>
+    </FloatLabel>
+
+    <FloatLabel variant="in">
+        <InputText v-model="p.nachname" class="w-full"/>
+        <label>Nachname</label>
+    </FloatLabel>
+
+    <FloatLabel variant="in">
+        <Dropdown
+            v-model="p.geschlecht"
+            :options="['männlich','weiblich','divers']"
+            class="w-full"
+        />
+        <label>Geschlecht</label>
+    </FloatLabel>
+
+    <FloatLabel variant="in">
+        <InputText v-model="p.typ" class="w-full"/>
+        <label>Rolle / Funktion</label>
+    </FloatLabel>
+
+</div>
+
+
+<!-- ADRESSE -->
+<div class="border-t pt-4 mb-4">
+  <h5 class="text-gray-600 font-medium mb-2">Adresse</h5>
+
+  <div class="grid grid-cols-2 gap-3">
+    <FloatLabel variant="in">
+      <InputText v-model="p.adresse.strasse" class="w-full"/>
+      <label>Straße</label>
+    </FloatLabel>
+
+    <FloatLabel variant="in">
+      <InputText v-model="p.adresse.hausnummer" class="w-full"/>
+      <label>Hausnummer</label>
+    </FloatLabel>
+
+    <FloatLabel variant="in">
+      <InputText v-model="p.adresse.plz" class="w-full"/>
+      <label>PLZ</label>
+    </FloatLabel>
+
+    <FloatLabel variant="in">
+      <InputText v-model="p.adresse.stadt" class="w-full"/>
+      <label>Stadt</label>
+    </FloatLabel>
+  </div>
+</div>
+
+<!-- KONTAKTE -->
+<div class="border-t pt-4">
+  <h5 class="text-gray-600 font-medium mb-2">Kontakte</h5>
+
+  <div v-for="(k, i) in p.kontakte" :key="i" class="grid grid-cols-3 gap-3 mb-2">
+    <FloatLabel variant="in">
+      <Dropdown v-model="k.kontakttyp_id" :options="kontaktypens" optionLabel="name" optionValue="id" class="w-full" placeholder="Typ"/>
+      <label>Typ</label>
+    </FloatLabel>
+
+    <FloatLabel variant="in">
+      <InputText v-model="k.wert" class="w-full"/>
+      <label>Kontakt</label>
+    </FloatLabel>
+
+    <FloatLabel variant="in">
+      <InputText v-model="k.bemerkung" class="w-full"/>
+      <label>Bemerkung</label>
+    </FloatLabel>
+  </div>
+
+  <button type="button" class="text-sm bg-gray-100 px-3 py-1 rounded hover:bg-gray-200" 
+          @click="p.kontakte.push({kontakttyp_id:'',wert:'',bemerkung:''})">
+    + Kontakt hinzufügen
+  </button>
+</div>
+
+
+<!-- DELETE PERSON -->
+<button
+  v-if="form.ansprechpartner.length > 1"
+  @click="removeAnsprechpartner(index)"
+  class="text-red-500 text-sm mt-3"
+>
+Ansprechpartner entfernen
+</button>
+
+</div>
 
         <button
           class="bg-gray-200 px-3 py-1 rounded text-sm"

@@ -64,6 +64,7 @@ import { ref } from "vue";
 import { router } from "@inertiajs/vue3";
 import Swal from "sweetalert2";
 import Select from 'primevue/select';
+import dayjs from "dayjs";
 
 const props = defineProps({
   teilnehmer: Object,
@@ -73,10 +74,11 @@ const props = defineProps({
 const teilnehmer = ref(JSON.parse(JSON.stringify(props.teilnehmer)));
 
 const form = ref({
-  geburtsdatum: teilnehmer.value.geburtsdatum || "",
+  geburtsdatum: teilnehmer.value.geburtsdatum
+    ? dayjs(teilnehmer.value.geburtsdatum).format("YYYY-MM-DD")
+    : "",
   betreuer: teilnehmer.value.betreuer_id || "",
 });
-
 const loadingSave = ref(false);
 
 const saveStammdaten = () => {

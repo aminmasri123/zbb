@@ -33,6 +33,7 @@
                 <div class="hidden space-x-8 sm:-my-px sm:flex text-center ">
                     <NavLink :href="route('dashboard')"
                         :active="route().current('dashboard')
+                            || route().current('dashboard.*')
                             || route().current('user.*')
                             || route().current('kooperationspartner.*')
                             || route().current('abteilung.*')

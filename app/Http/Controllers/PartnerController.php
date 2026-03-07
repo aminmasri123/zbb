@@ -2,40 +2,64 @@
 
 namespace App\Http\Controllers;
 
-use Exception;
-use Inertia\Inertia;
-use App\Models\Partner;
-use App\Models\Personen;
-use Illuminate\Http\Request;
-use App\Models\Partnerschaftstypen;
 use App\Http\Controllers\Controller;
+use App\Models\Adresse;
+use App\Models\Kontakte;
+use App\Models\Kontakttypen;
+use App\Models\Partner;
 use App\Models\PartnerHasPartnerschaftstypen;
+use App\Models\Partnerschaftstypen;
+use App\Models\Personen;
+use App\Models\Projekt;
+use App\Models\ProjektHasAnprechpartner;
+use Exception;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
 
 class PartnerController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
     public function index(Request $request)
     {
+        $kontaktypens = Kontakttypen::all();
+        $search = $request->input('search');
 
-        $search = $request->input('search'); // Benutze input(), um den Suchparameter abzurufen
-
-        // Hole die Abteilungen mit Suchfilter und lade die notwendigen Beziehungen
+        $user = auth()->user();
+        $userProjektAktiv = $user->current_team_id;
+        $projektName = Projekt::find($userProjektAktiv)?->name;
         $partnerschaftstypen = Partnerschaftstypen::all();
-        $partners = Partner::query()
+
+
+      $partners = Partner::query()
             ->when($search, function ($query) use ($search) {
                 $query->where('name', 'like', "%{$search}%");
             })
-            ->orderBy('id')
-            ->with('partnerschaftstypens')
-            ->paginate(20)    // Wende die Paginierung an
-            ->withQueryString(); // Behalte die Query-String-Parameter für die Pagination
+            ->with([
+                'partnerschaftstypens',
+                'ansprechpartners',
+                'ansprechpartners.partnerTyp',
 
-            return Inertia::render('Partner/Index', [
+                'ansprechpartners.adresses',
+                'ansprechpartners.kontaktes',
+                'ansprechpartners.kontaktes.kontakttyp',
+
+            ])
+            ->join('partner_has_partnerschaftstypens', 'partners.id', '=', 'partner_has_partnerschaftstypens.partner_id')
+            ->join('projekt_has_anprechpartners', 'partner_has_partnerschaftstypens.id', '=', 'projekt_has_anprechpartners.ansprechpartner_id')
+            ->where('projekt_has_anprechpartners.projekt_id', $userProjektAktiv)
+            ->select('partners.*')
+            ->distinct()
+            ->orderBy('partners.id')
+
+            ->paginate(20);
+
+    //dd($partners);
+        return Inertia::render('Partner/Index', [
             'partners' => $partners,
             'partnerschaftstypen' => $partnerschaftstypen,
+            'projektName' => $projektName,
+            'kontaktypens' => $kontaktypens
         ]);
     }
 
@@ -60,7 +84,26 @@ class PartnerController extends Controller
             'ansprechpartner.*.nachname'    => 'required|string|max:100',
             'ansprechpartner.*.geschlecht'  => 'nullable|string',
             'ansprechpartner.*.typ'         => 'nullable|string|max:255', // = Rolle/Funktion
+
+              // ✅ Adresse optional
+            'ansprechpartner.*.adresse.strasse'     => 'nullable|string|max:255',
+            'ansprechpartner.*.adresse.hausnummer'  => 'nullable|string|max:10',
+            'ansprechpartner.*.adresse.plz'         => 'nullable|string|max:10',
+            'ansprechpartner.*.adresse.stadt'       => 'nullable|string|max:255',
+            'ansprechpartner.*.adresse.land'        => 'nullable|string|max:255',
+            'ansprechpartner.*.adresse.zusatzinfo'  => 'nullable|string|max:255',
+
+
+            // ✅ Neue Kontakte
+            'ansprechpartner.*.email' => 'nullable|email|max:255',
+            'ansprechpartner.*.tel'   => 'nullable|string|max:50',
+            'ansprechpartner.*.handy' => 'nullable|string|max:50',
         ]);
+
+        $user = auth()->user();
+        $userProjektAktiv = $user->current_team_id;
+
+
 
         // 1️⃣ Partner anlegen
         $partner = Partner::create([
@@ -100,6 +143,52 @@ class PartnerController extends Controller
                     'typ'        => 'ansprechpartner'
                 ]);
 
+                // ✅ Optional Adresse speichern
+                if (!empty($personData['adresse'])) {
+                    $adresseData = $personData['adresse'];
+                    Adresse::create([
+                        'model_type' => Personen::class,
+                        'model_id'   => $person->id,
+                        'strasse'    => $adresseData['strasse'] ?? null,
+                        'hausnummer' => $adresseData['hausnummer'] ?? null,
+                        'plz'        => $adresseData['plz'] ?? null,
+                        'stadt'      => $adresseData['stadt'] ?? null,
+                        'land'       => $adresseData['land'] ?? 'Deutschland',
+                        'zusatzinfo' => $adresseData['zusatzinfo'] ?? null,
+                    ]);
+                }
+
+                    $emailTyp = Kontakttypen::where('name', 'Email')->first()->id;
+                    $telefonTyp = Kontakttypen::where('name', 'Telefon')->first()->id;
+                    $handyTyp = Kontakttypen::where('name', 'Mobile')->first()->id;
+
+
+                    if (!empty($personData['email'])) {
+                        Kontakte::create([
+                            'model_type' => Personen::class,
+                            'model_id' => $person->id,
+                            'kontakttyp_id' => $emailTyp,
+                            'wert' => $personData['email']
+                        ]);
+                    }
+
+                    if (!empty($personData['tel'])) {
+                        Kontakte::create([
+                            'model_type' => Personen::class,
+                            'model_id' => $person->id,
+                            'kontakttyp_id' => $telefonTyp,
+                            'wert' => $personData['tel']
+                        ]);
+                    }
+
+                    if (!empty($personData['handy'])) {
+                        Kontakte::create([
+                            'model_type' => Personen::class,
+                            'model_id' => $person->id,
+                            'kontakttyp_id' => $handyTyp,
+                            'wert' => $personData['handy']
+                        ]);
+                     }
                 // Ansprechpartner bekommt Rolle pro Typ
                 foreach ($data['typ'] as $typId) {
 
@@ -113,13 +202,41 @@ class PartnerController extends Controller
             }
         }
 
+        // 4️⃣ Pivot-Tabelle projekt_has_ansprechpartners füllen
+        if (!empty($data['ansprechpartner'])) {
+            foreach ($data['ansprechpartner'] as $personData) {
+                $person = Personen::where('vorname', $personData['vorname'])
+                            ->where('nachname', $personData['nachname'])
+                            ->first(); // bereits angelegt oben
+
+                // jedem Typ die Beziehung zum Projekt speichern
+                foreach ($data['typ'] as $typId) {
+
+                    // Ansprechpartner ID aus PartnerHasPartnerschaftstypen holen
+                    $ansprechpartnerPivot = PartnerHasPartnerschaftstypen::where('partner_id', $partner->id)
+                                            ->where('partnerschaftstypen_id', $typId)
+                                            ->first();
+
+                    if ($ansprechpartnerPivot) {
+                        DB::table('projekt_has_anprechpartners')->insert([
+                            'projekt_id' => $userProjektAktiv, // oder $projekt->id, falls Projekt separat angelegt
+                            'ansprechpartner_id' => $ansprechpartnerPivot->id,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+                    }
+                }
+            }
+        }
+
        return response()->json([
             'success' => true,
             'partner' => $partner
                 ->refresh()   // <<< WICHTIG!
                 ->load([
                     'partnerschaftstypens',
-                    'partnerschaftstypenZuordnung.ansprechpartner'
+                    'ansprechpartners',
+                     'ansprechpartners.adresses'
                 ])
         ]);
     }
@@ -128,7 +245,7 @@ class PartnerController extends Controller
 
     public function indexAjaxFresh()
     {
-        $partners = Partner::with([
+       /*  $partners = Partner::with([
             'partnerschaftstypens',
             'partnerschaftstypenZuordnung.ansprechpartner'
         ])
@@ -137,7 +254,29 @@ class PartnerController extends Controller
 
         return response()->json([
             'partners' => $partners
+        ]); */
+
+
+
+        $user = auth()->user();
+        $userProjektAktiv = $user->current_team_id;
+
+        $partners = Partner::with([
+                'partnerschaftstypens',
+                'ansprechpartners',
+                'ansprechpartners.adresses',
+                'ansprechpartners.kontaktes',
+            ])
+            ->whereHas('projektHasAnsprechpartner', function ($query) use ($userProjektAktiv) {
+                $query->where('projekt_id', $userProjektAktiv);
+            })
+            ->orderBy('id')
+            ->paginate(20);
+
+        return response()->json([
+            'partners' => $partners
         ]);
+
     }
 
 
@@ -161,85 +300,131 @@ class PartnerController extends Controller
     /**
      * Update the specified resource in storage.
      */
-   public function update(Request $request, $id)
+    public function update(Request $request, $id)
     {
         $data = $request->validate([
-            'name'              => 'required|string|max:255',
-            'beschreibung'      => 'nullable|string',
+            'name' => 'required|string|max:255',
+            'beschreibung' => 'nullable|string',
 
-            // Partnerschaftstypen (MultiSelect)
-            'typ'               => 'required|array',
-            'typ.*'             => 'integer|exists:partnerschaftstypens,id',
+            'typ' => 'required|array',
+            'typ.*' => 'integer|exists:partnerschaftstypens,id',
 
-            // Ansprechpartner
-            'ansprechpartner' => 'array',
-            'ansprechpartner.*.vorname'     => 'required|string|max:100',
-            'ansprechpartner.*.nachname'    => 'required|string|max:100',
-            'ansprechpartner.*.geschlecht'  => 'nullable|string',
-            'ansprechpartner.*.typ'         => 'nullable|string|max:255',
+            'ansprechpartner' => 'nullable|array',
+            'ansprechpartner.*.id' => 'nullable|integer',
+            'ansprechpartner.*.vorname' => 'required|string|max:100',
+            'ansprechpartner.*.nachname' => 'required|string|max:100',
+            'ansprechpartner.*.geschlecht' => 'nullable|string',
+            'ansprechpartner.*.typ' => 'nullable|string|max:255',
+
+            'ansprechpartner.*.adresse' => 'nullable|array',
+            'ansprechpartner.*.adresse.strasse' => 'nullable|string|max:255',
+            'ansprechpartner.*.adresse.hausnummer' => 'nullable|string|max:20',
+            'ansprechpartner.*.adresse.plz' => 'nullable|string|max:20',
+            'ansprechpartner.*.adresse.stadt' => 'nullable|string|max:255',
+
+            'ansprechpartner.*.kontakte' => 'nullable|array',
+            'ansprechpartner.*.kontakte.*.kontakttyp_id' => 'nullable|integer',
+            'ansprechpartner.*.kontakte.*.wert' => 'nullable|string|max:255',
+            'ansprechpartner.*.kontakte.*.bemerkung' => 'nullable|string|max:255',
         ]);
 
-        // 1️⃣ Partner laden
         $partner = Partner::findOrFail($id);
 
-        // 2️⃣ Partner aktualisieren
+        /*
+        |--------------------------------------------------------------------------
+        | 1 Partner aktualisieren
+        |--------------------------------------------------------------------------
+        */
+
         $partner->update([
             'name' => $data['name'],
             'beschreibung' => $data['beschreibung'] ?? null,
         ]);
 
-        // 3️⃣ ALLE vorhandenen Zuordnungen löschen (Neuaufbau ist einfacher & sicherer)
-        PartnerHasPartnerschaftstypen::where('partner_id', $partner->id)->delete();
+        /*
+        |--------------------------------------------------------------------------
+        | 2 Ansprechpartner speichern oder aktualisieren
+        |--------------------------------------------------------------------------
+        */
 
-        // 4️⃣ Partnerschaftstypen neu anlegen
-        foreach ($data['typ'] as $typId) {
-            PartnerHasPartnerschaftstypen::create([
-                'partner_id'             => $partner->id,
-                'partnerschaftstypen_id' => $typId,
-                'ansprechpartner_id'     => null,
-                'rolle'                  => null
-            ]);
-        }
-
-        // 5️⃣ Ansprechpartner neu speichern + rollen zuordnen
         if (!empty($data['ansprechpartner'])) {
 
             foreach ($data['ansprechpartner'] as $personData) {
 
-                // Geschlecht normalisieren
-                $geschlecht = strtolower($personData['geschlecht'] ?? '');
-                $personData['geschlecht'] = match($geschlecht) {
-                    'männlich' => 'm',
-                    'weiblich' => 'w',
-                    'divers'   => 'd',
-                    default    => null,
-                };
+    $geschlecht = strtolower($personData['geschlecht'] ?? '');
+    $geschlecht = match ($geschlecht) {
+        'männlich','m' => 'm',
+        'weiblich','w' => 'w',
+        'divers','d' => 'd',
+        default => null
+    };
 
-                // Prüfen ob Person existiert → sonst neu erstellen
-                $person = Personen::create([
-                    'vorname'    => $personData['vorname'],
-                    'nachname'   => $personData['nachname'],
-                    'geschlecht' => $personData['geschlecht'],
-                    'typ'        => 'ansprechpartner'
-                ]);
+    $person = Personen::updateOrCreate(
+        ['id' => $personData['id'] ?? null],
+        [
+            'vorname' => $personData['vorname'],
+            'nachname' => $personData['nachname'],
+            'geschlecht' => $geschlecht,
+            'typ' => 'ansprechpartner'
+        ]
+    );
 
-                // Rolle auf alle ausgewählten Partnerschaftstypen anwenden
-                foreach ($data['typ'] as $typId) {
-                    PartnerHasPartnerschaftstypen::where('partner_id', $partner->id)
-                        ->where('partnerschaftstypen_id', $typId)
-                        ->update([
-                            'ansprechpartner_id' => $person->id,
-                            'rolle'              => $personData['typ'] ?? null,
-                        ]);
+    // Pivot Partner + Typ
+    foreach ($data['typ'] as $typId) {
+        PartnerHasPartnerschaftstypen::updateOrCreate(
+            [
+                'partner_id' => $partner->id,
+                'partnerschaftstypen_id' => $typId,
+                'ansprechpartner_id' => $person->id
+            ],
+            ['rolle' => $personData['typ'] ?? null]
+        );
+    }
+
+    // Adresse
+    if (!empty($personData['adresse'])) {
+       $person->adresses()->updateOrCreate(
+            [], // Bedingung leer, weil morphMany automatisch filtert auf model_id & model_type
+            [
+                'strasse' => $personData['adresse']['strasse'] ?? null,
+                'hausnummer' => $personData['adresse']['hausnummer'] ?? null,
+                'plz' => $personData['adresse']['plz'] ?? null,
+                'stadt' => $personData['adresse']['stadt'] ?? null,
+            ]
+        );
+    }
+
+    // Kontakte
+    if (!empty($personData['kontakte'])) {
+        $person->kontaktes()->delete(); // alte löschen
+            foreach ($personData['kontakte'] as $kontakt) {
+                if (!empty($kontakt['wert'])) {
+                    $person->kontaktes()->create([
+                        'personen_id' => $person->id,
+                        'kontakttyp_id' => $kontakt['kontakttyp_id'] ?? null,
+                        'wert' => $kontakt['wert'],
+                        'bemerkung' => $kontakt['bemerkung'] ?? null
+                    ]);
                 }
             }
+    }
+}
         }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Response
+        |--------------------------------------------------------------------------
+        */
 
         return response()->json([
             'success' => true,
-            'partner' => $partner->load([
+            'partner' => $partner
+            ->refresh()->load([
                 'partnerschaftstypens',
-                'partnerschaftstypenZuordnung.ansprechpartner'
+                'ansprechpartners',
+                'ansprechpartners.adresses',
+                'ansprechpartners.kontaktes',
             ])
         ]);
     }
@@ -250,10 +435,16 @@ class PartnerController extends Controller
      */
     public function destroy(string $id)
     {
-         try {
+        try {
             $partner = Partner::findOrFail($id);
 
-            $partner->delete(); // Lösche die Partner
+            // Lösche alle Ansprechpartner + deren Daten
+            foreach ($partner->ansprechpartners as $person) {
+                $person->delete(); // Adresse und Kontakte werden automatisch gelöscht
+            }
+
+            // Partner selbst löschen
+            $partner->delete();
 
             return response()->json(['message' => 'Partner erfolgreich gelöscht!'], 200);
         } catch (ModelNotFoundException $e) {

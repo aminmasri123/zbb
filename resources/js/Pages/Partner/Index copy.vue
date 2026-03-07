@@ -8,6 +8,8 @@
     import ModalCreate from '@/Pages/Partner/ModalCreate.vue';
     import ModalDestroy from '@/Components/ModalDestroyForm.vue';
     import ModalEdit from '@/Pages/Partner/ModalEdit.vue';
+    import { computed } from 'vue'
+
 
     let seite = 'partner';
     let search = ref('');
@@ -21,9 +23,17 @@
     const props = defineProps({
         partners: Object,
         partnerschaftstypen: Array,
-        projektName: String,
-        kontaktypens: Array,
     });
+
+    const openPartners = ref([])
+
+    const togglePartner = (id) => {
+        if (openPartners.value.includes(id)) {
+            openPartners.value = openPartners.value.filter(p => p !== id)
+        } else {
+            openPartners.value.push(id)
+        }
+    }
     const openModalCreate = () => {
         isModalCreateOpen.value = true;
     };
@@ -47,7 +57,23 @@
         }
     };
 
+    const groupedPartners = computed(() => {
+    const groups = {}
 
+    filteredPartners.value.forEach(partner => {
+        partner.partnerschaftstypens.forEach(type => {
+
+            if (!groups[type.bezeichnung]) {
+                groups[type.bezeichnung] = []
+            }
+
+            groups[type.bezeichnung].push(partner)
+
+        })
+    })
+
+    return groups
+});
     // Fülle localPartner mit den Daten aus den Props
     let localPartners = ref([...props.partners.data]);  // Originaldaten
     let filteredPartners = ref([...localPartners.value]); // Gefilterte Daten
@@ -140,19 +166,17 @@ const handleDelete = (partnerId) => {
 const addPartner = async (data) => {
     try {
         const response = await axios.post(route('partner.store'), data);
-        const newPartner = response.data.partner; // sollte jetzt auch ansprechpartner enthalten
-
-        // Direkt in localPartners einfügen
-        localPartners.value.unshift(newPartner);
-        applySearchFilter();
-
+         //const response = router.post(route('partner.store'), data);
         Swal.fire({
             title: 'Erfolg!',
-            text: 'Partner erfolgreich angelegt!',
+            text: ' erfolgreich angelegt!',
             icon: 'success',
             timer: 3000,
             timerProgressBar: true,
         });
+
+        await compareAndReload();
+
 
     } catch (error) {
         console.error(error);
@@ -175,12 +199,9 @@ const updatePartner = async (form) => {
 
         const updated = response.data.partner;
 
-        const index = localPartners.value.findIndex(p => p.id === updated.id);
-        if (index !== -1) {
-            localPartners.value[index] = { ...updated };
-        }
-
-        applySearchFilter(); 
+        localPartners.value = localPartners.value.map(p =>
+            p.id === updated.id ? updated : p
+        );
 
         isModalEditOpen.value = false;
 
@@ -226,67 +247,64 @@ export default {
         </div>
         <!-- Partnerausgabe -->
         <div class="relative  mb-10">
-            <table id="table" class="w-full text-sm table-fixed mb-5 text-left border-collapse border border-gray-300 shadow-sm">
-    <thead class="text-md text-gray-600 uppercase bg-gray-200">
-        <tr>
-            <th class="border border-gray-300 px-6 py-3 w-16 text-center">ID</th>
-            <th class="border border-gray-300 px-6 py-3 w-48">Bezeichnung</th>
-            <th class="border border-gray-300 px-6 py-3 w-1/4">Ansprechpartner</th>
-            <th class="border border-gray-300 px-6 py-3 w-1/4">Adresse</th>
-            <th class="border border-gray-300 px-6 py-3 w-1/4">Kontakt</th>
-            <th class="border border-gray-300 px-6 py-3 w-1/4">Partnerschaftstypen</th>
-            <th class="border border-gray-300 px-6 py-3 w-40">Beschreibung</th>
-            <th class="border border-gray-300 px-6 py-3 w-12 text-center">*</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr v-for="partner in filteredPartners" :key="partner.id" class="bg-white border-b border-gray-300">
-            <td class="align-top border-r border-gray-300 px-6 py-4 text-center">{{partner.id}}</td>
-            <td class="align-middle border-r border-gray-300 px-6 py-4 font-bold">{{partner.name}}</td>
+            <div class="space-y-10">
 
-            <td colspan="4" class="p-0 align-top border-r border-gray-300">
-                <table class="w-full table-fixed border-hidden border-collapse">
-                    <tr v-for="(person, index) in partner.ansprechpartners" :key="person.id" 
-                        :class="{'border-b border-gray-300': index !== partner.ansprechpartners.length - 1}">
-                        
-                        <td class="px-6 py-4 w-1/4 border-r border-gray-300 align-top">
-                            {{ person.vorname }} {{ person.nachname }}
-                        </td>
-                        <td class="px-6 py-4 w-1/4 border-r border-gray-300 align-top">
-                            <div v-for="adresse in person.adresses" :key="adresse.id">
-                                {{ adresse.strasse }} {{ adresse.hausnummer }}<br>
-                                {{ adresse.plz }} {{ adresse.stadt }}
-                            </div>
-                        </td>
-                        <td class="px-6 py-4 w-1/4 border-r border-gray-300 align-top">
-                             <div v-for="kontakt in person.kontaktes" :key="kontakt.id">
-                                {{ kontakt.kontakttyp?.name }}: {{ kontakt.wert }}
-                            </div>
-                        </td>
-                        <td class="px-6 py-4 w-1/4 align-top">
-                            <div class="flex flex-wrap gap-1">
-                                <span class="bg-orange-500 text-white rounded px-2 py-0.5 text-[10px] font-bold shadow-sm" 
-                                      v-for="typ in person.partner_typ" :key="typ.id">
-                                    {{ typ.bezeichnung }}
-                                </span>
-                            </div>
-                        </td>
-                    </tr>
-                </table>
-            </td>
+    <div class="space-y-10">
 
-            <td class="align-top border-r border-gray-300 px-6 py-4">{{partner.beschreibung}}</td>
-            <td class="align-middle py-4 text-center"><i class="la la-ellipsis-v la-lg"></i></td>
-        </tr>
-    </tbody>
-</table>
+    <div v-for="(partners, category) in groupedPartners" :key="category">
+
+        <!-- Kategorie -->
+        <h2 class="text-xl font-bold mb-4 border-b pb-2">
+            {{ category }}
+        </h2>
+
+        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+            <!-- Partner Card -->
+            <div v-for="partner in partners" :key="partner.id" class="border p-4 rounded mb-3">
+
+                <div @click="togglePartner(partner.id)" class="cursor-pointer flex justify-between">
+
+                    <span class="font-semibold">
+                        {{ partner.name }}
+                    </span>
+
+                    <span>
+                        {{ openPartners.includes(partner.id) ? '▲' : '▼' }}
+                    </span>
+
+                </div>
+
+                <div v-if="openPartners.includes(partner.id)" class="mt-3">
+
+                    <div
+                        v-for="person in partner.ansprechpartners"
+                        :key="person.id"
+                        class="text-sm"
+                    >
+                        {{ person.vorname }} {{ person.nachname }}
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
 </div>
 
+</div>
+        </div>
+
          <!-- Modal für neue Partner -->
-        <ModalCreate :visible="isModalCreateOpen" :projektName="projektName" :partnerschaftstypen="partnerschaftstypen" @close="closeModalCreate" @add-partner="addPartner"/>
+
+
+        <ModalCreate :visible="isModalCreateOpen" :partnerschaftstypen="partnerschaftstypen" @close="closeModalCreate" @add-partner="addPartner"/>
         <ModalDestroy v-if="showModalLöschen" @delete="handleDelete" @close="showModalLöschen = false" :seite="seite"  :toDelete="partnerToDelete"></ModalDestroy>
 
-        <ModalEdit :visible="isModalEditOpen" :kontaktypens="kontaktypens" :partnerschaftstypen="partnerschaftstypen" :toEdit="partnerToEdit" @close="closeModalEdit" @updated="updatePartner"/>
+        <ModalEdit :visible="isModalEditOpen" :partnerschaftstypen="partnerschaftstypen" :toEdit="partnerToEdit" @close="closeModalEdit" @updated="updatePartner"/>
 
     </app-layout>
 </template>

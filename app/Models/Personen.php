@@ -102,11 +102,14 @@ class Personen extends Model
             });
         }
 
-        // 5. Anleiter → nur eigene Teilnehmer
-            return $query->whereHas('gruppen', function ($q) use ($user) {
-                $q->where('gruppe_has_personens.user_id', $user->id);
-            });
-            dd('Anleiter Bereich - noch nicht fertig');
+        // 5. Anleiter → nur Teilnehmer im selben Projekt und Standort
+           $projektIds = $user->projekte->pluck('id');    // Projekte des Anleiters
+    $standortIds = $user->standorte->pluck('id');  // Standorte des Anleiters
+
+    return $query->whereHas('projekte', function ($q) use ($projektIds, $standortIds) {
+        $q->whereIn('projekt_id', $projektIds)
+          ->whereIn('standort_id', $standortIds);
+    });
         // Fallback: nichts zurück
         return $query->whereRaw('1=0');
     }
@@ -208,5 +211,19 @@ class Personen extends Model
     {
         return $this->belongsToMany(Standort::class, 'projekt_has_personens', 'personen_id', 'standort_id')
             ->withPivot('projekt_id');
+    }
+
+
+
+    // ⚡ Booted Event für automatisches Löschen
+    protected static function booted()
+    {
+        static::deleting(function ($person) {
+            // Adresse löschen
+            $person->adresses()->delete();
+
+            // Kontakte löschen
+            $person->kontaktes()->delete();
+        });
     }
 }

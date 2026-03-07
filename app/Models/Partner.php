@@ -2,11 +2,11 @@
 
 namespace App\Models;
 
-use App\Models\Personen;
-use App\Models\Partnerschaftstypen;
-use Illuminate\Database\Eloquent\Model;
 use App\Models\PartnerHasPartnerschaftstypen;
+use App\Models\Partnerschaftstypen;
+use App\Models\Personen;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
 class Partner extends Model
 {
@@ -40,16 +40,16 @@ class Partner extends Model
             'partner_id',
             'id'
         );
-    }
+    } 
 
     /**
      * Nur falls du später direkte Ansprechpartner brauchst
      */
-    public function ansprechpartnerDirekt()
+    public function ansprechpartners()
     {
         return $this->belongsToMany(
             Personen::class,
-            'partner_has_personens',
+            'partner_has_partnerschaftstypens',
             'partner_id',
             'ansprechpartner_id'
         );
