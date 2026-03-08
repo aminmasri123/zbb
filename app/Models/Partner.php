@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\PartnerHasPartnerschaftstypen;
 use App\Models\Partnerschaftstypen;
+use App\Models\ProjektHasAnprechpartner;
 use App\Models\Personen;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -54,4 +55,15 @@ class Partner extends Model
             'ansprechpartner_id'
         );
     }
+
+   public function projektHasAnsprechpartner()
+{
+    return $this->hasMany(
+        ProjektHasAnprechpartner::class,
+        'ansprechpartner_id',
+        'id'
+    );
+}
+
+    
 }

@@ -11,7 +11,6 @@ use App\Models\PartnerHasPartnerschaftstypen;
 use App\Models\Partnerschaftstypen;
 use App\Models\Personen;
 use App\Models\Projekt;
-use App\Models\ProjektHasAnprechpartner;
 use Exception;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
@@ -31,7 +30,7 @@ class PartnerController extends Controller
         $partnerschaftstypen = Partnerschaftstypen::all();
 
 
-      $partners = Partner::query()
+        $partners = Partner::query()
             ->when($search, function ($query) use ($search) {
                 $query->where('name', 'like', "%{$search}%");
             })
@@ -39,11 +38,9 @@ class PartnerController extends Controller
                 'partnerschaftstypens',
                 'ansprechpartners',
                 'ansprechpartners.partnerTyp',
-
                 'ansprechpartners.adresses',
                 'ansprechpartners.kontaktes',
                 'ansprechpartners.kontaktes.kontakttyp',
-
             ])
             ->join('partner_has_partnerschaftstypens', 'partners.id', '=', 'partner_has_partnerschaftstypens.partner_id')
             ->join('projekt_has_anprechpartners', 'partner_has_partnerschaftstypens.id', '=', 'projekt_has_anprechpartners.ansprechpartner_id')
@@ -54,7 +51,6 @@ class PartnerController extends Controller
 
             ->paginate(20);
 
-    //dd($partners);
         return Inertia::render('Partner/Index', [
             'partners' => $partners,
             'partnerschaftstypen' => $partnerschaftstypen,
@@ -62,7 +58,32 @@ class PartnerController extends Controller
             'kontaktypens' => $kontaktypens
         ]);
     }
+    public function indexAjaxFresh()
+    {
+        $user = auth()->user();
+        $userProjektAktiv = $user->current_team_id;
 
+       $partners = Partner::with([
+        'partnerschaftstypens',
+        'ansprechpartners',
+        'ansprechpartners.partnerTyp',
+        'ansprechpartners.adresses',
+        'ansprechpartners.kontaktes',
+        'ansprechpartners.kontaktes.kontakttyp',
+            ])
+            ->join('partner_has_partnerschaftstypens', 'partners.id', '=', 'partner_has_partnerschaftstypens.partner_id')
+            ->join('projekt_has_anprechpartners', 'partner_has_partnerschaftstypens.id', '=', 'projekt_has_anprechpartners.ansprechpartner_id')
+            ->where('projekt_has_anprechpartners.projekt_id', $userProjektAktiv)
+            ->select('partners.*')
+             ->distinct()
+            ->orderBy('id')
+            ->paginate(20);
+
+        return response()->json([
+            'partners' => $partners
+        ]);
+
+    }
     /**
      * Show the form for creating a new resource.
      */
@@ -243,41 +264,7 @@ class PartnerController extends Controller
 
 
 
-    public function indexAjaxFresh()
-    {
-       /*  $partners = Partner::with([
-            'partnerschaftstypens',
-            'partnerschaftstypenZuordnung.ansprechpartner'
-        ])
-        ->orderBy('id')
-        ->paginate(20);
-
-        return response()->json([
-            'partners' => $partners
-        ]); */
-
-
-
-        $user = auth()->user();
-        $userProjektAktiv = $user->current_team_id;
-
-        $partners = Partner::with([
-                'partnerschaftstypens',
-                'ansprechpartners',
-                'ansprechpartners.adresses',
-                'ansprechpartners.kontaktes',
-            ])
-            ->whereHas('projektHasAnsprechpartner', function ($query) use ($userProjektAktiv) {
-                $query->where('projekt_id', $userProjektAktiv);
-            })
-            ->orderBy('id')
-            ->paginate(20);
-
-        return response()->json([
-            'partners' => $partners
-        ]);
-
-    }
+   
 
 
 

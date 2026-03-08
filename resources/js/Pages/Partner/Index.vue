@@ -241,7 +241,7 @@ export default {
     </thead>
     <tbody>
         <tr v-for="partner in filteredPartners" :key="partner.id" class="bg-white border-b border-gray-300">
-            <td class="align-top border-r border-gray-300 px-6 py-4 text-center">{{partner.id}}</td>
+            <td class="align-middle border-r border-gray-300 px-6 py-4 text-center">{{partner.id}}</td>
             <td class="align-middle border-r border-gray-300 px-6 py-4 font-bold">{{partner.name}}</td>
 
             <td colspan="4" class="p-0 align-top border-r border-gray-300">
