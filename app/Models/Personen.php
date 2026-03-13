@@ -3,19 +3,15 @@
 namespace App\Models;
 
 use App\Models\User;
-use App\Models\Brief;
 use App\Models\Baenke;
 use App\Models\Gruppe;
 use App\Models\Adresse;
 use App\Models\Fahrten;
-use App\Models\Partner;
-
 use App\Models\Projekt;
 use App\Models\Standort;
 use App\Models\Zielgruppe;
 use App\Models\Abschluesse;
 use App\Models\Dienstwagen;
-use App\Models\Anwesenheiten;
 use App\Models\GruppeHasPersonen;
 use App\Models\PersonenHasNotizen;
 use App\Models\ProjektHasPersonen;
@@ -24,8 +20,6 @@ use App\Models\Dienstwagenfahrtenbuch;
 use App\Models\PersonenHasAbschluesse;
 use App\Models\PersonenHasSozialedaten;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\PersonenHasAnwesenheiten;
-use App\Models\PartnerHasPartnerschaftstypen;
 use App\Models\PersonenHasBildungsmassnahmen;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -103,13 +97,16 @@ class Personen extends Model
         }
 
         // 5. Anleiter → nur Teilnehmer im selben Projekt und Standort
-           $projektIds = $user->projekte->pluck('id');    // Projekte des Anleiters
-    $standortIds = $user->standorte->pluck('id');  // Standorte des Anleiters
+           //$projektIds = $user->projekte->pluck('id');    // Projekte des Anleiters
+             $user = auth()->user();
+            $userProjektAktiv = $user->current_team_id;
 
-    return $query->whereHas('projekte', function ($q) use ($projektIds, $standortIds) {
-        $q->whereIn('projekt_id', $projektIds)
-          ->whereIn('standort_id', $standortIds);
-    });
+            $standortIds = $user->standorte->pluck('id');  // Standorte des Anleiters
+
+            return $query->whereHas('projekte', function ($q) use ($userProjektAktiv, $standortIds) {
+                $q->where('projekt_id', $userProjektAktiv)
+                ->whereIn('standort_id', $standortIds);
+            });
         // Fallback: nichts zurück
         return $query->whereRaw('1=0');
     }

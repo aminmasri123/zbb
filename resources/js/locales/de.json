@@ -236,7 +236,10 @@
      "PLZ": "PLZ",
      "Stadt": "Stadt",
      "Land": "Land",
-     "Zusatzinfo": "Zusatzinfo"
+     "Zusatzinfo": "Zusatzinfo",
+     "Geräteübersicht": "Geräteübersicht",
+     "Ausgabe": "Ausgabe",
+     "Rückgabe": "Rückgabe"
 
 
 

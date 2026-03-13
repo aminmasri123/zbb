@@ -2,30 +2,33 @@
 
 namespace App\Http\Controllers;
 
-use Exception;
-use App\Models\User;
-use Inertia\Inertia;
-use App\Models\Brief;
-use App\Models\Gruppe;
-use App\Models\Bereich;
-use App\Models\Projekt;
-use App\Models\Personen;
-use App\Models\Fahrtarten;
-use App\Models\Teilnehmer;
 use App\Models\Abschluesse;
-use App\Models\Kontakttypen;
-use App\Models\SozialeDaten;
-use Illuminate\Http\Request;
-use App\Models\Notizvarianten;
-use App\Models\Leistungsbezuege;
-use App\Models\BereichHasPersonen;
-use App\Models\ProjektHasPersonen;
-use Illuminate\Support\Facades\DB;
 use App\Models\Anwesenheitsstatuten;
-use Illuminate\Support\Facades\Auth;
+use App\Models\Bereich;
+use App\Models\BereichHasPersonen;
+use App\Models\Brief;
+use App\Models\Fahrtarten;
+use App\Models\Gruppe;
+use App\Models\Kontakttypen;
+use App\Models\Leistungsbezuege;
+use App\Models\Notizvarianten;
+use App\Models\Personen;
 use App\Models\PersonenHasSozialedaten;
+use App\Models\Projekt;
+use App\Models\ProjektHasPersonen;
+use App\Models\SozialeDaten;
+use App\Models\Teilnehmer;
+use App\Models\User;
+use Exception;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Shared\Date;
 
 class TeilnehmerController extends Controller
 {
@@ -143,7 +146,7 @@ class TeilnehmerController extends Controller
                 'vorname'   => $validatedData['vorname'],
                 'nachname'  => $validatedData['nachname'],
                 'geschlecht'=> $validatedData['geschlecht'],
-                'typ'       => 'required|in:Start, Verlauf, Abschluss',
+                'typ'       => 'teilnehmer',
                 'aktiv'=> 1,
             ]);
 
@@ -261,8 +264,8 @@ class TeilnehmerController extends Controller
         $thisProjekt = Projekt::where('id', auth()->user()->current_team_id)->first();
         $dokumente = $thisProjekt?->dokumente;
         $kontakttypen = Kontakttypen::all();
-/*         dd($personen);
- */        return Inertia::render('Teilnehmer/Edit', [
+
+        return Inertia::render('Teilnehmer/Edit', [
             'teilnehmer' => $personen->toArray(),
             'kontakttypen' => $kontakttypen,
             'projekte' => $projekte,
@@ -365,4 +368,162 @@ class TeilnehmerController extends Controller
             return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
         }
     }
+
+       public function import(Request $request)
+    {
+
+        try {
+
+            // Überprüfen, ob eine Datei hochgeladen wurde
+            if (!$request->hasFile('file')) {
+                return response()->json(['error' => true, 'message' => 'Es wurde keine Datei hochgeladen.']);
+            }
+
+            $file = $request->file('file');
+            if (!$file->isValid()) {
+                return response()->json(['error' => true, 'message' => 'Fehler beim Hochladen der Datei.']);
+            }
+
+            try {
+                $spreadsheet = IOFactory::load($file->getRealPath());
+            } catch (Exception $e) {
+                Log::error("Excel konnte nicht geladen werden: " . $e->getMessage());
+                return response()->json(['error' => true, 'message' => 'Die Datei konnte nicht gelesen werden.']);
+            }
+
+            $worksheet = $spreadsheet->getActiveSheet();
+
+            $data = [];
+            $skipFirstRow = true;
+            $emptyRowCount = 0; // Zähler für aufeinanderfolgende leere Zeilen
+
+            foreach ($worksheet->getRowIterator() as $row) {
+                if ($skipFirstRow) {
+                    $skipFirstRow = false;
+                    continue;
+                }
+
+                // Zellen einlesen
+                $cellIterator = $row->getCellIterator();
+                $cellIterator->setIterateOnlyExistingCells(false);
+
+                $rowData = [];
+                foreach ($cellIterator as $cell) {
+                    $rowData[] = $cell->getValue();
+                }
+
+                // Prüfen, ob die Zeile komplett leer ist
+                if (count(array_filter($rowData)) === 0) {
+                    $emptyRowCount++;
+                    if ($emptyRowCount >= 3) {
+                        Log::info("Import beendet nach " . $emptyRowCount . " aufeinanderfolgenden leeren Zeilen.");
+                        break; // Import abbrechen
+                    }
+                    continue; // Leere Zeile überspringen
+                } else {
+                    $emptyRowCount = 0; // Reset, sobald wieder eine gefüllte Zeile gefunden wurde
+                }
+
+                $data[] = $rowData;
+            }
+           // Log::info('Importierte Zeilen:', $data);
+            $createdCount = 0;
+            $errors = [];
+
+            foreach ($data as $index => $row) {
+                try {
+                    /* if (count($row) < 8) {
+                        $errors[] = "Zeile " . ($index + 2) . " hat zu wenige Spalten.";
+                        continue;
+                    } */
+
+                    $teilnehmerData = [
+                        'vorname'        => $row[0] ?? null,
+                        'nachname'       => $row[1] ?? null,
+                        'geschlecht'     => match (strtolower(trim($row[2] ?? ''))) {
+                            'männlich'  => 'm',
+                            'weiblich'  => 'w',
+                            'divers'    => 'd',
+                            'm'  => 'm',
+                            'w'  => 'w',
+                            'd'    => 'd',
+                            default     => null,
+                        }, 
+                        'geburtsdatum'   => !empty($row[3]) ? Date::excelToDateTimeObject($row[3])->format('Y-m-d') : null,
+                        'aktiv'         => 1,
+                        'typ'           => 'teilnehmer',
+
+                        
+                        /* 'klasse'         => $row[3] ?? null,
+                        'schule_id'      => $row[4] ?? null,
+                        'foerderschueler'=> match (strtolower(trim($row[5] ?? ''))) {
+                            'ja' => 1,
+                            'nein' => 0,
+                            '1' => 1,
+                            '0' => 0,
+                            default => 0,
+                        },
+                        'schuljahr'      => $row[7] ?? date('Y'),
+                        'adresse'        => $row[8] ?? null,
+                        'teil'           => $row[9] ?? '1', */
+                    ];
+
+                    if (empty($teilnehmerData['vorname']) || empty($teilnehmerData['nachname'])) {
+                        $errors[] = "Zeile " . ($index + 2) . " fehlt Vorname oder Nachname.";
+                        continue;
+                    }
+
+                    $teilnehmer = Personen::create($teilnehmerData);
+
+
+                    if ($teilnehmer) {
+                        // Projekt zuordnen
+                        if (!empty($row[4])) {
+
+                            $teilnehmer->projekte()->attach(
+                                $row[4],
+                                [
+                                    'standort_id' => $row[5] ?? null
+                                ]
+                            );
+                        }
+
+                        $createdCount++;
+                    } else {
+                        $errors[] = "Zeile " . ($index + 2) . " konnte nicht gespeichert werden.";
+                    }
+
+                } catch (Exception $e) {
+                    $errors[] = "Fehler in Zeile " . ($index + 2) . ": " . $e->getMessage();
+                    Log::error("Import Fehler Zeile " . ($index + 2) . ": " . $e->getMessage());
+                }
+            }
+             Log::info('Importierte Zeilen:', $errors);
+            if ($createdCount > 0) {
+               /*  $rollen = Role::whereIn('name', ['Administrator', 'Abteilungsleiter', 'Anleiter'])->get();
+                foreach ($rollen as $role) {
+                    foreach ($role->users as $user) {
+                        $user->notify(new ImportTeilnehmerNotification($createdCount));
+                    }
+                } */
+
+                return response()->json([
+                    'success' => true,
+                    'message' => "Import erfolgreich: $createdCount Teilnehmer angelegt.",
+                    'errors'  => $errors,
+                ]);
+            } else {
+                return response()->json([
+                    'error' => true,
+                    'message' => 'Kein Teilnehmer konnte importiert werden.',
+                    'errors' => $errors,
+                ]);
+            }
+
+        } catch (Exception $e) {
+            Log::error("Allgemeiner Importfehler: " . $e->getMessage());
+            return response()->json(['error' => true, 'message' => 'Ein unerwarteter Fehler ist aufgetreten.']);
+        }
+    }
+
 }

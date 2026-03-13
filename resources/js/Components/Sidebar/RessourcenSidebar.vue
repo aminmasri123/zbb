@@ -61,14 +61,18 @@
 
 
              <!-- Geräte Submenu -->
-             <li v-if="['kooperationspartner.index', 'kooperationspartner.store', 'kooperationspartner.update'].some(permission => $page.props.permissions.includes(permission))" class="submenu">
-                <a href="#" @click.prevent="toggleMenu('kooperationspartner')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
+             <li v-if="['geraet.index', 'geraet.store', 'geraet.update'].some(permission => $page.props.permissions.includes(permission))" class="submenu">
+                <a href="#" @click.prevent="toggleMenu('geraet')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                     <i class="la la-desktop la-lg mr-2"></i>
                     <span v-if="!displayHideTextSidebar" >{{$t('Geräte')}}</span>
-                    <span v-if="!displayHideTextSidebar" :class="{'rotate-180': activeMenu === 'kooperationspartner', 'text-zbb': $page.component.startsWith('Partner')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
+                    <span v-if="!displayHideTextSidebar" :class="{'rotate-180': activeMenu === 'geraet', 'text-zbb': $page.component.startsWith('Geraet')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
                 </a>
-                <ul v-show="activeMenu === 'kooperationspartner'" class="pl-6 mt-2 space-y-2">
-                    <li v-if="$page.props.permissions.includes('kooperationspartner.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dashboard')">{{$t('benutzerübersicht')}}</Link></li>
+                <ul v-show="activeMenu === 'geraet'" class="pl-6 mt-2 space-y-2">
+                    <li v-if="$page.props.permissions.includes('geraet.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('geraet.index')">{{$t('Geräteübersicht')}}</Link></li>
+                    <li v-if="$page.props.permissions.includes('geraet.ausgabe.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('geraet.ausgabe.index')">{{$t('Ausgabe')}}</Link></li>
+                    <li v-if="$page.props.permissions.includes('geraet.rueckgabe.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('geraet.rueckgabe.index')">{{$t('Rückgabe')}}</Link></li>
+
+                    <li v-if="$page.props.permissions.includes('geraet.store')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('geraet.store')">{{$t('Gerät anlegen')}}</Link></li>
                 </ul>
             </li>
 

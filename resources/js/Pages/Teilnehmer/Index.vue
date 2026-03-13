@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, onMounted } from 'vue';
 import { router, Head, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Pagination from '@/Components/Pagination.vue';
@@ -10,6 +10,18 @@ import Swal from 'sweetalert2';
 import axios from 'axios';
 import ModalCreateTeilnehmer from '@/Pages/Teilnehmer/ModalCreateTeilnehmer.vue';
 import ZurGruppeHinzufügen from '@/Components/ZurGruppeHinzufuegen.vue';
+
+import Dropzone from "dropzone";
+import "dropzone/dist/dropzone.css";
+Dropzone.autoDiscover = false;
+let dropzoneInstance = null;
+
+
+const teilnehmerList = ref([...teilnehmers.data]);
+
+watch(() => teilnehmers.data, (newValue) => {
+    teilnehmerList.value = [...newValue];
+});
 // Suchfeld und Dropdown für Projekte
 let seite = 'teilnehmer'; // Für die Löschseite
 let search = ref('');
@@ -53,12 +65,66 @@ const { teilnehmers, authProjekte, rollen, gruppen, projekte, standorte, default
      defaultProjekt: { type: Number, default: null },
 
 });
+const showImportModal = ref(false);
 
-const teilnehmerList = ref([...teilnehmers.data]);
-watch(() => teilnehmers.data, (newValue) => {
-    teilnehmerList.value = [...newValue];
-});
+const importTeilnehmer = () => {
 
+    showImportModal.value = true;
+
+    setTimeout(() => {
+        initDropzone();
+    }, 200);
+
+};
+
+const initDropzone = () => {
+
+    const el = document.querySelector("#mydropzone");
+    if (!el) return;
+
+    // verhindert doppelte Dropzone
+    if (dropzoneInstance) {
+        dropzoneInstance.destroy();
+        dropzoneInstance = null;
+    }
+
+    dropzoneInstance = new Dropzone(el, {
+        url: route("teilnehmer.import"),
+        method: "post",
+        paramName: "file",
+        clickable: true,
+        maxFilesize: 5,
+        acceptedFiles: ".csv,.xlsx,.xls",
+        addRemoveLinks: true,
+
+        headers: {
+            "X-CSRF-TOKEN": document
+                .querySelector('meta[name="csrf-token"]')
+                .getAttribute("content")
+        },
+
+        dictDefaultMessage: "Datei hier hineinziehen oder klicken",
+
+        success() {
+            Swal.fire({
+                title: "Import erfolgreich",
+                icon: "success"
+            });
+
+            showImportModal.value = false;
+
+            router.reload({ only: ["teilnehmers"] });
+        },
+
+        error(file, message) {
+            Swal.fire({
+                title: "Fehler",
+                text: message,
+                icon: "error"
+            });
+        }
+    });
+};
 // Löschbestätigung anzeigen und Abteilungsnamen speichern
 const confirmDelete = (teilnehmer) => {
     teilnehmerToDelete.value = {
@@ -207,6 +273,12 @@ const sortByColumn = (column) => {
                 <i class="la la-plus bg-white border border-gray-300  px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
             </div>
 
+
+            <div @click="importTeilnehmer" class="flex items-center">
+                <i class="las la-upload bg-white border border-gray-300  px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
+            </div>
+
+
             <label for="simple-search" class="sr-only">Search</label>
             <input v-model="search" type="text" class="border border-gray-300 text-gray-900 text-sm  focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" placeholder="Suchen ..." />
 
@@ -324,5 +396,19 @@ const sortByColumn = (column) => {
 
             <ModalDestroy v-if="showModalLöschen"@close="showModalLöschen = false"@delete="deleteTeilnehmer":seite="seite":toDelete="teilnehmerToDelete"/>
 
+
+            <div v-if="showImportModal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+                <div class="bg-white p-6 rounded-lg w-1/2">
+
+                    <div class="flex justify-between mb-4">
+                        <h2 class="text-lg font-bold">Teilnehmer importieren</h2>
+                        <button @click="showImportModal=false">✕</button>
+                    </div>
+
+                    <form id="mydropzone" class="dropzone border border-dashed p-6 rounded-lg"></form>
+
+                </div>
+
+            </div>
     </app-layout>
 </template>

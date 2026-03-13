@@ -224,14 +224,14 @@ class UserSeeder extends Seeder
         ]);
           $personen =
         [
-            ['vorname' => 'Amin', 'nachname' => 'Masri', 'geschlecht' => 'm', 'geburtsdatum' => '2000-01-01', 'email' => 'amin.masri@outlook.com', 'username' => 'aminmasri', 'password' => 'password'],
-            ['vorname' => 'Anika', 'nachname' => 'Feller', 'geschlecht' => 'w', 'geburtsdatum' => '2000-01-01', 'email' => 'a.feller@zbb-saar.de', 'username' => 'Anika Feller', 'password' => 'zbb.bop.hw'],
-            ['vorname' => 'Salvatore', 'nachname' => 'Gucciardo', 'geschlecht' => 'm', 'geburtsdatum' => '2000-01-01', 'email' => 's.gucciardo@zbb-saar.de', 'username' => 'Salvatore Gucciardo', 'password' => 'zbb.bop.ala'],
-            ['vorname' => 'Birgitta', 'nachname' => 'Lautenschlager', 'geschlecht' => 'w', 'geburtsdatum' => '2000-01-01', 'email' => 'b.lautenschlager@zbb-saar.de', 'username' => 'Brigitta Lautenschlager', 'password' => 'zbb.al'],
-            ['vorname' => 'Chantale', 'nachname' => 'Lismann', 'geschlecht' => 'w', 'geburtsdatum' => '2000-01-01', 'email' => 'c.lismann@zbb-saar.de', 'username' => 'Chantale Lismann', 'password' => 'zbb.al'],
-            ['vorname' => 'Stefanie', 'nachname' => 'Wagner', 'geschlecht' => 'w', 'geburtsdatum' => '2000-01-01', 'email' => 's.wagner@zbb-saar.de', 'username' => 'Stefanie Wagner', 'password' => 'zbb.al'],
-            ['vorname' => 'Stefan', 'nachname' => 'Haßdenteufel', 'geschlecht' => 'm', 'geburtsdatum' => '2000-01-01', 'email' => 's.haßdenteufel@zbb-saar.de', 'username' => 'Stefan Haßdenteufel', 'password' => 'zbb.al'],
-            ['vorname' => 'Martin', 'nachname' => 'Löw', 'geschlecht' => 'm', 'geburtsdatum' => '2000-01-01', 'email' => 'm.loew@zbb-saar.de', 'username' => 'Martin Löw', 'password' => 'zbb.al'],
+            ['typ' => 'mitarbeiter', 'vorname' => 'Amin', 'nachname' => 'Masri', 'geschlecht' => 'm', 'geburtsdatum' => '2000-01-01', 'email' => 'amin.masri@outlook.com', 'username' => 'aminmasri', 'password' => 'password'],
+            ['typ' => 'mitarbeiter', 'vorname' => 'Anika', 'nachname' => 'Feller', 'geschlecht' => 'w', 'geburtsdatum' => '2000-01-01', 'email' => 'a.feller@zbb-saar.de', 'username' => 'Anika Feller', 'password' => 'zbb.bop.hw'],
+            ['typ' => 'mitarbeiter', 'vorname' => 'Salvatore', 'nachname' => 'Gucciardo', 'geschlecht' => 'm', 'geburtsdatum' => '2000-01-01', 'email' => 's.gucciardo@zbb-saar.de', 'username' => 'Salvatore Gucciardo', 'password' => 'zbb.bop.ala'],
+            ['typ' => 'mitarbeiter', 'vorname' => 'Birgitta', 'nachname' => 'Lautenschlager', 'geschlecht' => 'w', 'geburtsdatum' => '2000-01-01', 'email' => 'b.lautenschlager@zbb-saar.de', 'username' => 'Brigitta Lautenschlager', 'password' => 'zbb.al'],
+            ['typ' => 'mitarbeiter', 'vorname' => 'Chantale', 'nachname' => 'Lismann', 'geschlecht' => 'w', 'geburtsdatum' => '2000-01-01', 'email' => 'c.lismann@zbb-saar.de', 'username' => 'Chantale Lismann', 'password' => 'zbb.al'],
+            ['typ' => 'mitarbeiter', 'vorname' => 'Stefanie', 'nachname' => 'Wagner', 'geschlecht' => 'w', 'geburtsdatum' => '2000-01-01', 'email' => 's.wagner@zbb-saar.de', 'username' => 'Stefanie Wagner', 'password' => 'zbb.al'],
+            ['typ' => 'mitarbeiter', 'vorname' => 'Stefan', 'nachname' => 'Haßdenteufel', 'geschlecht' => 'm', 'geburtsdatum' => '2000-01-01', 'email' => 's.haßdenteufel@zbb-saar.de', 'username' => 'Stefan Haßdenteufel', 'password' => 'zbb.al'],
+            ['typ' => 'mitarbeiter', 'vorname' => 'Martin', 'nachname' => 'Löw', 'geschlecht' => 'm', 'geburtsdatum' => '2000-01-01', 'email' => 'm.loew@zbb-saar.de', 'username' => 'Martin Löw', 'password' => 'zbb.al'],
         ];
 
         $projektIds = Projekt::pluck('id')->toArray();
@@ -1002,6 +1002,82 @@ class UserSeeder extends Seeder
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '26',
                 'beschreibung' => null,
+            ],
+            [ // id = 74
+                'name' => 'geraet.index',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '20',
+                'beschreibung' => null
+            ],
+            [ // id = 75
+                'name' => 'geraet.store',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '20',
+                'beschreibung' => null
+            ],
+            [ // id = 76
+                'name' => 'geraet.update',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '20',
+                'beschreibung' => null
+            ],
+            [ // id = 77
+                'name' => 'geraet.destroy',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '20',
+                'beschreibung' => null
+            ],
+            [ // id = 78
+            'name' => 'geraet.ausgabe.index',
+            'guard_name' => 'web',
+            'berechtigungskategorie_id' => '20',
+            'beschreibung' => null
+            ],
+            [ // id = 79
+                'name' => 'geraet.ausgabe.store',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '20',
+                'beschreibung' => null
+            ],
+            [ // id = 80
+                'name' => 'geraet.ausgabe.update',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '20',
+                'beschreibung' => null
+            ],
+            [ // id = 81
+                'name' => 'geraet.ausgabe.destroy',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '20',
+                'beschreibung' => null
+            ],
+            [
+                // id = 82
+                'name' => 'geraet.rueckgabe.index',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '20',
+                'beschreibung' => null
+            ],
+            [
+                // id = 83
+                'name' => 'geraet.rueckgabe.store',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '20',
+                'beschreibung' => null
+            ],
+            [
+                // id = 84
+                'name' => 'geraet.rueckgabe.update',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '20',
+                'beschreibung' => null
+            ],
+            [
+                // id = 85
+                'name' => 'geraet.rueckgabe.destroy',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '20',
+                'beschreibung' => null
             ],
         ]);
 

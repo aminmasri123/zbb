@@ -1,47 +1,50 @@
 <?php
 
-use Inertia\Inertia;
-use Illuminate\Support\Facades\Route;
-use Illuminate\Foundation\Application;
-use App\Http\Controllers\UserController;
-use App\Http\Controllers\BriefController;
-use App\Http\Controllers\NotizController;
-use App\Http\Controllers\BaenkeController;
-use App\Http\Controllers\GruppeController;
-use App\Http\Controllers\SchuleController;
-use App\Http\Controllers\AdresseController;
-use App\Http\Controllers\BereichController;
-use App\Http\Controllers\KontaktController;
-use App\Http\Controllers\PartnerController;
-use App\Http\Controllers\ProjektController;
-use App\Http\Controllers\PersonalController;
-use App\Http\Controllers\StandortController;
-use App\Http\Controllers\AbteilungController;
-use App\Http\Controllers\DashbaordController;
-use App\Http\Controllers\FahrzeugeController;
 use App\Http\Controllers\AbschlusseController;
-use App\Http\Controllers\ExportWordController;
-use App\Http\Controllers\FahrtartenController;
-use App\Http\Controllers\TeilnehmerController;
+use App\Http\Controllers\AbteilungController;
+use App\Http\Controllers\AdresseController;
 use App\Http\Controllers\AnwesenheitController;
-use App\Http\Controllers\DienstwagenController;
-use App\Http\Controllers\ExportExcelController;
+use App\Http\Controllers\BaenkeController;
 use App\Http\Controllers\BerechtigungController;
-use App\Http\Controllers\KostenstelleController;
-use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\RaumlichkeitenController;
-use App\Http\Controllers\TransportartenController;
+use App\Http\Controllers\BereichController;
+use App\Http\Controllers\BriefController;
+use App\Http\Controllers\DashbaordController;
+use App\Http\Controllers\DienstwagenController;
+use App\Http\Controllers\DienstwagenfahrtenbuchController;
 use App\Http\Controllers\DienstwagenkostenController;
-use App\Http\Controllers\FahrtkostensaetzeController;
 use App\Http\Controllers\DienstwagenreportsController;
 use App\Http\Controllers\DienstwagenwartungController;
-use App\Http\Controllers\ProjektHasPersonenController;
-use App\Http\Controllers\GruppeHasTeilnehmerController;
+use App\Http\Controllers\ExportExcelController;
+use App\Http\Controllers\ExportWordController;
+use App\Http\Controllers\FahrtartenController;
 use App\Http\Controllers\FahrtkostenAbrechnenController;
-use App\Http\Controllers\ProjektHasTeilnehmerController;
-use App\Http\Controllers\DienstwagenfahrtenbuchController;
-use App\Http\Controllers\ProjektHasTeilnehmerLuvController;
+use App\Http\Controllers\FahrtkostensaetzeController;
+use App\Http\Controllers\FahrzeugeController;
+use App\Http\Controllers\GeraetausgabeController;
+use App\Http\Controllers\GeraetController;
+use App\Http\Controllers\GeraetrueckgabeController;
+use App\Http\Controllers\GruppeController;
+use App\Http\Controllers\GruppeHasTeilnehmerController;
+use App\Http\Controllers\KontaktController;
+use App\Http\Controllers\KostenstelleController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\NotizController;
+use App\Http\Controllers\PartnerController;
+use App\Http\Controllers\PersonalController;
 use App\Http\Controllers\PersonenHasBildungsmassnahmenController;
+use App\Http\Controllers\ProjektController;
+use App\Http\Controllers\ProjektHasPersonenController;
+use App\Http\Controllers\ProjektHasTeilnehmerController;
+use App\Http\Controllers\ProjektHasTeilnehmerLuvController;
+use App\Http\Controllers\RaumlichkeitenController;
+use App\Http\Controllers\SchuleController;
+use App\Http\Controllers\StandortController;
+use App\Http\Controllers\TeilnehmerController;
+use App\Http\Controllers\TransportartenController;
+use App\Http\Controllers\UserController;
+use Illuminate\Foundation\Application;
+use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
 
 
 /*
@@ -181,6 +184,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
 
     Route::get('/teilnehmer/anlegen', function () { return Inertia::render('Teilnehmer/CreateTeilnehmer'); })->name('teilnehmer.create');
     Route::post('/teilnehmer/anlegen', [TeilnehmerController::class, 'store'])->name('teilnehmer.store');
+    Route::post('/teilnehmer/import', [TeilnehmerController::class, 'import'])->name('teilnehmer.import');
     Route::delete('/teilnehmer/entfernen/{id}', [TeilnehmerController::class, 'destroy'])->name('teilnehmer.destroy');
     Route::get('/teilnehmer/bearbeiten/{id}', [TeilnehmerController::class, 'show'])->name('teilnehmer.edit');
     Route::patch('/teilnehmer/update/{id}', [TeilnehmerController::class, 'update'])->name('teilnehmer.update');
@@ -359,6 +363,45 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::get('/export/dokument/anwesenheitslite_V1/{id}', [ExportExcelController::class, 'anwesenheitslite_V1'])->name('export.anwesenheitslite_V1');
 
     Route::get('/export/dokument/anwesenheitliste_monat_projekt_gruppe/{id}', [ExportExcelController::class, 'anwesenheitliste_monat_projekt_gruppe'])->name('export.projekt.anwesenheit.periode');
+
+
+
+    /*   Gerät */
+    Route::get('/ressourcen/geraet', [GeraetController::class, 'index'])->name('geraet.index');
+    Route::get('/ressourcen/geraet-edit/{id}', [GeraetController::class, 'edit'])->name('geraet.edit');
+    Route::post('/ressourcen/geraet-destroy', [GeraetController::class, 'destroy'])->name('geraet.delete');
+    Route::post('/ressourcen/geraet-store', [GeraetController::class, 'store'])->name('geraet.store');
+    Route::post('/ressourcen/geraet-update/{id}', [GeraetController::class, 'update'])->name('geraet.update');
+
+
+        Route::post('/import/geraet', [GeraetController::class, 'import'])->name('geraet.import');
+
+
+
+
+
+
+
+    Route::get('/get-geraet-id', [GeraetController::class, 'getGeraeteID'])->name('getGeraeteID');
+
+
+
+    Route::get('/ausleihende', [GeraetController::class, 'indexAusleihende'])->name('geraet.index.ausleihende')->middleware(['check.permission:index-ausleihende'])->middleware('notifications');
+
+    /*   Gerät Ausgabe */
+    Route::get('/ressourcen/geraetausgabe', [GeraetausgabeController::class,'index'])->name('geraet.ausgabe.index');
+    Route::post('/gressourcen/eraetausgabe', [GeraetausgabeController::class,'store'])->name('geraet.ausgabe.store');
+    Route::delete('/ressourcen/geraetausgabe/{id}', [GeraetausgabeController::class, 'destroy'])->name('geraetausgabe.destroy');
+
+
+    /*   Gerät Rückgabe */
+    Route::get('/ressourcen/geraet/rueckgabe', [GeraetrueckgabeController::class,'index'])->name('geraet.rueckgabe.index');
+    Route::post('/ressourcen/geraet/rueckgabe', [GeraetrueckgabeController::class,'store'])->name('geraet.rueckgabe.store');
+    Route::delete('/ressourcen/geraet/rueckgabe/{id}', [GeraetrueckgabeController::class, 'destroy'])->name('geraetrueckgabe.destroy');
+
+    Route::get('/ressourcen/geraet/rueckgabe/{id}/geraete', [GeraetrueckgabeController::class, 'geraete'])->name('geraet.ausgabe.geraete');
+
+
 
 
 });
