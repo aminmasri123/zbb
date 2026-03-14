@@ -51,10 +51,9 @@ watch(() => form.value.ausgabeschein_nr, async (id) => {
   geraeteAusgabe.value = []
 
   if (!id) return
-
   const response = await axios.get(route('geraet.ausgabe.geraete', id))
-
-  geraeteAusgabe.value = response.data.geraete
+    console.log(response.data)
+  geraeteAusgabe.value = response.data
 
 })
 const saveRueckgabe = () => {
@@ -64,8 +63,9 @@ const saveRueckgabe = () => {
     onError: (e) => errors.value = e,
 
     onSuccess: () => {
-      emit('added', { ...form.value })
-      emit('close')
+        router.reload({ only: ['rueckgaben'] })
+
+        emit('close')
     }
 
   })

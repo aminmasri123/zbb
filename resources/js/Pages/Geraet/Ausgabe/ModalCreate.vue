@@ -98,12 +98,12 @@ Ausgabe anlegen
 <div>
 
 <label class="block font-medium mb-1">
-Ausgabeschein Nr
+Ausgabeschein Nr <span class="text-red-600">*</span>
 </label>
 
 <InputText
 v-model="form.ausgabeschein_nr"
-readonly
+disabled
 class="w-full bg-gray-100"
 />
 

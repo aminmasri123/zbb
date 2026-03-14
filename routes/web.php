@@ -19,7 +19,7 @@ use App\Http\Controllers\ExportWordController;
 use App\Http\Controllers\FahrtartenController;
 use App\Http\Controllers\FahrtkostenAbrechnenController;
 use App\Http\Controllers\FahrtkostensaetzeController;
-use App\Http\Controllers\FahrzeugeController;
+//use App\Http\Controllers\FahrzeugeController;
 use App\Http\Controllers\GeraetausgabeController;
 use App\Http\Controllers\GeraetController;
 use App\Http\Controllers\GeraetrueckgabeController;
@@ -40,7 +40,7 @@ use App\Http\Controllers\RaumlichkeitenController;
 use App\Http\Controllers\SchuleController;
 use App\Http\Controllers\StandortController;
 use App\Http\Controllers\TeilnehmerController;
-use App\Http\Controllers\TransportartenController;
+//  use App\Http\Controllers\TransportartenController;
 use App\Http\Controllers\UserController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
@@ -393,11 +393,15 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::post('/gressourcen/eraetausgabe', [GeraetausgabeController::class,'store'])->name('geraet.ausgabe.store');
     Route::delete('/ressourcen/geraetausgabe/{id}', [GeraetausgabeController::class, 'destroy'])->name('geraetausgabe.destroy');
 
+    Route::get('/ressourcen/geraetausgabe-view/{id}', [GeraetausgabeController::class, 'view'])->name('ausgabe.view');
+    Route::get('/ressourcen/geraetausgabe-excel/{id}', [GeraetausgabeController::class, 'exportExcel'])->name('geraet.ausgabe.export.excel');
+    Route::post('/ressourcen/geraetausgabe-store-add', [GeraetausgabeController::class, 'storeAdd'])->name('geraet.ausgabe.store.add');
+
 
     /*   Gerät Rückgabe */
     Route::get('/ressourcen/geraet/rueckgabe', [GeraetrueckgabeController::class,'index'])->name('geraet.rueckgabe.index');
     Route::post('/ressourcen/geraet/rueckgabe', [GeraetrueckgabeController::class,'store'])->name('geraet.rueckgabe.store');
-    Route::delete('/ressourcen/geraet/rueckgabe/{id}', [GeraetrueckgabeController::class, 'destroy'])->name('geraetrueckgabe.destroy');
+    Route::delete('/ressourcen/geraetrueckgabe/{id}', [GeraetrueckgabeController::class, 'destroy'])->name('geraetrueckgabe.destroy');
 
     Route::get('/ressourcen/geraet/rueckgabe/{id}/geraete', [GeraetrueckgabeController::class, 'geraete'])->name('geraet.ausgabe.geraete');
 

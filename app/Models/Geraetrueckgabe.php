@@ -16,6 +16,8 @@ class Geraetrueckgabe extends Model
         'rueckgabescheinNr',
         'ausleiher_id',
         'ausgabe_id',
+        'rueckgabe',
+        'ablageort'
     ];
     protected $dates = [
         'rueckgabe',
@@ -29,7 +31,7 @@ class Geraetrueckgabe extends Model
     {
         return $this->belongsToMany(Geraet::class, 'geraet_has_rueckgabes', 'rueckgabe_id', 'geraet_id');
     }
-    public function kontakte(): BelongsTo
+    public function ausleiher(): BelongsTo
     {
         return $this->belongsTo(Personen::class);
     }

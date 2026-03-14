@@ -123,8 +123,7 @@ placeholder="Suchen ..."
     <tbody class="bg-white divide-y divide-gray-200">
         <tr v-for="ausgabe in filteredAusgaben" :key="ausgabe.id" class="hover:bg-gray-50" >
             <td class="px-4 py-3">{{ ausgabe.id }}</td>
-            <td class="px-4 py-3 font-semibold">{{ ausgabe.ausgabescheinNr }}</td>
-
+            <td class="px-4 py-3 font-semibold"> <Link :href="route('ausgabe.view', ausgabe.id)" target="_blank" > {{ ausgabe.ausgabescheinNr }} </Link> </td>
             <td class="px-4 py-3">{{ ausgabe.ausleiher.vorname }} {{ ausgabe.ausleiher.nachname }}</td>
 
             <td class="px-4 py-3">

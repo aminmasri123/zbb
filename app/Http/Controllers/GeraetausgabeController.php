@@ -13,6 +13,9 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class GeraetausgabeController extends Controller
 {
@@ -36,6 +39,18 @@ class GeraetausgabeController extends Controller
         //
     }
 
+    public function view($id)
+    {
+                //dd(Geraetausgabe::where('id', $id)->with(['ausleiher','projekte', 'projekte.kostenstellen' ,'geraete'])->first());
+
+        return Inertia::render('Geraet/Ausgabe/View', [
+            'ausgabe' => Geraetausgabe::where('id', $id)->with(['ausleiher','projekte', 'projekte.kostenstellen' ,'geraete'])->first(),
+            'alle_kontakte' => Personen::mitarbeiter()->get(),
+            'alle_projekte' => Projekt::All(),
+            'nichtAusgegebeneGeraete' => Geraet::where('verfuegbarkeit', '=', 1)->get()
+        ]);
+    }
+
 
 
     public function store(Request $request)
@@ -53,7 +68,7 @@ class GeraetausgabeController extends Controller
             $ausleihdatum = Carbon::parse($validated['ausleihdatum'])->format('Y-m-d');
             $ausgabe = Geraetausgabe::create([
                 'ausgabescheinNr' => $validated['ausgabeschein_nr'],
-                'kontakte_id' => $validated['ausleiher'],
+                'ausleiher_id' => $validated['ausleiher'],
                 'projekte_id' => $validated['projekt'],
                 'ausgabe' => $ausleihdatum,
             ]);
@@ -106,10 +121,68 @@ class GeraetausgabeController extends Controller
                 ]);
         } */
 
-                catch (Exception $e) {
-    DB::rollBack();
-    dd($e->getMessage(), $e->getTraceAsString());
-}
+        catch (Exception $e) {
+            DB::rollBack();
+            dd($e->getMessage(), $e->getTraceAsString());
+        }
+    }
+
+    public function storeAdd(Request $request)
+    {
+        $request->validate([
+            'ausgabeschein_nr' => 'required',
+            'ausleiher' => 'required',
+            'projekt' => 'required',
+            'sn' => 'required|array',
+            'sn.*' => 'exists:geraets,sn',
+            'ausleihdatum' => 'required',
+         ]);
+         $selectedGeraetSN = $request->input('sn');
+         $success = [];
+         $error = [];
+
+
+         foreach ($selectedGeraetSN as $SN)
+         {
+            $geraet = Geraet::where('sn', $SN)->first();
+            $ausgabe = Geraetausgabe::where('ausgabescheinNr', $request->ausgabeschein_nr)->first();
+            if (!$geraet OR !$ausgabe) {
+                $error[] = "Das Gerät mit der SN: ". $SN ." konnte nicht gefunden werden.";
+                continue;
+            }
+            if (!$ausgabe) {
+                $error[] = "Die Ausgabe mit der Ausgabescheinnummer: ". $request->ausgabeschein_nr ." konnte nicht gefunden werden.";
+                continue;
+            }
+            $relation = new GeraetHasAusgabe;
+            $relation->geraet_id = $geraet->id;
+            $relation->ausgabe_id = $ausgabe->id;
+            $relation->save();
+            $success[] = " ID: {$geraet->sn}";
+
+
+            $geraet->verfuegbarkeit = FALSE;
+            $geraet->update();
+
+        }
+       /*  $editorRoles = Role::whereIn('name', ['Administrator', 'IT-Administrator'])->get();
+
+                foreach ($editorRoles as $role) {
+                    foreach ($role->users as $user) {
+                        $user->notify(new CreateAusgabaAddNotification($selectedGeraetSN));
+                    }
+                } */
+
+
+            $successMessage = 'Die Ausgaben wurden erfolgreich angelegt.';
+            if (!empty($success)) {
+                $successMessage .= ' Erfolgreiche Geräte: ' . implode(', ', $success);
+            }
+            if (!empty($error)) {
+                $successMessage .= ' Probleme mit den Geräten: ' . implode(', ', $error);
+            }
+
+            return redirect()->back()->with('success', $successMessage);
     }
 
     /**
@@ -158,5 +231,74 @@ class GeraetausgabeController extends Controller
         } catch (Exception $e) {
             return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
         }
+    }
+
+
+    public function exportExcel($id)
+    {
+        $ausgabe = Geraetausgabe::findOrFail($id);
+
+        $geraeteDistinct = $ausgabe->geraete()
+            ->select('geraet', 'modell')
+            ->distinct()
+            ->get();
+
+        $geraeteArray = $geraeteDistinct->map(function($item) {
+            return $item->geraet . ' ' . $item->modell;
+        })->toArray();
+
+        // Verbinden des Arrays zu einem String
+        $geraeteString = implode(', ', $geraeteArray);
+
+        //Pfad zur vorhandenen Excel-Datei
+        $existingFile = storage_path('vorlage/projekte/ITabteilung/devicemanagement/Ausgabeschein.xlsx');
+        if(!file_exists($existingFile)){
+            return redirect()->back()->with('error', 'Die Datei für den Export konnte nicht gefunden werden.');
+        }
+
+        // Excel-Datei öffnen
+        $spreadsheet = IOFactory::load($existingFile);
+        $sheet = $spreadsheet->getActiveSheet();
+
+        // Daten in den Zellen einfügen
+        $sheet->setCellValue('C7', $ausgabe->projekte->name);
+        $sheet->setCellValue('C8', $ausgabe->projekte->kostenstelle);
+        $sheet->setCellValue('F7', 'Ausgabeschein Nr.: ' . $ausgabe->ausgabescheinNr );
+        $sheet->setCellValue('C12', $geraeteString);
+
+
+        $loop = 1;
+        $row = 15; // Startzeile für Daten
+        $sheet->setCellValue('B31', $ausgabe->geraete->count());
+        $angabedatum = $ausgabe->ausgabe;
+        $sheet->setCellValueExplicit('D33', date('d.m.Y', strtotime($angabedatum)), DataType::TYPE_STRING);
+        $sheet->setCellValue('A39', date('d.m.Y'));
+        $sheet->setCellValue('C36', $ausgabe->ausleiher->nachname);
+        $sheet->setCellValue('E36', $ausgabe->ausleiher->vorname);
+
+        if($ausgabe->geraete !=""){
+            foreach ($ausgabe->geraete as $ausgabe) {
+                $sheet->setCellValue('A'.$row, $loop);
+
+                $sheet->setCellValue('B'.$row, $ausgabe->productID);
+
+
+                $sheet->setCellValue('C'.$row, $ausgabe->sn);
+                $row++;
+                $loop++;
+            }
+        }else{
+            return redirect()->back()->with('error', 'Die Ausgabe enthält kein Gerät.');
+        }
+
+        // Excel-Datei speichern
+
+        $writer = new Xlsx($spreadsheet);
+
+       $updatedFile = 'Ausgabeschein Nr. ' .  $ausgabe->ausgabescheinNr . '-'  . date('Ymd_His') . '.xlsx';
+       $writer->save($updatedFile);
+
+       // Aktualisierte Excel-Datei herunterladen
+       return response()->download($updatedFile)->deleteFileAfterSend(true);
     }
 }

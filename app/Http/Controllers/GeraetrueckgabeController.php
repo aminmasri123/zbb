@@ -7,6 +7,9 @@ use App\Models\Geraetausgabe;
 use App\Models\GeraetHasRueckgabe;
 use App\Models\Geraetrueckgabe;
 use App\Models\Personen;
+use Carbon\Carbon;
+use Exception;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -18,12 +21,46 @@ class GeraetrueckgabeController extends Controller
      */
    public function index()
     {
+       /*  $id=1;
+         $geraete = DB::table('geraets')
+            ->join('geraet_has_ausgabes', 'geraets.id', '=', 'geraet_has_ausgabes.geraet_id')
+
+            ->where('geraet_has_ausgabes.ausgabe_id', $id)
+
+            ->whereNotExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('geraet_has_rueckgabes')
+                    ->whereColumn('geraet_has_rueckgabes.geraet_id', 'geraets.id');
+            })
+
+            ->select('geraets.*')
+            ->get();
+
+
+
+            dd($geraete);
+ */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         $rueckgaben = Geraetrueckgabe::with([
-            'ausgabe.kontakte',
+            'ausgabe.ausleiher',
             'ausgabe.projekte',
             'geraete'
         ])->get();
-
 
         $rueckgeber = Personen::where('typ', 'mitarbeiter')->select('id', 'nachname', 'vorname')->get();
 
@@ -48,6 +85,10 @@ class GeraetrueckgabeController extends Controller
             'rueckgaben' => $rueckgaben,
             'rueckgeber' => $rueckgeber,
             'ausgaben' => $ausgaben,
+            /**
+             * Zeigt die Geräte, die ausgegeben wurden, aber noch nicht zurückgegeben wurden.
+             */
+           
             'geraete' => $geraete,
             'ablageorte' => $ablageorte,
             //'ausgegebeneGeraete' => $ausgegebeneGeraete
@@ -63,68 +104,70 @@ class GeraetrueckgabeController extends Controller
 
     public function store(Request $request)
     {
-        dd($request->all());
         $validated = $request->validate([
-            'ausgabeschein_nr' => 'required|exists:ausgabes,id',
-            'ausleiher' => 'required|exists:kontaktes,id',
-            'rueckgabescheinNr' => 'required|unique:rueckgabes,rueckgabescheinNr',
+            'ausgabeschein_nr' => 'required|exists:geraetausgabes,id',
+            'ausleiher' => 'required|exists:personens,id',
+            'rueckgabescheinNr' => 'required|unique:geraetrueckgabes,rueckgabescheinNr',
             'sn' => 'required|array',
             'sn.*' => 'exists:geraets,id',
             'rueckgabedatum' => 'required|date',
-            'ablageort' => 'required'
+            'ablageort' => 'nullable|string',
         ]);
 
-        $success = [];
-        $errors = [];
+        DB::beginTransaction();
 
-        $rueckgabe = Geraetrueckgabe::create([
-            'ausgabe_id' => $validated['ausgabeschein_nr'],
-            'kontakte_id' => $validated['ausleiher'],
-            'rueckgabescheinNr' => $validated['rueckgabescheinNr'],
-            'rueckgabe' => $validated['rueckgabedatum']
-        ]);
+        try {
 
-        foreach ($validated['sn'] as $geraetId) {
+            $success = [];
+            $errors = [];
 
-            $geraet = Geraet::find($geraetId);
+            $rueckgabedatum = Carbon::parse($validated['rueckgabedatum'])->format('Y-m-d');
 
-            if (!$geraet) {
-                $errors[] = "Gerät nicht gefunden: {$geraetId}";
-                continue;
+            $rueckgabe = Geraetrueckgabe::create([
+                'ausgabe_id' => $validated['ausgabeschein_nr'],
+                'ausleiher_id' => $validated['ausleiher'],
+                'rueckgabescheinNr' => $validated['rueckgabescheinNr'],
+                'rueckgabe' => $rueckgabedatum
+            ]);
+
+            foreach ($validated['sn'] as $geraetId) {
+
+                $geraet = Geraet::find($geraetId);
+
+                if (!$geraet) {
+                    $errors[] = "Gerät nicht gefunden: {$geraetId}";
+                    continue;
+                }
+            
+                GeraetHasRueckgabe::create([
+                    'geraet_id' => $geraet->id,
+                    'rueckgabe_id' => $rueckgabe->id
+                ]);
+
+                $geraet->update([
+                    'verfuegbarkeit' => true,
+                    'imLager' => $validated['ablageort']
+                ]);
+
+                $success[] = $geraet->sn;
             }
 
-            GeraetHasRueckgabe::create([
-                'geraet_id' => $geraet->id,
-                'rueckgabe_id' => $rueckgabe->id
-            ]);
+            DB::commit();
 
-            $geraet->update([
-                'verfuegbarkeit' => true,
-                'imLager' => $validated['ablageort']
-            ]);
+            return redirect()
+                ->route('geraet.rueckgabe.index')
+                ->with('success', 'Rückgabe erfolgreich erstellt.');
 
-            $success[] = $geraet->sn;
+        } catch (Exception $e) {
+
+            DB::rollBack();
+
+            return redirect()
+                ->back()
+                ->withErrors([
+                    'error' => 'Fehler beim Speichern der Rückgabe: ' . $e->getMessage()
+                ]);
         }
-
-        /*
-        |-------------------------------------
-        | Notifications
-        |-------------------------------------
-        */
-        /*
-        $roles = Role::whereIn('name', ['Administrator', 'IT-Administrator'])
-            ->with('users')
-            ->get();
-
-        foreach ($roles as $role) {
-            foreach ($role->users as $user) {
-                $user->notify(new CreateRueckgabeNotification($success));
-            }
-        } */
-
-        return redirect()
-            ->route('geraet.rueckgabe.index')
-            ->with('success', 'Rückgabe erfolgreich erstellt.');
     }
 
     /**
@@ -156,15 +199,41 @@ class GeraetrueckgabeController extends Controller
      */
     public function destroy(string $id)
     {
-        //
+        try {
+            $geraetrueckgabe = Geraetrueckgabe::findOrFail($id);
+
+            $geraetrueckgabe->delete();
+
+            return response()->json(['message' => 'Rückgabe erfolgreich gelöscht!'], 200);
+        } catch (ModelNotFoundException $e) {
+            return response()->json(['message' => 'Rückgabe nicht gefunden.'], 404);
+        } catch (Exception $e) {
+            return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
+        }
     }
 
     public function geraete($id)
     {
-        $ausgabe = Geraetausgabe::with('geraete')->findOrFail($id);
+        
+        $ausgabe = DB::table('geraets')
+            ->join('geraet_has_ausgabes', 'geraets.id', '=', 'geraet_has_ausgabes.geraet_id')
 
-        return response()->json([
-            'geraete' => $ausgabe->geraete
-        ]);
+            ->where('geraet_has_ausgabes.ausgabe_id', $id)
+
+            ->whereNotExists(function ($query) use ($id) {
+                $query->select(DB::raw(1))
+                    ->from('geraet_has_rueckgabes')
+                    ->join('geraetrueckgabes', 'geraetrueckgabes.id', '=', 'geraet_has_rueckgabes.rueckgabe_id')
+                    ->whereColumn('geraet_has_rueckgabes.geraet_id', 'geraets.id')
+                    ->where('geraetrueckgabes.ausgabe_id', $id);
+            })
+
+            ->select('geraets.*')
+            ->get();
+
+        return response()->json($ausgabe);
     }
+
+
+     
 }

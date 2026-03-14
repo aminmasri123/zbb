@@ -244,6 +244,7 @@ class UserSeeder extends Seeder
                 'nachname' => $person['nachname'],
                 'geburtsdatum' => $person['geburtsdatum'],
                 'geschlecht' => $person['geschlecht'],
+                'typ' => $person['typ'],
 
             ]);
 
