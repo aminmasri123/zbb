@@ -37,6 +37,7 @@ use App\Http\Controllers\ProjektHasPersonenController;
 use App\Http\Controllers\ProjektHasTeilnehmerController;
 use App\Http\Controllers\ProjektHasTeilnehmerLuvController;
 use App\Http\Controllers\RaumlichkeitenController;
+use App\Http\Controllers\RolleController;
 use App\Http\Controllers\SchuleController;
 use App\Http\Controllers\StandortController;
 use App\Http\Controllers\TeilnehmerController;
@@ -83,25 +84,12 @@ Route::post('/set-locale', function () {
 
 Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->group(function() {
 
-
-
-
     Route::get('/dashboard', [DashbaordController::class, 'dashboard'])->name('dashboard');
+    Route::get('/organisation', function () {return Inertia::render('Dashboards/Organisation');})->name('organisation.index');
+    Route::get('/ressourcen', function () {return Inertia::render('Dashboards/Ressourcen');})->name('ressourcen.index');
+    Route::get('/finanzen', function () { return Inertia::render('Dashboards/Finanzen');})->name('finanzen.index');
 
-
-    Route::get('/organisation', function () {
-        return Inertia::render('Dashboards/Organisation');
-    })->name('organisation.index');
-
-    Route::get('/ressourcen', function () {
-        return Inertia::render('Dashboards/Ressourcen');
-    })->name('ressourcen.index');
-
-    Route::get('/finanzen', function () {
-        return Inertia::render('Dashboards/Finanzen');
-    })->name('finanzen.index');
-
-
+    //Schuld
     Route::get('/schule', [SchuleController::class, 'index'])->name('schule.index')->can('schule.index');;
 
     //Standort
@@ -110,22 +98,19 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::delete('/standort/{id}', [StandortController::class, 'destroy'])->name('standort.destroy');
     Route::put('/standort/{id}', [StandortController::class, 'update'])->name('standort.update');
 
-
-
-
     // Personal
     Route::get('ressourcen/personal', [PersonalController::class, 'index'])->name('personal.index');
     Route::get('ressourcen/personal/edit/{id}', [PersonalController::class, 'edit'])->name('personal.edit');
     Route::put('ressourcen/personal/update/{user}', [PersonalController::class, 'update'])->name('personal.update');
-
 
     Route::post('/toggleCheck', [UserController::class, 'check'])->name('user.check');
 
     //Einstellung -- Rolle
     Route::get('/berechtigung/{id?}', [BerechtigungController::class, 'index'])->name('berechtigung.index');
     Route::post('/berechtigungZuweisen', [BerechtigungController::class, 'berechtigungZuweisen'])->name('berechtigung.zuweisen');
-    Route::delete('/berechtigung/{id}', [BerechtigungController::class, 'destroy'])->name('rolle.destroy');
-
+    
+    Route::delete('/rolle/loeschen/{id}', [RolleController::class, 'destroy'])->name('rolle.destroy');
+    Route::post('/rolle/anlegen', [RolleController::class, 'store'])->name('rolle.store');
 
     //Benutzer
     Route::get('/benutzer', [UserController::class, 'index'])->name('user.index');
@@ -146,15 +131,12 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::post('/bereich/anlegen', [BereichController::class, 'store'])->name('bereich.store');
     Route::delete('/bereiche/{id}', [BereichController::class, 'destroy'])->name('bereich.destroy');
 
-
-
     //Abteilungen
     Route::get('/abteilung', [AbteilungController::class, 'index'])->name('abteilung.index');
     Route::get('/abteilung/ajaxFresh', [AbteilungController::class, 'indexAjaxFresh'])->name('abteilung.indexAjaxFresh');
     Route::post('/abteilung/anlegen', [AbteilungController::class, 'store'])->name('abteilung.store');
     Route::delete('/abteilungen/{id}', [AbteilungController::class, 'destroy'])->name('abteilung.destroy');
     Route::put('/abteilung/update/{abteilung}', [AbteilungController::class, 'update'])->name('abteilung.update');
-
 
     //Projekte
     Route::get('/projekt', [ProjektController::class, 'index'])->name('projekt.index');
@@ -171,16 +153,13 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
 
     //GruppeHasTeilnehmer
     Route::get('/gruppehasteilnehmer/{id}', [GruppeHasTeilnehmerController::class, 'show'])->name('gruppeHasTeilnehmer.show');
-
     Route::post('/gruppehasteilnehmer/anlegen', [GruppeHasTeilnehmerController::class, 'store'])->name('gruppeHasTeilnehmer.store');
 
     Route::delete('/gruppehasteilnehmer/entfernen/{id}', [GruppeHasTeilnehmerController::class, 'destroy'])->name('gruppeHasPersonen.destroy');
 
     //Teilnehmer
     Route::get('/teilnehmer', [TeilnehmerController::class, 'index'])->name('teilnehmer.index');
-
     Route::get('/teilnehmer/{id}', [TeilnehmerController::class, 'indexNachProjekt'])->name('teilnehmer.projekt.index');
-
     Route::get('/teilnehmer/anlegen', function () { return Inertia::render('Teilnehmer/CreateTeilnehmer'); })->name('teilnehmer.create');
     Route::post('/teilnehmer/anlegen', [TeilnehmerController::class, 'store'])->name('teilnehmer.store');
     Route::post('/teilnehmer/import', [TeilnehmerController::class, 'import'])->name('teilnehmer.import');
@@ -196,33 +175,24 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     // Personen Has Praktikum
     Route::post('/teilnehmer/praktikum/anlegen', [PersonenHasBildungsmassnahmenController::class, 'store'])->name('teilnehmer.praktikum.store');
 
-
     //Räumlichkeiten
     Route::get('/ressourcen/standort/raeumlichkeiten/', [RaumlichkeitenController::class, 'index'])->name('raeumlichkeiten.index');
     Route::post('/ressourcen/standort/raeumlichkeiten/anlegen', [RaumlichkeitenController::class, 'store'])->name('raeumlichkeiten.store');
     Route::put('/ressourcen/standort/raeumlichkeiten/update/{id}', [RaumlichkeitenController::class, 'update'])->name('raeumlichkeiten.update');
     Route::delete('/ressourcen/standort/raeumlichkeiten/entfernen/{id}', [RaumlichkeitenController::class, 'destroy'])->name('raeumlichkeiten.destroy');
 
-
-
     //Anwesenheiten
-
     Route::post('/anwesenheit/speichern', [AnwesenheitController::class, 'store'])->name('anwesenheit.store');
-
     Route::delete('/anwesenheit/entfernen/{id}', [AnwesenheitController::class, 'destroy'])->name('anwesenheit.destroy');
-
     Route::post('/anwesenheit/update', [AnwesenheitController::class, 'update'])->name('anwesenheit.update');
 
     //Kontakte
     Route::delete('/teilnehmer/kontakt/entfernen/{id}', [KontaktController::class, 'destroy'])->name('kontakt.destroy');
     Route::post('/teilnehmer/kontakt/anlegen', [KontaktController::class, 'store'])->name('kontakt.store');
 
-
-
     //Adresse
     Route::post('/teilnehmer/adresse/anlegen', [AdresseController::class, 'store'])->name('adresse.store');
     Route::delete('/teilnehmer/adresse/entfernen/{id}', [AdresseController::class, 'destroy'])->name('adresse.destroy');
-
 
     //ProjektHasTeilnehmer
     Route::post('/teilnehmer/projekt/anlegen', [ProjektHasTeilnehmerController::class, 'store'])->name('projekthasteilnehmer.store');
@@ -238,7 +208,6 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::post('/personen/projekt/zuweisen', [ProjektHasPersonenController::class, 'store'])->name('projekthaspersonen.store');
     Route::delete('/personen/projekt/entfernen/{id}', [ProjektHasPersonenController::class, 'destroy'])->name('projekthaspersonen.destroy');
 
-
     //Teilnehmer Bank
     Route::post('/teilnehmer/bank/anlegen', [BaenkeController::class, 'store'])->name('bank.store');
     Route::delete('/teilnehmer/bank/entfernen/{id}', [BaenkeController::class, 'destroy'])->name('bank.destroy');
@@ -246,31 +215,20 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     //Partner
     Route::get('/organisation/partner', [PartnerController::class, 'index'])->name('partner.index');
     Route::get('/partner', [PartnerController::class, 'index'])->name('dashboard.partner.index');
-
     Route::post('/organisation/partner/anlegen', [PartnerController::class, 'store'])->name('partner.store');
     Route::delete('/organisation/partner/entfernen/{id}', [PartnerController::class, 'destroy'])->name('partner.destroy');
     Route::put('/organisation/partner/edit/{id}', [PartnerController::class, 'update'])->name('partner.update');
-
     Route::get('/organisation/partner/ajax/fresh', [PartnerController::class, 'indexAjaxFresh'])->name('partner.indexAjaxFresh');
-
-
-
-
 
     //Kostenstelle
     Route::get('/kostenstelle', [KostenstelleController::class, 'index'])->name('kostenstelle.index');
-
 
     Route::get('/design/responsive', function () {
         return Inertia::render('Design/Responsive');
     })->name('responsive');
 
-
-
     //Notification
-
-    Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead'])
-    ->name('notifications.readAll');
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead'])->name('notifications.readAll');
 
     //Brief
         Route::post('/brief', [BriefController::class, 'store'])->name('brief.store');
@@ -278,15 +236,12 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
         Route::delete('/brief/delete/{id}', [BriefController::class, 'destroy'])->name('brief.destroy');
         Route::delete('/brief/shared/delete/{id}', [BriefController::class, 'sharedDestroy'])->name('briefShared.destroy');
 
-
     //Notizen
         Route::post('/notizen', [NotizController::class, 'store'])->name('notizen.store');
         Route::delete('/notizen/delete/{id}', [NotizController::class, 'destroy'])->name('notizen.destroy');
 
-
         //Export
         Route::get('/teilnehmer/export/stammblatt/{teilnehmerId}/{projektId}', [ExportExcelController::class, 'esfStammblatt'])->name('export.excel.esfStammblatt');
-
 
     //Fahrtarten
     Route::get('/finanzen/fahrtarten', [FahrtartenController::class, 'index'])->name('fahrtarten.index');
@@ -298,7 +253,6 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::post('/finanzen/fahrtkosten/anlegen', [FahrtkostensaetzeController::class, 'store'])->name('fahrtkosten.store');
     Route::delete('/finanzen/fahrtkosten/delete/{id}', [FahrtkostensaetzeController::class, 'destroy'])->name('fahrtkosten.destroy');
 
-
     //Teilnehmer Farhten
     Route::post('/fahrtkosten/Abrechnen/anlegen', [FahrtkostenAbrechnenController::class, 'store'])->name('fahrtkostenAbrechnung.store');
     Route::delete('/fahrtkosten/Abrechnen/delete/{id}', [FahrtkostenAbrechnenController::class, 'destroy'])->name('fahrtkostenAbrechnung.destroy');
@@ -308,13 +262,9 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
         // Fahrzeuge
         Route::get('/dienstwagen', [DienstwagenController::class, 'index'])->name('index');
         Route::get('/dienstwagen/edit/{id}', [DienstwagenController::class, 'edit'])->name('edit');
-
         Route::get('/dienstwagen/create', [DienstwagenController::class, 'create'])->name('create');
         Route::post('/dienstwagen', [DienstwagenController::class, 'store'])->name('store');
         Route::delete('/dienstwagen/{wagen}', [DienstwagenController::class, 'destroy'])->name('destroy');
-
-
-
         Route::put('dienstwagen/update/{id}', [DienstwagenController::class, 'update'])->name('update');
 
         // Fahrer
@@ -342,9 +292,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
         Route::get('/fahrtenbuch/report/pdf', [DienstwagenfahrtenbuchController::class, 'generateFahrtenbuchPDF'])->name('fahrtenbuch.report.pdf');
         Route::get('/fahrtenbuch/report/excel', [DienstwagenfahrtenbuchController::class, 'generateFahrtenbuchExcel'])->name('fahrtenbuch.report.excel');
     });
-
-
-
+    //End Prefix Ressourcen
 
   //Dokumente Exportieren
     Route::get('/export/dokument/{id}', [ExportWordController::class, 'info_teilnehmende'])->name('export.info_teilnehmende');
@@ -352,7 +300,6 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::get('/export/dokument/datenschutzhinweis_art13/{id}', [ExportWordController::class, 'datenschutzhinweis_art13'])->name('export.datenschutzhinweis_art13');
     Route::get('/export/dokument/einverstaendnis_datenschutz_esf/{id}', [ExportWordController::class, 'einverstaendnis_datenschutz_esf'])->name('export.einverstaendnis_datenschutz_esf');
     Route::get('/export/dokument/fehlzeitenkonzept/{id}', [ExportWordController::class, 'fehlzeitenkonzept'])->name('export.fehlzeitenkonzept');
-
     Route::get('/export/dokument/einverstaendnis_foto/{id}', [ExportWordController::class, 'einverstaendnis_foto'])->name('export.einverstaendnis_foto');
     Route::get('/export/dokument/einverstaendnis_elternarbeit/{id}', [ExportWordController::class, 'einverstaendnis_elternarbeit'])->name('export.einverstaendnis_elternarbeit');
     Route::get('/export/dokument/edv_nutzungsvereinbarung/{id}', [ExportWordController::class, 'edv_nutzungsvereinbarung'])->name('export.edv_nutzungsvereinbarung');
@@ -360,10 +307,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
 
 
     Route::get('/export/dokument/anwesenheitslite_V1/{id}', [ExportExcelController::class, 'anwesenheitslite_V1'])->name('export.anwesenheitslite_V1');
-
     Route::get('/export/dokument/anwesenheitliste_monat_projekt_gruppe/{id}', [ExportExcelController::class, 'anwesenheitliste_monat_projekt_gruppe'])->name('export.projekt.anwesenheit.periode');
-
-
 
     /*   Gerät */
     Route::get('/ressourcen/geraet', [GeraetController::class, 'index'])->name('geraet.index');
@@ -371,62 +315,35 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::post('/ressourcen/geraet-destroy', [GeraetController::class, 'destroy'])->name('geraet.delete');
     Route::post('/ressourcen/geraet-store', [GeraetController::class, 'store'])->name('geraet.store');
     Route::post('/ressourcen/geraet-update/{id}', [GeraetController::class, 'update'])->name('geraet.update');
-
-
-        Route::post('/import/geraet', [GeraetController::class, 'import'])->name('geraet.import');
-
-
-
-
-
-
-
+    Route::post('/import/geraet', [GeraetController::class, 'import'])->name('geraet.import');
     Route::get('/get-geraet-id', [GeraetController::class, 'getGeraeteID'])->name('getGeraeteID');
-
-
-
     Route::get('/ausleihende', [GeraetController::class, 'indexAusleihende'])->name('geraet.index.ausleihende')->middleware(['check.permission:index-ausleihende'])->middleware('notifications');
 
     /*   Gerät Ausgabe */
     Route::get('/ressourcen/geraetausgabe', [GeraetausgabeController::class,'index'])->name('geraet.ausgabe.index');
     Route::post('/gressourcen/eraetausgabe', [GeraetausgabeController::class,'store'])->name('geraet.ausgabe.store');
     Route::delete('/ressourcen/geraetausgabe/{id}', [GeraetausgabeController::class, 'destroy'])->name('geraetausgabe.destroy');
-
     Route::get('/ressourcen/geraetausgabe-view/{id}', [GeraetausgabeController::class, 'view'])->name('ausgabe.view');
     Route::get('/ressourcen/geraetausgabe-excel/{id}', [GeraetausgabeController::class, 'exportExcel'])->name('geraet.ausgabe.export.excel');
     Route::post('/ressourcen/geraetausgabe-store-add', [GeraetausgabeController::class, 'storeAdd'])->name('geraet.ausgabe.store.add');
-
 
     /*   Gerät Rückgabe */
     Route::get('/ressourcen/geraet/rueckgabe', [GeraetrueckgabeController::class,'index'])->name('geraet.rueckgabe.index');
     Route::post('/ressourcen/geraet/rueckgabe', [GeraetrueckgabeController::class,'store'])->name('geraet.rueckgabe.store');
     Route::delete('/ressourcen/geraetrueckgabe/{id}', [GeraetrueckgabeController::class, 'destroy'])->name('geraetrueckgabe.destroy');
-
-
-
-
     Route::get('/ressourcen/geraetrueckgabe-view/{id}', [GeraetrueckgabeController::class, 'view'])->name('rueckgabe.view');
     Route::get('/ressourcen/geraetrueckgabe-excel/{id}', [GeraetrueckgabeController::class, 'exportExcel'])->name('geraet.rueckgabe.export.excel');
     Route::post('/ressourcen/geraetrueckgabe-store-add', [GeraetrueckgabeController::class, 'storeAdd'])->name('geraet.rueckgabe.store.add');
     Route::get('/ressourcen/geraet/rueckgabe/{id}/geraete', [GeraetrueckgabeController::class, 'geraete'])->name('geraet.rueckgabe.geraete');
 
-
-
-
     /*   Bestellungen // Materialanforderung */
-
     Route::get('/Bestellungen', [MaterialanforderungController::class, 'index'])->name('materialanforderung.index');
     Route::get('/Materialanforderung/{id}', [MaterialanforderungController::class, 'show'])->name('materialanforderung.show');
     Route::get('/Bestellungen/create', [MaterialanforderungController::class, 'create'])->name('materialanforderung.create');
     Route::post('/Bestellungen/senden', [MaterialanforderungController::class,'store'])->name('materialanforderung.store');
+    Route::put('/Bestellungen/update', [MaterialanforderungController::class,'update'])->name('materialanforderung.update');
 
 
     Route::post('/materialanforderung/sachlich/{id}/genehmigen', [MaterialanforderungController::class, 'genehmigenSachlich'])->name('materialanforderung.sachlich.genehmigen');
-});
-
-
-
-
-
-
-
+    Route::get('/materialanforderung/{id}/{status}/genehmigen', [MaterialanforderungController::class, 'genehmigen'])->name('materialanforderung.genehmigen');
+}); 

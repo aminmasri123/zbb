@@ -6,6 +6,7 @@ use App\Models\Materialanforderung;
 use App\Models\MaterialanforderungGenehmigung;
 use App\Models\Projekt;
 use App\Models\User;
+use App\Notifications\CreateMaterialanforderungGenehmigenKufmaenischNotification;
 use App\Notifications\CreateMaterialanforderungNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -53,15 +54,15 @@ class MaterialanforderungController extends Controller
 
     // Berechtigungen
     if ($user->can('materialanforderung.kaufmännische_freigabe.index')) {
-        // Zeige alle, nichts filtern
+         $query->where('status', '!=', 'entwurf')->where('status', '!=', 'eingereicht');
     }
     elseif ($user->can('materialanforderung.sachlische_freigabe.index')) {
         // Alle Projekte, die dem User zugeordnet sind
         $projekteIds = $user->projekte()->pluck('projekts.id');
-        $query->whereHas('projekt', function ($q) use ($projekteIds) {
+        $query->where('status', 'eingereicht')
+        ->whereHas('projekt', function ($q) use ($projekteIds) {
             $q->whereIn('projekts.id', $projekteIds);
         });
-
 
     } else {
         // Nur eigene
@@ -89,8 +90,6 @@ class MaterialanforderungController extends Controller
 
     public function store(Request $request)
     {
-
-     
         $data = $request->validate([
             'projekt' => 'required|string',
             'kostenstelle' => 'required|string',
@@ -146,7 +145,7 @@ class MaterialanforderungController extends Controller
                 'pos' => $pos['pos'],
                 'artikel' => $pos['artikel'],
                 'link' => $pos['link'],
-                'stück' => $pos['stueck'],
+                'stueck' => $pos['stueck'],
                 'art_nr' => $pos['art_nr'],
                 'einzelpreis' => $pos['einzelpreis'],
                 'mwst' => $pos['mwst'],
@@ -183,17 +182,65 @@ class MaterialanforderungController extends Controller
         return redirect()->route('materialanforderung.index');
     }
 
-    public function update(Request $request, Materialanforderung $materialanforderung)
+    public function update(Request $request)
     {
-        $data = $request->validate([
-            'projekt' => 'required|string',
-            'kostenstelle' => 'required|string',
-            'bemerkungen' => 'nullable|string',
+        $anforderung = Materialanforderung::with('artikeln')->findOrFail($request->id);
+       
+        // Berechtigung prüfen
+        $this->authorize('materialanforderung.update');
+
+        // Nur Entwürfe dürfen bearbeitet werden
+        if($anforderung->status !== 'entwurf'){
+            abort(403, 'Nur Entwürfe können bearbeitet werden');
+        }
+
+        // Validierung
+        $validator = $request->validate([
+            'kostenstelle' => ['required', 'string', 'max:255'],
+            'bemerkungen' => ['nullable', 'string'],
+            'artikeln' => ['required', 'array', 'min:1'],
+            'artikeln.*.artikel' => ['required', 'string', 'max:255'],
+            'artikeln.*.stueck' => ['required', 'integer', 'min:1'],
+            'artikeln.*.einzelpreis' => ['required', 'numeric', 'min:0'],
+            'artikeln.*.mwst' => ['required', 'numeric', 'between:0,100'],
+            'artikeln.*.link' => ['nullable', 'url'],
+            'artikeln.*.art_nr' => ['nullable', 'string', 'max:100'],
         ]);
 
-        $materialanforderung->update($data);
+        
 
-        return redirect()->route('materialanforderung.index');
+        // Materialanforderung aktualisieren
+        $anforderung->update([
+            'kostenstelle' => $request->kostenstelle,
+            'bemerkungen' => $request->bemerkungen,
+        ]);
+
+        // Artikel aktualisieren / erstellen
+        foreach ($request->artikeln as $a) {
+            if (isset($a['id']) && $artikel = $anforderung->artikeln()->find($a['id'])) {
+                $artikel->update([
+                    'pos' => $a['pos'],
+                    'artikel' => $a['artikel'],
+                    'stueck' => $a['stueck'],
+                    'art_nr' => $a['art_nr'] ?? null,
+                    'einzelpreis' => $a['einzelpreis'],
+                    'mwst' => $a['mwst'],
+                    'gesamtpreis' => $a['stueck'] * $a['einzelpreis'],
+                    'link' => $a['link'] ?? null,
+                ]);
+            } else {
+                $anforderung->artikeln()->create([
+                    'pos' => $a['pos'],
+                    'artikel' => $a['artikel'],
+                    'stueck' => $a['stueck'],
+                    'art_nr' => $a['art_nr'] ?? null,
+                    'einzelpreis' => $a['einzelpreis'],
+                    'mwst' => $a['mwst'],
+                    'gesamtpreis' => $a['stueck'] * $a['einzelpreis'],
+                    'link' => $a['link'] ?? null,
+                ]);
+            }
+        }
     }
 
     public function destroy(Materialanforderung $materialanforderung)
@@ -205,19 +252,35 @@ class MaterialanforderungController extends Controller
 
     public function show($id)
     {
+
+        $user = auth()->user();
+        $query = Materialanforderung::with(['projekt', 'besteller', 'artikeln'])
+        ->where('id', $id)
+        ->first();
+
+        if(!$query) {
+            return back()->with('error', 'Materialanforderung nicht gefunden.');
+        }
+        // Berechtigungen
+        if ($user->can('materialanforderung.kaufmännische_freigabe.index') || $user->can('materialanforderung.sachlische_freigabe.index')) {
+                   
+
+        }elseif($query->ersteller_id != $user->person->id){
+            return back()->with('error', 'Sie haben keine Berechtigung, diese Materialanforderung einzusehen.');
+        }
+  
         $notification = auth()->user()->notifications()->where('data->id', $id)->where('data->typ', 'Materialanforderung')->first();
         if ($notification) {
             $notification->markAsRead();
         }
-        $user = auth()->user();
-        $materialanforderung = Materialanforderung::where('id', $id)
-        ->with('artikeln', 'besteller')
-        ->first();
 
+     
         return Inertia::render('Bestellungen/Materialanforderung/Show', [
-            'anforderung' => $materialanforderung,
+            'anforderung' => $query,
             'canConfirmSachlich' => auth()->user()->can('materialanforderung.sachlische_freigabe.update'),
-            'canConfirmKaufmaenisch' => auth()->user()->can('materialanforderung.kaufmännische_freigabe.update')
+            'canConfirmKaufmaenisch' => auth()->user()->can('materialanforderung.kaufmännische_freigabe.update'),
+            'canEditMaterialanforderung' => auth()->user()->can('materialanforderung.update'),
+
         ]);
     }
 
@@ -233,6 +296,7 @@ class MaterialanforderungController extends Controller
         if ($anforderung->status !== 'Entwurf') {
             return back()->with('error', 'Diese Genehmigung wurde bereits bearbeitet.');
         }
+        
 
         // Genehmigung aktualisieren
         MaterialanforderungGenehmigung::create([
@@ -245,6 +309,53 @@ class MaterialanforderungController extends Controller
             $anforderung->update([
                 'status' => 'Freigegeben'
             ]);
+
+              $users = User::permission('materialanforderung.kaufmännische_freigabe.update')->get();
+                
+               
+            foreach ($users as $user) {
+                $user->notify(new CreateMaterialanforderungGenehmigenKufmaenischNotification($anforderung));
+            }
+
+        return back()->with('success', 'Materialanforderung erfolgreich sachlich genehmigt.');
+    }
+    public function genehmigen($id, $status)
+    {
+
+
+        if(!in_array($status, ['sachlich_genehmigt', 'freigegeben', 'kaufmaennisch_genehmigt'])) {
+            return back()->with('error', 'Ungültiger Status.');
+        }
+        
+        $user = auth()->user();
+        $anforderung = Materialanforderung::findOrFail($id);
+
+        if($status == 'eingereicht' && $anforderung->status != 'entwurf'){
+            return redirect()->back()->with('error', 'Ein fehler ist aufgetreten, bitte kontaktieren Sie den Administrator.');
+        }
+        if($status == 'sachlich_genehmigt' && $anforderung->status != 'eingereicht'){
+            return redirect()->back()->with('error', 'die Materialanforderung soll zu erst Freigegeben werden.');
+        }
+        if($status == 'kaufmaennisch_genehmigt' && $anforderung->status != 'sachlich_genehmigt'){
+            return redirect()->back()->with('error', 'Die Materialanforderung soll zuerst sachlich genehmigt werden.');
+        }
+        // Genehmigung aktualisieren
+        MaterialanforderungGenehmigung::create([
+                'anforderung_id' => $anforderung->id,
+                'genehmiger_id' => $user->person->id,
+                'status' => $status,
+            ]);
+        
+            $anforderung->update([
+                'status' => $status,
+            ]);
+
+
+            //muss nich gemacht werden mit notification
+              $users = User::permission('materialanforderung.kaufmännische_freigabe.update')->get();
+            foreach ($users as $user) {
+                $user->notify(new CreateMaterialanforderungGenehmigenKufmaenischNotification($anforderung));
+            }
 
         return back()->with('success', 'Materialanforderung erfolgreich sachlich genehmigt.');
     }

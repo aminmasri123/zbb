@@ -8,8 +8,6 @@ import Dropdown from 'primevue/dropdown'
 import MultiSelect from 'primevue/multiselect'
 import DatePicker from 'primevue/datepicker'
 
-import Modal from '@/Components/ModalForm.vue'
-
 const props = defineProps({
   visible: Boolean,
   ausleiher: Array,

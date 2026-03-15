@@ -17,7 +17,7 @@ return new class extends Migration
             $table->integer('pos');
             $table->text('link')->nullable();
             $table->string('artikel');
-            $table->integer('stück');
+            $table->integer('stueck');
             $table->string('art_nr')->nullable();
             $table->decimal('einzelpreis', 10, 2);
             $table->decimal('gesamtpreis', 10, 2);

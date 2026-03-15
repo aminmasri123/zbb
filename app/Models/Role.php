@@ -13,6 +13,7 @@ class Role extends SpatieRole
     protected $fillable = [
         'color',
         'name',
+        'guard_name',
         'id',
     ];
     public function berechtigungskategories(){

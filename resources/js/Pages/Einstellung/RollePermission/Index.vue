@@ -9,13 +9,15 @@
     import { Inertia } from '@inertiajs/inertia';
     import Dropdown from '@/Components/Dropdown.vue';
     import DropdownLink from '@/Components/DropdownLink.vue';
-
+    import ModalCreate from './ModalCreate.vue';
     // Search input state
     let seite = 'rolle';
     let search = ref('');
     let rolleToDelete = ref(null); // Speichert den Namen der User, die gelöscht werden soll
     let showModalLöschen = ref(false); // Modal für die Löschung
-
+    let isModalCreateOpen = ref(false);
+    const openModalCreate = () => { isModalCreateOpen.value = true; };
+    const closeModalCreate = () => { isModalCreateOpen.value = false; };
     const props = defineProps({
         rollen: {type: Array, default: () => [] }, // Setzt einen leeren Array als Standardwert
         berechtigungskategorien: { type: Array, default: () => [] }, // Setzt einen leeren Array als Standardwert
@@ -29,6 +31,9 @@
     // Fülle localAbteilungen mit den Daten aus den Props
     localRollen.value = [...props.rollen]; // Kopiere die Rollen in eine reaktive Variable
 
+    const addRolle = (rolle) => {
+    localRollen.value.push(rolle);
+};
     // Löschbestätigung anzeigen und Abteilungsnamen speichern
     const confirmDelete = (rolle) => {
         rolleToDelete.value = {
@@ -174,7 +179,7 @@
                 <div class="flex flex-col sm:flex-row">
                     <div class="mb-5 sm:relative sm:w-1/4 ">
                         <div class=" hidden sm:block sm:w-1/5 sm:fixed">
-                            <div class="w-full bg-orange-500 py-2 rounded-md text-center">
+                            <div @click="openModalCreate" class="w-full bg-orange-500 py-2 rounded-md text-center">
                                 <a href="#" class="text-white">
                                     <i class="fa fa-plus"></i> {{ $t('rolle_anlegen') }}
                                 </a>
@@ -266,5 +271,9 @@
                 <template #footer>      </template>
             -->
         </ModalDestroy>
+
+        <ModalCreate :visible="isModalCreateOpen"
+                 @close="closeModalCreate"
+                 @added="addRolle" />
     </app-layout>
 </template>

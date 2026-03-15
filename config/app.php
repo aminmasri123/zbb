@@ -58,7 +58,7 @@ return [
     |
     */
 
-    'url' => env('APP_URL', 'http://localhost'),
+    'url' => env('APP_URL', 'http://192.168.0.167'),
 
     'asset_url' => env('ASSET_URL', 'http://192.168.0.167'), //zbb
     //'asset_url' => env('ASSET_URL', 'http://192.168.101.13'),

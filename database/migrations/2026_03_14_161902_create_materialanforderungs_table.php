@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('projekt_id')->constrained('projekts')->onDelete('cascade');
             $table->string('kostenstelle');
-            $table->enum('status', ['Entwurf', 'Freigegeben', 'Genehmigt', 'Bestellt', 'Abgeschlossen'])->default('Entwurf');
+            $table->enum('status', ['entwurf', 'eingereicht', 'sachlich_genehmigt', 'kaufmaennisch_genehmigt','bestellt', 'teilweise_geliefert', 'geliefert', 'bestaetigt', 'abgeschlossen', 'abgelehnt', 'zur_ueberarbeitung', 'storniert'])->default('entwurf');
             $table->decimal('gesamtpreis', 10, 2)->default(0); // Summe aller Positionen
             $table->decimal('endsumme', 10, 2)->default(0); // Summe inkl. MwSt
             $table->text('bemerkungen')->nullable();
