@@ -143,6 +143,20 @@
                 </ul>
             </li>
 
+
+
+             <li v-if="['materialanforderung.index', 'materialanforderung.store', 'materialanforderung.update'].some(permission => $page.props.permissions.includes(permission))" class="submenu">
+                <a href="#" @click.prevent="toggleMenu('materialanforderung')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
+                    <i class="las la-shopping-bag mr-2"></i>
+
+                    <span v-if="!displayHideTextSidebar" >{{$t('Materialanforderung')}}</span>
+                    <span v-if="!displayHideTextSidebar" :class="{'rotate-180': activeMenu === 'materialanforderung', 'text-zbb': $page.component.startsWith('Einstellung')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
+                </a>
+                <ul v-show="activeMenu === 'materialanforderung'" class="pl-6 mt-2 space-y-2">
+                    <li v-if="$page.props.permissions.includes('materialanforderung.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('materialanforderung.index')">{{$t('Bestellungen')}}</Link></li>
+                </ul>
+            </li>
+
             <!-- Weitere Menüpunkte -->
         </SidebarLayout>
 

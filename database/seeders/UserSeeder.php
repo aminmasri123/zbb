@@ -567,6 +567,11 @@ class UserSeeder extends Seeder
                 'name' => 'Personal',
                 'beschreibung' => '',
             ],
+            [
+                //id = 27
+                'name' => 'Bestellungen',
+                'beschreibung' => '',
+            ]
 
         ]);
 
@@ -1080,6 +1085,77 @@ class UserSeeder extends Seeder
                 'berechtigungskategorie_id' => '20',
                 'beschreibung' => null
             ],
+             [
+                // id = 86
+                'name' => 'materialanforderung.index',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '27',
+                'beschreibung' => null
+            ],
+            [
+                // id = 87
+                'name' => 'materialanforderung.store',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '27',
+                'beschreibung' => null
+            ],
+             [
+                // id = 88
+                'name' => 'materialanforderung.update',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '27',
+                'beschreibung' => null
+            ],
+             [
+                // id = 89
+                'name' => 'materialanforderung.destroy',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '27',
+                'beschreibung' => null
+            ],
+            [
+                // id = 90
+                'name' => 'materialanforderung.sachlische_freigabe.index',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '27',
+                'beschreibung' => 'Übersicht aller zu prüfenden Anforderungen der Abteilungen'
+             ],
+             [
+                // id = 91
+                'name' => 'materialanforderung.sachlische_freigabe.update',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '27',
+                'beschreibung' => 'Eine Anforderung fachlich bearbeiten oder den Status auf "freigegeben" setzen.'
+             ],
+             [
+                // id = 92
+                'name' => 'materialanforderung.sachlische_freigabe.show',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '27',
+                'beschreibung' => 'Details zur fachlichen Prüfung einsehen.'
+             ],
+             [
+                // id = 93
+                'name' => 'materialanforderung.kaufmännische_freigabe.index',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '27',
+                'beschreibung' => 'Übersicht aller fachlich freigegebenen Anforderungen zur Budgetprüfung.'
+            ],
+            [
+                // id = 94
+                'name' => 'materialanforderung.kaufmännische_freigabe.update',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '27',
+                'beschreibung' => 'Eine Anforderung kaufmännisch bearbeiten oder den Status auf "freigegeben" setzen.'
+            ],
+            [
+                // id = 95
+                'name' => 'materialanforderung.kaufmännische_freigabe.show',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '27',
+                'beschreibung' => 'Details zur kaufmännischen Prüfung einsehen.'
+            ],
+
         ]);
 
         DB::table('model_has_roles')->insert([
@@ -1435,6 +1511,10 @@ class UserSeeder extends Seeder
             [
                 'role_id' => '1',
                 'berechtigungskategorie_id' => '26',
+            ],
+            [
+                'role_id' => '1',
+                'berechtigungskategorie_id' => '27',
             ],
         ]);
 

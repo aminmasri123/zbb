@@ -1,6 +1,7 @@
 <script setup>
 import { ref, defineProps, watch, defineEmits } from 'vue'
 import { router } from '@inertiajs/vue3'
+import Modal from '@/Components/ModalForm.vue'
 
 import InputText from 'primevue/inputtext'
 import Dropdown from 'primevue/dropdown'

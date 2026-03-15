@@ -7,12 +7,16 @@ use App\Models\Geraetausgabe;
 use App\Models\GeraetHasRueckgabe;
 use App\Models\Geraetrueckgabe;
 use App\Models\Personen;
+use App\Models\Projekt;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class GeraetrueckgabeController extends Controller
 {
@@ -232,6 +236,84 @@ class GeraetrueckgabeController extends Controller
             ->get();
 
         return response()->json($ausgabe);
+    }
+
+     public function view($id)
+    {
+        return Inertia::render('Geraet/Rueckgabe/View', [
+            'rueckgabe' => Geraetrueckgabe::where('id', $id)->with(['ausgabe', 'ausleiher', 'ausgabe.projekte', 'ausgabe.projekte.kostenstellen', 'geraete'])->first(),
+            'alle_kontakte' => Personen::mitarbeiter()->get(),
+            'alle_projekte' => Projekt::All(),
+            'nichtAusgegebeneGeraete' => Geraet::where('verfuegbarkeit', '=', 1)->get()
+        ]);
+    }
+
+     public function exportExcel($id)
+    {
+        $rueckgabe = Geraetrueckgabe::where('id', $id)->first();
+        $geraeteDistinct = $rueckgabe->geraete()
+            ->select('geraet', 'modell')
+            ->distinct()
+            ->get();
+
+        $geraeteArray = $geraeteDistinct->map(function($item) {
+            return $item->geraet . ' ' . $item->modell;
+        })->toArray();
+
+        // Verbinden des Arrays zu einem String
+        $geraeteString = implode(', ', $geraeteArray);
+
+        //Pfad zur vorhandenen Excel-Datei
+        $existingFile = storage_path('vorlage/projekte/ITabteilung/devicemanagement/Rueckgabeschein.xlsx');
+        if(!file_exists($existingFile)){
+            return redirect()->back()->with('error', 'Die Datei für den Export konnte nicht gefunden werden.');
+        }
+
+        // Excel-Datei öffnen
+        $spreadsheet = IOFactory::load($existingFile);
+        $sheet = $spreadsheet->getActiveSheet();
+
+        // Daten in den Zellen einfügen
+
+        $sheet->setCellValue('C7', $rueckgabe->ausgabe->projekte->name);
+        $sheet->setCellValue('C8', $rueckgabe->ausgabe->projekte->kostenstelle);
+
+
+        $sheet->setCellValue('F7', 'Rückgabeschein Nr.: ' . $rueckgabe->ruegabescheinNr );
+        $sheet->setCellValue('F8', 'Zu Ausgabeschein Nr.: ' . $rueckgabe->ausgabe->ausgabescheinNr );
+
+        $sheet->setCellValue('C12', $geraeteString);
+
+        $loop = 1;
+        $row = 15; // Startzeile für Daten
+        $sheet->setCellValue('B31', $rueckgabe->geraete->count());
+        $rueckgabedatum = $rueckgabe->rueckgabe;
+        $sheet->setCellValueExplicit('D33', date('d.m.Y', strtotime($rueckgabedatum)), DataType::TYPE_STRING);
+        $sheet->setCellValue('A39', date('d.m.Y'));
+
+        $sheet->setCellValue('C36', $rueckgabe->ausleiher->nachname );
+        $sheet->setCellValue('E36', $rueckgabe->ausleiher->vorname );
+
+        if($rueckgabe->geraete !=""){
+            foreach ($rueckgabe->geraete as $geraet) {
+                $sheet->setCellValue('A'.$row, $loop);
+                $sheet->setCellValue('B'.$row, $geraet->productID);
+                $sheet->setCellValue('C'.$row, $geraet->sn);
+                $row++;
+                $loop++;
+            }
+        }else{
+            return redirect()->back()->with('error', 'Die Ausgabe enthält kein Gerät.');
+        }
+
+        // Excel-Datei speichern
+        $writer = new Xlsx($spreadsheet);
+
+       $updatedFile = 'Rückgabeschein Nr. ' .  $rueckgabe->rueckgabescheinNr . '-'  . date('Ymd_His') . '.xlsx';
+       $writer->save($updatedFile);
+
+       // Aktualisierte Excel-Datei herunterladen
+       return response()->download($updatedFile)->deleteFileAfterSend(true);
     }
 
 

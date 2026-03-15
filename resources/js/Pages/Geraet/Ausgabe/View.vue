@@ -29,7 +29,7 @@ const closeModalAddForm= () => { isModalAddFormOpen.value = false }
 
                 <div class="flex gap-2">
                     <button class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200" @click="openModalAddForm" ><i class="las la-plus"></i></button>
-                    <button class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200" @click="pdfBlock">PDF</button>
+                    <button class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200" @click="pdfBlock"><i class="las la-file-pdf"></i>PDF</button>
                     <button class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200" @click="printBlock"> <i class="la la-print" aria-hidden="true"></i>Print</button>
                     <button class="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200"> <a :href="route('geraet.ausgabe.export.excel', ausgabe.id)" class="btn btn-white"> <i class="las la-file-excel"></i> Excel </a></button>
                 </div>

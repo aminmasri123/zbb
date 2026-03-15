@@ -8,7 +8,7 @@ import ModalDestroy from '@/Components/ModalDestroyForm.vue'
 
 import ModalCreate from '@/Pages/Geraet/Ausgabe/ModalCreate.vue';
 import ModalEdit from '@/Pages/Geraet/Ausgabe/ModalEdit.vue';
- let seite = 'geraetausgabe';
+let seite = 'geraetausgabe';
 let search = ref('')
 let ausgabeToDelete = ref(null)
 let showModalLöschen = ref(false)
@@ -73,141 +73,128 @@ watch(search, () => {
 
 <template>
 
-<Head title="Ausgabe" />
+    <Head title="Ausgabe" />
 
-<AppLayout>
+    <AppLayout>
 
-<template #header>Ausgabe</template>
+        <template #header>Ausgabe</template>
 
-<!-- Suchleiste -->
+        <!-- Suchleiste -->
 
-<div class="flex justify-around items-center mb-3">
+        <div class="flex justify-around items-center mb-3">
 
-<div @click="openModalCreate" class="flex items-center">
-<i class="la la-plus bg-white border border-gray-300 rounded-l-md px-5 py-3 text-zbb hover:text-white hover:bg-zbb"></i>
-</div>
+            <div @click="openModalCreate" class="flex items-center">
+                <i class="la la-plus bg-white border border-gray-300 rounded-l-md px-5 py-3 text-zbb hover:text-white hover:bg-zbb"></i>
+            </div>
 
-<input
-v-model="search"
-type="text"
-class="border border-gray-300 text-sm block w-full p-2.5"
-placeholder="Suchen ..."
-/>
+            <input v-model="search" type="text" class="border border-gray-300 text-sm block w-full p-2.5" placeholder="Suchen ..." />
 
-<Link :href="route('geraet.ausgabe.index')" class="flex items-center">
-<i class="la la-refresh bg-white border border-gray-300 rounded-r-md px-5 py-3 text-zbb"></i>
-</Link>
+            <Link :href="route('geraet.ausgabe.index')" class="flex items-center">
+                <i class="la la-refresh bg-white border border-gray-300 rounded-r-md px-5 py-3 text-zbb"></i>
+            </Link>
 
-</div>
+        </div>
 
 
-<!-- Tabelle -->
+        <!-- Tabelle -->
 
-<div class="shadow rounded-lg">
+        <div class="shadow rounded-lg">
 
-<table class="min-w-[1200px] w-full text-sm divide-y divide-gray-200">
+            <table class="min-w-[1200px] w-full text-sm divide-y divide-gray-200">
 
-    <thead class="bg-gray-200 text-gray-700 uppercase">
-        <tr class="text-left">
-            <th class="px-4 py-3">ID</th>
-            <th class="px-4 py-3">Ausgabeschein</th>
-            <th class="px-4 py-3">Ausleiher</th>
-            <th class="px-4 py-3">Projekt</th>
-            <th class="px-4 py-3">Kostenstelle</th>
-            <th class="px-4 py-3">Produkt ID</th>
-            <th class="px-4 py-3">Datum</th>
-            <th class="px-4 py-3 text-center">*</th>
-        </tr>
-    </thead>
+                <thead class="bg-gray-200 text-gray-700 uppercase">
+                    <tr class="text-left">
+                        <th class="px-4 py-3">ID</th>
+                        <th class="px-4 py-3">Ausgabeschein</th>
+                        <th class="px-4 py-3">Ausleiher</th>
+                        <th class="px-4 py-3">Projekt</th>
+                        <th class="px-4 py-3">Kostenstelle</th>
+                        <th class="px-4 py-3">Produkt ID</th>
+                        <th class="px-4 py-3">Datum</th>
+                        <th class="px-4 py-3 text-center">*</th>
+                    </tr>
+                </thead>
 
-    <tbody class="bg-white divide-y divide-gray-200">
-        <tr v-for="ausgabe in filteredAusgaben" :key="ausgabe.id" class="hover:bg-gray-50" >
-            <td class="px-4 py-3">{{ ausgabe.id }}</td>
-            <td class="px-4 py-3 font-semibold"> <Link :href="route('ausgabe.view', ausgabe.id)" target="_blank" > {{ ausgabe.ausgabescheinNr }} </Link> </td>
-            <td class="px-4 py-3">{{ ausgabe.ausleiher.vorname }} {{ ausgabe.ausleiher.nachname }}</td>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    <tr v-for="ausgabe in filteredAusgaben" :key="ausgabe.id" class="hover:bg-gray-50">
+                        <td class="px-4 py-3">{{ ausgabe.id }}</td>
+                        <td class="px-4 py-3 font-semibold">
+                            <Link :href="route('ausgabe.view', ausgabe.id)" target="_blank"> {{ ausgabe.ausgabescheinNr }}</Link>
+                        </td>
+                        <td class="px-4 py-3">{{ ausgabe.ausleiher.vorname }} {{ ausgabe.ausleiher.nachname }}</td>
 
-            <td class="px-4 py-3">
-            {{ ausgabe.projekte.name }}
-            </td>
+                        <td class="px-4 py-3">
+                            {{ ausgabe.projekte.name }}
+                        </td>
 
-           <td class="px-4 py-3">
-                <ul class="m-0 p-0 list-none">
-                    <li v-for="kostenstelle in ausgabe.projekte.kostenstellen" :key="kostenstelle.id">
-                        {{ kostenstelle.kostenstelle }}
-                    </li>
-                </ul>
-            </td>
+                        <td class="px-4 py-3">
+                            <ul class="m-0 p-0 list-none">
+                                <li v-for="kostenstelle in ausgabe.projekte.kostenstellen" :key="kostenstelle.id">
+                                    {{ kostenstelle.kostenstelle }}
+                                </li>
+                            </ul>
+                        </td>
 
-            <td class="px-4 py-3">
-                <ul class="m-0 p-0 list-none">
-                    <li v-for="geraet in ausgabe.geraete" :key="geraet.id" >
-                        {{ geraet.productID }}
-                    </li>
-                </ul>
-            </td>
+                        <td class="px-4 py-3">
+                            <ul class="m-0 p-0 list-none">
+                                <li v-for="geraet in ausgabe.geraete" :key="geraet.id">
+                                    {{ geraet.productID }}
+                                </li>
+                            </ul>
+                        </td>
 
-            <td class="px-4 py-3">
-            {{ formatDate(ausgabe.ausgabe) }}
-            </td>
+                        <td class="px-4 py-3">
+                            {{ formatDate(ausgabe.ausgabe) }}
+                        </td>
 
-            <td class="px-4 py-3 text-center">
+                        <td class="px-4 py-3 text-center">
 
-        <Dropdown>
+                            <Dropdown>
 
-        <template #trigger>
-        <i class="la la-ellipsis-v cursor-pointer"></i>
-        </template>
+                                <template #trigger>
+                                    <i class="la la-ellipsis-v cursor-pointer"></i>
+                                </template>
 
-        <template #content>
+                                <template #content>
 
-        <span
-        class="flex justify-between items-center px-4 py-2 hover:bg-gray-100 cursor-pointer"
-        @click="openModalEdit(ausgabe)"
-        >
-        Bearbeiten
-        <i class="las la-edit"></i>
-        </span>
+                                    <span
+                                        class="flex justify-between items-center px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                                        @click="openModalEdit(ausgabe)">
+                                        Bearbeiten
+                                        <i class="las la-edit"></i>
+                                    </span>
 
-        <span
-        class="flex justify-between items-center px-4 py-2 hover:bg-gray-100 cursor-pointer"
-        @click="confirmDelete(ausgabe)"
-        >
-        Löschen
-        <i class="las la-trash-alt"></i>
-        </span>
+                                    <span
+                                        class="flex justify-between items-center px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                                        @click="confirmDelete(ausgabe)">
+                                        Löschen
+                                        <i class="las la-trash-alt"></i>
+                                    </span>
 
-        </template>
+                                </template>
 
-        </Dropdown>
+                            </Dropdown>
 
-        </td>
+                        </td>
 
-        </tr>
-    </tbody>
+                    </tr>
+                </tbody>
 
-</table>
+            </table>
 
-</div>
+        </div>
 
 
-<!-- Modals -->
+        <!-- Modals -->
 
-<ModalCreate :visible="isModalCreateOpen" :ausleiher="ausleiher" :projekte="projekte" :geraete="geraete" @close="closeModalCreate" />
+        <ModalCreate :visible="isModalCreateOpen" :ausleiher="ausleiher" :projekte="projekte" :geraete="geraete"
+            @close="closeModalCreate" />
 
-<ModalEdit
-:visible="isModalEditOpen"
-:toEdit="ausgabeToEdit"
-@close="closeModalEdit"
-/>
+        <ModalEdit :visible="isModalEditOpen" :toEdit="ausgabeToEdit" @close="closeModalEdit" />
 
-<ModalDestroy
-v-if="showModalLöschen"
-:seite="seite"
-@delete="handleDelete"
-@close="showModalLöschen = false"
-:toDelete="ausgabeToDelete"
-/>
+        <ModalDestroy v-if="showModalLöschen" :seite="seite" @delete="handleDelete" @close="showModalLöschen = false"
+            :toDelete="ausgabeToDelete" />
 
-</AppLayout>
+    </AppLayout>
 
 </template>

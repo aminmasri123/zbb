@@ -137,53 +137,19 @@ watch(search, () => {
 
                     <tr v-for="rueckgabe in filteredRueckgaben" :key="rueckgabe.id" class="hover:bg-gray-50">
 
+                        <td class="px-4 py-3"> {{ rueckgabe.id }} </td>
+                        <td class="px-4 py-3 font-semibold"> <Link :href="route('rueckgabe.view', rueckgabe.id)" target="_blank" > {{ rueckgabe.rueckgabescheinNr }} </Link> </td>
+                        <td class="px-4 py-3"> {{ rueckgabe.ausgabe.ausgabescheinNr }}</td>
+                        <td class="px-4 py-3"> {{ rueckgabe.ausgabe.ausleiher.vorname }} {{ rueckgabe.ausgabe.ausleiher.nachname }} </td>
+                        <td class="px-4 py-3">{{ rueckgabe.ausgabe.projekte.name }}</td>
                         <td class="px-4 py-3">
-                            {{ rueckgabe.id }}
-                        </td>
-
-
-                        <td class="px-4 py-3 font-semibold">
-                            {{ rueckgabe.rueckgabescheinNr }}
-                        </td>
-
-
-                        <td class="px-4 py-3">
-                            {{ rueckgabe.ausgabe.ausgabescheinNr }}
-                        </td>
-
-
-                        <td class="px-4 py-3">
-                            {{ rueckgabe.ausgabe.ausleiher.vorname }}
-                            {{ rueckgabe.ausgabe.ausleiher.nachname }}
-                        </td>
-
-
-                        <td class="px-4 py-3">
-                            {{ rueckgabe.ausgabe.projekte.name }}
-                        </td>
-
-                        <td class="px-4 py-3">
-
                             <ul class="m-0 p-0 list-none">
-
-                                <li v-for="geraet in rueckgabe.geraete" :key="geraet.id">
-                                    {{ geraet.productID }}
-                                </li>
-
+                                <li v-for="geraet in rueckgabe.geraete" :key="geraet.id">{{ geraet.productID }}</li>
                             </ul>
-
                         </td>
-
-
-                        <td class="px-4 py-3">
-                            {{ formatDate(rueckgabe.rueckgabe) }}
-                        </td>
-
-
+                        <td class="px-4 py-3">{{ formatDate(rueckgabe.rueckgabe) }}</td>
                         <td class="px-4 py-3 text-center">
-
                             <Dropdown>
-
                                 <template #trigger>
                                     <i class="la la-ellipsis-v cursor-pointer"></i>
                                 </template>

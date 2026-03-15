@@ -154,12 +154,18 @@
                         <template #trigger >
                             <button class="inline-flex items-center py-2 mx-1 border border-transparent text-sm leading-4 font-medium rounded-md dark:text-white dark:hover:text-gray-300 hover:text-gray-700 focus:outline-none transition ease-in-out duration-150">
                                 <i class="las la-bell text-lg"></i>
+                                <span v-if="notifications.length > 0" class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full text-xs w-5 h-5 flex items-center justify-center">
+                                    {{ notifications.length }}
+                                </span>
+
                             </button>
                         </template>
                         <template #content>
                             <div class="block px-4 py-2 text-xs text-gray-400 border-b border-gray-200">{{$t('Benachrichtigungen')}}</div>
                             <li v-for="notification in notifications" :key="notification.id" class="list-none text-sm py-2 px-3 border-b border-gray-200 hover:bg-slate-100 dark:text-gray-700">
-                                {{ notification.data.message }}
+                                <a :href="notification.data.link" target="_blank" class="text-decoration-none">
+                                    {{ notification.data.message }}
+                                </a>
                             </li>
 
 
