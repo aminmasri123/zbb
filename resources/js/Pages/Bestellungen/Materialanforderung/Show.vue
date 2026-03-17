@@ -4,20 +4,33 @@ import { ref, reactive, computed } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import Modal from '@/Components/ModalForm.vue'
 import Swal from 'sweetalert2';
+import Dropdown from 'primevue/dropdown';
 
 const props = defineProps({
     anforderung: Object,
-    permissions: Object, 
+    permissions: Object,
     canEditMaterialanforderung: Boolean,
     canConfirmKaufmaenisch: Boolean,
-    canConfirmSachlich: Boolean
-
+    canConfirmSachlich: Boolean,
+    canBestellen: Boolean,
+    verlauf: Array
 })
+const anmerkung = ref('')
+const selectedStatus = ref(null)
+const statusOptions = [
+    { label: 'Überarbeiten', value: 'zur_ueberarbeitung' },
+    { label: 'Stornieren', value: 'stornieren' },
+    { label: 'Geliefert', value: 'geliefert' },
+    { label: 'Teilweise geliefert', value: 'teilweise_geliefert' },
+    { label: 'Bestellt', value: 'bestellt' }
+]
 // Bearbeitungsmodus
 const editing = ref(false)
 
 // Modal für Genehmigungen
-const visible = ref(false)
+const visibleBestellen = ref(false)
+const visibleKaufmaennisch = ref(false)
+const visibleSachlich = ref(false)
 const sendenModal = ref(false)
 
 // Formular für inline editing
@@ -76,19 +89,51 @@ const removeArtikel = (index) => {
 // Materialanforderung senden
 
 const bestellungSenden = () => {
-
-    router.get(route('materialanforderung.genehmigen', {id: props.anforderung.id, status: 'freigegeben'}))
-    
+    router.get(route('materialanforderung.genehmigen', {
+        id: props.anforderung.id,
+        status: 'eingereicht',
+        anmerkung: anmerkung.value
+    }), {
+        onSuccess: () => {
+            anmerkung.value = ''
+            sendenModal.value = false
+            Swal.fire('Erfolg!', 'Materialanforderung erfolgreich gesendet!', 'success')
+        }
+    })
 }
 const sachlichGenehmigt = () => {
-    router.get(route('materialanforderung.genehmigen', {id: props.anforderung.id, status: 'sachlich_genehmigt'}))
+    router.get(route('materialanforderung.genehmigen', {
+        id: props.anforderung.id,
+        status: 'sachlich_genehmigt',
+        anmerkung: anmerkung.value
+    }), {
+        onSuccess: () => {
+            anmerkung.value = '' // reset
+            visibleSachlich.value = false
+        }
+    })
 }
+
 const kaufmaennischGenehmigt = () => {
     router.get(route('materialanforderung.genehmigen', {id: props.anforderung.id, status: 'kaufmaennisch_genehmigt'}))
 }
+const bestellwesenUpdate = () => {
+    if (!selectedStatus.value) {
+        Swal.fire('Fehler', 'Bitte Status auswählen!', 'warning')
+        return
+    }
 
-
-
+    router.get(route('materialanforderung.genehmigen', {
+        id: props.anforderung.id,
+        status: selectedStatus.value,
+        anmerkung: anmerkung.value
+    }), {
+        onSuccess: () => {
+            anmerkung.value = ''
+            visibleBestellen.value = false
+        }
+    })
+}
 // Änderungen speichern
 const save = () => {
     // id zum Form-Datenobjekt hinzufügen
@@ -104,15 +149,23 @@ const save = () => {
 
 // Genehmigungsaktionen
 const sachlichGenehmigen = () => {
-    visible.value = true
+        anmerkung.value = ''
+
+    visibleSachlich.value = true
 }
 const kaufmaennischGenehmigen = () => {
-    visible.value = true
+        anmerkung.value = ''
+
+    visibleKaufmaennisch.value = true
 }
 const bestellen = () => {
-    visible.value = true
+        anmerkung.value = ''
+
+    visibleBestellen.value = true
 }
 const senden = () => {
+        anmerkung.value = ''
+
     sendenModal.value = true
 }
 
@@ -135,7 +188,7 @@ const senden = () => {
 
             <div class="flex gap-2">
                 <!-- Bearbeiten Button -->
-                  <button v-if="anforderung.status === 'entwurf' && !editing"
+                  <button v-if="anforderung.status === 'entwurf' || anforderung.status === 'zur_ueberarbeitung'  && !editing"
                         @click="senden"
                         class="bg-zbb text-white px-4 py-2 rounded">
                     Senden
@@ -143,7 +196,7 @@ const senden = () => {
                 <button v-if="editing" @click="save" class="bg-zbb text-white px-4 py-2 rounded">
                     Speichern
                 </button>
-                <button v-if="canEditMaterialanforderung && anforderung.status === 'entwurf'"
+                <button v-if="canEditMaterialanforderung && anforderung.status === 'entwurf' || anforderung.status === 'zur_ueberarbeitung'"
                         @click="editing = !editing"
                         class="bg-green-500 text-white px-4 py-2 rounded">
                         {{ editing ? 'Abbrechen' : 'Bearbeiten' }}
@@ -161,13 +214,21 @@ const senden = () => {
                     Kaufmännisch genehmigen
                 </button>
 
-                <button v-if="anforderung.status === 'kaufmaennisch_genehmigt' && permissions.bestellen"
-                        @click="bestellen"
-                        class="bg-purple-500 text-white px-4 py-2 rounded">
-                    Bestellen
-                </button>
 
-                
+                <template @click="bestellen" v-if="anforderung.status !== 'entwurf'
+                    && anforderung.status !== 'zur_ueberarbeitung' && anforderung.status !== 'eingereicht'
+                 && canBestellen">
+                   <Dropdown
+                    v-model="selectedStatus"
+                    :options="statusOptions"
+                    optionLabel="label"
+                    optionValue="value"
+                    placeholder="Status auswählen"
+                    class="w-full"
+                    @change="visibleBestellen = true"
+                />
+                </template>
+
             </div>
         </div>
     </template>
@@ -197,17 +258,28 @@ const senden = () => {
             </div>
         </div>
 
+        <div class="grid grid-cols-2 gap-6">
         <!-- Bemerkungen -->
-        <div class="bg-white p-6 rounded-2xl shadow-sm border">
-            <h3 class="font-semibold text-gray-800 mb-2">Bemerkung</h3>
-            <template v-if="editing">
-                <textarea v-model="form.bemerkungen" class="border rounded w-full px-2 py-1"></textarea>
-            </template>
-            <template v-else>
-                {{ anforderung.bemerkungen || 'Keine Bemerkung vorhanden.' }}
-            </template>
-        </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border">
+                <h3 class="font-semibold text-gray-800 mb-2">Bemerkung</h3>
+                <template v-if="editing">
+                    <textarea v-model="form.bemerkungen" class="border rounded w-full px-2 py-1"></textarea>
+                </template>
+                <template v-else>
+                    {{ anforderung.bemerkungen || 'Keine Bemerkung vorhanden.' }}
+                </template>
+            </div>
 
+            <!-- Verlauf -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border">
+                <h3 class="font-semibold text-gray-800 mb-2">Verlauf</h3>
+                <ul class="text-gray-600 text-sm space-y-1">
+                    <li v-for="v in verlauf" :key="v.id">
+                        <span class="font-medium">{{ v.genehmiger.vorname }} {{ v.genehmiger.nachname }}</span> - <b class="text-red-500">{{ v.status }}</b> am {{ new Date(v.created_at).toLocaleString() }} || <b class="text-red-500">Bemmerkung: </b>{{ v.kommentar }}
+                    </li>
+                </ul>
+            </div>
+        </div>
         <!-- Artikel -->
         <div class="bg-white rounded-2xl shadow-sm border overflow-hidden">
             <div class="flex justify-between items-center p-6 border-b">
@@ -285,26 +357,52 @@ const senden = () => {
     </div>
 
     <!-- Modal für Genehmigung -->
-    <Modal v-if="visible" @close="visible = false">
+    <Modal v-if="visibleSachlich" @close="visibleSachlich = false">
         <template #header>Genehmigung bestätigen</template>
         <template #body>
             <p>Sind Sie sicher, dass Sie diese Aktion ausführen möchten?</p>
+            <textarea
+                v-model="anmerkung"
+                placeholder="Anmerkung hinzufügen..."
+                class="w-full border rounded mt-3 px-3 py-2"
+            ></textarea>
         </template>
         <template #footer>
             <button @click="sachlichGenehmigt" class="bg-zbb text-white px-4 py-2 rounded">Bestätigen</button>
-            <button @click="visible=false" class="border px-4 py-2 rounded">Abbrechen</button>
+            <button @click="visibleSachlich=false" class="border px-4 py-2 rounded">Abbrechen</button>
         </template>
     </Modal>
 
     <!-- Kaufmännische bestätigung -->
-    <Modal v-if="visible" @close="visible = false">
+    <Modal v-if="visibleKaufmaennisch" @close="visibleKaufmaennisch = false">
         <template #header>Genehmigung bestätigen</template>
         <template #body>
             <p>Sind Sie sicher, dass Sie diese Aktion ausführen möchten?</p>
+            <textarea
+                v-model="anmerkung"
+                placeholder="Anmerkung hinzufügen..."
+                class="w-full border rounded mt-3 px-3 py-2">
+            </textarea>
         </template>
         <template #footer>
             <button @click="kaufmaennischGenehmigt" class="bg-zbb text-white px-4 py-2 rounded">Bestätigen</button>
-            <button @click="visible=false" class="border px-4 py-2 rounded">Abbrechen</button>
+            <button @click="visibleKaufmaennisch=false" class="border px-4 py-2 rounded">Abbrechen</button>
+        </template>
+    </Modal>
+    <!-- Bestellwesen update -->
+    <Modal v-if="visibleBestellen" @close="visibleBestellen = false">
+        <template #header>Genehmigung bestätigen</template>
+        <template #body>
+            <p>Sind Sie sicher, dass Sie diese Aktion ausführen möchten?</p>
+            <textarea
+                v-model="anmerkung"
+                placeholder="Anmerkung hinzufügen..."
+                class="w-full border rounded mt-3 px-3 py-2">
+            </textarea>
+        </template>
+        <template #footer>
+            <button @click="bestellwesenUpdate" class="bg-zbb text-white px-4 py-2 rounded">Bestätigen</button>
+            <button @click="visibleBestellen=false" class="border px-4 py-2 rounded">Abbrechen</button>
         </template>
     </Modal>
     <Modal v-if="sendenModal" @close="sendenModal = false">
@@ -312,6 +410,11 @@ const senden = () => {
         <template #body>
             <p><b>Sind Sie sicher, dass Sie diese Aktion ausführen möchten?</b></p>
             <p>Bitte achten Sie darauf, dass eine Bearbeitung der Materialanforderung nach der Versendung nicht mehr möglich ist.</p>
+            <textarea
+                v-model="anmerkung"
+                placeholder="Anmerkung hinzufügen..."
+                class="w-full border rounded mt-3 px-3 py-2">
+            </textarea>
         </template>
         <template #footer>
             <button @click="bestellungSenden" class="bg-zbb text-white px-2 py-2 rounded">Bestätigen</button>

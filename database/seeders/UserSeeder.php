@@ -1155,6 +1155,14 @@ class UserSeeder extends Seeder
                 'berechtigungskategorie_id' => '27',
                 'beschreibung' => 'Details zur kaufmännischen Prüfung einsehen.'
             ],
+            [
+                // id = 96
+                'name' => 'materialanforderung.bestellwesen.update',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '27',
+                'beschreibung' => 'eine Anforderung im Bestellwesen bearbeiten oder den Status auf "bestellt" setzen.'
+            ],
+
 
         ]);
 

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Personen;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -12,6 +13,7 @@ class MaterialanforderungGenehmigung extends Model
         'anforderung_id',
         'genehmiger_id',
         'kommentar',
+        'status'
     ];
 
     public function anforderung()
@@ -21,6 +23,6 @@ class MaterialanforderungGenehmigung extends Model
 
     public function genehmiger()
     {
-        return $this->belongsTo(User::class, 'genehmiger_id');
+        return $this->belongsTo(Personen::class, 'genehmiger_id');
     }
 }
