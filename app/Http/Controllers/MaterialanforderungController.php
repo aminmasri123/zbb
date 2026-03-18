@@ -8,6 +8,7 @@ use App\Models\Projekt;
 use App\Models\User;
 use App\Notifications\CreateMaterialanforderungGenehmigenKufmaenischNotification;
 use App\Notifications\CreateMaterialanforderungNotification;
+use App\Notifications\UpdateMaterialanforderungNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -380,7 +381,7 @@ class MaterialanforderungController extends Controller
             elseif($status == 'zur_ueberarbeitung' || $status == 'stornieren' || $status == 'bestellt')
             {
                 $user = User::find($anforderung->ersteller_id);
-                $user->notify(new CreateMaterialanforderungGenehmigenKufmaenischNotification($anforderung, $status));
+                $user->notify(new UpdateMaterialanforderungNotification($anforderung, $status));
                 return back()->with('success', 'Materialanforderung erfolgreich ' . $status . '.');
             }
 

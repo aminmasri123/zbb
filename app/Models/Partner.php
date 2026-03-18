@@ -4,8 +4,9 @@ namespace App\Models;
 
 use App\Models\PartnerHasPartnerschaftstypen;
 use App\Models\Partnerschaftstypen;
-use App\Models\ProjektHasAnprechpartner;
 use App\Models\Personen;
+use App\Models\PersonenIstSchueler;
+use App\Models\ProjektHasAnprechpartner;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -41,7 +42,7 @@ class Partner extends Model
             'partner_id',
             'id'
         );
-    } 
+    }
 
     /**
      * Nur falls du später direkte Ansprechpartner brauchst
@@ -57,13 +58,17 @@ class Partner extends Model
     }
 
    public function projektHasAnsprechpartner()
-{
-    return $this->hasMany(
-        ProjektHasAnprechpartner::class,
-        'ansprechpartner_id',
-        'id'
-    );
-}
+    {
+        return $this->hasMany( ProjektHasAnprechpartner::class, 'ansprechpartner_id', 'id');
+    }
 
-    
+    public function schueler()
+    {
+        return $this->hasMany( PersonenIstSchueler::class, 'schule_id', 'id');
+    }
+
+
+
+
+
 }

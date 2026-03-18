@@ -108,7 +108,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     //Einstellung -- Rolle
     Route::get('/berechtigung/{id?}', [BerechtigungController::class, 'index'])->name('berechtigung.index');
     Route::post('/berechtigungZuweisen', [BerechtigungController::class, 'berechtigungZuweisen'])->name('berechtigung.zuweisen');
-    
+
     Route::delete('/rolle/loeschen/{id}', [RolleController::class, 'destroy'])->name('rolle.destroy');
     Route::post('/rolle/anlegen', [RolleController::class, 'store'])->name('rolle.store');
 
@@ -346,4 +346,30 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
 
     Route::post('/materialanforderung/sachlich/{id}/genehmigen', [MaterialanforderungController::class, 'genehmigenSachlich'])->name('materialanforderung.sachlich.genehmigen');
     Route::get('/materialanforderung/{id}/{status}/genehmigen', [MaterialanforderungController::class, 'genehmigen'])->name('materialanforderung.genehmigen');
-}); 
+
+
+
+
+
+
+
+Route::get('/anwesenheitsdaten/{schulId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'index'])->name('index-anpassung-anwesenheitsdaten');
+Route::get('/teilnehmerliste/excel/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'exportExcel'])->name('export.teilnehmerliste.schule.excel');
+Route::get('/teilnehmerccliste/excel/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'index'])->name('teilnehmer.liste.schule');
+Route::get('/alleTeilnehmer/folder/create/{idSchule}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'create'])->name('alleTeilnehmer.folder.create');
+Route::get('/einteilung/{idSchule}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'show'])->name('einteilung.show');
+Route::get('/anwesenheitsliste/vorbereitung/bo/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'vorBOTage'])->name('anwesenheitslisteVorBOTage');
+Route::get('/anwesenheitsliste/pa/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'paTage'])->name('anwesenheitslistePATage');
+Route::get('/anwesenheitsliste/bo/tag1/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'boTag1'])->name('anwesenheitslisteBoTag1');
+Route::get('/anwesenheitsliste/bo/bibb/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'boTagbibb'])->name('anwesenheitslisteBoTagbibb');
+Route::get('/export/elterneinverstaendniserklaerung/{idSchule}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'elterneinverstaendniserklaerung'])->name('export.elterneinverstaendniserklaerung.schule');
+Route::get('/export/auswertungsbogen/pa/pdf/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'auswertungsbogenPA'])->name('export.auswertungsbogenPA.schule.pdf');
+Route::get('/export/hausordnung/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'show'])->name('hausordnungTag');
+Route::get('/export/anwesenheitsliste/rechnung/{idSchule}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'anwesenheitslisteRechnung'])->name('export.anwesenheitsliste.rechnung');
+Route::get('/export/zertifikat/pobo/{idSchule}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'zertifikatPobo'])->name('export.zertifikat.schule.pobo');
+Route::get('/export/zertifikat/pobo/pdf/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'zertifikatPoboPDF'])->name('export.zertifikat.schule.pobo.pdf');
+Route::get('/export/auswertung/pobo/{schulId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'auswertungPobo'])->name('export.auswertungBO.schule.pdf');
+Route::get('/export/auswertung/pobo/tofolder/{schulId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'auswertungPoboToFolder'])->name('export.auswertungBO.schule.pdf.tofolder');
+Route::get('/export/auswertung/pa/tofolder/{schulId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'auswertungPAToFolder'])->name('export.auswertungPA.schule.pdf.tofolder');
+Route::get('/export/auswertung/pobo/runde/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'auswertungPoboRunde'])->name('auswertungPoboModal');
+    });

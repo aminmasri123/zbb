@@ -2,26 +2,27 @@
 
 namespace App\Models;
 
-use App\Models\User;
-use App\Models\Baenke;
-use App\Models\Gruppe;
-use App\Models\Adresse;
-use App\Models\Fahrten;
-use App\Models\Projekt;
-use App\Models\Standort;
-use App\Models\Zielgruppe;
 use App\Models\Abschluesse;
+use App\Models\Adresse;
+use App\Models\Baenke;
 use App\Models\Dienstwagen;
-use App\Models\GruppeHasPersonen;
-use App\Models\PersonenHasNotizen;
-use App\Models\ProjektHasPersonen;
-use App\Models\Partnerschaftstypen;
 use App\Models\Dienstwagenfahrtenbuch;
+use App\Models\Fahrten;
+use App\Models\Gruppe;
+use App\Models\GruppeHasPersonen;
+use App\Models\Partnerschaftstypen;
 use App\Models\PersonenHasAbschluesse;
-use App\Models\PersonenHasSozialedaten;
-use Illuminate\Database\Eloquent\Model;
 use App\Models\PersonenHasBildungsmassnahmen;
+use App\Models\PersonenHasNotizen;
+use App\Models\PersonenHasSozialedaten;
+use App\Models\PersonenIstSchueler;
+use App\Models\Projekt;
+use App\Models\ProjektHasPersonen;
+use App\Models\Standort;
+use App\Models\User;
+use App\Models\Zielgruppe;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Personen extends Model
@@ -208,6 +209,12 @@ class Personen extends Model
     {
         return $this->belongsToMany(Standort::class, 'projekt_has_personens', 'personen_id', 'standort_id')
             ->withPivot('projekt_id');
+    }
+
+
+    public function schueler()
+    {
+        return $this->hasMany(PersonenIstSchueler::class, 'person_id', 'id');
     }
 
 

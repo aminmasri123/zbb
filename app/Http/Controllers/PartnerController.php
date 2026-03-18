@@ -41,6 +41,7 @@ class PartnerController extends Controller
                 'ansprechpartners.adresses',
                 'ansprechpartners.kontaktes',
                 'ansprechpartners.kontaktes.kontakttyp',
+                'schueler',
             ])
             ->join('partner_has_partnerschaftstypens', 'partners.id', '=', 'partner_has_partnerschaftstypens.partner_id')
             ->join('projekt_has_anprechpartners', 'partner_has_partnerschaftstypens.id', '=', 'projekt_has_anprechpartners.ansprechpartner_id')
@@ -50,6 +51,7 @@ class PartnerController extends Controller
             ->orderBy('partners.id')
 
             ->paginate(20);
+
 
         return Inertia::render('Partner/Index', [
             'partners' => $partners,
@@ -264,7 +266,7 @@ class PartnerController extends Controller
 
 
 
-   
+
 
 
 
