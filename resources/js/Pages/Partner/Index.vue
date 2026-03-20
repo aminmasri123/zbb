@@ -8,16 +8,10 @@ import Dropdown from '@/Components/Dropdown.vue';
 import ModalCreate from '@/Pages/Partner/ModalCreate.vue';
 import ModalDestroy from '@/Components/ModalDestroyForm.vue';
 import ModalEdit from '@/Pages/Partner/ModalEdit.vue';
+import ModalAnwesenheitslisteBIBB from './BOP/ModalAnwesenheitslisteBIBB.vue';
+import ModalAnwesenheitslistePA from './BOP/ModalAnwesenheitslistePA.vue'; // fehlte
 
-let seite = 'partner';
-let search = ref('');
-let partnerToDelete = ref(null); // Speichert den Namen der Abteilung, die gelöscht werden soll
-let showModalLöschen = ref(false); // Modal für die Löschung
-let isModalCreateOpen = ref(false);
-let isModalEditOpen = ref(false);
-let partnerToEdit = ref(null);
-
-// Definiere die Props direkt
+// Props
 const props = defineProps({
     partners: Object,
     partnerschaftstypen: Array,
@@ -25,52 +19,95 @@ const props = defineProps({
     kontaktypens: Array,
 });
 
-// Dropdown-Status
-const openDropdowns = ref({})
+// States
+let seite = 'partner';
+let search = ref('');
+let partnerToDelete = ref(null);
+let showModalLöschen = ref(false);
+let isModalCreateOpen = ref(false);
+let isModalEditOpen = ref(false);
+let partnerToEdit = ref(null);
+let activeModal = ref(null);
+let modalData = ref({ jahr: null, teil: null, klasse: null, partnerId: null });
+let localPartners = ref([...props.partners.data]);
+let filteredPartners = ref([...localPartners.value]);
 
+// Dropdowns
+const openDropdowns = ref({});
+const openSubDropdowns = ref({});
+
+// -----------------------------
+// Dropdown-Funktionen
+// -----------------------------
 function toggleDropdown(jahr, teil) {
-  const key = `${jahr}-${teil}`
-  openDropdowns.value[key] = !openDropdowns.value[key]
+    const key = `${jahr}-${teil}`;
+    openDropdowns.value[key] = !openDropdowns.value[key];
 }
 
 function isDropdownOpen(jahr, teil) {
-  return openDropdowns.value[`${jahr}-${teil}`] || false
+    return openDropdowns.value[`${jahr}-${teil}`] || false;
 }
 
-// Modals öffnen
-function openModal(modalId, jahr, teil) {
-  // Emit event zu Inertia Modal-Komponente oder setze Status
-  console.log(`Modal öffnen: ${modalId}, Jahr: ${jahr}, Teil: ${teil}`)
+function toggleSubDropdown(jahr, teil) {
+    const key = `${jahr}-${teil}`;
+    openSubDropdowns.value[key] = !openSubDropdowns.value[key];
 }
-const openModalCreate = () => {
-    isModalCreateOpen.value = true;
-};
 
-const closeModalCreate = () => {
-    isModalCreateOpen.value = false;
-};
+function isSubDropdownOpen(jahr, teil) {
+    return openSubDropdowns.value[`${jahr}-${teil}`] || false;
+}
 
+function getKlassen(jahr, teil, partner) {
+    return [...new Set(
+        partner.schueler
+            .filter(s => s.schuljahr === jahr && s.teil === teil)
+            .map(s => s.klasse)
+    )];
+}
 
-const openModalEdit = (partner) => {
-    partnerToEdit.value = partner;
-    isModalEditOpen.value = true;
-};
-const closeModalEdit = () => { isModalEditOpen.value = false; };
+// -----------------------------
+// Modal-Funktionen
+// -----------------------------
+function openModal(modalName, { jahr = null, teil = null, klasse = null, partnerId = null } = {}) {
+    activeModal.value = modalName;
+    modalData.value = { jahr, teil, klasse, partnerId };
+}
 
+function closeModal() {
+    activeModal.value = null;
+    modalData.value = { jahr: null, teil: null, klasse: null, partnerId: null, partner: null };
+}
 
-const updatepartner = (updatedpartner) => {
+const openModalCreate = () => isModalCreateOpen.value = true;
+const closeModalCreate = () => isModalCreateOpen.value = false;
+const openModalEdit = (partner) => { partnerToEdit.value = partner; isModalEditOpen.value = true; };
+const closeModalEdit = () => isModalEditOpen.value = false;
+
+// -----------------------------
+// Partner-Funktionen
+// -----------------------------
+const updatePartner = (updatedPartner) => {
     const index = localPartners.value.findIndex(b => b.id === updatedPartner.id);
-    if (index !== -1) {
-        localPartners.value[index] = updatedPartner;
+    if (index !== -1) localPartners.value[index] = updatedPartner;
+};
+
+// Filter / Suche
+const applySearchFilter = () => {
+    if (search.value) {
+        filteredPartners.value = localPartners.value.filter(partner =>
+            partner.name.toLowerCase().includes(search.value.toLowerCase())
+        );
+    } else {
+        filteredPartners.value = [...localPartners.value];
     }
 };
 
+watch(search, () => {
+    router.get('/organisation/partner', { search: search.value }, { preserveState: true, replace: true });
+    applySearchFilter();
+});
 
-// Fülle localPartner mit den Daten aus den Props
-let localPartners = ref([...props.partners.data]);  // Originaldaten
-let filteredPartners = ref([...localPartners.value]); // Gefilterte Daten
-
-// Funktion, um die Partners von der Datenbank abzurufen
+// Fetch / Compare
 const fetchPartners = async () => {
     try {
         const response = await axios.get(route('partner.indexAjaxFresh'));
@@ -80,144 +117,66 @@ const fetchPartners = async () => {
         return null;
     }
 };
-// Funktion zum Vergleichen und Laden der neuen Daten
+
 const compareAndReload = async () => {
     const newPartners = await fetchPartners();
-
     if (newPartners) {
-        // Überprüfe die aktuellen IDs der lokalen Partners
-        const localIds = localPartners.value.map(partner => partner.id);
-
-        // Neue Partners hinzufügen, die nicht in der lokalen Liste sind
-        newPartners.data.forEach(newPartner => {
-            if (!localIds.includes(newPartner.id)) {
-                localPartners.value.unshift(newPartner); // Füge neue Partner hinzu
-            }
+        const localIds = localPartners.value.map(p => p.id);
+        newPartners.data.forEach(np => {
+            if (!localIds.includes(np.id)) localPartners.value.unshift(np);
         });
-
-        // Partners entfernen, die nicht mehr in der neuen Liste sind
-        localPartners.value = localPartners.value.filter(localPartner =>
-            newPartners.data.some(newPartner => newPartner.id === localPartner.id)
+        localPartners.value = localPartners.value.filter(lp =>
+            newPartners.data.some(np => np.id === lp.id)
         );
         applySearchFilter();
-
     }
 };
-// Setze ein Intervall, um die Daten regelmäßig zu überprüfen
-setInterval(compareAndReload, 5000); // Alle 5 Sekunden vergleichen
-// Funktion, um die Suchergebnisse zu filtern
-const applySearchFilter = () => {
-    if (search.value) {
-        filteredPartners.value = localPartners.value.filter(partner =>
-            partner.name.toLowerCase().includes(search.value.toLowerCase())
-        );
-    } else {
-        // Wenn keine Suchanfrage vorliegt, alle Abteilungen anzeigen
-        filteredPartners.value = [...localPartners.value];
-    }
-};
-watch([search], () => {
-    // Aktualisiere die URL mit der Suchabfrage
-    router.get('/organisation/partner', { search: search.value }, { preserveState: true, replace: true });
-    // Führe die Filterung durch
-    applySearchFilter();
-});
+setInterval(compareAndReload, 5000);
 
-// Löschbestätigung anzeigen und Partnerssnamen speichern
+// -----------------------------
+// Delete Partner
+// -----------------------------
 const confirmDelete = (partner) => {
-    partnerToDelete.value = {
-        name: partner.name, // Speichere den Namen der Partner
-        id: partner.id      // Speichere die ID der Partner
-    };
-    showModalLöschen.value = true; // Modal anzeigen
+    partnerToDelete.value = { name: partner.name, id: partner.id };
+    showModalLöschen.value = true;
 };
-// Event-Handler, um die Partner aus der lokalen Liste zu löschen
+
 const handleDelete = (partnerId) => {
-    // Remove the deleted item from localPartners
-    localPartners.value = localPartners.value.filter(
-        partner => partner.id !== partnerId
-    );
-    showModalLöschen.value = false; // Close the delete modal
+    localPartners.value = localPartners.value.filter(p => p.id !== partnerId);
+    showModalLöschen.value = false;
 };
 
+// -----------------------------
+// Add / Update Partner via API
+// -----------------------------
+let newPartner = ref({ name: '', beschreibung: '' });
+const resetForm = () => newPartner.value = { name: '', beschreibung: '' };
 
-// Neuen Benutzer
-let newPartner = ref({
-    name: '',
-    beschreibung: '',
-});
-
-const resetForm = () => {
-    newPartner.value = {
-        name: '',
-        beschreibung: '',
-    };
-};
-
-// Benutzer hinzufügen
 const addPartner = async (data) => {
     try {
         const response = await axios.post(route('partner.store'), data);
-        const newPartner = response.data.partner; // sollte jetzt auch ansprechpartner enthalten
-
-        // Direkt in localPartners einfügen
-        localPartners.value.unshift(newPartner);
+        localPartners.value.unshift(response.data.partner);
         applySearchFilter();
-
-        Swal.fire({
-            title: 'Erfolg!',
-            text: 'Partner erfolgreich angelegt!',
-            icon: 'success',
-            timer: 3000,
-            timerProgressBar: true,
-        });
-
+        Swal.fire({ title: 'Erfolg!', text: 'Partner erfolgreich angelegt!', icon: 'success', timer: 3000, timerProgressBar: true });
     } catch (error) {
         console.error(error);
-        Swal.fire({
-            title: 'Error!',
-            text: error.response?.data?.message || 'Beim Erstellen des Partners ist ein Fehler aufgetreten.',
-            icon: 'error',
-            timer: 3000,
-            timerProgressBar: true,
-        });
+        Swal.fire({ title: 'Error!', text: error.response?.data?.message || 'Fehler beim Erstellen des Partners.', icon: 'error', timer: 3000, timerProgressBar: true });
     }
 };
 
-const updatePartner = async (form) => {
+const updatePartnerAPI = async (form) => {
     try {
-        //const response = router.put(route('partner.update', partnerToEdit.value.id), form);
         const response = await axios.put(route('partner.update', partnerToEdit.value.id), form);
-
         Swal.fire("Erfolg!", "Partner aktualisiert!", "success");
-
         const updated = response.data.partner;
-
         const index = localPartners.value.findIndex(p => p.id === updated.id);
-        if (index !== -1) {
-            localPartners.value[index] = { ...updated };
-        }
-
+        if (index !== -1) localPartners.value[index] = { ...updated };
         applySearchFilter();
-
         isModalEditOpen.value = false;
-
     } catch (error) {
         console.error(error);
         Swal.fire("Fehler", "Update fehlgeschlagen", "error");
     }
-};
-
-</script>
-
-<script>
-
-export default {
-    // Komponente referenzieren
-    components: {
-        AppLayout,
-    },
-
 };
 </script>
 
@@ -297,91 +256,109 @@ export default {
                                             )]" :key="teil" class="text-xs">
 
                                                 <!-- Dropdown -->
-                                                <div class="dropdown dropdown-action inline-block relative">
+                                                <div class="dropdown dropdown-action inline-block relative ">
                                                     <button @click="toggleDropdown(jahr, teil)"
-                                                        class="teile dropdown-toggle px-2 py-1 border rounded bg-gray-100 text-xs">
+                                                        class="dropdown-toggle py-1 rounded text-xs w-full">
                                                         {{ teil }}
                                                     </button>
                                                     <div v-show="isDropdownOpen(jahr, teil)"
-                                                        class="dropdown-menu absolute mt-1 bg-white border rounded shadow-lg z-50">
+                                                        class="dropdown-menu absolute mt-1  bg-white border rounded text-xs shadow-lg z-50">
 
                                                         <!-- Links analog Blade -->
+
+                                                        <!-- Bearbeiter -->
+                                                        <a @click.prevent="openModal('anwesenheitslisteBoTagbibb', { jahr, teil, partnerId: partner.id})" class="block px-4 py-1 hover:bg-gray-200">Anwesenheitsliste BO Bibb</a>
+                                                        <!-- 🔽 PA mit Subdropdown -->
+                                                                <div class="relative">
+                                                                    <button @click="toggleSubDropdown(jahr, teil)"
+                                                                        class="w-full text-left px-4 py-1 hover:bg-gray-200">
+                                                                        Anwesenheitsliste PA ▶
+                                                                    </button>
+
+                                                                    <!-- Subdropdown -->
+                                                                    <div v-show="isSubDropdownOpen(jahr, teil)"
+                                                                        class="absolute left-full top-0 ml-1 bg-white border rounded shadow-lg z-50">
+
+                                                                        <a v-for="klasse in getKlassen(jahr, teil, partner)"
+                                                                            :key="klasse"
+                                                                            @click.prevent="openModal('anwesenheitslistePATage', { jahr, teil, klasse, partnerId: partner.id })"
+                                                                            class="block px-4 py-1 hover:bg-gray-200">
+
+                                                                            {{ klasse }}
+
+                                                                        </a>
+                                                                    </div>
+                                                                </div>
+
+
+
+                                                        <!-- zu erlegigen -->
                                                         <a :href="route('index-anpassung-anwesenheitsdaten', { schulId: '5', schuljahr: jahr, teil: teil })"
-                                                            class="block px-4 py-2 text-sm hover:bg-gray-200">Anwesenheitsdaten</a>
+                                                            class="block px-4 py-1 hover:bg-gray-200">Anwesenheitsdaten</a>
 
                                                          <a :href="route('export.teilnehmerliste.schule.excel', { schuleId: '5', schuljahr: jahr, teil: teil })"
-                                                            class="block px-4 py-2 text-sm hover:bg-gray-200">Teilnehmerliste</a>
+                                                            class="block px-4 py-1 hover:bg-gray-200">Teilnehmerliste</a>
 
                                                         <a :href="route('teilnehmer.liste.schule', { schuleId: '5', schuljahr: jahr, teil: teil })"
-                                                            class="block px-4 py-2 text-sm hover:bg-gray-200">Bereichsauswahl</a>
+                                                            class="block px-4 py-1  hover:bg-gray-200">Bereichsauswahl</a>
 
                                                         <a :href="route('einteilung.show', { idSchule: '5', schuljahr: jahr, teil })"
-                                                            class="block px-4 py-2 text-sm hover:bg-gray-200">Einteilung</a>
+                                                            class="block px-4 py-1 hover:bg-gray-200">Einteilung</a>
 
                                                         <a :href="route('alleTeilnehmer.folder.create', { idSchule: '5', schuljahr: jahr, teil })"
-                                                            class="block px-4 py-2 text-sm hover:bg-gray-200">Ordner
-                                                            anlegen</a>
+                                                            class="block px-4 py-1 hover:bg-gray-200">Ordner  anlegen</a>
 
                                                         <a href="#"
                                                             @click.prevent="openModal('anwesenheitslisteVorBOTage', jahr, teil)"
-                                                            class="block px-4 py-2 text-sm hover:bg-gray-200">Anwesenheitsliste
-                                                            BO Vorbereitung</a>
+                                                            class="block px-4 py-1 hover:bg-gray-200">Anwesenheitsliste BO Vorbereitung</a>
 
-                                                        <a href="#"
-                                                            @click.prevent="openModal('anwesenheitslistePATage', jahr, teil)"
-                                                            class="block px-4 py-2 text-sm hover:bg-gray-200">Anwesenheitsliste
-                                                            PA</a>
+
 
                                                         <a href="#"
                                                             @click.prevent="openModal('anwesenheitslisteBoTag1', jahr, teil)"
-                                                            class="block px-4 py-2 text-sm hover:bg-gray-200">Anwesenheitsliste
-                                                            BO Tag1</a>
+                                                            class="block px-4 py-1 hover:bg-gray-200">Anwesenheitsliste  BO Tag1</a>
 
-                                                        <a href="#"
-                                                            @click.prevent="openModal('anwesenheitslisteBoTagbibb', jahr, teil)"
-                                                            class="block px-4 py-2 text-sm hover:bg-gray-200">Anwesenheitsliste
-                                                            BO Bibb</a>
+
 
                                                         <a :href="route('export.elterneinverstaendniserklaerung.schule', { idSchule: '5', schuljahr: jahr, teil })"
-                                                            class="block px-4 py-2 text-sm hover:bg-gray-200">Vergessene
+                                                            class="block px-4 py-1 hover:bg-gray-200">Vergessene
                                                             Elterneinverständniserklärung</a>
 
                                                         <a :href="route('export.auswertungsbogenPA.schule.pdf', { schuleId: '5', schuljahr: jahr, teil })"
-                                                            class="block px-4 py-2 text-sm hover:bg-gray-200">Auswertungsbogen
+                                                            class="block px-4 py-1 hover:bg-gray-200">Auswertungsbogen
                                                             PA</a>
 
                                                         <a href="#"
                                                             @click.prevent="openModal('hausordnungTag', jahr, teil)"
-                                                            class="block px-4 py-2 text-sm hover:bg-gray-200">Hausordnung</a>
+                                                            class="block px-4 py-1 hover:bg-gray-200">Hausordnung</a>
 
                                                         <a :href="route('export.anwesenheitsliste.rechnung', { idSchule: '5', schuljahr: jahr, teil })"
-                                                            class="block px-4 py-2 text-sm hover:bg-gray-200">Anwesenheitsliste
+                                                            class="block px-4 py-1 hover:bg-gray-200">Anwesenheitsliste
                                                             Rechnung</a>
 
                                                         <a :href="route('export.zertifikat.schule.pobo', { idSchule: '5', schuljahr: jahr, teil })"
-                                                            class="block px-4 py-2 text-sm hover:bg-gray-200">Zertifikat
+                                                            class="block px-4 py-1 hover:bg-gray-200">Zertifikat
                                                             POBO</a>
 
                                                         <a :href="route('export.zertifikat.schule.pobo.pdf', { schuleId: '5', schuljahr: jahr, teil })"
-                                                            class="block px-4 py-2 text-sm hover:bg-gray-200">Zertifikat
+                                                            class="block px-4 py-1 hover:bg-gray-200">Zertifikat
                                                             POBO PDF</a>
 
                                                         <a :href="route('export.auswertungBO.schule.pdf', { schulId: '5', schuljahr: jahr, teil })"
-                                                            class="block px-4 py-2 text-sm hover:bg-gray-200">Auswertung
+                                                            class="block px-4 py-1 hover:bg-gray-200">Auswertung
                                                             POBO</a>
 
                                                         <a :href="route('export.auswertungBO.schule.pdf.tofolder', { schulId: '5', schuljahr: jahr, teil })"
-                                                            class="block px-4 py-2 text-sm hover:bg-gray-200">BO
+                                                            class="block px-4 py-1 hover:bg-gray-200">BO
                                                             Auswertungen in Ordner generieren</a>
 
                                                         <a :href="route('export.auswertungPA.schule.pdf.tofolder', { schulId: '5', schuljahr: jahr, teil })"
-                                                            class="block px-4 py-2 text-sm hover:bg-gray-200">PA
+                                                            class="block px-4 py-1 hover:bg-gray-200">PA
                                                             Berichte in Ordner generieren</a>
 
                                                         <a href="#"
                                                             @click.prevent="openModal('auswertungPoboModal', jahr, teil)"
-                                                            class="block px-4 py-2 text-sm hover:bg-gray-200">Auswertung
-                                                            POBO Runde</a>
+                                                            class="block px-4 py-1 hover:bg-gray-200">Auswertung POBO Runde</a>
 
                                                     </div>
                                                 </div>
@@ -451,5 +428,7 @@ export default {
         <ModalEdit :visible="isModalEditOpen" :kontaktypens="kontaktypens" :partnerschaftstypen="partnerschaftstypen"
             :toEdit="partnerToEdit" @close="closeModalEdit" @updated="updatePartner" />
 
+        <ModalAnwesenheitslisteBIBB v-if="activeModal === 'anwesenheitslisteBoTagbibb'" :visible="true" :partnerId="modalData.partnerId" :schuljahr="modalData.jahr" :teil="modalData.teil" @update:visible="closeModal" @close="closeModal"/>
+        <ModalAnwesenheitslistePA v-if="activeModal === 'anwesenheitslistePATage'" :visible="true" :partnerId="modalData.partnerId" :schuljahr="modalData.jahr" :klasse="modalData.klasse" :teil="modalData.teil" @update:visible="closeModal" @close="closeModal"/>
     </app-layout>
 </template>

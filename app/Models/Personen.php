@@ -122,6 +122,12 @@ class Personen extends Model
         return $this->belongsToMany(Partnerschaftstypen::class, 'partner_has_partnerschaftstypens', 'ansprechpartner_id', 'partnerschaftstypen_id');
     }
 
+
+        public function schueler()
+        {
+            return $this->hasMany(PersonenIstSchueler::class, 'person_id', 'id');
+        }
+
     public function gruppen()
     {
         return $this->belongsToMany(Gruppe::class, 'gruppe_has_personens', 'personen_id', 'gruppe_id')
@@ -212,10 +218,8 @@ class Personen extends Model
     }
 
 
-    public function schueler()
-    {
-        return $this->hasMany(PersonenIstSchueler::class, 'person_id', 'id');
-    }
+
+
 
 
 

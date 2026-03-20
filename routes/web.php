@@ -32,6 +32,7 @@ use App\Http\Controllers\NotizController;
 use App\Http\Controllers\PartnerController;
 use App\Http\Controllers\PersonalController;
 use App\Http\Controllers\PersonenHasBildungsmassnahmenController;
+use App\Http\Controllers\ProjektBopController;
 use App\Http\Controllers\ProjektController;
 use App\Http\Controllers\ProjektHasPersonenController;
 use App\Http\Controllers\ProjektHasTeilnehmerController;
@@ -350,6 +351,8 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
 
 
 
+    Route::post('export-anwesenheitsliste-pobo', [ProjektBopController::class, 'anwesenheitslistePOBOExportWordBIBB'])->name('anwesenheitsliste.POBO.bibb.export.word');
+    Route::post('export-anwesenheitsliste/pa', [ProjektBopController::class, 'anwesenheitslistePAexportWord'])->name('anwesenheitsliste.PA.export.word');
 
 
 
@@ -359,9 +362,7 @@ Route::get('/teilnehmerccliste/excel/{schuleId}/{schuljahr}/{teil}', [Materialan
 Route::get('/alleTeilnehmer/folder/create/{idSchule}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'create'])->name('alleTeilnehmer.folder.create');
 Route::get('/einteilung/{idSchule}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'show'])->name('einteilung.show');
 Route::get('/anwesenheitsliste/vorbereitung/bo/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'vorBOTage'])->name('anwesenheitslisteVorBOTage');
-Route::get('/anwesenheitsliste/pa/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'paTage'])->name('anwesenheitslistePATage');
 Route::get('/anwesenheitsliste/bo/tag1/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'boTag1'])->name('anwesenheitslisteBoTag1');
-Route::get('/anwesenheitsliste/bo/bibb/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'boTagbibb'])->name('anwesenheitslisteBoTagbibb');
 Route::get('/export/elterneinverstaendniserklaerung/{idSchule}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'elterneinverstaendniserklaerung'])->name('export.elterneinverstaendniserklaerung.schule');
 Route::get('/export/auswertungsbogen/pa/pdf/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'auswertungsbogenPA'])->name('export.auswertungsbogenPA.schule.pdf');
 Route::get('/export/hausordnung/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'show'])->name('hausordnungTag');

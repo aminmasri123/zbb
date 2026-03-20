@@ -41,7 +41,6 @@ class Projekt extends Model
     }
 
 
-
     public function kostenstellen()
     {
         return $this->belongsToMany(Kostenstelle::class, 'projekt_has_kostenstelles', 'projekt_id', 'kostenstelle_id');

@@ -3,4 +3,5 @@ return [
     'goodbye' => 'Auf Wiedersehen',
     'dashboard' => 'Dashboard mit liebe',
 
+
 ];

@@ -4,7 +4,6 @@ namespace App\Models;
 
 use App\Models\Projekt;
 use App\Models\BereichHasPersonen;
-use App\Models\BereichHasTeilnehmer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
@@ -15,6 +14,7 @@ class Bereich extends Model
         'id',
         'name',
         'aktiv',
+        'code',
         'beschreibung',
     ];
 

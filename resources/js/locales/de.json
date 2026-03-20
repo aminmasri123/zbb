@@ -77,6 +77,7 @@
     "Abteilung wählen": "Abteilung wählen",
     "Antragsdatum": "Antragsdatum",
     "Starttermin": "Starttermin",
+    "Startdatum": "Startdatum",
     "Anfangsdatum": "Anfangsdatum",
     "Endtermin": "Endtermin",
     "Enddatum": "Enddatum",
@@ -240,7 +241,12 @@
      "Geräteübersicht": "Geräteübersicht",
      "Ausgabe": "Ausgabe",
      "Rückgabe": "Rückgabe",
-     "Materialanforderung": "Materialanforderung"
+     "Materialanforderung": "Materialanforderung",
+     "Termin": "Termin",
+     "Feedbackgespräch": "Feedbackgespräch",
+     "Exportieren": "Exportieren",
+     "Termine anlegen": "Termine anlegen",
+     "Anwesenheitsliste für die PA exportieren": "Anwesenheitsliste für die PA exportieren"
 
 
 
