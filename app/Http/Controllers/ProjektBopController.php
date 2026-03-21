@@ -5,9 +5,18 @@ namespace App\Http\Controllers;
 use App\Models\Partner;
 use App\Models\PersonenIstSchueler;
 use App\Models\Projekt;
+use App\Services\MyDatum;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
+use DateTime;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpWord\TemplateProcessor;
+use ZipArchive;
 
 class ProjektBopController extends Controller
 {
@@ -204,4 +213,381 @@ class ProjektBopController extends Controller
                 return response()->download(storage_path('exports/' . $filename ))->deleteFileAfterSend(true);
     }
 
+    public function anwesenheitslistePOBOTag1($partnerID, $schuljahr, $teil, $klasse = 'exportAlleKlassen', Request $request)
+    {
+        // Query Parameter
+        $anzahlBereiche = request()->query('anzahlBereiche', 6);
+        $anzahlRaeumlichkeiten = request()->query('anzahlRaeumlichkeiten', $anzahlBereiche);
+        $kapazitaeten = request()->query('kapazitaeten', []);
+        $termin = request()->query('termin', date('d-m-Y')) ;
+        $raumNamen = $request->input('raumNamen', []);
+
+        // Prüfen
+        if (!$partnerID || !$schuljahr || !$teil || !$termin ){
+            return redirect()->route('partner.index')->with('error', 'Fehlende Daten.');
+        }
+
+        $schule = Partner::findOrFail($partnerID);
+
+        // Teilnehmer laden
+        $alleTeilnehmer = PersonenIstSchueler::where('schule_id', $schule->id)
+            ->where('schuljahr', $schuljahr)
+            ->where('teil', $teil)
+            ->when($klasse !== 'exportAlleKlassen' && $klasse !== 'exportAlleKlassenZip' , fn($q) => $q->where('klasse', $klasse))
+            ->with('person')
+            ->get()
+            ->sortBy(fn($t) => $t->person->nachname);
+
+        if ($alleTeilnehmer->isEmpty()) {
+            return back()->with('error', 'Keine Teilnehmer gefunden.');
+        }
+
+        // Template
+        $templateFile = storage_path('vorlage/projekte/bop/excel/bo/botag1/Anwesenheitsliste-BO-TAG1.xlsx');
+        if (!file_exists($templateFile)) {
+            return back()->with('error', 'Template fehlt.');
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | 🟢 FALL 1: EINZELNE KLASSE
+        |--------------------------------------------------------------------------
+        */
+        if ($klasse !== 'exportAlleKlassen' && $klasse !== 'exportAlleKlassenZip') {
+          Log::info('fall 1');
+
+            $templateFile = storage_path('vorlage/projekte/bop/excel/bo/botag1/Anwesenheitsliste-BO-TAG1-Klasse.xlsx');
+            if (!file_exists($templateFile)) {
+                return back()->with('error', 'Template fehlt.');
+            }
+
+            $spreadsheet = IOFactory::load($templateFile);
+            $sheet = $spreadsheet->getActiveSheet();
+
+            $terminDatum = DateTime::createFromFormat('Y-m-d', $termin)->format('d.m.Y');
+
+            $sheet->setCellValue('H5', $terminDatum);
+            $sheet->setCellValue('C2', "BO Tag 1 - Klasse $klasse - " . $schule->name);
+
+            $row = 8;
+
+            foreach ($alleTeilnehmer as $t) {
+                $sheet->setCellValue('B' . $row, $t->person->nachname . ', ' . $t->person->vorname);
+                $sheet->setCellValue('D' . $row, $t->klasse);
+                $sheet->setCellValue('E' . $row, $t->geschlecht);
+                $row++;
+            }
+
+            $filePath = storage_path('Anwesenheitsliste-BOTag1_' . $klasse . '.xlsx');
+            (new Xlsx($spreadsheet))->save($filePath);
+
+            return response()->download($filePath)->deleteFileAfterSend(true);
+        }
+        /*
+        |--------------------------------------------------------------------------
+        | 🔵 FALL 2: ALLE KLASSEN → ZIP mit Klassenlisten
+        |--------------------------------------------------------------------------
+        */
+        if ($klasse === 'exportAlleKlassenZip') {
+                      Log::info('fall 2');
+
+            $templateFile = storage_path('vorlage/projekte/bop/excel/bo/botag1/Anwesenheitsliste-BO-TAG1-klasse.xlsx');
+            if (!file_exists($templateFile)) {
+                return back()->with('error', 'Template fehlt.');
+            }
+
+            // 👉 Teilnehmer nach Klassen gruppieren
+            $gruppenNachKlassen = $alleTeilnehmer->groupBy('klasse');
+
+            // 👉 Temp Ordner
+            $tempDir = storage_path('temp_excel');
+            if (!is_dir($tempDir)) mkdir($tempDir, 0777, true);
+
+            array_map('unlink', glob($tempDir . '/*'));
+
+            $dateien = [];
+
+            foreach ($gruppenNachKlassen as $klassenName => $teilnehmerListe) {
+
+                $spreadsheet = IOFactory::load($templateFile);
+                $sheet = $spreadsheet->getActiveSheet();
+
+                $terminDatum = DateTime::createFromFormat('Y-m-d', $termin)->format('d.m.Y');
+
+                // Kopf
+                $sheet->setCellValue('H5', $terminDatum);
+                $sheet->setCellValue('C2', "BO Tag 1 - Klasse $klassenName - " . $schule->name);
+
+                // Teilnehmer eintragen
+                $row = 8;
+
+                foreach ($teilnehmerListe as $t) {
+                    $sheet->setCellValue('B' . $row, $t->person->nachname . ', ' . $t->person->vorname);
+                    $sheet->setCellValue('D' . $row, $t->klasse);
+                    $sheet->setCellValue('E' . $row, $t->geschlecht);
+                    $row++;
+                }
+
+                // Datei speichern
+                $fileName = "Anwesenheitsliste_{$klassenName}.xlsx";
+                $filePath = $tempDir . '/' . $fileName;
+
+                (new Xlsx($spreadsheet))->save($filePath);
+
+                $dateien[] = $filePath;
+            }
+
+            // 👉 ZIP erstellen
+            $zipFileName = storage_path('Anwesenheitslisten_Klassen_' . date('Ymd_His') . '.zip');
+            $zip = new ZipArchive();
+
+            if ($zip->open($zipFileName, ZipArchive::CREATE | ZipArchive::OVERWRITE) === TRUE) {
+
+                foreach ($dateien as $file) {
+                    $zip->addFile($file, basename($file));
+                }
+
+                $zip->close();
+
+                // Temp löschen
+                array_map('unlink', glob($tempDir . '/*'));
+                rmdir($tempDir);
+
+                return response()->download($zipFileName)->deleteFileAfterSend(true);
+            }
+
+            return back()->with('error', 'ZIP konnte nicht erstellt werden.');
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | 🔵 FALL 3: Benutzerdefinierte Räume mit Namen und Kapazitäten
+        |--------------------------------------------------------------------------
+        */
+        if ($request->has('anzahlRaeumlichkeiten') && $request->has('raumNamen')) {
+            $anzahlRaeumlichkeiten = (int)$anzahlRaeumlichkeiten;
+
+            // Validierung
+            if ($anzahlRaeumlichkeiten < 1 || count($raumNamen) != $anzahlRaeumlichkeiten) {
+                return back()->with('error', 'Anzahl der Räume und Raumnamen stimmen nicht überein.');
+            }
+
+            $anzahlTeilnehmer = $alleTeilnehmer->count();
+
+            // Kapazitäten automatisch berechnen, falls leer
+            if (!$kapazitaeten || count($kapazitaeten) != $anzahlRaeumlichkeiten) {
+                $grundzahl = intdiv($anzahlTeilnehmer, $anzahlRaeumlichkeiten);
+                $rest = $anzahlTeilnehmer % $anzahlRaeumlichkeiten;
+
+                $kapazitaeten = [];
+                for ($i = 0; $i < $anzahlRaeumlichkeiten; $i++) {
+                    $kapazitaeten[$i] = $grundzahl + ($i < $rest ? 1 : 0);
+                }
+            }
+
+            // Temp Ordner vorbereiten
+            $tempDir = storage_path('temp_excel');
+            if (!is_dir($tempDir)) mkdir($tempDir, 0777, true);
+            array_map('unlink', glob($tempDir . '/*'));
+
+            $startIndex = 0;
+
+            for ($i = 0; $i < $anzahlRaeumlichkeiten; $i++) {
+                $spreadsheet = IOFactory::load($templateFile);
+                $sheet = $spreadsheet->getActiveSheet();
+
+                // Raumname oder generisch
+                $raumNameOriginal = $raumNamen[$i] ?? 'Raum ' . ($i + 1);
+                $raumName = Str::slug($raumNameOriginal, '_');
+
+                $anzahlAktuell = $kapazitaeten[$i];
+                $terminDatum = DateTime::createFromFormat('d-m-Y', $termin)->format('d.m.Y');
+
+                $sheet->setCellValue('H5', $terminDatum);
+                $sheet->setCellValue('C2', "Gruppe " . ($i + 1) . " - $raumName - " . $schule->name);
+
+                $row = 8;
+
+                for ($j = $startIndex; $j < $startIndex + $anzahlAktuell && $j < $anzahlTeilnehmer; $j++) {
+                    $t = $alleTeilnehmer[$j];
+
+                    $sheet->setCellValue('B' . $row, $t->person->nachname . ', ' . $t->person->vorname);
+                    $sheet->setCellValue('D' . $row, $t->klasse);
+                    $sheet->setCellValue('E' . $row, $t->geschlecht);
+                    $row++;
+                }
+
+                $startIndex += $anzahlAktuell;
+
+                // Excel speichern
+                (new Xlsx($spreadsheet))->save($tempDir . "/Liste_" . ($i + 1) . "_$raumName.xlsx");
+            }
+
+            // ZIP erstellen
+            $zipPath = storage_path('Anwesenheitslisten_Fall4.zip');
+            $zip = new ZipArchive();
+
+            if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE)) {
+                foreach (glob($tempDir . '/*.xlsx') as $file) {
+                    $zip->addFile($file, basename($file));
+                }
+                $zip->close();
+
+                // Cleanup
+                array_map('unlink', glob($tempDir . '/*'));
+                rmdir($tempDir);
+
+                return response()->download($zipPath)->deleteFileAfterSend(true);
+            }
+
+            return back()->with('error', 'ZIP konnte nicht erstellt werden.');
+        }
+
+         /*
+        |--------------------------------------------------------------------------
+        | 🔵 FALL 4: ALLE KLASSEN gemischt sortiert nach nachname für alle Bereiche
+        |--------------------------------------------------------------------------
+        */
+            $anzahlTeilnehmer = $alleTeilnehmer->count();
+            $alleTeilnehmer = $alleTeilnehmer
+            ->sortBy(fn($t) => strtolower($t->person->nachname), SORT_NATURAL)
+            ->values();
+            // Temp Ordner
+            $tempDir = storage_path('temp_excel');
+            if (!is_dir($tempDir)) mkdir($tempDir, 0777, true);
+            array_map('unlink', glob($tempDir . '/*'));
+
+            // Kapazitäten berechnen (wenn leer)
+            if (!$kapazitaeten || count($kapazitaeten) != $anzahlRaeumlichkeiten) {
+                $grundzahl = intdiv($anzahlTeilnehmer, $anzahlRaeumlichkeiten);
+                $rest = $anzahlTeilnehmer % $anzahlRaeumlichkeiten;
+
+                $kapazitaeten = [];
+                for ($i = 0; $i < $anzahlRaeumlichkeiten; $i++) {
+                    $kapazitaeten[$i] = $grundzahl + ($i < $rest ? 1 : 0);
+                }
+            }
+
+            // Bereiche laden
+            $projekt = Projekt::with('bereiche')
+                ->where('id', auth()->user()->current_team_id)
+                ->first();
+
+            // Als Array von Bereichsnamen
+            $bereicheListe = $projekt->bereiche->pluck('name')->toArray();
+            $bereiche = array_slice($bereicheListe, 0, $anzahlBereiche);
+
+            $startIndex = 0;
+            $gruppenListe = [];
+            for ($i = 0; $i < $anzahlRaeumlichkeiten; $i++) {
+
+                $spreadsheet = IOFactory::load($templateFile);
+                $sheet = $spreadsheet->getActiveSheet();
+
+                $bereichNameOriginal = $bereiche[$i % count($bereiche)];
+                $anzahlAktuell = $kapazitaeten[$i];
+
+                $terminDatum = DateTime::createFromFormat('Y-m-d', $termin)->format('d.m.Y');
+
+                // Dateisicheren Bereichsnamen erstellen
+                $bereich = Str::slug($bereichNameOriginal, '_');
+
+                $sheet->setCellValue('H5', $terminDatum);
+                $sheet->setCellValue('C2', "Gruppe " . ($i + 1) . " - $bereich - " . $schule->name);
+
+                $row = 8;
+
+                for ($j = $startIndex; $j < $startIndex + $anzahlAktuell && $j < $anzahlTeilnehmer; $j++) {
+                    $t = $alleTeilnehmer[$j];
+
+                    $sheet->setCellValue('B' . $row, $t->person->nachname . ', ' . $t->person->vorname);
+                    $sheet->setCellValue('D' . $row, $t->klasse);
+                    $sheet->setCellValue('E' . $row, $t->geschlecht);
+                    $row++;
+
+                    $gruppenListe[] = [
+                        'gruppe' => $i + 1,
+                        'bereich' => $bereich,
+                        'name' => $t->person->nachname . ', ' . $t->person->vorname
+                    ];
+                }
+
+                $startIndex += $anzahlAktuell;
+
+                // Excel speichern
+                (new Xlsx($spreadsheet))->save($tempDir . "/Liste_" . ($i + 1) . ".xlsx");
+            }
+
+            // ZIP erstellen
+            $zipPath = storage_path('Anwesenheitslisten.zip');
+            $zip = new ZipArchive();
+
+            if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE)) {
+
+                foreach (glob($tempDir . '/*.xlsx') as $file) {
+                    $zip->addFile($file, basename($file));
+                }
+
+                $zip->close();
+
+                // Cleanup
+                array_map('unlink', glob($tempDir . '/*'));
+                rmdir($tempDir);
+
+                return response()->download($zipPath)->deleteFileAfterSend(true);
+            }
+
+            return back()->with('error', 'ZIP konnte nicht erstellt werden.');
+    }
+
+
+    public function hausordnungExportPdf($partnerID, $schuljahr, $teil, $sortBy, $termin)
+    {
+        $schule = Partner::findOrFail($partnerID);
+            if (!$schule)
+            {
+                return redirect()->route('partner.index')->with('error', 'Die gewählte Schule konnte nicht gefunden werden.');
+            }
+            if($sortBy != 'nachname' && $sortBy != 'klasse' ){
+                return redirect()->route('partner.index')->with('error', 'Bitte wählen Sie einen Sortierungstyp vor dem Export aus.');
+            }
+        // Daten aus der Tabelle abrufen
+       if($sortBy == 'nachname'){
+             $alle_teilnehmer = PersonenIstSchueler::where('schuljahr', $schuljahr)
+            ->where('schule_id', $partnerID)
+                ->where('teil', $teil)
+                ->with('person')
+                ->get()
+                ->sortBy(fn($t) => strtolower($t->person->nachname), SORT_NATURAL);
+
+
+       }elseif($sortBy == 'klasse'){
+           $alle_teilnehmer = PersonenIstSchueler::where('schuljahr', $schuljahr)
+            ->where('schule_id', $partnerID)
+            ->where('teil', $teil)
+            ->with('person')
+            ->get()
+            ->sort(function($a, $b) {
+                // Zuerst Klasse, natürlich sortiert
+                $klasseCompare = strnatcasecmp($a->klasse, $b->klasse);
+                if ($klasseCompare !== 0) {
+                    return $klasseCompare;
+                }
+
+                // Dann Nachname, natürlich sortiert
+                return strnatcasecmp($a->person->nachname, $b->person->nachname);
+            });
+        }
+        if($alle_teilnehmer->isEmpty()){
+            return redirect()->back()->with('error', 'Die Schule verfügt derzeit keine Teilnehmer.');
+        }
+
+        $data = [
+            'alle_teilnehmer' => $alle_teilnehmer,
+            'datum' => $termin,
+        ];
+
+       $pdf = Pdf::loadView('pdf.hausordnung',  $data);
+        return $pdf->stream('invoice.pdf');
+    }
 }

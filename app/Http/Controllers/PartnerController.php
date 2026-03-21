@@ -26,7 +26,9 @@ class PartnerController extends Controller
 
         $user = auth()->user();
         $userProjektAktiv = $user->current_team_id;
-        $projektName = Projekt::find($userProjektAktiv)?->name;
+        $projekt = Projekt::find($userProjektAktiv)->with('bereiche')->first();
+        $projektName = $projekt?->name;
+        $anzahlBereiche = $projekt?->bereiche->count();
         $partnerschaftstypen = Partnerschaftstypen::all();
 
 
@@ -57,7 +59,8 @@ class PartnerController extends Controller
             'partners' => $partners,
             'partnerschaftstypen' => $partnerschaftstypen,
             'projektName' => $projektName,
-            'kontaktypens' => $kontaktypens
+            'kontaktypens' => $kontaktypens,
+            'anzahlBereiche' => $anzahlBereiche
         ]);
     }
     public function indexAjaxFresh()

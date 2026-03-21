@@ -10,6 +10,8 @@ import ModalDestroy from '@/Components/ModalDestroyForm.vue';
 import ModalEdit from '@/Pages/Partner/ModalEdit.vue';
 import ModalAnwesenheitslisteBIBB from './BOP/ModalAnwesenheitslisteBIBB.vue';
 import ModalAnwesenheitslistePA from './BOP/ModalAnwesenheitslistePA.vue'; // fehlte
+import ModalBoTag1 from './BOP/ModalBoTag1.vue'
+import ModalHausordnung from './BOP/ModalHausordnung.vue';
 
 // Props
 const props = defineProps({
@@ -17,6 +19,7 @@ const props = defineProps({
     partnerschaftstypen: Array,
     projektName: String,
     kontaktypens: Array,
+    anzahlBereiche: Number,
 });
 
 // States
@@ -28,14 +31,16 @@ let isModalCreateOpen = ref(false);
 let isModalEditOpen = ref(false);
 let partnerToEdit = ref(null);
 let activeModal = ref(null);
-let modalData = ref({ jahr: null, teil: null, klasse: null, partnerId: null });
+let modalData = ref({ jahr: null, teil: null, klasse: null, partnerId: null, klassen: [] });
 let localPartners = ref([...props.partners.data]);
 let filteredPartners = ref([...localPartners.value]);
-
+const selectedNode = ref(null);
 // Dropdowns
 const openDropdowns = ref({});
-const openSubDropdowns = ref({});
-
+let hausordnungForm = ref({
+    datum: '',
+    sortBy: ''
+});
 // -----------------------------
 // Dropdown-Funktionen
 // -----------------------------
@@ -48,14 +53,18 @@ function isDropdownOpen(jahr, teil) {
     return openDropdowns.value[`${jahr}-${teil}`] || false;
 }
 
-function toggleSubDropdown(jahr, teil) {
-    const key = `${jahr}-${teil}`;
-    openSubDropdowns.value[key] = !openSubDropdowns.value[key];
+const openMenus = ref({});
+
+function toggleMenu(key) {
+    openMenus.value = {
+        [key]: !openMenus.value[key]
+    };
 }
 
-function isSubDropdownOpen(jahr, teil) {
-    return openSubDropdowns.value[`${jahr}-${teil}`] || false;
+function isMenuOpen(key) {
+    return openMenus.value[key] || false;
 }
+
 
 function getKlassen(jahr, teil, partner) {
     return [...new Set(
@@ -68,9 +77,9 @@ function getKlassen(jahr, teil, partner) {
 // -----------------------------
 // Modal-Funktionen
 // -----------------------------
-function openModal(modalName, { jahr = null, teil = null, klasse = null, partnerId = null } = {}) {
+function openModal(modalName, { jahr = null, teil = null, klasse = null, partnerId = null, klassen = null } = {}) {
     activeModal.value = modalName;
-    modalData.value = { jahr, teil, klasse, partnerId };
+    modalData.value = { jahr, teil, klasse, partnerId, klassen };
 }
 
 function closeModal() {
@@ -145,6 +154,39 @@ const handleDelete = (partnerId) => {
     localPartners.value = localPartners.value.filter(p => p.id !== partnerId);
     showModalLöschen.value = false;
 };
+
+// -----------------------------
+// Modal BOTAG 1 Konf
+// -----------------------------
+const handleBoTag1 = (data) => {
+    closeModal()
+
+    if (data.mode === 'klasse') {
+        openModal('anwesenheitslisteBoTag1', {
+            ...modalData.value,
+            klasse: data.klasse
+        })
+    }
+
+    if (data.mode === 'raum') {
+        openModal('anwesenheitslisteBoTag1', {
+            ...modalData.value,
+            raum: 1
+        })
+    }
+
+    if (data.mode === 'custom') {
+        openModal('anwesenheitslisteBoTag1', {
+            ...modalData.value,
+            anzahl: data.value
+        })
+    }
+}
+
+
+
+
+
 
 // -----------------------------
 // Add / Update Partner via API
@@ -266,33 +308,55 @@ const updatePartnerAPI = async (form) => {
 
                                                         <!-- Links analog Blade -->
 
-                                                        <!-- Bearbeiter -->
-                                                        <a @click.prevent="openModal('anwesenheitslisteBoTagbibb', { jahr, teil, partnerId: partner.id})" class="block px-4 py-1 hover:bg-gray-200">Anwesenheitsliste BO Bibb</a>
-                                                        <!-- 🔽 PA mit Subdropdown -->
-                                                                <div class="relative">
-                                                                    <button @click="toggleSubDropdown(jahr, teil)"
-                                                                        class="w-full text-left px-4 py-1 hover:bg-gray-200">
-                                                                        Anwesenheitsliste PA ▶
-                                                                    </button>
+                                                        <!-- Bearbeitet -->
+                                                        <!-- 🔽 Anwesenheitsliste BO Bibb -->
+                                                        <a @click.prevent="openModal('anwesenheitslisteBoTagbibb', { jahr, teil, partnerId: partner.id })" class="block px-4 py-1 hover:bg-gray-200"> Anwesenheitsliste BO Bibb</a>
 
-                                                                    <!-- Subdropdown -->
-                                                                    <div v-show="isSubDropdownOpen(jahr, teil)"
-                                                                        class="absolute left-full top-0 ml-1 bg-white border rounded shadow-lg z-50">
+                                                        <!-- 🔽 Anwesenheitsliste PA -->
+                                                        <div class="relative">
+                                                            <button @click="toggleMenu(`pa-${jahr}-${teil}`)" class="w-full text-left px-4 py-1 hover:bg-gray-200"> Anwesenheitsliste PA ▶ </button>
 
-                                                                        <a v-for="klasse in getKlassen(jahr, teil, partner)"
-                                                                            :key="klasse"
-                                                                            @click.prevent="openModal('anwesenheitslistePATage', { jahr, teil, klasse, partnerId: partner.id })"
-                                                                            class="block px-4 py-1 hover:bg-gray-200">
+                                                            <div v-show="isMenuOpen(`pa-${jahr}-${teil}`)"
+                                                                class="absolute left-full top-0 ml-1 bg-white border rounded shadow-lg z-50">
 
-                                                                            {{ klasse }}
+                                                                <a v-for="klasse in getKlassen(jahr, teil, partner)"
+                                                                    :key="klasse"
+                                                                    @click.prevent="openModal('anwesenheitslistePATage', { jahr, teil, klasse, partnerId: partner.id })"
+                                                                    class="block px-4 py-1 hover:bg-gray-200">
+                                                                    {{ klasse }}
+                                                                </a>
+                                                            </div>
+                                                        </div>
 
-                                                                        </a>
-                                                                    </div>
-                                                                </div>
+                                                        <!-- 🔽 Anwesenheitsliste BO Tag1 -->
+                                                        <a @click.prevent="openModal('boTag1Config', { jahr, teil, klassen: getKlassen(jahr, teil, partner), partnerId: partner.id })" class="block px-4 py-1 hover:bg-gray-200"> Anwesenheitsliste BO Tag1 </a>
+
+                                                        <!-- 🔽 Hausordnung -->
+
+                                                        <div class="relative">
+                                                            <button
+                                                                @click="openModal('hausordnungConfig', { jahr, teil, partnerId: partner.id })"
+                                                                class="w-full text-left px-4 py-1 hover:bg-gray-200">
+                                                                Hausordnung
+                                                            </button>
+                                                        </div>
 
 
 
-                                                        <!-- zu erlegigen -->
+                                                       <!--  <div class="relative">
+                                                            <button @click="toggleMenu(`haus-${jahr}-${teil}`)" class="w-full text-left px-4 py-1 hover:bg-gray-200"> Hausordnung ▶ </button>
+
+                                                            <div v-show="isMenuOpen(`haus-${jahr}-${teil}`)" class="absolute left-full w-full top-0 ml-1 bg-white border rounded shadow-lg z-50">
+                                                                <a :href="route('hausordnung.export.schule.pdf', { partnerId: partner.id, schuljahr: jahr, teil, sortBy: 'klasse' })" class="block px-4 py-1 hover:bg-gray-200 w-full"> Nach Klasse </a>
+
+                                                                <a :href="route('hausordnung.export.schule.pdf', { partnerId: partner.id, schuljahr: jahr, teil, sortBy: 'nachname' })" class="block px-4 py-1 hover:bg-gray-200"> Nach Nachname  </a>
+
+                                                            </div>
+                                                        </div> -->
+
+
+
+                                                        <!-- ⚠️ zu erlegigen -->
                                                         <a :href="route('index-anpassung-anwesenheitsdaten', { schulId: '5', schuljahr: jahr, teil: teil })"
                                                             class="block px-4 py-1 hover:bg-gray-200">Anwesenheitsdaten</a>
 
@@ -314,9 +378,6 @@ const updatePartnerAPI = async (form) => {
 
 
 
-                                                        <a href="#"
-                                                            @click.prevent="openModal('anwesenheitslisteBoTag1', jahr, teil)"
-                                                            class="block px-4 py-1 hover:bg-gray-200">Anwesenheitsliste  BO Tag1</a>
 
 
 
@@ -328,9 +389,7 @@ const updatePartnerAPI = async (form) => {
                                                             class="block px-4 py-1 hover:bg-gray-200">Auswertungsbogen
                                                             PA</a>
 
-                                                        <a href="#"
-                                                            @click.prevent="openModal('hausordnungTag', jahr, teil)"
-                                                            class="block px-4 py-1 hover:bg-gray-200">Hausordnung</a>
+
 
                                                         <a :href="route('export.anwesenheitsliste.rechnung', { idSchule: '5', schuljahr: jahr, teil })"
                                                             class="block px-4 py-1 hover:bg-gray-200">Anwesenheitsliste
@@ -420,15 +479,17 @@ const updatePartnerAPI = async (form) => {
         </div>
 
         <!-- Modal für neue Partner -->
-        <ModalCreate :visible="isModalCreateOpen" :projektName="projektName" :partnerschaftstypen="partnerschaftstypen"
-            @close="closeModalCreate" @add-partner="addPartner" />
-        <ModalDestroy v-if="showModalLöschen" @delete="handleDelete" @close="showModalLöschen = false" :seite="seite"
-            :toDelete="partnerToDelete"></ModalDestroy>
+        <ModalCreate :visible="isModalCreateOpen" :projektName="projektName" :partnerschaftstypen="partnerschaftstypen"  @close="closeModalCreate" @add-partner="addPartner" />
+        <ModalDestroy v-if="showModalLöschen" @delete="handleDelete" @close="showModalLöschen = false" :seite="seite"  :toDelete="partnerToDelete"></ModalDestroy>
 
-        <ModalEdit :visible="isModalEditOpen" :kontaktypens="kontaktypens" :partnerschaftstypen="partnerschaftstypen"
-            :toEdit="partnerToEdit" @close="closeModalEdit" @updated="updatePartner" />
+        <ModalEdit :visible="isModalEditOpen" :kontaktypens="kontaktypens" :partnerschaftstypen="partnerschaftstypen" :toEdit="partnerToEdit" @close="closeModalEdit" @updated="updatePartner" />
 
         <ModalAnwesenheitslisteBIBB v-if="activeModal === 'anwesenheitslisteBoTagbibb'" :visible="true" :partnerId="modalData.partnerId" :schuljahr="modalData.jahr" :teil="modalData.teil" @update:visible="closeModal" @close="closeModal"/>
         <ModalAnwesenheitslistePA v-if="activeModal === 'anwesenheitslistePATage'" :visible="true" :partnerId="modalData.partnerId" :schuljahr="modalData.jahr" :klasse="modalData.klasse" :teil="modalData.teil" @update:visible="closeModal" @close="closeModal"/>
+        <ModalBoTag1 v-if="activeModal === 'boTag1Config'" :visible="true" :anzahlBereiche="props.anzahlBereiche" :jahr="modalData.jahr" :teil="modalData.teil" :klassen="modalData.klassen" :partnerId="modalData.partnerId" @close="closeModal" @submit="handleBoTag1" />
+        <ModalHausordnung v-if="activeModal === 'hausordnungConfig'" :visible="true" :partnerId="modalData.partnerId" :jahr="modalData.jahr" :teil="modalData.teil" @close="closeHausordnungModal"/>
+
+
+
     </app-layout>
 </template>

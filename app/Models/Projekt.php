@@ -21,11 +21,12 @@ class Projekt extends Model
 {
     use HasFactory;
     protected $fillable = [
+        'id',
         'name',
         'abteilung_id',
         'beschreibung',
         'kostenstelle',
-        'aktiv'
+        'aktiv',
     ];
 
 
