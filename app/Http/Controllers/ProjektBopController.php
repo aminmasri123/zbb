@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Bereich;
+use App\Models\Bereichsauswahl;
 use App\Models\Partner;
 use App\Models\PersonenIstSchueler;
 use App\Models\Projekt;
@@ -12,6 +14,7 @@ use DateTime;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Inertia\Inertia;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -590,4 +593,185 @@ class ProjektBopController extends Controller
        $pdf = Pdf::loadView('pdf.hausordnung',  $data);
         return $pdf->stream('invoice.pdf');
     }
+
+
+    public function bereichsauswahl($partnerId, $schuljahr, $teil)
+    {
+        $projekt = Projekt::with('bereiche', 'partners')->where('id', Auth()->user()->current_team_id)->first();
+
+        $alle_teilnehmer = PersonenIstSchueler::with('bereichsauswahl')
+            ->filterSchueler($partnerId, $schuljahr, $teil)
+            ->get()
+            ->sort(function($a, $b) {
+                $klasseCompare = strnatcasecmp($a->klasse, $b->klasse);
+                if ($klasseCompare !== 0) return $klasseCompare;
+
+                return strnatcasecmp($a->person->nachname ?? '', $b->person->nachname ?? '');
+            })
+            ->values();
+        return Inertia::render('Bereichsauswahl/Index', [
+            'projekt'        => $projekt,
+            'alle_teilnehmer' => $alle_teilnehmer,
+        ]);
+    }
+
+    public function waehlen(Request $request)
+    {
+        $teilnehmer = PersonenIstSchueler::where('id', $request->teilnehmer_id)->with('bereichsauswahl')->first();
+                    Log::info($request);
+
+        if (!$teilnehmer)
+        {
+            return response()->json(['error' => false, 'message' => 'Teilnehmer nicht gefunden.' . $request->teilnehmer_id]);
+        }
+
+        if (!$teilnehmer->bereichsauswahl)
+        {
+            $wahl = Bereichsauswahl::create([
+
+                'teilnehmer_id' => $request->teilnehmer_id,
+                $request->wahl => $request->orientierung,
+                'user_create' => auth()->user()->id,
+            ]);
+
+            if ($wahl->save())
+            {
+                return response()->json(['success' => true, 'message' => 'neu erstellt']);
+            }
+        }
+        else
+        {
+            $bereiche = $teilnehmer->bereichsauswahl;
+
+            foreach (['bereich_id1', 'bereich_id2', 'bereich_id3', 'bereich_id4'] as $feld) {
+
+                // aktuelles Feld überspringen
+                if ($feld === $request->wahl) continue;
+
+                if ($bereiche->$feld == $request->orientierung) {
+                    return response()->json([
+                        'error' => 'Bereich bereits in einer anderen Auswahl gesetzt!'
+                    ], 400);
+                }
+            }
+
+            $upd = $teilnehmer->bereichsauswahl->update([
+                $request->wahl => $request->orientierung,
+                'user_update' => auth()->user()->id,
+            ]);
+
+            if($upd)
+            {
+                return response()->json(['success' => true, 'message' => 'aktualisiert']);
+            }
+
+        }
+
+    }
+
+
+    public function generatePdfauswertungsbogenPASchule($partnerId, $schuljahr, $teil)
+    {
+            $schule = Partner::findOrFail($partnerId);
+            if (!$schule)
+            {
+                return redirect()->route('schule.index')->with('error', 'Die gewählte Schule konnte nicht gefunden werden.');
+            }
+
+            // Daten aus der Tabelle abrufen
+            $alle_teilnehmer = PersonenIstSchueler::with('person')
+            ->filterSchueler($partnerId, $schuljahr, $teil)
+            ->get()
+            ->sort(function($a, $b) {
+                $klasseCompare = strnatcasecmp($a->klasse, $b->klasse);
+                if ($klasseCompare !== 0) return $klasseCompare;
+
+                return strnatcasecmp($a->person->nachname ?? '', $b->person->nachname ?? '');
+            })
+            ->values();
+
+            if ($alle_teilnehmer->isEmpty())
+            {
+                return redirect()->back()->with('error', 'Die Schule: ' . $schule->name . ' verfügt über keine Teilnehmer.');
+            }
+
+            $data = [
+                'alle_teilnehmer' => $alle_teilnehmer,
+                'schulname' => $schule->name,
+            ];
+
+
+            $pdf = Pdf::loadView('pdf.auswertungsbogenPA',  $data);
+            $pdf->setPaper('A4', 'landscape');
+            return $pdf->stream('Auswertungbogen_PA_' . $schule->name. '_' . $schuljahr  . '_Teil_' . $teil .'.pdf');
+    }
+
+
+
+    public function exportElterneinverstaendniserklaerungSchule($partnerId, $schuljahr, $teil)
+    {
+        $alle_teilnehmer = PersonenIstSchueler::with('person')
+            ->filterSchueler($partnerId, $schuljahr, $teil)
+            ->where('eee', '0')
+            ->get()
+             ->sort(function($a, $b) {
+                $klasseCompare = strnatcasecmp($a->klasse, $b->klasse);
+                if ($klasseCompare !== 0) return $klasseCompare;
+
+                return strnatcasecmp($a->person->nachname ?? '', $b->person->nachname ?? '');
+            })
+            ->values();
+        $partner = Partner::findOrFail($partnerId);
+        if(!$partner){
+            return redirect()->back()->with('error', 'Die Schule konnte nicht gefunden werden.' );
+        }
+        if($alle_teilnehmer->isEmpty()){
+            return redirect()->back()->with('success', 'Alle Elterneinverständniserklärung der Schule sind erfolgreich eingegangen.' );
+        }
+
+        // Pfad zur vorhandenen Excel-Datei
+        $existingFile = storage_path('vorlage/projekte/bop/excel/Liste-Elterneinverstaendniserklaerung.xlsx');
+        if(!file_exists($existingFile)){
+            return redirect()->back()->with('error', 'Die Datei für den Export konnte nicht gefunden werden.');
+        }
+        // Excel-Datei öffnen
+        $spreadsheet = IOFactory::load($existingFile);
+        $sheet = $spreadsheet->getActiveSheet();
+
+
+        $sheet->setCellValue('B2', 'Schule: ' . $partner->name);
+
+
+        $row = 5; // Startzeile für Daten
+        foreach ($alle_teilnehmer as $teilnehmer)
+        {
+                $sheet->setCellValue('B'.$row, $teilnehmer->person->vorname);
+                $sheet->setCellValue('C'.$row, $teilnehmer->person->nachname);
+                $sheet->setCellValue('D'.$row, $teilnehmer->geschlecht);
+                $sheet->setCellValue('E'.$row, $teilnehmer->klasse);
+                $row++;
+        }
+        $row++;
+
+        $sheet->setCellValue('D'.$row, 'Anzahl:');
+        $sheet->getStyle('D'.$row)->getAlignment()->setHorizontal('right');
+        $sheet->getStyle('D' . $row)->getFont()->setBold(true);
+
+        $sheet->setCellValue('E'.$row, $alle_teilnehmer->count());
+        $sheet->getStyle('E' . $row)->getAlignment()->setHorizontal('left');
+
+
+        // Excel-Datei speichern
+
+        $writer = new Xlsx($spreadsheet);
+       $updatedFile = 'Ausstehende Elterneinverstaendniserklaerung-' . $partner->name .'-'. date('d-m-Y') . '.xlsx';
+       $writer->save($updatedFile);
+
+       // Aktualisierte Excel-Datei herunterladen
+       return response()
+        ->download($updatedFile)
+        ->deleteFileAfterSend(true);
+
+    }
+
 }

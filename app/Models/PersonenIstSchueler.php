@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Bereichsauswahl;
 use App\Models\Personen;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -35,7 +36,7 @@ class PersonenIstSchueler extends Model
         if ($teil) {
             $query->where('teil', $teil);
         }
-
+        $query->with('person');
         return $query;
     }
 
@@ -54,6 +55,11 @@ class PersonenIstSchueler extends Model
     public function person()
     {
         return $this->belongsTo(Personen::class);
+    }
+
+    public function bereichsauswahl()
+    {
+        return $this->hasOne(Bereichsauswahl::class, 'teilnehmer_id', 'id');
     }
 
 }

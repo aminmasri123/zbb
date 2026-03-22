@@ -1,21 +1,21 @@
 <?php
 
 namespace App\Models;
-use App\Models\User;
-use App\Models\Gruppe;
-use App\Models\Raeume;
-use App\Models\Bereich;
-use App\Models\Personen;
-use App\Models\Standort;
-use App\Models\zeitraum;
 use App\Models\Abteilung;
+use App\Models\Bereich;
 use App\Models\Dokumente;
-use App\Models\Teilnehmer;
 use App\Models\Kostenstelle;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\Partner;
+use App\Models\PartnerHasPartnerschaftstypen;
+use App\Models\Personen;
+use App\Models\ProjektHasAnsprechpartner;
+use App\Models\Raeume;
+use App\Models\Standort;
+use App\Models\User;
+use App\Models\Zeitraum;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Projekt extends Model
 {
@@ -40,6 +40,35 @@ class Projekt extends Model
     {
         return $this->belongsTo(Abteilung::class, 'abteilung_id', 'id');
     }
+    public function projektHasAnsprechpartner()
+    {
+        return $this->hasMany(ProjektHasAnsprechpartner::class, 'projekt_id', 'id');
+    }
+
+    /* public function ansprechpartner()
+    {
+        return $this->hasManyThrough(
+            Personen::class, // Ziel: Personen
+            PartnerHasPartnerschaftstypen::class, // Pivot/Intermediate
+            'projekt_id', // FK in Pivot auf Projekt
+            'id', // PK in Person
+            'id', // PK in Projekt
+            'ansprechpartner_id', // FK in Pivot auf Person
+
+        );
+    }  */
+    public function partners(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            PartnerHasPartnerschaftstypen::class,   // erste Zwischentabelle
+            'projekt_has_ansprechpartners',          // Pivot-Tabelle Projekt ↔ Ansprechpartner
+            'projekt_id',                            // FK auf Projekt
+            'ansprechpartner_id'                     // FK auf PartnerHasPartnerschaftstypen
+        )
+        ->join('partners', 'partner_has_partnerschaftstypens.partner_id', '=', 'partners.id')
+        ->select('partners.*');                     // gibt nur Partner zurück
+    }
+
 
 
     public function kostenstellen()
@@ -50,7 +79,6 @@ class Projekt extends Model
     {
         return $this->belongsToMany(Personen::class, 'projekt_has_personens', 'projekt_id', 'personen_id');
     }
-
 
     public function mitarbeiter()
     {

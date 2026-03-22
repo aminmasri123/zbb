@@ -341,7 +341,10 @@ const updatePartnerAPI = async (form) => {
                                                             </button>
                                                         </div>
 
-
+                                                        <!--  Bereichsauswahl -->
+                                                        <a :href="route('bereichsauswahl.index', { partnerId: partner.id, schuljahr: jahr, teil: teil })" class="block px-4 py-1  hover:bg-gray-200">Bereichsauswahl</a>
+                                                        <a :href="route('export.auswertungsbogenPA.schule.pdf', { partnerId: partner.id, schuljahr: jahr, teil })" class="block px-4 py-1 hover:bg-gray-200">Auswertungsbogen PA</a>
+                                                        <a :href="route('export.elterneinverstaendniserklaerung.schule', { partnerId: partner.id, schuljahr: jahr, teil })" class="block px-4 py-1 hover:bg-gray-200">X Elterneinverständniserklärung</a>
 
                                                        <!--  <div class="relative">
                                                             <button @click="toggleMenu(`haus-${jahr}-${teil}`)" class="w-full text-left px-4 py-1 hover:bg-gray-200"> Hausordnung ▶ </button>
@@ -357,14 +360,16 @@ const updatePartnerAPI = async (form) => {
 
 
                                                         <!-- ⚠️ zu erlegigen -->
+
+
+                                                        <a href="#">________________________________________</a>
                                                         <a :href="route('index-anpassung-anwesenheitsdaten', { schulId: '5', schuljahr: jahr, teil: teil })"
                                                             class="block px-4 py-1 hover:bg-gray-200">Anwesenheitsdaten</a>
 
                                                          <a :href="route('export.teilnehmerliste.schule.excel', { schuleId: '5', schuljahr: jahr, teil: teil })"
                                                             class="block px-4 py-1 hover:bg-gray-200">Teilnehmerliste</a>
 
-                                                        <a :href="route('teilnehmer.liste.schule', { schuleId: '5', schuljahr: jahr, teil: teil })"
-                                                            class="block px-4 py-1  hover:bg-gray-200">Bereichsauswahl</a>
+
 
                                                         <a :href="route('einteilung.show', { idSchule: '5', schuljahr: jahr, teil })"
                                                             class="block px-4 py-1 hover:bg-gray-200">Einteilung</a>
@@ -377,17 +382,6 @@ const updatePartnerAPI = async (form) => {
                                                             class="block px-4 py-1 hover:bg-gray-200">Anwesenheitsliste BO Vorbereitung</a>
 
 
-
-
-
-
-                                                        <a :href="route('export.elterneinverstaendniserklaerung.schule', { idSchule: '5', schuljahr: jahr, teil })"
-                                                            class="block px-4 py-1 hover:bg-gray-200">Vergessene
-                                                            Elterneinverständniserklärung</a>
-
-                                                        <a :href="route('export.auswertungsbogenPA.schule.pdf', { schuleId: '5', schuljahr: jahr, teil })"
-                                                            class="block px-4 py-1 hover:bg-gray-200">Auswertungsbogen
-                                                            PA</a>
 
 
 

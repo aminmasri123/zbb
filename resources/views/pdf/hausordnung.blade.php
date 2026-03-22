@@ -160,7 +160,8 @@
 
             <div>
 
-<p>Saarbrücken, <span class="line">{{ \Carbon\Carbon::parse($datum)->format('d.m.Y') }}</span></p>            </div>
+                <p>Saarbrücken, <span class="line">{{ \Carbon\Carbon::parse($datum)->format('d.m.Y') }}</span></p>
+             </div>
             <table class="signature-table">
                 <tr>
                     <td>

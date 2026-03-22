@@ -46,8 +46,8 @@ class PartnerController extends Controller
                 'schueler',
             ])
             ->join('partner_has_partnerschaftstypens', 'partners.id', '=', 'partner_has_partnerschaftstypens.partner_id')
-            ->join('projekt_has_anprechpartners', 'partner_has_partnerschaftstypens.id', '=', 'projekt_has_anprechpartners.ansprechpartner_id')
-            ->where('projekt_has_anprechpartners.projekt_id', $userProjektAktiv)
+            ->join('projekt_has_ansprechpartners', 'partner_has_partnerschaftstypens.id', '=', 'projekt_has_ansprechpartners.ansprechpartner_id')
+            ->where('projekt_has_ansprechpartners.projekt_id', $userProjektAktiv)
             ->select('partners.*')
             ->distinct()
             ->orderBy('partners.id')
@@ -77,8 +77,8 @@ class PartnerController extends Controller
         'ansprechpartners.kontaktes.kontakttyp',
             ])
             ->join('partner_has_partnerschaftstypens', 'partners.id', '=', 'partner_has_partnerschaftstypens.partner_id')
-            ->join('projekt_has_anprechpartners', 'partner_has_partnerschaftstypens.id', '=', 'projekt_has_anprechpartners.ansprechpartner_id')
-            ->where('projekt_has_anprechpartners.projekt_id', $userProjektAktiv)
+            ->join('projekt_has_ansprechpartners', 'partner_has_partnerschaftstypens.id', '=', 'projekt_has_ansprechpartners.ansprechpartner_id')
+            ->where('projekt_has_ansprechpartners.projekt_id', $userProjektAktiv)
             ->select('partners.*')
              ->distinct()
             ->orderBy('id')
@@ -244,7 +244,7 @@ class PartnerController extends Controller
                                             ->first();
 
                     if ($ansprechpartnerPivot) {
-                        DB::table('projekt_has_anprechpartners')->insert([
+                        DB::table('projekt_has_ansprechpartners')->insert([
                             'projekt_id' => $userProjektAktiv, // oder $projekt->id, falls Projekt separat angelegt
                             'ansprechpartner_id' => $ansprechpartnerPivot->id,
                             'created_at' => now(),
