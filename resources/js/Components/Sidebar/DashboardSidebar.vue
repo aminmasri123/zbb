@@ -17,6 +17,24 @@
                 </ul>
             </li>
 
+            <!-- Team Apps Submenu -->
+            <li v-if="['dashboard.index'].some(permission => $page.props.permissions.includes(permission))" class="submenu">
+                <a href="#" @click.prevent="toggleMenu('teamApps')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
+                    <i class="la la-th-large la-lg mr-2"></i>
+                    <span v-if="!displayHideTextSidebar">Apps</span>
+                    <span :class="{'rotate-180': activeMenu === 'teamApps', 'hidden': displayHideTextSidebar === true, 'text-zbb': $page.component.startsWith('Apps')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
+                </a>
+                <ul v-show="activeMenu === 'teamApps'" class="pl-6 mt-2 space-y-2">
+                    <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('apps.index')">Apps</Link></li>
+                    <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('apps.calendar')">Kalender</Link></li>
+                    <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('apps.contacts')">Kontakte</Link></li>
+                    <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('apps.files')">Dateimanager</Link></li>
+                    <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('teilnehmer.index')">Teilnehmer</Link></li>
+                    <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('apps.tasks')">Taskmanager</Link></li>
+                    <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('apps.popups')">Popups</Link></li>
+                </ul>
+            </li>
+
             <!-- Benutzer Submenu -->
             <li v-if="['benutzer.index', 'benutzer.store'].some(permission => $page.props.permissions.includes(permission))" class="submenu">
                 <a href="#" @click.prevent="toggleMenu('benutzer')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
@@ -189,4 +207,3 @@
 
   }
   </script>
-

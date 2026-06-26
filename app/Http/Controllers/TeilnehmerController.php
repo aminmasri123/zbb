@@ -14,6 +14,7 @@ use App\Models\Leistungsbezuege;
 use App\Models\Notizvarianten;
 use App\Models\Personen;
 use App\Models\PersonenHasSozialedaten;
+use App\Models\PersonenIstSchueler;
 use App\Models\Projekt;
 use App\Models\ProjektHasPersonen;
 use App\Models\SozialeDaten;
@@ -369,6 +370,26 @@ class TeilnehmerController extends Controller
         }
     }
 
+    public function bulkDestroy(Request $request)
+    {
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer', 'exists:personens,id'],
+        ]);
+
+        try {
+            $deleted = Personen::whereIn('id', $validated['ids'])
+                ->where('typ', 'teilnehmer')
+                ->delete();
+
+            return response()->json([
+                'message' => $deleted . ' Teilnehmer wurden erfolgreich geloescht.',
+                'deleted' => $deleted,
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
+        }
+    }
        public function import(Request $request)
     {
 
@@ -393,16 +414,14 @@ class TeilnehmerController extends Controller
 
             $worksheet = $spreadsheet->getActiveSheet();
 
+            $importTyp = strtolower((string) $this->cleanImportValue($worksheet->getCell('B2')->getCalculatedValue()));
+            $isBopImport = in_array($importTyp, ['bop', 'berufsorientierungsprogramm'], true);
+
             $data = [];
-            $skipFirstRow = true;
+            $headerFound = false;
             $emptyRowCount = 0; // Zähler für aufeinanderfolgende leere Zeilen
 
             foreach ($worksheet->getRowIterator() as $row) {
-                if ($skipFirstRow) {
-                    $skipFirstRow = false;
-                    continue;
-                }
-
                 // Zellen einlesen
                 $cellIterator = $row->getCellIterator();
                 $cellIterator->setIterateOnlyExistingCells(false);
@@ -412,6 +431,16 @@ class TeilnehmerController extends Controller
                     $rowData[] = $cell->getValue();
                 }
 
+                if (!$headerFound) {
+                    $firstColumn = strtolower((string) $this->cleanImportValue($rowData[0] ?? null));
+                    $secondColumn = strtolower((string) $this->cleanImportValue($rowData[1] ?? null));
+
+                    if ($firstColumn === 'vorname' && $secondColumn === 'nachname') {
+                        $headerFound = true;
+                    }
+
+                    continue;
+                }
                 // Prüfen, ob die Zeile komplett leer ist
                 if (count(array_filter($rowData)) === 0) {
                     $emptyRowCount++;
@@ -424,14 +453,90 @@ class TeilnehmerController extends Controller
                     $emptyRowCount = 0; // Reset, sobald wieder eine gefüllte Zeile gefunden wurde
                 }
 
-                $data[] = $rowData;
+                $data[] = [
+                    'row_number' => $row->getRowIndex(),
+                    'values' => $rowData,
+                ];
             }
            // Log::info('Importierte Zeilen:', $data);
+            if (!$headerFound) {
+                return response()->json([
+                    'error' => true,
+                    'message' => 'Die Kopfzeile wurde nicht gefunden. Erwartet wird eine Zeile mit Vorname und Nachname.',
+                ]);
+            }
+
             $createdCount = 0;
             $errors = [];
 
-            foreach ($data as $index => $row) {
+            foreach ($data as $index => $entry) {
                 try {
+                    $row = $entry['values'];
+                    $rowNumber = $entry['row_number'];
+                    $schuleId = $this->cleanImportValue($row[6] ?? null);
+                    $schuljahr = $this->cleanImportValue($row[7] ?? null);
+                    $teil = $this->cleanImportValue($row[8] ?? null);
+                    $klasse = $this->cleanImportValue($row[9] ?? null);
+
+                    if (!$isBopImport) {
+                        $schuleId = null;
+                        $schuljahr = null;
+                        $teil = null;
+                        $klasse = null;
+                    }
+
+                    if ($isBopImport && (empty($schuleId) || empty($schuljahr) || empty($teil) || empty($klasse))) {
+                        $errors[] = "Zeile " . $rowNumber . " ist BOP, aber Schule_ID, Schuljahr, Teil oder Klasse fehlt.";
+                        continue;
+                    }
+
+                    $teilnehmerData = [
+                        'vorname' => $row[0] ?? null,
+                        'nachname' => $row[1] ?? null,
+                        'geschlecht' => match (strtolower(trim((string) ($row[2] ?? '')))) {
+                            'männlich', 'maennlich', 'mannlich', 'm' => 'm',
+                            'weiblich', 'w' => 'w',
+                            'divers', 'd' => 'd',
+                            default => null,
+                        },
+                        'geburtsdatum' => $this->parseImportDate($row[3] ?? null),
+                        'aktiv' => 1,
+                        'typ' => 'teilnehmer',
+                    ];
+
+                    if (empty($teilnehmerData['vorname']) || empty($teilnehmerData['nachname'])) {
+                        $errors[] = "Zeile " . $rowNumber . " fehlt Vorname oder Nachname.";
+                        continue;
+                    }
+
+                    DB::transaction(function () use ($teilnehmerData, $row, $schuleId, $schuljahr, $teil, $klasse) {
+                        $teilnehmer = Personen::create($teilnehmerData);
+
+                        if (!empty($row[4])) {
+                            $teilnehmer->projekte()->attach(
+                                $row[4],
+                                [
+                                    'standort_id' => $row[5] ?? null
+                                ]
+                            );
+                        }
+
+                        if ($schuleId) {
+                            PersonenIstSchueler::create([
+                                'person_id' => $teilnehmer->id,
+                                'klasse' => $klasse,
+                                'schule_id' => $schuleId,
+                                'foerderschueler' => $this->parseImportBoolean($row[10] ?? null),
+                                'eee' => $this->parseImportBoolean($row[11] ?? null),
+                                'schuljahr' => $schuljahr,
+                                'teil' => $teil,
+                            ]);
+                        }
+                    });
+
+                    $createdCount++;
+                    continue;
+
                     /* if (count($row) < 8) {
                         $errors[] = "Zeile " . ($index + 2) . " hat zu wenige Spalten.";
                         continue;
@@ -494,8 +599,8 @@ class TeilnehmerController extends Controller
                     }
 
                 } catch (Exception $e) {
-                    $errors[] = "Fehler in Zeile " . ($index + 2) . ": " . $e->getMessage();
-                    Log::error("Import Fehler Zeile " . ($index + 2) . ": " . $e->getMessage());
+                    $errors[] = "Fehler in Zeile " . ($rowNumber ?? ($index + 2)) . ": " . $e->getMessage();
+                    Log::error("Import Fehler Zeile " . ($rowNumber ?? ($index + 2)) . ": " . $e->getMessage());
                 }
             }
              Log::info('Importierte Zeilen:', $errors);
@@ -524,6 +629,51 @@ class TeilnehmerController extends Controller
             Log::error("Allgemeiner Importfehler: " . $e->getMessage());
             return response()->json(['error' => true, 'message' => 'Ein unerwarteter Fehler ist aufgetreten.']);
         }
+    }
+
+    private function cleanImportValue($value)
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
+    }
+
+    private function parseImportBoolean($value): bool
+    {
+        $value = strtolower(trim((string) ($value ?? '')));
+
+        return match ($value) {
+            '1', 'ja', 'j', 'yes', 'true', 'wahr' => true,
+            default => false,
+        };
+    }
+
+    private function parseImportDate($value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (is_numeric($value)) {
+            return Date::excelToDateTimeObject($value)->format('Y-m-d');
+        }
+
+        $value = trim((string) $value);
+        $formats = ['d.m.Y', 'Y-m-d', 'd/m/Y'];
+
+        foreach ($formats as $format) {
+            $date = \DateTime::createFromFormat($format, $value);
+
+            if ($date instanceof \DateTime) {
+                return $date->format('Y-m-d');
+            }
+        }
+
+        return null;
     }
 
 }

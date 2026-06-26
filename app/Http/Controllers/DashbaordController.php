@@ -2,6 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AppCalendarEvent;
+use App\Models\AppContact;
+use App\Models\AppFile;
+use App\Models\AppPopup;
+use App\Models\AppTask;
 use Inertia\Inertia;
 use App\Models\Raeume;
 use App\Models\Projekt;
@@ -24,6 +29,14 @@ class DashbaordController extends Controller
             'dienstwagen' => $dienstwagen,
             'raeume' => $raeume,
             'teilnehmer' => $teilnehmer,
+            'apps' => [
+                'events' => AppCalendarEvent::count(),
+                'contacts' => AppContact::count(),
+                'files' => AppFile::where('type', 'file')->count(),
+                'tasks' => AppTask::where('status', '!=', 'done')->count(),
+                'popups' => AppPopup::where('active', true)->count(),
+                'participants' => $teilnehmer,
+            ],
         ]);
 
     }

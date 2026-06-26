@@ -13,6 +13,7 @@ class ProjektHasAnsprechpartner extends Model
     protected $fillable = [
         'projekt_id',
         'ansprechpartner_id',
+        'partnerschaftstypen_id',
     ];
     public function partnerHasPartnerschaftstyp()
     {

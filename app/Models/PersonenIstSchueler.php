@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Bereichsauswahl;
+use App\Models\EinteilungBereiche;
 use App\Models\Personen;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -15,6 +16,7 @@ class PersonenIstSchueler extends Model
         'id',
         'person_id',
         'klasse',
+        'foerderschueler',
         'foederschueler',
         'eee',
         'schuljahr',
@@ -60,6 +62,11 @@ class PersonenIstSchueler extends Model
     public function bereichsauswahl()
     {
         return $this->hasOne(Bereichsauswahl::class, 'teilnehmer_id', 'id');
+    }
+
+    public function einteilungen()
+    {
+        return $this->morphMany(EinteilungBereiche::class, 'teilnehmende');
     }
 
 }

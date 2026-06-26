@@ -54,10 +54,10 @@ class Partner extends Model
             'partner_has_partnerschaftstypens',
             'partner_id',
             'ansprechpartner_id'
-        );
+        )->withPivot('partnerschaftstypen_id', 'rolle');
     }
 
-   public function projektHasAnsprechpartner()
+    public function projektHasAnsprechpartner()
     {
         return $this->hasMany( ProjektHasAnprechpartner::class, 'ansprechpartner_id', 'id');
     }

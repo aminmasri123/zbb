@@ -33,8 +33,16 @@ const currentSidebar = computed(() => {
 });
 const sidebarOpen = ref(false); // Für die mobile Ansicht Sidebar umschalten
 const displayHideTextSidebar = ref(false);
+const dismissedAppPopups = ref([]);
+
+const visibleAppPopups = computed(() => {
+    const popups = page.props.appPopups || [];
+    return popups.filter((popup) => !dismissedAppPopups.value.includes(popup.id));
+});
 
 onMounted(() => {
+    dismissedAppPopups.value = JSON.parse(localStorage.getItem('dismissedAppPopups') || '[]');
+
     const syncLogout = (event) => {
         if (event.key === 'logout') {
             router.visit(route('welcome'))
@@ -46,6 +54,11 @@ onMounted(() => {
         window.removeEventListener('storage', syncLogout)
     })
 })
+
+function dismissAppPopup(id) {
+    dismissedAppPopups.value = [...new Set([...dismissedAppPopups.value, id])];
+    localStorage.setItem('dismissedAppPopups', JSON.stringify(dismissedAppPopups.value));
+}
 
 </script>
 <script>
@@ -121,6 +134,25 @@ export default {
 
              <!-- End Sweetalert Success Error Message -->
 
+             <div v-if="visibleAppPopups.length" class="fixed right-5 top-20 z-50 w-full max-w-sm space-y-3">
+                <div
+                    v-for="popup in visibleAppPopups"
+                    :key="popup.id"
+                    :class="[
+                        'rounded border bg-white p-4 shadow-lg',
+                        popup.level === 'danger' ? 'border-red-300' : popup.level === 'warning' ? 'border-yellow-300' : popup.level === 'success' ? 'border-green-300' : 'border-orange-300'
+                    ]"
+                >
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <h3 class="text-sm font-semibold text-gray-900">{{ popup.title }}</h3>
+                            <p class="mt-1 text-sm text-gray-700">{{ popup.message }}</p>
+                        </div>
+                        <button class="text-xl leading-none text-gray-400 hover:text-gray-700" @click="dismissAppPopup(popup.id)">&times;</button>
+                    </div>
+                </div>
+             </div>
+
              <Banner />
 
              <div id="app" class="main-wrapper ">
@@ -141,9 +173,9 @@ export default {
                         <!-- Page Heading -->
                         <header v-if="$slots.header" class="bg-white relative w-full shadow mb-5 z-20">
                             <div class="text-center sm:text-left max-w-7xl mx-36 py-6">
-                                <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+                                <div class="font-semibold text-xl text-gray-800 leading-tight">
                                     <slot name="header" />
-                                </h2>
+                                </div>
                             </div>
                         </header>
                         <div class="px-10">

@@ -22,7 +22,7 @@ import Aura from '@primevue/themes/aura';
 import { setThemeOnLoad } from './theme';
 
 
-const appName = window.document.getElementsByTagName('title')[0]?.innerText || 'Phönix ZBB';
+const appName = window.document.getElementsByTagName('title')[0]?.innerText || 'ERP ZBB';
 
 
 // Abmelde-Synchronisation über localStorage

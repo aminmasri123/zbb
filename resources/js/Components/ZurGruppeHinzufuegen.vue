@@ -1,28 +1,30 @@
 <script setup>
-import { ref, watch } from 'vue'
-import { router, usePage  } from '@inertiajs/vue3'
+import { computed, ref } from 'vue'
 import Swal from 'sweetalert2'
+import axios from 'axios'
 
 // Props von der Elternkomponente
 const props = defineProps({
   selected: { type: Array, default: () => [] },
-  gruppen: { type: Array, default: () => [] }
+  gruppen: { type: Array, default: () => [] },
+  showButton: { type: Boolean, default: true }
 })
 const emit = defineEmits(['submitted'])
 
 const selectedGroup = ref('')
 const showModal = ref(false)
-console.log(props.gruppen);
 
-watch(
-  () => props.selected,
-  (newVal) => {
-    console.log('Neue Auswahl:', newVal)
-  },
-  { deep: true, immediate: true }
-);
+const selectedGroupData = computed(() =>
+  props.gruppen.find(gruppe => String(gruppe.id) === String(selectedGroup.value))
+)
 
- function submitForm() {
+const open = () => {
+  showModal.value = true
+}
+
+defineExpose({ open })
+
+ async function submitForm() {
   if (!selectedGroup.value || props.selected.length === 0) {
     Swal.fire({
       title: 'Fehler',
@@ -32,25 +34,30 @@ watch(
     return
   } 
 
-  router.post(
-    route('gruppeHasTeilnehmer.store'),
-    { gruppe_id: selectedGroup.value, teilnehmer: props.selected },
-    {
-      onSuccess: () => {
-        const flash = usePage().props.flash
-        console.log(props);
-        if (flash.success) {
-        Swal.fire({ icon: 'success', text: flash.success, timer: 2500 })
-      } else if (flash.warning) {
-        Swal.fire({ icon: 'warning', text: flash.warning, timer: 2500 })
-      } else if (flash.info) {
-        Swal.fire({ icon: 'info', text: flash.info, timer: 2500 })
-      }
-        emit('submitted')
-        showModal.value = false
-      }
-    }
-  )
+  try {
+    const response = await axios.post(route('gruppeHasTeilnehmer.store'), {
+      gruppe_id: selectedGroup.value,
+      teilnehmer: props.selected,
+      startzeit: selectedGroupData.value?.startzeit,
+      endzeit: selectedGroupData.value?.endzeit,
+      startdatum: selectedGroupData.value?.anfangsdatum,
+      enddatum: selectedGroupData.value?.enddatum,
+    })
+
+    Swal.fire({
+      icon: 'success',
+      text: response.data.message || 'Teilnehmer wurden zur Gruppe hinzugefuegt.',
+      timer: 2500
+    })
+    emit('submitted')
+    showModal.value = false
+  } catch (error) {
+    Swal.fire({
+      title: 'Fehler',
+      text: error.response?.data?.message || 'Teilnehmer konnten nicht zur Gruppe hinzugefuegt werden.',
+      icon: 'error'
+    })
+  }
 }
 </script>
 
@@ -58,7 +65,7 @@ watch(
   <div class="mt-4">
     <button
       type="button"
-      v-if="selected.length > 0"
+      v-if="showButton && selected.length > 0"
       @click="showModal = true"
       class="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition"
     >

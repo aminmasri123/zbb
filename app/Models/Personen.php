@@ -7,6 +7,7 @@ use App\Models\Adresse;
 use App\Models\Baenke;
 use App\Models\Dienstwagen;
 use App\Models\Dienstwagenfahrtenbuch;
+use App\Models\EinteilungBereiche;
 use App\Models\Fahrten;
 use App\Models\Gruppe;
 use App\Models\GruppeHasPersonen;
@@ -217,7 +218,10 @@ class Personen extends Model
             ->withPivot('projekt_id');
     }
 
-
+    public function einteilungen()
+    {
+        return $this->morphMany(EinteilungBereiche::class, 'teilnehmende')->where('typ', 'teilnehmer');
+    }
 
 
 

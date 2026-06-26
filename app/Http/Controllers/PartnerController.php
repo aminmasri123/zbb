@@ -11,6 +11,7 @@ use App\Models\PartnerHasPartnerschaftstypen;
 use App\Models\Partnerschaftstypen;
 use App\Models\Personen;
 use App\Models\Projekt;
+use App\Models\ProjektHasPartner;
 use Exception;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
@@ -19,6 +20,75 @@ use Inertia\Inertia;
 
 class PartnerController extends Controller
 {
+    private function projektPartnerPivotIds($projektId)
+    {
+        return DB::table('projekt_has_ansprechpartners')
+            ->where('projekt_id', $projektId)
+            ->pluck('ansprechpartner_id');
+    }
+
+    private function partnerRelationsForProject($projektId)
+    {
+        $pivotIds = $this->projektPartnerPivotIds($projektId);
+
+        return [
+            'partnerschaftstypens' => function ($query) use ($pivotIds) {
+                $query->whereIn('partner_has_partnerschaftstypens.id', $pivotIds);
+            },
+            'ansprechpartners' => function ($query) use ($pivotIds) {
+                $query->whereIn('partner_has_partnerschaftstypens.id', $pivotIds);
+            },
+            'ansprechpartners.partnerTyp',
+            'ansprechpartners.adresses',
+            'ansprechpartners.kontaktes',
+            'ansprechpartners.kontaktes.kontakttyp',
+            'schueler',
+        ];
+    }
+
+    private function applyPartnerSearch($query, $search)
+    {
+        $search = trim((string) $search);
+
+        if ($search === '') {
+            return $query;
+        }
+
+        $term = "%{$search}%";
+
+        return $query->where(function ($query) use ($term) {
+            $query->where('partners.name', 'like', $term)
+                ->orWhere('partners.beschreibung', 'like', $term)
+                ->orWhereHas('partnerschaftstypens', function ($typeQuery) use ($term) {
+                    $typeQuery->where('bezeichnung', 'like', $term)
+                        ->orWhere('beschreibung', 'like', $term);
+                })
+                ->orWhereHas('ansprechpartners', function ($personQuery) use ($term) {
+                    $personQuery->where('vorname', 'like', $term)
+                        ->orWhere('nachname', 'like', $term)
+                        ->orWhereHas('partnerTyp', function ($typeQuery) use ($term) {
+                            $typeQuery->where('bezeichnung', 'like', $term)
+                                ->orWhere('beschreibung', 'like', $term);
+                        })
+                        ->orWhereHas('adresses', function ($addressQuery) use ($term) {
+                            $addressQuery->where('strasse', 'like', $term)
+                                ->orWhere('hausnummer', 'like', $term)
+                                ->orWhere('plz', 'like', $term)
+                                ->orWhere('stadt', 'like', $term)
+                                ->orWhere('land', 'like', $term)
+                                ->orWhere('zusatzinfo', 'like', $term);
+                        })
+                        ->orWhereHas('kontaktes', function ($contactQuery) use ($term) {
+                            $contactQuery->where('wert', 'like', $term)
+                                ->orWhere('bemerkung', 'like', $term)
+                                ->orWhereHas('kontakttyp', function ($contactTypeQuery) use ($term) {
+                                    $contactTypeQuery->where('name', 'like', $term);
+                                });
+                        });
+                });
+        });
+    }
+
     public function index(Request $request)
     {
         $kontaktypens = Kontakttypen::all();
@@ -26,28 +96,16 @@ class PartnerController extends Controller
 
         $user = auth()->user();
         $userProjektAktiv = $user->current_team_id;
-        $projekt = Projekt::find($userProjektAktiv)->with('bereiche')->first();
+        /* $projekt = Projekt::find($userProjektAktiv)->with('bereiche')->first(); */
+        $projekt = Projekt::with('bereiche')->find($userProjektAktiv);
         $projektName = $projekt?->name;
         $anzahlBereiche = $projekt?->bereiche->count();
         $partnerschaftstypen = Partnerschaftstypen::all();
 
-
-        $partners = Partner::query()
-            ->when($search, function ($query) use ($search) {
-                $query->where('name', 'like', "%{$search}%");
-            })
-            ->with([
-                'partnerschaftstypens',
-                'ansprechpartners',
-                'ansprechpartners.partnerTyp',
-                'ansprechpartners.adresses',
-                'ansprechpartners.kontaktes',
-                'ansprechpartners.kontaktes.kontakttyp',
-                'schueler',
-            ])
-            ->join('partner_has_partnerschaftstypens', 'partners.id', '=', 'partner_has_partnerschaftstypens.partner_id')
-            ->join('projekt_has_ansprechpartners', 'partner_has_partnerschaftstypens.id', '=', 'projekt_has_ansprechpartners.ansprechpartner_id')
-            ->where('projekt_has_ansprechpartners.projekt_id', $userProjektAktiv)
+        $partners = $this->applyPartnerSearch(Partner::query(), $search)
+            ->with($this->partnerRelationsForProject($userProjektAktiv))
+            ->join('projekt_has_partners', 'partners.id', '=', 'projekt_has_partners.partner_id')
+            ->where('projekt_has_partners.projekt_id', $userProjektAktiv)
             ->select('partners.*')
             ->distinct()
             ->orderBy('partners.id')
@@ -63,22 +121,16 @@ class PartnerController extends Controller
             'anzahlBereiche' => $anzahlBereiche
         ]);
     }
-    public function indexAjaxFresh()
+    public function indexAjaxFresh(Request $request)
     {
         $user = auth()->user();
         $userProjektAktiv = $user->current_team_id;
+        $search = $request->input('search');
 
-       $partners = Partner::with([
-        'partnerschaftstypens',
-        'ansprechpartners',
-        'ansprechpartners.partnerTyp',
-        'ansprechpartners.adresses',
-        'ansprechpartners.kontaktes',
-        'ansprechpartners.kontaktes.kontakttyp',
-            ])
-            ->join('partner_has_partnerschaftstypens', 'partners.id', '=', 'partner_has_partnerschaftstypens.partner_id')
-            ->join('projekt_has_ansprechpartners', 'partner_has_partnerschaftstypens.id', '=', 'projekt_has_ansprechpartners.ansprechpartner_id')
-            ->where('projekt_has_ansprechpartners.projekt_id', $userProjektAktiv)
+       $partners = $this->applyPartnerSearch(Partner::query(), $search)
+            ->with($this->partnerRelationsForProject($userProjektAktiv))
+            ->join('projekt_has_partners', 'partners.id', '=', 'projekt_has_partners.partner_id')
+            ->where('projekt_has_partners.projekt_id', $userProjektAktiv)
             ->select('partners.*')
              ->distinct()
             ->orderBy('id')
@@ -135,6 +187,11 @@ class PartnerController extends Controller
         $partner = Partner::create([
             'name' => $data['name'],
             'beschreibung' => $data['beschreibung'] ?? null
+        ]);
+
+        ProjektHasPartner::updateOrCreate([
+            'projekt_id' => $userProjektAktiv,
+            'partner_id' => $partner->id,
         ]);
 
         // 2️⃣ Partnerschaftstypen zuordnen (Pivot ohne Ansprechpartner)
@@ -247,6 +304,7 @@ class PartnerController extends Controller
                         DB::table('projekt_has_ansprechpartners')->insert([
                             'projekt_id' => $userProjektAktiv, // oder $projekt->id, falls Projekt separat angelegt
                             'ansprechpartner_id' => $ansprechpartnerPivot->id,
+                            'partnerschaftstypen_id' => $typId,
                             'created_at' => now(),
                             'updated_at' => now(),
                         ]);
@@ -259,11 +317,7 @@ class PartnerController extends Controller
             'success' => true,
             'partner' => $partner
                 ->refresh()   // <<< WICHTIG!
-                ->load([
-                    'partnerschaftstypens',
-                    'ansprechpartners',
-                     'ansprechpartners.adresses'
-                ])
+                ->load($this->partnerRelationsForProject($userProjektAktiv))
         ]);
     }
 
@@ -333,6 +387,16 @@ class PartnerController extends Controller
             'beschreibung' => $data['beschreibung'] ?? null,
         ]);
 
+        $user = auth()->user();
+        $userProjektAktiv = $user->current_team_id;
+        $assignedPivotIds = [];
+        $assignedPersonIds = [];
+
+        ProjektHasPartner::updateOrCreate([
+            'projekt_id' => $userProjektAktiv,
+            'partner_id' => $partner->id,
+        ]);
+
         /*
         |--------------------------------------------------------------------------
         | 2 Ansprechpartner speichern oder aktualisieren
@@ -361,15 +425,31 @@ class PartnerController extends Controller
         ]
     );
 
+    $assignedPersonIds[] = $person->id;
+
     // Pivot Partner + Typ
     foreach ($data['typ'] as $typId) {
-        PartnerHasPartnerschaftstypen::updateOrCreate(
+        $pivot = PartnerHasPartnerschaftstypen::updateOrCreate(
             [
                 'partner_id' => $partner->id,
                 'partnerschaftstypen_id' => $typId,
                 'ansprechpartner_id' => $person->id
             ],
             ['rolle' => $personData['typ'] ?? null]
+        );
+
+        $assignedPivotIds[] = $pivot->id;
+
+        DB::table('projekt_has_ansprechpartners')->updateOrInsert(
+            [
+                'projekt_id' => $userProjektAktiv,
+                'ansprechpartner_id' => $pivot->id,
+            ],
+            [
+                'partnerschaftstypen_id' => $typId,
+                'updated_at' => now(),
+                'created_at' => now(),
+            ]
         );
     }
 
@@ -403,6 +483,23 @@ class PartnerController extends Controller
 }
         }
 
+        $currentProjectPivotIds = DB::table('projekt_has_ansprechpartners')
+            ->join('partner_has_partnerschaftstypens', 'projekt_has_ansprechpartners.ansprechpartner_id', '=', 'partner_has_partnerschaftstypens.id')
+            ->where('projekt_has_ansprechpartners.projekt_id', $userProjektAktiv)
+            ->where('partner_has_partnerschaftstypens.partner_id', $partner->id)
+            ->pluck('partner_has_partnerschaftstypens.id');
+
+        $obsoletePivotIds = $currentProjectPivotIds
+            ->diff(array_unique($assignedPivotIds))
+            ->values();
+
+        DB::table('projekt_has_ansprechpartners')
+            ->where('projekt_id', $userProjektAktiv)
+            ->whereIn('ansprechpartner_id', $obsoletePivotIds)
+            ->delete();
+
+        PartnerHasPartnerschaftstypen::whereIn('id', $obsoletePivotIds)->delete();
+
         /*
         |--------------------------------------------------------------------------
         | Response
@@ -412,12 +509,7 @@ class PartnerController extends Controller
         return response()->json([
             'success' => true,
             'partner' => $partner
-            ->refresh()->load([
-                'partnerschaftstypens',
-                'ansprechpartners',
-                'ansprechpartners.adresses',
-                'ansprechpartners.kontaktes',
-            ])
+            ->refresh()->load($this->partnerRelationsForProject($userProjektAktiv))
         ]);
     }
 
@@ -429,6 +521,44 @@ class PartnerController extends Controller
     {
         try {
             $partner = Partner::findOrFail($id);
+            $user = auth()->user();
+            $userProjektAktiv = $user->current_team_id;
+
+            $projectPivotIds = DB::table('projekt_has_ansprechpartners')
+                ->join('partner_has_partnerschaftstypens', 'projekt_has_ansprechpartners.ansprechpartner_id', '=', 'partner_has_partnerschaftstypens.id')
+                ->where('projekt_has_ansprechpartners.projekt_id', $userProjektAktiv)
+                ->where('partner_has_partnerschaftstypens.partner_id', $partner->id)
+                ->pluck('partner_has_partnerschaftstypens.id');
+
+            $projectPersonIds = PartnerHasPartnerschaftstypen::whereIn('id', $projectPivotIds)
+                ->pluck('ansprechpartner_id')
+                ->filter()
+                ->unique();
+
+            DB::table('projekt_has_ansprechpartners')
+                ->where('projekt_id', $userProjektAktiv)
+                ->whereIn('ansprechpartner_id', $projectPivotIds)
+                ->delete();
+
+            PartnerHasPartnerschaftstypen::whereIn('id', $projectPivotIds)->delete();
+
+            foreach ($projectPersonIds as $personId) {
+                if (!PartnerHasPartnerschaftstypen::where('ansprechpartner_id', $personId)->exists()) {
+                    Personen::where('id', $personId)->delete();
+                }
+            }
+
+            ProjektHasPartner::where('projekt_id', $userProjektAktiv)
+                ->where('partner_id', $partner->id)
+                ->delete();
+
+            if (ProjektHasPartner::where('partner_id', $partner->id)->exists()) {
+                return response()->json(['message' => 'Partner erfolgreich aus diesem Projekt entfernt!'], 200);
+            }
+
+            $partner->delete();
+
+            return response()->json(['message' => 'Partner erfolgreich geloescht!'], 200);
 
             // Lösche alle Ansprechpartner + deren Daten
             foreach ($partner->ansprechpartners as $person) {

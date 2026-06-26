@@ -15,8 +15,13 @@ const props = defineProps({
     toEdit: Object,
     kontaktypens: Array,
 });
-    console.log(props.toEdit);
 const emit = defineEmits(['close', 'updated']);
+
+const geschlechtOptions = [
+    { label: 'Maennlich', value: 'm' },
+    { label: 'Weiblich', value: 'w' },
+    { label: 'Divers', value: 'd' },
+];
 
 let form = ref({
     name: '',
@@ -45,7 +50,7 @@ watch(
       name: val.name ?? '',
       beschreibung: val.beschreibung ?? '',
       typ: val.partnerschaftstypens
-        ? val.partnerschaftstypens.map(t => t.id)
+        ? [...new Set(val.partnerschaftstypens.map(t => t.id))]
         : [],
 
       ansprechpartner: val.ansprechpartners?.map(p => ({
@@ -53,7 +58,7 @@ watch(
         vorname: p.vorname ?? '',
         nachname: p.nachname ?? '',
         geschlecht: p.geschlecht ?? '',
-        typ: p.rolle ?? '',
+        typ: p.pivot?.rolle ?? p.rolle ?? '',
 
         adresse: {
           strasse: p.adresses?.[0]?.strasse ?? '',
@@ -165,7 +170,9 @@ const save = () => {
     <FloatLabel variant="in">
         <Dropdown
             v-model="p.geschlecht"
-            :options="['männlich','weiblich','divers']"
+            :options="geschlechtOptions"
+            optionLabel="label"
+            optionValue="value"
             class="w-full"
         />
         <label>Geschlecht</label>

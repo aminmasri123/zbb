@@ -2,16 +2,14 @@
 
 namespace Database\Seeders;
 
-use Carbon\Carbon;
-use App\Models\User;
-use App\Models\Projekt;
 use App\Models\Personen;
+use App\Models\Projekt;
+use App\Models\ProjektHasPersonen;
 use App\Models\Standort;
+use App\Models\StandortHasPersonen;
 use Faker\Factory as Faker;
 use Illuminate\Database\Seeder;
-use App\Models\ProjektHasPersonen;
 use Illuminate\Support\Facades\DB;
-use App\Models\StandortHasPersonen;
 use Illuminate\Support\Facades\Hash;
 
 class UserSeeder extends Seeder
@@ -23,7 +21,10 @@ class UserSeeder extends Seeder
                 'bezeichnung' => 'Bildungspartner',
                 'beschreibung' => 'Schulen, Hochschulen oder Bildungseinrichtungen, mit denen organisatorisch zusammengearbeitet wird.',
             ],
-
+            [
+                'bezeichnung' => 'Kooperationsschule',
+                'beschreibung' => 'Schulen, die in Kooperation mit anderen Einrichtungen tätig sind, wie BOP',
+            ],
             [
                 'bezeichnung' => 'Praktikumspartner',
                 'beschreibung' => 'Unternehmen, die regelmäßig Praktikumsplätze zur Verfügung stellen.',
@@ -207,37 +208,27 @@ class UserSeeder extends Seeder
             ['bezeichnung' => 'hat Teilnahme abgebrochen'],
 
         ]);
-
-        DB::table('standorts')->insert([
-            [ // id = 1
-                'name' => 'BOP',
-            ],
-            [ // id = 2
-                'name' => 'Verwaltung',
-            ],
-            [ // id = 3
-                'name' => 'Völklingen',
-            ],
-            [ // id = 4
-                'name' => 'Brebach',
-            ],
+        DB::table('standorts')->insertOrIgnore([
+            ['name' => 'BOP'],
+            ['name' => 'Verwaltung'],
+            ['name' => 'Völklingen'],
+            ['name' => 'Brebach'],
         ]);
-          $personen =
+        $personen =
         [
-            ['typ' => 'mitarbeiter', 'vorname' => 'Amin', 'nachname' => 'Masri', 'geschlecht' => 'm', 'geburtsdatum' => '2000-01-01', 'email' => 'amin.masri@outlook.com', 'username' => 'aminmasri', 'password' => 'password'],
-            ['typ' => 'mitarbeiter', 'vorname' => 'Anika', 'nachname' => 'Feller', 'geschlecht' => 'w', 'geburtsdatum' => '2000-01-01', 'email' => 'a.feller@zbb-saar.de', 'username' => 'Anika Feller', 'password' => 'zbb.bop.hw'],
-            ['typ' => 'mitarbeiter', 'vorname' => 'Salvatore', 'nachname' => 'Gucciardo', 'geschlecht' => 'm', 'geburtsdatum' => '2000-01-01', 'email' => 's.gucciardo@zbb-saar.de', 'username' => 'Salvatore Gucciardo', 'password' => 'zbb.bop.ala'],
-            ['typ' => 'mitarbeiter', 'vorname' => 'Birgitta', 'nachname' => 'Lautenschlager', 'geschlecht' => 'w', 'geburtsdatum' => '2000-01-01', 'email' => 'b.lautenschlager@zbb-saar.de', 'username' => 'Brigitta Lautenschlager', 'password' => 'zbb.al'],
-            ['typ' => 'mitarbeiter', 'vorname' => 'Chantale', 'nachname' => 'Lismann', 'geschlecht' => 'w', 'geburtsdatum' => '2000-01-01', 'email' => 'c.lismann@zbb-saar.de', 'username' => 'Chantale Lismann', 'password' => 'zbb.al'],
-            ['typ' => 'mitarbeiter', 'vorname' => 'Stefanie', 'nachname' => 'Wagner', 'geschlecht' => 'w', 'geburtsdatum' => '2000-01-01', 'email' => 's.wagner@zbb-saar.de', 'username' => 'Stefanie Wagner', 'password' => 'zbb.al'],
-            ['typ' => 'mitarbeiter', 'vorname' => 'Stefan', 'nachname' => 'Haßdenteufel', 'geschlecht' => 'm', 'geburtsdatum' => '2000-01-01', 'email' => 's.haßdenteufel@zbb-saar.de', 'username' => 'Stefan Haßdenteufel', 'password' => 'zbb.al'],
-            ['typ' => 'mitarbeiter', 'vorname' => 'Martin', 'nachname' => 'Löw', 'geschlecht' => 'm', 'geburtsdatum' => '2000-01-01', 'email' => 'm.loew@zbb-saar.de', 'username' => 'Martin Löw', 'password' => 'zbb.al'],
+          ['typ' => 'mitarbeiter', 'vorname' => 'Amin', 'nachname' => 'Masri', 'geschlecht' => 'm', 'geburtsdatum' => '2000-01-01', 'email' => 'amin.masri@outlook.com', 'username' => 'aminmasri', 'password' => 'password'],
+          ['typ' => 'mitarbeiter', 'vorname' => 'Anika', 'nachname' => 'Feller', 'geschlecht' => 'w', 'geburtsdatum' => '2000-01-01', 'email' => 'a.feller@zbb-saar.de', 'username' => 'Anika Feller', 'password' => 'zbb.bop.hw'],
+          ['typ' => 'mitarbeiter', 'vorname' => 'Salvatore', 'nachname' => 'Gucciardo', 'geschlecht' => 'm', 'geburtsdatum' => '2000-01-01', 'email' => 's.gucciardo@zbb-saar.de', 'username' => 'Salvatore Gucciardo', 'password' => 'zbb.bop.ala'],
+          ['typ' => 'mitarbeiter', 'vorname' => 'Birgitta', 'nachname' => 'Lautenschlager', 'geschlecht' => 'w', 'geburtsdatum' => '2000-01-01', 'email' => 'b.lautenschlager@zbb-saar.de', 'username' => 'Brigitta Lautenschlager', 'password' => 'zbb.al'],
+          ['typ' => 'mitarbeiter', 'vorname' => 'Chantale', 'nachname' => 'Lismann', 'geschlecht' => 'w', 'geburtsdatum' => '2000-01-01', 'email' => 'c.lismann@zbb-saar.de', 'username' => 'Chantale Lismann', 'password' => 'zbb.al'],
+          ['typ' => 'mitarbeiter', 'vorname' => 'Stefanie', 'nachname' => 'Wagner', 'geschlecht' => 'w', 'geburtsdatum' => '2000-01-01', 'email' => 's.wagner@zbb-saar.de', 'username' => 'Stefanie Wagner', 'password' => 'zbb.al'],
+          ['typ' => 'mitarbeiter', 'vorname' => 'Stefan', 'nachname' => 'Haßdenteufel', 'geschlecht' => 'm', 'geburtsdatum' => '2000-01-01', 'email' => 's.haßdenteufel@zbb-saar.de', 'username' => 'Stefan Haßdenteufel', 'password' => 'zbb.al'],
+          ['typ' => 'mitarbeiter', 'vorname' => 'Martin', 'nachname' => 'Löw', 'geschlecht' => 'm', 'geburtsdatum' => '2000-01-01', 'email' => 'm.loew@zbb-saar.de', 'username' => 'Martin Löw', 'password' => 'zbb.al'],
         ];
 
         $projektIds = Projekt::pluck('id')->toArray();
 
-        foreach ($personen as $person)
-        {
+        foreach ($personen as $person) {
             // Person einfügen und ID speichern
             $personId = DB::table('personens')->insertGetId([
                 'vorname' => $person['vorname'],
@@ -248,22 +239,22 @@ class UserSeeder extends Seeder
 
             ]);
 
-                // Passendes Benutzerkonto automatisch anlegen
-                DB::table('users')->insert([
-                    'person_id' => $personId,
-                    'username' => $person['username'],
-                    'email' => $person['email'],
-                    'password' => Hash::make($person['password']),
-                    'lang' => 'de',
-                    'default_projekt_id' => $personId == 1 || $personId == 2 ? 5 : fake()->randomElement($projektIds),
-                ]);
+            // Passendes Benutzerkonto automatisch anlegen
+            DB::table('users')->insert([
+                'person_id' => $personId,
+                'username' => $person['username'],
+                'email' => $person['email'],
+                'password' => Hash::make($person['password']),
+                'lang' => 'de',
+                'default_projekt_id' => $personId == 1 || $personId == 2 ? 5 : fake()->randomElement($projektIds),
+            ]);
 
-                DB::table('standort_has_personens')->insert([
-                    [ // id = 1
-                        'personen_id' => $personId,
-                        'standort_id' => fake()->randomElement(Standort::pluck('id')->toArray()),
-                    ],
-                ]);
+            DB::table('standort_has_personens')->insert([
+                [ // id = 1
+                    'personen_id' => $personId,
+                    'standort_id' => fake()->randomElement(Standort::pluck('id')->toArray()),
+                ],
+            ]);
         }
 
         DB::table('kontakttypens')->insert([
@@ -281,8 +272,8 @@ class UserSeeder extends Seeder
             ],
         ]);
 
-         DB::table('notizvariantens')->insert([
-            //Notizkategorie
+        DB::table('notizvariantens')->insert([
+            // Notizkategorie
             [ // id = 1
                 'typ' => 'kategorie',
                 'name' => 'Beratung',
@@ -300,8 +291,7 @@ class UserSeeder extends Seeder
                 'name' => 'Termin',
             ],
 
-
-            //Notiztyp
+            // Notiztyp
             [ // id = 5
                 'typ' => 'typ',
                 'name' => 'Aktennotiz',
@@ -319,8 +309,7 @@ class UserSeeder extends Seeder
                 'name' => 'Telefonnotiz',
             ],
 
-
-            //Priorität
+            // Priorität
             [ // id = 9
                 'typ' => 'prioritaet',
                 'name' => 'Niedrig',
@@ -354,8 +343,6 @@ class UserSeeder extends Seeder
             ],
 
         ]);
-
-
 
         DB::table('projekts')->insert([
             [ // id = 1
@@ -458,8 +445,6 @@ class UserSeeder extends Seeder
                 'aktiv' => 1,
             ],
         ]);
-
-
 
         DB::table('berechtigungskategories')->insert([
 
@@ -568,10 +553,10 @@ class UserSeeder extends Seeder
                 'beschreibung' => '',
             ],
             [
-                //id = 27
+                // id = 27
                 'name' => 'Bestellungen',
                 'beschreibung' => '',
-            ]
+            ],
 
         ]);
 
@@ -619,38 +604,38 @@ class UserSeeder extends Seeder
                 'name' => 'dashboard.index',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '1',
-                'beschreibung' => null
+                'beschreibung' => null,
             ],
             [ // id = 2
                 'name' => 'berechtigung.index',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '8',
-                'beschreibung' => null
+                'beschreibung' => null,
             ],
             [ // id = 3
                 'name' => 'berechtigung.store',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '8',
-                'beschreibung' => null
+                'beschreibung' => null,
             ],
 
             [ // id = 4
                 'name' => 'benutzer.index',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '9',
-                'beschreibung' => null
+                'beschreibung' => null,
             ],
             [ // id = 5
                 'name' => 'benutzer.store',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '9',
-                'beschreibung' => null
+                'beschreibung' => null,
             ],
             [ // id = 6
                 'name' => 'benutzer.update',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '9',
-                'beschreibung' => null
+                'beschreibung' => null,
             ],
             [ // id = 7
                 'name' => 'benutzer.destroy',
@@ -659,8 +644,7 @@ class UserSeeder extends Seeder
                 'beschreibung' => null,
             ],
 
-
-             [ // id = 8
+            [ // id = 8
                 'name' => 'kooperationspartner.index',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '2',
@@ -785,7 +769,7 @@ class UserSeeder extends Seeder
                 'beschreibung' => null,
             ],
 
-             [ // id = 28
+            [ // id = 28
                 'name' => 'fahrtarten.index',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '22',
@@ -810,7 +794,7 @@ class UserSeeder extends Seeder
                 'berechtigungskategorie_id' => '22',
                 'beschreibung' => null,
             ],
-           [ // id = 32
+            [ // id = 32
                 'name' => 'printing.index',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '23',
@@ -989,19 +973,19 @@ class UserSeeder extends Seeder
                 'name' => 'personal.index',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '26',
-                'beschreibung' => null
+                'beschreibung' => null,
             ],
             [ // id = 71
                 'name' => 'personal.store',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '26',
-                'beschreibung' => null
+                'beschreibung' => null,
             ],
             [ // id = 72
                 'name' => 'personal.update',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '26',
-                'beschreibung' => null
+                'beschreibung' => null,
             ],
             [ // id = 73
                 'name' => 'personal.destroy',
@@ -1013,156 +997,155 @@ class UserSeeder extends Seeder
                 'name' => 'geraet.index',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '20',
-                'beschreibung' => null
+                'beschreibung' => null,
             ],
             [ // id = 75
                 'name' => 'geraet.store',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '20',
-                'beschreibung' => null
+                'beschreibung' => null,
             ],
             [ // id = 76
                 'name' => 'geraet.update',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '20',
-                'beschreibung' => null
+                'beschreibung' => null,
             ],
             [ // id = 77
                 'name' => 'geraet.destroy',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '20',
-                'beschreibung' => null
+                'beschreibung' => null,
             ],
             [ // id = 78
-            'name' => 'geraet.ausgabe.index',
-            'guard_name' => 'web',
-            'berechtigungskategorie_id' => '20',
-            'beschreibung' => null
+                'name' => 'geraet.ausgabe.index',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '20',
+                'beschreibung' => null,
             ],
             [ // id = 79
                 'name' => 'geraet.ausgabe.store',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '20',
-                'beschreibung' => null
+                'beschreibung' => null,
             ],
             [ // id = 80
                 'name' => 'geraet.ausgabe.update',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '20',
-                'beschreibung' => null
+                'beschreibung' => null,
             ],
             [ // id = 81
                 'name' => 'geraet.ausgabe.destroy',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '20',
-                'beschreibung' => null
+                'beschreibung' => null,
             ],
             [
                 // id = 82
                 'name' => 'geraet.rueckgabe.index',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '20',
-                'beschreibung' => null
+                'beschreibung' => null,
             ],
             [
                 // id = 83
                 'name' => 'geraet.rueckgabe.store',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '20',
-                'beschreibung' => null
+                'beschreibung' => null,
             ],
             [
                 // id = 84
                 'name' => 'geraet.rueckgabe.update',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '20',
-                'beschreibung' => null
+                'beschreibung' => null,
             ],
             [
                 // id = 85
                 'name' => 'geraet.rueckgabe.destroy',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '20',
-                'beschreibung' => null
+                'beschreibung' => null,
             ],
-             [
+            [
                 // id = 86
                 'name' => 'materialanforderung.index',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '27',
-                'beschreibung' => null
+                'beschreibung' => null,
             ],
             [
                 // id = 87
                 'name' => 'materialanforderung.store',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '27',
-                'beschreibung' => null
+                'beschreibung' => null,
             ],
-             [
+            [
                 // id = 88
                 'name' => 'materialanforderung.update',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '27',
-                'beschreibung' => null
+                'beschreibung' => null,
             ],
-             [
+            [
                 // id = 89
                 'name' => 'materialanforderung.destroy',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '27',
-                'beschreibung' => null
+                'beschreibung' => null,
             ],
             [
                 // id = 90
                 'name' => 'materialanforderung.sachlische_freigabe.index',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '27',
-                'beschreibung' => 'Übersicht aller zu prüfenden Anforderungen der Abteilungen'
-             ],
-             [
+                'beschreibung' => 'Übersicht aller zu prüfenden Anforderungen der Abteilungen',
+            ],
+            [
                 // id = 91
                 'name' => 'materialanforderung.sachlische_freigabe.update',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '27',
-                'beschreibung' => 'Eine Anforderung fachlich bearbeiten oder den Status auf "freigegeben" setzen.'
-             ],
-             [
+                'beschreibung' => 'Eine Anforderung fachlich bearbeiten oder den Status auf "freigegeben" setzen.',
+            ],
+            [
                 // id = 92
                 'name' => 'materialanforderung.sachlische_freigabe.show',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '27',
-                'beschreibung' => 'Details zur fachlichen Prüfung einsehen.'
-             ],
-             [
+                'beschreibung' => 'Details zur fachlichen Prüfung einsehen.',
+            ],
+            [
                 // id = 93
                 'name' => 'materialanforderung.kaufmännische_freigabe.index',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '27',
-                'beschreibung' => 'Übersicht aller fachlich freigegebenen Anforderungen zur Budgetprüfung.'
+                'beschreibung' => 'Übersicht aller fachlich freigegebenen Anforderungen zur Budgetprüfung.',
             ],
             [
                 // id = 94
                 'name' => 'materialanforderung.kaufmännische_freigabe.update',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '27',
-                'beschreibung' => 'Eine Anforderung kaufmännisch bearbeiten oder den Status auf "freigegeben" setzen.'
+                'beschreibung' => 'Eine Anforderung kaufmännisch bearbeiten oder den Status auf "freigegeben" setzen.',
             ],
             [
                 // id = 95
                 'name' => 'materialanforderung.kaufmännische_freigabe.show',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '27',
-                'beschreibung' => 'Details zur kaufmännischen Prüfung einsehen.'
+                'beschreibung' => 'Details zur kaufmännischen Prüfung einsehen.',
             ],
             [
                 // id = 96
                 'name' => 'materialanforderung.bestellwesen.update',
                 'guard_name' => 'web',
                 'berechtigungskategorie_id' => '27',
-                'beschreibung' => 'eine Anforderung im Bestellwesen bearbeiten oder den Status auf "bestellt" setzen.'
+                'beschreibung' => 'eine Anforderung im Bestellwesen bearbeiten oder den Status auf "bestellt" setzen.',
             ],
-
 
         ]);
 
@@ -1170,27 +1153,27 @@ class UserSeeder extends Seeder
             [
                 'role_id' => '1',
                 'model_type' => 'App\Models\User',
-                'model_id' => '1'
+                'model_id' => '1',
             ],
             [
                 'role_id' => '5',
                 'model_type' => 'App\Models\User',
-                'model_id' => '2'
+                'model_id' => '2',
             ],
             [
                 'role_id' => '3',
                 'model_type' => 'App\Models\User',
-                'model_id' => '3'
+                'model_id' => '3',
             ],
             [
                 'role_id' => '2',
                 'model_type' => 'App\Models\User',
-                'model_id' => '4'
+                'model_id' => '4',
             ],
             [
                 'role_id' => '2',
                 'model_type' => 'App\Models\User',
-                'model_id' => '5'
+                'model_id' => '5',
             ],
         ]);
 
@@ -1504,7 +1487,7 @@ class UserSeeder extends Seeder
                 'berechtigungskategorie_id' => '22',
             ],
 
-             [
+            [
                 'role_id' => '1',
                 'berechtigungskategorie_id' => '23',
             ],
@@ -1551,12 +1534,11 @@ class UserSeeder extends Seeder
 
         ]);
 
-        //Teilnehmer erstellen und mit Projekten verknüpfen
+        // Teilnehmer erstellen und mit Projekten verknüpfen
         $faker = Faker::create();
         // Anzahl der Benutzer, die erstellt werden sollen
         $numberOfUsers = 50;
-        for ($i = 0; $i < $numberOfUsers; $i++)
-        {
+        for ($i = 0; $i < $numberOfUsers; $i++) {
             $teilnehmer = Personen::create([
                 'vorname' => $faker->firstName,
                 'nachname' => $faker->lastName(),
@@ -1565,18 +1547,18 @@ class UserSeeder extends Seeder
                 'typ' => 'teilnehmer',
             ]);
 
-             // Projekt-IDs und Teilnehmer-IDs müssen aus DB kommen
+            // Projekt-IDs und Teilnehmer-IDs müssen aus DB kommen
             ProjektHasPersonen::create([
-                'projekt_id'    => $faker->randomElement(Projekt::pluck('id')->toArray()),
+                'projekt_id' => $faker->randomElement(Projekt::pluck('id')->toArray()),
                 'personen_id' => $teilnehmer->id, // gerade erstellter Teilnehmer
-                'standort_id'    => '1',
+                'standort_id' => '1',
             ]);
             StandortHasPersonen::create([
-                'standort_id'    => $faker->randomElement(Standort::pluck('id')->toArray()),
+                'standort_id' => $faker->randomElement(Standort::pluck('id')->toArray()),
                 'personen_id' => $teilnehmer->id, // gerade erstellter Teilnehmer
 
             ]);
-        };
+        }
 
     }
 }

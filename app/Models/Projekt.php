@@ -9,6 +9,7 @@ use App\Models\Partner;
 use App\Models\PartnerHasPartnerschaftstypen;
 use App\Models\Personen;
 use App\Models\ProjektHasAnsprechpartner;
+use App\Models\ProjektHasPartner;
 use App\Models\Raeume;
 use App\Models\Standort;
 use App\Models\User;
@@ -45,6 +46,11 @@ class Projekt extends Model
         return $this->hasMany(ProjektHasAnsprechpartner::class, 'projekt_id', 'id');
     }
 
+    public function projektHasPartner()
+    {
+        return $this->hasMany(ProjektHasPartner::class, 'projekt_id', 'id');
+    }
+
     /* public function ansprechpartner()
     {
         return $this->hasManyThrough(
@@ -59,6 +65,13 @@ class Projekt extends Model
     }  */
     public function partners(): BelongsToMany
     {
+        return $this->belongsToMany(
+            Partner::class,
+            'projekt_has_partners',
+            'projekt_id',
+            'partner_id'
+        );
+
         return $this->belongsToMany(
             PartnerHasPartnerschaftstypen::class,   // erste Zwischentabelle
             'projekt_has_ansprechpartners',          // Pivot-Tabelle Projekt ↔ Ansprechpartner

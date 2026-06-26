@@ -16,7 +16,7 @@ return new class extends Migration
             $table->foreignId('personen_id')->constrained()->onDelete('cascade'); //Personal oder Teilnehmer
             $table->foreignId('projekt_id')->constrained()->onDelete('cascade');
             $table->enum('status', ['angemeldet', 'aktiv', 'pausiert', 'abgeschlossen', 'abgebrochen'])->default('aktiv');
-            $table->foreignId('standort_id')->constrained('standorts')->onDelete('cascade');
+            $table->foreignId('standort_id')->nullable()->constrained('standorts')->onDelete('cascade');
             $table->text('bemerkung')->nullable();
             $table->timestamps();
         });

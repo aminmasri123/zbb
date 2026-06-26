@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Bereich;
 use App\Models\Bereichsauswahl;
+use App\Models\EinteilungBereiche;
 use App\Models\Partner;
+use App\Models\Personen;
 use App\Models\PersonenIstSchueler;
 use App\Models\Projekt;
 use App\Services\MyDatum;
@@ -773,5 +775,8 @@ class ProjektBopController extends Controller
         ->deleteFileAfterSend(true);
 
     }
+
+
+
 
 }

@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('anforderung_id')->constrained('materialanforderungs')->onDelete('cascade');
             $table->foreignId('genehmiger_id')->constrained('users')->onDelete('cascade');
-            $table->enum('status', ['in Bearbeitung', 'Genehmigt', 'Abgelehnt'])->default('Offen');
+            $table->enum('status', ['Offen', 'in Bearbeitung', 'Genehmigt', 'Abgelehnt'])->default('Offen');
             $table->text('kommentar')->nullable();
             $table->timestamps();
         });

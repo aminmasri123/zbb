@@ -33,6 +33,7 @@ let sortColumn = ref('');  // Spalte zum Sortieren
 let sortDirection = ref('desc'); // Sortierrichtung ('asc' oder 'desc')
 
 const selected = ref([]);
+const groupModal = ref(null);
 // Lokale Teilnehmerliste
 let teilnehmerToDelete = ref(null); // Speichert den Namen der Teilnehmer, die gelöscht werden sollen
 let showModalLöschen = ref(false); // Modal für die Löschung
@@ -189,6 +190,93 @@ const filteredTeilnehmerByProject = computed(() => {
 
 
 // Projekt auswählen
+const selectedCount = computed(() => selected.value.length);
+const allVisibleSelected = computed(() =>
+    filteredTeilnehmerByProject.value.length > 0
+    && filteredTeilnehmerByProject.value.every(teilnehmer => selected.value.includes(teilnehmer.id))
+);
+
+const toggleSelectionMode = () => {
+    checkBoxListeTeilnehmer.value = !checkBoxListeTeilnehmer.value;
+
+    if (!checkBoxListeTeilnehmer.value) {
+        selected.value = [];
+    }
+};
+
+const toggleSelectAllVisible = () => {
+    const visibleIds = filteredTeilnehmerByProject.value.map(teilnehmer => teilnehmer.id);
+
+    if (allVisibleSelected.value) {
+        selected.value = selected.value.filter(id => !visibleIds.includes(id));
+        return;
+    }
+
+    selected.value = [...new Set([...selected.value, ...visibleIds])];
+};
+
+const openGroupModal = () => {
+    if (selected.value.length === 0) {
+        Swal.fire({
+            title: 'Keine Auswahl',
+            text: 'Bitte markieren Sie zuerst mindestens einen Teilnehmer.',
+            icon: 'warning',
+            timer: 2500,
+        });
+        return;
+    }
+
+    groupModal.value?.open();
+};
+
+const deleteSelectedTeilnehmer = async () => {
+    if (selected.value.length === 0) {
+        Swal.fire({
+            title: 'Keine Auswahl',
+            text: 'Bitte markieren Sie zuerst mindestens einen Teilnehmer.',
+            icon: 'warning',
+            timer: 2500,
+        });
+        return;
+    }
+
+    const result = await Swal.fire({
+        title: 'Markierte Teilnehmer loeschen?',
+        text: `${selected.value.length} Teilnehmer werden dauerhaft geloescht.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Loeschen',
+        cancelButtonText: 'Abbrechen',
+        confirmButtonColor: '#dc2626',
+    });
+
+    if (!result.isConfirmed) {
+        return;
+    }
+
+    try {
+        const ids = [...selected.value];
+        const response = await axios.delete(route('teilnehmer.bulkDestroy'), {
+            data: { ids },
+        });
+
+        teilnehmerList.value = teilnehmerList.value.filter(teilnehmer => !ids.includes(teilnehmer.id));
+        selected.value = [];
+
+        Swal.fire({
+            title: 'Erfolg',
+            text: response.data.message || 'Die markierten Teilnehmer wurden geloescht.',
+            icon: 'success',
+            timer: 2500,
+        });
+    } catch (error) {
+        Swal.fire({
+            title: 'Fehler',
+            text: error.response?.data?.message || 'Die markierten Teilnehmer konnten nicht geloescht werden.',
+            icon: 'error',
+        });
+    }
+};
 const selectProject = (projekt) => {
     selectedProject.value = projekt.name;
 };
@@ -268,7 +356,32 @@ const sortByColumn = (column) => {
 
         <!-- Suchfeld -->
         <div class="flex justify-around items-center mb-3">
-            <div @click="checkBoxListeTeilnehmer = !checkBoxListeTeilnehmer" class="bg-white border border-gray-300 rounded-l-md px-5 py-2 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500">⋮</div>
+            <Dropdown align="left">
+                <template #trigger>
+                    <button class="bg-white border border-gray-300 rounded-l-md px-5 py-2 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500">
+                        <i class="la la-ellipsis-v la-lg"></i>
+                    </button>
+                </template>
+
+                <template #content>
+                    <button type="button" class="flex w-full justify-between cursor-pointer py-2 px-6 items-center hover:bg-gray-100 text-left" @click="toggleSelectionMode">
+                        {{ checkBoxListeTeilnehmer ? 'Auswahl beenden' : 'Teilnehmer markieren' }}
+                        <i class="las la-check-square"></i>
+                    </button>
+                    <button v-if="checkBoxListeTeilnehmer" type="button" class="flex w-full justify-between cursor-pointer py-2 px-6 items-center hover:bg-gray-100 text-left" @click="toggleSelectAllVisible">
+                        {{ allVisibleSelected ? 'Sichtbare abwaehlen' : 'Sichtbare markieren' }}
+                        <i class="las la-tasks"></i>
+                    </button>
+                    <button type="button" class="flex w-full justify-between cursor-pointer py-2 px-6 items-center hover:bg-gray-100 text-left" @click="openGroupModal">
+                        In Gruppe hinzufuegen
+                        <span class="ml-4 text-xs text-gray-500">{{ selectedCount }}</span>
+                    </button>
+                    <button type="button" class="flex w-full justify-between cursor-pointer py-2 px-6 items-center hover:bg-red-50 text-left text-red-600" @click="deleteSelectedTeilnehmer">
+                        Markierte loeschen
+                        <span class="ml-4 text-xs">{{ selectedCount }}</span>
+                    </button>
+                </template>
+            </Dropdown>
             <div @click="openModal" class="flex items-center">
                 <i class="la la-plus bg-white border border-gray-300  px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
             </div>
@@ -312,6 +425,8 @@ const sortByColumn = (column) => {
         </div>
 
          <ZurGruppeHinzufügen
+            ref="groupModal"
+            :show-button="false"
             :selected="selected"
             :gruppen="gruppen"
             @submitted="selected = []"
@@ -328,7 +443,9 @@ const sortByColumn = (column) => {
                 <table class="w-full text-sm text-left text-gray-500 ">
                     <thead class=" text-gray-600 uppercase bg-gray-200">
                         <tr >
-                            <th v-if="checkBoxListeTeilnehmer" class="border border-solid border-gray-300 text-center py-3">⋮</th>
+                            <th v-if="checkBoxListeTeilnehmer" class="border border-solid border-gray-300 text-center py-3">
+                                <input type="checkbox" :checked="allVisibleSelected" @change="toggleSelectAllVisible">
+                            </th>
                             <th @click="sortByColumn('id')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
                                 {{$t('id')}}
                                 <i :class="sortColumn === 'id' && sortDirection === 'asc' ? 'las la-lg la-sort-numeric-down-alt' : 'las la-lg la-sort-numeric-up-alt'"></i>
@@ -351,7 +468,7 @@ const sortByColumn = (column) => {
                     <tbody>
                         <tr v-for="teilnehmer in filteredTeilnehmerByProject" :key="teilnehmer.id" class="bg-white border-b">
                             <td v-if="checkBoxListeTeilnehmer" class="text-center py-4 border border-solid border-gray-300">
-                                <input v-model="selected":value="teilnehmer.id" type="checkbox"></input>
+                                <input v-model="selected" :value="teilnehmer.id" type="checkbox">
                             </td>
                             <td class="px-6 py-4 border border-solid border-gray-300"><Link :href="route('teilnehmer.edit', teilnehmer.id)">{{ teilnehmer.id }}</Link> </td>
                             <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.vorname }}</td>

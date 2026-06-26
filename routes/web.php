@@ -4,9 +4,11 @@ use App\Http\Controllers\AbschlusseController;
 use App\Http\Controllers\AbteilungController;
 use App\Http\Controllers\AdresseController;
 use App\Http\Controllers\AnwesenheitController;
+use App\Http\Controllers\AppsController;
 use App\Http\Controllers\BaenkeController;
 use App\Http\Controllers\BerechtigungController;
 use App\Http\Controllers\BereichController;
+use App\Http\Controllers\BopLegacyFunctionController;
 use App\Http\Controllers\BriefController;
 use App\Http\Controllers\DashbaordController;
 use App\Http\Controllers\DienstwagenController;
@@ -14,6 +16,7 @@ use App\Http\Controllers\DienstwagenfahrtenbuchController;
 use App\Http\Controllers\DienstwagenkostenController;
 use App\Http\Controllers\DienstwagenreportsController;
 use App\Http\Controllers\DienstwagenwartungController;
+use App\Http\Controllers\EinteilungBereicheController;
 use App\Http\Controllers\ExportExcelController;
 use App\Http\Controllers\ExportWordController;
 use App\Http\Controllers\FahrtartenController;
@@ -86,6 +89,41 @@ Route::post('/set-locale', function () {
 Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->group(function() {
 
     Route::get('/dashboard', [DashbaordController::class, 'dashboard'])->name('dashboard');
+    Route::prefix('apps')->name('apps.')->group(function () {
+        Route::get('/', [AppsController::class, 'index'])->name('index');
+
+        Route::get('/dateimanager', [AppsController::class, 'files'])->name('files');
+        Route::post('/dateimanager/ordner', [AppsController::class, 'createFolder'])->name('files.folder.store');
+        Route::post('/dateimanager/upload', [AppsController::class, 'uploadFile'])->name('files.upload');
+        Route::get('/dateimanager/download/{file}', [AppsController::class, 'downloadFile'])->name('files.download');
+        Route::delete('/dateimanager/{file}', [AppsController::class, 'deleteFile'])->name('files.destroy');
+        Route::post('/dateimanager/{file}/mail', [AppsController::class, 'mailFile'])->name('files.mail');
+
+        Route::get('/kalender', [AppsController::class, 'calendar'])->name('calendar');
+        Route::get('/kalender/events', [AppsController::class, 'calendarEvents'])->name('calendar.events');
+        Route::post('/kalender/kalender', [AppsController::class, 'storeCalendarCalendar'])->name('calendar.calendars.store');
+        Route::post('/kalender/farben', [AppsController::class, 'storeCalendarStyle'])->name('calendar.styles.store');
+        Route::post('/kalender', [AppsController::class, 'storeCalendar'])->name('calendar.store');
+        Route::put('/kalender/{event}', [AppsController::class, 'updateCalendar'])->name('calendar.update');
+        Route::delete('/kalender/{event}', [AppsController::class, 'destroyCalendar'])->name('calendar.destroy');
+
+        Route::get('/kontakte', [AppsController::class, 'contacts'])->name('contacts');
+        Route::post('/kontakte', [AppsController::class, 'storeContact'])->name('contacts.store');
+        Route::put('/kontakte/{contact}', [AppsController::class, 'updateContact'])->name('contacts.update');
+        Route::delete('/kontakte/{contact}', [AppsController::class, 'destroyContact'])->name('contacts.destroy');
+
+        Route::get('/taskmanager', [AppsController::class, 'tasks'])->name('tasks');
+        Route::post('/taskmanager', [AppsController::class, 'storeTask'])->name('tasks.store');
+        Route::put('/taskmanager/{task}', [AppsController::class, 'updateTask'])->name('tasks.update');
+        Route::delete('/taskmanager/{task}', [AppsController::class, 'destroyTask'])->name('tasks.destroy');
+
+        Route::get('/popups', [AppsController::class, 'popups'])->name('popups');
+        Route::post('/popups', [AppsController::class, 'storePopup'])->name('popups.store');
+        Route::put('/popups/{popup}', [AppsController::class, 'updatePopup'])->name('popups.update');
+        Route::delete('/popups/{popup}', [AppsController::class, 'destroyPopup'])->name('popups.destroy');
+
+        Route::post('/teilen/{type}/{id}', [AppsController::class, 'share'])->name('share');
+    });
     Route::get('/organisation', function () {return Inertia::render('Dashboards/Organisation');})->name('organisation.index');
     Route::get('/ressourcen', function () {return Inertia::render('Dashboards/Ressourcen');})->name('ressourcen.index');
     Route::get('/finanzen', function () { return Inertia::render('Dashboards/Finanzen');})->name('finanzen.index');
@@ -164,6 +202,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::get('/teilnehmer/anlegen', function () { return Inertia::render('Teilnehmer/CreateTeilnehmer'); })->name('teilnehmer.create');
     Route::post('/teilnehmer/anlegen', [TeilnehmerController::class, 'store'])->name('teilnehmer.store');
     Route::post('/teilnehmer/import', [TeilnehmerController::class, 'import'])->name('teilnehmer.import');
+    Route::delete('/teilnehmer/entfernen', [TeilnehmerController::class, 'bulkDestroy'])->name('teilnehmer.bulkDestroy');
     Route::delete('/teilnehmer/entfernen/{id}', [TeilnehmerController::class, 'destroy'])->name('teilnehmer.destroy');
     Route::get('/teilnehmer/bearbeiten/{id}', [TeilnehmerController::class, 'show'])->name('teilnehmer.edit');
     Route::patch('/teilnehmer/update/{id}', [TeilnehmerController::class, 'update'])->name('teilnehmer.update');
@@ -364,21 +403,24 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::get('/export/elterneinverstaendniserklaerung/{partnerId}/{schuljahr}/{teil}', [ProjektBopController::class, 'exportElterneinverstaendniserklaerungSchule'])->name('export.elterneinverstaendniserklaerung.schule');
 
 
+    //Einteilung Berieche
+    Route::get('/einteilung/{partnerId}/{schuljahr}/{teil}', [EinteilungBereicheController::class, 'index'])->name('einteilung.show');
+    Route::post('/einteilung/update', [EinteilungBereicheController::class, 'update'])->name('einteilung.update');
+
 
     //zu bearbeiten
-Route::get('/anwesenheitsdaten/{schulId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'index'])->name('index-anpassung-anwesenheitsdaten');
-Route::get('/teilnehmerliste/excel/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'exportExcel'])->name('export.teilnehmerliste.schule.excel');
+Route::get('/anwesenheitsdaten/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'anwesenheitsdaten'])->name('index-anpassung-anwesenheitsdaten');
+Route::get('/teilnehmerliste/excel/{schuleId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'teilnehmerliste'])->name('export.teilnehmerliste.schule.excel');
 Route::get('/teilnehmerccliste/excel/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'index'])->name('teilnehmer.liste.schule');
-Route::get('/alleTeilnehmer/folder/create/{idSchule}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'create'])->name('alleTeilnehmer.folder.create');
-Route::get('/einteilung/{idSchule}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'show'])->name('einteilung.show');
-Route::get('/anwesenheitsliste/vorbereitung/bo/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'vorBOTage'])->name('anwesenheitslisteVorBOTage');
-Route::get('/export/anwesenheitsliste/rechnung/{idSchule}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'anwesenheitslisteRechnung'])->name('export.anwesenheitsliste.rechnung');
-Route::get('/export/zertifikat/pobo/{idSchule}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'zertifikatPobo'])->name('export.zertifikat.schule.pobo');
-Route::get('/export/zertifikat/pobo/pdf/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'zertifikatPoboPDF'])->name('export.zertifikat.schule.pobo.pdf');
-Route::get('/export/auswertung/pobo/{schulId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'auswertungPobo'])->name('export.auswertungBO.schule.pdf');
-Route::get('/export/auswertung/pobo/tofolder/{schulId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'auswertungPoboToFolder'])->name('export.auswertungBO.schule.pdf.tofolder');
-Route::get('/export/auswertung/pa/tofolder/{schulId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'auswertungPAToFolder'])->name('export.auswertungPA.schule.pdf.tofolder');
-Route::get('/export/auswertung/pobo/runde/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'auswertungPoboRunde'])->name('auswertungPoboModal');
+Route::get('/alleTeilnehmer/folder/create/{idSchule}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'createFolderAll'])->name('alleTeilnehmer.folder.create');
+Route::get('/anwesenheitsliste/vorbereitung/bo/{schuleId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'anwesenheitslisteVorbereitung'])->name('anwesenheitslisteVorBOTage');
+Route::get('/export/anwesenheitsliste/rechnung/{idSchule}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'anwesenheitslisteRechnung'])->name('export.anwesenheitsliste.rechnung');
+Route::get('/export/zertifikat/pobo/{idSchule}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'zertifikatPobo'])->name('export.zertifikat.schule.pobo');
+Route::get('/export/zertifikat/pobo/pdf/{schuleId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'zertifikatPoboPdf'])->name('export.zertifikat.schule.pobo.pdf');
+Route::get('/export/auswertung/pobo/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'auswertungPobo'])->name('export.auswertungBO.schule.pdf');
+Route::get('/export/auswertung/pobo/tofolder/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'auswertungPoboToFolder'])->name('export.auswertungBO.schule.pdf.tofolder');
+Route::get('/export/auswertung/pa/tofolder/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'auswertungPaToFolder'])->name('export.auswertungPA.schule.pdf.tofolder');
+Route::get('/export/auswertung/pobo/runde/{schuleId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'auswertungPoboRunde'])->name('auswertungPoboModal');
 
 
 
