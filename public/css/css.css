@@ -1,5 +1,5 @@
 .btna:hover{
-    color:black !important
+    color: var(--buttonPrimary, black) !important
 }
 .card-border{
     width: 105%;
@@ -23,10 +23,10 @@ input.p-inputtext.p-component.p-password-input{
 }
 
 .p-inputtext:enabled:focus{
-    border-color: black !important;
+    border-color: var(--borderHover, black) !important;
 }
 .p-floatlabel:has(input:focus) label{
-    color:black !important;
+    color: var(--buttonPrimary, black) !important;
 }
 
 

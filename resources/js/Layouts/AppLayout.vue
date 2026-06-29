@@ -19,7 +19,7 @@ const page = usePage();
 // Dynamisch die Sidebar auswählen basierend auf der Route oder Seite
 const currentSidebar = computed(() => {
   const url = page.url; // Aktuelle URL abrufen
-  if (url.startsWith('/dashboard')) {
+  if (url.startsWith('/dashboard') || url.startsWith('/anwesenheitsdaten')) {
     return DashboardSidebar;
   } else if (url.startsWith('/user')) {
     return ProfileSidebar;
@@ -156,7 +156,7 @@ export default {
              <Banner />
 
              <div id="app" class="main-wrapper ">
-                 <div class="min-h-screen bg-gray-100">
+                 <div class="min-h-screen bg-[var(--bg)] text-[var(--primary)]">
                 <!-- Page Sidebar -->
                 <!-- Sidebar -->
                 <NavigationMenu :sidebar-open="sidebarOpen" :display-hide-text-sidebar="displayHideTextSidebar"
@@ -167,13 +167,13 @@ export default {
                 <div class="flex">
                     <component class="min-h-screen" :is="currentSidebar" :displayHideTextSidebar="displayHideTextSidebar" :sidebarOpen="sidebarOpen" :activeMenu="activeMenu" :toggleMenu="toggleMenu"/>
 
-                    <main class="w-full bg-gray-100 h-full "
+                    <main class="w-full bg-[var(--bg)] h-full "
                         :class="{'hidden sm:block':sidebarOpen}">
 
                         <!-- Page Heading -->
-                        <header v-if="$slots.header" class="bg-white relative w-full shadow mb-5 z-20">
+                        <header v-if="$slots.header" class="bg-[var(--surfaceTint)] border-b border-[var(--border)] relative w-full shadow mb-5 z-20">
                             <div class="text-center sm:text-left max-w-7xl mx-36 py-6">
-                                <div class="font-semibold text-xl text-gray-800 leading-tight">
+                                <div class="font-semibold text-xl text-[var(--primary)] leading-tight">
                                     <slot name="header" />
                                 </div>
                             </div>

@@ -1,6 +1,7 @@
 <script setup>
-import { ref } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import { Link, router, useForm } from '@inertiajs/vue3';
+import axios from 'axios';
 import ActionMessage from '@/Components/ActionMessage.vue';
 import FormSection from '@/Components/FormSection.vue';
 import InputError from '@/Components/InputError.vue';
@@ -8,6 +9,7 @@ import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
+import { setTheme } from '@/theme';
 
 const props = defineProps({
     user: Object,
@@ -17,7 +19,43 @@ const form = useForm({
     _method: 'PUT',
     name: props.user.username,
     email: props.user.email,
+    theme: props.user.theme || 'air',
     photo: null,
+});
+
+const themeOptions = [
+    { key: 'air', label: 'Air', colors: ['#0ea5e9', '#10b981', '#f7fbff'] },
+    { key: 'dark', label: 'Dark', colors: ['#0c1016', '#60a5fa', '#f4f7fb'] },
+    { key: 'womanly', label: 'Womanly', colors: ['#be185d', '#f1cfe0', '#fff7fb'] },
+    { key: 'champion', label: 'Champion', colors: ['#b45309', '#f2d89b', '#fffaf0'] },
+    { key: 'sprint', label: 'Sprint', colors: ['#059669', '#bfe8d8', '#f5fff9'] },
+    { key: 'arena', label: 'Arena', colors: ['#334155', '#cbd5e1', '#f8fafc'] },
+    { key: 'pulse', label: 'Pulse', colors: ['#ea580c', '#fed7aa', '#fff7ed'] },
+    { key: 'trail', label: 'Trail', colors: ['#4d7c0f', '#d6dfc6', '#f6f8f2'] },
+    { key: 'bazaar', label: 'Bazaar', colors: ['#ff8a00', '#00a8c6', '#e7f8fb'] },
+    { key: 'vital', label: 'Vital', colors: ['#6CC63A', '#262827', '#FFFFFF'] },
+];
+
+const selectTheme = (theme) => {
+    form.theme = theme;
+    setTheme(theme);
+    persistTheme(theme);
+};
+
+const persistTheme = async (theme) => {
+    try {
+        await axios.post(route('user.theme.update'), { theme });
+    } catch (error) {
+        console.error('Theme konnte nicht gespeichert werden:', error);
+    }
+};
+
+watch(() => form.theme, (theme) => {
+    setTheme(theme || 'air');
+});
+
+onMounted(() => {
+    setTheme(form.theme || 'air');
 });
 
 const verificationLinkSent = ref(null);
@@ -172,6 +210,31 @@ const clearPhotoFileInput = () => {
                         {{ $t('Ein_neuer_Bestätigungslink_wurde_an_die_E-Mail-Adresse_gesendet_die_Sie_in_Ihren_Profil-Einstellungen_bereitgestellt_haben.') }}
                     </div>
                 </div>
+            </div>
+
+            <div class="col-span-6">
+                <InputLabel value="Theme" />
+                <div class="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                    <button
+                        v-for="themeOption in themeOptions"
+                        :key="themeOption.key"
+                        type="button"
+                        class="rounded-md border p-3 text-left transition hover:border-[var(--borderHover)] hover:bg-[var(--surfaceTint)]"
+                        :class="form.theme === themeOption.key ? 'border-[var(--buttonPrimary)] bg-[var(--surfaceTint)] ring-2 ring-[var(--buttonPrimary)]/20' : 'border-[var(--border)] bg-[var(--card)]'"
+                        @click="selectTheme(themeOption.key)"
+                    >
+                        <span class="flex gap-1">
+                            <span
+                                v-for="color in themeOption.colors"
+                                :key="color"
+                                class="h-5 flex-1 rounded-sm border border-black/10"
+                                :style="{ backgroundColor: color }"
+                            />
+                        </span>
+                        <span class="mt-2 block text-sm font-semibold text-[var(--primary)]">{{ themeOption.label }}</span>
+                    </button>
+                </div>
+                <InputError :message="form.errors.theme" class="mt-2" />
             </div>
         </template>
 

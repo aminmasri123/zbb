@@ -1,5 +1,6 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
+import DialogModal from '@/Components/DialogModal.vue';
 import { useForm } from '@inertiajs/vue3';
 import axios from 'axios';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
@@ -22,6 +23,7 @@ const savingEvent = ref(false);
 const fullscreen = ref(false);
 const selectedCalendar = ref('all');
 const showModal = ref(false);
+const showImportModal = ref(false);
 const editingEvent = ref(null);
 const editingDay = ref(null);
 const dragEvent = ref(null);
@@ -29,6 +31,30 @@ const selectingDays = ref(false);
 const selectionStart = ref(null);
 const selectionEnd = ref(null);
 const selectionMoved = ref(false);
+const pendingMove = ref(null);
+const copyRangeStart = ref('');
+const copyRangeEnd = ref('');
+const copyRanges = ref([]);
+const noticeModal = ref({
+    show: false,
+    title: '',
+    message: '',
+});
+const toast = ref({
+    show: false,
+    message: '',
+    type: 'success',
+});
+const importForm = ref({
+    file: null,
+    calendar_id: '',
+});
+const importPreviewEvents = ref([]);
+const selectedImportKeys = ref([]);
+const importSummary = ref(null);
+const importLoading = ref(false);
+const importSaving = ref(false);
+let toastTimer = null;
 
 const eventForm = useForm({
     title: '',
@@ -73,6 +99,16 @@ const months = computed(() => monthNames.map((name, index) => ({
     days: Array.from({ length: daysInMonth(currentYear.value, index) }, (_, dayIndex) => buildDay(currentYear.value, index, dayIndex + 1)),
 })));
 
+const exportCalendarUrl = computed(() => {
+    const params = { year: currentYear.value };
+
+    if (selectedCalendar.value !== 'all') {
+        params.calendar = selectedCalendar.value;
+    }
+
+    return route('apps.calendar.export', params);
+});
+
 function buildDay(year, month, day) {
     const date = new Date(year, month, day);
     const iso = toDateInput(date);
@@ -100,8 +136,33 @@ function toDateInput(date) {
 }
 
 function toDateTimeInput(value) {
-    if (!value) return '';
-    return String(value).slice(0, 16);
+    const date = eventDate(value);
+    if (!date) return '';
+
+    return `${date}T${eventTime(value)}`;
+}
+
+function eventDate(value) {
+    return String(value || '').slice(0, 10);
+}
+
+function eventTime(value, fallback = '08:00') {
+    const match = String(value || '').match(/(?:T|\s)(\d{2}:\d{2})/);
+    return match?.[1] || fallback;
+}
+
+function localDate(iso) {
+    return new Date(`${iso}T00:00:00`);
+}
+
+function addDaysIso(iso, days) {
+    const date = localDate(iso);
+    date.setDate(date.getDate() + days);
+    return toDateInput(date);
+}
+
+function diffDays(startIso, endIso) {
+    return Math.round((localDate(endIso) - localDate(startIso)) / 86400000);
 }
 
 function dayEvents(day) {
@@ -111,8 +172,8 @@ function dayEvents(day) {
 }
 
 function eventTouchesDay(event, iso) {
-    const start = String(event.starts_at).slice(0, 10);
-    const end = String(event.ends_at || event.starts_at).slice(0, 10);
+    const start = eventDate(event.starts_at);
+    const end = eventDate(event.ends_at || event.starts_at);
 
     if ((event.excluded_dates || []).includes(iso)) {
         return false;
@@ -136,6 +197,7 @@ function openCreate(day = null) {
 function openCreateRange(startIso, endIso) {
     editingEvent.value = null;
     editingDay.value = null;
+    resetCopyRanges();
     eventForm.reset();
     eventForm.clearErrors();
     eventForm.all_day = true;
@@ -152,6 +214,7 @@ function openCreateRange(startIso, endIso) {
 function openEdit(event, day = null) {
     editingEvent.value = event;
     editingDay.value = day?.iso || null;
+    resetCopyRanges();
     eventForm.clearErrors();
     eventForm.title = event.title || '';
     eventForm.calendar_id = event.calendar_id || '';
@@ -174,6 +237,28 @@ function csrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 }
 
+function eventId(event) {
+    return event?.id || event?.event_id || event?.calendar_event_id || null;
+}
+
+function calendarEventRoute(name, event) {
+    const id = eventId(event);
+    if (!id) {
+        showToast('Der Termin konnte nicht eindeutig gefunden werden.', 'error');
+        return null;
+    }
+
+    const calendarUrl = new URL(route('apps.calendar'), window.location.origin);
+    const basePath = calendarUrl.pathname.replace(/\/$/, '');
+    const suffixes = {
+        'apps.calendar.move': '/move',
+        'apps.calendar.copy': '/copy',
+    };
+    const suffix = suffixes[name] || '';
+
+    return `${basePath}/${encodeURIComponent(id)}${suffix}`;
+}
+
 function eventFormPayload() {
     return {
         ...eventForm.data(),
@@ -188,52 +273,289 @@ async function calendarRequest(method, url, data = null, options = {}) {
     eventForm.clearErrors();
 
     try {
-        await axios({
-            method,
-            url,
-            data,
-            headers: {
-                Accept: 'application/json',
-                'X-CSRF-TOKEN': csrfToken(),
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-        });
+        const response = await sendCalendar(method, url, data);
 
         if (options.closeModal !== false) {
             showModal.value = false;
         }
 
-        await loadYear(currentYear.value);
+        if (options.successMessage) {
+            showToast(options.successMessage);
+        }
+
+        if (options.applyResponse) {
+            options.applyResponse(response.data);
+        } else if (options.reload !== false) {
+            await loadYear(currentYear.value);
+        }
     } catch (error) {
         if (error.response?.status === 422 && error.response.data?.errors) {
             eventForm.setError(error.response.data.errors);
+            showToast('Bitte pruefe die Eingaben.', 'error');
         } else {
-            console.error(error);
-            alert('Die Kalenderaenderung konnte nicht gespeichert werden.');
+            handleCalendarError(error);
         }
     } finally {
         savingEvent.value = false;
     }
 }
 
+async function sendCalendar(method, url, data = null) {
+    const token = csrfToken();
+    const normalizedMethod = String(method).toLowerCase();
+    let payload = data;
+
+    if (['post', 'put', 'patch', 'delete'].includes(normalizedMethod) && token) {
+        if (payload instanceof FormData) {
+            if (!payload.has('_token')) {
+                payload.append('_token', token);
+            }
+        } else if (payload && typeof payload === 'object') {
+            payload = { _token: token, ...payload };
+        }
+    }
+
+    return axios({
+        method,
+        url,
+        data: payload,
+        headers: {
+            Accept: 'application/json',
+            'X-CSRF-TOKEN': token,
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+    });
+}
+
+function handleCalendarError(error) {
+    console.error(error);
+    if (error.response?.status === 419) {
+        showToast('Sitzung/CSRF ist abgelaufen. Bitte Seite einmal aktualisieren und erneut versuchen.', 'error');
+        return;
+    }
+
+    showToast(error.response?.data?.message || error.message || 'Die Kalenderaenderung konnte nicht gespeichert werden.', 'error');
+}
+
+function showNotice(title, message) {
+    noticeModal.value = {
+        show: true,
+        title,
+        message,
+    };
+}
+
+function closeNotice() {
+    noticeModal.value.show = false;
+}
+
+function showToast(message, type = 'success') {
+    toast.value = {
+        show: true,
+        message,
+        type,
+    };
+
+    if (toastTimer) {
+        window.clearTimeout(toastTimer);
+    }
+
+    toastTimer = window.setTimeout(() => {
+        toast.value.show = false;
+    }, 2600);
+}
+
+function calendarSnapshot() {
+    return calendarItems.value.map((event) => ({
+        ...event,
+        excluded_dates: [...(event.excluded_dates || [])],
+        calendar: event.calendar ? { ...event.calendar } : event.calendar,
+    }));
+}
+
+function restoreCalendarSnapshot(snapshot) {
+    calendarItems.value = snapshot;
+}
+
+function openImportModal() {
+    importForm.value = {
+        file: null,
+        calendar_id: selectedCalendar.value !== 'all' ? selectedCalendar.value : '',
+    };
+    importPreviewEvents.value = [];
+    selectedImportKeys.value = [];
+    importSummary.value = null;
+    showImportModal.value = true;
+}
+
+function closeImportModal() {
+    if (importLoading.value || importSaving.value) return;
+    showImportModal.value = false;
+}
+
+async function previewCalendarImport() {
+    if (!importForm.value.file) {
+        showToast('Bitte zuerst eine Excel-Datei auswaehlen.', 'error');
+        return;
+    }
+
+    importLoading.value = true;
+
+    try {
+        const data = new FormData();
+        data.append('file', importForm.value.file);
+        if (importForm.value.calendar_id) {
+            data.append('calendar_id', importForm.value.calendar_id);
+        }
+
+        const response = await sendCalendar('post', route('apps.calendar.import.preview'), data);
+        importPreviewEvents.value = response.data.events || [];
+        selectedImportKeys.value = importPreviewEvents.value.filter((event) => event.selected).map((event) => event.key);
+        importSummary.value = response.data.summary || null;
+        showToast('Vorschau wurde erstellt.');
+    } catch (error) {
+        handleCalendarError(error);
+    } finally {
+        importLoading.value = false;
+    }
+}
+
+function importKeySelected(key) {
+    return selectedImportKeys.value.includes(key);
+}
+
+function toggleImportKey(key) {
+    selectedImportKeys.value = importKeySelected(key)
+        ? selectedImportKeys.value.filter((item) => item !== key)
+        : [...selectedImportKeys.value, key];
+}
+
+function selectImportKind(kind) {
+    const keys = new Set(selectedImportKeys.value);
+    importPreviewEvents.value
+        .filter((event) => !event.duplicate && (kind === 'all' ? !event.is_weekend && !event.is_holiday : event[kind]))
+        .forEach((event) => keys.add(event.key));
+    selectedImportKeys.value = Array.from(keys);
+}
+
+function clearImportSelection() {
+    selectedImportKeys.value = [];
+}
+
+async function confirmCalendarImport() {
+    const selectedEvents = importPreviewEvents.value.filter((event) => importKeySelected(event.key));
+
+    if (selectedEvents.length === 0) {
+        showToast('Bitte mindestens einen Termin auswaehlen.', 'error');
+        return;
+    }
+
+    importSaving.value = true;
+
+    try {
+        const response = await sendCalendar('post', route('apps.calendar.import.confirm'), {
+            calendar_id: importForm.value.calendar_id || null,
+            events: selectedEvents,
+        });
+
+        showImportModal.value = false;
+        showToast(response.data.message || 'Import abgeschlossen.');
+        await loadYear(currentYear.value);
+    } catch (error) {
+        handleCalendarError(error);
+    } finally {
+        importSaving.value = false;
+    }
+}
+
+function eventTouchesYearValue(event, year) {
+    const start = eventDate(event.starts_at);
+    const end = eventDate(event.ends_at || event.starts_at);
+
+    return start <= `${year}-12-31` && end >= `${year}-01-01`;
+}
+
+function upsertCalendarEvent(event) {
+    if (!event?.id) return;
+
+    if (!eventTouchesYearValue(event, currentYear.value)) {
+        removeCalendarEvent(event.id);
+        return;
+    }
+
+    const id = String(event.id);
+    const index = calendarItems.value.findIndex((item) => String(eventId(item)) === id);
+
+    if (index === -1) {
+        calendarItems.value = [...calendarItems.value, event].sort((a, b) => String(a.starts_at).localeCompare(String(b.starts_at)));
+        return;
+    }
+
+    calendarItems.value = calendarItems.value.map((item, itemIndex) => (itemIndex === index ? event : item));
+}
+
+function removeCalendarEvent(id) {
+    calendarItems.value = calendarItems.value.filter((event) => String(eventId(event)) !== String(id));
+}
+
+function payloadFromEvent(event, overrides = {}) {
+    return {
+        title: event.title,
+        calendar_id: event.calendar_id || '',
+        description: event.description || '',
+        starts_at: toDateTimeInput(event.starts_at),
+        ends_at: toDateTimeInput(event.ends_at || event.starts_at),
+        all_day: Boolean(event.all_day),
+        include_weekends: Boolean(event.include_weekends),
+        excluded_dates: event.excluded_dates || [],
+        location: event.location || '',
+        background_color: event.background_color || event.calendar?.background_color || '#ff7a00',
+        text_color: event.text_color || event.calendar?.text_color || '#ffffff',
+        visibility: event.visibility || 'private',
+        project_id: event.project_id || '',
+        team_id: event.team_id || '',
+        ...overrides,
+    };
+}
+
 function saveEvent() {
     if (editingEvent.value) {
-        calendarRequest('put', route('apps.calendar.update', editingEvent.value.id), eventFormPayload());
+        const url = calendarEventRoute('apps.calendar.update', editingEvent.value);
+        if (!url) return;
+        calendarRequest('put', url, eventFormPayload(), {
+            successMessage: 'Termin wurde gespeichert.',
+            applyResponse: (data) => upsertCalendarEvent(data.event),
+            reload: false,
+        });
     } else {
-        calendarRequest('post', route('apps.calendar.store'), eventFormPayload());
+        calendarRequest('post', route('apps.calendar.store'), eventFormPayload(), {
+            successMessage: 'Termin wurde angelegt.',
+            applyResponse: (data) => upsertCalendarEvent(data.event),
+            reload: false,
+        });
     }
 }
 
 function deleteEvent() {
     if (!editingEvent.value || !confirm('Termin wirklich loeschen?')) return;
-    calendarRequest('delete', route('apps.calendar.destroy', editingEvent.value.id));
+    const url = calendarEventRoute('apps.calendar.destroy', editingEvent.value);
+    if (!url) return;
+    calendarRequest('delete', url, null, {
+        successMessage: 'Termin wurde geloescht.',
+        applyResponse: (data) => removeCalendarEvent(data.id || eventId(editingEvent.value)),
+        reload: false,
+    });
+}
+
+function canDeleteClickedDay() {
+    return Boolean(editingEvent.value && editingDay.value);
 }
 
 function canRemoveSingleDay() {
     if (!editingEvent.value || !editingDay.value) return false;
 
-    const start = String(editingEvent.value.starts_at).slice(0, 10);
-    const end = String(editingEvent.value.ends_at || editingEvent.value.starts_at).slice(0, 10);
+    const start = eventDate(editingEvent.value.starts_at);
+    const end = eventDate(editingEvent.value.ends_at || editingEvent.value.starts_at);
 
     return start !== end && editingDay.value >= start && editingDay.value <= end;
 }
@@ -243,22 +565,102 @@ function removeSingleDay() {
 
     const excludedDates = Array.from(new Set([...(editingEvent.value.excluded_dates || []), editingDay.value])).sort();
 
-    calendarRequest('put', route('apps.calendar.update', editingEvent.value.id), {
-        title: editingEvent.value.title,
-        calendar_id: editingEvent.value.calendar_id || '',
-        description: editingEvent.value.description || '',
-        starts_at: toDateTimeInput(editingEvent.value.starts_at),
-        ends_at: toDateTimeInput(editingEvent.value.ends_at || editingEvent.value.starts_at),
-        all_day: Boolean(editingEvent.value.all_day),
-        include_weekends: Boolean(editingEvent.value.include_weekends),
+    const url = calendarEventRoute('apps.calendar.update', editingEvent.value);
+    if (!url) return;
+
+    calendarRequest('put', url, payloadFromEvent(editingEvent.value, {
         excluded_dates: excludedDates,
-        location: editingEvent.value.location || '',
-        background_color: editingEvent.value.background_color || editingEvent.value.calendar?.background_color || '#ff7a00',
-        text_color: editingEvent.value.text_color || editingEvent.value.calendar?.text_color || '#ffffff',
-        visibility: editingEvent.value.visibility || 'private',
-        project_id: editingEvent.value.project_id || '',
-        team_id: editingEvent.value.team_id || '',
+    }), {
+        successMessage: 'Dieser Tag wurde entfernt.',
+        applyResponse: (data) => upsertCalendarEvent(data.event),
+        reload: false,
     });
+}
+
+function deleteClickedDay() {
+    if (!canDeleteClickedDay()) return;
+
+    if (canRemoveSingleDay()) {
+        removeSingleDay();
+        return;
+    }
+
+    const url = calendarEventRoute('apps.calendar.destroy', editingEvent.value);
+    if (!url) return;
+
+    calendarRequest('delete', url, null, {
+        successMessage: 'Dieser Tag wurde geloescht.',
+        applyResponse: (data) => removeCalendarEvent(data.id || eventId(editingEvent.value)),
+        reload: false,
+    });
+}
+
+function resetCopyRanges() {
+    copyRangeStart.value = '';
+    copyRangeEnd.value = '';
+    copyRanges.value = [];
+}
+
+function addCopyRange() {
+    if (!copyRangeStart.value) return;
+
+    const range = {
+        start_date: copyRangeStart.value,
+        end_date: copyRangeEnd.value || copyRangeStart.value,
+    };
+
+    if (range.end_date < range.start_date) {
+        showToast('Das Bis-Datum darf nicht vor dem Von-Datum liegen.', 'error');
+        return;
+    }
+
+    const key = copyRangeKey(range);
+    const existing = new Set(copyRanges.value.map(copyRangeKey));
+    if (!existing.has(key)) {
+        copyRanges.value = [...copyRanges.value, range].sort((a, b) => a.start_date.localeCompare(b.start_date));
+    }
+
+    copyRangeStart.value = '';
+    copyRangeEnd.value = '';
+}
+
+function copyRangeKey(range) {
+    return `${range.start_date}_${range.end_date}`;
+}
+
+function copyRangeLabel(range) {
+    return range.start_date === range.end_date ? range.start_date : `${range.start_date} bis ${range.end_date}`;
+}
+
+function removeCopyRange(range) {
+    const key = copyRangeKey(range);
+    copyRanges.value = copyRanges.value.filter((item) => copyRangeKey(item) !== key);
+}
+
+async function copyClickedDay() {
+    if (!editingEvent.value || copyRanges.value.length === 0) return;
+
+    savingEvent.value = true;
+    eventForm.clearErrors();
+
+    try {
+        const url = calendarEventRoute('apps.calendar.copy', editingEvent.value);
+        if (!url) return;
+
+        await sendCalendar('post', url, {
+            ranges: copyRanges.value,
+            include_weekends: Boolean(eventForm.include_weekends),
+        });
+
+        const count = copyRanges.value.length;
+        resetCopyRanges();
+        showToast(count === 1 ? 'Kopie wurde erstellt.' : `${count} Kopien wurden erstellt.`);
+        await loadYear(currentYear.value);
+    } catch (error) {
+        handleCalendarError(error);
+    } finally {
+        savingEvent.value = false;
+    }
 }
 
 function createCalendar() {
@@ -275,39 +677,153 @@ function createStyle() {
     });
 }
 
-function startDrag(event) {
-    dragEvent.value = event;
+function startDrag(event, day) {
+    dragEvent.value = {
+        event,
+        sourceIso: day?.iso || eventDate(event.starts_at),
+    };
 }
 
 function dropOnDay(day) {
     if (!dragEvent.value) return;
 
-    const event = dragEvent.value;
-    const start = new Date(String(event.starts_at).slice(0, 10));
-    const end = new Date(String(event.ends_at || event.starts_at).slice(0, 10));
-    const duration = Math.max(0, Math.round((end - start) / 86400000));
-    const nextStart = new Date(day.iso);
-    const nextEnd = new Date(nextStart);
-    nextEnd.setDate(nextEnd.getDate() + duration);
-
-    calendarRequest('put', route('apps.calendar.update', event.id), {
-        title: event.title,
-        calendar_id: event.calendar_id || '',
-        description: event.description || '',
-        starts_at: `${toDateInput(nextStart)}T${String(event.starts_at).slice(11, 16) || '08:00'}`,
-        ends_at: `${toDateInput(nextEnd)}T${String(event.ends_at || event.starts_at).slice(11, 16) || '16:00'}`,
-        all_day: Boolean(event.all_day),
-        include_weekends: Boolean(event.include_weekends),
-        excluded_dates: event.excluded_dates || [],
-        location: event.location || '',
-        background_color: event.background_color || event.calendar?.background_color || '#ff7a00',
-        text_color: event.text_color || event.calendar?.text_color || '#ffffff',
-        visibility: event.visibility || 'private',
-        project_id: event.project_id || '',
-        team_id: event.team_id || '',
-    }, { closeModal: false });
-
+    const move = {
+        ...dragEvent.value,
+        targetIso: day.iso,
+    };
     dragEvent.value = null;
+
+    const start = eventDate(move.event.starts_at);
+    const end = eventDate(move.event.ends_at || move.event.starts_at);
+
+    if (start !== end && move.sourceIso >= start && move.sourceIso <= end) {
+        pendingMove.value = move;
+        return;
+    }
+
+    moveWholeEvent(move.event, move.targetIso);
+}
+
+function cancelMove() {
+    pendingMove.value = null;
+}
+
+async function confirmMove(mode) {
+    if (!pendingMove.value) return;
+
+    const move = pendingMove.value;
+    pendingMove.value = null;
+
+    if (mode === 'single') {
+        await moveSingleOccurrence(move.event, move.sourceIso, move.targetIso);
+        return;
+    }
+
+    await moveWholeEvent(move.event, move.targetIso);
+}
+
+async function moveWholeEvent(event, targetIso) {
+    const url = calendarEventRoute('apps.calendar.move', event);
+    if (!url) return;
+    const snapshot = calendarSnapshot();
+
+    savingEvent.value = true;
+    eventForm.clearErrors();
+    optimisticMoveGroup(event, targetIso);
+
+    try {
+        await sendCalendar('post', url, {
+            mode: 'group',
+            target_date: targetIso,
+        });
+        showToast('Termin wurde verschoben.');
+        await loadYear(currentYear.value);
+    } catch (error) {
+        restoreCalendarSnapshot(snapshot);
+        handleCalendarError(error);
+    } finally {
+        savingEvent.value = false;
+    }
+}
+
+async function moveSingleOccurrence(event, sourceIso, targetIso) {
+    savingEvent.value = true;
+    eventForm.clearErrors();
+    let snapshot = null;
+
+    try {
+        const url = calendarEventRoute('apps.calendar.move', event);
+        if (!url) return;
+        snapshot = calendarSnapshot();
+
+        optimisticMoveSingle(event, sourceIso, targetIso);
+
+        await sendCalendar('post', url, {
+            mode: 'single',
+            source_date: sourceIso,
+            target_date: targetIso,
+        });
+
+        showToast('Einzelner Termin wurde verschoben.');
+        await loadYear(currentYear.value);
+    } catch (error) {
+        if (snapshot) {
+            restoreCalendarSnapshot(snapshot);
+        }
+
+        if (error.response?.status === 422 && error.response.data?.errors) {
+            eventForm.setError(error.response.data.errors);
+            showToast('Bitte pruefe die Eingaben.', 'error');
+        } else {
+            handleCalendarError(error);
+        }
+    } finally {
+        savingEvent.value = false;
+    }
+}
+
+function optimisticMoveGroup(event, targetIso) {
+    const id = eventId(event);
+    const startIso = eventDate(event.starts_at);
+    const endIso = eventDate(event.ends_at || event.starts_at);
+    const duration = Math.max(0, diffDays(startIso, endIso));
+    const delta = diffDays(startIso, targetIso);
+    const nextEndIso = addDaysIso(targetIso, duration);
+
+    calendarItems.value = calendarItems.value.map((item) => {
+        if (String(eventId(item)) !== String(id)) return item;
+
+        return {
+            ...item,
+            starts_at: `${targetIso}T${eventTime(item.starts_at, '08:00')}`,
+            ends_at: `${nextEndIso}T${eventTime(item.ends_at || item.starts_at, '16:00')}`,
+            excluded_dates: (item.excluded_dates || []).map((date) => addDaysIso(date, delta)),
+        };
+    });
+}
+
+function optimisticMoveSingle(event, sourceIso, targetIso) {
+    const id = eventId(event);
+    const movedEvent = {
+        ...event,
+        id: `temp-${Date.now()}`,
+        starts_at: `${targetIso}T${eventTime(event.starts_at, '08:00')}`,
+        ends_at: `${targetIso}T${eventTime(event.ends_at || event.starts_at, '16:00')}`,
+        include_weekends: false,
+        excluded_dates: [],
+    };
+
+    calendarItems.value = [
+        ...calendarItems.value.map((item) => {
+            if (String(eventId(item)) !== String(id)) return item;
+
+            return {
+                ...item,
+                excluded_dates: Array.from(new Set([...(item.excluded_dates || []), sourceIso])).sort(),
+            };
+        }),
+        movedEvent,
+    ];
 }
 
 async function loadYear(year) {
@@ -333,7 +849,7 @@ async function loadYear(year) {
         window.history.replaceState({}, '', route('apps.calendar', { year: data.year }));
     } catch (error) {
         console.error(error);
-        alert('Das Jahr konnte nicht geladen werden.');
+        showToast('Das Jahr konnte nicht geladen werden.', 'error');
     } finally {
         loadingYear.value = false;
     }
@@ -413,7 +929,7 @@ async function toggleFullscreen() {
     fullscreen.value = true;
     await nextTick();
 
-    const el = document.querySelector('#year-calendar-board');
+    const el = document.documentElement;
     if (el?.requestFullscreen) {
         el.requestFullscreen().catch(() => {
             fullscreen.value = false;
@@ -429,6 +945,10 @@ onMounted(() => {
 onBeforeUnmount(() => {
     document.removeEventListener('fullscreenchange', syncFullscreenState);
     document.removeEventListener('mouseup', finishDaySelection);
+
+    if (toastTimer) {
+        window.clearTimeout(toastTimer);
+    }
 });
 
 function easterDate(year) {
@@ -489,6 +1009,14 @@ function germanHolidays(year) {
                     <button class="inline-flex h-9 items-center rounded border bg-white px-3 text-sm font-normal disabled:opacity-50" :disabled="loadingYear" @click="loadYear(currentYear - 1)">&lt;&lt;</button>
                     <span class="px-2 text-2xl font-semibold">{{ currentYear }}</span>
                     <button class="inline-flex h-9 items-center rounded border bg-white px-3 text-sm font-normal disabled:opacity-50" :disabled="loadingYear" @click="loadYear(currentYear + 1)">&gt;&gt;</button>
+                    <a :href="exportCalendarUrl" class="inline-flex h-9 items-center rounded border border-green-200 bg-green-50 px-3 text-sm font-semibold text-green-700">
+                        <i class="la la-file-excel mr-1"></i>
+                        Excel
+                    </a>
+                    <button class="inline-flex h-9 items-center rounded border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-700" @click="openImportModal">
+                        <i class="la la-file-import mr-1"></i>
+                        Import
+                    </button>
                     <button class="h-9 rounded bg-orange-500 px-4 text-sm font-semibold text-white" @click="openCreate()">+ Event anlegen</button>
                     <button class="h-9 rounded bg-orange-500 px-3 text-sm font-semibold text-white" @click="toggleFullscreen">
                         <i class="la la-expand"></i>
@@ -509,6 +1037,14 @@ function germanHolidays(year) {
                         <button class="inline-flex h-9 items-center rounded border bg-white px-3 text-sm disabled:opacity-50" :disabled="loadingYear" @click="loadYear(currentYear - 1)">&lt;&lt;</button>
                         <span class="px-2 text-2xl font-semibold">{{ currentYear }}</span>
                         <button class="inline-flex h-9 items-center rounded border bg-white px-3 text-sm disabled:opacity-50" :disabled="loadingYear" @click="loadYear(currentYear + 1)">&gt;&gt;</button>
+                        <a :href="exportCalendarUrl" class="inline-flex h-9 items-center rounded border border-green-200 bg-green-50 px-3 text-sm font-semibold text-green-700">
+                            <i class="la la-file-excel mr-1"></i>
+                            Excel
+                        </a>
+                        <button class="inline-flex h-9 items-center rounded border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-700" @click="openImportModal">
+                            <i class="la la-file-import mr-1"></i>
+                            Import
+                        </button>
                         <button class="h-9 rounded bg-orange-500 px-4 text-sm font-semibold text-white" @click="openCreate()">+ Event anlegen</button>
                         <button class="h-9 rounded bg-orange-500 px-3 text-sm font-semibold text-white" @click="toggleFullscreen">
                             <i class="la la-expand"></i>
@@ -556,7 +1092,7 @@ function germanHolidays(year) {
                                         :style="eventStyle(event)"
                                         :title="event.title"
                                         @mousedown.stop
-                                        @dragstart="startDrag(event)"
+                                        @dragstart="startDrag(event, day)"
                                         @click.stop="openEdit(event, day)"
                                     >
                                         {{ event.title }}
@@ -570,7 +1106,7 @@ function germanHolidays(year) {
             </div>
         </div>
 
-        <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div v-if="showModal" class="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4" @click.self="showModal = false">
             <form class="w-full max-w-2xl rounded bg-white p-5 shadow-xl" @submit.prevent="saveEvent">
                 <div class="mb-4 flex items-center justify-between">
                     <h2 class="text-lg font-semibold">{{ editingEvent ? 'Event bearbeiten' : 'Event anlegen' }}</h2>
@@ -597,6 +1133,50 @@ function germanHolidays(year) {
                         <label class="text-xs text-gray-600">Hintergrund <input v-model="eventForm.background_color" type="color" class="mt-1 h-10 w-full rounded border" /></label>
                         <label class="text-xs text-gray-600">Schrift <input v-model="eventForm.text_color" type="color" class="mt-1 h-10 w-full rounded border" /></label>
                     </div>
+                    <div v-if="editingEvent && editingDay" class="space-y-3 rounded border border-gray-200 bg-gray-50 p-3 md:col-span-2">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                                <div class="text-sm font-semibold text-gray-900">Angeklickter Tag</div>
+                                <div class="text-xs text-gray-500">{{ editingDay }}</div>
+                            </div>
+                            <button type="button" class="rounded border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 disabled:opacity-50" :disabled="savingEvent" @click="deleteClickedDay">
+                                Diesen Tag loeschen
+                            </button>
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-xs font-semibold text-gray-600">Kopie fuer bestimmte Tage oder Zeitraeume erstellen</label>
+                            <div class="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                                <label class="text-xs font-semibold text-gray-600">
+                                    Von
+                                    <input v-model="copyRangeStart" type="date" class="mt-1 w-full rounded border-gray-300 text-sm" @keydown.enter.prevent="addCopyRange" />
+                                </label>
+                                <label class="text-xs font-semibold text-gray-600">
+                                    Bis
+                                    <input v-model="copyRangeEnd" type="date" class="mt-1 w-full rounded border-gray-300 text-sm" @keydown.enter.prevent="addCopyRange" />
+                                </label>
+                                <div class="flex items-end">
+                                    <button type="button" class="w-full rounded border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700" @click="addCopyRange">Zeitraum hinzufuegen</button>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button type="button" class="rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="savingEvent || copyRanges.length === 0" @click="copyClickedDay">
+                                    Kopie erstellen
+                                </button>
+                                <span class="text-xs text-gray-500">Eine Kopie kann ein einzelner Tag oder mehrere Tage sein.</span>
+                            </div>
+                            <div v-if="copyRanges.length" class="flex flex-wrap gap-2">
+                                <button
+                                    v-for="range in copyRanges"
+                                    :key="copyRangeKey(range)"
+                                    type="button"
+                                    class="rounded bg-white px-2 py-1 text-xs font-semibold text-gray-700 ring-1 ring-gray-200"
+                                    @click="removeCopyRange(range)"
+                                >
+                                    {{ copyRangeLabel(range) }} &times;
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                     <select v-if="eventForm.visibility === 'project'" v-model="eventForm.project_id" class="rounded border-gray-300 text-sm md:col-span-2">
                         <option value="">Aktuelles Projekt</option>
                         <option v-for="project in projects" :key="project.id" :value="project.id">{{ project.name }}</option>
@@ -604,12 +1184,141 @@ function germanHolidays(year) {
                 </div>
                 <div class="mt-5 flex justify-between">
                     <div class="flex flex-wrap gap-2">
-                        <button v-if="canRemoveSingleDay()" type="button" class="rounded border border-orange-200 px-4 py-2 text-sm font-semibold text-orange-600 disabled:opacity-50" :disabled="savingEvent" @click="removeSingleDay">Nur diesen Tag entfernen</button>
                         <button v-if="editingEvent" type="button" class="rounded border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 disabled:opacity-50" :disabled="savingEvent" @click="deleteEvent">Ganzes Event loeschen</button>
                     </div>
                     <button class="rounded bg-orange-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="savingEvent">{{ savingEvent ? 'Speichert ...' : 'Speichern' }}</button>
                 </div>
             </form>
+        </div>
+
+        <DialogModal :show="Boolean(pendingMove)" max-width="md" @close="cancelMove">
+            <template #title>
+                Termin verschieben
+            </template>
+            <template #content>
+                Soll nur dieser einzelne Tag verschoben werden oder das komplette Event?
+            </template>
+            <template #footer>
+                <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    <button type="button" class="rounded border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700" :disabled="savingEvent" @click="cancelMove">Abbrechen</button>
+                    <button type="button" class="rounded border border-orange-200 px-4 py-2 text-sm font-semibold text-orange-600" :disabled="savingEvent" @click="confirmMove('single')">Nur diesen Tag</button>
+                    <button type="button" class="rounded bg-orange-500 px-4 py-2 text-sm font-semibold text-white" :disabled="savingEvent" @click="confirmMove('group')">Ganzes Event</button>
+                </div>
+            </template>
+        </DialogModal>
+
+        <DialogModal :show="noticeModal.show" max-width="md" @close="closeNotice">
+            <template #title>
+                {{ noticeModal.title }}
+            </template>
+            <template #content>
+                {{ noticeModal.message }}
+            </template>
+            <template #footer>
+                <button type="button" class="rounded bg-orange-500 px-4 py-2 text-sm font-semibold text-white" @click="closeNotice">OK</button>
+            </template>
+        </DialogModal>
+
+        <div v-if="showImportModal" class="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4" @click.self="closeImportModal">
+            <div class="flex max-h-[90vh] w-full max-w-5xl flex-col rounded bg-white shadow-xl">
+                <div class="flex items-center justify-between border-b px-5 py-4">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-900">Kalender importieren</h2>
+                        <p class="text-sm text-gray-500">Erst Vorschau pruefen, dann bewusst importieren.</p>
+                    </div>
+                    <button type="button" class="text-xl" :disabled="importLoading || importSaving" @click="closeImportModal">&times;</button>
+                </div>
+
+                <div class="space-y-4 overflow-y-auto p-5">
+                    <div class="grid gap-3 md:grid-cols-[1fr_220px_auto]">
+                        <label class="text-sm font-semibold text-gray-700">
+                            Excel-Datei
+                            <input type="file" accept=".xlsx,.xls" class="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm" @change="importForm.file = $event.target.files[0] || null" />
+                        </label>
+                        <label class="text-sm font-semibold text-gray-700">
+                            Zielkalender
+                            <select v-model="importForm.calendar_id" class="mt-1 w-full rounded border-gray-300 text-sm">
+                                <option value="">Mein Kalender</option>
+                                <option v-for="calendar in calendars" :key="calendar.id" :value="calendar.id">{{ calendar.name }}</option>
+                            </select>
+                        </label>
+                        <div class="flex items-end">
+                            <button type="button" class="w-full rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="importLoading || !importForm.file" @click="previewCalendarImport">
+                                {{ importLoading ? 'Prueft ...' : 'Vorschau erstellen' }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div v-if="importSummary" class="grid gap-2 text-sm sm:grid-cols-4">
+                        <div class="rounded border bg-gray-50 p-3"><strong>{{ importSummary.total }}</strong><br />erkannt</div>
+                        <div class="rounded border bg-gray-50 p-3"><strong>{{ selectedImportKeys.length }}</strong><br />ausgewaehlt</div>
+                        <div class="rounded border bg-gray-50 p-3"><strong>{{ importSummary.weekend }}</strong><br />Wochenende</div>
+                        <div class="rounded border bg-gray-50 p-3"><strong>{{ importSummary.holiday }}</strong><br />Feiertage</div>
+                    </div>
+
+                    <div v-if="importPreviewEvents.length" class="flex flex-wrap gap-2">
+                        <button type="button" class="rounded border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700" @click="selectImportKind('all')">Alle erlaubten auswaehlen</button>
+                        <button type="button" class="rounded border border-orange-200 px-3 py-2 text-sm font-semibold text-orange-600" @click="selectImportKind('is_weekend')">Wochenenden auch auswaehlen</button>
+                        <button type="button" class="rounded border border-red-200 px-3 py-2 text-sm font-semibold text-red-600" @click="selectImportKind('is_holiday')">Feiertage auch auswaehlen</button>
+                        <button type="button" class="rounded border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700" @click="clearImportSelection">Auswahl leeren</button>
+                    </div>
+
+                    <div v-if="importPreviewEvents.length" class="overflow-hidden rounded border">
+                        <div class="max-h-[42vh] overflow-y-auto">
+                            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead class="sticky top-0 bg-gray-100 text-left text-xs font-semibold uppercase text-gray-600">
+                                    <tr>
+                                        <th class="w-12 px-3 py-2"></th>
+                                        <th class="px-3 py-2">Datum</th>
+                                        <th class="px-3 py-2">Farbe</th>
+                                        <th class="px-3 py-2">Titel</th>
+                                        <th class="px-3 py-2">Hinweis</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100">
+                                    <tr v-for="event in importPreviewEvents" :key="event.key" :class="event.duplicate ? 'bg-red-50 text-red-900' : event.is_holiday ? 'bg-orange-50' : event.is_weekend ? 'bg-gray-50' : 'bg-white'">
+                                        <td class="px-3 py-2">
+                                            <input type="checkbox" class="rounded border-gray-300 text-blue-600" :disabled="event.duplicate" :checked="importKeySelected(event.key)" @change="toggleImportKey(event.key)" />
+                                        </td>
+                                        <td class="whitespace-nowrap px-3 py-2">{{ event.weekday }} {{ event.date }}</td>
+                                        <td class="px-3 py-2">
+                                            <span
+                                                class="inline-flex h-5 min-w-14 items-center justify-center rounded px-2 text-[11px] font-semibold"
+                                                :style="{ backgroundColor: event.background_color || '#f3f4f6', color: event.text_color || '#374151' }"
+                                            >
+                                                {{ event.background_color || '-' }}
+                                            </span>
+                                        </td>
+                                        <td class="px-3 py-2 font-semibold">{{ event.title }}</td>
+                                        <td class="px-3 py-2 text-xs">
+                                            <span v-if="event.duplicate" class="rounded bg-red-100 px-2 py-1 font-semibold text-red-700">Duplikat</span>
+                                            <span v-else-if="event.is_holiday" class="rounded bg-orange-100 px-2 py-1 font-semibold text-orange-700">Feiertag</span>
+                                            <span v-else-if="event.is_weekend" class="rounded bg-gray-200 px-2 py-1 font-semibold text-gray-700">Wochenende</span>
+                                            <span v-else class="text-gray-400">OK</span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-3 border-t bg-gray-50 px-5 py-4">
+                    <p class="text-xs text-gray-500">Wochenenden und Feiertage werden standardmaessig nicht importiert. Du kannst sie oben bewusst auswaehlen.</p>
+                    <button type="button" class="rounded bg-orange-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="importSaving || selectedImportKeys.length === 0" @click="confirmCalendarImport">
+                        {{ importSaving ? 'Importiert ...' : 'Auswahl importieren' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div
+            v-if="toast.show"
+            class="fixed right-4 top-4 z-[100] rounded border px-4 py-3 text-sm font-semibold shadow-lg"
+            :class="toast.type === 'success' ? 'border-green-200 bg-green-50 text-green-800' : 'border-red-200 bg-red-50 text-red-800'"
+            role="status"
+        >
+            {{ toast.message }}
         </div>
     </AppLayout>
 </template>

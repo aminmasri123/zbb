@@ -88,6 +88,21 @@ Route::post('/set-locale', function () {
 
 Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->group(function() {
 
+    Route::post('/benutzer/theme', function () {
+        $data = request()->validate([
+            'theme' => ['required', 'string', 'in:air,dark,womanly,champion,sprint,arena,pulse,trail,bazaar,vital'],
+        ]);
+
+        request()->user()->forceFill([
+            'theme' => $data['theme'],
+        ])->save();
+
+        return response()->json([
+            'success' => true,
+            'theme' => $data['theme'],
+        ]);
+    })->name('user.theme.update');
+
     Route::get('/dashboard', [DashbaordController::class, 'dashboard'])->name('dashboard');
     Route::prefix('apps')->name('apps.')->group(function () {
         Route::get('/', [AppsController::class, 'index'])->name('index');
@@ -96,14 +111,20 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
         Route::post('/dateimanager/ordner', [AppsController::class, 'createFolder'])->name('files.folder.store');
         Route::post('/dateimanager/upload', [AppsController::class, 'uploadFile'])->name('files.upload');
         Route::get('/dateimanager/download/{file}', [AppsController::class, 'downloadFile'])->name('files.download');
+        Route::put('/dateimanager/{file}', [AppsController::class, 'updateFile'])->name('files.update');
         Route::delete('/dateimanager/{file}', [AppsController::class, 'deleteFile'])->name('files.destroy');
         Route::post('/dateimanager/{file}/mail', [AppsController::class, 'mailFile'])->name('files.mail');
 
         Route::get('/kalender', [AppsController::class, 'calendar'])->name('calendar');
         Route::get('/kalender/events', [AppsController::class, 'calendarEvents'])->name('calendar.events');
+        Route::get('/kalender/export', [AppsController::class, 'exportCalendar'])->name('calendar.export');
+        Route::post('/kalender/import/vorschau', [AppsController::class, 'previewCalendarImport'])->name('calendar.import.preview');
+        Route::post('/kalender/import/bestaetigen', [AppsController::class, 'confirmCalendarImport'])->name('calendar.import.confirm');
         Route::post('/kalender/kalender', [AppsController::class, 'storeCalendarCalendar'])->name('calendar.calendars.store');
         Route::post('/kalender/farben', [AppsController::class, 'storeCalendarStyle'])->name('calendar.styles.store');
         Route::post('/kalender', [AppsController::class, 'storeCalendar'])->name('calendar.store');
+        Route::post('/kalender/{event}/move', [AppsController::class, 'moveCalendar'])->name('calendar.move');
+        Route::post('/kalender/{event}/copy', [AppsController::class, 'copyCalendar'])->name('calendar.copy');
         Route::put('/kalender/{event}', [AppsController::class, 'updateCalendar'])->name('calendar.update');
         Route::delete('/kalender/{event}', [AppsController::class, 'destroyCalendar'])->name('calendar.destroy');
 
@@ -116,6 +137,9 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
         Route::post('/taskmanager', [AppsController::class, 'storeTask'])->name('tasks.store');
         Route::put('/taskmanager/{task}', [AppsController::class, 'updateTask'])->name('tasks.update');
         Route::delete('/taskmanager/{task}', [AppsController::class, 'destroyTask'])->name('tasks.destroy');
+        Route::post('/taskmanager/workflows', [AppsController::class, 'storeTaskWorkflowTemplate'])->name('tasks.workflows.store');
+        Route::post('/taskmanager/workflows/{template}/apply', [AppsController::class, 'applyTaskWorkflowTemplate'])->name('tasks.workflows.apply');
+        Route::delete('/taskmanager/workflows/{template}', [AppsController::class, 'destroyTaskWorkflowTemplate'])->name('tasks.workflows.destroy');
 
         Route::get('/popups', [AppsController::class, 'popups'])->name('popups');
         Route::post('/popups', [AppsController::class, 'storePopup'])->name('popups.store');
@@ -410,6 +434,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
 
     //zu bearbeiten
 Route::get('/anwesenheitsdaten/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'anwesenheitsdaten'])->name('index-anpassung-anwesenheitsdaten');
+Route::post('/anwesenheitsdaten/{schulId}/{schuljahr}/{teil}/export', [BopLegacyFunctionController::class, 'anwesenheitsdatenExport'])->name('export.anwesenheitsdaten.schule.excel');
 Route::get('/teilnehmerliste/excel/{schuleId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'teilnehmerliste'])->name('export.teilnehmerliste.schule.excel');
 Route::get('/teilnehmerccliste/excel/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'index'])->name('teilnehmer.liste.schule');
 Route::get('/alleTeilnehmer/folder/create/{idSchule}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'createFolderAll'])->name('alleTeilnehmer.folder.create');

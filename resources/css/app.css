@@ -1,3 +1,316 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+    :root,
+    .theme-air {
+        --bg: #eef8ff;
+        --card: #ffffff;
+        --primary: theme('colors.air.primary');
+        --secondary: theme('colors.air.secondary');
+        --success: theme('colors.air.success');
+        --error: theme('colors.air.error');
+        --border: theme('colors.air.border');
+        --borderHover: theme('colors.air.borderHover');
+        --muted: theme('colors.air.muted');
+        --buttonPrimary: theme('colors.air.buttonPrimary');
+        --buttonPrimaryHover: theme('colors.air.buttonPrimaryHover');
+        --buttonTextPrimary: theme('colors.air.buttonTextPrimary');
+        --buttonTextSecondary: theme('colors.air.buttonTextSecondary');
+        --inputBg: theme('colors.air.inputBg');
+        --table: theme('colors.air.table');
+        --progress: theme('colors.air.progress');
+        --sidebarBg: #0b3554;
+        --headerBg: #dff3ff;
+        --surfaceTint: #e7f6ff;
+    }
+
+    .theme-dark {
+        --bg: theme('colors.dark.bg');
+        --card: theme('colors.dark.card');
+        --primary: theme('colors.dark.primary');
+        --secondary: theme('colors.dark.secondary');
+        --success: theme('colors.dark.success');
+        --error: theme('colors.dark.error');
+        --border: theme('colors.dark.border');
+        --borderHover: theme('colors.dark.borderHover');
+        --muted: theme('colors.dark.muted');
+        --buttonPrimary: theme('colors.dark.buttonPrimary');
+        --buttonPrimaryHover: theme('colors.dark.buttonPrimaryHover');
+        --buttonTextPrimary: theme('colors.dark.buttonTextPrimary');
+        --buttonTextSecondary: theme('colors.dark.buttonTextSecondary');
+        --inputBg: theme('colors.dark.inputBg');
+        --table: theme('colors.dark.table');
+        --progress: theme('colors.dark.progress');
+        --sidebarBg: #121821;
+        --headerBg: #121821;
+        --surfaceTint: #1d2633;
+    }
+
+    .theme-womanly {
+        --bg: theme('colors.womanly.bg');
+        --card: theme('colors.womanly.card');
+        --primary: theme('colors.womanly.primary');
+        --secondary: theme('colors.womanly.secondary');
+        --success: theme('colors.womanly.success');
+        --error: theme('colors.womanly.error');
+        --border: theme('colors.womanly.border');
+        --borderHover: theme('colors.womanly.borderHover');
+        --muted: theme('colors.womanly.muted');
+        --buttonPrimary: theme('colors.womanly.buttonPrimary');
+        --buttonPrimaryHover: theme('colors.womanly.buttonPrimaryHover');
+        --buttonTextPrimary: theme('colors.womanly.buttonTextPrimary');
+        --buttonTextSecondary: theme('colors.womanly.buttonTextSecondary');
+        --inputBg: theme('colors.womanly.inputBg');
+        --table: theme('colors.womanly.table');
+        --progress: theme('colors.womanly.progress');
+        --sidebarBg: #43223b;
+        --headerBg: #fde8f2;
+        --surfaceTint: #fff0f7;
+    }
+
+    .theme-champion {
+        --bg: theme('colors.champion.bg');
+        --card: theme('colors.champion.card');
+        --primary: theme('colors.champion.primary');
+        --secondary: theme('colors.champion.secondary');
+        --success: theme('colors.champion.success');
+        --error: theme('colors.champion.error');
+        --border: theme('colors.champion.border');
+        --borderHover: theme('colors.champion.borderHover');
+        --muted: theme('colors.champion.muted');
+        --buttonPrimary: theme('colors.champion.buttonPrimary');
+        --buttonPrimaryHover: theme('colors.champion.buttonPrimaryHover');
+        --buttonTextPrimary: theme('colors.champion.buttonTextPrimary');
+        --buttonTextSecondary: theme('colors.champion.buttonTextSecondary');
+        --inputBg: theme('colors.champion.inputBg');
+        --table: theme('colors.champion.table');
+        --progress: theme('colors.champion.progress');
+        --sidebarBg: #2f2412;
+        --headerBg: #fff1c2;
+        --surfaceTint: #fff6d8;
+    }
+
+    .theme-sprint {
+        --bg: theme('colors.sprint.bg');
+        --card: theme('colors.sprint.card');
+        --primary: theme('colors.sprint.primary');
+        --secondary: theme('colors.sprint.secondary');
+        --success: theme('colors.sprint.success');
+        --error: theme('colors.sprint.error');
+        --border: theme('colors.sprint.border');
+        --borderHover: theme('colors.sprint.borderHover');
+        --muted: theme('colors.sprint.muted');
+        --buttonPrimary: theme('colors.sprint.buttonPrimary');
+        --buttonPrimaryHover: theme('colors.sprint.buttonPrimaryHover');
+        --buttonTextPrimary: theme('colors.sprint.buttonTextPrimary');
+        --buttonTextSecondary: theme('colors.sprint.buttonTextSecondary');
+        --inputBg: theme('colors.sprint.inputBg');
+        --table: theme('colors.sprint.table');
+        --progress: theme('colors.sprint.progress');
+        --sidebarBg: #0b2f24;
+        --headerBg: #dcfce7;
+        --surfaceTint: #ecfdf5;
+    }
+
+    .theme-arena {
+        --bg: theme('colors.arena.bg');
+        --card: theme('colors.arena.card');
+        --primary: theme('colors.arena.primary');
+        --secondary: theme('colors.arena.secondary');
+        --success: theme('colors.arena.success');
+        --error: theme('colors.arena.error');
+        --border: theme('colors.arena.border');
+        --borderHover: theme('colors.arena.borderHover');
+        --muted: theme('colors.arena.muted');
+        --buttonPrimary: theme('colors.arena.buttonPrimary');
+        --buttonPrimaryHover: theme('colors.arena.buttonPrimaryHover');
+        --buttonTextPrimary: theme('colors.arena.buttonTextPrimary');
+        --buttonTextSecondary: theme('colors.arena.buttonTextSecondary');
+        --inputBg: theme('colors.arena.inputBg');
+        --table: theme('colors.arena.table');
+        --progress: theme('colors.arena.progress');
+        --sidebarBg: #1e293b;
+        --headerBg: #e2e8f0;
+        --surfaceTint: #f1f5f9;
+    }
+
+    .theme-pulse {
+        --bg: theme('colors.pulse.bg');
+        --card: theme('colors.pulse.card');
+        --primary: theme('colors.pulse.primary');
+        --secondary: theme('colors.pulse.secondary');
+        --success: theme('colors.pulse.success');
+        --error: theme('colors.pulse.error');
+        --border: theme('colors.pulse.border');
+        --borderHover: theme('colors.pulse.borderHover');
+        --muted: theme('colors.pulse.muted');
+        --buttonPrimary: theme('colors.pulse.buttonPrimary');
+        --buttonPrimaryHover: theme('colors.pulse.buttonPrimaryHover');
+        --buttonTextPrimary: theme('colors.pulse.buttonTextPrimary');
+        --buttonTextSecondary: theme('colors.pulse.buttonTextSecondary');
+        --inputBg: theme('colors.pulse.inputBg');
+        --table: theme('colors.pulse.table');
+        --progress: theme('colors.pulse.progress');
+        --sidebarBg: #3b1d0f;
+        --headerBg: #ffedd5;
+        --surfaceTint: #fff3e0;
+    }
+
+    .theme-trail {
+        --bg: theme('colors.trail.bg');
+        --card: theme('colors.trail.card');
+        --primary: theme('colors.trail.primary');
+        --secondary: theme('colors.trail.secondary');
+        --success: theme('colors.trail.success');
+        --error: theme('colors.trail.error');
+        --border: theme('colors.trail.border');
+        --borderHover: theme('colors.trail.borderHover');
+        --muted: theme('colors.trail.muted');
+        --buttonPrimary: theme('colors.trail.buttonPrimary');
+        --buttonPrimaryHover: theme('colors.trail.buttonPrimaryHover');
+        --buttonTextPrimary: theme('colors.trail.buttonTextPrimary');
+        --buttonTextSecondary: theme('colors.trail.buttonTextSecondary');
+        --inputBg: theme('colors.trail.inputBg');
+        --table: theme('colors.trail.table');
+        --progress: theme('colors.trail.progress');
+        --sidebarBg: #24301b;
+        --headerBg: #edf5df;
+        --surfaceTint: #eef6e2;
+    }
+
+    .theme-bazaar {
+        --bg: theme('colors.bazaar.bg');
+        --card: theme('colors.bazaar.card');
+        --primary: theme('colors.bazaar.primary');
+        --secondary: theme('colors.bazaar.secondary');
+        --success: theme('colors.bazaar.success');
+        --error: theme('colors.bazaar.error');
+        --border: theme('colors.bazaar.border');
+        --borderHover: theme('colors.bazaar.borderHover');
+        --muted: theme('colors.bazaar.muted');
+        --buttonPrimary: theme('colors.bazaar.buttonPrimary');
+        --buttonPrimaryHover: theme('colors.bazaar.buttonPrimaryHover');
+        --buttonTextPrimary: theme('colors.bazaar.buttonTextPrimary');
+        --buttonTextSecondary: theme('colors.bazaar.buttonTextSecondary');
+        --inputBg: theme('colors.bazaar.inputBg');
+        --table: theme('colors.bazaar.table');
+        --progress: theme('colors.bazaar.progress');
+        --sidebarBg: #172033;
+        --headerBg: #c8eef4;
+        --surfaceTint: #f4fbfc;
+    }
+
+    .theme-vital {
+        --bg: theme('colors.vital.bg');
+        --card: theme('colors.vital.card');
+        --primary: theme('colors.vital.primary');
+        --secondary: theme('colors.vital.secondary');
+        --success: theme('colors.vital.success');
+        --error: theme('colors.vital.error');
+        --border: theme('colors.vital.border');
+        --borderHover: theme('colors.vital.borderHover');
+        --muted: theme('colors.vital.muted');
+        --buttonPrimary: theme('colors.vital.buttonPrimary');
+        --buttonPrimaryHover: theme('colors.vital.buttonPrimaryHover');
+        --buttonTextPrimary: theme('colors.vital.buttonTextPrimary');
+        --buttonTextSecondary: theme('colors.vital.buttonTextSecondary');
+        --inputBg: theme('colors.vital.inputBg');
+        --table: theme('colors.vital.table');
+        --progress: theme('colors.vital.progress');
+        --sidebarBg: #262827;
+        --headerBg: #EDEDED;
+        --surfaceTint: #F6F8F5;
+    }
+
+    html,
+    body {
+        background: var(--bg);
+        color: var(--primary);
+    }
+}
+
+html[class*="theme-"] body :where(.bg-gray-50, .bg-gray-100, .bg-slate-50, .bg-slate-100) {
+    background-color: var(--bg) !important;
+}
+
+html[class*="theme-"] body :where(.bg-white) {
+    background-color: var(--card) !important;
+}
+
+html[class*="theme-"] body :where(.bg-gray-700, .bg-gray-800, .bg-gray-900) {
+    background-color: var(--sidebarBg) !important;
+}
+
+html[class*="theme-"] body :where(.text-gray-900, .text-gray-800, .text-gray-700, .text-black) {
+    color: var(--primary) !important;
+}
+
+html[class*="theme-"] body :where(.text-gray-600, .text-gray-500, .text-gray-400, .text-slate-600, .text-slate-500) {
+    color: var(--secondary) !important;
+}
+
+html[class*="theme-"] body :where(.border-gray-300, .border-gray-200, .border-slate-300, .border-slate-200) {
+    border-color: var(--border) !important;
+}
+
+html[class*="theme-"] body :where(.hover\:bg-gray-50:hover, .hover\:bg-gray-100:hover, .hover\:bg-slate-100:hover) {
+    background-color: var(--muted) !important;
+}
+
+html[class*="theme-"] body :where(.hover\:text-gray-700:hover, .hover\:text-gray-900:hover) {
+    color: var(--buttonPrimary) !important;
+}
+
+html[class*="theme-"] body :where(input, select, textarea) {
+    background-color: var(--inputBg);
+    border-color: var(--border);
+    color: var(--primary);
+}
+
+html[class*="theme-"] body :where(table, thead, tbody, tr) {
+    border-color: var(--border);
+}
+
+html[class*="theme-"] body :where(thead, .bg-gray-200, .bg-slate-200) {
+    background-color: var(--table) !important;
+}
+
+html[class*="theme-"] body :where(.text-zbb) {
+    color: var(--buttonPrimary) !important;
+}
+
+html[class*="theme-"] body :where(.bg-zbb) {
+    background-color: var(--buttonPrimary) !important;
+}
+
+html[class*="theme-"] body :where(.border-zbb) {
+    border-color: var(--buttonPrimary) !important;
+}
+
+.theme-sidebar {
+    background: linear-gradient(180deg, var(--sidebarBg), color-mix(in srgb, var(--sidebarBg) 72%, var(--buttonPrimary))) !important;
+    color: #fff;
+    box-shadow: inset -1px 0 0 color-mix(in srgb, var(--buttonPrimary) 32%, transparent);
+}
+
+.theme-sidebar :where(a, button, li, span, i) {
+    color: inherit;
+}
+
+.theme-sidebar :where(.text-gray-400) {
+    color: color-mix(in srgb, #ffffff 68%, var(--buttonPrimary)) !important;
+}
+
+.theme-sidebar :where(.text-zbb) {
+    color: var(--buttonPrimary) !important;
+}
+
+.theme-sidebar :where(.hover\:bg-gray-700:hover, .hover\:bg-gray-800:hover, .hover\:bg-gray-900:hover) {
+    background-color: color-mix(in srgb, var(--buttonPrimary) 22%, var(--sidebarBg)) !important;
+}
+
+.theme-sidebar :where(.hover\:text-white:hover) {
+    color: #fff !important;
+}

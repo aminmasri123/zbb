@@ -1,15 +1,15 @@
 <template>
-    <nav class="sticky top-0 w-full  z-50 dark:bg-gray-800 bg-gray-100 dark:text-gray-100">
+    <nav class="sticky top-0 w-full z-50 border-b border-[var(--border)] bg-[var(--headerBg)] text-[var(--primary)] shadow-sm">
 
         <!-- Primary Navigation Menu -->
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-black">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-[var(--primary)]">
             <div class="flex justify-between h-20 ">
 
                 <div class="flex ">
                     <!-- Hamburger Button (nur auf Mobilgeräten sichtbar) -->
                     <button
                         @click="$emit('toggle-sidebar')"
-                        class=" text-black pr-4 block md:hidden dark:text-gray-100"
+                        class="text-[var(--primary)] pr-4 block md:hidden"
                         :class="{' ':sidebarOpen}"
                     >
                         <i class="la la-bars text-2xl"></i>
@@ -18,7 +18,7 @@
                     <!-- Knopf Sidebar displayHideTextSidebar -->
                     <button
                         @click="$emit('toggle-sidebar-text')"
-                        class=" text-black  pr-4 hidden md:block dark:text-gray-100"
+                        class="text-[var(--primary)] pr-4 hidden md:block"
                         :class="{' ':displayHideTextSidebar}"
                     >
                         <i class="la la-bars text-2xl"></i>
@@ -40,16 +40,16 @@
                             || route().current('projekt.*')
                             || route().current('bereich.*')
                             "
-                    class="dark:text-gray-100 text-[17px] ">
+                    class="text-[17px] text-[var(--primary)]">
                         {{ $t('dashboard') }}
                     </NavLink>
-                    <NavLink :href="route('organisation.index')" :active="route().current('organisation.index')" class="dark:text-gray-100 text-[17px] ">
+                    <NavLink :href="route('organisation.index')" :active="route().current('organisation.index')" class="text-[17px] text-[var(--primary)]">
                         {{ $t('organisation') }}
                     </NavLink>
-                    <NavLink :href="route('ressourcen.index')" :active="route().current('ressourcen.index')" class="dark:text-gray-100  text-[17px] ">
+                    <NavLink :href="route('ressourcen.index')" :active="route().current('ressourcen.index')" class="text-[17px] text-[var(--primary)]">
                         {{ $t('Ressourcen') }}
                     </NavLink>
-                    <NavLink :href="route('finanzen.index')" :active="route().current('finanzen.index')" class="dark:text-gray-100  text-[17px] ">
+                    <NavLink :href="route('finanzen.index')" :active="route().current('finanzen.index')" class="text-[17px] text-[var(--primary)]">
                         {{ $t('Finanzen') }}
                     </NavLink>
                 </div>
@@ -58,7 +58,7 @@
                     <!-- Teams Dropdown -->
                     <Dropdown v-if="$page.props.auth.user.projekte" align="right" width="60">
                         <template #trigger>
-                                <button type="button" class="inline-flex items-center py-2 border border-transparent text-sm leading-4 font-medium rounded-md dark:text-white dark:hover:text-gray-300 hover:text-gray-700 transition ease-in-out duration-150">
+                                <button type="button" class="inline-flex items-center py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-primary hover:text-buttonPrimary transition ease-in-out duration-150">
                                     <i class="la text-lg la-briefcase" aria-hidden="true"></i>
                                 </button>
                         </template>
@@ -111,7 +111,7 @@
                     <!-- Sprache Dropdown -->
                     <Dropdown align="right" width="48">
                         <template #trigger >
-                            <button class="inline-flex items-center px-3 py-2 mx-1 border border-transparent text-sm leading-4 font-medium rounded-md dark:text-white dark:hover:text-gray-300 hover:text-gray-700 focus:outline-none transition ease-in-out duration-150">
+                            <button class="inline-flex items-center px-3 py-2 mx-1 border border-transparent text-sm leading-4 font-medium rounded-md text-primary hover:text-buttonPrimary focus:outline-none transition ease-in-out duration-150">
                                 <i class="las la-globe text-lg"></i>
                             </button>
                         </template>
@@ -142,8 +142,8 @@
                     </Dropdown>
 
                     <button
-                        @click="switchTheme"
-                        class="inline-flex items-center py-2 mr-3 border border-transparent text-sm leading-4 font-medium rounded-md  dark:text-white dark:hover:text-gray-300 hover:text-gray-700 focus:outline-none transition ease-in-out duration-150">
+                        @click="cycleTheme"
+                        class="inline-flex items-center py-2 mr-3 border border-transparent text-sm leading-4 font-medium rounded-md text-primary hover:text-buttonPrimary focus:outline-none transition ease-in-out duration-150">
                             <i class="las la-adjust text-lg"></i>
                     </button>
 
@@ -152,7 +152,7 @@
                     <!-- Notification Dropdown -->
                     <Dropdown align="right" width="80">
                         <template #trigger >
-                            <button class="inline-flex items-center py-2 mx-1 border border-transparent text-sm leading-4 font-medium rounded-md dark:text-white dark:hover:text-gray-300 hover:text-gray-700 focus:outline-none transition ease-in-out duration-150">
+                            <button class="inline-flex items-center py-2 mx-1 border border-transparent text-sm leading-4 font-medium rounded-md text-primary hover:text-buttonPrimary focus:outline-none transition ease-in-out duration-150">
                                 <i class="las la-bell text-lg"></i>
                                 <span v-if="notifications.length > 0" class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full text-xs w-5 h-5 flex items-center justify-center">
                                     {{ notifications.length }}
@@ -337,6 +337,20 @@ const markAllAsRead = async () => {
     console.error('Fehler beim Markieren:', error);
   }
 }
+
+const persistTheme = async (theme) => {
+    try {
+        await axios.post(route('user.theme.update'), { theme });
+    } catch (error) {
+        console.error('Theme konnte nicht gespeichert werden:', error);
+    }
+}
+
+const cycleTheme = async () => {
+    const theme = switchTheme();
+    await persistTheme(theme);
+}
+
 const emit = defineEmits(['toggle-sidebar', 'toggle-sidebar-text']);
     const { t, locale } = useI18n();
 

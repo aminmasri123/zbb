@@ -34,9 +34,9 @@ const apps = [
     <AppLayout title="Dashboard">
         <template #header>{{ $t('Dashboard') }}</template>
 
-        <div class="min-h-screen bg-gray-50 py-2">
+        <div class="min-h-screen bg-[var(--bg)] py-2 text-[var(--primary)]">
             <div class="mx-auto mb-8 max-w-7xl px-4">
-                <div class="rounded-lg bg-gradient-to-r from-orange-500 to-orange-200 px-8 py-4 text-white shadow-lg">
+                <div class="rounded-lg px-8 py-4 text-[var(--buttonTextPrimary)] shadow-lg" style="background: linear-gradient(90deg, var(--buttonPrimary), var(--borderHover));">
                     <h1 class="mb-2 text-2xl font-bold">Willkommen im webbasierten ERP-System des ZBB</h1>
                     <p class="text-lg">Das webbasierte Verwaltungssystem des Zentrums fuer Bildung und Beruf Saar.</p>
                 </div>
@@ -55,7 +55,7 @@ const apps = [
             <div class="mx-auto mb-10 max-w-7xl px-4">
                 <div class="mb-3 flex items-center justify-between border-b border-gray-200 pb-2">
                     <h2 class="text-lg font-semibold text-gray-900">Apps</h2>
-                    <Link :href="route('apps.index')" class="text-sm font-medium text-orange-600 hover:text-orange-700">Alle Apps</Link>
+                    <Link :href="route('apps.index')" class="text-sm font-medium text-[var(--buttonPrimary)] hover:text-[var(--buttonPrimaryHover)]">Alle Apps</Link>
                 </div>
 
                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -63,14 +63,14 @@ const apps = [
                         v-for="app in apps"
                         :key="app.title"
                         :href="route(app.route)"
-                        class="rounded border border-gray-200 bg-white p-4 shadow-sm transition hover:border-orange-400 hover:shadow"
+                        class="rounded border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm transition hover:border-[var(--borderHover)] hover:shadow"
                     >
                         <div class="mb-3 flex items-center justify-between">
-                            <i :class="['la la-2x text-orange-500', app.icon]"></i>
-                            <span class="rounded bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700">{{ props.apps?.[app.count] ?? 0 }}</span>
+                            <i :class="['la la-2x text-[var(--buttonPrimary)]', app.icon]"></i>
+                            <span class="rounded bg-[var(--muted)] px-2 py-1 text-xs font-semibold text-[var(--primary)]">{{ props.apps?.[app.count] ?? 0 }}</span>
                         </div>
-                        <h3 class="text-sm font-semibold text-gray-900">{{ app.title }}</h3>
-                        <p class="mt-1 text-xs leading-5 text-gray-600">{{ app.text }}</p>
+                        <h3 class="text-sm font-semibold text-[var(--primary)]">{{ app.title }}</h3>
+                        <p class="mt-1 text-xs leading-5 text-[var(--secondary)]">{{ app.text }}</p>
                     </Link>
                 </div>
             </div>
@@ -78,7 +78,7 @@ const apps = [
 
         <div class="py-12">
             <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
-                <div class="overflow-hidden bg-white shadow-xl sm:rounded-lg">
+                <div class="overflow-hidden bg-[var(--card)] shadow-xl sm:rounded-lg">
                     <Welcome />
                 </div>
             </div>

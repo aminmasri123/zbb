@@ -8,6 +8,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
+use Inertia\Inertia;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpWord\TemplateProcessor;
@@ -93,19 +98,160 @@ class BopLegacyFunctionController extends Controller
 
     private function downloadSpreadsheet(Spreadsheet $spreadsheet, string $filename)
     {
-        $path = storage_path('app/tmp/' . $filename);
+        $path = storage_path('app/tmp/' . Str::uuid() . '_' . $filename);
         File::ensureDirectoryExists(dirname($path));
         (new Xlsx($spreadsheet))->save($path);
 
-        return response()->download($path)->deleteFileAfterSend(true);
+        return response()->download($path, $filename)->deleteFileAfterSend(true);
     }
 
     public function anwesenheitsdaten(int $schulId, string $schuljahr, string $teil)
     {
         $partner = $this->partner($schulId);
         $schueler = $this->schueler($schulId, $schuljahr, $teil);
+        $tage = $this->anwesenheitsdatenTage();
+        $summenTage = $this->anwesenheitsdatenSummenTage();
+        $gesamtAnwesenheitstage = $schueler->count() * count(array_filter(
+            $summenTage,
+            fn ($key) => $this->defaultAnwesenheitsdatenStatus($key) === 'present'
+        ));
+        $paAnzahl = $schueler->count();
 
-        return response()->view('bop.anwesenheitsdaten', compact('partner', 'schueler', 'schuljahr', 'teil'));
+        return Inertia::render('BOP/Anwesenheitsdaten', [
+            'partner' => [
+                'id' => $partner->id,
+                'name' => $partner->name,
+            ],
+            'schueler' => $schueler->map(function ($item, $index) {
+                return [
+                    'id' => $item->id,
+                    'nummer' => $index + 1,
+                    'nachname' => $item->person?->nachname,
+                    'vorname' => $item->person?->vorname,
+                    'geschlecht' => $item->person?->geschlecht,
+                    'klasse' => $item->klasse,
+                ];
+            })->values(),
+            'schuljahr' => $schuljahr,
+            'teil' => $teil,
+            'tage' => $tage,
+            'summenTage' => $summenTage,
+            'gesamtAnwesenheitstage' => $gesamtAnwesenheitstage,
+            'paAnzahl' => $paAnzahl,
+        ]);
+    }
+
+    private function anwesenheitsdatenTage(): array
+    {
+        return [
+            'vorb' => 'Vorb.',
+            'pa1' => 'PA1',
+            'pa2' => 'PA2',
+            'rolltag' => 'Rolltag',
+            'bo1' => 'BO-Tag1',
+            'bo2' => 'BO-Tag2',
+            'bo3' => 'BO-Tag3',
+            'bo4' => 'BO-Tag4',
+            'bo5' => 'BO-Tag5',
+            'bo6' => 'BO-Tag6',
+            'bo7' => 'BO-Tag7',
+            'bo8' => 'BO-Tag8',
+            'bo9' => 'BO-Tag9',
+        ];
+    }
+
+    private function defaultAnwesenheitsdatenStatus(string $key): string
+    {
+        return $key === 'bo1' ? 'absent' : 'present';
+    }
+
+    private function anwesenheitsdatenSummenTage(): array
+    {
+        return ['rolltag', 'bo1', 'bo2', 'bo3', 'bo4', 'bo5', 'bo6', 'bo7', 'bo8', 'bo9'];
+    }
+
+    public function anwesenheitsdatenExport(Request $request, int $schulId, string $schuljahr, string $teil)
+    {
+        $partner = $this->partner($schulId);
+        $schueler = $this->schueler($schulId, $schuljahr, $teil);
+        $tage = $this->anwesenheitsdatenTage();
+        $summenTage = $this->anwesenheitsdatenSummenTage();
+        $statusPayload = json_decode((string) $request->input('status_payload', '{}'), true);
+        $statusPayload = is_array($statusPayload) ? $statusPayload : [];
+        $defaultTotal = $schueler->count() * count(array_filter(
+            $summenTage,
+            fn ($key) => $this->defaultAnwesenheitsdatenStatus($key) === 'present'
+        ));
+        $exportTotal = empty($statusPayload)
+            ? $defaultTotal
+            : collect($statusPayload)->sum(function ($studentStatus) use ($summenTage) {
+                return collect($summenTage)->filter(fn ($key) => ($studentStatus[$key] ?? $this->defaultAnwesenheitsdatenStatus($key)) === 'present')->count();
+            });
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Anwesenheitsdaten');
+
+        $sheet->setCellValue('A1', 'Anwesenheitsdaten');
+        $sheet->setCellValue('A2', 'Schule');
+        $sheet->setCellValue('B2', $partner->name);
+        $sheet->setCellValue('A3', 'Schuljahr');
+        $sheet->setCellValue('B3', $schuljahr);
+        $sheet->setCellValue('A4', 'Teil');
+        $sheet->setCellValue('B4', $teil);
+        $sheet->setCellValue('A5', 'Gesamtanzahl Anwesenheitstage');
+        $sheet->setCellValue('B5', $exportTotal);
+        $sheet->setCellValue('C5', 'Schueleranzahl PA');
+        $sheet->setCellValue('D5', $schueler->count());
+
+        $headers = array_merge(['ID', 'Nachname', 'Vorname', 'W/M', 'Klasse'], array_values($tage), ['Summe']);
+        foreach ($headers as $index => $header) {
+            $sheet->setCellValue([$index + 1, 7], $header);
+        }
+
+        foreach ($schueler as $index => $item) {
+            $person = $item->person;
+            $row = $index + 8;
+            $sheet->setCellValue([1, $row], $index + 1);
+            $sheet->setCellValue([2, $row], $person?->nachname);
+            $sheet->setCellValue([3, $row], $person?->vorname);
+            $sheet->setCellValue([4, $row], $person?->geschlecht);
+            $sheet->setCellValue([5, $row], $item->klasse);
+
+            $summe = 0;
+            $column = 6;
+            foreach ($tage as $key => $label) {
+                $status = $statusPayload[$item->id][$key] ?? $this->defaultAnwesenheitsdatenStatus($key);
+                $value = match ($status) {
+                    'present' => 'x',
+                    'absent' => '-',
+                    default => '',
+                };
+                if (in_array($key, $summenTage, true) && $status === 'present') {
+                    $summe++;
+                }
+                $sheet->setCellValue([$column, $row], $value);
+                $column++;
+            }
+            $sheet->setCellValue([$column, $row], $summe);
+        }
+
+        $lastColumn = count($headers);
+        $lastColumnLetter = Coordinate::stringFromColumnIndex($lastColumn);
+        $lastRow = max(8, $schueler->count() + 7);
+        $sheet->getStyle('A7:' . $lastColumnLetter . '7')->getFont()->setBold(true);
+        $sheet->getStyle('A7:' . $lastColumnLetter . '7')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFEFF3F7');
+        $sheet->getStyle('A7:' . $lastColumnLetter . $lastRow)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB('FFD9DEE5');
+        $sheet->getStyle('A7:' . $lastColumnLetter . $lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+        $sheet->getStyle('D8:' . $lastColumnLetter . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        foreach (range(1, $lastColumn) as $column) {
+            $sheet->getColumnDimensionByColumn($column)->setAutoSize(true);
+        }
+
+        return $this->downloadSpreadsheet(
+            $spreadsheet,
+            'Anwesenheitsdaten_' . $schulId . '_' . $this->safeName($schuljahr) . '_Teil_' . $this->safeName($teil) . '.xlsx'
+        );
     }
 
     public function teilnehmerliste(int $schuleId, string $schuljahr, string $teil)
