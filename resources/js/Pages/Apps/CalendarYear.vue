@@ -14,9 +14,12 @@ const props = defineProps({
     styles: Array,
 });
 
-const monthNames = ['Januar', 'Februar', 'Maerz', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+const monthNames = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
 const weekdays = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+const listSelectionBatchSize = 20;
 const currentYear = ref(props.year);
+const currentMonth = ref(new Date().getFullYear() === props.year ? new Date().getMonth() : 0);
+const viewMode = ref('year');
 const calendarItems = ref(props.items || []);
 const loadingYear = ref(false);
 const savingEvent = ref(false);
@@ -40,6 +43,15 @@ const noticeModal = ref({
     title: '',
     message: '',
 });
+const confirmModal = ref({
+    show: false,
+    title: '',
+    message: '',
+    confirmText: 'Löschen',
+    cancelText: 'Abbrechen',
+    tone: 'danger',
+    resolver: null,
+});
 const toast = ref({
     show: false,
     message: '',
@@ -54,6 +66,7 @@ const selectedImportKeys = ref([]);
 const importSummary = ref(null);
 const importLoading = ref(false);
 const importSaving = ref(false);
+const selectedListEventIds = ref([]);
 let toastTimer = null;
 
 const eventForm = useForm({
@@ -88,9 +101,18 @@ const styleForm = useForm({
     text_color: '#ffffff',
 });
 
+const personalCalendar = computed(() => (props.calendars || []).find((calendar) => calendar.name === 'Mein Kalender' && !calendar.project_id) || (props.calendars || [])[0] || null);
+const defaultCalendarId = computed(() => personalCalendar.value?.id || '');
+
 const filteredEvents = computed(() => {
     if (selectedCalendar.value === 'all') return calendarItems.value;
-    return calendarItems.value.filter((event) => String(event.calendar_id || '') === String(selectedCalendar.value));
+    return calendarItems.value.filter((event) => {
+        if (String(event.calendar_id || '') === String(selectedCalendar.value)) {
+            return true;
+        }
+
+        return personalCalendar.value && String(selectedCalendar.value) === String(personalCalendar.value.id) && !event.calendar_id;
+    });
 });
 
 const months = computed(() => monthNames.map((name, index) => ({
@@ -98,6 +120,44 @@ const months = computed(() => monthNames.map((name, index) => ({
     index,
     days: Array.from({ length: daysInMonth(currentYear.value, index) }, (_, dayIndex) => buildDay(currentYear.value, index, dayIndex + 1)),
 })));
+
+const activeMonth = computed(() => months.value[currentMonth.value] || months.value[0]);
+const activeMonthGridDays = computed(() => {
+    const firstDay = activeMonth.value.days[0];
+    const leadingDays = firstDay ? (firstDay.date.getDay() + 6) % 7 : 0;
+
+    return [
+        ...Array.from({ length: leadingDays }, (_, index) => ({ empty: true, key: `empty-${currentMonth.value}-${index}` })),
+        ...activeMonth.value.days,
+    ];
+});
+
+const visibleEventDays = computed(() => {
+    const items = [];
+
+    months.value.forEach((month) => {
+        month.days.forEach((day) => {
+            dayEvents(day).forEach((event) => {
+                items.push({
+                    day,
+                    event,
+                    starts_at: event.starts_at,
+                    key: `${day.iso}-${event.id}`,
+                });
+            });
+        });
+    });
+
+    return items.sort((a, b) => String(a.day.iso + a.starts_at).localeCompare(String(b.day.iso + b.starts_at)));
+});
+
+const visibleListEventIds = computed(() => Array.from(new Set(visibleEventDays.value.map((item) => String(eventId(item.event))).filter(Boolean))));
+const selectedVisibleListEventIds = computed(() => selectedListEventIds.value.filter((id) => visibleListEventIds.value.includes(String(id))));
+const allVisibleListEventsSelected = computed(() => visibleListEventIds.value.length > 0 && selectedVisibleListEventIds.value.length === visibleListEventIds.value.length);
+const nextListSelectionCount = computed(() => Math.min(
+    listSelectionBatchSize,
+    visibleListEventIds.value.filter((id) => !selectedListEventIds.value.map(String).includes(String(id))).length,
+));
 
 const exportCalendarUrl = computed(() => {
     const params = { year: currentYear.value };
@@ -171,6 +231,34 @@ function dayEvents(day) {
         .sort((a, b) => String(a.starts_at).localeCompare(String(b.starts_at)));
 }
 
+function eventCalendarName(event) {
+    return event.calendar?.name || personalCalendar.value?.name || 'Mein Kalender';
+}
+
+function eventTimeRange(event) {
+    return `${eventTime(event.starts_at)} - ${eventTime(event.ends_at || event.starts_at, '16:00')}`;
+}
+
+function changeMonth(delta) {
+    const next = currentMonth.value + delta;
+
+    if (next < 0) {
+        loadYear(currentYear.value - 1).then(() => {
+            currentMonth.value = 11;
+        });
+        return;
+    }
+
+    if (next > 11) {
+        loadYear(currentYear.value + 1).then(() => {
+            currentMonth.value = 0;
+        });
+        return;
+    }
+
+    currentMonth.value = next;
+}
+
 function eventTouchesDay(event, iso) {
     const start = eventDate(event.starts_at);
     const end = eventDate(event.ends_at || event.starts_at);
@@ -205,6 +293,7 @@ function openCreateRange(startIso, endIso) {
     eventForm.excluded_dates = [];
     eventForm.background_color = '#ff7a00';
     eventForm.text_color = '#ffffff';
+    eventForm.calendar_id = defaultCalendarId.value;
     eventForm.visibility = 'private';
     eventForm.starts_at = `${startIso}T08:00`;
     eventForm.ends_at = `${endIso}T16:00`;
@@ -217,7 +306,7 @@ function openEdit(event, day = null) {
     resetCopyRanges();
     eventForm.clearErrors();
     eventForm.title = event.title || '';
-    eventForm.calendar_id = event.calendar_id || '';
+    eventForm.calendar_id = event.calendar_id || defaultCalendarId.value;
     eventForm.description = event.description || '';
     eventForm.starts_at = toDateTimeInput(event.starts_at);
     eventForm.ends_at = toDateTimeInput(event.ends_at);
@@ -349,6 +438,38 @@ function closeNotice() {
     noticeModal.value.show = false;
 }
 
+function askConfirmation({ title, message, confirmText = 'Löschen', cancelText = 'Abbrechen', tone = 'danger' }) {
+    return new Promise((resolve) => {
+        confirmModal.value = {
+            show: true,
+            title,
+            message,
+            confirmText,
+            cancelText,
+            tone,
+            resolver: resolve,
+        };
+    });
+}
+
+function resolveConfirmation(confirmed) {
+    const resolver = confirmModal.value.resolver;
+
+    confirmModal.value = {
+        show: false,
+        title: '',
+        message: '',
+        confirmText: 'Löschen',
+        cancelText: 'Abbrechen',
+        tone: 'danger',
+        resolver: null,
+    };
+
+    if (resolver) {
+        resolver(confirmed);
+    }
+}
+
 function showToast(message, type = 'success') {
     toast.value = {
         show: true,
@@ -380,7 +501,7 @@ function restoreCalendarSnapshot(snapshot) {
 function openImportModal() {
     importForm.value = {
         file: null,
-        calendar_id: selectedCalendar.value !== 'all' ? selectedCalendar.value : '',
+        calendar_id: selectedCalendar.value !== 'all' ? selectedCalendar.value : defaultCalendarId.value,
     };
     importPreviewEvents.value = [];
     selectedImportKeys.value = [];
@@ -496,6 +617,7 @@ function upsertCalendarEvent(event) {
 
 function removeCalendarEvent(id) {
     calendarItems.value = calendarItems.value.filter((event) => String(eventId(event)) !== String(id));
+    selectedListEventIds.value = selectedListEventIds.value.filter((selectedId) => String(selectedId) !== String(id));
 }
 
 function payloadFromEvent(event, overrides = {}) {
@@ -536,8 +658,17 @@ function saveEvent() {
     }
 }
 
-function deleteEvent() {
-    if (!editingEvent.value || !confirm('Termin wirklich loeschen?')) return;
+async function deleteEvent() {
+    if (!editingEvent.value) return;
+
+    const confirmed = await askConfirmation({
+        title: 'Ganzes Event löschen?',
+        message: 'Dieser Termin wird komplett aus dem Kalender entfernt.',
+        confirmText: 'Ganzes Event löschen',
+    });
+
+    if (!confirmed) return;
+
     const url = calendarEventRoute('apps.calendar.destroy', editingEvent.value);
     if (!url) return;
     calendarRequest('delete', url, null, {
@@ -545,6 +676,98 @@ function deleteEvent() {
         applyResponse: (data) => removeCalendarEvent(data.id || eventId(editingEvent.value)),
         reload: false,
     });
+}
+
+async function deleteListEvent(event) {
+    if (!event) return;
+
+    const confirmed = await askConfirmation({
+        title: 'Termin löschen?',
+        message: `"${event.title || 'Termin'}" wird aus dem Kalender entfernt.`,
+    });
+
+    if (!confirmed) return;
+
+    const url = calendarEventRoute('apps.calendar.destroy', event);
+    if (!url) return;
+
+    savingEvent.value = true;
+
+    try {
+        const response = await sendCalendar('delete', url);
+        removeCalendarEvent(response.data.id || eventId(event));
+        showToast(response.data.message || 'Termin wurde geloescht.');
+    } catch (error) {
+        handleCalendarError(error);
+    } finally {
+        savingEvent.value = false;
+    }
+}
+
+function listEventSelected(event) {
+    const id = String(eventId(event));
+
+    return selectedListEventIds.value.includes(id);
+}
+
+function toggleListEvent(event) {
+    const id = String(eventId(event));
+    if (!id) return;
+
+    selectedListEventIds.value = listEventSelected(event)
+        ? selectedListEventIds.value.filter((selectedId) => String(selectedId) !== id)
+        : [...selectedListEventIds.value, id];
+}
+
+function toggleAllVisibleListEvents() {
+    if (allVisibleListEventsSelected.value) {
+        selectedListEventIds.value = selectedListEventIds.value.filter((id) => !visibleListEventIds.value.includes(String(id)));
+        return;
+    }
+
+    const selectedIds = selectedListEventIds.value.map(String);
+    const nextIds = visibleListEventIds.value
+        .filter((id) => !selectedIds.includes(String(id)))
+        .slice(0, listSelectionBatchSize);
+
+    selectedListEventIds.value = Array.from(new Set([...selectedIds, ...nextIds]));
+}
+
+async function deleteSelectedListEvents() {
+    const ids = [...selectedVisibleListEventIds.value];
+    if (ids.length === 0) return;
+
+    const confirmed = await askConfirmation({
+        title: `${ids.length} Termine löschen?`,
+        message: 'Alle ausgewaehlten Termine werden aus dem Kalender entfernt.',
+        confirmText: 'Ausgewählte löschen',
+    });
+
+    if (!confirmed) return;
+
+    savingEvent.value = true;
+
+    try {
+        let deleted = 0;
+
+        for (const id of ids) {
+            const event = calendarItems.value.find((item) => String(eventId(item)) === String(id));
+            if (!event) continue;
+
+            const url = calendarEventRoute('apps.calendar.destroy', event);
+            if (!url) continue;
+
+            const response = await sendCalendar('delete', url);
+            removeCalendarEvent(response.data.id || id);
+            deleted++;
+        }
+
+        showToast(`${deleted} Termine wurden geloescht.`);
+    } catch (error) {
+        handleCalendarError(error);
+    } finally {
+        savingEvent.value = false;
+    }
 }
 
 function canDeleteClickedDay() {
@@ -577,8 +800,18 @@ function removeSingleDay() {
     });
 }
 
-function deleteClickedDay() {
+async function deleteClickedDay() {
     if (!canDeleteClickedDay()) return;
+
+    const confirmed = await askConfirmation({
+        title: 'Diesen Tag löschen?',
+        message: canRemoveSingleDay()
+            ? 'Nur der angeklickte Tag wird aus diesem mehrtaegigen Event entfernt.'
+            : 'Dieser Termin besteht nur aus diesem Tag und wird komplett entfernt.',
+        confirmText: 'Diesen Tag löschen',
+    });
+
+    if (!confirmed) return;
 
     if (canRemoveSingleDay()) {
         removeSingleDay();
@@ -1002,6 +1235,18 @@ function germanHolidays(year) {
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <span>Kalender</span>
                 <div v-if="!fullscreen" class="flex flex-wrap items-center justify-end gap-2">
+                    <div class="inline-flex h-9 overflow-hidden rounded border border-gray-200 bg-white text-sm">
+                        <button
+                            v-for="mode in [{ value: 'year', label: 'Jahr' }, { value: 'month', label: 'Monat' }, { value: 'list', label: 'Liste' }]"
+                            :key="mode.value"
+                            type="button"
+                            class="px-3 font-semibold"
+                            :class="viewMode === mode.value ? 'bg-orange-500 text-white' : 'text-gray-700 hover:bg-gray-50'"
+                            @click="viewMode = mode.value"
+                        >
+                            {{ mode.label }}
+                        </button>
+                    </div>
                     <select v-model="selectedCalendar" class="h-9 rounded border-gray-300 text-sm font-normal">
                         <option value="all">Alle Kalender</option>
                         <option v-for="calendar in calendars" :key="calendar.id" :value="calendar.id">{{ calendar.name }}</option>
@@ -1025,36 +1270,29 @@ function germanHolidays(year) {
             </div>
         </template>
 
-        <div :class="fullscreen ? 'fixed inset-0 z-[60] overflow-hidden bg-white p-2 text-gray-900' : 'min-h-screen bg-gray-50 py-0'">
+        <div :class="fullscreen ? 'fixed inset-0 z-[60] overflow-hidden bg-white p-1 text-gray-900' : 'min-h-screen bg-gray-50 py-0'">
+            <button
+                v-if="fullscreen"
+                type="button"
+                class="fixed right-2 top-2 z-[70] flex h-8 w-8 items-center justify-center rounded-full bg-white text-xl font-semibold text-gray-900 shadow ring-1 ring-gray-200 hover:bg-gray-50"
+                title="Vollbild schliessen"
+                @click="toggleFullscreen"
+            >
+                &times;
+            </button>
             <div id="year-calendar-board" :class="fullscreen ? 'mx-auto flex h-full w-full max-w-none flex-col bg-white text-gray-900' : 'mx-auto w-full max-w-none'">
-                <div v-if="fullscreen" class="mb-2 flex shrink-0 flex-wrap items-center justify-between gap-3 bg-white text-gray-900">
-                    <h1 class="text-xl font-semibold text-gray-900">Kalender</h1>
-                    <div class="flex flex-wrap items-center justify-end gap-2">
-                        <select v-model="selectedCalendar" class="h-9 rounded border-gray-300 text-sm">
-                            <option value="all">Alle Kalender</option>
-                            <option v-for="calendar in calendars" :key="calendar.id" :value="calendar.id">{{ calendar.name }}</option>
-                        </select>
-                        <button class="inline-flex h-9 items-center rounded border bg-white px-3 text-sm disabled:opacity-50" :disabled="loadingYear" @click="loadYear(currentYear - 1)">&lt;&lt;</button>
-                        <span class="px-2 text-2xl font-semibold">{{ currentYear }}</span>
-                        <button class="inline-flex h-9 items-center rounded border bg-white px-3 text-sm disabled:opacity-50" :disabled="loadingYear" @click="loadYear(currentYear + 1)">&gt;&gt;</button>
-                        <a :href="exportCalendarUrl" class="inline-flex h-9 items-center rounded border border-green-200 bg-green-50 px-3 text-sm font-semibold text-green-700">
-                            <i class="la la-file-excel mr-1"></i>
-                            Excel
-                        </a>
-                        <button class="inline-flex h-9 items-center rounded border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-700" @click="openImportModal">
-                            <i class="la la-file-import mr-1"></i>
-                            Import
-                        </button>
-                        <button class="h-9 rounded bg-orange-500 px-4 text-sm font-semibold text-white" @click="openCreate()">+ Event anlegen</button>
-                        <button class="h-9 rounded bg-orange-500 px-3 text-sm font-semibold text-white" @click="toggleFullscreen">
-                            <i class="la la-expand"></i>
-                        </button>
+                <div v-if="!fullscreen && viewMode === 'month'" class="mb-3 flex flex-wrap items-center justify-between gap-2 rounded border border-gray-200 bg-white px-3 py-2">
+                    <div class="flex items-center gap-2">
+                        <button class="h-9 rounded border bg-white px-3 text-sm font-semibold" :disabled="loadingYear" @click="changeMonth(-1)">&lt;&lt;</button>
+                        <div class="min-w-48 text-center text-lg font-semibold text-gray-900">{{ activeMonth.name }} {{ currentYear }}</div>
+                        <button class="h-9 rounded border bg-white px-3 text-sm font-semibold" :disabled="loadingYear" @click="changeMonth(1)">&gt;&gt;</button>
                     </div>
+                    <button class="h-9 rounded bg-orange-500 px-4 text-sm font-semibold text-white" @click="openCreate(activeMonth.days[0])">+ Event anlegen</button>
                 </div>
 
-                <div :class="fullscreen ? 'min-h-0 flex-1 space-y-3' : 'mb-4 space-y-3'">
-                    <div :class="fullscreen ? 'flex h-full flex-col overflow-hidden rounded border border-gray-200 bg-white p-3 text-gray-900 shadow-sm' : 'overflow-hidden rounded border border-gray-200 bg-white p-3 shadow-sm'">
-                        <div class="mb-2 flex flex-wrap gap-2">
+                <div :class="fullscreen ? 'min-h-0 flex-1' : 'mb-4 space-y-3'">
+                    <div v-if="fullscreen || viewMode === 'year'" :class="fullscreen ? 'flex h-full flex-col overflow-hidden border border-gray-200 bg-white p-1 pr-10 text-gray-900 shadow-sm' : 'overflow-hidden rounded border border-gray-200 bg-white p-3 shadow-sm'">
+                        <div :class="fullscreen ? 'mb-1 flex shrink-0 flex-wrap gap-1' : 'mb-2 flex flex-wrap gap-2'">
                             <span v-for="calendar in calendars" :key="calendar.id" class="rounded px-2 py-1 text-xs font-semibold" :style="{ backgroundColor: calendar.background_color, color: calendar.text_color }">
                                 {{ calendar.name }}
                             </span>
@@ -1102,6 +1340,117 @@ function germanHolidays(year) {
                         </div>
                     </div>
 
+                    <div v-else-if="viewMode === 'month'" class="overflow-hidden rounded border border-gray-200 bg-white p-3 shadow-sm">
+                        <div class="grid grid-cols-7 border-l border-t text-xs font-semibold text-gray-600">
+                            <div v-for="weekday in ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']" :key="weekday" class="border-b border-r bg-gray-50 px-2 py-2 text-center">{{ weekday }}</div>
+                            <div
+                                v-for="day in activeMonthGridDays"
+                                :key="day.empty ? day.key : day.iso"
+                                :class="[
+                                    'min-h-[128px] border-b border-r p-2',
+                                    day.empty ? 'bg-gray-50' : day.isWeekend ? 'bg-blue-50/60' : 'bg-white',
+                                    !day.empty && day.holiday ? 'bg-orange-50' : '',
+                                    !day.empty && isSelectedDay(day) ? 'ring-2 ring-inset ring-blue-500' : '',
+                                ]"
+                                @mousedown.prevent="!day.empty && startDaySelection(day, $event)"
+                                @mouseenter="!day.empty && extendDaySelection(day)"
+                                @dblclick="!day.empty && openCreate(day)"
+                                @dragover.prevent
+                                @drop="!day.empty && dropOnDay(day)"
+                            >
+                                <template v-if="!day.empty">
+                                    <div class="mb-2 flex items-center justify-between gap-2 text-xs text-gray-700">
+                                        <span class="font-semibold">{{ day.day }}</span>
+                                        <span v-if="day.holiday" class="truncate rounded bg-orange-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">{{ day.holiday }}</span>
+                                    </div>
+                                    <button
+                                        v-for="event in dayEvents(day)"
+                                        :key="`${day.iso}-${event.id}`"
+                                        draggable="true"
+                                        class="mb-1 block w-full truncate rounded px-2 py-1 text-left text-xs font-semibold shadow-sm"
+                                        :style="eventStyle(event)"
+                                        :title="event.title"
+                                        @mousedown.stop
+                                        @dragstart="startDrag(event, day)"
+                                        @click.stop="openEdit(event, day)"
+                                    >
+                                        {{ event.title }}
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-else class="overflow-hidden rounded border border-gray-200 bg-white shadow-sm">
+                        <div class="flex flex-wrap items-center justify-between gap-3 border-b bg-white px-4 py-3">
+                            <div class="text-sm font-semibold text-gray-900">
+                                {{ selectedVisibleListEventIds.length }} ausgewaehlt
+                                <span v-if="nextListSelectionCount && !allVisibleListEventsSelected" class="ml-2 font-normal text-gray-500">+{{ nextListSelectionCount }} beim naechsten Klick</span>
+                            </div>
+                            <button
+                                type="button"
+                                class="inline-flex h-9 items-center rounded border border-red-200 bg-white px-3 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                                :disabled="savingEvent || selectedVisibleListEventIds.length === 0"
+                                @click="deleteSelectedListEvents"
+                            >
+                                <i class="la la-trash mr-1"></i>
+                                Ausgewählte löschen
+                            </button>
+                        </div>
+                        <div class="grid grid-cols-[36px_120px_120px_1fr_160px_48px] gap-3 border-b bg-gray-50 px-4 py-2 text-xs font-semibold uppercase text-gray-600">
+                            <span>
+                                <input
+                                    type="checkbox"
+                                    class="rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                                    :checked="allVisibleListEventsSelected"
+                                    :title="allVisibleListEventsSelected ? 'Sichtbare Auswahl aufheben' : `Naechste ${nextListSelectionCount || listSelectionBatchSize} Termine markieren`"
+                                    @click.prevent="toggleAllVisibleListEvents"
+                                />
+                            </span>
+                            <span>Datum</span>
+                            <span>Zeit</span>
+                            <span>Termin</span>
+                            <span>Kalender</span>
+                            <span></span>
+                        </div>
+                        <div class="max-h-[70vh] overflow-y-auto">
+                            <div
+                                v-for="item in visibleEventDays"
+                                :key="item.key"
+                                class="grid w-full grid-cols-[36px_120px_120px_1fr_160px_48px] items-center gap-3 border-b px-4 py-2 text-left text-sm hover:bg-orange-50"
+                                @click="openEdit(item.event, item.day)"
+                            >
+                                <span>
+                                    <input
+                                        type="checkbox"
+                                        class="rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                                        :checked="listEventSelected(item.event)"
+                                        @click.stop
+                                        @change="toggleListEvent(item.event)"
+                                    />
+                                </span>
+                                <span class="font-semibold text-gray-900">{{ item.day.weekday }}. {{ item.day.iso }}</span>
+                                <span class="text-gray-600">{{ eventTimeRange(item.event) }}</span>
+                                <span class="flex min-w-0 items-center gap-2">
+                                    <span class="h-3 w-3 shrink-0 rounded-full" :style="{ backgroundColor: item.event.background_color || item.event.calendar?.background_color || '#ff7a00' }"></span>
+                                    <span class="truncate font-semibold text-gray-900">{{ item.event.title }}</span>
+                                </span>
+                                <span class="truncate text-gray-600">{{ eventCalendarName(item.event) }}</span>
+                                <button
+                                    type="button"
+                                    class="flex h-8 w-8 items-center justify-center rounded border border-red-200 bg-white text-red-600 hover:bg-red-50 disabled:opacity-50"
+                                    title="Termin löschen"
+                                    :disabled="savingEvent"
+                                    @click.stop="deleteListEvent(item.event)"
+                                >
+                                    <i class="la la-trash"></i>
+                                </button>
+                            </div>
+                            <div v-if="visibleEventDays.length === 0" class="px-4 py-8 text-center text-sm text-gray-500">
+                                Keine Termine in dieser Sicht.
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1115,7 +1464,6 @@ function germanHolidays(year) {
                 <div class="grid gap-3 md:grid-cols-2">
                     <input v-model="eventForm.title" class="rounded border-gray-300 text-sm md:col-span-2" placeholder="Bezeichnung" />
                     <select v-model="eventForm.calendar_id" class="rounded border-gray-300 text-sm">
-                        <option value="">Mein Kalender</option>
                         <option v-for="calendar in calendars" :key="calendar.id" :value="calendar.id">{{ calendar.name }}</option>
                     </select>
                     <select v-model="eventForm.visibility" class="rounded border-gray-300 text-sm">
@@ -1140,7 +1488,7 @@ function germanHolidays(year) {
                                 <div class="text-xs text-gray-500">{{ editingDay }}</div>
                             </div>
                             <button type="button" class="rounded border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 disabled:opacity-50" :disabled="savingEvent" @click="deleteClickedDay">
-                                Diesen Tag loeschen
+                                Diesen Tag löschen
                             </button>
                         </div>
                         <div class="space-y-2">
@@ -1184,7 +1532,7 @@ function germanHolidays(year) {
                 </div>
                 <div class="mt-5 flex justify-between">
                     <div class="flex flex-wrap gap-2">
-                        <button v-if="editingEvent" type="button" class="rounded border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 disabled:opacity-50" :disabled="savingEvent" @click="deleteEvent">Ganzes Event loeschen</button>
+                        <button v-if="editingEvent" type="button" class="rounded border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 disabled:opacity-50" :disabled="savingEvent" @click="deleteEvent">Ganzes Event löschen</button>
                     </div>
                     <button class="rounded bg-orange-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="savingEvent">{{ savingEvent ? 'Speichert ...' : 'Speichern' }}</button>
                 </div>
@@ -1219,6 +1567,36 @@ function germanHolidays(year) {
             </template>
         </DialogModal>
 
+        <DialogModal :show="confirmModal.show" max-width="md" @close="resolveConfirmation(false)">
+            <template #title>
+                {{ confirmModal.title }}
+            </template>
+            <template #content>
+                {{ confirmModal.message }}
+            </template>
+            <template #footer>
+                <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    <button
+                        type="button"
+                        class="rounded border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50"
+                        :disabled="savingEvent"
+                        @click="resolveConfirmation(false)"
+                    >
+                        {{ confirmModal.cancelText }}
+                    </button>
+                    <button
+                        type="button"
+                        class="rounded px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                        :class="confirmModal.tone === 'danger' ? 'bg-red-600 hover:bg-red-700' : 'bg-orange-500 hover:bg-orange-600'"
+                        :disabled="savingEvent"
+                        @click="resolveConfirmation(true)"
+                    >
+                        {{ confirmModal.confirmText }}
+                    </button>
+                </div>
+            </template>
+        </DialogModal>
+
         <div v-if="showImportModal" class="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4" @click.self="closeImportModal">
             <div class="flex max-h-[90vh] w-full max-w-5xl flex-col rounded bg-white shadow-xl">
                 <div class="flex items-center justify-between border-b px-5 py-4">
@@ -1238,7 +1616,6 @@ function germanHolidays(year) {
                         <label class="text-sm font-semibold text-gray-700">
                             Zielkalender
                             <select v-model="importForm.calendar_id" class="mt-1 w-full rounded border-gray-300 text-sm">
-                                <option value="">Mein Kalender</option>
                                 <option v-for="calendar in calendars" :key="calendar.id" :value="calendar.id">{{ calendar.name }}</option>
                             </select>
                         </label>

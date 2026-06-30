@@ -26,7 +26,6 @@ class Projekt extends Model
         'name',
         'abteilung_id',
         'beschreibung',
-        'kostenstelle',
         'aktiv',
     ];
 
@@ -86,7 +85,8 @@ class Projekt extends Model
 
     public function kostenstellen()
     {
-        return $this->belongsToMany(Kostenstelle::class, 'projekt_has_kostenstelles', 'projekt_id', 'kostenstelle_id');
+        return $this->belongsToMany(Kostenstelle::class, 'projekt_has_kostenstelles', 'projekt_id', 'kostenstelle_id')
+            ->withPivot(['gueltig_von', 'gueltig_bis']);
     }
     public function teilnehmer()
     {

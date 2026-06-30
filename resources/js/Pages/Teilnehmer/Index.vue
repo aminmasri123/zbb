@@ -241,11 +241,11 @@ const deleteSelectedTeilnehmer = async () => {
     }
 
     const result = await Swal.fire({
-        title: 'Markierte Teilnehmer loeschen?',
+        title: 'Markierte Teilnehmer löschen?',
         text: `${selected.value.length} Teilnehmer werden dauerhaft geloescht.`,
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonText: 'Loeschen',
+        confirmButtonText: 'Löschen',
         cancelButtonText: 'Abbrechen',
         confirmButtonColor: '#dc2626',
     });
@@ -377,7 +377,7 @@ const sortByColumn = (column) => {
                         <span class="ml-4 text-xs text-gray-500">{{ selectedCount }}</span>
                     </button>
                     <button type="button" class="flex w-full justify-between cursor-pointer py-2 px-6 items-center hover:bg-red-50 text-left text-red-600" @click="deleteSelectedTeilnehmer">
-                        Markierte loeschen
+                        Markierte löschen
                         <span class="ml-4 text-xs">{{ selectedCount }}</span>
                     </button>
                 </template>

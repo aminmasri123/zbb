@@ -16,7 +16,7 @@ use App\Http\Controllers\DienstwagenfahrtenbuchController;
 use App\Http\Controllers\DienstwagenkostenController;
 use App\Http\Controllers\DienstwagenreportsController;
 use App\Http\Controllers\DienstwagenwartungController;
-use App\Http\Controllers\EinteilungBereicheController;
+use App\Http\Controllers\EinteilungParameterController;
 use App\Http\Controllers\ExportExcelController;
 use App\Http\Controllers\ExportWordController;
 use App\Http\Controllers\FahrtartenController;
@@ -84,6 +84,11 @@ Route::post('/set-locale', function () {
 
 
 // Geschützte Routen
+Route::get('/bereichsauswahl/zugang/{token}', [ProjektBopController::class, 'bereichsauswahlSelfShow'])->name('bereichsauswahl.self.show');
+Route::post('/bereichsauswahl/zugang/{token}/code', [ProjektBopController::class, 'bereichsauswahlSelfVerify'])->name('bereichsauswahl.self.verify');
+Route::post('/bereichsauswahl/zugang/{token}', [ProjektBopController::class, 'bereichsauswahlSelfStore'])->name('bereichsauswahl.self.store');
+Route::get('/bereichsauswahl/zugang/{token}/danke', [ProjektBopController::class, 'bereichsauswahlSelfThanks'])->name('bereichsauswahl.self.thanks');
+
 //Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProjekte'])->group(function() {
 
 Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->group(function() {
@@ -286,6 +291,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
 
     //Kostenstelle
     Route::get('/kostenstelle', [KostenstelleController::class, 'index'])->name('kostenstelle.index');
+    Route::post('/kostenstelle/anlegen', [KostenstelleController::class, 'store'])->name('kostenstelle.store');
 
     Route::get('/design/responsive', function () {
         return Inertia::render('Design/Responsive');
@@ -421,6 +427,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
 
 
     Route::get('/bereichsauswahl/{partnerId}/{schuljahr}/{teil}', [ProjektBopController::class, 'bereichsauswahl'])->name('bereichsauswahl.index');
+    Route::post('/bereichsauswahl/einstellung', [ProjektBopController::class, 'bereichsauswahlSettingUpdate'])->name('bereichsauswahl.setting.update');
     Route::post('/bereichwahl-update', [ProjektBopController::class, 'waehlen'])->name('bereichsauswahl.bop.radio.update');
 
     Route::get('/export/auswertungsbogen/pa/pdf/{partnerId}/{schuljahr}/{teil}', [ProjektBopController::class, 'generatePdfauswertungsbogenPASchule'])->name('export.auswertungsbogenPA.schule.pdf');
@@ -428,8 +435,15 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
 
 
     //Einteilung Berieche
-    Route::get('/einteilung/{partnerId}/{schuljahr}/{teil}', [EinteilungBereicheController::class, 'index'])->name('einteilung.show');
-    Route::post('/einteilung/update', [EinteilungBereicheController::class, 'update'])->name('einteilung.update');
+    Route::get('/einteilung/{partnerId}/{schuljahr}/{teil}', [EinteilungParameterController::class, 'index'])->name('einteilung.show');
+    Route::post('/einteilung/update', [EinteilungParameterController::class, 'update'])->name('einteilung.update');
+    Route::post('/einteilung/create', [EinteilungParameterController::class, 'createManual'])->name('einteilung.create');
+    Route::post('/einteilung/parameter', [EinteilungParameterController::class, 'updateParameter'])->name('einteilung.parameter.update');
+    Route::post('/einteilung/runden-tauschen', [EinteilungParameterController::class, 'switchRunden'])->name('einteilung.runden.switch');
+    Route::post('/einteilung/einteilen', [EinteilungParameterController::class, 'einteilen'])->name('einteilung.store');
+    Route::post('/einteilung/destroy-context', [EinteilungParameterController::class, 'destroyContext'])->name('einteilung.destroy');
+    Route::post('/einteilung/gruppen-generieren', [EinteilungParameterController::class, 'gruppenGenerieren'])->name('gruppen.generieren');
+    Route::post('/einteilung/export-excel', [EinteilungParameterController::class, 'exportExcel'])->name('einteilung.export.excel');
 
 
     //zu bearbeiten

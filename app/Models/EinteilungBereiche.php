@@ -10,8 +10,8 @@ class EinteilungBereiche extends Model
     use HasFactory;
 
     protected $fillable = [
-        'person_id',
-        'person_type',
+        'teilnehmende_id',
+        'teilnehmende_type',
         'bereich_id',
         'runde',
     ];

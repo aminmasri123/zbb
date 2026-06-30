@@ -281,14 +281,16 @@ class AppsController extends Controller
         $year = (int) $request->integer('year', now()->year);
         $calendarId = $request->input('calendar');
         $calendarId = $calendarId && $calendarId !== 'all' ? (int) $calendarId : null;
+        $includePersonalWithoutCalendar = false;
 
         if ($calendarId) {
             $calendar = AppCalendar::findOrFail($calendarId);
             abort_unless($this->canSee($calendar, AppCalendar::class), 403);
+            $includePersonalWithoutCalendar = $calendar->owner_user_id === Auth::id() && $calendar->name === 'Mein Kalender' && ! $calendar->project_id;
         }
 
         $events = $this->calendarEventsForYear($year)
-            ->when($calendarId, fn ($items) => $items->where('calendar_id', $calendarId))
+            ->when($calendarId, fn ($items) => $items->filter(fn ($event) => (int) $event->calendar_id === $calendarId || ($includePersonalWithoutCalendar && ! $event->calendar_id)))
             ->values();
 
         $spreadsheet = $this->calendarSpreadsheet($events, $year);
@@ -311,7 +313,8 @@ class AppsController extends Controller
             'calendar_id' => ['nullable', 'exists:app_calendars,id'],
         ]);
 
-        $calendarId = $data['calendar_id'] ?? null;
+        $this->ensureDefaultCalendars();
+        $calendarId = $data['calendar_id'] ?? $this->personalCalendarId();
         if ($calendarId) {
             $calendar = AppCalendar::findOrFail($calendarId);
             abort_unless($this->canManage($calendar), 403);
@@ -346,7 +349,8 @@ class AppsController extends Controller
             'events.*.text_color' => ['nullable', 'string', 'max:20'],
         ]);
 
-        $calendarId = $data['calendar_id'] ?? null;
+        $this->ensureDefaultCalendars();
+        $calendarId = $data['calendar_id'] ?? $this->personalCalendarId();
         if ($calendarId) {
             $calendar = AppCalendar::findOrFail($calendarId);
             abort_unless($this->canManage($calendar), 403);
@@ -942,6 +946,14 @@ class AppsController extends Controller
             });
     }
 
+    private function personalCalendarId(): ?int
+    {
+        return AppCalendar::where('owner_user_id', Auth::id())
+            ->whereNull('project_id')
+            ->where('name', 'Mein Kalender')
+            ->value('id');
+    }
+
     private function calendarEventsForYear(int $year)
     {
         return $this->visible(AppCalendarEvent::query(), AppCalendarEvent::class)
@@ -1198,7 +1210,7 @@ class AppsController extends Controller
         $sheet->setTitle('Kalender ' . $year);
         $spreadsheet->getDefaultStyle()->getFont()->setName('Arial')->setSize(10);
 
-        $monthNames = ['Januar', 'Februar', 'Maerz', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+        $monthNames = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
         $holidays = $this->germanHolidays($year);
         $title = 'Kalender ' . $year;
 

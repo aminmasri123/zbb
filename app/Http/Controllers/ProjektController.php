@@ -4,11 +4,13 @@ namespace App\Http\Controllers;
 
 use Exception;
 use Inertia\Inertia;
+use App\Models\Bereich;
 use App\Models\Projekt;
 use App\Models\Abteilung;
+use App\Models\Kostenstelle;
 use Illuminate\Http\Request;
-use App\Models\Projektzeitraum;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ProjektController extends Controller
 {
@@ -22,6 +24,13 @@ class ProjektController extends Controller
         $search = $request->input('search'); // Benutze input(), um den Suchparameter abzurufen
 
         $abteilungen = Abteilung::select('id', 'name')->get();
+        $bereiche = Bereich::query()
+            ->orderBy('name')
+            ->get(['id', 'name', 'beschreibung']);
+        $kostenstellen = Kostenstelle::query()
+            ->orderBy('kostenstelle')
+            ->get(['id', 'kostenstelle']);
+
         // Hole die Projekte mit Suchfilter und lade die notwendigen Beziehungen
         $projekte = Projekt::query()
         ->when($search, function ($query) use ($search) {
@@ -40,7 +49,9 @@ class ProjektController extends Controller
 
         return Inertia::render('Projekt/Index', [
             'projekte' => $projekte,
-            'abteilungen' => $abteilungen
+            'abteilungen' => $abteilungen,
+            'bereiche' => $bereiche,
+            'kostenstellen' => $kostenstellen
         ]);
     }
     public function indexAjaxFresh(Request $request)
@@ -53,7 +64,9 @@ class ProjektController extends Controller
             $query->where('projekts.name', 'like', "%{$search}%"); // Beachte: 'projekts.name' ist hier qualifiziert
         })
             ->with('abteilung')
-            ->with('projektzeitraume')
+            ->with('zeitraume')
+            ->with('bereiche')
+            ->with('kostenstellen')
             ->orderBy('projekts.id', 'desc') // Sortiere nach Projektname
             ->paginate(100) // Paginierung
             ->withQueryString();
@@ -83,20 +96,36 @@ class ProjektController extends Controller
         // Validierung
         $validatedData = $request->validate([
             'name'         => 'required|max:50',
-            'kostenstelle' => 'required|max:50',
+            'kostenstelle' => 'nullable|max:50',
             'abteilung'    => 'required|exists:abteilungs,id',
             'antragsdatum' => 'required|date',
             'starttermin'  => 'required|date',
             'anfangsdatum' => 'required|date',
             'endtermin'    => 'required|date',
             'enddatum'     => 'required|date',
+            'kostenstellen' => 'nullable|array',
+            'kostenstellen.*.kostenstelle_id' => 'required_with:kostenstellen|integer|exists:kostenstelles,id',
+            'kostenstellen.*.gueltig_von' => 'required_with:kostenstellen|date',
+            'kostenstellen.*.gueltig_bis' => 'required_with:kostenstellen|date',
+            'bereiche'      => 'nullable|array',
+            'bereiche.*'    => 'integer|exists:bereiches,id',
         ]);
 
         try {
+            $bereichIds = collect($validatedData['bereiche'] ?? [])
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+            $bereichSyncData = collect($bereichIds)
+                ->mapWithKeys(fn ($id) => [$id => ['aktiv' => 1]])
+                ->all();
+            $kostenstelleSyncData = $this->resolveKostenstelleSyncData($validatedData);
+
+            $projekt = DB::transaction(function () use ($validatedData, $bereichSyncData, $kostenstelleSyncData) {
             // 1️⃣ Projekt erstellen
             $projekt = Projekt::create([
                 'name'         => $validatedData['name'],
-                'kostenstelle' => $validatedData['kostenstelle'],
                 'abteilung_id' => $validatedData['abteilung'],
             ]);
 
@@ -111,12 +140,20 @@ class ProjektController extends Controller
                 'model_id'     => $projekt->id,
             ]);
 
+                $projekt->bereiche()->sync($bereichSyncData);
+                $projekt->kostenstellen()->sync($kostenstelleSyncData);
+
+                return $projekt;
+            });
+
             // 3️⃣ Projekt mit Relationen zurückgeben
             return response()->json([
                 'message' => 'Projekt erfolgreich erstellt.',
-                'projekt' => $projekt->load(['abteilung', 'zeitraume'])
+                'projekt' => $projekt->load(['abteilung', 'zeitraume', 'bereiche', 'kostenstellen'])
             ], 201);
 
+        } catch (ValidationException $e) {
+            throw $e;
         } catch (Exception $e) {
 
             return response()->json([
@@ -161,55 +198,178 @@ class ProjektController extends Controller
         // Validierung
         $validatedData = $request->validate([
             'name' => 'required|max:50',
-            'kostenstelle' => 'required|max:50',
+            'kostenstelle' => 'nullable|max:50',
             'abteilung' => 'required|exists:abteilungs,id',
-            'antragsdatum'  =>  'required|date',
-            'starttermin'  =>  'required|date',
-            'anfangsdatum'  =>  'required|date',
-            'endtermin'  =>  'required|date',
-            'enddatum'  =>  'required|date',
+            'antragsdatum' => 'required_without:zeitraume|date',
+            'starttermin' => 'required_without:zeitraume|date',
+            'anfangsdatum' => 'required_without:zeitraume|date',
+            'endtermin' => 'required_without:zeitraume|date',
+            'enddatum' => 'required_without:zeitraume|date',
+            'zeitraume' => 'sometimes|array|min:1',
+            'zeitraume.*.id' => 'nullable|integer|exists:zeitraums,id',
+            'zeitraume.*.antragsdatum' => 'required_with:zeitraume|date',
+            'zeitraume.*.starttermin' => 'required_with:zeitraume|date',
+            'zeitraume.*.anfangsdatum' => 'required_with:zeitraume|date',
+            'zeitraume.*.endtermin' => 'required_with:zeitraume|date',
+            'zeitraume.*.enddatum' => 'required_with:zeitraume|date',
+            'kostenstellen' => 'sometimes|array',
+            'kostenstellen.*.kostenstelle_id' => 'required_with:kostenstellen|integer|exists:kostenstelles,id',
+            'kostenstellen.*.gueltig_von' => 'required_with:kostenstellen|date',
+            'kostenstellen.*.gueltig_bis' => 'required_with:kostenstellen|date',
+            'bereiche' => 'sometimes|array',
+            'bereiche.*' => 'integer|exists:bereiches,id',
         ]);
 
         try {
+            $bereichIds = collect($validatedData['bereiche'] ?? [])
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+            $bereichSyncData = collect($bereichIds)
+                ->mapWithKeys(fn ($id) => [$id => ['aktiv' => 1]])
+                ->all();
+            $kostenstelleSyncData = $this->resolveKostenstelleSyncData($validatedData);
+
+            $projekt = DB::transaction(function () use ($id, $request, $validatedData, $bereichSyncData, $kostenstelleSyncData) {
             // Projekt finden
             $projekt = Projekt::findOrFail($id);
 
             // Basisdaten updaten
             $projekt->update([
                 'name' => $validatedData['name'],
-                'kostenstelle' => $validatedData['kostenstelle'],
                 'abteilung_id' => $validatedData['abteilung'],
             ]);
 
-            // Projektzeitraum updaten oder neu anlegen
-            $zeitraum = $projekt->projektzeitraume()->first();
-            if ($zeitraum) {
-                $zeitraum->update([
-                    'antragsdatum' => $validatedData['antragsdatum'],
-                    'starttermin' => $validatedData['starttermin'],
-                    'anfangsdatum' => $validatedData['anfangsdatum'],
-                    'endtermin' => $validatedData['endtermin'],
-                    'enddatum' => $validatedData['enddatum'],
-                ]);
+            if ($request->has('zeitraume')) {
+                $this->syncProjektZeitraume($projekt, $validatedData['zeitraume']);
             } else {
-                $projekt->projektzeitraume()->create([
-                    'antragsdatum' => $validatedData['antragsdatum'],
-                    'starttermin' => $validatedData['starttermin'],
-                    'anfangsdatum' => $validatedData['anfangsdatum'],
-                    'endtermin' => $validatedData['endtermin'],
-                    'enddatum' => $validatedData['enddatum'],
-                ]);
+                // Rueckwaertskompatibel fuer alte Formulare: nur den ersten Zeitraum aktualisieren.
+                $zeitraum = $projekt->zeitraume()->first();
+                if ($zeitraum) {
+                    $zeitraum->update([
+                        'antragsdatum' => $validatedData['antragsdatum'],
+                        'starttermin' => $validatedData['starttermin'],
+                        'anfangsdatum' => $validatedData['anfangsdatum'],
+                        'endtermin' => $validatedData['endtermin'],
+                        'enddatum' => $validatedData['enddatum'],
+                    ]);
+                } else {
+                    $projekt->zeitraume()->create([
+                        'antragsdatum' => $validatedData['antragsdatum'],
+                        'starttermin' => $validatedData['starttermin'],
+                        'anfangsdatum' => $validatedData['anfangsdatum'],
+                        'endtermin' => $validatedData['endtermin'],
+                        'enddatum' => $validatedData['enddatum'],
+                        'model_type' => Projekt::class,
+                        'model_id' => $projekt->id,
+                    ]);
+                }
             }
+
+                if ($request->has('bereiche')) {
+                    $projekt->bereiche()->sync($bereichSyncData);
+                }
+
+                if ($request->has('kostenstellen')) {
+                    $projekt->kostenstellen()->sync($kostenstelleSyncData);
+                }
+
+                return $projekt;
+            });
 
             return response()->json([
                 'message' => 'Projekt erfolgreich aktualisiert.',
-                'projekt' => $projekt->load('projektzeitraume', 'abteilung') // Relationen nachladen
+                'projekt' => $projekt->load(['zeitraume', 'abteilung', 'bereiche', 'kostenstellen']) // Relationen nachladen
             ], 200);
 
+        } catch (ValidationException $e) {
+            throw $e;
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Update fehlgeschlagen: ' . $e->getMessage()
             ], 500);
+        }
+    }
+
+    private function resolveKostenstelleSyncData(array $validatedData): array
+    {
+        $kostenstellen = collect($validatedData['kostenstellen'] ?? [])
+            ->filter(fn ($entry) => is_array($entry) && !empty($entry['kostenstelle_id']))
+            ->values();
+
+        if ($kostenstellen->isNotEmpty()) {
+            return $kostenstellen
+                ->mapWithKeys(function ($entry) {
+                    if (($entry['gueltig_bis'] ?? '') < ($entry['gueltig_von'] ?? '')) {
+                        throw ValidationException::withMessages([
+                            'kostenstellen' => 'Das Ende der Kostenstelle darf nicht vor dem Anfang liegen.',
+                        ]);
+                    }
+
+                    return [
+                        (int) $entry['kostenstelle_id'] => [
+                            'gueltig_von' => $entry['gueltig_von'],
+                            'gueltig_bis' => $entry['gueltig_bis'],
+                        ],
+                    ];
+                })
+                ->all();
+        }
+
+        $kostenstelle = trim($validatedData['kostenstelle'] ?? '');
+
+        if ($kostenstelle === '') {
+            return [];
+        }
+
+        return [
+            Kostenstelle::firstOrCreate([
+                'kostenstelle' => $kostenstelle,
+            ])->id => [
+                'gueltig_von' => null,
+                'gueltig_bis' => null,
+            ],
+        ];
+    }
+
+    private function syncProjektZeitraume(Projekt $projekt, array $zeitraume): void
+    {
+        $existingIds = $projekt->zeitraume()->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+        foreach ($zeitraume as $zeitraumData) {
+            if (($zeitraumData['enddatum'] ?? '') < ($zeitraumData['anfangsdatum'] ?? '')) {
+                throw ValidationException::withMessages([
+                    'zeitraume' => 'Das Enddatum darf nicht vor dem Anfangsdatum liegen.',
+                ]);
+            }
+
+            $payload = [
+                'antragsdatum' => $zeitraumData['antragsdatum'],
+                'starttermin' => $zeitraumData['starttermin'],
+                'anfangsdatum' => $zeitraumData['anfangsdatum'],
+                'endtermin' => $zeitraumData['endtermin'],
+                'enddatum' => $zeitraumData['enddatum'],
+            ];
+
+            $zeitraumId = isset($zeitraumData['id']) ? (int) $zeitraumData['id'] : null;
+
+            if ($zeitraumId && !in_array($zeitraumId, $existingIds, true)) {
+                throw ValidationException::withMessages([
+                    'zeitraume' => 'Ein Zeitraum gehoert nicht zu diesem Projekt.',
+                ]);
+            }
+
+            if ($zeitraumId && in_array($zeitraumId, $existingIds, true)) {
+                $projekt->zeitraume()->whereKey($zeitraumId)->update($payload);
+                continue;
+            }
+
+            $projekt->zeitraume()->create([
+                ...$payload,
+                'model_type' => Projekt::class,
+                'model_id' => $projekt->id,
+            ]);
         }
     }
 

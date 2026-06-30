@@ -4,18 +4,25 @@ namespace App\Http\Controllers;
 
 use App\Models\Bereich;
 use App\Models\Bereichsauswahl;
+use App\Models\BereichsauswahlSetting;
 use App\Models\EinteilungBereiche;
 use App\Models\Partner;
 use App\Models\Personen;
 use App\Models\PersonenIstSchueler;
 use App\Models\Projekt;
 use App\Services\MyDatum;
+use BaconQrCode\Renderer\Image\SvgImageBackEnd;
+use BaconQrCode\Renderer\ImageRenderer;
+use BaconQrCode\Renderer\RendererStyle\RendererStyle;
+use BaconQrCode\Writer;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use DateTime;
+use Illuminate\Support\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -25,6 +32,204 @@ use ZipArchive;
 
 class ProjektBopController extends Controller
 {
+    private const ACCESS_CODE_PARTS = [
+        'BA', 'BE', 'BI', 'BO',
+        'DA', 'DE', 'DI', 'DO',
+        'FA', 'FE', 'FI', 'FO',
+        'KA', 'KE', 'KI', 'KO',
+        'LA', 'LE', 'LI', 'LO',
+        'MA', 'ME', 'MI', 'MO',
+        'NA', 'NE', 'NI', 'NO',
+        'PA', 'PE', 'PI', 'PO',
+        'RA', 'RE', 'RI', 'RO',
+        'SA', 'SE', 'SI', 'SO',
+        'TA', 'TE', 'TI', 'TO',
+    ];
+
+    private function normalizeAuswahlAnzahl(int $value): int
+    {
+        return min(4, max(2, $value));
+    }
+
+    private function defaultAuswahlAnzahl(?Projekt $projekt): int
+    {
+        $bereicheCount = $projekt?->bereiche?->count() ?? 4;
+
+        return $this->normalizeAuswahlAnzahl($bereicheCount > 0 ? $bereicheCount : 4);
+    }
+
+    private function publicToken(): string
+    {
+        do {
+            $token = Str::random(40);
+        } while (BereichsauswahlSetting::where('public_token', $token)->exists());
+
+        return $token;
+    }
+
+    private function settingFor(int $projektId, int $partnerId, string $schuljahr, string $teil, ?Projekt $projekt = null): BereichsauswahlSetting
+    {
+        $setting = BereichsauswahlSetting::firstOrCreate(
+            [
+                'projekt_id' => $projektId,
+                'partner_id' => $partnerId,
+                'schuljahr' => $schuljahr,
+                'teil' => $teil,
+            ],
+            [
+                'auswahl_anzahl' => $this->defaultAuswahlAnzahl($projekt),
+                'public_token' => $this->publicToken(),
+                'zugang_aktiv' => true,
+                'user_create' => auth()->id(),
+            ]
+        );
+
+        if (!$setting->public_token) {
+            $setting->update(['public_token' => $this->publicToken()]);
+        }
+
+        return $setting;
+    }
+
+    private function accessCode(): string
+    {
+        do {
+            $parts = self::ACCESS_CODE_PARTS;
+            $code = $parts[random_int(0, count($parts) - 1)]
+                . '-' . $parts[random_int(0, count($parts) - 1)]
+                . '-' . random_int(20, 98)
+                . '-' . $parts[random_int(0, count($parts) - 1)];
+        } while (Bereichsauswahl::where('access_code', $code)->exists());
+
+        return $code;
+    }
+
+    private function normalizeAccessCodeInput(string $value): string
+    {
+        $normalized = Str::upper(preg_replace('/\s+/', '', trim($value)));
+        $plain = str_replace('-', '', $normalized);
+
+        if (preg_match('/^[A-Z]{4}[0-9]{2}[A-Z]{2}$/', $plain)) {
+            return substr($plain, 0, 2)
+                . '-' . substr($plain, 2, 2)
+                . '-' . substr($plain, 4, 2)
+                . '-' . substr($plain, 6, 2);
+        }
+
+        return $normalized;
+    }
+
+    private function ensureAccessCodes(Collection $teilnehmer, ?int $userId): void
+    {
+        foreach ($teilnehmer as $schueler) {
+            $wahl = $schueler->bereichsauswahl;
+
+            if (!$wahl) {
+                $wahl = Bereichsauswahl::create([
+                    'teilnehmer_id' => $schueler->id,
+                    'access_code' => $this->accessCode(),
+                    'user_create' => $userId,
+                ]);
+
+                $schueler->setRelation('bereichsauswahl', $wahl);
+                continue;
+            }
+
+            if (!$wahl->access_code) {
+                $wahl->update(['access_code' => $this->accessCode()]);
+            }
+        }
+    }
+
+    private function qrSvg(string $url): string
+    {
+        $renderer = new ImageRenderer(
+            new RendererStyle(128),
+            new SvgImageBackEnd()
+        );
+
+        return (new Writer($renderer))->writeString($url);
+    }
+
+    private function allowedBereichIds(Projekt $projekt): Collection
+    {
+        return $projekt->bereiche->pluck('id')->map(fn ($id) => (int) $id)->values();
+    }
+
+    private function validatedChoices(Request $request, BereichsauswahlSetting $setting, Collection $allowedBereichIds): array
+    {
+        $data = $request->validate([
+            'choices' => ['required', 'array', 'size:' . $setting->auswahl_anzahl],
+            'choices.*' => ['required', 'integer'],
+        ]);
+
+        $choices = collect($data['choices'])->map(fn ($id) => (int) $id)->values();
+
+        if ($choices->unique()->count() !== $choices->count()) {
+            throw ValidationException::withMessages([
+                'choices' => 'Jeder Bereich darf nur einmal gewaehlt werden.',
+            ]);
+        }
+
+        if ($choices->diff($allowedBereichIds)->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'choices' => 'Mindestens ein Bereich ist fuer dieses Projekt nicht erlaubt.',
+            ]);
+        }
+
+        return $choices->all();
+    }
+
+    private function persistChoices(Bereichsauswahl $wahl, array $choices, ?int $userId = null, bool $submitted = false): void
+    {
+        $payload = [
+            'bereich_id1' => $choices[0] ?? null,
+            'bereich_id2' => $choices[1] ?? null,
+            'bereich_id3' => $choices[2] ?? null,
+            'bereich_id4' => $choices[3] ?? null,
+        ];
+
+        if ($userId) {
+            $payload['user_update'] = $userId;
+        }
+
+        if ($submitted) {
+            $payload['submitted_at'] = now();
+        }
+
+        $wahl->update($payload);
+    }
+
+    private function teilnehmerForCode(BereichsauswahlSetting $setting, string $code): ?PersonenIstSchueler
+    {
+        return PersonenIstSchueler::with(['person', 'bereichsauswahl'])
+            ->where('schule_id', $setting->partner_id)
+            ->where('schuljahr', $setting->schuljahr)
+            ->where('teil', $setting->teil)
+            ->whereHas('bereichsauswahl', fn ($query) => $query->where('access_code', $code))
+            ->first();
+    }
+
+    private function formatSelfTeilnehmer(PersonenIstSchueler $teilnehmer, BereichsauswahlSetting $setting): array
+    {
+        $wahl = $teilnehmer->bereichsauswahl;
+
+        return [
+            'id' => $teilnehmer->id,
+            'vorname' => $teilnehmer->person?->vorname,
+            'nachname' => $teilnehmer->person?->nachname,
+            'klasse' => $teilnehmer->klasse,
+            'auswahl_anzahl' => $setting->auswahl_anzahl,
+            'choices' => array_slice([
+                $wahl?->bereich_id1,
+                $wahl?->bereich_id2,
+                $wahl?->bereich_id3,
+                $wahl?->bereich_id4,
+            ], 0, $setting->auswahl_anzahl),
+            'submitted_at' => $wahl?->submitted_at?->toIso8601String(),
+        ];
+    }
+
     public function anwesenheitslistePOBOExportWordBIBB(Request $request)
     {
             if(!$request->exportFormat OR !$request->termin1 OR !$request->termin2 OR !$request->termin3 OR !$request->termin4 OR !$request->termin5 OR !$request->termin6 OR !$request->termin7 OR !$request->termin8 OR !$request->termin9 OR !$request->termin10 OR !$request->schuljahrInputBibb OR !$request->schuleIdInputBibb OR !$request->teilInputBibb)
@@ -599,9 +804,11 @@ class ProjektBopController extends Controller
 
     public function bereichsauswahl($partnerId, $schuljahr, $teil)
     {
-        $projekt = Projekt::with('bereiche', 'partners')->where('id', Auth()->user()->current_team_id)->first();
+        $projekt = Projekt::with('bereiche', 'partners')->where('id', Auth()->user()->current_team_id)->firstOrFail();
+        $partner = Partner::findOrFail($partnerId);
+        $setting = $this->settingFor($projekt->id, (int) $partnerId, $schuljahr, $teil, $projekt);
 
-        $alle_teilnehmer = PersonenIstSchueler::with('bereichsauswahl')
+        $alle_teilnehmer = PersonenIstSchueler::with(['bereichsauswahl', 'person'])
             ->filterSchueler($partnerId, $schuljahr, $teil)
             ->get()
             ->sort(function($a, $b) {
@@ -611,64 +818,217 @@ class ProjektBopController extends Controller
                 return strnatcasecmp($a->person->nachname ?? '', $b->person->nachname ?? '');
             })
             ->values();
+
+        $this->ensureAccessCodes($alle_teilnehmer, auth()->id());
+        $alle_teilnehmer->load('bereichsauswahl');
+
+        $publicUrl = route('bereichsauswahl.self.show', $setting->public_token);
+
         return Inertia::render('Bereichsauswahl/Index', [
-            'projekt'        => $projekt,
+            'projekt' => $projekt,
             'alle_teilnehmer' => $alle_teilnehmer,
+            'partner' => [
+                'id' => $partner->id,
+                'name' => $partner->name,
+            ],
+            'schuljahr' => $schuljahr,
+            'teil' => $teil,
+            'setting' => [
+                'id' => $setting->id,
+                'auswahl_anzahl' => $setting->auswahl_anzahl,
+                'zugang_aktiv' => $setting->zugang_aktiv,
+                'public_url' => $publicUrl,
+                'qr_svg' => $this->qrSvg($publicUrl),
+            ],
+        ]);
+    }
+
+    public function bereichsauswahlSettingUpdate(Request $request)
+    {
+        $validated = $request->validate([
+            'partner_id' => ['required', 'integer', 'exists:partners,id'],
+            'schuljahr' => ['required', 'string'],
+            'teil' => ['required', 'string'],
+            'auswahl_anzahl' => ['required', 'integer', 'min:2', 'max:4'],
+            'zugang_aktiv' => ['nullable', 'boolean'],
+        ]);
+
+        $projekt = Projekt::with('bereiche')->findOrFail(auth()->user()->current_team_id);
+        $setting = $this->settingFor(
+            $projekt->id,
+            (int) $validated['partner_id'],
+            $validated['schuljahr'],
+            $validated['teil'],
+            $projekt
+        );
+
+        $selectionCount = $this->normalizeAuswahlAnzahl((int) $validated['auswahl_anzahl']);
+
+        $setting->update([
+            'auswahl_anzahl' => $selectionCount,
+            'zugang_aktiv' => $request->boolean('zugang_aktiv', true),
+            'user_update' => auth()->id(),
+        ]);
+
+        $teilnehmerIds = PersonenIstSchueler::query()
+            ->where('schule_id', $validated['partner_id'])
+            ->where('schuljahr', $validated['schuljahr'])
+            ->where('teil', $validated['teil'])
+            ->pluck('id');
+
+        $clearFields = collect([3, 4])
+            ->filter(fn ($field) => $field > $selectionCount)
+            ->mapWithKeys(fn ($field) => ['bereich_id' . $field => null])
+            ->all();
+
+        if ($clearFields) {
+            Bereichsauswahl::whereIn('teilnehmer_id', $teilnehmerIds)->update($clearFields);
+        }
+
+        return response()->json([
+            'success' => true,
+            'setting' => [
+                'id' => $setting->id,
+                'auswahl_anzahl' => $setting->auswahl_anzahl,
+                'zugang_aktiv' => $setting->zugang_aktiv,
+            ],
         ]);
     }
 
     public function waehlen(Request $request)
     {
-        $teilnehmer = PersonenIstSchueler::where('id', $request->teilnehmer_id)->with('bereichsauswahl')->first();
-                    Log::info($request);
+        $request->validate([
+            'teilnehmer_id' => ['required', 'integer', 'exists:personen_ist_schuelers,id'],
+        ]);
 
-        if (!$teilnehmer)
-        {
-            return response()->json(['error' => false, 'message' => 'Teilnehmer nicht gefunden.' . $request->teilnehmer_id]);
-        }
+        $teilnehmer = PersonenIstSchueler::where('id', $request->teilnehmer_id)
+            ->with(['bereichsauswahl', 'person'])
+            ->firstOrFail();
 
-        if (!$teilnehmer->bereichsauswahl)
-        {
+        $projekt = Projekt::with('bereiche')->findOrFail(auth()->user()->current_team_id);
+        $setting = $this->settingFor(
+            $projekt->id,
+            (int) $teilnehmer->schule_id,
+            $teilnehmer->schuljahr,
+            $teilnehmer->teil,
+            $projekt
+        );
+        $choices = $this->validatedChoices($request, $setting, $this->allowedBereichIds($projekt));
+
+        $wahl = $teilnehmer->bereichsauswahl;
+
+        if (!$wahl) {
             $wahl = Bereichsauswahl::create([
-
                 'teilnehmer_id' => $request->teilnehmer_id,
-                $request->wahl => $request->orientierung,
+                'access_code' => $this->accessCode(),
                 'user_create' => auth()->user()->id,
             ]);
-
-            if ($wahl->save())
-            {
-                return response()->json(['success' => true, 'message' => 'neu erstellt']);
-            }
         }
-        else
-        {
-            $bereiche = $teilnehmer->bereichsauswahl;
 
-            foreach (['bereich_id1', 'bereich_id2', 'bereich_id3', 'bereich_id4'] as $feld) {
+        $this->persistChoices($wahl, $choices, auth()->id());
 
-                // aktuelles Feld überspringen
-                if ($feld === $request->wahl) continue;
+        return response()->json([
+            'success' => true,
+            'message' => 'Bereichsauswahl aktualisiert.',
+            'choices' => $choices,
+            'access_code' => $wahl->access_code,
+        ]);
+    }
 
-                if ($bereiche->$feld == $request->orientierung) {
-                    return response()->json([
-                        'error' => 'Bereich bereits in einer anderen Auswahl gesetzt!'
-                    ], 400);
-                }
-            }
+    public function bereichsauswahlSelfShow(string $token)
+    {
+        $setting = BereichsauswahlSetting::with(['partner', 'projekt.bereiche'])
+            ->where('public_token', $token)
+            ->where('zugang_aktiv', true)
+            ->firstOrFail();
 
-            $upd = $teilnehmer->bereichsauswahl->update([
-                $request->wahl => $request->orientierung,
-                'user_update' => auth()->user()->id,
+        return Inertia::render('Bereichsauswahl/Selbstwahl', [
+            'context' => [
+                'schule' => $setting->partner?->name,
+                'schuljahr' => $setting->schuljahr,
+                'teil' => $setting->teil,
+                'auswahl_anzahl' => $setting->auswahl_anzahl,
+            ],
+            'bereiche' => $setting->projekt?->bereiche?->values() ?? [],
+            'token' => $token,
+        ]);
+    }
+
+    public function bereichsauswahlSelfThanks(string $token)
+    {
+        $setting = BereichsauswahlSetting::with('partner')
+            ->where('public_token', $token)
+            ->firstOrFail();
+
+        return Inertia::render('Bereichsauswahl/Danke', [
+            'context' => [
+                'schule' => $setting->partner?->name,
+                'schuljahr' => $setting->schuljahr,
+                'teil' => $setting->teil,
+            ],
+        ]);
+    }
+
+    public function bereichsauswahlSelfVerify(Request $request, string $token)
+    {
+        $request->validate([
+            'access_code' => ['required', 'string', 'max:20'],
+        ]);
+
+        $setting = BereichsauswahlSetting::where('public_token', $token)
+            ->where('zugang_aktiv', true)
+            ->firstOrFail();
+
+        $code = $this->normalizeAccessCodeInput($request->input('access_code'));
+        $teilnehmer = $this->teilnehmerForCode($setting, $code);
+
+        if (!$teilnehmer) {
+            throw ValidationException::withMessages([
+                'access_code' => 'Der Code wurde nicht gefunden.',
             ]);
-
-            if($upd)
-            {
-                return response()->json(['success' => true, 'message' => 'aktualisiert']);
-            }
-
         }
 
+        return response()->json([
+            'success' => true,
+            'teilnehmer' => $this->formatSelfTeilnehmer($teilnehmer, $setting),
+        ]);
+    }
+
+    public function bereichsauswahlSelfStore(Request $request, string $token)
+    {
+        $request->validate([
+            'access_code' => ['required', 'string', 'max:20'],
+        ]);
+
+        $setting = BereichsauswahlSetting::with('projekt.bereiche')
+            ->where('public_token', $token)
+            ->where('zugang_aktiv', true)
+            ->firstOrFail();
+
+        $code = $this->normalizeAccessCodeInput($request->input('access_code'));
+        $teilnehmer = $this->teilnehmerForCode($setting, $code);
+
+        if (!$teilnehmer || !$teilnehmer->bereichsauswahl) {
+            throw ValidationException::withMessages([
+                'access_code' => 'Der Code wurde nicht gefunden.',
+            ]);
+        }
+
+        $choices = $this->validatedChoices(
+            $request,
+            $setting,
+            $this->allowedBereichIds($setting->projekt)
+        );
+
+        $this->persistChoices($teilnehmer->bereichsauswahl, $choices, null, true);
+        $teilnehmer->load('bereichsauswahl');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Deine Bereichsauswahl wurde gespeichert.',
+            'teilnehmer' => $this->formatSelfTeilnehmer($teilnehmer, $setting),
+            'redirect_url' => route('bereichsauswahl.self.thanks', $token),
+        ]);
     }
 
 

@@ -1,6 +1,6 @@
 <script setup>
     import AppLayout from '@/Layouts/AppLayout.vue';
-    import { ref, defineProps, watch } from 'vue';
+    import { ref, watch } from 'vue';
     import Swal from 'sweetalert2';
     import { router, Link, Head } from '@inertiajs/vue3';
 
@@ -21,13 +21,17 @@
     // Props
     const props = defineProps({
     projekte: Object,
-    abteilungen: Object
+    abteilungen: Object,
+    bereiche: Array,
+    kostenstellen: Array
     });
 
     console.log(props.abteilungen)
     // Lokale Liste
     let localProjekte = ref([...props.projekte.data]);
     let filteredProjekte = ref([...localProjekte.value]);
+    let localBereiche = ref([...(props.bereiche || [])]);
+    let localKostenstellen = ref([...(props.kostenstellen || [])]);
 
     // Formatierung für Datum
     const formatDate = (date) => {
@@ -69,6 +73,24 @@
         localProjekte.value[index] = updatedProjekt;
     }
     applySearchFilter();
+    };
+
+    const addBereichOption = (bereich) => {
+    if (!bereich || localBereiche.value.some(b => b.id === bereich.id)) {
+        return;
+    }
+
+    localBereiche.value.push(bereich);
+    localBereiche.value.sort((a, b) => a.name.localeCompare(b.name));
+    };
+
+    const addKostenstelleOption = (kostenstelle) => {
+    if (!kostenstelle || localKostenstellen.value.some(k => k.id === kostenstelle.id)) {
+        return;
+    }
+
+    localKostenstellen.value.push(kostenstelle);
+    localKostenstellen.value.sort((a, b) => a.kostenstelle.localeCompare(b.kostenstelle));
     };
 
 
@@ -120,13 +142,14 @@
 
     <!-- Tabelle -->
     <div class="w-full overflow-x-auto">
-        <table class="min-w-[1200px] w-full text-sm shadow-sm border-collapse">
+        <table class="min-w-[1350px] w-full text-sm shadow-sm border-collapse">
         <thead class="text-md text-gray-600 uppercase bg-gray-200 sticky top-0">
             <tr>
             <th class="border px-3 py-3 text-left">ID</th>
             <th class="border px-3 py-3 text-left">Projekt</th>
-            <th class="border px-3 py-3 text-left">Kostenstelle</th>
+            <th class="border px-3 py-3 text-left">Kostenstellen</th>
             <th class="border px-3 py-3 text-left">Abteilung</th>
+            <th class="border px-3 py-3 text-left">Bereiche</th>
             <th class="border px-3 py-3 text-left">Antragsdatum</th>
             <th class="border px-3 py-3 text-left">Starttermin</th>
             <th class="border px-3 py-3 text-left">Anfangsdatum</th>
@@ -151,16 +174,34 @@
                 {{ projekt.name }}
                 </td>
                 <td class="border px-6 py-4" v-if="index === 0" :rowspan="projekt.zeitraume?.length || 1">
-                <span
-                    v-for="kostenstelle in projekt.kostenstellen"
-                    :key="kostenstelle.id"
-                    class="bg-zbb mx-1 p-1 rounded text-white"
-                >
-                    {{ kostenstelle.kostenstelle }}
-                </span>
+                <template v-if="projekt.kostenstellen?.length">
+                    <span
+                        v-for="kostenstelle in projekt.kostenstellen"
+                        :key="kostenstelle.id"
+                        class="bg-zbb mx-1 p-1 rounded text-white"
+                    >
+                        {{ kostenstelle.kostenstelle }}
+                        <span v-if="kostenstelle.pivot?.gueltig_von || kostenstelle.pivot?.gueltig_bis">
+                            ({{ formatDate(kostenstelle.pivot?.gueltig_von) || '?' }} - {{ formatDate(kostenstelle.pivot?.gueltig_bis) || '?' }})
+                        </span>
+                    </span>
+                </template>
+                <span v-else>{{ projekt.kostenstelle || '-' }}</span>
                 </td>
                 <td class="border px-6 py-4" v-if="index === 0" :rowspan="projekt.zeitraume?.length || 1">
                 {{ projekt.abteilung?.name }}
+                </td>
+                <td class="border px-6 py-4" v-if="index === 0" :rowspan="projekt.zeitraume?.length || 1">
+                <div v-if="projekt.bereiche?.length" class="flex flex-wrap gap-1">
+                    <span
+                        v-for="bereich in projekt.bereiche"
+                        :key="bereich.id"
+                        class="rounded bg-gray-100 px-2 py-1 text-xs text-gray-700"
+                    >
+                        {{ bereich.name }}
+                    </span>
+                </div>
+                <span v-else>-</span>
                 </td>
 
                 <!-- Zeitraum-Daten -->
@@ -218,12 +259,20 @@
     <!-- Modals -->
     <ModalCreate :visible="isModalCreateOpen"
                  :abteilungen="props.abteilungen"
+                 :bereiche="localBereiche"
+                 :kostenstellen="localKostenstellen"
                  @close="isModalCreateOpen = false"
-                 @added="(projekt) => { localProjekte.unshift(projekt); applySearchFilter(); }"
+                 @bereich-created="addBereichOption"
+                 @kostenstelle-created="addKostenstelleOption"
+                 @added="addProjekt"
                  />
     <ModalEdit :visible="isModalEditOpen"
                :toEdit="projektToEdit"
                :abteilungen="props.abteilungen"
+               :bereiche="localBereiche"
+               :kostenstellen="localKostenstellen"
+               @bereich-created="addBereichOption"
+               @kostenstelle-created="addKostenstelleOption"
                @close="closeModalEdit"
                @updated="updateProjekt"/>
 

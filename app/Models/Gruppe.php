@@ -26,6 +26,7 @@ class Gruppe extends Model
         'enddatum',
         'startzeit',
         'endzeit',
+        'bemerkung',
     ];
 
     public function teilnehmer()

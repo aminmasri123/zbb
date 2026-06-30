@@ -128,7 +128,7 @@ function applyWorkflowTemplate() {
 }
 
 function destroyItem(routeName, id) {
-    if (!confirm('Diesen Eintrag wirklich loeschen?')) return;
+    if (!confirm('Diesen Eintrag wirklich löschen?')) return;
     router.delete(route(routeName, id), { preserveScroll: true });
 }
 
@@ -444,7 +444,7 @@ function ownerLabel(item) {
 
                             <div class="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
                                 <div class="rounded border border-gray-200 bg-gray-50 p-3">
-                                    <p class="text-xs text-gray-500">Eintraege</p>
+                                    <p class="text-xs text-gray-500">Einträge</p>
                                     <p class="text-lg font-semibold text-gray-950">{{ fileStats?.total || 0 }}</p>
                                 </div>
                                 <div class="rounded border border-gray-200 bg-gray-50 p-3">
@@ -466,7 +466,7 @@ function ownerLabel(item) {
                             <div class="min-h-[460px] p-4">
                                 <div v-if="items.length === 0" class="flex min-h-[320px] flex-col items-center justify-center rounded border border-dashed border-gray-300 text-center">
                                     <i class="la la-folder-open mb-3 text-5xl text-gray-300"></i>
-                                    <p class="text-sm font-semibold text-gray-700">Keine Eintraege gefunden</p>
+                                    <p class="text-sm font-semibold text-gray-700">Keine Einträge gefunden</p>
                                     <div class="mt-4 flex flex-wrap justify-center gap-2">
                                         <button class="inline-flex items-center gap-2 rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white" @click="openUploadModal">
                                             <i class="la la-cloud-upload-alt"></i>
@@ -526,7 +526,7 @@ function ownerLabel(item) {
 
                                 <div v-if="pagination && pagination.last_page > 1" class="mt-4 flex items-center justify-between border-t pt-4 text-sm">
                                     <button class="rounded border px-3 py-2 disabled:opacity-40" :disabled="!pagination.prev_page_url" @click="visitFiles({ page: pagination.current_page - 1 })">Zurueck</button>
-                                    <span class="text-gray-500">Seite {{ pagination.current_page }} von {{ pagination.last_page }} · {{ pagination.total }} Eintraege</span>
+                                    <span class="text-gray-500">Seite {{ pagination.current_page }} von {{ pagination.last_page }} · {{ pagination.total }} Einträge</span>
                                     <button class="rounded border px-3 py-2 disabled:opacity-40" :disabled="!pagination.next_page_url" @click="visitFiles({ page: pagination.current_page + 1 })">Weiter</button>
                                 </div>
                             </div>
@@ -549,7 +549,7 @@ function ownerLabel(item) {
                                         </a>
                                         <button class="rounded border border-gray-200 bg-white px-3 py-2 font-semibold text-gray-700" @click="openShare(selectedFile, 'file')">Teilen</button>
                                         <button class="rounded border border-gray-200 bg-white px-3 py-2 font-semibold text-gray-700" @click="openFileEdit(selectedFile)">Bearbeiten</button>
-                                        <button class="rounded border border-red-200 bg-white px-3 py-2 font-semibold text-red-600" @click="destroyItem('apps.files.destroy', selectedFile.id)">Loeschen</button>
+                                        <button class="rounded border border-red-200 bg-white px-3 py-2 font-semibold text-red-600" @click="destroyItem('apps.files.destroy', selectedFile.id)">Löschen</button>
                                     </div>
 
                                     <dl class="space-y-2 rounded border border-gray-200 bg-white p-3 text-sm">
@@ -627,7 +627,7 @@ function ownerLabel(item) {
 
                                             <div class="mt-3 flex flex-wrap gap-2">
                                                 <button class="rounded border px-2 py-1 text-xs hover:border-orange-400" @click="openShare(item, 'task')">Teilen</button>
-                                                <button class="rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50" @click="destroyItem('apps.tasks.destroy', item.id)">Loeschen</button>
+                                                <button class="rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50" @click="destroyItem('apps.tasks.destroy', item.id)">Löschen</button>
                                             </div>
                                         </article>
                                     </div>
@@ -685,11 +685,11 @@ function ownerLabel(item) {
                                 <h2 class="text-lg font-semibold text-gray-900">{{ title }}</h2>
                                 <Link v-if="section === 'files' && currentFolder" :href="route('apps.files')" class="text-sm text-orange-600">Zurueck zur Dateiuebersicht</Link>
                             </div>
-                            <span class="text-sm text-gray-500">{{ items.length }} Eintraege</span>
+                            <span class="text-sm text-gray-500">{{ items.length }} Einträge</span>
                         </div>
 
                         <div class="divide-y">
-                            <div v-if="items.length === 0" class="p-8 text-center text-sm text-gray-500">Noch keine Eintraege vorhanden.</div>
+                            <div v-if="items.length === 0" class="p-8 text-center text-sm text-gray-500">Noch keine Einträge vorhanden.</div>
 
                             <div v-for="item in items" :key="item.id" class="grid gap-3 p-4 md:grid-cols-[1fr_auto]">
                                 <div>
@@ -717,7 +717,7 @@ function ownerLabel(item) {
                                         class="rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
                                         @click="destroyItem(section === 'files' ? 'apps.files.destroy' : section === 'calendar' ? 'apps.calendar.destroy' : section === 'contacts' ? 'apps.contacts.destroy' : section === 'tasks' ? 'apps.tasks.destroy' : 'apps.popups.destroy', item.id)"
                                     >
-                                        Loeschen
+                                        Löschen
                                     </button>
                                 </div>
                             </div>

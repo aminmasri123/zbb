@@ -14,8 +14,14 @@ class Bereichsauswahl extends Model
         'bereich_id2',
         'bereich_id3',
         'bereich_id4',
+        'access_code',
+        'submitted_at',
         'user_create',
         'user_update'
         ];
+
+    protected $casts = [
+        'submitted_at' => 'datetime',
+    ];
 
 }
