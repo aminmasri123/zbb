@@ -8,6 +8,7 @@ use App\Http\Controllers\AppsController;
 use App\Http\Controllers\BaenkeController;
 use App\Http\Controllers\BerechtigungController;
 use App\Http\Controllers\BereichController;
+use App\Http\Controllers\BopGruppeExportController;
 use App\Http\Controllers\BopLegacyFunctionController;
 use App\Http\Controllers\BriefController;
 use App\Http\Controllers\DashbaordController;
@@ -16,6 +17,7 @@ use App\Http\Controllers\DienstwagenfahrtenbuchController;
 use App\Http\Controllers\DienstwagenkostenController;
 use App\Http\Controllers\DienstwagenreportsController;
 use App\Http\Controllers\DienstwagenwartungController;
+use App\Http\Controllers\DokumenteController;
 use App\Http\Controllers\EinteilungParameterController;
 use App\Http\Controllers\ExportExcelController;
 use App\Http\Controllers\ExportWordController;
@@ -210,14 +212,35 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::get('/projekt', [ProjektController::class, 'index'])->name('projekt.index');
     Route::get('/projekt/ajaxFresh', [ProjektController::class, 'indexAjaxFresh'])->name('projekt.indexAjaxFresh');
     Route::post('/projekt/anlegen', [ProjektController::class, 'store'])->name('projekt.store');
+    Route::put('/projekt/{projekt}/dokumente', [ProjektController::class, 'updateDokumente'])->name('projekt.dokumente.update');
     Route::put('/projekt/{id}', [ProjektController::class, 'update'])->name('projekt.update');
     Route::delete('/projekt/{id}', [ProjektController::class, 'destroy'])->name('projekt.destroy');
+
+    // Export-Vorlagen / Dokumentenmanager
+    Route::get('/dokumente', [DokumenteController::class, 'index'])->name('dokumente.index');
+    Route::post('/dokumente', [DokumenteController::class, 'store'])->name('dokumente.store');
+    Route::get('/dokumente/{dokument}/download', [DokumenteController::class, 'download'])->name('dokumente.download');
+    Route::put('/dokumente/{dokument}', [DokumenteController::class, 'update'])->name('dokumente.update');
+    Route::post('/dokumente/kategorien', [DokumenteController::class, 'storeKategorie'])->name('dokumente.kategorien.store');
+    Route::put('/dokumente/projekt-kategorien/{projekt}', [DokumenteController::class, 'updateProjektKategorien'])->name('dokumente.projekt-kategorien.update');
 
     //Gruppe
     Route::get('/gruppe', [GruppeController::class, 'index'])->name('gruppe.index');
     Route::put('/gruppe/{id}', [GruppeController::class, 'update'])->name('gruppe.update');
     Route::delete('/gruppe/{id}', [GruppeController::class, 'destroy'])->name('gruppe.destroy');
     Route::post('/gruppe/anlegen', [GruppeController::class, 'store'])->name('gruppe.store');
+    Route::get('/gruppe/{gruppe}/export/serienbrief/{dokument}', [ExportWordController::class, 'gruppeSerienbrief'])->name('gruppe.export.serienbrief');
+    Route::get('/gruppe/{gruppe}/bop-export/namensschilder', [BopGruppeExportController::class, 'namensschilder'])->name('gruppe.bop.export.namensschilder');
+    Route::get('/gruppe/{gruppe}/bop-export/anwesenheitsliste', [BopGruppeExportController::class, 'anwesenheitsliste'])->name('gruppe.bop.export.anwesenheitsliste');
+    Route::get('/gruppe/{gruppe}/bop-export/hausordnung', [BopGruppeExportController::class, 'hausordnung'])->name('gruppe.bop.export.hausordnung');
+    Route::get('/gruppe/{gruppe}/bop-export/berufsfelderprobung', [BopGruppeExportController::class, 'berufsfelderprobung'])->name('gruppe.bop.export.berufsfelderprobung');
+    Route::get('/gruppe/{gruppe}/bop-export/auswertungsbogen-bop', [BopGruppeExportController::class, 'auswertungsbogenBop'])->name('gruppe.bop.export.auswertungsbogen-bop');
+    Route::get('/gruppe/{gruppe}/bop-export/toilettennutzungsliste', [BopGruppeExportController::class, 'toilettennutzungsliste'])->name('gruppe.bop.export.toilettennutzungsliste');
+    Route::get('/gruppe/{gruppe}/bop-export/zertifikat-pobo', [BopGruppeExportController::class, 'zertifikatPobo'])->name('gruppe.bop.export.zertifikat-pobo');
+    Route::get('/gruppe/{gruppe}/bop-export/teilnahme-pobo', [BopGruppeExportController::class, 'teilnahmePobo'])->name('gruppe.bop.export.teilnahme-pobo');
+    Route::get('/gruppe/{gruppe}/bop-export/zertifikat-pa', [BopGruppeExportController::class, 'zertifikatPa'])->name('gruppe.bop.export.zertifikat-pa');
+    Route::get('/gruppe/{gruppe}/bop-export/teilnahme-pa', [BopGruppeExportController::class, 'teilnahmePa'])->name('gruppe.bop.export.teilnahme-pa');
+    Route::get('/gruppe/{gruppe}/bop-export/auswertungsbogen-pa', [BopGruppeExportController::class, 'auswertungsbogenPa'])->name('gruppe.bop.export.auswertungsbogen-pa');
 
     //GruppeHasTeilnehmer
     Route::get('/gruppehasteilnehmer/{id}', [GruppeHasTeilnehmerController::class, 'show'])->name('gruppeHasTeilnehmer.show');
@@ -249,6 +272,8 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::post('/ressourcen/standort/raeumlichkeiten/anlegen', [RaumlichkeitenController::class, 'store'])->name('raeumlichkeiten.store');
     Route::put('/ressourcen/standort/raeumlichkeiten/update/{id}', [RaumlichkeitenController::class, 'update'])->name('raeumlichkeiten.update');
     Route::delete('/ressourcen/standort/raeumlichkeiten/entfernen/{id}', [RaumlichkeitenController::class, 'destroy'])->name('raeumlichkeiten.destroy');
+    Route::post('/ressourcen/standort/raeumlichkeiten/{raum}/meldung', [RaumlichkeitenController::class, 'storeMeldung'])->name('raeumlichkeiten.meldung.store');
+    Route::put('/ressourcen/standort/raeumlichkeiten/meldung/{meldung}', [RaumlichkeitenController::class, 'updateMeldung'])->name('raeumlichkeiten.meldung.update');
 
     //Anwesenheiten
     Route::post('/anwesenheit/speichern', [AnwesenheitController::class, 'store'])->name('anwesenheit.store');
@@ -431,6 +456,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::post('/bereichwahl-update', [ProjektBopController::class, 'waehlen'])->name('bereichsauswahl.bop.radio.update');
 
     Route::get('/export/auswertungsbogen/pa/pdf/{partnerId}/{schuljahr}/{teil}', [ProjektBopController::class, 'generatePdfauswertungsbogenPASchule'])->name('export.auswertungsbogenPA.schule.pdf');
+    Route::get('/export/auswertungsbogen/pa/roland/pdf/{partnerId}/{schuljahr}/{teil}', [ProjektBopController::class, 'generatePdfAuswertungsbogenPaRolandSchule'])->name('export.auswertungsbogenPA.roland.schule.pdf');
     Route::get('/export/elterneinverstaendniserklaerung/{partnerId}/{schuljahr}/{teil}', [ProjektBopController::class, 'exportElterneinverstaendniserklaerungSchule'])->name('export.elterneinverstaendniserklaerung.schule');
 
 

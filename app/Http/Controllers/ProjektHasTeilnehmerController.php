@@ -48,6 +48,7 @@ class ProjektHasTeilnehmerController extends Controller
             'endtermin'           => ['nullable', 'date'],
             'anfangsdatum'        => ['nullable', 'date'],
             'enddatum'            => ['nullable', 'date'],
+            'standort_id'         => ['nullable', 'exists:standorts,id'],
             'model_type'          => ['required'],
         ]);
 
@@ -99,7 +100,7 @@ class ProjektHasTeilnehmerController extends Controller
             // 🔵 FALL 2: Neues Projekt → Pivot + Meta + Zeitraum anlegen
             // ---------------------------------------------------------
             $projekt = Projekt::find($validated['projekt_id']);
-            $standortId = $projekt?->abteilung?->standort_id ?? 1;
+            $standortId = $validated['standort_id'] ?? $projekt?->abteilung?->standort_id ?? 1;
 
             $pivot = ProjektHasPersonen::create([
                 'personen_id' => $validated['teilnehmer_id'],
@@ -172,6 +173,7 @@ class ProjektHasTeilnehmerController extends Controller
             'endtermin'     => ['nullable', 'date'],
             'anfangsdatum'  => ['nullable', 'date'],
             'enddatum'      => ['nullable', 'date'],
+            'standort_id'   => ['nullable', 'exists:standorts,id'],
         ]);
 
         DB::beginTransaction();
@@ -181,6 +183,12 @@ class ProjektHasTeilnehmerController extends Controller
 
             if (!$pivot) {
                 return back()->with('error', 'Projektzuweisung nicht gefunden.');
+            }
+
+            if (array_key_exists('standort_id', $validated)) {
+                $pivot->update([
+                    'standort_id' => $validated['standort_id'],
+                ]);
             }
 
            // Prüfen, ob Meta existiert (angenommen: Relation heißt "meta")
@@ -211,6 +219,13 @@ class ProjektHasTeilnehmerController extends Controller
             $zeitraum = $pivot->zeitraume()
                 ->orderBy('id', 'desc')
                 ->first();
+            $hasZeitraumData = collect([
+                'antragsdatum',
+                'starttermin',
+                'endtermin',
+                'anfangsdatum',
+                'enddatum',
+            ])->contains(fn ($field) => !empty($validated[$field]));
             // 🟧 Wenn vorhanden → aktualisieren
             if ($zeitraum) {
 
@@ -221,7 +236,7 @@ class ProjektHasTeilnehmerController extends Controller
                     'anfangsdatum' => $validated['anfangsdatum'] ?? $zeitraum->anfangsdatum,
                     'enddatum'     => $validated['enddatum'] ?? $zeitraum->enddatum,
                 ]);
-            }else {
+            } elseif ($hasZeitraumData) {
                 // 🟨 Sonst neuen Zeitraum anlegen
             $zeitraum = Zeitraum::create([
                     'antragsdatum' => $validated['antragsdatum'] ?? null,
@@ -232,13 +247,19 @@ class ProjektHasTeilnehmerController extends Controller
                     'model_type'   => get_class($pivot),
                     'model_id'     => $pivot->id,
                 ]);
+            } else {
+                $zeitraum = null;
             }
 
             DB::commit();
+            $pivot->load('standort');
+
             return response()->json([
                 'success' => true,
                 'zeitraum' => $zeitraum ?? null,
                 'meta'     => $meta ? $meta->load('projektbegleiter', 'betreuer') : null,
+                'standort_id' => $pivot->standort_id,
+                'standort' => $pivot->standort,
             ]);
         } catch (Throwable $e) {
 

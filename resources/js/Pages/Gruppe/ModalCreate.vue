@@ -20,9 +20,29 @@
 
         <!-- Gruppentyp -->
         <div class="mb-5">
-            <FloatLabel variant="on">
+            <div class="mb-4 grid grid-cols-2 gap-3">
+                <label class="cursor-pointer">
+                    <input type="radio" value="raum" v-model="form.ort_typ" class="sr-only" />
+                    <div :class="['rounded-lg border-2 p-3 text-center text-sm font-medium', form.ort_typ === 'raum' ? 'border-zbb bg-orange-50 text-zbb' : 'border-gray-200 text-gray-700']">
+                        Raum
+                    </div>
+                </label>
+                <label class="cursor-pointer">
+                    <input type="radio" value="extern" v-model="form.ort_typ" class="sr-only" />
+                    <div :class="['rounded-lg border-2 p-3 text-center text-sm font-medium', form.ort_typ === 'extern' ? 'border-zbb bg-orange-50 text-zbb' : 'border-gray-200 text-gray-700']">
+                        Extern
+                    </div>
+                </label>
+            </div>
+
+            <FloatLabel v-if="form.ort_typ === 'raum'" variant="on">
                 <Select v-model="form.raum_id" :options="props.projekt.raeume" optionValue="id" optionLabel="name" class="w-full"/>
                 <label>Raum</label>
+            </FloatLabel>
+
+            <FloatLabel v-else variant="on">
+                <input v-model="form.externer_ort" type="text" class="w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb" />
+                <label>Externer Ort / Ausflug</label>
             </FloatLabel>
             <label for="groupType" class="block text-sm font-medium text-gray-700 mb-3" >
                 Gruppentyp <span class="text-red-500">*</span>
@@ -95,6 +115,10 @@
                 <input v-model="form.endZeit" type="time" id="endZeit" name="endZeit" required  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"/>
           </div>
         </div>
+        <div class="mb-6">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Bemerkung</label>
+            <textarea v-model="form.bemerkung" rows="3" class="w-full rounded-lg border-gray-300 focus:border-zbb focus:ring-zbb"></textarea>
+        </div>
       </form>
     </template>
     <template #footer>
@@ -107,7 +131,7 @@
 
 
 <script setup>
-import { reactive, computed, watch } from 'vue'
+import { computed, watch } from 'vue'
 import { useForm } from '@inertiajs/vue3'
 import Modal from '@/Components/ModalForm.vue'
 import Select from 'primevue/Select'
@@ -126,8 +150,6 @@ const props = defineProps({
         },
 })
 
-console.log('Props gruppen:', props.betreuer);
-
 const emit = defineEmits(['close', 'added'])
 
 const close = () => emit('close')
@@ -141,7 +163,10 @@ const form = useForm({
   endDate: '',
   startZeit: '',
   endZeit: '',
+  ort_typ: 'raum',
   raum_id: '',
+  externer_ort: '',
+  bemerkung: '',
 })
 
 
@@ -151,9 +176,10 @@ const groupTypes = [
   { value: '3-day', label: '3 Tage', desc: 'Dreitägiges Event', icon: '🗓️' },
   { value: 'unlimited', label: 'Flexibel', desc: 'Beliebige Dauer', icon: '♾️' },
 ]
-console.log(groupTypes)
 // 🔹 Validierung
 const isValid = computed(() => {
+  const hasOrt = form.ort_typ === 'extern' ? form.externer_ort !== '' : form.raum_id !== ''
+
   return (
     form.groupType !== '' &&
     form.startDate !== '' &&
@@ -162,9 +188,20 @@ const isValid = computed(() => {
     form.endZeit !== '' &&
     form.bereich !== '' &&
     form.betreuer !== '' &&
-    form.raum_id !== ''
+    hasOrt
   )
 })
+
+watch(
+  () => form.ort_typ,
+  (typ) => {
+    if (typ === 'extern') {
+      form.raum_id = ''
+    } else {
+      form.externer_ort = ''
+    }
+  }
+)
 
 // 🔹 Reaktive Logik: Enddatum automatisch berechnen
 watch(

@@ -45,8 +45,7 @@ class ProjektHasPersonen extends Pivot //Model
 
     public function standort()
     {
-        //return $this->hasOne(Standort::class, 'standort_id');
-        return $this->hasOne(Standort::class, 'id');
+        return $this->belongsTo(Standort::class, 'standort_id');
     }
     public function projekt()
     {

@@ -27,6 +27,20 @@
                     </FloatLabel>
                 </div>
 
+                <div>
+                    <FloatLabel>
+                        <Dropdown
+                            v-model="form.parent_id"
+                            :options="raumOptionen"
+                            optionLabel="label"
+                            optionValue="id"
+                            showClear
+                            class="w-full"
+                        />
+                        <label>Innerhalb von Raum</label>
+                    </FloatLabel>
+                </div>
+
                 <!-- Raumtyp -->
                 <div>
                     <FloatLabel>
@@ -40,6 +54,33 @@
                 </div>
 
                 <!-- Kapazität -->
+                <div>
+                    <FloatLabel>
+                        <Dropdown
+                            v-model="form.belegungsart"
+                            :options="belegungsarten"
+                            optionLabel="label"
+                            optionValue="value"
+                            class="w-full"
+                        />
+                        <label>Belegungsart</label>
+                    </FloatLabel>
+                </div>
+
+                <div v-if="standardPersonSichtbar">
+                    <FloatLabel>
+                        <Dropdown
+                            v-model="form.standard_personen_id"
+                            :options="personalOptionen"
+                            optionLabel="label"
+                            optionValue="id"
+                            showClear
+                            class="w-full"
+                        />
+                        <label>Standard-Person</label>
+                    </FloatLabel>
+                </div>
+
                 <div>
                     <FloatLabel>
                         <InputNumber
@@ -59,6 +100,11 @@
                     </FloatLabel>
                 </div>
 
+                <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+                    <input v-model="form.aktiv" type="checkbox" class="rounded border-slate-300 text-zbb focus:ring-zbb" />
+                    Aktiv verfuegbar
+                </label>
+
             </div>
         </template>
 
@@ -75,7 +121,7 @@
 
 <script setup>
 import Modal from '@/Components/ModalForm.vue';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import Swal from 'sweetalert2';
 import FloatLabel from 'primevue/floatlabel';
 import InputText from 'primevue/inputtext';
@@ -83,11 +129,14 @@ import InputNumber from 'primevue/inputnumber';
 import Dropdown from 'primevue/dropdown';
 import Textarea from 'primevue/textarea';
 import axios from 'axios';
-import { router} from '@inertiajs/vue3';
 
 const props = defineProps({
   visible: Boolean,
   standorte: Array,
+  personal: {
+    type: Array,
+    default: () => [],
+  },
   raum: Object,     // <-- der Raum, der bearbeitet wird
 });
 
@@ -101,6 +150,39 @@ const raumtypen = [
   'Copyroom', 'Technikraum', 'Hauswirtschaftsraum', 'Holzbereich', 'Metallbereich'
 ];
 
+const belegungsarten = [
+  { label: 'Frei vergebbar', value: 'frei' },
+  { label: 'Meist feste Belegung', value: 'standard' },
+  { label: 'Teilweise belegt', value: 'teilweise' },
+  { label: 'Blockiert', value: 'blockiert' },
+];
+
+const belegungsartenMitStandardPerson = ['standard', 'teilweise'];
+
+const standardPersonSichtbar = computed(() =>
+  belegungsartenMitStandardPerson.includes(form.value.belegungsart)
+);
+
+const standardPersonPflicht = computed(() => form.value.belegungsart === 'standard');
+
+const personalOptionen = computed(() =>
+  (props.personal || []).map((person) => ({
+    ...person,
+    label: `${person.vorname ?? ''} ${person.nachname ?? ''}`.trim(),
+  }))
+);
+
+const raumOptionen = computed(() =>
+  (props.standorte || []).flatMap((standort) =>
+    (standort.raeume || [])
+      .filter((raum) => raum.id !== props.raum?.id)
+      .map((raum) => ({
+        id: raum.id,
+        label: `${raum.name} (${standort.name})`,
+      }))
+  )
+);
+
 /* ---------------------------------------------------
    FORM -> wird automatisch mit Daten aus props.raum
    gefüllt, wenn das Modal geöffnet wird
@@ -109,9 +191,13 @@ const form = ref({
     id: null,
     name: '',
     standort_id: null,
+    parent_id: null,
     typ: null,
+    belegungsart: 'frei',
+    standard_personen_id: null,
     beschreibung: '',
     kapazitaet: null,
+    aktiv: true,
 });
 
 // füllt die Formulardaten, wenn sich der zu bearbeitende Raum ändert
@@ -119,9 +205,22 @@ watch(
     () => props.raum,
     (raum) => {
         if (!raum) return;
-        form.value = { ...raum }; // komplette Kopie
+        form.value = {
+            ...raum,
+            belegungsart: raum.belegungsart ?? 'frei',
+            aktiv: raum.aktiv ?? true,
+        }; // komplette Kopie
     },
     { immediate: true }
+);
+
+watch(
+    () => form.value.belegungsart,
+    (belegungsart) => {
+        if (!belegungsartenMitStandardPerson.includes(belegungsart)) {
+            form.value.standard_personen_id = null;
+        }
+    }
 );
 
 /* ---------------------------------------------------
@@ -129,9 +228,19 @@ watch(
 ---------------------------------------------------*/
 const update = async () => {
     try {
+        if (standardPersonPflicht.value && !form.value.standard_personen_id) {
+            Swal.fire('Fehler', 'Bitte eine Standard-Person waehlen.', 'warning');
+            return;
+        }
+
+        const payload = {
+            ...form.value,
+            standard_personen_id: standardPersonSichtbar.value ? form.value.standard_personen_id : null,
+        };
+
         const response = await axios.put(
             route('raeumlichkeiten.update', form.value.id),
-            form.value
+            payload
         );
 
         Swal.fire('Erfolg!', 'Raum erfolgreich aktualisiert!', 'success');
@@ -142,7 +251,7 @@ const update = async () => {
     } catch (error) {
         Swal.fire(
             'Fehler',
-            error.response?.data?.error || 'Aktualisieren fehlgeschlagen',
+            error.response?.data?.message || error.response?.data?.error || 'Aktualisieren fehlgeschlagen',
             'error'
         );
     }

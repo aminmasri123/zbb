@@ -18,6 +18,7 @@ use App\Models\PersonenIstSchueler;
 use App\Models\Projekt;
 use App\Models\ProjektHasPersonen;
 use App\Models\SozialeDaten;
+use App\Models\Standort;
 use App\Models\Teilnehmer;
 use App\Models\User;
 use Exception;
@@ -44,8 +45,15 @@ class TeilnehmerController extends Controller
         $projekte = $benutzer->projekte;
         $standorte = $benutzer->standorte;
         $defaultProjekt = $benutzer->current_team_id;
-        $gruppen = Gruppe::where('personen_id', $benutzer->id)
+        $gruppen = Gruppe::query()
             ->with('bereich')
+            ->where('projekt_id', $benutzer->current_team_id)
+            ->when(
+                !$benutzer->can('gruppe.view.all') && !$benutzer->can('projekt.mitarbeiter.view.all'),
+                fn ($query) => $query->where('personen_id', $this->userPersonId($benutzer))
+            )
+            ->orderBy('anfangsdatum')
+            ->orderBy('startzeit')
             ->get();
 
         // Mögliche Sortierfelder
@@ -222,7 +230,7 @@ class TeilnehmerController extends Controller
             $t->user = $t->pivot->user;
         });
         $personen->projekte->each(function ($projekt) {
-            $projekt->pivotModel->load('zeitraume', 'meta', 'luv');
+            $projekt->pivotModel->load('zeitraume', 'meta', 'luv', 'standort');
         });
         //dd($personen);
         $berechtigt = $personen->projekte->pluck('id')->contains($userProjektAktivId);
@@ -262,6 +270,24 @@ class TeilnehmerController extends Controller
         $projekte = Projekt::orderBy('name')->get();
         $gruppen = Gruppe::where('projekt_id', Auth()->user()->current_team_id)->with('bereich', 'betreuer')->get();
 
+        $aktuelleStandortIds = $personen->projekte
+            ->pluck('pivotModel.standort_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        if (auth()->user()->hasPermissionTo('teilnehmer.view.all')) {
+            $standorte = Standort::orderBy('name')->get(['id', 'name']);
+        } else {
+            $userStandortIds = auth()->user()->standorte()->pluck('standorts.id');
+            $standorte = Standort::whereIn(
+                'id',
+                $userStandortIds->merge($aktuelleStandortIds)->filter()->unique()->values()
+            )
+                ->orderBy('name')
+                ->get(['id', 'name']);
+        }
+
         $thisProjekt = Projekt::where('id', auth()->user()->current_team_id)->first();
         $dokumente = $thisProjekt?->dokumente;
         $kontakttypen = Kontakttypen::all();
@@ -281,6 +307,7 @@ class TeilnehmerController extends Controller
             'notizprioritaet' => $notizprioritaet,
             'fahrtarten' => $fahrtarten,
             'gruppen' => $gruppen,
+            'standorte' => $standorte,
             'dokumente' => $dokumente,
             'bereiche' => $bereiche,
             'arbeitsvermittler' => $arbeitsvermittler,
@@ -674,6 +701,11 @@ class TeilnehmerController extends Controller
         }
 
         return null;
+    }
+
+    private function userPersonId($user): ?int
+    {
+        return $user?->person_id ?? $user?->person?->id;
     }
 
 }

@@ -11,7 +11,11 @@ const props = defineProps({
   visible: Boolean,
   toEdit: Object,
   bereiche: Array,
-  personal: Array
+  personal: Array,
+  raeume: {
+    type: Array,
+    default: () => [],
+  },
 });
 const emit = defineEmits(['close', 'updated']);
 
@@ -19,8 +23,14 @@ let form = ref({
   id: null,
   bereich: '',
   betreuer: '',
+  ort_typ: 'raum',
+  raum_id: null,
+  externer_ort: '',
   anfangsdatum: null,
   enddatum: null,
+  startzeit: '',
+  endzeit: '',
+  bemerkung: '',
 });
 
 // 🔹 synchronisieren & konvertieren von String -> Date
@@ -32,12 +42,29 @@ watch(
         id: val.id,
         bereich: val.bereich?.id || val.bereich,
         betreuer: val.betreuer?.id || val.betreuer,
+        ort_typ: val.ort_typ || (val.raum_id ? 'raum' : 'extern'),
+        raum_id: val.raum_id || val.raum?.id || null,
+        externer_ort: val.externer_ort || '',
         anfangsdatum: val.anfangsdatum ? new Date(val.anfangsdatum) : null,
         enddatum: val.enddatum ? new Date(val.enddatum) : null,
+        startzeit: normalizeTime(val.startzeit),
+        endzeit: normalizeTime(val.endzeit),
+        bemerkung: val.bemerkung || '',
       };
     }
   },
   { immediate: true }
+);
+
+watch(
+  () => form.value.ort_typ,
+  (typ) => {
+    if (typ === 'extern') {
+      form.value.raum_id = null;
+    } else {
+      form.value.externer_ort = '';
+    }
+  }
 );
 
 // 🔹 Hilfsfunktion: Date -> 'yyyy-MM-dd'
@@ -47,6 +74,11 @@ function formatToIso(date) {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function normalizeTime(value) {
+  if (!value) return '';
+  return String(value).slice(0, 5);
 }
 
 // 🔹 Speichern
@@ -95,6 +127,37 @@ const save = async () => {
           <label>Betreuer</label>
         </FloatLabel>
 
+        <div class="col-span-2 grid grid-cols-2 gap-3">
+          <label class="cursor-pointer">
+            <input type="radio" value="raum" v-model="form.ort_typ" class="sr-only" />
+            <div :class="['rounded-lg border-2 p-3 text-center text-sm font-medium', form.ort_typ === 'raum' ? 'border-zbb bg-orange-50 text-zbb' : 'border-gray-200 text-gray-700']">
+              Raum
+            </div>
+          </label>
+          <label class="cursor-pointer">
+            <input type="radio" value="extern" v-model="form.ort_typ" class="sr-only" />
+            <div :class="['rounded-lg border-2 p-3 text-center text-sm font-medium', form.ort_typ === 'extern' ? 'border-zbb bg-orange-50 text-zbb' : 'border-gray-200 text-gray-700']">
+              Extern
+            </div>
+          </label>
+        </div>
+
+        <FloatLabel v-if="form.ort_typ === 'raum'" variant="on" class="col-span-2">
+          <Select
+            v-model="form.raum_id"
+            :options="raeume"
+            optionValue="id"
+            optionLabel="name"
+            class="w-full"
+          />
+          <label>Raum</label>
+        </FloatLabel>
+
+        <FloatLabel v-else variant="on" class="col-span-2">
+          <input v-model="form.externer_ort" type="text" class="w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb" />
+          <label>Externer Ort / Ausflug</label>
+        </FloatLabel>
+
         <FloatLabel variant="on">
           <DatePicker
             v-model="form.anfangsdatum"
@@ -114,6 +177,21 @@ const save = async () => {
           />
           <label>Enddatum</label>
         </FloatLabel>
+
+        <FloatLabel variant="on">
+          <input v-model="form.startzeit" type="time" class="w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb" />
+          <label>Startzeit</label>
+        </FloatLabel>
+
+        <FloatLabel variant="on">
+          <input v-model="form.endzeit" type="time" class="w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb" />
+          <label>Endzeit</label>
+        </FloatLabel>
+
+        <div class="col-span-2">
+          <label class="mb-1 block text-sm text-gray-600">Bemerkung</label>
+          <textarea v-model="form.bemerkung" rows="3" class="w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb"></textarea>
+        </div>
       </div>
     </template>
 

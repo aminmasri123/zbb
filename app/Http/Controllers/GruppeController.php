@@ -5,153 +5,149 @@ namespace App\Http\Controllers;
 use Inertia\Inertia;
 use App\Models\Gruppe;
 use App\Models\Raeume;
-use App\Models\Bereich;
 use App\Models\Projekt;
-use App\Models\Personen;
-use App\Models\Abteilung;
 use Illuminate\Http\Request;
-use App\Models\ProjektHasBereiche;
 use Illuminate\Support\Facades\Log;
-use App\Http\Controllers\Controller;
-use App\Models\BereichHasTeilnehmer;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class GruppeController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-     public function index(Request $request)
+    public function index(Request $request)
     {
-        $user = Auth()->user();
-            if(!$user->current_team_id){
-                return redirect()->back()->with('error', 'Bitte wählen Sie ein Projekt aus.');
-            }
-        //alle gruppen mit bereich laden
-            $gruppen = Gruppe::with('bereich', 'betreuer')->where('projekt_id', $user->current_team_id)->get();
-            $gruppen = Gruppe::with('bereich', 'betreuer')->where('projekt_id', $user->current_team_id)->where('personen_id', $user->id)->get();
+        $user = auth()->user();
+        $this->authorizeAny($user, ['gruppe.index']);
 
-            $projekt = Projekt::with('bereiche', 'mitarbeiter', 'raeume')->findOrFail($user->current_team_id);
-            $betreuer = $projekt->mitarbeiter;
-            if($user->can('projekt.mitarbeiter.view.all')){
-                $betreuer = $projekt->mitarbeiter->values();
-            } else {
-                //$betreuer = $projekt->mitarbeiter->where('id', $user->id)->first();
-                $betreuer = collect([$user->person]);
-            }
+        if (!$user->current_team_id) {
+            return redirect()->back()->with('error', 'Bitte waehlen Sie ein Projekt aus.');
+        }
 
+        $projekt = $this->projektMitVerfuegbarenRaeumen((int) $user->current_team_id);
+        $canSeeAllGroups = $this->canSeeAllGroups($user);
 
-            return Inertia::render('Gruppe/Index', [
-            'gruppen' => $gruppen->toArray(),
-            'projekt' => $projekt->toArray(),
+        $gruppen = Gruppe::query()
+            ->with(['bereich', 'betreuer', 'raum.parent'])
+            ->withCount('teilnehmer')
+            ->where('projekt_id', $user->current_team_id)
+            ->when(!$canSeeAllGroups, fn ($query) => $query->where('personen_id', $this->userPersonId($user)))
+            ->orderBy('anfangsdatum')
+            ->orderBy('startzeit')
+            ->get();
+
+        $betreuer = $this->canAny($user, ['projekt.mitarbeiter.view.all', 'gruppe.view.all'])
+            ? $projekt->mitarbeiter->values()
+            : collect([$user->person])->filter()->values();
+
+        return Inertia::render('Gruppe/Index', [
+            'gruppen' => $gruppen,
+            'projekt' => $projekt,
             'betreuer' => $betreuer,
-            ],
-        );
-    }
-
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
+            'canSeeAllGroups' => $canSeeAllGroups,
+        ]);
     }
 
     public function store(Request $request)
     {
+        $user = auth()->user();
+        $this->authorizeAny($user, ['gruppe.store']);
+
+        $request->merge([
+            'ort_typ' => $request->input('ort_typ', 'raum'),
+        ]);
 
         $validated = $request->validate([
-            'startDate'   => 'required|date',
-            'endDate'     => 'nullable|date|after_or_equal:startDate',
+            'startDate' => 'required|date',
+            'endDate' => 'nullable|date|after_or_equal:startDate',
             'startZeit' => 'required|date_format:H:i',
-            'endZeit'   => 'required|date_format:H:i|after:startZeit',
-            'bereich'     => 'required|integer|exists:bereiches,id',
-            'betreuer'    => 'required|integer|exists:personens,id',
-            'raum_id'    => 'required|integer|exists:raeumes,id',
+            'endZeit' => 'required|date_format:H:i|after:startZeit',
+            'bereich' => 'required|integer|exists:bereiches,id',
+            'betreuer' => 'required|integer|exists:personens,id',
+            'ort_typ' => ['required', Rule::in(['raum', 'extern'])],
+            'raum_id' => 'nullable|required_if:ort_typ,raum|integer|exists:raeumes,id',
+            'externer_ort' => 'nullable|required_if:ort_typ,extern|string|max:255',
+            'bemerkung' => 'nullable|string|max:1000',
         ]);
-        $user = Auth()->user();
+
+        $projekt = $this->projektMitVerfuegbarenRaeumen((int) $user->current_team_id);
+        $this->validateProjektZuordnung($projekt, (int) $validated['bereich'], $validated['raum_id'] ?? null);
+        $this->validateBetreuer($user, $projekt, (int) $validated['betreuer']);
 
         $gruppe = Gruppe::create([
-            'personen_id'   => $validated['betreuer'],
-            'bereich_id'    => $validated['bereich'],
-            'projekt_id'    => $user->current_team_id,
-            'raum_id'       => $validated['raum_id'],
-            'anfangsdatum'  => $validated['startDate'],
-            'enddatum'      => $validated['endDate'] ?? null,
-            'startzeit'     => $validated['startZeit'],
-            'endzeit'       => $validated['endZeit'],
+            'personen_id' => $validated['betreuer'],
+            'bereich_id' => $validated['bereich'],
+            'projekt_id' => $user->current_team_id,
+            'ort_typ' => $validated['ort_typ'],
+            'raum_id' => $validated['ort_typ'] === 'raum' ? $validated['raum_id'] : null,
+            'externer_ort' => $validated['ort_typ'] === 'extern' ? $validated['externer_ort'] : null,
+            'anfangsdatum' => $validated['startDate'],
+            'enddatum' => $validated['endDate'] ?? null,
+            'startzeit' => $validated['startZeit'],
+            'endzeit' => $validated['endZeit'],
+            'bemerkung' => $validated['bemerkung'] ?? null,
         ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Gruppe erfolgreich erstellt.',
-            'gruppe'  => $gruppe->load(['bereich', 'betreuer'])
+            'gruppe' => $gruppe->load(['bereich', 'betreuer', 'raum.parent'])->loadCount('teilnehmer'),
         ], 201);
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
+    public function update(Request $request, $id)
     {
-        //
-    }
+        $user = auth()->user();
+        $gruppe = Gruppe::findOrFail($id);
+        abort_unless($this->canManageGroup($user, $gruppe, 'gruppe.update'), 403);
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
-    {
-        //
-    }
-
-     public function update(Request $request, $id)
-    {
         try {
-            // 🔹 Validierung
+            $request->merge([
+                'ort_typ' => $request->input('ort_typ', $gruppe->ort_typ ?? 'raum'),
+            ]);
+
             $validated = $request->validate([
                 'bereich' => 'required|integer|exists:bereiches,id',
                 'betreuer' => 'required|integer|exists:personens,id',
-                'anfangsdatum' => 'nullable|date',
+                'ort_typ' => ['required', Rule::in(['raum', 'extern'])],
+                'raum_id' => 'nullable|required_if:ort_typ,raum|integer|exists:raeumes,id',
+                'externer_ort' => 'nullable|required_if:ort_typ,extern|string|max:255',
+                'anfangsdatum' => 'required|date',
                 'enddatum' => 'nullable|date|after_or_equal:anfangsdatum',
+                'startzeit' => 'required|date_format:H:i',
+                'endzeit' => 'required|date_format:H:i|after:startzeit',
+                'bemerkung' => 'nullable|string|max:1000',
             ]);
 
-            // 🔹 Gruppe finden
-            $gruppe = Gruppe::findOrFail($id);
+            $projekt = $this->projektMitVerfuegbarenRaeumen((int) $gruppe->projekt_id);
+            $this->validateProjektZuordnung($projekt, (int) $validated['bereich'], $validated['raum_id'] ?? null);
+            $this->validateBetreuer($user, $projekt, (int) $validated['betreuer']);
 
-            // 🔹 Daten speichern (z. B. falls Spalten gleich heißen)
-            $gruppe->bereich_id = $validated['bereich'];
-            $gruppe->personen_id = $validated['betreuer'];
-            $gruppe->anfangsdatum = $validated['anfangsdatum'];
-            $gruppe->enddatum = $validated['enddatum'];
-            $gruppe->save();
+            $gruppe->update([
+                'bereich_id' => $validated['bereich'],
+                'personen_id' => $validated['betreuer'],
+                'ort_typ' => $validated['ort_typ'],
+                'raum_id' => $validated['ort_typ'] === 'raum' ? $validated['raum_id'] : null,
+                'externer_ort' => $validated['ort_typ'] === 'extern' ? $validated['externer_ort'] : null,
+                'anfangsdatum' => $validated['anfangsdatum'],
+                'enddatum' => $validated['enddatum'],
+                'startzeit' => $validated['startzeit'],
+                'endzeit' => $validated['endzeit'],
+                'bemerkung' => $validated['bemerkung'] ?? null,
+            ]);
 
-            // 🔹 (Optional) Daten für Vue zurückgeben
             return response()->json([
                 'success' => true,
                 'message' => 'Gruppe erfolgreich aktualisiert.',
-                'projekt' => $gruppe->load(['bereich', 'betreuer'])
+                'projekt' => $gruppe->load(['bereich', 'betreuer', 'raum.parent'])->loadCount('teilnehmer'),
             ], 200);
-
         } catch (ValidationException $e) {
-            // ⛔ Validierungsfehler
             return response()->json([
                 'success' => false,
                 'message' => 'Validierungsfehler',
                 'errors' => $e->errors(),
             ], 422);
-
-        } catch (ModelNotFoundException $e) {
-            // ⛔ Datensatz nicht gefunden
-            return response()->json([
-                'success' => false,
-                'message' => 'Gruppe nicht gefunden.',
-            ], 404);
-
         } catch (\Exception $e) {
-            // ⛔ Allgemeiner Fehler (z. B. SQL)
-            Log::error('Fehler beim Aktualisieren der Gruppe: '.$e->getMessage());
+            Log::error('Fehler beim Aktualisieren der Gruppe: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
@@ -159,20 +155,118 @@ class GruppeController extends Controller
             ], 500);
         }
     }
-    /**
-     * Remove the specified resource from storage.
-     */
+
     public function destroy($id)
     {
         try {
+            $user = auth()->user();
             $gruppe = Gruppe::findOrFail($id);
+            abort_unless($this->canManageGroup($user, $gruppe, 'gruppe.destroy'), 403);
+
             $gruppe->delete();
 
-            return response()->json(['message' => 'Gruppe erfolgreich gelöscht!'], 200);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['message' => 'Gruppe erfolgreich geloescht!'], 200);
+        } catch (ModelNotFoundException $e) {
             return response()->json(['message' => 'Gruppe nicht gefunden.'], 404);
         } catch (\Exception $e) {
             return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
+        }
+    }
+
+    private function canAny($user, array $permissions): bool
+    {
+        foreach ($permissions as $permission) {
+            if ($user?->can($permission)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function authorizeAny($user, array $permissions): void
+    {
+        abort_unless($this->canAny($user, $permissions), 403);
+    }
+
+    private function canSeeAllGroups($user): bool
+    {
+        return $this->canAny($user, ['gruppe.view.all', 'projekt.mitarbeiter.view.all']);
+    }
+
+    private function canManageGroup($user, Gruppe $gruppe, string $permission): bool
+    {
+        if (!$user?->can($permission)) {
+            return false;
+        }
+
+        if ($this->canSeeAllGroups($user)) {
+            return true;
+        }
+
+        return (int) $gruppe->personen_id === (int) $this->userPersonId($user);
+    }
+
+    private function userPersonId($user): ?int
+    {
+        return $user?->person_id ?? $user?->person?->id;
+    }
+
+    private function projektMitVerfuegbarenRaeumen(int $projektId): Projekt
+    {
+        $projekt = Projekt::with([
+            'bereiche',
+            'mitarbeiter',
+            'raeume.parent',
+            'raeume.standardPerson',
+            'standorte',
+        ])->findOrFail($projektId);
+
+        $raeume = $projekt->raeume->filter(fn ($raum) => $raum->aktiv !== false)->values();
+
+        if ($raeume->isEmpty()) {
+            $standortIds = $projekt->standorte->pluck('id')->filter()->unique()->values();
+
+            $raeume = Raeume::query()
+                ->with(['parent', 'standardPerson'])
+                ->where('aktiv', true)
+                ->when($standortIds->isNotEmpty(), fn ($query) => $query->whereIn('standort_id', $standortIds))
+                ->orderBy('name')
+                ->get();
+        }
+
+        $projekt->setRelation('raeume', $raeume);
+
+        return $projekt;
+    }
+
+    private function validateProjektZuordnung(Projekt $projekt, int $bereichId, ?int $raumId): void
+    {
+        if (!$projekt->bereiche->contains('id', $bereichId)) {
+            throw ValidationException::withMessages([
+                'bereich' => 'Der Bereich gehoert nicht zum ausgewaehlten Projekt.',
+            ]);
+        }
+
+        if ($raumId && !$projekt->raeume->contains('id', (int) $raumId)) {
+            throw ValidationException::withMessages([
+                'raum_id' => 'Der Raum ist fuer dieses Projekt nicht verfuegbar.',
+            ]);
+        }
+    }
+
+    private function validateBetreuer($user, Projekt $projekt, int $betreuerId): void
+    {
+        if (!$projekt->mitarbeiter->contains('id', $betreuerId)) {
+            throw ValidationException::withMessages([
+                'betreuer' => 'Der Betreuer gehoert nicht zum ausgewaehlten Projekt.',
+            ]);
+        }
+
+        if (!$this->canAny($user, ['projekt.mitarbeiter.view.all', 'gruppe.view.all']) && $betreuerId !== (int) $this->userPersonId($user)) {
+            throw ValidationException::withMessages([
+                'betreuer' => 'Sie duerfen nur eigene Gruppen anlegen oder bearbeiten.',
+            ]);
         }
     }
 }

@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use Exception;
 use Inertia\Inertia;
 use App\Models\Bereich;
+use App\Models\DokumentKategorie;
+use App\Models\Dokumente;
 use App\Models\Projekt;
 use App\Models\Abteilung;
 use App\Models\Kostenstelle;
@@ -41,6 +43,8 @@ class ProjektController extends Controller
             ->with('zeitraume')
             ->with('bereiche')
             ->with('kostenstellen')
+            ->with('dokumente.bereiche')
+            ->with('dokumentKategorien')
             ->orderBy('projekts.id', 'desc') // Sortiere nach Projektname
             ->paginate(100) // Paginierung
             ->withQueryString();
@@ -51,7 +55,14 @@ class ProjektController extends Controller
             'projekte' => $projekte,
             'abteilungen' => $abteilungen,
             'bereiche' => $bereiche,
-            'kostenstellen' => $kostenstellen
+            'kostenstellen' => $kostenstellen,
+            'dokumente' => Dokumente::query()
+                ->with('bereiche:id,name')
+                ->orderBy('name')
+                ->get(['id', 'name', 'typ', 'kontext', 'einsatzbereich', 'ausgabeformate', 'version', 'dateipfad', 'dateipfadName', 'beschreibung', 'aktiv']),
+            'dokumentKategorien' => DokumentKategorie::query()
+                ->orderBy('name')
+                ->get(['id', 'name', 'beschreibung']),
         ]);
     }
     public function indexAjaxFresh(Request $request)
@@ -290,6 +301,42 @@ class ProjektController extends Controller
                 'error' => 'Update fehlgeschlagen: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    public function updateDokumente(Request $request, Projekt $projekt)
+    {
+        $user = auth()->user();
+        if (!$user?->can('projekt.update') && !$user?->can('projekt.store') && !$user?->can('projekt.index')) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'dokumente' => 'array',
+            'dokumente.*.id' => 'required|integer|exists:dokumentes,id',
+            'dokumente.*.gruppen_export' => 'boolean',
+            'dokumente.*.serienbrief' => 'boolean',
+        ]);
+
+        $syncData = collect($validated['dokumente'] ?? [])
+            ->unique('id')
+            ->values()
+            ->mapWithKeys(function ($entry, $index) {
+                return [
+                    (int) $entry['id'] => [
+                        'gruppen_export' => (bool) ($entry['gruppen_export'] ?? true),
+                        'serienbrief' => (bool) ($entry['serienbrief'] ?? false),
+                        'sort_order' => $index + 1,
+                    ],
+                ];
+            })
+            ->all();
+
+        $projekt->dokumente()->sync($syncData);
+
+        return response()->json([
+            'message' => 'Export-Vorlagen wurden aktualisiert.',
+            'projekt' => $projekt->fresh()->load(['abteilung', 'zeitraume', 'bereiche', 'kostenstellen', 'dokumente.bereiche', 'dokumentKategorien']),
+        ]);
     }
 
     private function resolveKostenstelleSyncData(array $validatedData): array

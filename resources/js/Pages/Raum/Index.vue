@@ -80,6 +80,22 @@
                                         <span class="text-lg">{{getEmoji(raum?.typ)}}</span>
                                         <span>Typ: <strong>{{ raum?.typ || '-'}}</strong></span>
                                     </div>
+                                    <div v-if="raum.parent" class="flex items-center gap-2 text-slate-600">
+                                        <span class="text-lg">↳</span>
+                                        <span>Innerhalb von: <strong>{{ raum.parent.name }}</strong></span>
+                                    </div>
+                                    <div class="flex items-center gap-2 text-slate-600">
+                                        <span class="text-lg">⌂</span>
+                                        <span>Belegung: <strong>{{ belegungsartLabel(raum.belegungsart) }}</strong></span>
+                                    </div>
+                                    <div v-if="belegungsartHatStandardPerson(raum.belegungsart) && raum.standard_person" class="flex items-center gap-2 text-slate-600">
+                                        <span class="text-lg">★</span>
+                                        <span>Standard: <strong>{{ raum.standard_person.vorname }} {{ raum.standard_person.nachname }}</strong></span>
+                                    </div>
+                                    <div class="flex items-center gap-2 text-slate-600">
+                                        <span class="text-lg">!</span>
+                                        <span>Offene Meldungen: <strong>{{ offeneMeldungen(raum).length }}</strong></span>
+                                    </div>
                                     <p class="text-slate-600 text-sm line-clamp-2">{{ raum.beschreibung || 'Keine Beschreibung' }}</p>
                                 </div>
 
@@ -90,6 +106,13 @@
                                         class="flex-1 text-center bg-zbbTrp hover:bg-orange-200 text-zbb font-semibold py-2 rounded-lg transition duration-300"
                                     >
                                         ✏️ Bearbeiten
+                                    </button>
+
+                                    <button
+                                        @click="openMeldungModal(raum)"
+                                        class="flex-1 bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold py-2 rounded-lg transition duration-300"
+                                    >
+                                        Melden
                                     </button>
 
                                     <button
@@ -109,16 +132,25 @@
             <!-- Modals -->
         <ModalCreate :visible="isModalCreateOpen"
              :standorte="localStandorte"
+             :personal="props.personal"
              @close="isModalCreateOpen = false"
              @added="addRaum"
         />
         <ModalEdit
     :visible="isModalEditOpen"
     :standorte="localStandorte"
+    :personal="props.personal"
     :raum="raumToEdit"
     @close="isModalEditOpen = false"
     @updated="updateRaum"
 />
+
+        <ModalMeldung
+            :visible="isMeldungModalOpen"
+            :raum="raumForMeldung"
+            @close="isMeldungModalOpen = false"
+            @added="addMeldung"
+        />
 
 
 
@@ -139,9 +171,11 @@ import { ref, computed } from 'vue'
 import { Link, Head, router } from '@inertiajs/vue3'
 import ModalCreate from '@/Pages/Raum/ModalCreate.vue';
 import ModalEdit from '@/Pages/Raum/ModalEdit.vue'
+import ModalMeldung from '@/Pages/Raum/ModalMeldung.vue'
 
 const props = defineProps({
     standorte: { type: Array, default: () => [] },
+    personal: { type: Array, default: () => [] },
 })
 
 let seite = 'raeumlichkeiten'
@@ -153,6 +187,8 @@ const showModalLöschen = ref(false)
 let isModalCreateOpen = ref(false);
 const isModalEditOpen = ref(false)
 const raumToEdit = ref(null)
+const isMeldungModalOpen = ref(false)
+const raumForMeldung = ref(null)
 
 const openEditModal = (raum) => {
     raumToEdit.value = JSON.parse(JSON.stringify(raum)) // Kopie
@@ -164,6 +200,10 @@ const closeEditModal = () => {
 }
 const openModalCreate = () => { isModalCreateOpen.value = true; };
 const closeModalCreate = () => { isModalCreateOpen.value = false; };
+const openMeldungModal = (raum) => {
+    raumForMeldung.value = raum
+    isMeldungModalOpen.value = true
+}
 // ✅ Lokale Kopie der Standorte (damit wir Räume direkt entfernen können)
 const localStandorte = ref(JSON.parse(JSON.stringify(props.standorte)))
 
@@ -196,6 +236,17 @@ const filteredRaeumeCount = computed(() => {
     )
 })
 
+const belegungsartLabel = (value) => ({
+    frei: 'frei vergebbar',
+    standard: 'meist feste Belegung',
+    teilweise: 'teilweise belegt',
+    blockiert: 'blockiert',
+}[value] || 'frei vergebbar')
+
+const belegungsartHatStandardPerson = (value) => ['standard', 'teilweise'].includes(value)
+
+const offeneMeldungen = (raum) => (raum.meldungen || []).filter((meldung) => meldung.status !== 'erledigt')
+
 // MorphOne / MorphMany Normalisierung
 const normalizeAdresse = (adresse) => {
     if (!adresse) return []
@@ -211,6 +262,17 @@ const addRaum = (raum) => {
     }
     standort.raeume.push(raum);
 };
+
+const addMeldung = (meldung) => {
+    localStandorte.value.forEach((standort) => {
+        const raum = standort.raeume.find((r) => r.id === meldung.raum_id)
+        if (!raum) return
+        if (!Array.isArray(raum.meldungen)) {
+            raum.meldungen = []
+        }
+        raum.meldungen.unshift(meldung)
+    })
+}
 
 
 // 🗑️ Löschdialog öffnen
@@ -268,12 +330,25 @@ function getEmoji(type) {
 }
 
 const updateRaum = (updatedRaum) => {
+    let found = false
     localStandorte.value.forEach((standort) => {
         const index = standort.raeume.findIndex(r => r.id === updatedRaum.id);
         if (index !== -1) {
-            standort.raeume[index] = updatedRaum;
+            if (standort.id === updatedRaum.standort_id) {
+                standort.raeume[index] = updatedRaum;
+            } else {
+                standort.raeume.splice(index, 1);
+            }
+            found = true
         }
     });
+
+    const zielStandort = localStandorte.value.find((standort) => standort.id === updatedRaum.standort_id)
+    if (zielStandort && !zielStandort.raeume.some((raum) => raum.id === updatedRaum.id)) {
+        zielStandort.raeume.push(updatedRaum)
+    } else if (!found && zielStandort) {
+        zielStandort.raeume.push(updatedRaum)
+    }
 };
 
 

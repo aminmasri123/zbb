@@ -6,6 +6,7 @@ import Dropdown from '@/Components/Dropdown.vue';
 import ModalDestroy from '@/Components/ModalDestroyForm.vue';
 import ModalCreate from '@/Pages/Gruppe/ModalCreate.vue';
 import ModalEdit from '@/Pages/Gruppe/ModalEdit.vue';
+import ModalMeldung from '@/Pages/Raum/ModalMeldung.vue';
 import { formatTime } from '@/utils/timeFormat';
 import { formatDate } from '@/utils/dateFormat';
 let seite = 'gruppe';
@@ -15,6 +16,9 @@ let showModalLöschen = ref(false);
 let isModalCreateOpen = ref(false);
 let isModalEditOpen = ref(false);
 let gruppeToEdit = ref(null);
+let isMeldungModalOpen = ref(false);
+let gruppeForMeldung = ref(null);
+let raumForMeldung = ref(null);
 
 // Props
 const props = defineProps({
@@ -36,6 +40,10 @@ const props = defineProps({
         type: [Array, Object],
         required: true,
     },
+    canSeeAllGroups: {
+        type: Boolean,
+        default: false,
+    },
 });
 // ✅ Lokale Liste – unterstützt Array ODER paginierte Daten
 let localGruppen = ref(
@@ -56,6 +64,19 @@ const openModalEdit = (gruppe) => {
 };
 const closeModalEdit = () => { isModalEditOpen.value = false; };
 
+const openMeldungModal = (gruppe) => {
+  if (!gruppe?.raum) return;
+  gruppeForMeldung.value = gruppe;
+  raumForMeldung.value = gruppe.raum;
+  isMeldungModalOpen.value = true;
+};
+
+const closeMeldungModal = () => {
+  isMeldungModalOpen.value = false;
+  gruppeForMeldung.value = null;
+  raumForMeldung.value = null;
+};
+
 // 🔹 CRUD
 const addGruppe = (gruppe) => {
   localGruppen.value.unshift(gruppe);
@@ -72,7 +93,7 @@ const updateGruppe = (updatedGruppe) => {
 
 // 🔹 Delete
 const confirmDelete = (gruppe) => {
-  gruppeToDelete.value = { id: gruppe.id, name: gruppe.name };
+  gruppeToDelete.value = { id: gruppe.id, name: gruppe.bereich?.name || gruppe.raum?.name || `Gruppe ${gruppe.id}` };
   showModalLöschen.value = true;
 };
 
@@ -85,8 +106,13 @@ const handleDelete = (gruppeId) => {
 // 🔹 Suche
 const applySearchFilter = () => {
   if (search.value) {
+    const q = search.value.toLowerCase();
     filteredGruppen.value = localGruppen.value.filter(g =>
-      g.name?.toLowerCase().includes(search.value.toLowerCase())
+      g.bereich?.name?.toLowerCase().includes(q) ||
+      g.betreuer?.vorname?.toLowerCase().includes(q) ||
+      g.betreuer?.nachname?.toLowerCase().includes(q) ||
+      g.raum?.name?.toLowerCase().includes(q) ||
+      g.externer_ort?.toLowerCase().includes(q)
     );
   } else {
     filteredGruppen.value = [...localGruppen.value];
@@ -121,7 +147,7 @@ watch(search, () => {
         <!-- Tabelle -->
         <!-- Gruppenübersicht -->
         <div class="bg-white rounded-2xl shadow-md mt-8 p-8 w-3/4 mx-auto">
-            <h2 class="text-lg font-semibold text-gray-800 mb-5">Meine Gruppen</h2>
+            <h2 class="text-lg font-semibold text-gray-800 mb-5">{{ props.canSeeAllGroups ? 'Projektgruppen' : 'Meine Gruppen' }}</h2>
 
         <!-- Wenn keine Gruppen -->
             <div v-if="filteredGruppen.length === 0" class="text-gray-500 italic text-sm">
@@ -174,11 +200,27 @@ watch(search, () => {
                         <i class="la la-clock la-2x text-zbb/70"></i>
                         <span>{{ gruppe.anwesend_heute || 0 }} heute anwesend</span>
                     </div>
+                    <div class="flex items-center gap-1">
+                        <i class="la la-door-open la-2x text-zbb/70"></i>
+                        <span v-if="gruppe.ort_typ === 'extern'">{{ gruppe.externer_ort || 'Externer Ort' }}</span>
+                        <span v-else>{{ gruppe.raum?.name || 'Kein Raum' }}</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <i class="la la-user la-2x text-zbb/70"></i>
+                        <span>{{ gruppe.betreuer?.vorname }} {{ gruppe.betreuer?.nachname }}</span>
+                    </div>
                     </div>
                 </div>
 
                 <!-- Buttons -->
                 <div class="flex gap-2 mt-4 sm:mt-0">
+                    <button
+                    v-if="gruppe.raum"
+                    @click="openMeldungModal(gruppe)"
+                    class="px-4 py-2 text-sm font-medium rounded-md bg-amber-500 text-white shadow-sm hover:bg-amber-600 transition"
+                    >
+                    Melden
+                    </button>
                     <button
                     @click="openModalEdit(gruppe)"
                     class="px-4 py-2 text-sm font-medium rounded-md bg-zbb text-white shadow-sm hover:bg-zbb/90 transition"
@@ -204,11 +246,19 @@ watch(search, () => {
                                  @added="(gruppe) => { localGruppen.unshift(gruppe); applySearchFilter(); }"
         />
         <ModalEdit :visible="isModalEditOpen"
-                            :bereiche="props.bereiche"
-                            :personal="props.personal"
+                            :bereiche="props.projekt.bereiche"
+                            :personal="props.betreuer"
+                            :raeume="props.projekt.raeume"
                             :toEdit="gruppeToEdit"
                             @close="closeModalEdit"
                             @updated="updateGruppe"/>
+        <ModalMeldung
+                            :visible="isMeldungModalOpen"
+                            :raum="raumForMeldung"
+                            :projekt-id="props.projekt.id"
+                            :gruppe-id="gruppeForMeldung?.id"
+                            @close="closeMeldungModal"
+                            @added="closeMeldungModal"/>
         <ModalDestroy v-if="showModalLöschen"
                                     @delete="handleDelete"
                                     @close="showModalLöschen = false"
@@ -217,5 +267,3 @@ watch(search, () => {
     </app-layout>
 
 </template>
-
-

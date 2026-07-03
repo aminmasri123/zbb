@@ -1068,6 +1068,64 @@ class ProjektBopController extends Controller
             return $pdf->stream('Auswertungbogen_PA_' . $schule->name. '_' . $schuljahr  . '_Teil_' . $teil .'.pdf');
     }
 
+    public function generatePdfAuswertungsbogenPaRolandSchule($partnerId, $schuljahr, $teil)
+    {
+        $schule = Partner::findOrFail($partnerId);
+
+        $schueler = PersonenIstSchueler::with('person')
+            ->filterSchueler($partnerId, $schuljahr, $teil)
+            ->get()
+            ->sort(function ($a, $b) {
+                $klasseCompare = strnatcasecmp((string) $a->klasse, (string) $b->klasse);
+                if ($klasseCompare !== 0) {
+                    return $klasseCompare;
+                }
+
+                $nachnameCompare = strnatcasecmp((string) ($a->person?->nachname ?? ''), (string) ($b->person?->nachname ?? ''));
+                if ($nachnameCompare !== 0) {
+                    return $nachnameCompare;
+                }
+
+                return strnatcasecmp((string) ($a->person?->vorname ?? ''), (string) ($b->person?->vorname ?? ''));
+            })
+            ->values();
+
+        if ($schueler->isEmpty()) {
+            return redirect()->back()->with('error', 'Die Schule: ' . $schule->name . ' verfuegt ueber keine Teilnehmer.');
+        }
+
+        $klasseCounter = [];
+        $teilnehmer = $schueler->map(function (PersonenIstSchueler $schueler) use (&$klasseCounter, $schule, $schuljahr, $teil) {
+            $klasse = trim((string) $schueler->klasse) ?: 'ohne Klasse';
+            $klasseCounter[$klasse] = ($klasseCounter[$klasse] ?? 0) + 1;
+
+            return [
+                'vorname' => $schueler->person?->vorname ?? '',
+                'nachname' => $schueler->person?->nachname ?? '',
+                'name' => trim(($schueler->person?->nachname ?? '') . ', ' . ($schueler->person?->vorname ?? '')),
+                'geburtsdatum' => $schueler->person?->geburtsdatum ? Carbon::parse($schueler->person->geburtsdatum)->format('d.m.Y') : '',
+                'geschlecht' => $schueler->person?->geschlecht ?? '',
+                'schule' => $schule->name,
+                'klasse' => $klasse,
+                'schuljahr' => $schuljahr,
+                'teil' => $teil,
+                'footer_nummer' => $klasse . '-' . $klasseCounter[$klasse],
+            ];
+        })->values();
+
+        $pdf = Pdf::loadView('pdf.auswertungsbogenPA-roland', [
+            'teilnehmer' => $teilnehmer,
+            'schulname' => $schule->name,
+            'schuljahr' => $schuljahr,
+            'teil' => $teil,
+        ]);
+        $pdf->setPaper('A4', 'landscape');
+
+        return $pdf->download(
+            'Auswertungsbogen_PA_neu_Roland_' . $this->exportFilePart($schule->name) . '_' . $this->exportFilePart($schuljahr) . '_Teil_' . $this->exportFilePart($teil) . '.pdf'
+        );
+    }
+
 
 
     public function exportElterneinverstaendniserklaerungSchule($partnerId, $schuljahr, $teil)
@@ -1134,6 +1192,13 @@ class ProjektBopController extends Controller
         ->download($updatedFile)
         ->deleteFileAfterSend(true);
 
+    }
+
+    private function exportFilePart(string $value): string
+    {
+        $value = preg_replace('/[^A-Za-z0-9_\-\.]+/', '_', trim($value));
+
+        return trim($value, '_') ?: 'export';
     }
 
 

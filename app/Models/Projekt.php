@@ -3,6 +3,7 @@
 namespace App\Models;
 use App\Models\Abteilung;
 use App\Models\Bereich;
+use App\Models\DokumentKategorie;
 use App\Models\Dokumente;
 use App\Models\Kostenstelle;
 use App\Models\Partner;
@@ -120,7 +121,16 @@ class Projekt extends Model
     }
     public function dokumente()
     {
-        return $this->belongsToMany(Dokumente::class, 'projekt_has_dokumentes', 'projekt_id', 'dokument_id');
+        return $this->belongsToMany(Dokumente::class, 'projekt_has_dokumentes', 'projekt_id', 'dokument_id')
+            ->withPivot(['gruppen_export', 'serienbrief', 'sort_order'])
+            ->orderByPivot('sort_order')
+            ->orderBy('dokumentes.name');
+    }
+
+    public function dokumentKategorien()
+    {
+        return $this->belongsToMany(DokumentKategorie::class, 'projekt_has_dokument_kategories', 'projekt_id', 'dokument_kategorie_id')
+            ->orderBy('dokument_kategories.name');
     }
 
     public function zeitraume()

@@ -7,6 +7,7 @@ use App\Models\Bereich;
 use App\Models\Projekt;
 use App\Models\Personen;
 use App\Models\Zeitraum;
+use App\Models\RaumMeldung;
 use App\Models\GruppeHasPersonen;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -22,10 +23,12 @@ class Gruppe extends Model
         'raum_id',
         'bereich_id',
         'projekt_id',
+        'ort_typ',
         'anfangsdatum',
         'enddatum',
         'startzeit',
         'endzeit',
+        'externer_ort',
         'bemerkung',
     ];
 
@@ -56,6 +59,11 @@ class Gruppe extends Model
     public function raum()
     {
         return $this->hasOne(Raeume::class, 'id', 'raum_id');
+    }
+
+    public function raumMeldungen()
+    {
+        return $this->hasMany(RaumMeldung::class, 'gruppe_id')->latest();
     }
 
     public function bereich()

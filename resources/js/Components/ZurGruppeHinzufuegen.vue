@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import Swal from 'sweetalert2'
 import axios from 'axios'
+import { formatTime } from '@/utils/timeFormat'
 
 // Props von der Elternkomponente
 const props = defineProps({
@@ -38,8 +39,8 @@ defineExpose({ open })
     const response = await axios.post(route('gruppeHasTeilnehmer.store'), {
       gruppe_id: selectedGroup.value,
       teilnehmer: props.selected,
-      startzeit: selectedGroupData.value?.startzeit,
-      endzeit: selectedGroupData.value?.endzeit,
+      startzeit: formatTime(selectedGroupData.value?.startzeit),
+      endzeit: formatTime(selectedGroupData.value?.endzeit),
       startdatum: selectedGroupData.value?.anfangsdatum,
       enddatum: selectedGroupData.value?.enddatum,
     })

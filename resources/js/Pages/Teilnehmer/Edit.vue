@@ -174,6 +174,7 @@
                         <thead class="bg-gray-100">
                             <tr>
                             <th class="px-4 py-2 border">Projekte</th>
+                            <th class="px-4 py-2 border">Standort</th>
                             <th class="px-4 py-2 border">Betreuer</th>
                             <th class="px-4 py-2 border">Projektbegleiter</th>
                             <th class="px-4 py-2 border">Antragsdatum</th>
@@ -200,6 +201,13 @@
                                         class="border px-4 py-2 align-middle font-medium bg-gray-50"
                                         >
                                         {{ projekt.name }}
+                                    </td>
+                                    <td
+                                        v-if="z === 0"
+                                        :rowspan="projekt.pivot_model?.zeitraume?.length || 1"
+                                        class="border px-4 py-2 align-middle bg-gray-50"
+                                    >
+                                        {{ getProjektStandortName(projekt) }}
                                     </td>
                                     <td class="border px-4 py-2">{{ projekt.pivot_model.meta?.betreuer?.geschlecht == 'w' ? 'Frau' : (projekt.pivot_model.meta?.betreuer?.geschlecht == 'm' ? 'Herr' : '') }} {{ projekt.pivot_model.meta?.betreuer?.vorname }} {{ projekt.pivot_model.meta?.betreuer?.nachname }}</td>
                                     <td class="border px-4 py-2">{{ projekt.pivot_model.meta?.projektbegleiter?.geschlecht == 'w' ? 'Frau' : (projekt.pivot_model.meta?.projektbegleiter?.geschlecht == 'm' ? 'Herr' : '') }} {{ projekt.pivot_model.meta?.projektbegleiter?.vorname }} {{ projekt.pivot_model.meta?.projektbegleiter?.nachname }}</td>
@@ -239,6 +247,7 @@
                                 <!-- Falls keine Zeiträume vorhanden sind -->
                                 <tr v-if="!projekt.pivot_model?.zeitraume?.length" class="hover:bg-gray-50">
                                     <td class="border px-4 py-2 font-medium bg-gray-50">{{ projekt.name }}</td>
+                                    <td class="border px-4 py-2 bg-gray-50">{{ getProjektStandortName(projekt) }}</td>
                                     <td class="border px-4 py-2">{{ projekt.pivot_model.meta?.betreuer?.geschlecht == 'w' ? 'Frau' : (projekt.pivot_model.meta?.betreuer?.geschlecht == 'm' ? 'Herr' : '------') }} {{ projekt.pivot_model.meta?.betreuer?.vorname }} {{ projekt.pivot_model.meta?.betreuer?.nachname }}</td>
                                     <td class="border px-4 py-2 font-medium bg-gray-50">{{ projekt.pivot_model.meta?.projektbegleiter?.geschlecht == 'w' ? 'Frau' : 'Herr' }} {{ projekt.pivot_model.meta?.projektbegleiter?.vorname }} {{ projekt.pivot_model.meta?.projektbegleiter?.nachname }}</td>
                                     <td colspan="5" class="border px-4 py-2 text-gray-500 italic"> Keine Zeiträume vorhanden</td>
@@ -260,7 +269,7 @@
                                                 </span>
                                                 <span
                                                     class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"
-                                                    @click="openProjektEdit(zeit, projekt)"
+                                                    @click="openProjektEdit(null, projekt)"
                                                     >
                                                     {{ $t('Bearbeiten') }} <i class="las la-edit"></i>
                                                 </span>
@@ -1202,6 +1211,19 @@
                 />
                 </div>
 
+                <div class="col-span-2">
+                <FloatLabel variant="on">
+                    <Select
+                    v-model="neuesProjekt.standort_id"
+                    :options="props.standorte"
+                    optionValue="id"
+                    optionLabel="name"
+                    class="w-full"
+                    />
+                    <label>Standort</label>
+                </FloatLabel>
+                </div>
+
                 <!-- Betreuer -->
                 <div>
                 <FloatLabel variant="on">
@@ -1298,6 +1320,13 @@
                         <Select v-model="editForm.projektname" disabled :options="props.projekte" optionValue="id" optionLabel="name" class="w-full"/>
 
                         <label>Projektname</label>
+                    </FloatLabel>
+                </div>
+                <div class="mb-4 w-full mx-1">
+                    <FloatLabel variant="on">
+                        <Select v-model="editForm.standort_id" :options="props.standorte" optionValue="id" optionLabel="name" class="w-full"/>
+
+                        <label>Standort</label>
                     </FloatLabel>
                 </div>
                 <div class="mb-4 w-full mx-1">
@@ -1777,6 +1806,7 @@
         gruppen: Array,
         kontakttypen: Array,
         projekte: Array,
+        standorte: Array,
         betreuer: Array,
         erhalteneBriefe: Array,
         meineBriefe: Array,
@@ -1840,6 +1870,7 @@ watchEffect(() => {
         endtermin: '',
         anfangsdatum: '',
         enddatum: '',
+        standort_id: '',
         betreuer: "",
         massnahmebegleiter: "",
     });
@@ -1904,6 +1935,19 @@ onMounted(() => {
     neueAnwesenheit.value.anwesenheitsstatus = standard.id
   }
 })
+
+const getProjektStandortName = (projekt) => {
+  if (projekt?.pivot_model?.standort?.name) {
+    return projekt.pivot_model.standort.name;
+  }
+
+  const standortId = projekt?.pivot_model?.standort_id;
+  const standort = props.standorte?.find(
+    (item) => Number(item.id) === Number(standortId)
+  );
+
+  return standort?.name || "Kein Standort";
+};
 
 // =======  Sozialdaten  =======
 // script setup (Ausschnitt)
@@ -2649,12 +2693,17 @@ const addProjekt = () => {
       const projekt = props.projekte.find(
         (p) => p.id === neuesProjektId.value
       );
+      const selectedStandort = props.standorte?.find(
+        (standort) => Number(standort.id) === Number(neuesProjekt.value.standort_id)
+      );
 
       if (projekt) {
         // 🔥 Neues Projekt in lokale Liste einfügen
         teilnehmer.value.projekte.unshift({
           ...projekt,
           pivot_model: {
+            standort_id: neuesProjekt.value.standort_id || null,
+            standort: selectedStandort || null,
             zeitraume: [
               {
                 antragsdatum: neuesProjekt.value.antragsdatum || null,
@@ -2687,6 +2736,7 @@ const addProjekt = () => {
         endtermin: "",
         anfangsdatum: "",
         enddatum: "",
+        standort_id: "",
         betreuer: "",
         massnahmebegleiter: "",
       };
@@ -2711,6 +2761,7 @@ const editForm = ref({
     anfangsdatum: "",
     endtermin: "",
     enddatum: "",
+    standort_id: "",
 });
 const openProjektEdit = (zeit, projekt) =>  {
     showEditZuwseisungModal.value = true;
@@ -2719,6 +2770,7 @@ const openProjektEdit = (zeit, projekt) =>  {
         betreuer: projekt.pivot_model.meta?.betreuer_id ?? "",
         massnahmebegleiter: projekt.pivot_model.meta?.projektbegleiter_id ?? "",
         projektname: projekt.id,
+        standort_id: projekt.pivot_model.standort_id ?? "",
         antragsdatum: formatDate(zeit?.antragsdatum),
         starttermin: formatDate(zeit?.starttermin),
         anfangsdatum: formatDate(zeit?.anfangsdatum),
@@ -2733,6 +2785,7 @@ function saveEdit() {
         id: editForm.value.id,
         projektbegleiter_id: editForm.value.massnahmebegleiter,
         betreuer_id: editForm.value.betreuer,
+        standort_id: editForm.value.standort_id,
         antragsdatum: toLocalDateString(editForm.value.antragsdatum),
         starttermin: toLocalDateString(editForm.value.starttermin),
         endtermin: toLocalDateString(editForm.value.endtermin),
@@ -2752,17 +2805,24 @@ function saveEdit() {
             );
 
             if (projekt) {
-                const index = projekt.pivot_model.zeitraume.findIndex(
-                    z => Number(z.id) === Number(newData.id)
-                );
+                if (newData) {
+                    const zeitraume = projekt.pivot_model.zeitraume || [];
+                    const index = zeitraume.findIndex(
+                        z => Number(z.id) === Number(newData.id)
+                    );
 
-                if (index !== -1) {
-                    projekt.pivot_model.zeitraume[index] = newData;
-                } else {
-                    projekt.pivot_model.zeitraume.push(newData);
+                    if (index !== -1) {
+                        zeitraume[index] = newData;
+                    } else {
+                        zeitraume.push(newData);
+                    }
+
+                    projekt.pivot_model.zeitraume = zeitraume;
                 }
                  // 🔹 Projektbegleiter im Meta-Objekt aktualisieren
                 projekt.pivot_model.meta = newMeta;
+                projekt.pivot_model.standort_id = response.data.standort_id;
+                projekt.pivot_model.standort = response.data.standort;
             }
 
             showEditZuwseisungModal.value = false;

@@ -9,6 +9,7 @@
     import ModalDestroy from '@/Components/ModalDestroyForm.vue';
     import ModalCreate from '@/Pages/Projekt/ModalCreate.vue';
     import ModalEdit from '@/Pages/Projekt/ModalEdit.vue';
+    import ModalDokumente from '@/Pages/Projekt/ModalDokumente.vue';
     import ModalExportAnwesenheitlisteZeitraum from '@/Pages/Projekt/ModalExportAnwesenheitlisteZeitraum.vue';
     let seite = 'projekt';
     let search = ref('');
@@ -16,17 +17,20 @@
     let showModalLöschen = ref(false);
     let isModalCreateOpen = ref(false);
     let isModalEditOpen = ref(false);
+    let isModalDokumenteOpen = ref(false);
     let projektToEdit = ref(null);
+    let projektForDokumente = ref(null);
 
     // Props
     const props = defineProps({
     projekte: Object,
     abteilungen: Object,
     bereiche: Array,
-    kostenstellen: Array
+    kostenstellen: Array,
+    dokumente: Array,
+    dokumentKategorien: Array,
     });
 
-    console.log(props.abteilungen)
     // Lokale Liste
     let localProjekte = ref([...props.projekte.data]);
     let filteredProjekte = ref([...localProjekte.value]);
@@ -50,6 +54,13 @@
     };
 
     const closeModalEdit = () => { isModalEditOpen.value = false; };
+
+    const openModalDokumente = (projekt) => {
+    projektForDokumente.value = projekt;
+    isModalDokumenteOpen.value = true;
+    };
+
+    const closeModalDokumente = () => { isModalDokumenteOpen.value = false; };
 
 
     let isModalExportAnwesenheitlisteOpen = ref(false);
@@ -137,6 +148,9 @@
              placeholder="Suchen ..." />
             <Link :href="route('projekt.index')" class="flex items-center">
                 <i class="la la-refresh bg-white border border-gray-300 rounded-r-md px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
+            </Link>
+            <Link :href="route('dokumente.index')" class="ml-2 flex items-center rounded border border-gray-300 bg-white px-4 py-2 text-sm text-zbb hover:border-orange-500 hover:bg-zbb hover:text-white">
+                <i class="las la-file-export mr-2"></i> Dokumentenmanager
             </Link>
     </div>
 
@@ -242,6 +256,12 @@
                     </span>
                     <span
                         class="flex justify-between cursor-pointer px-6 items-center hover:bg-gray-100"
+                        @click="openModalDokumente(projekt)"
+                    >
+                        Export-Vorlagen <i class="las la-file-alt"></i>
+                    </span>
+                    <span
+                        class="flex justify-between cursor-pointer px-6 items-center hover:bg-gray-100"
                         @click="confirmDelete(projekt)"
                     >
                         Löschen <i class="las la-trash-alt"></i>
@@ -274,6 +294,13 @@
                @bereich-created="addBereichOption"
                @kostenstelle-created="addKostenstelleOption"
                @close="closeModalEdit"
+               @updated="updateProjekt"/>
+
+    <ModalDokumente
+               :visible="isModalDokumenteOpen"
+               :projekt="projektForDokumente"
+               :dokumente="props.dokumente"
+               @close="closeModalDokumente"
                @updated="updateProjekt"/>
 
 

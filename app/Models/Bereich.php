@@ -27,4 +27,9 @@ class Bereich extends Model
     {
        return $this->hasMany(BereichHasPersonen::class, 'bereich_id', 'id');
     }
+
+    public function dokumente()
+    {
+        return $this->belongsToMany(Dokumente::class, 'dokument_has_bereiches', 'bereich_id', 'dokument_id');
+    }
 }

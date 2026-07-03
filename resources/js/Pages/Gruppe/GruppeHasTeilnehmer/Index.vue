@@ -11,17 +11,20 @@
     import Swal from 'sweetalert2'
     import axios from 'axios' // ✅ FEHLTE
     import { formatTime } from '@/utils/timeFormat'
-    import Dropdown from '@/Components/Dropdown.vue';
 
     // --- Props ---
     const props = defineProps({
     gruppe: { type: Object, required: true },
     teilnehmer: { type: Array, required: true },
     anwesenheitsstatuten: { type: Array, required: true },
+    bopLegacyExporte: { type: Array, default: () => [] },
     })
     console.log('Props:', props.gruppe    )
     // Modal-Steuerung + Auswahl
     const showTeilnehmerModal = ref(false)
+    const showExportDialog = ref(false)
+    const exportSuche = ref('')
+    const legacyExportLoading = ref(null)
     const selectedTeilnehmerIds = ref([])
 
     // --- Hilfsfunktion für Farben je nach Status ---
@@ -171,6 +174,102 @@ const tage = computed(() =>
     : []
 )
 
+const exportVorlagen = computed(() =>
+  (props.gruppe?.projekt?.dokumente || []).filter((dokument) =>
+    dokument.dateipfad &&
+    dokument.pivot?.gruppen_export &&
+    dokument.pivot?.serienbrief
+  )
+)
+
+const exportFormate = (dokument) => {
+  if (Array.isArray(dokument.ausgabeformate) && dokument.ausgabeformate.length) {
+    return dokument.ausgabeformate
+  }
+
+  if (dokument.typ === 'excel') return ['xlsx', 'pdf']
+  if (dokument.typ === 'pdf') return ['pdf']
+  return ['docx', 'pdf']
+}
+
+const gefilterteExportVorlagen = computed(() => {
+  const suche = exportSuche.value.trim().toLowerCase()
+  if (!suche) return exportVorlagen.value
+
+  return exportVorlagen.value.filter((dokument) =>
+    [dokument.name, dokument.typ, dokument.kontext, ...(dokument.ausgabeformate || [])]
+      .filter(Boolean)
+      .some((wert) => String(wert).toLowerCase().includes(suche))
+  )
+})
+
+const bopLegacyExporte = computed(() => props.bopLegacyExporte || [])
+
+const gefilterteBopLegacyExporte = computed(() => {
+  const suche = exportSuche.value.trim().toLowerCase()
+  if (!suche) return bopLegacyExporte.value
+
+  return bopLegacyExporte.value.filter((item) =>
+    [item.name, item.typ, item.format]
+      .filter(Boolean)
+      .some((wert) => String(wert).toLowerCase().includes(suche))
+  )
+})
+
+const exportTreffer = computed(() => gefilterteExportVorlagen.value.length + gefilterteBopLegacyExporte.value.length)
+const exportGesamt = computed(() => exportVorlagen.value.length + bopLegacyExporte.value.length)
+
+const formatLabel = (format) => String(format).toUpperCase()
+
+const exportHref = (dokument, format) =>
+  route('gruppe.export.serienbrief', {
+    gruppe: props.gruppe.id,
+    dokument: dokument.id,
+    format,
+  })
+
+const fileNameFromResponse = (response, fallback) => {
+  const disposition = response.headers?.['content-disposition'] || ''
+  const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+  if (encoded) return decodeURIComponent(encoded)
+
+  const plain = disposition.match(/filename="?([^";]+)"?/i)?.[1]
+  return plain || fallback || 'export'
+}
+
+const downloadBlob = (response, fallbackName) => {
+  const url = window.URL.createObjectURL(new Blob([response.data]))
+  const link = document.createElement('a')
+  link.href = url
+  link.setAttribute('download', fileNameFromResponse(response, fallbackName))
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
+}
+
+const startBopLegacyExport = async (item) => {
+  if (!item?.url) return
+
+  if ((item.method || 'get').toLowerCase() !== 'post') {
+    window.location.href = item.url
+    return
+  }
+
+  legacyExportLoading.value = item.id
+
+  try {
+    const response = await axios.post(item.url, item.payload || {}, {
+      responseType: 'blob',
+    })
+    downloadBlob(response, item.fileName || `${item.name}.${String(item.format || 'docx').toLowerCase()}`)
+  } catch (error) {
+    Swal.fire('Fehler', error.response?.data?.message || 'Export fehlgeschlagen.', 'error')
+  } finally {
+    legacyExportLoading.value = null
+  }
+}
+
 
 // --- Teilnehmer vorbereiten ---
 const gruppenTeilnehmer = ref([])
@@ -244,6 +343,8 @@ const speichernSofort = async (tID, ttag, statusName, tatstartTime, tatendTime) 
   }
 }
 const exportMitTag = async () => {
+    showExportDialog.value = false;
+
     const options = tage.value.map(t => ({
         value: t.date,
         label: `${t.label} (${t.datum})`
@@ -307,12 +408,12 @@ const exportMitTag = async () => {
              <div class="flex gap-2">
                 <div class="w-full">
                     <label for="abteilungDelete">Von*</label>
-                    <InputText type="time" v-model="tatstartTime" class="w-full" />
+                    <InputText type="time" v-model="zeitgeplantStart" class="w-full" />
                 </div>
 
                 <div class="w-full">
                     <label for="abteilungDelete">Bis*</label>
-                    <InputText type="time" v-model="tatendTime" class="w-full" />
+                    <InputText type="time" v-model="zeitgeplantEnd" class="w-full" />
                 </div>
             </div>
 
@@ -364,29 +465,110 @@ const exportMitTag = async () => {
 
       <!-- Anwesenheit -->
       <div class="space-y-4">
-        <div class="flex justify-between">
+        <div class="flex flex-wrap items-center justify-between gap-3">
             <h3 class="font-semibold text-gray-700">Anwesenheit verwalten</h3>
-              <Dropdown align="right" width="80">
-                        <template #trigger >
-                            <button class="inline-flex items-center py-2 mx-1 border border-transparent text-sm leading-4 font-medium rounded-md dark:text-white dark:hover:text-gray-300 bg-zbb text-white p-2 hover:text-gray-700 focus:outline-none transition ease-in-out duration-150">
-                                Exportieren
-                            </button>
-                        </template>
-                        <template #content>
-                            <div class="block px-4 py-2 text-xs text-gray-400 border-b border-gray-200">{{$t('Dateien')}}</div>
-                            <li class="list-none text-sm py-2 px-3 hover:bg-slate-100">
-                                <button @click="exportMitTag()">Anwesenheitsliste</button>
-                            </li>
-                            <li class="list-none text-sm py-2 px-3 border-b border-gray-200 hover:bg-slate-100 dark:text-gray-700">
-                                2
-                            </li>
-
-
-
-                        </template>
-                        <!-- Dropdown content -->
-                    </Dropdown>
+            <Button
+              label="Exportieren"
+              icon="pi pi-download"
+              class="!bg-zbb hover:!bg-zbb/80 border-none"
+              @click="showExportDialog = true"
+            />
         </div>
+
+        <Dialog
+          v-model:visible="showExportDialog"
+          modal
+          header="Exportieren"
+          :style="{ width: '760px', maxWidth: '94vw' }"
+          :draggable="false"
+          appendTo="body"
+          dismissableMask
+        >
+          <div class="space-y-4">
+            <button
+              type="button"
+              class="flex w-full items-center justify-between rounded border border-gray-200 bg-white px-4 py-3 text-left text-sm hover:border-zbb hover:bg-zbbTrp"
+              @click="exportMitTag"
+            >
+              <span>
+                <span class="block font-semibold text-gray-800">Anwesenheitsliste</span>
+                <span class="block text-xs text-gray-500">{{ tage.length }} Tage</span>
+              </span>
+              <i class="las la-file-export text-xl text-zbb"></i>
+            </button>
+
+            <div class="flex items-center gap-2">
+              <InputText
+                v-model="exportSuche"
+                class="w-full"
+                placeholder="Vorlage suchen"
+              />
+              <span class="shrink-0 rounded bg-gray-100 px-3 py-2 text-xs text-gray-600">
+                {{ exportTreffer }} / {{ exportGesamt }}
+              </span>
+            </div>
+
+            <div v-if="gefilterteBopLegacyExporte.length" class="rounded border border-gray-200 bg-white">
+              <div class="border-b border-gray-100 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase text-gray-500">
+                BOP-Funktionen
+              </div>
+              <div
+                v-for="item in gefilterteBopLegacyExporte"
+                :key="item.id"
+                class="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 last:border-b-0 hover:bg-gray-50"
+              >
+                <div class="min-w-0">
+                  <div class="truncate font-medium text-gray-800" :title="item.name">{{ item.name }}</div>
+                  <div class="mt-1 flex flex-wrap gap-1 text-xs text-gray-500">
+                    <span class="rounded bg-gray-100 px-2 py-0.5">{{ item.typ }}</span>
+                    <span class="rounded bg-gray-100 px-2 py-0.5">{{ item.format }}</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="inline-flex h-9 min-w-20 items-center justify-center rounded border border-zbb/30 px-3 text-xs font-semibold text-zbb hover:bg-zbb hover:text-white disabled:opacity-60"
+                  :disabled="legacyExportLoading === item.id"
+                  @click="startBopLegacyExport(item)"
+                >
+                  {{ legacyExportLoading === item.id ? 'Lädt...' : item.format }}
+                </button>
+              </div>
+            </div>
+
+            <div class="max-h-[52vh] overflow-y-auto rounded border border-gray-200 bg-white">
+              <div v-if="gefilterteExportVorlagen.length" class="border-b border-gray-100 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase text-gray-500">
+                Vorlagen
+              </div>
+              <div
+                v-for="dok in gefilterteExportVorlagen"
+                :key="dok.id"
+                class="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 last:border-b-0 hover:bg-gray-50"
+              >
+                <div class="min-w-0">
+                  <div class="truncate font-medium text-gray-800" :title="dok.name">{{ dok.name }}</div>
+                  <div class="mt-1 flex flex-wrap gap-1 text-xs text-gray-500">
+                    <span class="rounded bg-gray-100 px-2 py-0.5">{{ dok.typ?.toUpperCase() }}</span>
+                    <span v-if="dok.kontext" class="rounded bg-gray-100 px-2 py-0.5">{{ dok.kontext }}</span>
+                  </div>
+                </div>
+                <div class="flex shrink-0 flex-wrap justify-end gap-2">
+                  <a
+                    v-for="format in exportFormate(dok)"
+                    :key="dok.id + '-' + format"
+                    class="inline-flex h-9 min-w-16 items-center justify-center rounded border border-zbb/30 px-3 text-xs font-semibold text-zbb hover:bg-zbb hover:text-white"
+                    :href="exportHref(dok, format)"
+                  >
+                    {{ formatLabel(format) }}
+                  </a>
+                </div>
+              </div>
+
+              <div v-if="exportTreffer === 0" class="px-4 py-8 text-center text-sm text-gray-400">
+                Keine Export-Vorlagen
+              </div>
+            </div>
+          </div>
+        </Dialog>
 
         <!-- Anwesenheitsstatuten Agenda-->
         <div class="flex items-center gap-6 bg-zbbTrp border p-3 rounded">
