@@ -4,10 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Inertia\Inertia;
+use App\Models\RoleDataAccessSetting;
 use Spatie\Permission\Models\Role;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Berechtigungskategorie;
-use Illuminate\Support\Facades\Request;
+use Illuminate\Http\Request;
 use Spatie\Permission\Models\Permission;
 
 class BerechtigungController extends Controller
@@ -21,6 +22,7 @@ class BerechtigungController extends Controller
     {
         // Default Rolle ist Administrator, falls kein ID übergeben wurde
         $id = $id ?? 1;
+        $role = Role::findById($id);
 
         // Aktuell angemeldeten Benutzer abrufen
         $user = User::find(Auth::user())->first(); // Auth::user() gibt bereits das Benutzerobjekt zurück
@@ -39,31 +41,36 @@ class BerechtigungController extends Controller
 
         return Inertia::render('Einstellung/RollePermission/Index', [
             'rollen' => Role::query()
-                ->when(Request::input('search'), function ($query, $search) {
+                ->when(request('search'), function ($query, $search) {
                     $query->where('name', 'like', "%{$search}%");
                 })
                 ->get(),
 
             'berechtigungskategorien' => $berechtigungskategorien, // Berechtigungen mit Kategorien
 
-            'roleSearched' => Role::findById($id),
+            'roleSearched' => $role,
 
             // Kategorien, auf die der aktuelle Benutzer Berechtigungen hat
             'kategorienDerUser' => Berechtigungskategorie::whereHas('roles', function($query) use ($userRoleIds) {
                 $query->whereIn('role_id', $userRoleIds);
             })->with('permissions')->get(),
 
-            'alleZugewiesenePermission' => Role::findById($id)->permissions,
+            'alleZugewiesenePermission' => $role->permissions,
 
             'roleId' => $id,
+            'dataAccess' => RoleDataAccessSetting::valuesForRole($role),
+            'dataAccessOptions' => [
+                'team' => RoleDataAccessSetting::TEAM_SCOPES,
+                'participant' => RoleDataAccessSetting::PARTICIPANT_SCOPES,
+            ],
         ]);
     }
 
     public function berechtigungZuweisen(Request $request)
         {
-            $roleId = Request::input('roleId');
-            $permissionId = Request::input('permissionId');
-            $action =Request::input('action');
+            $roleId = $request->input('roleId');
+            $permissionId = $request->input('permissionId');
+            $action = $request->input('action');
             $role = Role::find($roleId);
             $permission = Permission::find($permissionId);
 

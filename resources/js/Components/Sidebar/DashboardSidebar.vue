@@ -29,7 +29,7 @@
                     <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('apps.calendar')">Kalender</Link></li>
                     <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('apps.contacts')">Kontakte</Link></li>
                     <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('apps.files')">Dateimanager</Link></li>
-                    <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('teilnehmer.index')">Teilnehmer</Link></li>
+                    <li v-if="$page.props.permissions.includes('teilnehmer.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('teilnehmer.index')">Teilnehmer</Link></li>
                     <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('apps.tasks')">Taskmanager</Link></li>
                     <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('apps.popups')">Popups</Link></li>
                 </ul>
@@ -116,7 +116,7 @@
             </li>
 
             <!-- Gruppe Submenu -->
-            <li v-if="$page.props.roles.includes('Administrator')" class="submenu" >
+            <li v-if="['teilnehmer.index', 'teilnehmer.store'].some(permission => $page.props.permissions.includes(permission))" class="submenu" >
                 <a href="#" @click.prevent="toggleMenu('gruppe')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                     <i class="las la-cookie la-lg mr-2"></i>
                     <span v-if="!displayHideTextSidebar" class="pr-16">{{$t('Gruppe')}}</span>
@@ -142,10 +142,10 @@
                     <span :class="{'rotate-180': activeMenu === 'teilnehmer'}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
                 </a>
                 <ul v-show="activeMenu === 'teilnehmer'" class="pl-6 mt-2 space-y-2">
-                    <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('teilnehmer.index')">{{$t('Teilnehmerübersicht')}}</Link></li>
+                    <li v-if="$page.props.permissions.includes('teilnehmer.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('teilnehmer.index')">{{$t('Teilnehmerübersicht')}}</Link></li>
                 </ul>
                 <ul v-show="activeMenu === 'teilnehmer'" class="pl-6 mt-2 space-y-2">
-                    <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('teilnehmer.create')">{{$t('Teilnehmer anlegen')}}</Link></li>
+                    <li v-if="$page.props.permissions.includes('teilnehmer.store')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('teilnehmer.create')">{{$t('Teilnehmer anlegen')}}</Link></li>
                 </ul>
             </li>
             <!-- Berechtigung Submenu -->

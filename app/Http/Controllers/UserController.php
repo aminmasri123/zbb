@@ -6,6 +6,9 @@ use App\Models\User;
 use Inertia\Inertia;
 use Inertia\Response;
 use App\Models\Projekt;
+use App\Models\Personen;
+use App\Models\Standort;
+use App\Models\RoleDataAccessSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -39,8 +42,8 @@ class UserController extends Controller
             $sort = 'id';
         }
 
-        $authUser   = auth()->user();
-        $adminRoles = ['Administrator', 'Geschäftsführer', 'Sekretariat'];
+        $authUser = auth()->user();
+        $teamScope = RoleDataAccessSetting::scopeForUser($authUser, 'team');
 
         $query = User::query()
             ->select('users.*') // wichtig für Pagination!
@@ -57,11 +60,7 @@ class UserController extends Controller
             ->with(['projekte', 'person', 'roles:name,color']);
 
         // Zugriffsbeschränkung
-        if (!$authUser->roles->whereIn('name', $adminRoles)->count()) {
-            $query->whereHas('projekte', function ($query) use ($authUser) {
-                $query->whereIn('projekt_id', $authUser->projekte->pluck('id'));
-            });
-        }
+        $this->applyTeamVisibility($query, $authUser, $teamScope);
 
         // Filter nach Projekt
         if ($selectedProject) {
@@ -76,10 +75,23 @@ class UserController extends Controller
         } else {
             $query->orderBy("users.$sort", $direction);
         }
+        $assignableProjects = $this->assignableProjectsFor($authUser);
+
         return Inertia::render('User/Index', [
             'users'        => $query->paginate(30)->withQueryString(),
-            'authProjekte' => $authUser->projekte,
+            'authProjekte' => $assignableProjects,
+            'alleProjekte' => $assignableProjects,
+            'standorte'    => Standort::orderBy('name')->get(['id', 'name']),
             'rollen'       => $rollen,
+        ]);
+    }
+
+    public function create()
+    {
+        return Inertia::render('User/CreateMitarbeiter', [
+            'rollen' => Role::orderBy('name')->get(),
+            'alleProjekte' => $this->assignableProjectsFor(auth()->user()),
+            'alleStandorte' => Standort::orderBy('name')->get(['id', 'name']),
         ]);
     }
 
@@ -154,19 +166,37 @@ class UserController extends Controller
                 'username' => ['required', 'max:50', 'unique:users,username'],
                 'rollen' => ['required', 'array'],
                 'rollen.*' => ['exists:roles,id'],
+                'projekt_zuweisungen' => ['nullable', 'array'],
+                'projekt_zuweisungen.*.projekt_id' => ['nullable', 'integer', 'exists:projekts,id'],
+                'projekt_zuweisungen.*.standort_ids' => ['array'],
+                'projekt_zuweisungen.*.standort_ids.*' => ['integer', 'exists:standorts,id'],
             ])->validate();
 
+            $user = DB::transaction(function () use ($validatedData, $request) {
+                $person = Personen::create([
+                    'vorname' => $validatedData['first_name'],
+                    'nachname' => $validatedData['last_name'],
+                    'geschlecht' => $request->input('geschlecht', 'd'),
+                    'typ' => 'mitarbeiter',
+                    'aktiv' => true,
+                ]);
 
-            // Passwort hashen und Benutzer erstellen
-              // Passwort hashen und Benutzer erstellen
-            $validatedData['password'] = Hash::make($validatedData['password']);
-            $user = User::create($validatedData);
+                $user = User::create([
+                    'person_id' => $person->id,
+                    'username' => $validatedData['username'],
+                    'email' => $validatedData['email'],
+                    'password' => Hash::make($validatedData['password']),
+                    'current_team_id' => collect($validatedData['projekt_zuweisungen'] ?? [])
+                        ->pluck('projekt_id')
+                        ->filter()
+                        ->first(),
+                ]);
 
-            // Rollen zuweisen
-            $user->assignRole($validatedData['rollen']);
+                $user->roles()->sync($validatedData['rollen']);
+                $this->syncProjektZuweisungen($person, $validatedData['projekt_zuweisungen'] ?? []);
 
-
-            $user->load('roles'); // falls du Rollen brauchst
+                return $user->load('person', 'roles', 'projekte');
+            });
 
 
             return response()->json(['message' => 'Benutzer erfolgreich erstellt!', 'user' => $user], 201);
@@ -208,7 +238,7 @@ class UserController extends Controller
 
     public function edit($id)
     {
-        $user = User::with('roles')->findOrFail($id);
+        $user = User::with('roles', 'person')->findOrFail($id);
 
 
         $rollen = Role::all();
@@ -216,13 +246,15 @@ class UserController extends Controller
         return Inertia::render('User/Edit', [
             'user' => $user,
             'rollen' => $rollen,
+            'alleProjekte' => $this->assignableProjectsFor(auth()->user()),
+            'alleStandorte' => Standort::orderBy('name')->get(['id', 'name']),
+            'zuweisungen' => $user->person_id ? $this->buildProjektZuweisungen($user->person_id) : [],
         ]);
     }
 
 
     public function update(Request $request, User $user)
     {
-        // Validierung
         $validated = $request->validate([
             'first_name' => 'required|string|max:255',
             'last_name'  => 'required|string|max:255',
@@ -231,26 +263,43 @@ class UserController extends Controller
             'password'   => 'nullable|string|min:8|confirmed',
             'rollen' => ['required', 'array'],
             'rollen.*' => ['exists:roles,id'],
+            'projekt_zuweisungen' => ['array'],
+            'projekt_zuweisungen.*.projekt_id' => ['nullable', 'integer', 'exists:projekts,id'],
+            'projekt_zuweisungen.*.standort_ids' => ['array'],
+            'projekt_zuweisungen.*.standort_ids.*' => ['integer', 'exists:standorts,id'],
         ]);
-        // User-Daten aktualisieren
-        $user->first_name = $validated['first_name'];
-        $user->last_name  = $validated['last_name'];
-        $user->username   = $validated['username'];
-        $user->email      = $validated['email'];
-        $user->assignRole($validated['rollen']);
 
+        DB::transaction(function () use ($validated, $user) {
+            $person = $user->person ?: Personen::create([
+                'vorname' => $validated['first_name'],
+                'nachname' => $validated['last_name'],
+                'geschlecht' => 'd',
+                'typ' => 'mitarbeiter',
+                'aktiv' => true,
+            ]);
 
-        // Passwort nur ändern, wenn eingegeben
-        if (!empty($validated['password'])) {
-            $user->password = Hash::make($validated['password']);
-        }
+            $person->update([
+                'vorname' => $validated['first_name'],
+                'nachname' => $validated['last_name'],
+                'typ' => $person->typ ?: 'mitarbeiter',
+            ]);
 
-        $user->save();
+            $user->person_id = $person->id;
+            $user->username = $validated['username'];
+            $user->email = $validated['email'];
+
+            if (!empty($validated['password'])) {
+                $user->password = Hash::make($validated['password']);
+            }
+
+            $user->save();
+            $user->roles()->sync($validated['rollen']);
+            $this->syncProjektZuweisungen($person, $validated['projekt_zuweisungen'] ?? []);
+        });
 
         return redirect()->route('user.edit', $user->id)
                          ->with('success', 'Benutzer wurde erfolgreich aktualisiert.');
     }
-
     public function destroy($id)
     {
         try {
@@ -263,6 +312,143 @@ class UserController extends Controller
             return response()->json(['message' => 'Der Konto konnte nicht gefunden werden.'], 404);
         } catch (\Exception $e) {
             return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
+        }
+    }
+
+    private function assignableProjectsFor(?User $user)
+    {
+        $query = Projekt::query()
+            ->with('abteilung')
+            ->orderBy('name');
+
+        if (! $user) {
+            $query->whereRaw('1 = 0');
+        } else {
+            match (RoleDataAccessSetting::scopeForUser($user, 'team')) {
+                'all' => null,
+                'department' => $this->filterProjectsByDepartments($query, $this->departmentIdsFor($user)),
+                'own_projects' => $this->filterProjectsByIds($query, $this->projectIdsFor($user)),
+                default => $query->whereRaw('1 = 0'),
+            };
+        }
+
+        return $query->get(['id', 'name', 'abteilung_id']);
+    }
+
+    private function applyTeamVisibility($query, User $user, string $scope): void
+    {
+        match ($scope) {
+            'all' => null,
+            'department' => $this->filterUsersByDepartments($query, $this->departmentIdsFor($user)),
+            'own_projects' => $this->filterUsersByProjects($query, $this->projectIdsFor($user)),
+            default => $query->whereRaw('1 = 0'),
+        };
+    }
+
+    private function filterUsersByProjects($query, $projectIds): void
+    {
+        if ($projectIds->isEmpty()) {
+            $query->whereRaw('1 = 0');
+            return;
+        }
+
+        $query->whereHas('projekte', function ($query) use ($projectIds) {
+            $query->whereIn('projekts.id', $projectIds);
+        });
+    }
+
+    private function filterUsersByDepartments($query, $departmentIds): void
+    {
+        if ($departmentIds->isEmpty()) {
+            $query->whereRaw('1 = 0');
+            return;
+        }
+
+        $query->whereHas('projekte', function ($query) use ($departmentIds) {
+            $query->whereIn('projekts.abteilung_id', $departmentIds);
+        });
+    }
+
+    private function filterProjectsByIds($query, $projectIds): void
+    {
+        if ($projectIds->isEmpty()) {
+            $query->whereRaw('1 = 0');
+            return;
+        }
+
+        $query->whereIn('id', $projectIds);
+    }
+
+    private function filterProjectsByDepartments($query, $departmentIds): void
+    {
+        if ($departmentIds->isEmpty()) {
+            $query->whereRaw('1 = 0');
+            return;
+        }
+
+        $query->whereIn('abteilung_id', $departmentIds);
+    }
+
+    private function projectIdsFor(User $user)
+    {
+        return $user->projekte()->pluck('projekts.id')->filter()->unique()->values();
+    }
+
+    private function departmentIdsFor(User $user)
+    {
+        return $user->projekte()->pluck('projekts.abteilung_id')->filter()->unique()->values();
+    }
+
+    private function buildProjektZuweisungen(int $personId): array
+    {
+        return DB::table('projekt_has_personens')
+            ->join('projekts', 'projekts.id', '=', 'projekt_has_personens.projekt_id')
+            ->where('personen_id', $personId)
+            ->select(
+                'projekt_has_personens.projekt_id',
+                'projekts.name as projekt_name',
+                'projekt_has_personens.standort_id'
+            )
+            ->get()
+            ->groupBy('projekt_id')
+            ->map(function ($rows) {
+                return [
+                    'projekt_id' => $rows->first()->projekt_id,
+                    'projekt_name' => $rows->first()->projekt_name,
+                    'standort_ids' => $rows->pluck('standort_id')->filter()->unique()->values()->all(),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function syncProjektZuweisungen(Personen $person, array $zuweisungen): void
+    {
+        DB::table('projekt_has_personens')
+            ->where('personen_id', $person->id)
+            ->delete();
+
+        foreach ($zuweisungen as $item) {
+            $projektId = $item['projekt_id'] ?? null;
+            $standortIds = collect($item['standort_ids'] ?? [])
+                ->filter()
+                ->unique()
+                ->values();
+
+            if (! $projektId || $standortIds->isEmpty()) {
+                continue;
+            }
+
+            foreach ($standortIds as $standortId) {
+                DB::table('projekt_has_personens')->insert([
+                    'personen_id' => $person->id,
+                    'projekt_id' => $projektId,
+                    'standort_id' => $standortId,
+                    'status' => 'aktiv',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
         }
     }
 }

@@ -8,6 +8,8 @@ use App\Models\Bereich;
 use App\Models\DokumentKategorie;
 use App\Models\Dokumente;
 use App\Models\Projekt;
+use App\Models\Personen;
+use App\Models\Standort;
 use App\Models\Abteilung;
 use App\Models\Kostenstelle;
 use Illuminate\Http\Request;
@@ -183,7 +185,40 @@ class ProjektController extends Controller
      */
     public function show($id)
     {
-        //
+        $projekt = Projekt::query()
+            ->with([
+                'abteilung',
+                'zeitraume',
+                'bereiche',
+                'kostenstellen',
+                'dokumente.bereiche',
+                'dokumentKategorien',
+                'mitarbeiter.user.roles',
+            ])
+            ->findOrFail($id);
+
+        $zugewieseneMitarbeiterIds = DB::table('projekt_has_personens')
+            ->where('projekt_id', $projekt->id)
+            ->pluck('personen_id')
+            ->unique()
+            ->values();
+
+        $fehlendeMitarbeiter = Personen::query()
+            ->mitarbeiter()
+            ->aktiv()
+            ->with('user.roles')
+            ->when($zugewieseneMitarbeiterIds->isNotEmpty(), function ($query) use ($zugewieseneMitarbeiterIds) {
+                $query->whereNotIn('id', $zugewieseneMitarbeiterIds);
+            })
+            ->orderBy('nachname')
+            ->orderBy('vorname')
+            ->get();
+
+        return Inertia::render('Projekt/Show', [
+            'projekt' => $projekt,
+            'fehlendeMitarbeiter' => $fehlendeMitarbeiter,
+            'alleStandorte' => Standort::orderBy('name')->get(['id', 'name']),
+        ]);
     }
 
     /**

@@ -1,5 +1,5 @@
 <script setup>
-import { defineProps, defineEmits } from 'vue';
+import { defineProps, defineEmits, watch } from 'vue';
 import FloatLabel from 'primevue/floatlabel';
 import InputText from 'primevue/inputtext';
 import Password from 'primevue/password';
@@ -11,11 +11,44 @@ import Modal from '@/Components/ModalForm.vue';   // <---- das fehlte
 const props = defineProps({
   visible: { type: Boolean, default: false },
   newUser: { type: Object, required: true },
-  rollen: { type: Array, default: () => [] }
+  rollen: { type: Array, default: () => [] },
+  projekte: { type: Array, default: () => [] },
+  standorte: { type: Array, default: () => [] },
 })
 
 // Events an die Eltern-Komponente
 const emit = defineEmits(['close', 'add-user'])
+
+const ensureProjektZuweisungen = () => {
+  if (!Array.isArray(props.newUser.projekt_zuweisungen)) {
+    props.newUser.projekt_zuweisungen = [];
+  }
+
+  if (props.newUser.projekt_zuweisungen.length === 0) {
+    props.newUser.projekt_zuweisungen.push({
+      projekt_id: null,
+      standort_ids: [],
+    });
+  }
+};
+
+const addProjektRow = () => {
+  ensureProjektZuweisungen();
+  props.newUser.projekt_zuweisungen.push({
+    projekt_id: null,
+    standort_ids: [],
+  });
+};
+
+const removeProjektRow = (index) => {
+  props.newUser.projekt_zuweisungen.splice(index, 1);
+};
+
+watch(() => props.visible, (visible) => {
+  if (visible) {
+    ensureProjektZuweisungen();
+  }
+}, { immediate: true });
 </script>
 
 <template>
@@ -97,6 +130,55 @@ const emit = defineEmits(['close', 'add-user'])
                     <label>Rollen</label>
                 </FloatLabel>
           </div>
+        </div>
+
+        <div class="mt-6 border-t pt-4">
+          <h3 class="mb-3 text-sm font-semibold text-gray-700">Projekte & Standorte</h3>
+
+          <div
+            v-for="(row, index) in newUser.projekt_zuweisungen"
+            :key="index"
+            class="mb-3 rounded border bg-gray-50 p-3"
+          >
+            <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div>
+                <label class="mb-1 block text-xs font-semibold text-gray-600">Projekt</label>
+                <select v-model="row.projekt_id" class="w-full rounded border p-2 text-sm">
+                  <option :value="null">Projekt auswahlen</option>
+                  <option v-for="projekt in projekte" :key="projekt.id" :value="projekt.id">
+                    {{ projekt.name }}
+                  </option>
+                </select>
+              </div>
+
+              <div>
+                <label class="mb-1 block text-xs font-semibold text-gray-600">Standorte</label>
+                <MultiSelect
+                  v-model="row.standort_ids"
+                  :options="standorte"
+                  optionLabel="name"
+                  optionValue="id"
+                  display="chip"
+                  filter
+                  placeholder="Standorte auswahlen"
+                  class="w-full"
+                />
+              </div>
+            </div>
+
+            <button
+              v-if="newUser.projekt_zuweisungen.length > 1"
+              type="button"
+              @click="removeProjektRow(index)"
+              class="mt-2 text-sm text-red-600"
+            >
+              Projekt entfernen
+            </button>
+          </div>
+
+          <button type="button" @click="addProjektRow" class="rounded bg-gray-200 px-3 py-1 text-sm">
+            + Projekt hinzufugen
+          </button>
         </div>
       </form>
     </template>

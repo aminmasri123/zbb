@@ -43,6 +43,7 @@ use App\Http\Controllers\ProjektHasPersonenController;
 use App\Http\Controllers\ProjektHasTeilnehmerController;
 use App\Http\Controllers\ProjektHasTeilnehmerLuvController;
 use App\Http\Controllers\RaumlichkeitenController;
+use App\Http\Controllers\RoleDataAccessController;
 use App\Http\Controllers\RolleController;
 use App\Http\Controllers\SchuleController;
 use App\Http\Controllers\StandortController;
@@ -176,20 +177,21 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::post('/toggleCheck', [UserController::class, 'check'])->name('user.check');
 
     //Einstellung -- Rolle
-    Route::get('/berechtigung/{id?}', [BerechtigungController::class, 'index'])->name('berechtigung.index');
-    Route::post('/berechtigungZuweisen', [BerechtigungController::class, 'berechtigungZuweisen'])->name('berechtigung.zuweisen');
+    Route::get('/berechtigung/{id?}', [BerechtigungController::class, 'index'])->name('berechtigung.index')->can('berechtigung.index');
+    Route::post('/berechtigungZuweisen', [BerechtigungController::class, 'berechtigungZuweisen'])->name('berechtigung.zuweisen')->can('berechtigung.update');
+    Route::put('/rolle/{role}/datenzugriff', [RoleDataAccessController::class, 'update'])->name('rolle.data-access.update')->can('berechtigung.update');
 
     Route::delete('/rolle/loeschen/{id}', [RolleController::class, 'destroy'])->name('rolle.destroy');
     Route::post('/rolle/anlegen', [RolleController::class, 'store'])->name('rolle.store');
 
     //Benutzer
-    Route::get('/benutzer', [UserController::class, 'index'])->name('user.index');
-    Route::get('/benutzer/anlegen', function () { return Inertia::render('User/CreateUser'); })->name('user.create');
-    Route::post('/benutzer/anlegen', [UserController::class, 'store'])->name('user.store');
-    Route::delete('/benutzer/entfernen/{id}', [UserController::class, 'destroy'])->name('user.destroy');
+    Route::get('/benutzer', [UserController::class, 'index'])->name('user.index')->can('benutzer.index');
+    Route::get('/benutzer/anlegen', [UserController::class, 'create'])->name('user.create')->can('benutzer.store');
+    Route::post('/benutzer/anlegen', [UserController::class, 'store'])->name('user.store')->can('benutzer.store');
+    Route::delete('/benutzer/entfernen/{id}', [UserController::class, 'destroy'])->name('user.destroy')->can('benutzer.destroy');
     Route::post('/benutzer/projekt/switch', [UserController::class, 'switch'])->name('projekt.switch');
-    Route::get('/benutzer/edit/{id}', [UserController::class, 'edit'])->name('user.edit');
-    Route::put('/benutzer/update/{user}', [UserController::class, 'update'])->name('user.update');
+    Route::get('/benutzer/edit/{id}', [UserController::class, 'edit'])->name('user.edit')->can('benutzer.update');
+    Route::put('/benutzer/update/{user}', [UserController::class, 'update'])->name('user.update')->can('benutzer.update');
 
     //Profile-Benutzer
     Route::get('/user/profile/{id}', [UserController::class, 'show'])->name('user.profil');
@@ -211,6 +213,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     //Projekte
     Route::get('/projekt', [ProjektController::class, 'index'])->name('projekt.index');
     Route::get('/projekt/ajaxFresh', [ProjektController::class, 'indexAjaxFresh'])->name('projekt.indexAjaxFresh');
+    Route::get('/projekt/{id}', [ProjektController::class, 'show'])->name('projekt.show');
     Route::post('/projekt/anlegen', [ProjektController::class, 'store'])->name('projekt.store');
     Route::put('/projekt/{projekt}/dokumente', [ProjektController::class, 'updateDokumente'])->name('projekt.dokumente.update');
     Route::put('/projekt/{id}', [ProjektController::class, 'update'])->name('projekt.update');
@@ -249,23 +252,23 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::delete('/gruppehasteilnehmer/entfernen/{id}', [GruppeHasTeilnehmerController::class, 'destroy'])->name('gruppeHasPersonen.destroy');
 
     //Teilnehmer
-    Route::get('/teilnehmer', [TeilnehmerController::class, 'index'])->name('teilnehmer.index');
-    Route::get('/teilnehmer/{id}', [TeilnehmerController::class, 'indexNachProjekt'])->name('teilnehmer.projekt.index');
-    Route::get('/teilnehmer/anlegen', function () { return Inertia::render('Teilnehmer/CreateTeilnehmer'); })->name('teilnehmer.create');
-    Route::post('/teilnehmer/anlegen', [TeilnehmerController::class, 'store'])->name('teilnehmer.store');
-    Route::post('/teilnehmer/import', [TeilnehmerController::class, 'import'])->name('teilnehmer.import');
-    Route::delete('/teilnehmer/entfernen', [TeilnehmerController::class, 'bulkDestroy'])->name('teilnehmer.bulkDestroy');
-    Route::delete('/teilnehmer/entfernen/{id}', [TeilnehmerController::class, 'destroy'])->name('teilnehmer.destroy');
-    Route::get('/teilnehmer/bearbeiten/{id}', [TeilnehmerController::class, 'show'])->name('teilnehmer.edit');
-    Route::patch('/teilnehmer/update/{id}', [TeilnehmerController::class, 'update'])->name('teilnehmer.update');
-    Route::patch('/teilnehmer/{person}/sozialdaten', [TeilnehmerController::class, 'updateSozialdaten'])->name('person.sozialdaten.update');
+    Route::get('/teilnehmer', [TeilnehmerController::class, 'index'])->name('teilnehmer.index')->can('teilnehmer.index');
+    Route::get('/teilnehmer/anlegen', function () { return Inertia::render('Teilnehmer/CreateTeilnehmer'); })->name('teilnehmer.create')->can('teilnehmer.store');
+    Route::post('/teilnehmer/anlegen', [TeilnehmerController::class, 'store'])->name('teilnehmer.store')->can('teilnehmer.store');
+    Route::post('/teilnehmer/import', [TeilnehmerController::class, 'import'])->name('teilnehmer.import')->can('teilnehmer.store');
+    Route::delete('/teilnehmer/entfernen', [TeilnehmerController::class, 'bulkDestroy'])->name('teilnehmer.bulkDestroy')->can('teilnehmer.destroy');
+    Route::delete('/teilnehmer/entfernen/{id}', [TeilnehmerController::class, 'destroy'])->name('teilnehmer.destroy')->can('teilnehmer.destroy');
+    Route::get('/teilnehmer/bearbeiten/{id}', [TeilnehmerController::class, 'show'])->name('teilnehmer.edit')->can('teilnehmer.update');
+    Route::patch('/teilnehmer/update/{id}', [TeilnehmerController::class, 'update'])->name('teilnehmer.update')->can('teilnehmer.update');
+    Route::patch('/teilnehmer/{person}/sozialdaten', [TeilnehmerController::class, 'updateSozialdaten'])->name('person.sozialdaten.update')->can('teilnehmer.update');
+    Route::get('/teilnehmer/{id}', [TeilnehmerController::class, 'indexNachProjekt'])->name('teilnehmer.projekt.index')->can('teilnehmer.index');
 
     // Personen Has Abschluss
-    Route::post('/teilnehmer/abschluss/anlegen', [AbschlusseController::class, 'store'])->name('abschluss.store');
-    Route::delete('/teilnehmer/abschluss/entfernen/{id}', [AbschlusseController::class, 'destroy'])->name('abschluss.destroy');
+    Route::post('/teilnehmer/abschluss/anlegen', [AbschlusseController::class, 'store'])->name('abschluss.store')->can('teilnehmer.update');
+    Route::delete('/teilnehmer/abschluss/entfernen/{id}', [AbschlusseController::class, 'destroy'])->name('abschluss.destroy')->can('teilnehmer.update');
 
     // Personen Has Praktikum
-    Route::post('/teilnehmer/praktikum/anlegen', [PersonenHasBildungsmassnahmenController::class, 'store'])->name('teilnehmer.praktikum.store');
+    Route::post('/teilnehmer/praktikum/anlegen', [PersonenHasBildungsmassnahmenController::class, 'store'])->name('teilnehmer.praktikum.store')->can('teilnehmer.update');
 
     //Räumlichkeiten
     Route::get('/ressourcen/standort/raeumlichkeiten/', [RaumlichkeitenController::class, 'index'])->name('raeumlichkeiten.index');
@@ -281,30 +284,30 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::post('/anwesenheit/update', [AnwesenheitController::class, 'update'])->name('anwesenheit.update');
 
     //Kontakte
-    Route::delete('/teilnehmer/kontakt/entfernen/{id}', [KontaktController::class, 'destroy'])->name('kontakt.destroy');
-    Route::post('/teilnehmer/kontakt/anlegen', [KontaktController::class, 'store'])->name('kontakt.store');
+    Route::delete('/teilnehmer/kontakt/entfernen/{id}', [KontaktController::class, 'destroy'])->name('kontakt.destroy')->can('teilnehmer.update');
+    Route::post('/teilnehmer/kontakt/anlegen', [KontaktController::class, 'store'])->name('kontakt.store')->can('teilnehmer.update');
 
     //Adresse
-    Route::post('/teilnehmer/adresse/anlegen', [AdresseController::class, 'store'])->name('adresse.store');
-    Route::delete('/teilnehmer/adresse/entfernen/{id}', [AdresseController::class, 'destroy'])->name('adresse.destroy');
+    Route::post('/teilnehmer/adresse/anlegen', [AdresseController::class, 'store'])->name('adresse.store')->can('teilnehmer.update');
+    Route::delete('/teilnehmer/adresse/entfernen/{id}', [AdresseController::class, 'destroy'])->name('adresse.destroy')->can('teilnehmer.update');
 
     //ProjektHasTeilnehmer
-    Route::post('/teilnehmer/projekt/anlegen', [ProjektHasTeilnehmerController::class, 'store'])->name('projekthasteilnehmer.store');
-    Route::put('/teilnehmer/projekt/edit', [ProjektHasTeilnehmerController::class, 'update'])->name('projekthasteilnehmer.update');
+    Route::post('/teilnehmer/projekt/anlegen', [ProjektHasTeilnehmerController::class, 'store'])->name('projekthasteilnehmer.store')->can('teilnehmer.update');
+    Route::put('/teilnehmer/projekt/edit', [ProjektHasTeilnehmerController::class, 'update'])->name('projekthasteilnehmer.update')->can('teilnehmer.update');
 
     //ProjektHasTeilnehmerLuv
-    Route::post('/teilnehmer/projekt/luv/anlegen', [ProjektHasTeilnehmerLuvController::class, 'store'])->name('projekthasteilnehmer.luv.store');
-    Route::put('/teilnehmer/projekt/luv/edit', [ProjektHasTeilnehmerLuvController::class, 'update'])->name('projekthasteilnehmer.luv.update');
-    Route::delete('/teilnehmer/projekt/luv/entfernen/{id}', [ProjektHasTeilnehmerLuvController::class, 'destroy'])->name('projekthasteilnehmer.luv.destroy');
-    Route::get('/teilnehmer/projekt/luv/export/{id}', [ProjektHasTeilnehmerLuvController::class, 'export'])->name('projekthasteilnehmer.luv.export');
+    Route::post('/teilnehmer/projekt/luv/anlegen', [ProjektHasTeilnehmerLuvController::class, 'store'])->name('projekthasteilnehmer.luv.store')->can('teilnehmer.update');
+    Route::put('/teilnehmer/projekt/luv/edit', [ProjektHasTeilnehmerLuvController::class, 'update'])->name('projekthasteilnehmer.luv.update')->can('teilnehmer.update');
+    Route::delete('/teilnehmer/projekt/luv/entfernen/{id}', [ProjektHasTeilnehmerLuvController::class, 'destroy'])->name('projekthasteilnehmer.luv.destroy')->can('teilnehmer.update');
+    Route::get('/teilnehmer/projekt/luv/export/{id}', [ProjektHasTeilnehmerLuvController::class, 'export'])->name('projekthasteilnehmer.luv.export')->can('teilnehmer.index');
 
     //ProjektHasPersonen
-    Route::post('/personen/projekt/zuweisen', [ProjektHasPersonenController::class, 'store'])->name('projekthaspersonen.store');
-    Route::delete('/personen/projekt/entfernen/{id}', [ProjektHasPersonenController::class, 'destroy'])->name('projekthaspersonen.destroy');
+    Route::post('/personen/projekt/zuweisen', [ProjektHasPersonenController::class, 'store'])->name('projekthaspersonen.store')->can('benutzer.update');
+    Route::delete('/personen/projekt/entfernen/{id}', [ProjektHasPersonenController::class, 'destroy'])->name('projekthaspersonen.destroy')->can('benutzer.update');
 
     //Teilnehmer Bank
-    Route::post('/teilnehmer/bank/anlegen', [BaenkeController::class, 'store'])->name('bank.store');
-    Route::delete('/teilnehmer/bank/entfernen/{id}', [BaenkeController::class, 'destroy'])->name('bank.destroy');
+    Route::post('/teilnehmer/bank/anlegen', [BaenkeController::class, 'store'])->name('bank.store')->can('teilnehmer.update');
+    Route::delete('/teilnehmer/bank/entfernen/{id}', [BaenkeController::class, 'destroy'])->name('bank.destroy')->can('teilnehmer.update');
 
     //Partner
     Route::get('/organisation/partner', [PartnerController::class, 'index'])->name('partner.index');

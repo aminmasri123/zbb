@@ -21,6 +21,7 @@ use App\Models\SozialeDaten;
 use App\Models\Standort;
 use App\Models\Teilnehmer;
 use App\Models\User;
+use App\Models\RoleDataAccessSetting;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -67,42 +68,12 @@ class TeilnehmerController extends Controller
         $sortierspalte = $sortierbareSpalten[$sortierung] ?? 'id';
         $richtung = in_array($richtung, ['asc', 'desc']) ? $richtung : 'desc';
 
-        // Prüfen, ob User ALLE sehen darf
-        $darfAlle = $benutzer->hasPermissionTo('teilnehmer.view.all');
-
         // Basis-Query (kein ->get() !!)
         $abfrage = Personen::query()
             ->teilnehmer()
             ->aktiv()
             ->visibleForUser($benutzer)   // <-- dein globaler Berechtigungsscope
             ->with(['projekte.abteilung', 'standorte']);
-
-        // Wenn KEINE Vollberechtigung → Projekte + Standorte filtern
-        if (!$darfAlle) {
-
-            // Projekte des Benutzers
-            $benutzerProjektIds = $benutzer->projekte()->pluck('projekts.id')->toArray();
-
-            // Standorte des Benutzers
-            $benutzerStandortIds = $benutzer->standorte()->pluck('standorts.id')->toArray();
-
-            $abfrage->where(function ($q) use ($benutzerProjektIds, $benutzerStandortIds) {
-
-                // Teilnehmer aus gleichen Projekten
-                if (!empty($benutzerProjektIds)) {
-                    $q->whereHas('projekte', function ($sub) use ($benutzerProjektIds) {
-                        $sub->whereIn('projekts.id', $benutzerProjektIds);
-                    });
-                }
-
-                // Teilnehmer aus gleichen Standorten
-                if (!empty($benutzerStandortIds)) {
-                    $q->orWhereHas('standorte', function ($sub) use ($benutzerStandortIds) {
-                        $sub->whereIn('standorts.id', $benutzerStandortIds);
-                    });
-                }
-            });
-        }
 
         // 🔍 Suche
         if ($suchbegriff) {
@@ -200,7 +171,15 @@ class TeilnehmerController extends Controller
 
     public function show($id)
     {
-        $userProjektAktivId = Auth()->user()->current_team_id;
+        $user = auth()->user();
+
+        $berechtigt = Personen::query()
+            ->teilnehmer()
+            ->visibleForUser($user)
+            ->whereKey($id)
+            ->exists();
+
+        if(!$berechtigt) abort(403, "Sie sind nicht berechtigt, die Daten des Teilnehmers zu sehen.");
 
         $personen = personen::Teilnehmer()->with([
             'adresses',
@@ -233,8 +212,6 @@ class TeilnehmerController extends Controller
             $projekt->pivotModel->load('zeitraume', 'meta', 'luv', 'standort');
         });
         //dd($personen);
-        $berechtigt = $personen->projekte->pluck('id')->contains($userProjektAktivId);
-        if(!$berechtigt) abort(403, "Sie sind nicht berechtigt, die Daten des Teilnehmers zu sehen.");
 
         $arbeitsvermittler = Personen::arbeitsvermittler()->get();
         $bereiche = Bereich::all();
@@ -276,10 +253,10 @@ class TeilnehmerController extends Controller
             ->unique()
             ->values();
 
-        if (auth()->user()->hasPermissionTo('teilnehmer.view.all')) {
+        if (RoleDataAccessSetting::scopeForUser($user, 'participant') === 'all') {
             $standorte = Standort::orderBy('name')->get(['id', 'name']);
         } else {
-            $userStandortIds = auth()->user()->standorte()->pluck('standorts.id');
+            $userStandortIds = $user->standorte()->pluck('standorts.id');
             $standorte = Standort::whereIn(
                 'id',
                 $userStandortIds->merge($aktuelleStandortIds)->filter()->unique()->values()

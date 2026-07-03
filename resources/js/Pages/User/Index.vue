@@ -1,17 +1,24 @@
 <script setup>
 import { ref, watch, computed } from 'vue';
-import { router, Head, Link } from '@inertiajs/vue3';
+import { router, Head, Link, usePage } from '@inertiajs/vue3';
+import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Pagination from '@/Components/Pagination.vue';
 import ModalDestroy from '@/Components/ModalDestroyForm.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import Swal from 'sweetalert2';
+import ModalCreateUser from '@/Pages/User/ModalCreateUser.vue';
+import ModalProjektZuweisen from '@/Pages/Personal/ModalProjektZuweisen.vue';
 
-const { users, authProjekte, rollen } = defineProps({
+const { users, authProjekte, rollen, alleProjekte, standorte } = defineProps({
     users: Object,
     authProjekte: Array,
-    rollen: Array
+    rollen: Array,
+    alleProjekte: Array,
+    standorte: Array,
 });
+const page = usePage();
+const can = (permission) => (page.props.permissions || []).includes(permission);
 
 // Reactive states
 let search = ref('');
@@ -19,8 +26,29 @@ let selectedProject = ref(null);
 let sortColumn = ref('');
 let sortDirection = ref('asc');
 let searchProject = ref('');
+const showCreateModal = ref(false);
+const showProjektZuweisenModal = ref(false);
+const userForProjekt = ref(null);
 
 let userList = ref([...users.data]);
+
+const emptyUser = () => ({
+    first_name: '',
+    last_name: '',
+    username: '',
+    email: '',
+    password: '',
+    password_confirmation: '',
+    rollen: [],
+    projekt_zuweisungen: [
+        {
+            projekt_id: null,
+            standort_ids: [],
+        },
+    ],
+});
+
+let newUser = ref(emptyUser());
 
 // Auto-update table when pagination updates
 watch(() => users.data, (newValue) => {
@@ -73,6 +101,84 @@ const confirmDelete = (user) => {
     };
     showModalLöschen.value = true;
 };
+const openCreateModal = () => {
+    newUser.value = emptyUser();
+    showCreateModal.value = true;
+};
+
+const addUser = () => {
+    axios.post(route('user.store'), newUser.value)
+        .then((response) => {
+            Swal.fire('Gespeichert!', 'Mitarbeiter wurde angelegt.', 'success');
+            if (response.data?.user) {
+                userList.value = [response.data.user, ...userList.value];
+            }
+            showCreateModal.value = false;
+        })
+        .catch((error) => {
+            const message = error.response?.data?.message || 'Speichern fehlgeschlagen.';
+            Swal.fire('Fehler', message, 'error');
+        });
+};
+
+const openProjektZuweisen = (user) => {
+    userForProjekt.value = user;
+    showProjektZuweisenModal.value = true;
+};
+
+const handleProjektZuweisungSaved = ({ user_id, zuweisungen }) => {
+    const userIndex = userList.value.findIndex((user) => user.person_id === user_id);
+
+    if (userIndex === -1) {
+        return;
+    }
+
+    const user = userList.value[userIndex];
+    const existingProjects = Array.isArray(user.projekte) ? user.projekte : [];
+    const existingProjectIds = new Set(existingProjects.map((projekt) => Number(projekt.id)));
+    const assignedProjectIds = [...new Set(zuweisungen.map((row) => Number(row.projekt_id)).filter(Boolean))];
+    const nextProjects = [...existingProjects];
+
+    for (const projektId of assignedProjectIds) {
+        if (!existingProjectIds.has(projektId)) {
+            const projekt = alleProjekte.find((item) => Number(item.id) === projektId);
+
+            if (projekt) {
+                nextProjects.push(projekt);
+                existingProjectIds.add(projektId);
+            }
+        }
+    }
+
+    userList.value[userIndex] = {
+        ...user,
+        projekte: nextProjects,
+    };
+
+    if (userForProjekt.value?.person_id === user_id) {
+        userForProjekt.value = userList.value[userIndex];
+    }
+};
+
+const handleProjektZuweisungRemoved = ({ user_id, projekt_id }) => {
+    const userIndex = userList.value.findIndex((user) => user.person_id === user_id);
+
+    if (userIndex === -1) {
+        return;
+    }
+
+    const user = userList.value[userIndex];
+    const nextProjects = (user.projekte || []).filter((projekt) => Number(projekt.id) !== Number(projekt_id));
+
+    userList.value[userIndex] = {
+        ...user,
+        projekte: nextProjects,
+    };
+
+    if (userForProjekt.value?.person_id === user_id) {
+        userForProjekt.value = userList.value[userIndex];
+    }
+};
 </script>
 
 <template>
@@ -83,11 +189,22 @@ const confirmDelete = (user) => {
 
         <!-- Suchzeile -->
         <div class="flex justify-between items-center mb-4">
-            <input
-                v-model="search"
-                class="border border-gray-300 text-gray-900 text-sm p-2.5"
-                placeholder="Suchen ..."
-            />
+            <div class="flex items-center">
+                <button
+                    v-if="can('benutzer.store')"
+                    type="button"
+                    @click="openCreateModal"
+                    class="border border-gray-300 bg-white px-4 py-2.5 text-zbb hover:bg-zbb hover:text-white"
+                    title="Mitarbeiter anlegen"
+                >
+                    <i class="la la-plus"></i>
+                </button>
+                <input
+                    v-model="search"
+                    class="border border-gray-300 text-gray-900 text-sm p-2.5"
+                    placeholder="Suchen ..."
+                />
+            </div>
 
             <!-- Projekt dropdown -->
             <Dropdown align="right">
@@ -192,11 +309,19 @@ const confirmDelete = (user) => {
                                     </button>
                                 </template>
                                 <template #content>
-                                    <span class="block px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                                    <span v-if="can('benutzer.destroy')"
+                                          class="block px-4 py-2 hover:bg-gray-100 cursor-pointer"
                                           @click="confirmDelete(user)">
                                         Löschen
                                     </span>
-                                    <Link :href="route('user.edit', user.id)" class="block px-4 py-2 hover:bg-gray-100">
+                                    <span
+                                        v-if="user.person_id && can('benutzer.update')"
+                                        class="block px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                                        @click="openProjektZuweisen(user)"
+                                    >
+                                        Projekte zuweisen
+                                    </span>
+                                    <Link v-if="can('benutzer.update')" :href="route('user.edit', user.id)" class="block px-4 py-2 hover:bg-gray-100">
                                         Bearbeiten
                                     </Link>
                                 </template>
@@ -214,6 +339,26 @@ const confirmDelete = (user) => {
             :toDelete="userToDelete"
             seite="user"
             @close="showModalLöschen = false"
+        />
+        <ModalCreateUser
+            :visible="showCreateModal"
+            :newUser="newUser"
+            :rollen="rollen"
+            :projekte="alleProjekte"
+            :standorte="standorte"
+            @close="showCreateModal = false"
+            @add-user="addUser"
+        />
+
+        <ModalProjektZuweisen
+            :visible="showProjektZuweisenModal"
+            :userId="userForProjekt?.person_id"
+            :projekte="alleProjekte"
+            :standorte="standorte"
+            :bestehendeProjekte="userForProjekt?.projekte || []"
+            @close="showProjektZuweisenModal = false"
+            @saved="handleProjektZuweisungSaved"
+            @removed="handleProjektZuweisungRemoved"
         />
     </AppLayout>
 </template>

@@ -24,7 +24,48 @@
         kategorienDerUser:{ type: Array, default: () => [] },
         alleZugewiesenePermission:{ type:Array, default:()=> []},
         roleId:{ type:Number , default:()=> []},
+        dataAccess:{ type:Object, default:()=> ({})},
+        dataAccessOptions:{ type:Object, default:()=> ({ team: {}, participant: {} })},
     });
+
+    const dataAccessForm = ref({
+        team_scope: props.dataAccess?.team_scope || 'none',
+        participant_scope: props.dataAccess?.participant_scope || 'none',
+    });
+    const isSavingDataAccess = ref(false);
+
+    watch(() => props.dataAccess, (value) => {
+        dataAccessForm.value = {
+            team_scope: value?.team_scope || 'none',
+            participant_scope: value?.participant_scope || 'none',
+        };
+    }, { deep: true });
+
+    const saveDataAccess = async () => {
+        isSavingDataAccess.value = true;
+
+        try {
+            await axios.put(route('rolle.data-access.update', props.roleId), dataAccessForm.value);
+            Swal.fire({
+                title: 'Gespeichert!',
+                text: 'Der Datenzugriff wurde aktualisiert.',
+                icon: 'success',
+                timer: 2500,
+                timerProgressBar: true,
+            });
+        } catch (error) {
+            Swal.fire({
+                title: 'Fehler!',
+                text: 'Der Datenzugriff konnte nicht gespeichert werden.',
+                icon: 'error',
+                timer: 3000,
+                timerProgressBar: true,
+            });
+            console.error(error.response ? error.response.data : error.message);
+        } finally {
+            isSavingDataAccess.value = false;
+        }
+    };
 
     // Lokale Kopie der Rollen erstellen
     let localRollen= ref([]); // Initialisiere mit einem leeren Array
@@ -220,6 +261,40 @@
                     <div class="sm:w-3/4 sm:pl-3">
                         <div class="overflow-x-auto border">
                             <div class=" min-w-full bg-white">
+                                <div class="border-b px-8 py-5">
+                                    <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                                        <div>
+                                            <h2 class="text-lg font-semibold text-gray-800">Datenzugriff</h2>
+                                            <p class="mt-1 text-sm text-gray-500">Legt fest, welche Mitarbeiter und Teilnehmer diese Rolle sehen darf.</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            class="rounded bg-zbb px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                                            :disabled="isSavingDataAccess"
+                                            @click="saveDataAccess"
+                                        >
+                                            {{ isSavingDataAccess ? 'Speichern ...' : 'Speichern' }}
+                                        </button>
+                                    </div>
+                                    <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                                        <label class="block text-sm font-medium text-gray-700">
+                                            Team
+                                            <select v-model="dataAccessForm.team_scope" class="mt-1 w-full rounded border-gray-300 text-sm shadow-sm focus:border-orange-400 focus:ring-orange-400">
+                                                <option v-for="(label, value) in dataAccessOptions.team" :key="value" :value="value">
+                                                    {{ label }}
+                                                </option>
+                                            </select>
+                                        </label>
+                                        <label class="block text-sm font-medium text-gray-700">
+                                            Teilnehmer
+                                            <select v-model="dataAccessForm.participant_scope" class="mt-1 w-full rounded border-gray-300 text-sm shadow-sm focus:border-orange-400 focus:ring-orange-400">
+                                                <option v-for="(label, value) in dataAccessOptions.participant" :key="value" :value="value">
+                                                    {{ label }}
+                                                </option>
+                                            </select>
+                                        </label>
+                                    </div>
+                                </div>
                                 <div class="flex flex-row px-8 py-2">
                                     <div class="basis-1/6">*</div>
                                     <div class="basis-4/6">Bestätigte Berechtigungen</div>

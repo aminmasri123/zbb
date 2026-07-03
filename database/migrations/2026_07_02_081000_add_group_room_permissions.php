@@ -45,7 +45,17 @@ return new class extends Migration
             ],
         ];
 
+        $existingCategoryIds = DB::table('berechtigungskategories')
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
         foreach ($permissions as $permissionData) {
+            // Fresh migrations run before seeders, so these categories may not exist yet.
+            if (! in_array((int) $permissionData['berechtigungskategorie_id'], $existingCategoryIds, true)) {
+                continue;
+            }
+
             DB::table('permissions')->updateOrInsert(
                 [
                     'name' => $permissionData['name'],

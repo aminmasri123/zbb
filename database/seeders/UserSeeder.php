@@ -1146,6 +1146,60 @@ class UserSeeder extends Seeder
                 'berechtigungskategorie_id' => '27',
                 'beschreibung' => 'eine Anforderung im Bestellwesen bearbeiten oder den Status auf "bestellt" setzen.',
             ],
+            [
+                'name' => 'gruppe.view.all',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '3',
+                'beschreibung' => 'Alle Gruppen im ausgewaehlten Projekt sehen.',
+            ],
+            [
+                'name' => 'raeumlichkeiten.index',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '24',
+                'beschreibung' => 'Raumuebersicht sehen.',
+            ],
+            [
+                'name' => 'raeumlichkeiten.store',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '24',
+                'beschreibung' => 'Raeume anlegen.',
+            ],
+            [
+                'name' => 'raeumlichkeiten.update',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '24',
+                'beschreibung' => 'Raeume bearbeiten.',
+            ],
+            [
+                'name' => 'raeumlichkeiten.destroy',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '24',
+                'beschreibung' => 'Raeume loeschen.',
+            ],
+            [
+                'name' => 'raeumlichkeiten.meldung.store',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '24',
+                'beschreibung' => 'Schaeden oder Probleme in Raeumen melden.',
+            ],
+            [
+                'name' => 'raeumlichkeiten.meldung.update',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '24',
+                'beschreibung' => 'Raummeldungen bearbeiten oder abschliessen.',
+            ],
+            [
+                'name' => 'teilnehmer.update',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '5',
+                'beschreibung' => 'Teilnehmer bearbeiten.',
+            ],
+            [
+                'name' => 'teilnehmer.destroy',
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => '5',
+                'beschreibung' => 'Teilnehmer loeschen.',
+            ],
 
         ]);
 
@@ -1508,6 +1562,41 @@ class UserSeeder extends Seeder
                 'berechtigungskategorie_id' => '27',
             ],
         ]);
+
+        $extraPermissionNames = [
+            'gruppe.view.all',
+            'raeumlichkeiten.index',
+            'raeumlichkeiten.store',
+            'raeumlichkeiten.update',
+            'raeumlichkeiten.destroy',
+            'raeumlichkeiten.meldung.store',
+            'raeumlichkeiten.meldung.update',
+            'teilnehmer.update',
+            'teilnehmer.destroy',
+        ];
+
+        $extraPermissionIds = DB::table('permissions')
+            ->whereIn('name', $extraPermissionNames)
+            ->where('guard_name', 'web')
+            ->pluck('id');
+
+        $extraRoleIds = DB::table('roles')
+            ->whereIn('name', ['Administrator', 'Developer'])
+            ->where('guard_name', 'web')
+            ->pluck('id');
+
+        foreach ($extraRoleIds as $roleId) {
+            foreach ($extraPermissionIds as $permissionId) {
+                DB::table('role_has_permissions')->insertOrIgnore([
+                    'permission_id' => $permissionId,
+                    'role_id' => $roleId,
+                ]);
+            }
+        }
+
+        app('cache')
+            ->store(config('permission.cache.store') !== 'default' ? config('permission.cache.store') : null)
+            ->forget(config('permission.cache.key'));
 
         DB::table('projekt_has_personens')->insert([
             [

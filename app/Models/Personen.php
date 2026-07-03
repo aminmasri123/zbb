@@ -69,48 +69,62 @@ class Personen extends Model
 
     public function scopeVisibleForUser($query, User $user)
     {
-        // 1. Koordinator = volle Rechte
-        if ($user->can('teilnehmer.view.all')) {
+        $scope = RoleDataAccessSetting::scopeForUser($user, 'participant');
+
+        if ($scope === 'all') {
             return $query;
         }
 
-        // 2. Abteilungsleitung + Assistenz
-        if ($user->can('teilnehmer.view.abteilung')) {
-            return $query->whereHas('projekte', function ($q) use ($user) {
-                $q->whereIn('abteilung_id', $user->projekte->pluck('abteilung_id'));
+        if ($scope === 'department') {
+            $departmentIds = $user->projekte()->pluck('projekts.abteilung_id')->filter()->unique()->values();
+
+            if ($departmentIds->isEmpty()) {
+                return $query->whereRaw('1 = 0');
+            }
+
+            return $query->whereHas('projekte', function ($q) use ($departmentIds) {
+                $q->whereIn('projekts.abteilung_id', $departmentIds);
             });
         }
 
-        // 3. Projektleitung
-        if ($user->can('teilnehmer.view.projekt')) {
-            $projektIds = $user->projekte()->pluck('projekts.id');
+        if ($scope === 'own_projects') {
+            $projektIds = $user->projekte()->pluck('projekts.id')->filter()->unique()->values();
+
+            if ($projektIds->isEmpty()) {
+                return $query->whereRaw('1 = 0');
+            }
 
             return $query->whereHas('projekte', function ($q) use ($projektIds) {
-                $q->whereIn('projekt_id', $projektIds);
+                $q->whereIn('projekts.id', $projektIds);
             });
         }
 
-        // 4. Sozialpädagoge → Projekte am selben Standort
-        if ($user->can('teilnehmer.view.standort')) {
-            $standortIds = $user->standorte()->pluck('standorts.id');
-                return $query->whereHas('projekte', function ($q) use ($standortIds) {
-                $q->whereIn('standort_id', $standortIds);
+        if ($scope === 'own_locations') {
+            $standortIds = $user->standorte()->pluck('standorts.id')->filter()->unique()->values();
+
+            if ($standortIds->isEmpty()) {
+                return $query->whereRaw('1 = 0');
+            }
+
+            return $query->whereHas('projekte', function ($q) use ($standortIds) {
+                $q->whereIn('projekt_has_personens.standort_id', $standortIds);
             });
         }
 
-        // 5. Anleiter → nur Teilnehmer im selben Projekt und Standort
-           //$projektIds = $user->projekte->pluck('id');    // Projekte des Anleiters
-             $user = auth()->user();
-            $userProjektAktiv = $user->current_team_id;
+        if ($scope === 'current_project_same_location') {
+            $standortIds = $user->standorte()->pluck('standorts.id')->filter()->unique()->values();
 
-            $standortIds = $user->standorte->pluck('id');  // Standorte des Anleiters
+            if (! $user->current_team_id || $standortIds->isEmpty()) {
+                return $query->whereRaw('1 = 0');
+            }
 
-            return $query->whereHas('projekte', function ($q) use ($userProjektAktiv, $standortIds) {
-                $q->where('projekt_id', $userProjektAktiv)
-                ->whereIn('standort_id', $standortIds);
+            return $query->whereHas('projekte', function ($q) use ($user, $standortIds) {
+                $q->where('projekt_has_personens.projekt_id', $user->current_team_id)
+                    ->whereIn('projekt_has_personens.standort_id', $standortIds);
             });
-        // Fallback: nichts zurück
-        return $query->whereRaw('1=0');
+        }
+
+        return $query->whereRaw('1 = 0');
     }
 
     public function scopeAktiv($query)

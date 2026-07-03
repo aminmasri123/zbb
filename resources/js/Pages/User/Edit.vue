@@ -1,5 +1,6 @@
 <script setup>
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import { ref } from 'vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
@@ -12,24 +13,54 @@ import { usePage } from '@inertiajs/vue3';
 const page = usePage();
 
 
-const props = defineProps({ user: Object , rollen: Array});
+const props = defineProps({
+    user: Object,
+    rollen: Array,
+    alleProjekte: Array,
+    alleStandorte: Array,
+    zuweisungen: Array,
+});
 
 // Formular mit bestehenden Werten initialisieren
 const form = useForm({
     id: props.user.id || '',
-    first_name: props.user.first_name || '',
-    last_name: props.user.last_name || '',
+    first_name: props.user.person?.vorname || '',
+    last_name: props.user.person?.nachname || '',
     username: props.user.username || '',
     email: props.user.email || '',
     password: '',
     password_confirmation: '',
     rollen: props.user.roles?.map(r => r.id) || [] || '' // Array mit IDs
 });
+
+const projektList = ref(
+    (props.zuweisungen || []).map((zuweisung) => ({
+        projekt_id: zuweisung.projekt_id,
+        standort_ids: Array.isArray(zuweisung.standort_ids) ? zuweisung.standort_ids : [],
+    }))
+);
+
+const addProjekt = () => {
+    projektList.value.push({
+        projekt_id: null,
+        standort_ids: [],
+    });
+};
+
+const removeProjekt = (index) => {
+    projektList.value.splice(index, 1);
+};
+
  // Speichern (PUT/PATCH)
 const submit = () => {
-    form.put(route('user.update', props.user.id), {
-        onFinish: () => form.reset('password', 'password_confirmation'),
-    });
+    form
+        .transform((data) => ({
+            ...data,
+            projekt_zuweisungen: projektList.value,
+        }))
+        .put(route('user.update', props.user.id), {
+            onFinish: () => form.reset('password', 'password_confirmation'),
+        });
 };
 </script>
 
@@ -140,6 +171,66 @@ const submit = () => {
                 </div>
 
             </div>
+            <div class="mt-8">
+                <h2 class="text-lg font-bold mb-3">Projekte & Standorte</h2>
+
+                <div
+                    v-for="(projektZeile, index) in projektList"
+                    :key="index"
+                    class="p-4 border rounded mb-3 bg-gray-50"
+                >
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <InputLabel :for="`projekt_${index}`" value="Projekt" />
+                            <select
+                                :id="`projekt_${index}`"
+                                v-model="projektZeile.projekt_id"
+                                class="mt-1 block w-full border p-2 rounded"
+                            >
+                                <option value="">-- Projekt auswahlen --</option>
+                                <option
+                                    v-for="projekt in alleProjekte"
+                                    :key="projekt.id"
+                                    :value="projekt.id"
+                                >
+                                    {{ projekt.name }}
+                                </option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <InputLabel :for="`standorte_${index}`" value="Standorte" />
+                            <MultiSelect
+                                :id="`standorte_${index}`"
+                                v-model="projektZeile.standort_ids"
+                                :options="alleStandorte"
+                                optionLabel="name"
+                                optionValue="id"
+                                display="chip"
+                                class="w-full mt-1"
+                                placeholder="Standorte auswahlen..."
+                            />
+                        </div>
+                    </div>
+
+                    <button
+                        type="button"
+                        @click="removeProjekt(index)"
+                        class="text-red-600 mt-3 text-sm"
+                    >
+                        Projekt entfernen
+                    </button>
+                </div>
+
+                <button
+                    type="button"
+                    @click="addProjekt"
+                    class="bg-gray-200 px-3 py-1 rounded text-sm"
+                >
+                    + Projekt hinzufugen
+                </button>
+            </div>
+
             <div class="my-4">
 
             <button type="submit" class="bg-zbb text-white px-4 py-2 rounded">Hinzufügen</button>

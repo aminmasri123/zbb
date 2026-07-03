@@ -185,7 +185,9 @@
                 {{ projekt.id }}
                 </td>
                 <td class="border px-6 py-4" v-if="index === 0" :rowspan="projekt.zeitraume?.length || 1">
-                {{ projekt.name }}
+                <Link :href="route('projekt.show', projekt.id)" class="font-semibold text-zbb hover:underline">
+                    {{ projekt.name }}
+                </Link>
                 </td>
                 <td class="border px-6 py-4" v-if="index === 0" :rowspan="projekt.zeitraume?.length || 1">
                 <template v-if="projekt.kostenstellen?.length">

@@ -52,12 +52,16 @@ class ProjektHasPersonenController extends Controller
 
                 foreach ($zw['standort_id'] as $standortId) {
 
-                    ProjektHasPersonen::create([
-                        'personen_id' => $person->id,
-                        'projekt_id'  => $zw['projekt_id'],
-                        'standort_id' => $standortId,
-                        'status'      => 'aktiv',
-                    ]);
+                    ProjektHasPersonen::updateOrCreate(
+                        [
+                            'personen_id' => $person->id,
+                            'projekt_id'  => $zw['projekt_id'],
+                            'standort_id' => $standortId,
+                        ],
+                        [
+                            'status' => 'aktiv',
+                        ]
+                    );
                 }
             }
 
@@ -108,8 +112,34 @@ class ProjektHasPersonenController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy(Request $request, string $id)
     {
-        //
+        $validated = $request->validate([
+            'user_id' => ['nullable', 'integer', 'exists:personens,id'],
+            'projekt_id' => ['nullable', 'integer', 'exists:projekts,id'],
+        ]);
+
+        if (! empty($validated['user_id'])) {
+            $projektId = $validated['projekt_id'] ?? $id;
+
+            $deleted = ProjektHasPersonen::where('personen_id', $validated['user_id'])
+                ->where('projekt_id', $projektId)
+                ->delete();
+
+            return response()->json([
+                'success' => true,
+                'deleted' => $deleted,
+                'message' => 'Projekt wurde vom Mitarbeiter entfernt.',
+            ]);
+        }
+
+        $zuweisung = ProjektHasPersonen::findOrFail($id);
+        $zuweisung->delete();
+
+        return response()->json([
+            'success' => true,
+            'deleted' => 1,
+            'message' => 'Projektzuweisung wurde entfernt.',
+        ]);
     }
 }
