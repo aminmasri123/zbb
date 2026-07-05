@@ -227,34 +227,50 @@ class UserSeeder extends Seeder
         ];
 
         $projektIds = Projekt::pluck('id')->toArray();
+        $standortIds = Standort::pluck('id')->toArray();
 
         foreach ($personen as $person) {
-            // Person einfügen und ID speichern
-            $personId = DB::table('personens')->insertGetId([
-                'vorname' => $person['vorname'],
-                'nachname' => $person['nachname'],
-                'geburtsdatum' => $person['geburtsdatum'],
-                'geschlecht' => $person['geschlecht'],
-                'typ' => $person['typ'],
+            $existingUser = DB::table('users')->where('email', $person['email'])->first();
 
-            ]);
+            if ($existingUser) {
+                $personId = $existingUser->person_id;
+            } else {
+                // Person einfügen und ID speichern
+                $personId = DB::table('personens')->insertGetId([
+                    'vorname' => $person['vorname'],
+                    'nachname' => $person['nachname'],
+                    'geburtsdatum' => $person['geburtsdatum'],
+                    'geschlecht' => $person['geschlecht'],
+                    'typ' => $person['typ'],
 
-            // Passendes Benutzerkonto automatisch anlegen
-            DB::table('users')->insert([
-                'person_id' => $personId,
-                'username' => $person['username'],
-                'email' => $person['email'],
-                'password' => Hash::make($person['password']),
-                'lang' => 'de',
-                'default_projekt_id' => $personId == 1 || $personId == 2 ? 5 : fake()->randomElement($projektIds),
-            ]);
+                ]);
 
-            DB::table('standort_has_personens')->insert([
-                [ // id = 1
-                    'personen_id' => $personId,
-                    'standort_id' => fake()->randomElement(Standort::pluck('id')->toArray()),
-                ],
-            ]);
+                // Passendes Benutzerkonto automatisch anlegen
+                DB::table('users')->insert([
+                    'person_id' => $personId,
+                    'username' => $person['username'],
+                    'email' => $person['email'],
+                    'password' => Hash::make($person['password']),
+                    'lang' => 'de',
+                    'default_projekt_id' => ($personId == 1 || $personId == 2) && in_array(5, $projektIds, true)
+                        ? 5
+                        : ($projektIds === [] ? null : fake()->randomElement($projektIds)),
+                ]);
+
+            }
+
+            if ($personId && $standortIds !== []) {
+                $standortId = fake()->randomElement($standortIds);
+
+                if (! DB::table('standort_has_personens')->where('personen_id', $personId)->exists()) {
+                    DB::table('standort_has_personens')->insert([
+                        [ // id = 1
+                            'personen_id' => $personId,
+                            'standort_id' => $standortId,
+                        ],
+                    ]);
+                }
+            }
         }
 
         DB::table('kontakttypens')->insert([
@@ -560,7 +576,7 @@ class UserSeeder extends Seeder
 
         ]);
 
-        DB::table('roles')->insert([
+        $roles = [
             [ // id = 1
                 'name' => 'Administrator',
                 'guard_name' => 'web',
@@ -653,9 +669,21 @@ class UserSeeder extends Seeder
                 'color' => 'bg-violet-300',
             ]
 
-        ]);
+        ];
 
-        DB::table('permissions')->insert([
+        foreach ($roles as $role) {
+            DB::table('roles')->updateOrInsert(
+                [
+                    'name' => $role['name'],
+                    'guard_name' => $role['guard_name'],
+                ],
+                [
+                    'color' => $role['color'],
+                ]
+            );
+        }
+
+        $permissions = [
             [ // id = 1
                 'name' => 'dashboard.index',
                 'guard_name' => 'web',
@@ -1257,367 +1285,80 @@ class UserSeeder extends Seeder
                 'beschreibung' => 'Teilnehmer loeschen.',
             ],
 
-        ]);
+        ];
 
-        DB::table('model_has_roles')->insert([
-            [
-                'role_id' => '1',
-                'model_type' => 'App\Models\User',
-                'model_id' => '1',
-            ],
-            [
-                'role_id' => '5',
-                'model_type' => 'App\Models\User',
-                'model_id' => '2',
-            ],
-            [
-                'role_id' => '3',
-                'model_type' => 'App\Models\User',
-                'model_id' => '3',
-            ],
-            [
-                'role_id' => '2',
-                'model_type' => 'App\Models\User',
-                'model_id' => '4',
-            ],
-            [
-                'role_id' => '2',
-                'model_type' => 'App\Models\User',
-                'model_id' => '5',
-            ],
-        ]);
+        foreach ($permissions as $permission) {
+            DB::table('permissions')->updateOrInsert(
+                [
+                    'name' => $permission['name'],
+                    'guard_name' => $permission['guard_name'],
+                ],
+                [
+                    'berechtigungskategorie_id' => $permission['berechtigungskategorie_id'],
+                    'beschreibung' => $permission['beschreibung'],
+                ]
+            );
+        }
 
-        DB::table('role_has_permissions')->insert([
-            [
-                'permission_id' => '1',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '2',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '3',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '4',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '5',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '6',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '7',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '8',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '9',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '10',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '11',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '12',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '13',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '14',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '15',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '16',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '17',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '18',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '19',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '20',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '21',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '22',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '23',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '24',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '25',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '26',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '27',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '28',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '29',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '30',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '31',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '32',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '33',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '34',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '35',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '36',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '37',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '38',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '39',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '40',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '41',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '42',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '43',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '44',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '45',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '46',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '47',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '48',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '49',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '50',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '51',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '52',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '53',
-                'role_id' => '1',
-            ],
-            [
-                'permission_id' => '54',
-                'role_id' => '1',
-            ],
+        $userRoleAssignments = [
+            'amin.masri@outlook.com' => $roles[0]['name'],
+            'a.feller@zbb-saar.de' => $roles[4]['name'],
+            's.gucciardo@zbb-saar.de' => $roles[2]['name'],
+            'b.lautenschlager@zbb-saar.de' => $roles[1]['name'],
+            'c.lismann@zbb-saar.de' => $roles[1]['name'],
+        ];
 
-        ]);
+        foreach ($userRoleAssignments as $email => $roleName) {
+            $userId = DB::table('users')->where('email', $email)->value('id');
+            $roleId = DB::table('roles')
+                ->where('name', $roleName)
+                ->where('guard_name', 'web')
+                ->value('id');
 
-        DB::table('role_berechtigungskategories')->insert([
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '1',
-            ],
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '2',
-            ],
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '3',
-            ],
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '4',
-            ],
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '5',
-            ],
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '6',
-            ],
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '7',
-            ],
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '8',
-            ],
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '9',
-            ],
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '10',
-            ],
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '11',
-            ],
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '12',
-            ],
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '13',
-            ],
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '14',
-            ],
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '15',
-            ],
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '16',
-            ],
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '17',
-            ],
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '18',
-            ],
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '19',
-            ],
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '20',
-            ],
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '21',
-            ],
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '22',
-            ],
+            if ($userId && $roleId) {
+                DB::table('model_has_roles')->insertOrIgnore([
+                    'role_id' => $roleId,
+                    'model_type' => 'App\Models\User',
+                    'model_id' => $userId,
+                ]);
+            }
+        }
 
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '23',
-            ],
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '24',
-            ],
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '25',
-            ],
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '26',
-            ],
-            [
-                'role_id' => '1',
-                'berechtigungskategorie_id' => '27',
-            ],
-        ]);
+        $administratorRoleId = DB::table('roles')
+            ->where('name', $roles[0]['name'])
+            ->where('guard_name', 'web')
+            ->value('id');
+
+        if ($administratorRoleId) {
+            $administratorPermissionRows = DB::table('permissions')
+                ->where('guard_name', 'web')
+                ->pluck('id')
+                ->map(fn ($permissionId) => [
+                    'permission_id' => $permissionId,
+                    'role_id' => $administratorRoleId,
+                ])
+                ->all();
+
+            if ($administratorPermissionRows !== []) {
+                DB::table('role_has_permissions')->insertOrIgnore($administratorPermissionRows);
+            }
+
+            $categoryIds = DB::table('berechtigungskategories')->pluck('id');
+
+            foreach ($categoryIds as $categoryId) {
+                $exists = DB::table('role_berechtigungskategories')
+                    ->where('role_id', $administratorRoleId)
+                    ->where('berechtigungskategorie_id', $categoryId)
+                    ->exists();
+
+                if (! $exists) {
+                    DB::table('role_berechtigungskategories')->insert([
+                        'role_id' => $administratorRoleId,
+                        'berechtigungskategorie_id' => $categoryId,
+                    ]);
+                }
+            }
+        }
 
         $extraPermissionNames = [
             'gruppe.view.all',

@@ -13,7 +13,7 @@ class DienstwagenSeeder extends Seeder
      */
     public function run(): void
     {
-         DB::table('dienstwagens')->insert([
+         $dienstwagens = [
             [
                 'typ'          => 'PKW',
                 'kennzeichen'  => 'AB-1234',
@@ -134,7 +134,24 @@ class DienstwagenSeeder extends Seeder
                 'status'       => 'verfügbar',
                 'naechste_wartung'=> '2026-02-18',
             ],
-        ]);
+        ];
+
+        foreach ($dienstwagens as $dienstwagen) {
+            DB::table('dienstwagens')->updateOrInsert(
+                ['kennzeichen' => $dienstwagen['kennzeichen']],
+                [
+                    'typ' => $dienstwagen['typ'],
+                    'marke' => $dienstwagen['marke'],
+                    'modell' => $dienstwagen['modell'],
+                    'baujahr' => $dienstwagen['baujahr'],
+                    'kraftstoffart' => $dienstwagen['kraftstoffart'],
+                    'kilometerstand' => $dienstwagen['kilometerstand'],
+                    'standort_id' => $dienstwagen['standort_id'],
+                    'status' => $dienstwagen['status'],
+                    'naechste_wartung' => $dienstwagen['naechste_wartung'],
+                ]
+            );
+        }
 
 
 /*

@@ -22,7 +22,7 @@ class TageSeeder extends Seeder
         extension=zip
          */
 
-        DB::table('zeitens')->insert([
+        $zeitens = [
             [ // id = 1
                 'startzeit' => '08:00:00',
                 'endzeit' => '12:00:00',
@@ -35,9 +35,19 @@ class TageSeeder extends Seeder
                 'startzeit' => '08:00:00',
                 'endzeit' => '17:00:00',
             ],
-        ]);
+        ];
 
-        DB::table('anwesenheitsstatutens')->insert([
+        foreach ($zeitens as $zeit) {
+            DB::table('zeitens')->updateOrInsert(
+                [
+                    'startzeit' => $zeit['startzeit'],
+                    'endzeit' => $zeit['endzeit'],
+                ],
+                []
+            );
+        }
+
+        $anwesenheitsstatuten = [
             [ // id = 1
                 'status' => 'anwesend',
                 'abkuerzung' => 'A',
@@ -73,7 +83,17 @@ class TageSeeder extends Seeder
                 'abkuerzung' => 'FT',
                 'farben' => '#9ca3af', // gray-400
             ],
-        ]);
+        ];
+
+        foreach ($anwesenheitsstatuten as $anwesenheitsstatut) {
+            DB::table('anwesenheitsstatutens')->updateOrInsert(
+                ['status' => $anwesenheitsstatut['status']],
+                [
+                    'abkuerzung' => $anwesenheitsstatut['abkuerzung'],
+                    'farben' => $anwesenheitsstatut['farben'],
+                ]
+            );
+        }
 
 
 
@@ -116,7 +136,16 @@ class TageSeeder extends Seeder
             ];
         }
 
-        DB::table('tages')->insert($data);
+        foreach ($data as $tag) {
+            DB::table('tages')->updateOrInsert(
+                ['datum' => $tag['datum']],
+                [
+                    'wochentag' => $tag['wochentag'],
+                    'feiertag_typ' => $tag['feiertag_typ'],
+                    'feiertag_name' => $tag['feiertag_name'],
+                ]
+            );
+        }
 
 
 
