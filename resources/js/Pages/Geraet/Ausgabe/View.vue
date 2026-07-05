@@ -4,7 +4,7 @@ import { Head, router } from '@inertiajs/vue3'
 import { ref, defineProps} from 'vue'
 
 import ApplicationMark from '../../../Components/ApplicationMark.vue'
-import { printBlock, pdfBlock } from '@/Utils/printHelper.js'
+import { printBlock, pdfBlock } from '@/utils/printHelper.js'
 import AddForm from './AddForm.vue'
 const props = defineProps({
     ausgabe: Object,
