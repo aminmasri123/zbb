@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\QueryException;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -9,15 +10,44 @@ return new class extends Migration
 {
     public function up(): void
     {
-        DB::statement('ALTER TABLE raeumes ADD COLUMN IF NOT EXISTS parent_id BIGINT UNSIGNED NULL AFTER standort_id');
-        DB::statement("ALTER TABLE raeumes ADD COLUMN IF NOT EXISTS belegungsart VARCHAR(30) NOT NULL DEFAULT 'frei' AFTER typ");
-        DB::statement('ALTER TABLE raeumes ADD COLUMN IF NOT EXISTS standard_personen_id BIGINT UNSIGNED NULL AFTER belegungsart');
-        DB::statement('ALTER TABLE raeumes ADD COLUMN IF NOT EXISTS aktiv TINYINT(1) NOT NULL DEFAULT 1 AFTER standard_personen_id');
+        if (! Schema::hasColumn('raeumes', 'parent_id')) {
+            Schema::table('raeumes', function (Blueprint $table) {
+                $table->unsignedBigInteger('parent_id')->nullable()->after('standort_id');
+            });
+        }
+
+        if (! Schema::hasColumn('raeumes', 'belegungsart')) {
+            Schema::table('raeumes', function (Blueprint $table) {
+                $table->string('belegungsart', 30)->default('frei')->after('typ');
+            });
+        }
+
+        if (! Schema::hasColumn('raeumes', 'standard_personen_id')) {
+            Schema::table('raeumes', function (Blueprint $table) {
+                $table->unsignedBigInteger('standard_personen_id')->nullable()->after('belegungsart');
+            });
+        }
+
+        if (! Schema::hasColumn('raeumes', 'aktiv')) {
+            Schema::table('raeumes', function (Blueprint $table) {
+                $table->boolean('aktiv')->default(true)->after('standard_personen_id');
+            });
+        }
+
         $this->statementIgnoreDuplicate('ALTER TABLE raeumes ADD CONSTRAINT raeumes_parent_id_foreign FOREIGN KEY (parent_id) REFERENCES raeumes(id) ON DELETE SET NULL');
         $this->statementIgnoreDuplicate('ALTER TABLE raeumes ADD CONSTRAINT raeumes_standard_personen_id_foreign FOREIGN KEY (standard_personen_id) REFERENCES personens(id) ON DELETE SET NULL');
 
-        DB::statement("ALTER TABLE gruppes ADD COLUMN IF NOT EXISTS ort_typ VARCHAR(20) NOT NULL DEFAULT 'raum' AFTER projekt_id");
-        DB::statement('ALTER TABLE gruppes ADD COLUMN IF NOT EXISTS externer_ort VARCHAR(255) NULL AFTER raum_id');
+        if (! Schema::hasColumn('gruppes', 'ort_typ')) {
+            Schema::table('gruppes', function (Blueprint $table) {
+                $table->string('ort_typ', 20)->default('raum')->after('projekt_id');
+            });
+        }
+
+        if (! Schema::hasColumn('gruppes', 'externer_ort')) {
+            Schema::table('gruppes', function (Blueprint $table) {
+                $table->string('externer_ort')->nullable()->after('raum_id');
+            });
+        }
 
         DB::statement("UPDATE raeumes SET standard_personen_id = NULL WHERE belegungsart IN ('frei', 'blockiert')");
 

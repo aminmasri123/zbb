@@ -2,15 +2,31 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\QueryException;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
-        DB::statement("ALTER TABLE dokumentes ADD COLUMN IF NOT EXISTS kontext VARCHAR(30) NOT NULL DEFAULT 'teilnehmer' AFTER typ");
-        DB::statement('ALTER TABLE dokumentes ADD COLUMN IF NOT EXISTS ausgabeformate JSON NULL AFTER kontext');
-        DB::statement('ALTER TABLE dokumentes ADD COLUMN IF NOT EXISTS aktiv TINYINT(1) NOT NULL DEFAULT 1 AFTER beschreibung');
+        if (! Schema::hasColumn('dokumentes', 'kontext')) {
+            Schema::table('dokumentes', function (Blueprint $table) {
+                $table->string('kontext', 30)->default('teilnehmer')->after('typ');
+            });
+        }
+
+        if (! Schema::hasColumn('dokumentes', 'ausgabeformate')) {
+            Schema::table('dokumentes', function (Blueprint $table) {
+                $table->json('ausgabeformate')->nullable()->after('kontext');
+            });
+        }
+
+        if (! Schema::hasColumn('dokumentes', 'aktiv')) {
+            Schema::table('dokumentes', function (Blueprint $table) {
+                $table->boolean('aktiv')->default(true)->after('beschreibung');
+            });
+        }
 
         DB::statement("
             CREATE TABLE IF NOT EXISTS dokument_kategories (
@@ -87,9 +103,17 @@ return new class extends Migration
         $this->statementIgnoreMissing('DROP TABLE IF EXISTS projekt_has_dokument_kategories');
         $this->statementIgnoreMissing('DROP TABLE IF EXISTS dokument_has_kategories');
         $this->statementIgnoreMissing('DROP TABLE IF EXISTS dokument_kategories');
-        $this->statementIgnoreMissing('ALTER TABLE dokumentes DROP COLUMN IF EXISTS aktiv');
-        $this->statementIgnoreMissing('ALTER TABLE dokumentes DROP COLUMN IF EXISTS ausgabeformate');
-        $this->statementIgnoreMissing('ALTER TABLE dokumentes DROP COLUMN IF EXISTS kontext');
+
+        $columns = array_filter(
+            ['aktiv', 'ausgabeformate', 'kontext'],
+            fn (string $column) => Schema::hasColumn('dokumentes', $column)
+        );
+
+        if ($columns !== []) {
+            Schema::table('dokumentes', function (Blueprint $table) use ($columns) {
+                $table->dropColumn($columns);
+            });
+        }
     }
 
     private function seedBopVorlagen(): void

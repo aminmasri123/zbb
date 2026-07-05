@@ -2,15 +2,32 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\QueryException;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
-        DB::statement('ALTER TABLE projekt_has_dokumentes ADD COLUMN IF NOT EXISTS gruppen_export TINYINT(1) NOT NULL DEFAULT 1');
-        DB::statement('ALTER TABLE projekt_has_dokumentes ADD COLUMN IF NOT EXISTS serienbrief TINYINT(1) NOT NULL DEFAULT 1');
-        DB::statement('ALTER TABLE projekt_has_dokumentes ADD COLUMN IF NOT EXISTS sort_order INT UNSIGNED NOT NULL DEFAULT 0');
+        if (! Schema::hasColumn('projekt_has_dokumentes', 'gruppen_export')) {
+            Schema::table('projekt_has_dokumentes', function (Blueprint $table) {
+                $table->boolean('gruppen_export')->default(true);
+            });
+        }
+
+        if (! Schema::hasColumn('projekt_has_dokumentes', 'serienbrief')) {
+            Schema::table('projekt_has_dokumentes', function (Blueprint $table) {
+                $table->boolean('serienbrief')->default(true);
+            });
+        }
+
+        if (! Schema::hasColumn('projekt_has_dokumentes', 'sort_order')) {
+            Schema::table('projekt_has_dokumentes', function (Blueprint $table) {
+                $table->unsignedInteger('sort_order')->default(0);
+            });
+        }
+
         $this->statementIgnoreDuplicate('ALTER TABLE projekt_has_dokumentes ADD PRIMARY KEY (projekt_id, dokument_id)');
 
         $bopDokumente = [
@@ -108,9 +125,16 @@ return new class extends Migration
 
     public function down(): void
     {
-        DB::statement('ALTER TABLE projekt_has_dokumentes DROP COLUMN IF EXISTS sort_order');
-        DB::statement('ALTER TABLE projekt_has_dokumentes DROP COLUMN IF EXISTS serienbrief');
-        DB::statement('ALTER TABLE projekt_has_dokumentes DROP COLUMN IF EXISTS gruppen_export');
+        $columns = array_filter(
+            ['sort_order', 'serienbrief', 'gruppen_export'],
+            fn (string $column) => Schema::hasColumn('projekt_has_dokumentes', $column)
+        );
+
+        if ($columns !== []) {
+            Schema::table('projekt_has_dokumentes', function (Blueprint $table) use ($columns) {
+                $table->dropColumn($columns);
+            });
+        }
     }
 
     private function statementIgnoreDuplicate(string $statement): void

@@ -2,13 +2,19 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\QueryException;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
-        DB::statement("ALTER TABLE dokumentes ADD COLUMN IF NOT EXISTS einsatzbereich VARCHAR(30) NOT NULL DEFAULT 'gruppe' AFTER kontext");
+        if (! Schema::hasColumn('dokumentes', 'einsatzbereich')) {
+            Schema::table('dokumentes', function (Blueprint $table) {
+                $table->string('einsatzbereich', 30)->default('gruppe')->after('kontext');
+            });
+        }
 
         DB::statement("
             CREATE TABLE IF NOT EXISTS dokument_has_bereiches (
@@ -72,7 +78,12 @@ return new class extends Migration
     public function down(): void
     {
         $this->statementIgnoreMissing('DROP TABLE IF EXISTS dokument_has_bereiches');
-        $this->statementIgnoreMissing('ALTER TABLE dokumentes DROP COLUMN IF EXISTS einsatzbereich');
+
+        if (Schema::hasColumn('dokumentes', 'einsatzbereich')) {
+            Schema::table('dokumentes', function (Blueprint $table) {
+                $table->dropColumn('einsatzbereich');
+            });
+        }
     }
 
     private function statementIgnoreMissing(string $statement): void
