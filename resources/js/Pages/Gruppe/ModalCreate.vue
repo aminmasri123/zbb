@@ -141,7 +141,7 @@
 import { computed, watch } from 'vue'
 import { useForm } from '@inertiajs/vue3'
 import Modal from '@/Components/ModalForm.vue'
-import Select from 'primevue/Select'
+import Select from 'primevue/select'
 import FloatLabel from 'primevue/floatlabel';
 import Swal from 'sweetalert2';
 
