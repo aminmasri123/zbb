@@ -19,7 +19,7 @@ const page = usePage();
 // Dynamisch die Sidebar auswählen basierend auf der Route oder Seite
 const currentSidebar = computed(() => {
   const url = page.url; // Aktuelle URL abrufen
-  if (url.startsWith('/dashboard') || url.startsWith('/anwesenheitsdaten')) {
+  if (url.startsWith('/dashboard') || url.startsWith('/anwesenheitsdaten') || url.startsWith('/klassenbuecher')) {
     return DashboardSidebar;
   } else if (url.startsWith('/user')) {
     return ProfileSidebar;

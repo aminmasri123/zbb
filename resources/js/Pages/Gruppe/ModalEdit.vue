@@ -1,6 +1,6 @@
 <script setup>
 import Modal from '@/Components/ModalForm.vue';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import Swal from 'sweetalert2';
 import FloatLabel from 'primevue/floatlabel';
 import Select from 'primevue/select';
@@ -16,6 +16,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  standorte: {
+    type: Array,
+    default: () => [],
+  },
 });
 const emit = defineEmits(['close', 'updated']);
 
@@ -25,6 +29,7 @@ let form = ref({
   betreuer: '',
   ort_typ: 'raum',
   raum_id: null,
+  standort_id: null,
   externer_ort: '',
   anfangsdatum: null,
   enddatum: null,
@@ -32,6 +37,21 @@ let form = ref({
   endzeit: '',
   bemerkung: '',
 });
+
+const selectedRoom = computed(() =>
+  (props.raeume || []).find((raum) => Number(raum.id) === Number(form.value.raum_id))
+);
+
+const selectedStandortName = computed(() =>
+  selectedRoom.value?.standort?.name ||
+  props.standorte.find((standort) => Number(standort.id) === Number(selectedRoom.value?.standort_id))?.name ||
+  ''
+);
+
+const roomLabel = (raum) => {
+  const standortName = raum?.standort?.name || props.standorte.find((standort) => Number(standort.id) === Number(raum?.standort_id))?.name;
+  return standortName ? `${raum.name} (${standortName})` : raum.name;
+};
 
 // 🔹 synchronisieren & konvertieren von String -> Date
 watch(
@@ -44,6 +64,7 @@ watch(
         betreuer: val.betreuer?.id || val.betreuer,
         ort_typ: val.ort_typ || (val.raum_id ? 'raum' : 'extern'),
         raum_id: val.raum_id || val.raum?.id || null,
+        standort_id: val.standort_id || val.standort?.id || val.raum?.standort_id || null,
         externer_ort: val.externer_ort || '',
         anfangsdatum: val.anfangsdatum ? new Date(val.anfangsdatum) : null,
         enddatum: val.enddatum ? new Date(val.enddatum) : null,
@@ -61,8 +82,19 @@ watch(
   (typ) => {
     if (typ === 'extern') {
       form.value.raum_id = null;
+      form.value.standort_id = form.value.standort_id || props.standorte[0]?.id || null;
     } else {
       form.value.externer_ort = '';
+      form.value.standort_id = selectedRoom.value?.standort_id || null;
+    }
+  }
+);
+
+watch(
+  () => form.value.raum_id,
+  () => {
+    if (form.value.ort_typ === 'raum') {
+      form.value.standort_id = selectedRoom.value?.standort_id || null;
     }
   }
 );
@@ -147,7 +179,7 @@ const save = async () => {
             v-model="form.raum_id"
             :options="raeume"
             optionValue="id"
-            optionLabel="name"
+            :optionLabel="roomLabel"
             class="w-full"
           />
           <label>Raum</label>
@@ -156,6 +188,21 @@ const save = async () => {
         <FloatLabel v-else variant="on" class="col-span-2">
           <input v-model="form.externer_ort" type="text" class="w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb" />
           <label>Externer Ort / Ausflug</label>
+        </FloatLabel>
+
+        <p v-if="form.ort_typ === 'raum' && selectedStandortName" class="col-span-2 text-xs text-gray-500">
+          Standort: {{ selectedStandortName }}
+        </p>
+
+        <FloatLabel v-if="form.ort_typ === 'extern'" variant="on" class="col-span-2">
+          <Select
+            v-model="form.standort_id"
+            :options="standorte"
+            optionValue="id"
+            optionLabel="name"
+            class="w-full"
+          />
+          <label>Standort</label>
         </FloatLabel>
 
         <FloatLabel variant="on">

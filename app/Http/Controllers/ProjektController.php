@@ -116,6 +116,7 @@ class ProjektController extends Controller
             'anfangsdatum' => 'required|date',
             'endtermin'    => 'required|date',
             'enddatum'     => 'required|date',
+            'klassenbuch_aktiv' => 'sometimes|boolean',
             'kostenstellen' => 'nullable|array',
             'kostenstellen.*.kostenstelle_id' => 'required_with:kostenstellen|integer|exists:kostenstelles,id',
             'kostenstellen.*.gueltig_von' => 'required_with:kostenstellen|date',
@@ -140,6 +141,7 @@ class ProjektController extends Controller
             $projekt = Projekt::create([
                 'name'         => $validatedData['name'],
                 'abteilung_id' => $validatedData['abteilung'],
+                'klassenbuch_aktiv' => (bool) ($validatedData['klassenbuch_aktiv'] ?? false),
             ]);
 
             // 2️⃣ Zeitraum anlegen
@@ -251,6 +253,7 @@ class ProjektController extends Controller
             'anfangsdatum' => 'required_without:zeitraume|date',
             'endtermin' => 'required_without:zeitraume|date',
             'enddatum' => 'required_without:zeitraume|date',
+            'klassenbuch_aktiv' => 'sometimes|boolean',
             'zeitraume' => 'sometimes|array|min:1',
             'zeitraume.*.id' => 'nullable|integer|exists:zeitraums,id',
             'zeitraume.*.antragsdatum' => 'required_with:zeitraume|date',
@@ -282,10 +285,16 @@ class ProjektController extends Controller
             $projekt = Projekt::findOrFail($id);
 
             // Basisdaten updaten
-            $projekt->update([
+            $payload = [
                 'name' => $validatedData['name'],
                 'abteilung_id' => $validatedData['abteilung'],
-            ]);
+            ];
+
+            if ($request->has('klassenbuch_aktiv')) {
+                $payload['klassenbuch_aktiv'] = (bool) $validatedData['klassenbuch_aktiv'];
+            }
+
+            $projekt->update($payload);
 
             if ($request->has('zeitraume')) {
                 $this->syncProjektZeitraume($projekt, $validatedData['zeitraume']);

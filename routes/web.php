@@ -29,6 +29,7 @@ use App\Http\Controllers\GeraetController;
 use App\Http\Controllers\GeraetrueckgabeController;
 use App\Http\Controllers\GruppeController;
 use App\Http\Controllers\GruppeHasTeilnehmerController;
+use App\Http\Controllers\KlassenbuchController;
 use App\Http\Controllers\KontaktController;
 use App\Http\Controllers\KostenstelleController;
 use App\Http\Controllers\MaterialanforderungController;
@@ -250,6 +251,18 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::post('/gruppehasteilnehmer/anlegen', [GruppeHasTeilnehmerController::class, 'store'])->name('gruppeHasTeilnehmer.store');
 
     Route::delete('/gruppehasteilnehmer/entfernen/{id}', [GruppeHasTeilnehmerController::class, 'destroy'])->name('gruppeHasPersonen.destroy');
+
+    //Klassenbuch
+    Route::get('/klassenbuecher', [KlassenbuchController::class, 'index'])->name('klassenbuch.index');
+    Route::post('/klassenbuecher', [KlassenbuchController::class, 'store'])->name('klassenbuch.store');
+    Route::get('/klassenbuecher/{klassenbuch}', [KlassenbuchController::class, 'show'])->name('klassenbuch.show');
+    Route::get('/klassenbuecher/{klassenbuch}/wochen/{woche}', [KlassenbuchController::class, 'woche'])->name('klassenbuch.woche.show');
+    Route::post('/klassenbuecher/{klassenbuch}/wochen/{woche}/eintraege', [KlassenbuchController::class, 'storeEintrag'])->name('klassenbuch.eintrag.store');
+    Route::delete('/klassenbuecher/{klassenbuch}/wochen/{woche}/eintraege/{eintrag}', [KlassenbuchController::class, 'destroyEintrag'])->name('klassenbuch.eintrag.destroy');
+    Route::post('/klassenbuecher/{klassenbuch}/wochen/{woche}/einreichen', [KlassenbuchController::class, 'submit'])->name('klassenbuch.woche.submit');
+    Route::post('/klassenbuecher/{klassenbuch}/wochen/{woche}/pruefen', [KlassenbuchController::class, 'review'])->name('klassenbuch.woche.review');
+    Route::post('/klassenbuecher/{klassenbuch}/wochen/{woche}/kommentare', [KlassenbuchController::class, 'storeKommentar'])->name('klassenbuch.kommentar.store');
+    Route::put('/klassenbuecher/{klassenbuch}/wochen/{woche}/kommentare/{kommentar}', [KlassenbuchController::class, 'updateKommentar'])->name('klassenbuch.kommentar.update');
 
     //Teilnehmer
     Route::get('/teilnehmer', [TeilnehmerController::class, 'index'])->name('teilnehmer.index')->can('teilnehmer.index');

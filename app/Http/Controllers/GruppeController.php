@@ -27,7 +27,7 @@ class GruppeController extends Controller
         $canSeeAllGroups = $this->canSeeAllGroups($user);
 
         $gruppen = Gruppe::query()
-            ->with(['bereich', 'betreuer', 'raum.parent'])
+            ->with(['bereich', 'betreuer', 'raum.parent', 'raum.standort', 'standort'])
             ->withCount('teilnehmer')
             ->where('projekt_id', $user->current_team_id)
             ->when(!$canSeeAllGroups, fn ($query) => $query->where('personen_id', $this->userPersonId($user)))
@@ -36,8 +36,8 @@ class GruppeController extends Controller
             ->get();
 
         $betreuer = $this->canAny($user, ['projekt.mitarbeiter.view.all', 'gruppe.view.all'])
-            ? $projekt->mitarbeiter->values()
-            : collect([$user->person])->filter()->values();
+            ? $projekt->mitarbeiter
+            : $this->uniquePersonen(collect([$user->person])->filter());
 
         return Inertia::render('Gruppe/Index', [
             'gruppen' => $gruppen,
@@ -65,18 +65,21 @@ class GruppeController extends Controller
             'betreuer' => 'required|integer|exists:personens,id',
             'ort_typ' => ['required', Rule::in(['raum', 'extern'])],
             'raum_id' => 'nullable|required_if:ort_typ,raum|integer|exists:raeumes,id',
+            'standort_id' => 'nullable|required_if:ort_typ,extern|integer|exists:standorts,id',
             'externer_ort' => 'nullable|required_if:ort_typ,extern|string|max:255',
             'bemerkung' => 'nullable|string|max:1000',
         ]);
 
         $projekt = $this->projektMitVerfuegbarenRaeumen((int) $user->current_team_id);
         $this->validateProjektZuordnung($projekt, (int) $validated['bereich'], $validated['raum_id'] ?? null);
+        $standortId = $this->resolveStandortId($projekt, $validated);
         $this->validateBetreuer($user, $projekt, (int) $validated['betreuer']);
 
         $gruppe = Gruppe::create([
             'personen_id' => $validated['betreuer'],
             'bereich_id' => $validated['bereich'],
             'projekt_id' => $user->current_team_id,
+            'standort_id' => $standortId,
             'ort_typ' => $validated['ort_typ'],
             'raum_id' => $validated['ort_typ'] === 'raum' ? $validated['raum_id'] : null,
             'externer_ort' => $validated['ort_typ'] === 'extern' ? $validated['externer_ort'] : null,
@@ -90,7 +93,7 @@ class GruppeController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Gruppe erfolgreich erstellt.',
-            'gruppe' => $gruppe->load(['bereich', 'betreuer', 'raum.parent'])->loadCount('teilnehmer'),
+            'gruppe' => $gruppe->load(['bereich', 'betreuer', 'raum.parent', 'raum.standort', 'standort'])->loadCount('teilnehmer'),
         ], 201);
     }
 
@@ -110,6 +113,7 @@ class GruppeController extends Controller
                 'betreuer' => 'required|integer|exists:personens,id',
                 'ort_typ' => ['required', Rule::in(['raum', 'extern'])],
                 'raum_id' => 'nullable|required_if:ort_typ,raum|integer|exists:raeumes,id',
+                'standort_id' => 'nullable|required_if:ort_typ,extern|integer|exists:standorts,id',
                 'externer_ort' => 'nullable|required_if:ort_typ,extern|string|max:255',
                 'anfangsdatum' => 'required|date',
                 'enddatum' => 'nullable|date|after_or_equal:anfangsdatum',
@@ -120,11 +124,13 @@ class GruppeController extends Controller
 
             $projekt = $this->projektMitVerfuegbarenRaeumen((int) $gruppe->projekt_id);
             $this->validateProjektZuordnung($projekt, (int) $validated['bereich'], $validated['raum_id'] ?? null);
+            $standortId = $this->resolveStandortId($projekt, $validated);
             $this->validateBetreuer($user, $projekt, (int) $validated['betreuer']);
 
             $gruppe->update([
                 'bereich_id' => $validated['bereich'],
                 'personen_id' => $validated['betreuer'],
+                'standort_id' => $standortId,
                 'ort_typ' => $validated['ort_typ'],
                 'raum_id' => $validated['ort_typ'] === 'raum' ? $validated['raum_id'] : null,
                 'externer_ort' => $validated['ort_typ'] === 'extern' ? $validated['externer_ort'] : null,
@@ -138,7 +144,7 @@ class GruppeController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Gruppe erfolgreich aktualisiert.',
-                'projekt' => $gruppe->load(['bereich', 'betreuer', 'raum.parent'])->loadCount('teilnehmer'),
+                'projekt' => $gruppe->load(['bereich', 'betreuer', 'raum.parent', 'raum.standort', 'standort'])->loadCount('teilnehmer'),
             ], 200);
         } catch (ValidationException $e) {
             return response()->json([
@@ -219,6 +225,7 @@ class GruppeController extends Controller
             'mitarbeiter',
             'raeume.parent',
             'raeume.standardPerson',
+            'raeume.standort',
             'standorte',
         ])->findOrFail($projektId);
 
@@ -228,7 +235,7 @@ class GruppeController extends Controller
             $standortIds = $projekt->standorte->pluck('id')->filter()->unique()->values();
 
             $raeume = Raeume::query()
-                ->with(['parent', 'standardPerson'])
+                ->with(['parent', 'standardPerson', 'standort'])
                 ->where('aktiv', true)
                 ->when($standortIds->isNotEmpty(), fn ($query) => $query->whereIn('standort_id', $standortIds))
                 ->orderBy('name')
@@ -236,8 +243,26 @@ class GruppeController extends Controller
         }
 
         $projekt->setRelation('raeume', $raeume);
+        $projekt->setRelation('mitarbeiter', $this->uniquePersonen($projekt->mitarbeiter));
+        $projekt->setRelation('standorte', $this->uniqueStandorte($projekt->standorte));
 
         return $projekt;
+    }
+
+    private function uniquePersonen($personen)
+    {
+        return $personen
+            ->unique('id')
+            ->sortBy(fn ($person) => strtolower(($person->nachname ?? '') . ' ' . ($person->vorname ?? '')))
+            ->values();
+    }
+
+    private function uniqueStandorte($standorte)
+    {
+        return $standorte
+            ->unique('id')
+            ->sortBy(fn ($standort) => strtolower($standort->name ?? ''))
+            ->values();
     }
 
     private function validateProjektZuordnung(Projekt $projekt, int $bereichId, ?int $raumId): void
@@ -253,6 +278,31 @@ class GruppeController extends Controller
                 'raum_id' => 'Der Raum ist fuer dieses Projekt nicht verfuegbar.',
             ]);
         }
+    }
+
+    private function resolveStandortId(Projekt $projekt, array $validated): int
+    {
+        if (($validated['ort_typ'] ?? 'raum') === 'raum') {
+            $raum = $projekt->raeume->firstWhere('id', (int) ($validated['raum_id'] ?? 0));
+
+            if (! $raum?->standort_id) {
+                throw ValidationException::withMessages([
+                    'raum_id' => 'Der Raum hat keinen gueltigen Standort.',
+                ]);
+            }
+
+            return (int) $raum->standort_id;
+        }
+
+        $standortId = (int) ($validated['standort_id'] ?? 0);
+
+        if (! $projekt->standorte->contains('id', $standortId)) {
+            throw ValidationException::withMessages([
+                'standort_id' => 'Der Standort gehoert nicht zum ausgewaehlten Projekt.',
+            ]);
+        }
+
+        return $standortId;
     }
 
     private function validateBetreuer($user, Projekt $projekt, int $betreuerId): void

@@ -38,6 +38,7 @@ const form = ref({
   kostenstelle: '',
   kostenstellen: [],
   abteilung: null,
+  klassenbuch_aktiv: false,
   zeitraume: [],
   bereiche: [],
 });
@@ -54,6 +55,8 @@ const toDateInput = (value) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
 };
+
+const toBoolean = (value) => value === true || value === 1 || value === '1';
 
 const fillForm = (projekt) => {
   if (!projekt) {
@@ -74,6 +77,7 @@ const fillForm = (projekt) => {
       gueltig_bis: toDateInput(kostenstelle.pivot?.gueltig_bis),
     })) ?? [],
     abteilung: projekt.abteilung_id ?? projekt.abteilung?.id ?? null,
+    klassenbuch_aktiv: toBoolean(projekt.klassenbuch_aktiv),
     zeitraume: zeitraume.map((zeitraum) => ({
       id: zeitraum.id ?? null,
       antragsdatum: toDateInput(zeitraum.antragsdatum),
@@ -229,6 +233,11 @@ const handleKostenstelleCreated = (kostenstelle) => {
             <label>Abteilung</label>
           </FloatLabel>
         </div>
+
+        <label class="mb-4 flex items-center gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-700">
+          <input v-model="form.klassenbuch_aktiv" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
+          <span class="font-medium">Klassenbuch aktiv</span>
+        </label>
 
         <div class="mb-4">
           <div class="mb-3 flex items-center justify-between gap-3">

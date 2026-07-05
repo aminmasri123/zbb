@@ -28,6 +28,12 @@ class Projekt extends Model
         'abteilung_id',
         'beschreibung',
         'aktiv',
+        'klassenbuch_aktiv',
+    ];
+
+    protected $casts = [
+        'aktiv' => 'boolean',
+        'klassenbuch_aktiv' => 'boolean',
     ];
 
 

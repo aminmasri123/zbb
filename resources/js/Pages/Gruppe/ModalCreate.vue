@@ -36,13 +36,20 @@
             </div>
 
             <FloatLabel v-if="form.ort_typ === 'raum'" variant="on">
-                <Select v-model="form.raum_id" :options="props.projekt.raeume" optionValue="id" optionLabel="name" class="w-full"/>
+                <Select v-model="form.raum_id" :options="props.projekt.raeume" optionValue="id" :optionLabel="roomLabel" class="w-full"/>
                 <label>Raum</label>
             </FloatLabel>
 
             <FloatLabel v-else variant="on">
                 <input v-model="form.externer_ort" type="text" class="w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb" />
                 <label>Externer Ort / Ausflug</label>
+            </FloatLabel>
+            <p v-if="form.ort_typ === 'raum' && selectedStandortName" class="mt-2 text-xs text-gray-500">
+                Standort: {{ selectedStandortName }}
+            </p>
+            <FloatLabel v-if="form.ort_typ === 'extern'" variant="on" class="mt-4">
+                <Select v-model="form.standort_id" :options="standorte" optionValue="id" optionLabel="name" class="w-full"/>
+                <label>Standort</label>
             </FloatLabel>
             <label for="groupType" class="block text-sm font-medium text-gray-700 mb-3" >
                 Gruppentyp <span class="text-red-500">*</span>
@@ -165,6 +172,7 @@ const form = useForm({
   endZeit: '',
   ort_typ: 'raum',
   raum_id: '',
+  standort_id: '',
   externer_ort: '',
   bemerkung: '',
 })
@@ -176,9 +184,27 @@ const groupTypes = [
   { value: '3-day', label: '3 Tage', desc: 'Dreitägiges Event', icon: '🗓️' },
   { value: 'unlimited', label: 'Flexibel', desc: 'Beliebige Dauer', icon: '♾️' },
 ]
+
+const standorte = computed(() => props.projekt?.standorte || [])
+
+const selectedRoom = computed(() =>
+  (props.projekt?.raeume || []).find((raum) => Number(raum.id) === Number(form.raum_id))
+)
+
+const selectedStandortName = computed(() =>
+  selectedRoom.value?.standort?.name ||
+  standorte.value.find((standort) => Number(standort.id) === Number(selectedRoom.value?.standort_id))?.name ||
+  ''
+)
+
+const roomLabel = (raum) => {
+  const standortName = raum?.standort?.name || standorte.value.find((standort) => Number(standort.id) === Number(raum?.standort_id))?.name
+  return standortName ? `${raum.name} (${standortName})` : raum.name
+}
+
 // 🔹 Validierung
 const isValid = computed(() => {
-  const hasOrt = form.ort_typ === 'extern' ? form.externer_ort !== '' : form.raum_id !== ''
+  const hasOrt = form.ort_typ === 'extern' ? form.externer_ort !== '' && form.standort_id !== '' : form.raum_id !== ''
 
   return (
     form.groupType !== '' &&
@@ -197,8 +223,19 @@ watch(
   (typ) => {
     if (typ === 'extern') {
       form.raum_id = ''
+      form.standort_id = form.standort_id || standorte.value[0]?.id || ''
     } else {
       form.externer_ort = ''
+      form.standort_id = selectedRoom.value?.standort_id || ''
+    }
+  }
+)
+
+watch(
+  () => form.raum_id,
+  () => {
+    if (form.ort_typ === 'raum') {
+      form.standort_id = selectedRoom.value?.standort_id || ''
     }
   }
 )

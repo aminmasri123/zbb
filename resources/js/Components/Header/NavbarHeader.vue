@@ -39,6 +39,7 @@
                             || route().current('abteilung.*')
                             || route().current('projekt.*')
                             || route().current('bereich.*')
+                            || route().current('klassenbuch.*')
                             "
                     class="text-[17px] text-[var(--primary)]">
                         {{ $t('dashboard') }}
@@ -250,7 +251,7 @@
         <!-- Responsive Navigation Menu -->
         <div :class="{'block': showingNavigationDropdown, 'hidden': !showingNavigationDropdown}" class="sm:hidden">
             <div class="pt-2 pb-3 space-y-1">
-                <ResponsiveNavLink :href="route('dashboard')" :active="['dashboard','benutzer','partner','abteilung','projekt','bereich','einstellung'].includes(route().current())">
+                <ResponsiveNavLink :href="route('dashboard')" :active="['dashboard','benutzer','partner','abteilung','projekt','bereich','einstellung'].includes(route().current()) || route().current('klassenbuch.*')">
                     {{$t('dashboard')}}
                 </ResponsiveNavLink>
                 <ResponsiveNavLink :href="route('organisation.index')" :active="route().current('organisation.index')">

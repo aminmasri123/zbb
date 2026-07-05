@@ -7,8 +7,10 @@ use App\Models\Bereich;
 use App\Models\Projekt;
 use App\Models\Personen;
 use App\Models\Zeitraum;
+use App\Models\Standort;
 use App\Models\RaumMeldung;
 use App\Models\GruppeHasPersonen;
+use App\Models\Klassenbuch;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -23,6 +25,7 @@ class Gruppe extends Model
         'raum_id',
         'bereich_id',
         'projekt_id',
+        'standort_id',
         'ort_typ',
         'anfangsdatum',
         'enddatum',
@@ -61,6 +64,11 @@ class Gruppe extends Model
         return $this->hasOne(Raeume::class, 'id', 'raum_id');
     }
 
+    public function standort()
+    {
+        return $this->belongsTo(Standort::class);
+    }
+
     public function raumMeldungen()
     {
         return $this->hasMany(RaumMeldung::class, 'gruppe_id')->latest();
@@ -69,5 +77,10 @@ class Gruppe extends Model
     public function bereich()
     {
         return $this->belongsTo(Bereich::class);
+    }
+
+    public function klassenbuecher()
+    {
+        return $this->hasMany(Klassenbuch::class, 'gruppe_id');
     }
 }

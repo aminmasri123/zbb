@@ -566,6 +566,11 @@ class UserSeeder extends Seeder
                 'guard_name' => 'web',
                 'color' => 'bg-orange-200',
             ],
+            [
+                'name' => 'Pädagogische Leitung',
+                'guard_name' => 'web',
+                'color' => 'bg-blue-200',
+            ],
             [ // id = 2
                 'name' => 'Abteilungsleitung',
                 'guard_name' => 'web',
@@ -576,15 +581,36 @@ class UserSeeder extends Seeder
                 'guard_name' => 'web',
                 'color' => 'bg-yellow-200',
             ],
-            [ // id = 4
+
+            [
+                // id = 4
+                'name' => 'Projektleitung',
+                'guard_name' => 'web',
+                'color' => 'bg-indigo-300',
+            ],
+
+            [ // id = 5
                 'name' => 'Sozialpädagoge',
                 'guard_name' => 'web',
                 'color' => 'bg-slate-400',
             ],
+
+            [
+                'name' => 'Ausbilder',
+                'guard_name' => 'web',
+                'color' => 'bg-lime-300',
+            ],
+
             [ // id = 5
                 'name' => 'Anleiter',
                 'guard_name' => 'web',
                 'color' => 'bg-cyan-300',
+            ],
+
+            [
+                'name' => 'Auszubildender',
+                'guard_name' => 'web',
+                'color' => 'bg-emerald-300',
             ],
             [ // id = 6
                 'name' => 'Sekretariat',
@@ -596,6 +622,36 @@ class UserSeeder extends Seeder
                 'guard_name' => 'web',
                 'color' => 'bg-red-200',
             ],
+            [
+                'name' => 'Personalabteilung',
+                'guard_name' => 'web',
+                'color' => 'bg-violet-300',
+            ],
+            [
+                'name' => 'Bestellwesen',
+                'guard_name' => 'web',
+                'color' => 'bg-fuchsia-300',
+            ],
+            [
+                'name' => 'Buchhaltung',
+                'guard_name' => 'web',
+                'color' => 'bg-amber-300',
+            ],
+            [
+                'name' => 'Sicherheitsbeauftragte',
+                'guard_name' => 'web',
+                'color' => 'bg-rose-400',
+            ],
+            [
+                'name' => 'Ersthelfer',
+                'guard_name' => 'web',
+                'color' => 'bg-rose-400',
+            ],
+            [
+                'name' => 'Qualitätsmanagement',
+                'guard_name' => 'web',
+                'color' => 'bg-violet-300',
+            ]
 
         ]);
 

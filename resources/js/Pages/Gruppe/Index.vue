@@ -112,6 +112,7 @@ const applySearchFilter = () => {
       g.betreuer?.vorname?.toLowerCase().includes(q) ||
       g.betreuer?.nachname?.toLowerCase().includes(q) ||
       g.raum?.name?.toLowerCase().includes(q) ||
+      g.standort?.name?.toLowerCase().includes(q) ||
       g.externer_ort?.toLowerCase().includes(q)
     );
   } else {
@@ -206,6 +207,10 @@ watch(search, () => {
                         <span v-else>{{ gruppe.raum?.name || 'Kein Raum' }}</span>
                     </div>
                     <div class="flex items-center gap-1">
+                        <i class="la la-map-marker la-2x text-zbb/70"></i>
+                        <span>{{ gruppe.standort?.name || gruppe.raum?.standort?.name || 'Kein Standort' }}</span>
+                    </div>
+                    <div class="flex items-center gap-1">
                         <i class="la la-user la-2x text-zbb/70"></i>
                         <span>{{ gruppe.betreuer?.vorname }} {{ gruppe.betreuer?.nachname }}</span>
                     </div>
@@ -214,6 +219,13 @@ watch(search, () => {
 
                 <!-- Buttons -->
                 <div class="flex gap-2 mt-4 sm:mt-0">
+                    <Link
+                    v-if="props.projekt?.klassenbuch_aktiv"
+                    :href="route('klassenbuch.index')"
+                    class="px-4 py-2 text-sm font-medium rounded-md border border-zbb text-zbb shadow-sm hover:bg-zbb hover:text-white transition"
+                    >
+                    Klassenbuch
+                    </Link>
                     <button
                     v-if="gruppe.raum"
                     @click="openMeldungModal(gruppe)"
@@ -249,6 +261,7 @@ watch(search, () => {
                             :bereiche="props.projekt.bereiche"
                             :personal="props.betreuer"
                             :raeume="props.projekt.raeume"
+                            :standorte="props.projekt.standorte"
                             :toEdit="gruppeToEdit"
                             @close="closeModalEdit"
                             @updated="updateGruppe"/>

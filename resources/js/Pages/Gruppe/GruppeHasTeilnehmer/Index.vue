@@ -157,6 +157,8 @@ function generateDateRangeInclusive(start, end) {
 
     result.push({
       label: `Tag ${index}`,
+      wochentag: weekday,
+      kurzdatum: day,
       datum: `${weekday}, ${day}.`,
       date: localDate,
     })
@@ -173,6 +175,82 @@ const tage = computed(() =>
     ? generateDateRangeInclusive(props.gruppe.anfangsdatum, props.gruppe.enddatum)
     : []
 )
+
+const selectedWocheIndex = ref(0)
+
+const parseLocalDate = (value) => new Date(`${value}T00:00:00`)
+
+const formatKurzDatum = (value) =>
+  parseLocalDate(value).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })
+
+const formatDateKey = (date) => [
+  date.getFullYear(),
+  String(date.getMonth() + 1).padStart(2, '0'),
+  String(date.getDate()).padStart(2, '0'),
+].join('-')
+
+const kalenderwoche = (date) => {
+  const target = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+  const dayNumber = target.getUTCDay() || 7
+  target.setUTCDate(target.getUTCDate() + 4 - dayNumber)
+  const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1))
+  return Math.ceil((((target - yearStart) / 86400000) + 1) / 7)
+}
+
+const wochen = computed(() => {
+  const gruppiert = []
+
+  tage.value.forEach((tag, index) => {
+    const date = parseLocalDate(tag.date)
+    const monday = new Date(date)
+    const weekday = monday.getDay() || 7
+    monday.setDate(monday.getDate() - weekday + 1)
+    const key = formatDateKey(monday)
+
+    let woche = gruppiert.find((entry) => entry.key === key)
+    if (!woche) {
+      woche = {
+        key,
+        kw: kalenderwoche(date),
+        start: tag,
+        end: tag,
+        tage: [],
+      }
+      gruppiert.push(woche)
+    }
+
+    woche.end = tag
+    woche.tage.push({ ...tag, index })
+  })
+
+  return gruppiert.map((woche, index) => ({
+    ...woche,
+    value: index,
+    label: `KW ${woche.kw} | ${formatKurzDatum(woche.start.date)} - ${formatKurzDatum(woche.end.date)}`,
+  }))
+})
+
+const aktiveWoche = computed(() =>
+  wochen.value[selectedWocheIndex.value] || wochen.value[0] || { tage: [], label: '' }
+)
+
+const sichtbareTage = computed(() => aktiveWoche.value?.tage || [])
+
+const wechselWoche = (richtung) => {
+  const ziel = selectedWocheIndex.value + richtung
+  if (ziel >= 0 && ziel < wochen.value.length) {
+    selectedWocheIndex.value = ziel
+  }
+}
+
+const geheZuAktuellerWoche = () => {
+  const heute = formatDateKey(new Date())
+  const index = wochen.value.findIndex((woche) =>
+    woche.tage.some((tag) => tag.date === heute)
+  )
+
+  selectedWocheIndex.value = index >= 0 ? index : 0
+}
 
 const exportVorlagen = computed(() =>
   (props.gruppe?.projekt?.dokumente || []).filter((dokument) =>
@@ -276,7 +354,25 @@ const gruppenTeilnehmer = ref([])
 console.log(gruppenTeilnehmer);
 const tag = ref([])
 
+const statusUebersicht = computed(() => {
+  const zaehler = new Map(props.anwesenheitsstatuten.map((status) => [status.status, 0]))
+
+  gruppenTeilnehmer.value.forEach((teilnehmer) => {
+    sichtbareTage.value.forEach((tag) => {
+      const status = teilnehmer.anwesenheit?.[tag.index] || 'unentschuldigt'
+      zaehler.set(status, (zaehler.get(status) || 0) + 1)
+    })
+  })
+
+  return props.anwesenheitsstatuten.map((status) => ({
+    status: status.status,
+    count: zaehler.get(status.status) || 0,
+  }))
+})
+
 onMounted(() => {
+  geheZuAktuellerWoche()
+
   const gruppiert = {}
   props.gruppe.teilnehmer.forEach(t => {
     if (!gruppiert[t.id]) gruppiert[t.id] = []
@@ -582,20 +678,78 @@ const exportMitTag = async () => {
           </div>
         </div>
 
+        <div class="flex flex-wrap items-center justify-between gap-3 overflow-hidden rounded border border-gray-200 bg-white px-4 py-3">
+          <div class="flex min-w-0 flex-wrap items-center gap-2">
+            <button
+              type="button"
+              class="inline-flex h-10 w-10 items-center justify-center rounded border border-gray-300 text-gray-700 hover:border-zbb hover:text-zbb disabled:cursor-not-allowed disabled:opacity-40"
+              :disabled="selectedWocheIndex === 0"
+              title="Vorherige Woche"
+              @click="wechselWoche(-1)"
+            >
+              <i class="la la-chevron-left"></i>
+            </button>
+            <Select
+              v-model="selectedWocheIndex"
+              :options="wochen"
+              optionLabel="label"
+              optionValue="value"
+              class="w-72 max-w-full"
+            />
+            <button
+              type="button"
+              class="inline-flex h-10 w-10 items-center justify-center rounded border border-gray-300 text-gray-700 hover:border-zbb hover:text-zbb disabled:cursor-not-allowed disabled:opacity-40"
+              :disabled="selectedWocheIndex >= wochen.length - 1"
+              title="Naechste Woche"
+              @click="wechselWoche(1)"
+            >
+              <i class="la la-chevron-right"></i>
+            </button>
+            <button
+              type="button"
+              class="inline-flex h-10 items-center gap-2 rounded border border-gray-300 px-3 text-sm font-medium text-gray-700 hover:border-zbb hover:text-zbb"
+              title="Aktuelle Woche"
+              @click="geheZuAktuellerWoche"
+            >
+              <i class="la la-calendar-day"></i>
+              Heute
+            </button>
+          </div>
+
+          <div class="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+            <span
+              v-for="item in statusUebersicht"
+              :key="item.status"
+              class="inline-flex items-center gap-2 rounded bg-gray-50 px-2.5 py-1 text-xs text-gray-700"
+            >
+              <span class="h-2.5 w-2.5 rounded-full" :style="statusFarbe(item.status)"></span>
+              {{ item.status }}: {{ item.count }}
+            </span>
+          </div>
+        </div>
+
         <!-- Tabelle -->
-        <div class="overflow-x-auto max-w-full">
-          <table class="w-full table-fixed text-sm border-collapse border shadow-sm ">
+        <div class="max-w-full overflow-hidden rounded border border-gray-200">
+          <table class="w-full table-fixed text-sm border-collapse shadow-sm">
+            <colgroup>
+              <col class="w-52 xl:w-60" />
+              <col
+                v-for="tag in sichtbareTage"
+                :key="'col-' + tag.date"
+              />
+            </colgroup>
             <thead class="bg-gray-100 text-gray-700">
               <tr>
-                <th class="border px-3 py-2 text-left">Teilnehmer</th>
+                <th class="sticky left-0 z-20 border bg-gray-100 px-3 py-2 text-left">Teilnehmer</th>
                 <th
-                  v-for="tag in tage"
-                  :key="tag.label"
-                  class="border px-3 py-2 text-center"
+                  v-for="tag in sichtbareTage"
+                  :key="tag.date"
+                  class="border px-2 py-2 text-center"
                 >
                   <div class="flex flex-col items-center">
-                    <span class="font-semibold">{{ tag.label }}</span>
-                    <span class="text-xs text-gray-500">{{ tag.datum }}</span>
+                    <span class="font-semibold">{{ tag.wochentag }}</span>
+                    <span class="text-xs text-gray-500">{{ tag.kurzdatum }}</span>
+                    <span class="text-[11px] text-gray-400">{{ tag.label }}</span>
                   </div>
                 </th>
               </tr>
@@ -607,34 +761,35 @@ const exportMitTag = async () => {
                 :key="t.id"
                 class="hover:bg-gray-50"
               >
-                <td class="border px-4 py-3 font-medium text-gray-800">
-                  <p>{{ t.vorname }} {{ t.nachname }}</p>
+                <td class="sticky left-0 z-10 border bg-white px-4 py-3 font-medium text-gray-800">
+                  <p class="truncate">{{ t.vorname }} {{ t.nachname }}</p>
                   <span class="text-sm text-zbb">{{ formatTime(t.pivot?.zeitgeplant?.startzeit) }} - {{formatTime(t.pivot?.zeitgeplant?.endzeit)}}</span>
                 </td>
-                <td v-for="(tttag, dayIndex) in tage" :key="dayIndex" class="border px-4 py-3 text-center">
+                <td v-for="tttag in sichtbareTage" :key="tttag.date" class="border px-2 py-3 text-center align-top">
                     <div class="flex flex-col gap-1 items-center">
 
                         <!-- Anwesenheitsstatus -->
 
                         <Select
-                        v-model="gruppenTeilnehmer[tIndex].anwesenheit[dayIndex]"
+                        v-model="gruppenTeilnehmer[tIndex].anwesenheit[tttag.index]"
                         :options="props.anwesenheitsstatuten"
                         optionLabel="status"
                         optionValue="status"
-                        class="text-sm"
+                        class="w-full min-w-0 text-xs"
                        @change="speichernSofort(
                             t.id,
                             tttag,
-                            gruppenTeilnehmer[tIndex].anwesenheit[dayIndex],
-                            t.pivot.zeittatsaechlich.startzeit,
-                            t.pivot.zeittatsaechlich.endzeit
+                            gruppenTeilnehmer[tIndex].anwesenheit[tttag.index],
+                            t.zeiten[tttag.index].start,
+                            t.zeiten[tttag.index].ende
                         )"
                     >
                     <template #value="slotProps">
-                        <div class="flex items-center gap-2">
-                            <span class="w-3 h-3 rounded-full inline-block" :style="statusFarbe(slotProps.value)" >
+                        <div class="flex min-w-0 items-center gap-2">
+                            <span class="h-3 w-3 shrink-0 rounded-full inline-block" :style="statusFarbe(slotProps.value)" >
 
-                            </span> {{ slotProps.value }}
+                            </span>
+                            <span class="truncate">{{ slotProps.value }}</span>
                         </div>
                     </template>
                     <template #option="slotProps">
@@ -647,28 +802,30 @@ const exportMitTag = async () => {
 
 
                         <!-- Zeiten -->
-                        <div class="flex gap-1 justify-center mt-1">
+                        <div class="mt-1 grid w-full grid-cols-2 gap-1">
                         <InputText
                             type="time"
-                            v-model="t.zeiten[dayIndex].start"
+                            v-model="t.zeiten[tttag.index].start"
+                            class="min-w-0 !w-full px-1 text-xs"
                             @blur="speichernSofort(
                                 t.id,
                                 tttag,
-                                gruppenTeilnehmer[tIndex].anwesenheit[dayIndex],
-                                t.zeiten[dayIndex].start,
-                                t.zeiten[dayIndex].ende
+                                gruppenTeilnehmer[tIndex].anwesenheit[tttag.index],
+                                t.zeiten[tttag.index].start,
+                                t.zeiten[tttag.index].ende
                             )"
                         />
 
                         <InputText
                             type="time"
-                            v-model="t.zeiten[dayIndex].ende"
+                            v-model="t.zeiten[tttag.index].ende"
+                            class="min-w-0 !w-full px-1 text-xs"
                             @blur="speichernSofort(
                                 t.id,
                                 tttag,
-                                gruppenTeilnehmer[tIndex].anwesenheit[dayIndex],
-                                t.zeiten[dayIndex].start,
-                                t.zeiten[dayIndex].ende
+                                gruppenTeilnehmer[tIndex].anwesenheit[tttag.index],
+                                t.zeiten[tttag.index].start,
+                                t.zeiten[tttag.index].ende
                             )"
                         />
 

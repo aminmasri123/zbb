@@ -38,6 +38,7 @@ const form = ref({
   anfangsdatum: '',
   endtermin: '',
   enddatum: '',
+  klassenbuch_aktiv: false,
   bereiche: [],
 });
 
@@ -52,6 +53,7 @@ const resetForm = () => {
     anfangsdatum: '',
     endtermin: '',
     enddatum: '',
+    klassenbuch_aktiv: false,
     bereiche: [],
   };
 };
@@ -159,6 +161,11 @@ const handleKostenstelleCreated = (kostenstelle) => {
             <label>Abteilung</label>
           </FloatLabel>
         </div>
+
+        <label class="mb-4 flex items-center gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-700">
+          <input v-model="form.klassenbuch_aktiv" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
+          <span class="font-medium">Klassenbuch aktiv</span>
+        </label>
 
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label class="text-sm text-gray-600">

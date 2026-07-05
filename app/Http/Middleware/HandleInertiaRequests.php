@@ -3,8 +3,10 @@
 namespace App\Http\Middleware;
 
 use App\Models\AppPopup;
+use App\Models\Projekt;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -68,6 +70,8 @@ class HandleInertiaRequests extends Middleware
                 ? $this->visiblePopupsFor($request)->take(3)->get(['id', 'title', 'message', 'level'])
                 : [],
 
+            'currentProjekt' => fn () => $this->currentProjektFor($request),
+
            /*  'auth' => [
                 'user' => fn () => $request->user()
                     ? $request->user()->load('projekte') // Relation anhängen
@@ -119,5 +123,31 @@ class HandleInertiaRequests extends Middleware
                 });
             })
             ->orderByDesc('created_at');
+    }
+
+    private function currentProjektFor(Request $request): ?array
+    {
+        $user = $request->user();
+
+        if (! $user?->current_team_id) {
+            return null;
+        }
+
+        $columns = ['id', 'name'];
+        if (Schema::hasColumn('projekts', 'klassenbuch_aktiv')) {
+            $columns[] = 'klassenbuch_aktiv';
+        }
+
+        $projekt = Projekt::query()->find($user->current_team_id, $columns);
+
+        if (! $projekt) {
+            return null;
+        }
+
+        return [
+            'id' => $projekt->id,
+            'name' => $projekt->name,
+            'klassenbuch_aktiv' => (bool) ($projekt->klassenbuch_aktiv ?? false),
+        ];
     }
 }

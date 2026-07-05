@@ -2,7 +2,7 @@
     import AppLayout from '@/Layouts/AppLayout.vue';
     import { ref, watch } from 'vue';
     import Swal from 'sweetalert2';
-    import { router, Link, Head } from '@inertiajs/vue3';
+    import { router, Link, Head, usePage } from '@inertiajs/vue3';
 
     import axios from 'axios';
     import Dropdown from '@/Components/Dropdown.vue';
@@ -20,6 +20,7 @@
     let isModalDokumenteOpen = ref(false);
     let projektToEdit = ref(null);
     let projektForDokumente = ref(null);
+    const page = usePage();
 
     // Props
     const props = defineProps({
@@ -82,6 +83,9 @@
     const index = localProjekte.value.findIndex(p => p.id === updatedProjekt.id);
     if (index !== -1) {
         localProjekte.value[index] = updatedProjekt;
+    }
+    if (page.props.currentProjekt?.id === updatedProjekt.id) {
+        router.reload({ only: ['currentProjekt'], preserveState: true, preserveScroll: true });
     }
     applySearchFilter();
     };
@@ -156,7 +160,7 @@
 
     <!-- Tabelle -->
     <div class="w-full overflow-x-auto">
-        <table class="min-w-[1350px] w-full text-sm shadow-sm border-collapse">
+        <table class="min-w-[1450px] w-full text-sm shadow-sm border-collapse">
         <thead class="text-md text-gray-600 uppercase bg-gray-200 sticky top-0">
             <tr>
             <th class="border px-3 py-3 text-left">ID</th>
@@ -164,6 +168,7 @@
             <th class="border px-3 py-3 text-left">Kostenstellen</th>
             <th class="border px-3 py-3 text-left">Abteilung</th>
             <th class="border px-3 py-3 text-left">Bereiche</th>
+            <th class="border px-3 py-3 text-left">Klassenbuch</th>
             <th class="border px-3 py-3 text-left">Antragsdatum</th>
             <th class="border px-3 py-3 text-left">Starttermin</th>
             <th class="border px-3 py-3 text-left">Anfangsdatum</th>
@@ -218,6 +223,14 @@
                     </span>
                 </div>
                 <span v-else>-</span>
+                </td>
+                <td class="border px-6 py-4" v-if="index === 0" :rowspan="projekt.zeitraume?.length || 1">
+                <span
+                    class="rounded px-2 py-1 text-xs font-medium"
+                    :class="projekt.klassenbuch_aktiv ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'"
+                >
+                    {{ projekt.klassenbuch_aktiv ? 'Aktiv' : 'Aus' }}
+                </span>
                 </td>
 
                 <!-- Zeitraum-Daten -->

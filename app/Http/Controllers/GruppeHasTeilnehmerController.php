@@ -181,19 +181,20 @@ class GruppeHasTeilnehmerController extends Controller
 
         $anwesenheitsstatuten = Anwesenheitsstatuten::all();
 
-        $person = Personen::findOrFail($this->userPersonId($user));
-        $userStandorte = $person->standorte()->pluck('standorts.id')->toArray();
-        $projekt = $user->current_team_id;
+        $projektId = $gruppe->projekt_id ?? $user->current_team_id;
+        $standortId = $gruppe->standort_id;
 
         $teilnehmer = Personen::Teilnehmer()
             ->with('standorte', 'projekte')
-            ->whereHas('standorte', function($query) use ($userStandorte) {
-                    $query->whereIn('standorts.id', $userStandorte);
-                })->whereHas('projekte', function ($query) use ($projekt) {
-                // prüfe auf die id-Spalte der Projekte
-                $query->where('projekts.id', $projekt);
+            ->whereHas('projekte', function ($query) use ($projektId, $standortId) {
+                $query->where('projekts.id', $projektId);
+                if ($standortId) {
+                    $query->where('projekt_has_personens.standort_id', $standortId);
+                }
             })
-             ->get();
+            ->orderBy('nachname')
+            ->orderBy('vorname')
+            ->get();
         return Inertia::render('Gruppe/GruppeHasTeilnehmer/Index', [
             'gruppe' => $gruppe,
             'teilnehmer' => $teilnehmer,
