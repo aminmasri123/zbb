@@ -81,10 +81,9 @@ class User extends Authenticatable implements MustVerifyEmail
      *
      * @var array<int, string>
      */
-    /*
     protected $appends = [
         'profile_photo_url',
-    ];*/
+    ];
 
 
 

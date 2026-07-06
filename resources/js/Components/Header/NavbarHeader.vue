@@ -180,7 +180,7 @@
                     <Dropdown align="right" width="48">
                         <template #trigger>
                             <button v-if="$page.props.jetstream.managesProfilePhotos" class="flex text-sm border-2 border-transparent rounded-full focus:outline-none focus:border-gray-300 transition">
-                                <img class="h-12 w-12 rounded-full object-cover"  :src="`/storage/${$page.props.auth.user.profile_photo_path}`"  :alt="$page.props.auth.user.name">
+                                <img class="h-12 w-12 rounded-full object-cover" :src="$page.props.auth.user.profile_photo_url" :alt="$page.props.auth.user.name">
                             </button>
 
                             <span v-else class="inline-flex rounded-md">
@@ -266,7 +266,7 @@
             <div class="pt-4 pb-1 border-t border-gray-200">
                 <div class="flex items-center px-4">
                     <div v-if="$page.props.jetstream.managesProfilePhotos" class="shrink-0 mr-3">
-                        <img class="h-10 w-10 rounded-full object-cover"  :src="`/storage/${$page.props.auth.user.profile_photo_path}`"  :alt="$page.props.auth.user.name">
+                        <img class="h-10 w-10 rounded-full object-cover" :src="$page.props.auth.user.profile_photo_url" :alt="$page.props.auth.user.name">
                     </div>
 
                     <div>

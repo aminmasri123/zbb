@@ -1,0 +1,1 @@
+import{e,o,b as a,w as s,a as l,g as n,q as r}from"./main-2bg1NSJ7.js";const i={class:"py-5"},m={__name:"AuthenticationCardLogo",setup(c){return(_,t)=>(o(),e("div",i,[a(n(r),null,{default:s(()=>[...t[0]||(t[0]=[l("img",{src:"/img/logo/logoSimpliste.png",alt:"Logo",width:"200",class:"mx-auto"},null,-1)])]),_:1})]))}};export{m as _};

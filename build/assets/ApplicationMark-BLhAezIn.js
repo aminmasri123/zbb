@@ -1,0 +1,1 @@
+import{_ as e}from"./_plugin-vue_export-helper-DlAUqK2U.js";import{e as r,o as s}from"./main-hy1qOE7g.js";const t={},c=["src"];function n(o,a){return s(),r("img",{src:o.asset("img/logo/logoSimpliste.png"),alt:"Logo"},null,8,c)}const _=e(t,[["render",n]]);export{_ as A};

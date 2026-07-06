@@ -52,7 +52,7 @@ const activeTab = ref('profile') // default Tab
                                     <!-- Profilbild -->
                                     <div class="flex-shrink-0">
                                         <img class="h-24 w-24 rounded-full border"
-                                           :src="`/storage/${$page.props.auth.user.profile_photo_path}`"
+                                           :src="$page.props.auth.user.profile_photo_url"
                                            :alt="$page.props.auth.user.name"
                                         >
                                     </div>

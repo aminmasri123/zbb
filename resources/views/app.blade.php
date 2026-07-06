@@ -28,8 +28,14 @@
         <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
  --}}
         <!-- Scripts -->
+        <script>
+            window.assetBaseUrl = @json(rtrim(asset(''), '/'));
+        </script>
         @routes
-            @vite(['resources/js/app.js', "resources/js/Pages/{$page['component']}.vue"])
+        <script>
+            window.Ziggy = typeof Ziggy !== 'undefined' ? Ziggy : window.Ziggy;
+        </script>
+        @vite(['resources/js/app.js', "resources/js/Pages/{$page['component']}.vue"])
         @inertiaHead
 
 

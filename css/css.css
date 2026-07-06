@@ -1,0 +1,35 @@
+.btna:hover{
+    color: var(--buttonPrimary, black) !important
+}
+.card-border{
+    width: 105%;
+    margin-left: -30px;
+}
+
+
+
+div#password_overlay.p-password-overlay.p-component{
+    position:fixed !important;
+    display: block !important;
+    top: 55% !important;
+}
+div.p-multiselect-overlay.p-component{
+    /* position:fixed !important; */
+    display: block !important;
+
+}
+input.p-inputtext.p-component.p-password-input{
+    width: 100%;
+}
+
+.p-inputtext:enabled:focus{
+    border-color: var(--borderHover, black) !important;
+}
+.p-floatlabel:has(input:focus) label{
+    color: var(--buttonPrimary, black) !important;
+}
+
+
+#table{
+    border-radius: 50px !important;
+}

@@ -4,6 +4,10 @@ import { Head } from '@inertiajs/vue3';
 defineProps({
     context: Object,
 });
+
+const logoSrc = window.asset
+    ? window.asset('img/logo/logo.png')
+    : `${window.assetBaseUrl || ''}/img/logo/logo.png`;
 </script>
 
 <template>
@@ -12,7 +16,7 @@ defineProps({
     <main class="min-h-screen bg-gray-100 text-gray-900">
         <div class="mx-auto flex min-h-screen max-w-2xl items-center px-4 py-10">
             <section class="w-full bg-white border border-gray-300 shadow-sm p-6 text-center sm:p-10">
-                <img src="/img/logo/logo.png" alt="ZBB" class="mx-auto mb-6 h-14 w-auto" />
+                <img :src="logoSrc" alt="ZBB" class="mx-auto mb-6 h-14 w-auto" />
 
                 <h1 class="text-2xl font-bold text-gray-900">
                     Danke für die Bereichsauswahl

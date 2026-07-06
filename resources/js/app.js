@@ -23,13 +23,14 @@ import { setThemeOnLoad } from './theme';
 
 
 const appName = window.document.getElementsByTagName('title')[0]?.innerText || 'ERP ZBB';
+window.asset = (path) => `${window.assetBaseUrl || ''}/${String(path).replace(/^\/+/, '')}`;
 
 
 // Abmelde-Synchronisation über localStorage
 window.addEventListener("storage", (event) => {
     if (event.key === "logout") {
         // Benutzer sofort auf Login-Seite umleiten
-        window.location.href = "/login";
+        window.location.href = window.asset('login');
     }
 });
 
@@ -43,7 +44,7 @@ createInertiaApp({
     const app = createApp({ render: () => h(App, props) })
         .use(plugin)
         .use(i18n)
-        .use(ZiggyVue, Ziggy)
+        .use(ZiggyVue, window.Ziggy)
         .use(PrimeVue, {
             theme: {
                 preset: Aura

@@ -15,6 +15,9 @@ const checking = ref(false);
 const saving = ref(false);
 const teilnehmer = ref(null);
 const choices = ref([]);
+const logoSrc = window.asset
+    ? window.asset('img/logo/logo.png')
+    : `${window.assetBaseUrl || ''}/img/logo/logo.png`;
 
 const normalizedCode = computed(() => accessCode.value.trim().toUpperCase());
 
@@ -109,7 +112,7 @@ const saveChoices = async () => {
     <main class="min-h-screen bg-gray-100 text-gray-900">
         <div class="mx-auto max-w-3xl px-4 py-6 sm:py-10">
             <div class="mb-6 flex items-center gap-3">
-                <img src="/img/logo/logo.png" alt="ZBB" class="h-12 w-auto" />
+                <img :src="logoSrc" alt="ZBB" class="h-12 w-auto" />
                 <div>
                     <h1 class="text-xl font-bold">Bereichsauswahl</h1>
                     <p class="text-sm text-gray-600">{{ context.schule }} · {{ context.schuljahr }} · Teil {{ context.teil }}</p>

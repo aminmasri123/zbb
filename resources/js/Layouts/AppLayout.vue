@@ -172,9 +172,11 @@ export default {
 
                         <!-- Page Heading -->
                         <header v-if="$slots.header" class="bg-[var(--surfaceTint)] border-b border-[var(--border)] relative w-full shadow mb-5 z-20">
-                            <div class="text-center sm:text-left max-w-7xl mx-36 py-6">
-                                <div class="font-semibold text-xl text-[var(--primary)] leading-tight">
-                                    <slot name="header" />
+                            <div class="px-10">
+                                <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+                                    <div class="font-semibold text-xl text-[var(--primary)] leading-tight">
+                                        <slot name="header" />
+                                    </div>
                                 </div>
                             </div>
                         </header>

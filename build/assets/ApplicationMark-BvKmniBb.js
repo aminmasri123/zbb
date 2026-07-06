@@ -1,0 +1,1 @@
+import{_ as o}from"./_plugin-vue_export-helper-DlAUqK2U.js";import{e,o as t}from"./main-CezweKym.js";const c={},r={src:"/img/logo/logoSimpliste.png",alt:"Logo"};function n(s,i){return t(),e("img",r)}const m=o(c,[["render",n]]);export{m as A};
