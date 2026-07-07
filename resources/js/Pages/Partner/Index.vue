@@ -31,7 +31,7 @@ let isModalCreateOpen = ref(false);
 let isModalEditOpen = ref(false);
 let partnerToEdit = ref(null);
 let activeModal = ref(null);
-let modalData = ref({ jahr: null, teil: null, klasse: null, partnerId: null, klassen: [] });
+let modalData = ref({ jahr: null, teil: null, klasse: null, partnerId: null, klassen: [], teilnehmerCount: 0 });
 const normalizePartner = (partner) => ({
     ...partner,
     ansprechpartners: Object.values(
@@ -83,7 +83,17 @@ function getKlassen(jahr, teil, partner) {
         partner.schueler
             .filter(s => s.schuljahr === jahr && s.teil === teil)
             .map(s => s.klasse)
+            .filter(Boolean)
     )];
+}
+
+function getSchuelerCount(jahr, teil, partner) {
+    return new Set(
+        partner.schueler
+            .filter(s => s.schuljahr === jahr && s.teil === teil)
+            .map(s => s.personen_id ?? s.person_id ?? s.id)
+            .filter(Boolean)
+    ).size;
 }
 
 const exportAnwesenheitslisteVorbereitungBo = async (jahr, teil, partner) => {
@@ -158,14 +168,14 @@ const exportAnwesenheitslisteVorbereitungBo = async (jahr, teil, partner) => {
 // -----------------------------
 // Modal-Funktionen
 // -----------------------------
-function openModal(modalName, { jahr = null, teil = null, klasse = null, partnerId = null, klassen = null } = {}) {
+function openModal(modalName, { jahr = null, teil = null, klasse = null, partnerId = null, klassen = null, teilnehmerCount = 0 } = {}) {
     activeModal.value = modalName;
-    modalData.value = { jahr, teil, klasse, partnerId, klassen };
+    modalData.value = { jahr, teil, klasse, partnerId, klassen, teilnehmerCount };
 }
 
 function closeModal() {
     activeModal.value = null;
-    modalData.value = { jahr: null, teil: null, klasse: null, partnerId: null, partner: null };
+    modalData.value = { jahr: null, teil: null, klasse: null, partnerId: null, partner: null, teilnehmerCount: 0 };
 }
 
 const openModalCreate = () => isModalCreateOpen.value = true;
@@ -448,25 +458,15 @@ const updatePartnerAPI = async (form) => {
 
                                                         <!-- 🔽 Anwesenheitsliste BO Bibb -->
                                                         <a @click.prevent="openModal('anwesenheitslisteBoTagbibb', { jahr, teil, partnerId: partner.id })" class="block px-4 py-1 hover:bg-gray-200"> Anwesenheitsliste BO Bibb</a>
+                                                        <a
+                                                            @click.prevent="openModal('anwesenheitslistePATage', { jahr, teil, klassen: getKlassen(jahr, teil, partner), partnerId: partner.id })"
+                                                            class="block px-4 py-1 hover:bg-gray-200"
+                                                        >
+                                                            Anwesenheitsliste PA
+                                                        </a>
 
-                                                        <!-- 🔽 Anwesenheitsliste PA -->
-                                                        <div class="relative">
-                                                            <button @click="toggleMenu(`pa-${jahr}-${teil}`)" class="w-full text-left px-4 py-1 hover:bg-gray-200"> Anwesenheitsliste PA ▶ </button>
-
-                                                            <div v-show="isMenuOpen(`pa-${jahr}-${teil}`)"
-                                                                class="absolute left-full top-0 ml-1 bg-white border rounded shadow-lg z-50">
-
-                                                                <a v-for="klasse in getKlassen(jahr, teil, partner)"
-                                                                    :key="klasse"
-                                                                    @click.prevent="openModal('anwesenheitslistePATage', { jahr, teil, klasse, partnerId: partner.id })"
-                                                                    class="block px-4 py-1 hover:bg-gray-200">
-                                                                    {{ klasse }}
-                                                                </a>
-                                                            </div>
-                                                        </div>
-
-                                                        <!-- 🔽 Anwesenheitsliste BO Tag1 -->
-                                                        <a @click.prevent="openModal('boTag1Config', { jahr, teil, klassen: getKlassen(jahr, teil, partner), partnerId: partner.id })" class="block px-4 py-1 hover:bg-gray-200"> Anwesenheitsliste BO Tag1 </a>
+                                                        <!-- Rolltag -->
+                                                        <a @click.prevent="openModal('boTag1Config', { jahr, teil, klassen: getKlassen(jahr, teil, partner), partnerId: partner.id, teilnehmerCount: getSchuelerCount(jahr, teil, partner) })" class="block px-4 py-1 hover:bg-gray-200"> Rolltag </a>
 
                                                         <!-- 🔽 Hausordnung -->
 
@@ -646,9 +646,9 @@ const updatePartnerAPI = async (form) => {
         <ModalEdit :visible="isModalEditOpen" :kontaktypens="kontaktypens" :partnerschaftstypen="partnerschaftstypen" :toEdit="partnerToEdit" @close="closeModalEdit" @updated="updatePartnerAPI" />
 
         <ModalAnwesenheitslisteBIBB v-if="activeModal === 'anwesenheitslisteBoTagbibb'" :visible="true" :partnerId="modalData.partnerId" :schuljahr="modalData.jahr" :teil="modalData.teil" @update:visible="closeModal" @close="closeModal"/>
-        <ModalAnwesenheitslistePA v-if="activeModal === 'anwesenheitslistePATage'" :visible="true" :partnerId="modalData.partnerId" :schuljahr="modalData.jahr" :klasse="modalData.klasse" :teil="modalData.teil" @update:visible="closeModal" @close="closeModal"/>
-        <ModalBoTag1 v-if="activeModal === 'boTag1Config'" :visible="true" :anzahlBereiche="props.anzahlBereiche" :jahr="modalData.jahr" :teil="modalData.teil" :klassen="modalData.klassen" :partnerId="modalData.partnerId" @close="closeModal" @submit="handleBoTag1" />
-        <ModalHausordnung v-if="activeModal === 'hausordnungConfig'" :visible="true" :partnerId="modalData.partnerId" :jahr="modalData.jahr" :teil="modalData.teil" @close="closeHausordnungModal"/>
+        <ModalAnwesenheitslistePA v-if="activeModal === 'anwesenheitslistePATage'" :visible="true" :partnerId="modalData.partnerId" :schuljahr="modalData.jahr" :klasse="modalData.klasse" :klassen="modalData.klassen" :teil="modalData.teil" @update:visible="closeModal" @close="closeModal"/>
+        <ModalBoTag1 v-if="activeModal === 'boTag1Config'" :visible="true" :anzahlBereiche="props.anzahlBereiche" :jahr="modalData.jahr" :teil="modalData.teil" :klassen="modalData.klassen" :teilnehmerCount="modalData.teilnehmerCount" :partnerId="modalData.partnerId" @close="closeModal" @submit="handleBoTag1" />
+        <ModalHausordnung v-if="activeModal === 'hausordnungConfig'" :visible="true" :partnerId="modalData.partnerId" :jahr="modalData.jahr" :teil="modalData.teil" @close="closeModal"/>
 
 
 

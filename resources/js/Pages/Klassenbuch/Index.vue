@@ -161,7 +161,7 @@ function statusClass(status) {
             <div v-if="selectedGruppe" class="rounded border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-600">
               <div class="flex items-center gap-2">
                 <i class="las la-users text-lg text-zbb"></i>
-                <span>{{ selectedGruppe.teilnehmer_count || 0 }} Teilnehmer</span>
+                <span>{{ selectedGruppe.teilnehmer_count || 0 }} Teilnehmenden</span>
               </div>
               <div class="mt-1 flex items-center gap-2">
                 <i class="las la-user-tie text-lg text-zbb"></i>

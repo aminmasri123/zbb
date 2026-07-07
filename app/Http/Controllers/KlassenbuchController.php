@@ -34,7 +34,9 @@ class KlassenbuchController extends Controller
 
         $gruppen = Gruppe::query()
             ->with(['bereich', 'betreuer', 'raum', 'projekt.abteilung', 'klassenbuecher.typ'])
-            ->withCount('teilnehmer')
+            ->withCount([
+                'teilnehmer as teilnehmer_count' => fn ($query) => $query->select(DB::raw('count(distinct personens.id)')),
+            ])
             ->where('projekt_id', $user->current_team_id)
             ->when(!$this->canSeeAllGroups($user), fn ($query) => $query->where('personen_id', $this->userPersonId($user)))
             ->orderBy('anfangsdatum')

@@ -356,8 +356,11 @@ class ProjektBopController extends Controller
             'schuleId' => 'required|exists:partners,id',
             'schuljahr' => 'required|string',
             'teil' => 'required|string',
-            'klasse' => 'required|string',
+            'exportMode' => 'nullable|in:alle,klasse',
+            'klasse' => 'nullable|required_if:exportMode,klasse|string',
         ]);
+
+        $validated['exportMode'] = $validated['exportMode'] ?? (empty($validated['klasse']) ? 'alle' : 'klasse');
 
         $templateFile = storage_path('vorlage/projekte/bop/word/pa/Anwesenheitsliste-PA.docx');
 
@@ -368,7 +371,7 @@ class ProjektBopController extends Controller
 
             $alle_teilnehmer = PersonenIstSchueler::query()
             ->filterSchueler($validated['schuleId'], $validated['schuljahr'], $validated['teil'])
-            ->where('klasse', $validated['klasse'])
+            ->when(($validated['exportMode'] ?? 'klasse') === 'klasse', fn ($query) => $query->where('klasse', $validated['klasse']))
             ->with('person')
             ->get()
             ->sortBy(fn($item) => $item->person->nachname);
@@ -386,6 +389,59 @@ class ProjektBopController extends Controller
 
             $tag1 = Carbon::parse($request->startDate)->format('d.m.Y');
             $tag2 = Carbon::parse($request->endDate)->format('d.m.Y');
+
+            $createDocument = function ($teilnehmerListe, string $klasseName, string $exportPath) use ($templateFile, $schule, $tag1, $tag2) {
+                $i = 1;
+                $templateProcessor = new TemplateProcessor($templateFile);
+
+                $templateProcessor->setValue('schule', $schule->name);
+                $templateProcessor->setValue('schulform', PersonenIstSchueler::query()->schulform($teilnehmerListe));
+                $templateProcessor->setValue('klasse', $klasseName);
+                $templateProcessor->setValue('tag1', $tag1);
+                $templateProcessor->setValue('tag2', $tag2);
+
+                foreach ($teilnehmerListe as $teilnehmer) {
+                    $templateProcessor->setValue('nachname' . $i, $teilnehmer->person->nachname);
+                    $templateProcessor->setValue('vorname' . $i, $teilnehmer->person->vorname);
+                    $i++;
+                }
+
+                while($i<=30){
+                    $templateProcessor->setValue('nachname' . $i, '');
+                    $templateProcessor->setValue('vorname' . $i, '');
+                    $i++;
+                }
+
+                File::ensureDirectoryExists(dirname($exportPath));
+                $templateProcessor->saveAs($exportPath);
+            };
+
+            if (($validated['exportMode'] ?? 'klasse') === 'alle') {
+                $exportDir = storage_path('exports/pa_' . Str::uuid());
+                File::ensureDirectoryExists($exportDir);
+
+                $zipPath = storage_path('exports/Anwesenheitslisten_PA_' . $schule->name . '_' . $tag1 . '_' . $tag2 . '_' . date('Ymd_His') . '.zip');
+                File::ensureDirectoryExists(dirname($zipPath));
+                $zip = new ZipArchive();
+
+                if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+                    return response()->json(['message' => 'ZIP-Datei konnte nicht erstellt werden.'], 500);
+                }
+
+                foreach ($alle_teilnehmer->groupBy('klasse') as $klasseName => $teilnehmerListe) {
+                    $klasseName = (string) ($klasseName ?: 'ohne_Klasse');
+                    $filename = 'Anwesenheitsliste_PA_' . Str::slug($schule->name, '_') . '_' . Str::slug($klasseName, '_') . '_' . date('Ymd_His') . '.docx';
+                    $exportPath = $exportDir . DIRECTORY_SEPARATOR . $filename;
+
+                    $createDocument($teilnehmerListe->sortBy(fn($item) => $item->person->nachname), $klasseName, $exportPath);
+                    $zip->addFile($exportPath, $filename);
+                }
+
+                $zip->close();
+                File::deleteDirectory($exportDir);
+
+                return response()->download($zipPath)->deleteFileAfterSend(true);
+            }
 
             $i = 1;
             $templateProcessor = new TemplateProcessor($templateFile);
@@ -434,7 +490,7 @@ class ProjektBopController extends Controller
         $anzahlBereiche = request()->query('anzahlBereiche', 6);
         $anzahlRaeumlichkeiten = request()->query('anzahlRaeumlichkeiten', $anzahlBereiche);
         $kapazitaeten = request()->query('kapazitaeten', []);
-        $termin = request()->query('termin', date('d-m-Y')) ;
+        $termin = request()->query('termin', date('Y-m-d')) ;
         $raumNamen = $request->input('raumNamen', []);
 
         // Prüfen
@@ -482,7 +538,7 @@ class ProjektBopController extends Controller
             $terminDatum = DateTime::createFromFormat('Y-m-d', $termin)->format('d.m.Y');
 
             $sheet->setCellValue('H5', $terminDatum);
-            $sheet->setCellValue('C2', "BO Tag 1 - Klasse $klasse - " . $schule->name);
+            $sheet->setCellValue('C2', "Rolltag - Klasse $klasse - " . $schule->name);
 
             $row = 8;
 
@@ -493,7 +549,7 @@ class ProjektBopController extends Controller
                 $row++;
             }
 
-            $filePath = storage_path('Anwesenheitsliste-BOTag1_' . $klasse . '.xlsx');
+            $filePath = storage_path('Rolltag_' . $klasse . '.xlsx');
             (new Xlsx($spreadsheet))->save($filePath);
 
             return response()->download($filePath)->deleteFileAfterSend(true);
@@ -531,7 +587,7 @@ class ProjektBopController extends Controller
 
                 // Kopf
                 $sheet->setCellValue('H5', $terminDatum);
-                $sheet->setCellValue('C2', "BO Tag 1 - Klasse $klassenName - " . $schule->name);
+                $sheet->setCellValue('C2', "Rolltag - Klasse $klassenName - " . $schule->name);
 
                 // Teilnehmer eintragen
                 $row = 8;
@@ -544,7 +600,7 @@ class ProjektBopController extends Controller
                 }
 
                 // Datei speichern
-                $fileName = "Anwesenheitsliste_{$klassenName}.xlsx";
+                $fileName = "Rolltag_{$klassenName}.xlsx";
                 $filePath = $tempDir . '/' . $fileName;
 
                 (new Xlsx($spreadsheet))->save($filePath);
@@ -553,7 +609,7 @@ class ProjektBopController extends Controller
             }
 
             // 👉 ZIP erstellen
-            $zipFileName = storage_path('Anwesenheitslisten_Klassen_' . date('Ymd_His') . '.zip');
+            $zipFileName = storage_path('Rolltag_Klassen_' . date('Ymd_His') . '.zip');
             $zip = new ZipArchive();
 
             if ($zip->open($zipFileName, ZipArchive::CREATE | ZipArchive::OVERWRITE) === TRUE) {
@@ -581,6 +637,8 @@ class ProjektBopController extends Controller
         */
         if ($request->has('anzahlRaeumlichkeiten') && $request->has('raumNamen')) {
             $anzahlRaeumlichkeiten = (int)$anzahlRaeumlichkeiten;
+            $alleTeilnehmer = $alleTeilnehmer->values();
+            $kapazitaeten = array_map(fn ($kapazitaet) => (int) $kapazitaet, $kapazitaeten ?? []);
 
             // Validierung
             if ($anzahlRaeumlichkeiten < 1 || count($raumNamen) != $anzahlRaeumlichkeiten) {
@@ -600,6 +658,12 @@ class ProjektBopController extends Controller
                 }
             }
 
+            if (array_sum($kapazitaeten) < $anzahlTeilnehmer) {
+                return response()->json([
+                    'message' => 'Die eingegebenen Kapazitaeten reichen nicht fuer alle Schueler aus.',
+                ], 422);
+            }
+
             // Temp Ordner vorbereiten
             $tempDir = storage_path('temp_excel');
             if (!is_dir($tempDir)) mkdir($tempDir, 0777, true);
@@ -616,7 +680,7 @@ class ProjektBopController extends Controller
                 $raumName = Str::slug($raumNameOriginal, '_');
 
                 $anzahlAktuell = $kapazitaeten[$i];
-                $terminDatum = DateTime::createFromFormat('d-m-Y', $termin)->format('d.m.Y');
+                $terminDatum = DateTime::createFromFormat('Y-m-d', $termin)->format('d.m.Y');
 
                 $sheet->setCellValue('H5', $terminDatum);
                 $sheet->setCellValue('C2', "Gruppe " . ($i + 1) . " - $raumName - " . $schule->name);
@@ -635,11 +699,11 @@ class ProjektBopController extends Controller
                 $startIndex += $anzahlAktuell;
 
                 // Excel speichern
-                (new Xlsx($spreadsheet))->save($tempDir . "/Liste_" . ($i + 1) . "_$raumName.xlsx");
+                (new Xlsx($spreadsheet))->save($tempDir . "/Rolltag_Raum_" . ($i + 1) . "_$raumName.xlsx");
             }
 
             // ZIP erstellen
-            $zipPath = storage_path('Anwesenheitslisten_Fall4.zip');
+            $zipPath = storage_path('Rolltag_Raeume_' . date('Ymd_His') . '.zip');
             $zip = new ZipArchive();
 
             if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE)) {

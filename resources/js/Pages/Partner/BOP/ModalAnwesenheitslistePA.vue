@@ -12,6 +12,7 @@ const props = defineProps({
   schuljahr: String,
   teil: String,
   klasse: String,
+  klassen: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['close'])
@@ -21,10 +22,11 @@ const close = () => emit('close')
 const form = useForm({
   startDate: '',
   endDate: '',
+  exportMode: 'alle',
   schuleId: props.partnerId,
   schuljahr: props.schuljahr,
   teil: props.teil,
-  klasse: props.klasse,
+  klasse: props.klasse || '',
 })
 
 // Watcher: Props bei Öffnen ins Formular übernehmen
@@ -32,14 +34,14 @@ watch(
   () => [props.visible, props.klasse],
   ([visible, klasse]) => {
     if (visible) {
-      form.reset({
-        startDate: '',
-        endDate: '',
-        schuleId: props.partnerId,
-        schuljahr: props.schuljahr,
-        teil: props.teil,
-        klasse: klasse || ''
-      })
+      form.startDate = ''
+      form.endDate = ''
+      form.exportMode = klasse ? 'klasse' : 'alle'
+      form.schuleId = props.partnerId
+      form.schuljahr = props.schuljahr
+      form.teil = props.teil
+      form.klasse = klasse || ''
+      form.clearErrors()
     }
   },
   { immediate: true }
@@ -48,7 +50,9 @@ watch(
 const loading = ref(false)
 
 // Validierung: nur Start- und Enddatum prüfen
-const isValid = computed(() => form.startDate && form.endDate)
+const isValid = computed(() =>
+  form.startDate && form.endDate && (form.exportMode === 'alle' || form.klasse)
+)
 
 // Speichern
 const save = async () => {
@@ -63,7 +67,10 @@ const save = async () => {
     const url = window.URL.createObjectURL(new Blob([response.data]));
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `Anwesenheitsliste_PA_${form.klasse}.docx`);
+    link.setAttribute('download', form.exportMode === 'alle'
+      ? 'Anwesenheitslisten_PA_alle_Klassen.zip'
+      : `Anwesenheitsliste_PA_${form.klasse}.docx`
+    );
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -105,6 +112,43 @@ const exportErrorMessage = async (error) => {
     <!-- Body -->
     <template #body>
       <form @submit.prevent="save" class="space-y-6">
+        <div class="grid grid-cols-2 gap-4 mb-6">
+          <label class="block rounded border border-gray-200 p-3">
+            <input
+              v-model="form.exportMode"
+              type="radio"
+              value="alle"
+              class="mr-2 text-zbb focus:ring-zbb"
+            />
+            <span class="text-sm font-medium text-gray-700">Alle Klassen exportieren</span>
+          </label>
+          <label class="block rounded border border-gray-200 p-3">
+            <input
+              v-model="form.exportMode"
+              type="radio"
+              value="klasse"
+              class="mr-2 text-zbb focus:ring-zbb"
+            />
+            <span class="text-sm font-medium text-gray-700">Einzelne Klasse exportieren</span>
+          </label>
+        </div>
+
+        <div v-if="form.exportMode === 'klasse'" class="mb-6">
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            Klasse <span class="text-red-500">*</span>
+          </label>
+          <select
+            v-model="form.klasse"
+            required
+            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors"
+          >
+            <option value="" disabled>Klasse auswaehlen</option>
+            <option v-for="klasseOption in klassen" :key="klasseOption" :value="klasseOption">
+              {{ klasseOption }}
+            </option>
+          </select>
+        </div>
+
         <!-- Datum -->
         <div class="grid grid-cols-2 gap-4 mb-6">
           <div>

@@ -115,7 +115,7 @@
     @foreach ($alle_teilnehmer as $index => $teilnehmer)
 
         <div>
-            <img class="logo" src="{{asset('storage/img/logo.png')}}" alt="zbb_logo">
+            <img class="logo" src="{{ public_path('img/logo/logo.png') }}" alt="zbb_logo">
         </div>
 
         <div>
