@@ -16,9 +16,26 @@ import SweetalertSuccessError from '@/Components/Utils/SweetalertSuccessError.vu
 // Aktuelle Seite/Route
 const page = usePage();
 
+const normalizePath = (url) => {
+  const parsedUrl = new URL(url, window.location.origin);
+  const basePath = window.assetBaseUrl
+    ? new URL(window.assetBaseUrl, window.location.origin).pathname.replace(/\/$/, '')
+    : '';
+
+  let path = parsedUrl.pathname;
+
+  if (basePath && path === basePath) {
+    path = '/';
+  } else if (basePath && path.startsWith(`${basePath}/`)) {
+    path = path.slice(basePath.length);
+  }
+
+  return path || '/';
+};
+
 // Dynamisch die Sidebar auswählen basierend auf der Route oder Seite
 const currentSidebar = computed(() => {
-  const url = page.url; // Aktuelle URL abrufen
+  const url = normalizePath(page.url); // Aktuelle URL ohne Installations-Unterordner
   if (url.startsWith('/dashboard') || url.startsWith('/anwesenheitsdaten') || url.startsWith('/klassenbuecher')) {
     return DashboardSidebar;
   } else if (url.startsWith('/user')) {
