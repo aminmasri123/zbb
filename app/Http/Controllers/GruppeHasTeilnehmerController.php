@@ -62,20 +62,13 @@ class GruppeHasTeilnehmerController extends Controller
 
 
         // IDs, die bereits existieren
-        $already = $gruppe->teilnehmer()
-            ->whereIn('personens.id', $ids)
-            ->pluck('personens.id')
-            ->all();
-
-        $new = array_values(array_diff($ids, $already));
-
         // ⏰ geplante & tatsächliche Zeiten anlegen
         $zeitGeplant = Zeiten::firstOrCreate([
             'startzeit' => $validated['startzeit'],
             'endzeit'   => $validated['endzeit'],
         ]);
 
-        $zeitTatsaechlich = Zeiten::create([
+        $zeitTatsaechlich = Zeiten::firstOrCreate([
             'startzeit' => $validated['startzeit'],
             'endzeit'   => $validated['endzeit'],
         ]);
@@ -98,22 +91,33 @@ class GruppeHasTeilnehmerController extends Controller
         }
 
         // 🔥 Für jeden Teilnehmer & Tag Eintrag erstellen
-        if (count($new) > 0) {
-            foreach ($new as $teilnehmerId) {
-                foreach ($tageIDs as $tagId) {
-                    $gruppe->teilnehmer()->attach($teilnehmerId, [
+        $createdTeilnehmerIds = [];
+
+        foreach ($ids as $teilnehmerId) {
+            foreach ($tageIDs as $tagId) {
+                $pivot = GruppeHasPersonen::firstOrCreate(
+                    [
+                        'gruppe_id' => $gruppe->id,
+                        'personen_id' => $teilnehmerId,
+                        'tage_id' => $tagId,
+                    ],
+                    [
                         'user_id' => $gruppe->personen_id,
                         'zeitgeplant_id' => $zeitGeplant->id,
                         'zeittatsaechlich_id' => $zeitTatsaechlich->id,
                         'anwesenheitsstatuten_id' => $anwesenheitsstatuten->id,
                         'bemerkung' => null,
-                        'tage_id' => $tagId,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                    ]
+                );
+
+                if ($pivot->wasRecentlyCreated) {
+                    $createdTeilnehmerIds[$teilnehmerId] = true;
                 }
             }
         }
+
+        $new = array_keys($createdTeilnehmerIds);
+        $already = array_values(array_diff($ids, $new));
 
         // ✅ Rückgabe
         $addedTeilnehmer = Personen::whereIn('id', $new)->get(['id', 'vorname', 'nachname']);

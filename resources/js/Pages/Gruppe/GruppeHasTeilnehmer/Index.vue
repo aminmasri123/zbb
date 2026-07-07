@@ -26,6 +26,7 @@
     const exportSuche = ref('')
     const legacyExportLoading = ref(null)
     const selectedTeilnehmerIds = ref([])
+    const isSubmittingTeilnehmer = ref(false)
 
     // --- Hilfsfunktion für Farben je nach Status ---
 const statusFarbe = (statusName) => {
@@ -58,6 +59,10 @@ datumgeplantEnd.value =props.gruppe.enddatum;
 
 // Funktion, um nach Klick auf „Übernehmen“ die ausgewählten Teilnehmer hinzuzufügen
 const confirmTeilnehmer = async () => {
+  if (isSubmittingTeilnehmer.value) {
+    return;
+  }
+
   if (selectedTeilnehmerIds.value.length === 0) {
     await Swal.fire({
       icon: 'warning',
@@ -66,6 +71,8 @@ const confirmTeilnehmer = async () => {
     });
     return;
   }
+
+  isSubmittingTeilnehmer.value = true;
 
   try {
     const response = await axios.post('/gruppehasteilnehmer/anlegen', {
@@ -131,6 +138,8 @@ const confirmTeilnehmer = async () => {
       title: 'Fehler',
       text: error.response?.data?.message || 'Teilnehmer konnten nicht hinzugefügt werden.',
     });
+  } finally {
+    isSubmittingTeilnehmer.value = false;
   }
 };
 
@@ -546,12 +555,14 @@ const exportMitTag = async () => {
               <Button
                 label="Abbrechen"
                 class="p-button-text hover:!bg-zbbTrp !text-zbb"
+                :disabled="isSubmittingTeilnehmer"
                 @click="showTeilnehmerModal = false"
               />
               <Button
                 label="Übernehmen"
                 icon="pi pi-check"
                 class="!bg-zbb hover:!bg-zbb/80 border-none"
+                :disabled="isSubmittingTeilnehmer"
                 @click="confirmTeilnehmer"
               />
             </div>

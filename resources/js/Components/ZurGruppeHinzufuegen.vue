@@ -14,6 +14,7 @@ const emit = defineEmits(['submitted'])
 
 const selectedGroup = ref('')
 const showModal = ref(false)
+const isSubmitting = ref(false)
 
 const selectedGroupData = computed(() =>
   props.gruppen.find(gruppe => String(gruppe.id) === String(selectedGroup.value))
@@ -26,6 +27,10 @@ const open = () => {
 defineExpose({ open })
 
  async function submitForm() {
+  if (isSubmitting.value) {
+    return
+  }
+
   if (!selectedGroup.value || props.selected.length === 0) {
     Swal.fire({
       title: 'Fehler',
@@ -34,6 +39,8 @@ defineExpose({ open })
     })
     return
   } 
+
+  isSubmitting.value = true
 
   try {
     const response = await axios.post(route('gruppeHasTeilnehmer.store'), {
@@ -58,6 +65,8 @@ defineExpose({ open })
       text: error.response?.data?.message || 'Teilnehmer konnten nicht zur Gruppe hinzugefuegt werden.',
       icon: 'error'
     })
+  } finally {
+    isSubmitting.value = false
   }
 }
 </script>
@@ -87,6 +96,7 @@ defineExpose({ open })
         </h2>
         <button
           @click="showModal = false"
+          :disabled="isSubmitting"
           class="text-gray-500 hover:text-gray-700 text-xl"
         >
           &times;
@@ -117,9 +127,10 @@ defineExpose({ open })
       <div class="text-right">
         <button
           @click="submitForm"
-          class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          :disabled="isSubmitting"
+          class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {{ $t('speichern') }}
+          {{ isSubmitting ? $t('speichern') + ' ...' : $t('speichern') }}
         </button>
       </div>
     </div>

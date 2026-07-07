@@ -7,6 +7,7 @@ use App\Models\Gruppe;
 use App\Models\Raeume;
 use App\Models\Projekt;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -28,7 +29,9 @@ class GruppeController extends Controller
 
         $gruppen = Gruppe::query()
             ->with(['bereich', 'betreuer', 'raum.parent', 'raum.standort', 'standort'])
-            ->withCount('teilnehmer')
+            ->withCount([
+                'teilnehmer as teilnehmer_count' => fn ($query) => $query->select(DB::raw('count(distinct personens.id)')),
+            ])
             ->where('projekt_id', $user->current_team_id)
             ->when(!$canSeeAllGroups, fn ($query) => $query->where('personen_id', $this->userPersonId($user)))
             ->orderBy('anfangsdatum')
@@ -93,7 +96,9 @@ class GruppeController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Gruppe erfolgreich erstellt.',
-            'gruppe' => $gruppe->load(['bereich', 'betreuer', 'raum.parent', 'raum.standort', 'standort'])->loadCount('teilnehmer'),
+            'gruppe' => $gruppe->load(['bereich', 'betreuer', 'raum.parent', 'raum.standort', 'standort'])->loadCount([
+                'teilnehmer as teilnehmer_count' => fn ($query) => $query->select(DB::raw('count(distinct personens.id)')),
+            ]),
         ], 201);
     }
 
@@ -144,7 +149,9 @@ class GruppeController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Gruppe erfolgreich aktualisiert.',
-                'projekt' => $gruppe->load(['bereich', 'betreuer', 'raum.parent', 'raum.standort', 'standort'])->loadCount('teilnehmer'),
+                'projekt' => $gruppe->load(['bereich', 'betreuer', 'raum.parent', 'raum.standort', 'standort'])->loadCount([
+                    'teilnehmer as teilnehmer_count' => fn ($query) => $query->select(DB::raw('count(distinct personens.id)')),
+                ]),
             ], 200);
         } catch (ValidationException $e) {
             return response()->json([
