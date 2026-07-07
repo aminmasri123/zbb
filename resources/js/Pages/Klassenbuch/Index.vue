@@ -8,11 +8,12 @@ const props = defineProps({
   klassenbuecher: { type: Array, default: () => [] },
   pruefungen: { type: Array, default: () => [] },
   typen: { type: Array, default: () => [] },
+  selectedGruppeId: { type: [Number, String], default: null },
   canReview: { type: Boolean, default: false },
 })
 
 const form = useForm({
-  gruppe_id: props.gruppen[0]?.id || '',
+  gruppe_id: props.selectedGruppeId || props.gruppen[0]?.id || '',
   klassenbuch_typ_id: props.typen[0]?.id || '',
   titel: '',
   schuljahr: '',
@@ -74,17 +75,17 @@ function statusClass(status) {
 </script>
 
 <template>
-  <Head title="Klassenbuecher" />
+  <Head title="Klassenbücher" />
 
-  <AppLayout title="Klassenbuecher">
-    <template #header>Klassenbuecher</template>
+  <AppLayout title="Klassenbücher">
+    <template #header>Klassenbücher</template>
 
     <div class="mx-auto max-w-7xl space-y-6 pb-10">
       <section class="rounded border border-zinc-200 bg-white p-5 shadow-sm">
         <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p class="text-sm font-semibold uppercase tracking-wide text-zbb">Digitales Klassenbuch</p>
-            <h1 class="mt-1 text-2xl font-semibold text-zinc-900">Aus Gruppen werden pruefbare Klassenbuecher</h1>
+            <h1 class="mt-1 text-2xl font-semibold text-zinc-900">Aus Gruppen werden prüfbare Klassenbücher</h1>
             <p class="mt-2 max-w-3xl text-sm text-zinc-600">
               Gruppen bleiben die organisatorische Basis. Das Klassenbuch dokumentiert Wochenberichte, Kommentare,
               Freigaben und Sperrungen getrennt nach Fachpraxis, Unterricht oder weiteren Typen.
@@ -123,7 +124,7 @@ function statusClass(status) {
             <label class="block">
               <span class="text-sm font-medium text-zinc-700">Gruppe</span>
               <select v-model="form.gruppe_id" class="mt-1 w-full rounded border-zinc-300 text-sm focus:border-zbb focus:ring-zbb">
-                <option value="" disabled>Gruppe auswaehlen</option>
+                <option value="" disabled>Gruppe auswählen</option>
                 <option v-for="gruppe in gruppen" :key="gruppe.id" :value="gruppe.id">
                   {{ gruppe.bereich?.name || `Gruppe ${gruppe.id}` }} - {{ dateLabel(gruppe.anfangsdatum) }}
                 </option>
@@ -134,7 +135,7 @@ function statusClass(status) {
             <label class="block">
               <span class="text-sm font-medium text-zinc-700">Art</span>
               <select v-model="form.klassenbuch_typ_id" class="mt-1 w-full rounded border-zinc-300 text-sm focus:border-zbb focus:ring-zbb">
-                <option value="" disabled>Art auswaehlen</option>
+                <option value="" disabled>Art auswählen</option>
                 <option v-for="typ in typen" :key="typ.id" :value="typ.id">{{ typ.name }}</option>
               </select>
               <span v-if="form.errors.klassenbuch_typ_id" class="mt-1 block text-xs text-red-600">{{ form.errors.klassenbuch_typ_id }}</span>
@@ -206,7 +207,7 @@ function statusClass(status) {
 
           <section class="rounded border border-zinc-200 bg-white shadow-sm">
             <div class="flex items-center justify-between border-b border-zinc-100 px-5 py-4">
-              <h2 class="text-lg font-semibold text-zinc-900">Vorhandene Klassenbuecher</h2>
+              <h2 class="text-lg font-semibold text-zinc-900">Vorhandene Klassenbücher</h2>
               <span class="text-sm text-zinc-500">{{ klassenbuecher.length }} Einträge</span>
             </div>
 
@@ -251,8 +252,8 @@ function statusClass(status) {
 
             <div v-else class="px-5 py-12 text-center text-zinc-500">
               <i class="las la-book text-5xl text-zinc-300"></i>
-              <p class="mt-2 font-medium">Noch keine Klassenbuecher vorhanden</p>
-              <p class="text-sm">Waehle links eine Gruppe und eine Art aus.</p>
+              <p class="mt-2 font-medium">Noch keine Klassenbücher vorhanden</p>
+              <p class="text-sm">Wähle links eine Gruppe und eine Art aus.</p>
             </div>
           </section>
         </div>

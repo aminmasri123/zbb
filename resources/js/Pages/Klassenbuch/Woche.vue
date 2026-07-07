@@ -168,7 +168,7 @@ function updateKommentar(kommentar) {
           <div>
             <Link :href="route('klassenbuch.show', klassenbuch.id)" class="inline-flex items-center gap-2 text-sm font-medium text-zbb hover:underline">
               <i class="las la-arrow-left"></i>
-              Zurueck zum Klassenbuch
+              Zurück zum Klassenbuch
             </Link>
             <div class="mt-4 flex flex-wrap items-center gap-3">
               <h1 class="text-2xl font-semibold text-zinc-900">Kalenderwoche {{ woche.kalenderwoche }}</h1>
@@ -190,7 +190,7 @@ function updateKommentar(kommentar) {
               @click="submitWoche"
             >
               <i class="las la-paper-plane"></i>
-              Woche vollstaendig bestaetigen
+              Woche vollständig bestätigen
             </button>
             <span v-else-if="isSubmitted" class="rounded border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700">
               Wartet auf Prüfung
@@ -333,7 +333,7 @@ function updateKommentar(kommentar) {
                 </select>
                 <label v-if="canReview" class="inline-flex items-center gap-2 text-sm text-zinc-600">
                   <input v-model="commentForm.intern" type="checkbox" class="rounded border-zinc-300 text-zbb focus:ring-zbb" />
-                  Interne Notiz nur fuer Leitung/Assistenz
+                  Interne Notiz nur für Leitung/Assistenz
                 </label>
               </div>
               <textarea v-model="commentForm.text" rows="3" class="w-full rounded border-zinc-300 text-sm focus:border-zbb focus:ring-zbb" placeholder="Kommentar schreiben"></textarea>
@@ -388,9 +388,9 @@ function updateKommentar(kommentar) {
           <section v-if="canReview && isSubmitted" class="rounded border border-sky-200 bg-white p-5 shadow-sm">
             <h2 class="text-lg font-semibold text-zinc-900">Prüfung</h2>
             <p class="mt-2 text-sm text-zinc-600">
-              OK sperrt diese Kalenderwoche endgueltig. Korrektur oeffnet sie wieder fuer die Bearbeitung.
+              OK sperrt diese Kalenderwoche endgültig. Korrektur öffnet sie wieder für die Bearbeitung.
             </p>
-            <textarea v-model="reviewForm.kommentar" rows="4" class="mt-4 w-full rounded border-zinc-300 text-sm focus:border-zbb focus:ring-zbb" placeholder="Rueckmeldung oder interne Notiz"></textarea>
+            <textarea v-model="reviewForm.kommentar" rows="4" class="mt-4 w-full rounded border-zinc-300 text-sm focus:border-zbb focus:ring-zbb" placeholder="Rückmeldung oder interne Notiz"></textarea>
             <label class="mt-3 inline-flex items-center gap-2 text-sm text-zinc-600">
               <input v-model="reviewForm.intern" type="checkbox" class="rounded border-zinc-300 text-zbb focus:ring-zbb" />
               Kommentar intern speichern
@@ -414,14 +414,14 @@ function updateKommentar(kommentar) {
               <div class="flex items-start gap-3">
                 <span class="mt-1 h-3 w-3 rounded-full" :class="woche.submitted_at ? 'bg-sky-500' : 'bg-zinc-300'"></span>
                 <div>
-                  <p class="font-medium text-zinc-900">Ausbilder/Lehrkraft bestaetigt</p>
+                  <p class="font-medium text-zinc-900">Ausbilder/Lehrkraft bestätigt</p>
                   <p class="text-zinc-500">{{ woche.submitted_at ? timeLabel(woche.submitted_at) : 'noch offen' }}</p>
                 </div>
               </div>
               <div class="flex items-start gap-3">
                 <span class="mt-1 h-3 w-3 rounded-full" :class="woche.reviewed_at ? 'bg-emerald-500' : 'bg-zinc-300'"></span>
                 <div>
-                  <p class="font-medium text-zinc-900">Leitung/Assistenz prueft</p>
+                  <p class="font-medium text-zinc-900">Leitung/Assistenz prüft</p>
                   <p class="text-zinc-500">{{ woche.reviewed_at ? timeLabel(woche.reviewed_at) : 'wartet' }}</p>
                 </div>
               </div>

@@ -146,9 +146,9 @@ class GruppeHasTeilnehmerController extends Controller
     {
 
         $gruppe = Gruppe::with([
-            'teilnehmer.schueler',
             'bereich',
             'raum',
+            'klassenbuecher.typ',
             'projekt.dokumente.bereiche',
             'projekt.dokumentKategorien.dokumente.bereiche',
 
@@ -157,16 +157,33 @@ class GruppeHasTeilnehmerController extends Controller
         $user = auth()->user();
         abort_unless($this->canUseGroup($user, $gruppe), 403);
 
-        $gruppe->teilnehmer->each(function ($t) {
-            $t->zeitgeplant = $t->pivot->zeitgeplant;
-            $t->zeittatsaechlich = $t->pivot->zeittatsaechlich;
-            $t->status = $t->pivot->status;
-            $t->tag = $t->pivot->tag;
-            $t->user = $t->pivot->user;
-        });
+        $gruppenTeilnehmer = GruppeHasPersonen::query()
+            ->where('gruppe_id', $gruppe->id)
+            ->with([
+                'teilnehmer.schueler',
+                'zeitgeplant',
+                'zeittatsaechlich',
+                'status',
+                'tag',
+                'user',
+            ])
+            ->get()
+            ->map(function (GruppeHasPersonen $eintrag) {
+                if (! $eintrag->teilnehmer) {
+                    return null;
+                }
 
-        // Gruppiere nach Teilnehmer
-        $gruppe->teilnehmer = $gruppe->teilnehmer->unique('id')->values();
+                $teilnehmer = clone $eintrag->teilnehmer;
+                $pivot = clone $eintrag;
+                $pivot->unsetRelation('teilnehmer');
+                $teilnehmer->setRelation('pivot', $pivot);
+
+                return $teilnehmer;
+            })
+            ->filter()
+            ->values();
+
+        $gruppe->setRelation('teilnehmer', $gruppenTeilnehmer);
 
         if ($gruppe->projekt) {
             $direkteDokumente = $gruppe->projekt->dokumente;
@@ -189,7 +206,6 @@ class GruppeHasTeilnehmerController extends Controller
         $standortId = $gruppe->standort_id;
 
         $teilnehmer = Personen::Teilnehmer()
-            ->with('standorte', 'projekte')
             ->whereHas('projekte', function ($query) use ($projektId, $standortId) {
                 $query->where('projekts.id', $projektId);
                 if ($standortId) {
@@ -198,7 +214,7 @@ class GruppeHasTeilnehmerController extends Controller
             })
             ->orderBy('nachname')
             ->orderBy('vorname')
-            ->get();
+            ->get(['id', 'vorname', 'nachname']);
         return Inertia::render('Gruppe/GruppeHasTeilnehmer/Index', [
             'gruppe' => $gruppe,
             'teilnehmer' => $teilnehmer,
@@ -241,6 +257,23 @@ class GruppeHasTeilnehmerController extends Controller
         } catch (Exception $e) {
             return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
         }
+    }
+
+    public function destroyTeilnehmer(Gruppe $gruppe, Personen $personen)
+    {
+        abort_unless($this->canUseGroup(auth()->user(), $gruppe), 403);
+
+        $deleted = GruppeHasPersonen::where('gruppe_id', $gruppe->id)
+            ->where('personen_id', $personen->id)
+            ->delete();
+
+        return response()->json([
+            'success' => true,
+            'deleted' => $deleted,
+            'message' => $deleted > 0
+                ? 'Teilnehmer wurde aus der Gruppe entfernt.'
+                : 'Teilnehmer war in dieser Gruppe nicht vorhanden.',
+        ]);
     }
 
     private function canUseGroup($user, ?Gruppe $gruppe): bool

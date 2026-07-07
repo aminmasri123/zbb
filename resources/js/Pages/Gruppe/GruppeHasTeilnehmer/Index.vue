@@ -1,6 +1,6 @@
 <script setup>
     import { ref, computed, onMounted } from 'vue'
-    import { Head, router } from '@inertiajs/vue3'
+    import { Head, Link, router } from '@inertiajs/vue3'
     import AppLayout from '@/Layouts/AppLayout.vue'
     import InputText from 'primevue/inputtext'
     import FloatLabel from 'primevue/floatlabel'
@@ -27,6 +27,13 @@
     const legacyExportLoading = ref(null)
     const selectedTeilnehmerIds = ref([])
     const isSubmittingTeilnehmer = ref(false)
+    const klassenbuchErlaubt = computed(() => Boolean(props.gruppe?.projekt?.klassenbuch_aktiv))
+    const erstesKlassenbuch = computed(() => props.gruppe?.klassenbuecher?.[0] || null)
+    const klassenbuchHref = computed(() =>
+      erstesKlassenbuch.value
+        ? route('klassenbuch.show', erstesKlassenbuch.value.id)
+        : route('klassenbuch.index', { gruppe_id: props.gruppe.id })
+    )
 
     // --- Hilfsfunktion für Farben je nach Status ---
 const statusFarbe = (statusName) => {
@@ -75,7 +82,7 @@ const confirmTeilnehmer = async () => {
   isSubmittingTeilnehmer.value = true;
 
   try {
-    const response = await axios.post('/gruppehasteilnehmer/anlegen', {
+    const response = await axios.post(route('gruppeHasTeilnehmer.store'), {
       gruppe_id: props.gruppe.id,
       teilnehmer: selectedTeilnehmerIds.value,
       startzeit: zeitgeplantStart.value,
@@ -420,8 +427,7 @@ const speichernSofort = async (tID, ttag, statusName, tatstartTime, tatendTime) 
 
     console.log('speichernSofort:', { teilnehmerId, tag, statusName, tatstartTime , tatendTime })
 
-    //await axios.post('/anwesenheit/update', {
-    router.post('/anwesenheit/update', {
+    router.post(route('anwesenheit.update'), {
       personen_id: teilnehmerId,
       gruppe_id: props.gruppe.id,
       tag: tag,
@@ -447,6 +453,48 @@ const speichernSofort = async (tID, ttag, statusName, tatstartTime, tatendTime) 
     })
   }
 }
+
+const entferneTeilnehmer = async (teilnehmer) => {
+  const name = `${teilnehmer.vorname} ${teilnehmer.nachname}`.trim()
+
+  const result = await Swal.fire({
+    icon: 'warning',
+    title: 'Teilnehmer entfernen?',
+    text: `${name} wird mit allen Anwesenheitstagen aus dieser Gruppe entfernt.`,
+    showCancelButton: true,
+    confirmButtonText: 'Entfernen',
+    cancelButtonText: 'Abbrechen',
+    confirmButtonColor: '#dc2626',
+  })
+
+  if (!result.isConfirmed) {
+    return
+  }
+
+  try {
+    const response = await axios.delete(route('gruppeHasTeilnehmer.destroyTeilnehmer', {
+      gruppe: props.gruppe.id,
+      personen: teilnehmer.id,
+    }))
+
+    gruppenTeilnehmer.value = gruppenTeilnehmer.value.filter((item) => item.id !== teilnehmer.id)
+
+    await Swal.fire({
+      icon: 'success',
+      title: 'Entfernt',
+      text: response.data?.message || 'Teilnehmer wurde aus der Gruppe entfernt.',
+      timer: 1800,
+      showConfirmButton: false,
+    })
+  } catch (error) {
+    await Swal.fire({
+      icon: 'error',
+      title: 'Fehler',
+      text: error.response?.data?.message || 'Teilnehmer konnte nicht entfernt werden.',
+    })
+  }
+}
+
 const exportMitTag = async () => {
     showExportDialog.value = false;
 
@@ -491,7 +539,17 @@ const exportMitTag = async () => {
     <div class="p-6 space-y-8 bg-white rounded-lg shadow-sm ">
       <!-- Teilnehmer hinzufügen -->
       <div class="bg-gray-50 rounded-lg p-4 border shadow-sm">
-        <h3 class="font-semibold mb-3 text-gray-700">Teilnehmer hinzufügen</h3>
+        <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h3 class="font-semibold text-gray-700">Teilnehmer hinzufügen</h3>
+          <Link
+            v-if="klassenbuchErlaubt"
+            :href="klassenbuchHref"
+            class="inline-flex h-10 items-center justify-center gap-2 rounded border border-zbb bg-white px-4 text-sm font-semibold text-zbb hover:bg-zbb hover:text-white"
+          >
+            <i class="las la-book-open text-lg"></i>
+            Klassenbuch
+          </Link>
+        </div>
 
         <Button
           label="➕ Teilnehmer hinzufügen"
@@ -773,8 +831,20 @@ const exportMitTag = async () => {
                 class="hover:bg-gray-50"
               >
                 <td class="sticky left-0 z-10 border bg-white px-4 py-3 font-medium text-gray-800">
-                  <p class="truncate">{{ t.vorname }} {{ t.nachname }}</p>
-                  <span class="text-sm text-zbb">{{ formatTime(t.pivot?.zeitgeplant?.startzeit) }} - {{formatTime(t.pivot?.zeitgeplant?.endzeit)}}</span>
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0">
+                      <p class="truncate">{{ t.vorname }} {{ t.nachname }}</p>
+                      <span class="text-sm text-zbb">{{ formatTime(t.pivot?.zeitgeplant?.startzeit) }} - {{formatTime(t.pivot?.zeitgeplant?.endzeit)}}</span>
+                    </div>
+                    <button
+                      type="button"
+                      class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded border border-red-200 text-red-600 hover:bg-red-50"
+                      title="Teilnehmer aus Gruppe entfernen"
+                      @click="entferneTeilnehmer(t)"
+                    >
+                      <i class="la la-trash"></i>
+                    </button>
+                  </div>
                 </td>
                 <td v-for="tttag in sichtbareTage" :key="tttag.date" class="border px-2 py-3 text-center align-top">
                     <div class="flex flex-col gap-1 items-center">

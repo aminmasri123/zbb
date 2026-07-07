@@ -86,6 +86,75 @@ function getKlassen(jahr, teil, partner) {
     )];
 }
 
+const exportAnwesenheitslisteVorbereitungBo = async (jahr, teil, partner) => {
+    const klassen = getKlassen(jahr, teil, partner).filter(Boolean);
+
+    if (klassen.length === 0) {
+        Swal.fire('Keine Klassen', 'Fuer diesen Zeitraum wurden keine Klassen gefunden.', 'warning');
+        return;
+    }
+
+    const terminResult = await Swal.fire({
+        title: 'Termin auswaehlen',
+        input: 'date',
+        inputLabel: 'Termin zur Vorbereitung BO-Tage',
+        showCancelButton: true,
+        confirmButtonText: 'Weiter',
+        cancelButtonText: 'Abbrechen',
+        inputValidator: (value) => !value ? 'Bitte waehle einen Termin aus.' : null,
+    });
+
+    if (!terminResult.isConfirmed) {
+        return;
+    }
+
+    const modeResult = await Swal.fire({
+        title: 'Export auswaehlen',
+        input: 'select',
+        inputOptions: {
+            alle: 'Alle Klassen als ZIP',
+            klasse: 'Einzelne Klasse',
+        },
+        inputValue: 'alle',
+        showCancelButton: true,
+        confirmButtonText: 'Exportieren',
+        cancelButtonText: 'Abbrechen',
+    });
+
+    if (!modeResult.isConfirmed) {
+        return;
+    }
+
+    let klasse = null;
+    if (modeResult.value === 'klasse') {
+        const klasseResult = await Swal.fire({
+            title: 'Klasse auswaehlen',
+            input: 'select',
+            inputOptions: Object.fromEntries(klassen.map((klasse) => [klasse, klasse])),
+            showCancelButton: true,
+            confirmButtonText: 'Exportieren',
+            cancelButtonText: 'Abbrechen',
+        });
+
+        if (!klasseResult.isConfirmed) {
+            return;
+        }
+
+        klasse = klasseResult.value;
+    }
+
+    const params = new URLSearchParams({ termin: terminResult.value });
+    if (klasse) {
+        params.set('klasse', klasse);
+    }
+
+    window.location.href = `${route('anwesenheitslisteVorBOTage', {
+        schuleId: partner.id,
+        schuljahr: jahr,
+        teil,
+    })}?${params.toString()}`;
+};
+
 // -----------------------------
 // Modal-Funktionen
 // -----------------------------
@@ -368,6 +437,15 @@ const updatePartnerAPI = async (form) => {
                                                         <!-- Links analog Blade -->
 
                                                         <!-- Bearbeitet -->
+
+                                                         <button
+                                                            type="button"
+                                                            @click="exportAnwesenheitslisteVorbereitungBo(jahr, teil, partner)"
+                                                            class="block w-full px-4 py-1 text-left hover:bg-gray-200"
+                                                         >
+                                                            Anwesenheitsliste BO Vorbereitung
+                                                         </button>
+
                                                         <!-- 🔽 Anwesenheitsliste BO Bibb -->
                                                         <a @click.prevent="openModal('anwesenheitslisteBoTagbibb', { jahr, teil, partnerId: partner.id })" class="block px-4 py-1 hover:bg-gray-200"> Anwesenheitsliste BO Bibb</a>
 
@@ -439,9 +517,7 @@ const updatePartnerAPI = async (form) => {
                                                         <a :href="route('alleTeilnehmer.folder.create', { idSchule: partner.id, schuljahr: jahr, teil })"
                                                             class="block px-4 py-1 hover:bg-gray-200">Ordner  anlegen</a>
 
-                                                        <a :href="route('anwesenheitslisteVorBOTage', { schuleId: partner.id, schuljahr: jahr, teil })"
-                                                            class="block px-4 py-1 hover:bg-gray-200">Anwesenheitsliste BO Vorbereitung</a>
-
+                                                       
 
 
 

@@ -12,6 +12,7 @@ use App\Models\Gruppe;
 use App\Models\Kontakttypen;
 use App\Models\Leistungsbezuege;
 use App\Models\Notizvarianten;
+use App\Models\Partner;
 use App\Models\Personen;
 use App\Models\PersonenHasSozialedaten;
 use App\Models\PersonenIstSchueler;
@@ -44,8 +45,15 @@ class TeilnehmerController extends Controller
 
         $benutzer = auth()->user();
         $projekte = $benutzer->projekte;
-        $standorte = $benutzer->standorte;
         $defaultProjekt = $benutzer->current_team_id;
+        $standortId = $request->integer('standort') ?: null;
+        $standorte = $defaultProjekt
+            ? Standort::whereIn('id', ProjektHasPersonen::query()
+                ->where('projekt_id', $defaultProjekt)
+                ->whereNotNull('standort_id')
+                ->select('standort_id')
+            )->orderBy('name')->get()
+            : collect();
         $gruppen = Gruppe::query()
             ->with('bereich')
             ->where('projekt_id', $benutzer->current_team_id)
@@ -75,6 +83,17 @@ class TeilnehmerController extends Controller
             ->visibleForUser($benutzer)   // <-- dein globaler Berechtigungsscope
             ->with(['projekte.abteilung', 'standorte']);
 
+        if ($defaultProjekt) {
+            $abfrage->whereHas('projekte', function ($query) use ($defaultProjekt, $standortId) {
+                $query->where('projekt_has_personens.projekt_id', $defaultProjekt)
+                    ->when($standortId, function ($query) use ($standortId) {
+                        $query->where('projekt_has_personens.standort_id', $standortId);
+                    });
+            });
+        } else {
+            $abfrage->whereRaw('1 = 0');
+        }
+
         // 🔍 Suche
         if ($suchbegriff) {
             $abfrage->where(function ($q) use ($suchbegriff) {
@@ -96,6 +115,7 @@ class TeilnehmerController extends Controller
             'defaultProjekt' => $defaultProjekt,
             'filters' => [
                 'search'    => $suchbegriff,
+                'standort'  => $standortId,
                 'sort'      => $sortierung,
                 'direction' => $richtung,
             ],
@@ -472,6 +492,7 @@ class TeilnehmerController extends Controller
 
             $createdCount = 0;
             $errors = [];
+            $validRows = [];
 
             foreach ($data as $index => $entry) {
                 try {
@@ -481,6 +502,8 @@ class TeilnehmerController extends Controller
                     $schuljahr = $this->cleanImportValue($row[7] ?? null);
                     $teil = $this->cleanImportValue($row[8] ?? null);
                     $klasse = $this->cleanImportValue($row[9] ?? null);
+                    $projektId = $this->cleanImportValue($row[4] ?? null);
+                    $standortId = $this->cleanImportValue($row[5] ?? null);
 
                     if (!$isBopImport) {
                         $schuleId = null;
@@ -491,6 +514,21 @@ class TeilnehmerController extends Controller
 
                     if ($isBopImport && (empty($schuleId) || empty($schuljahr) || empty($teil) || empty($klasse))) {
                         $errors[] = "Zeile " . $rowNumber . " ist BOP, aber Schule_ID, Schuljahr, Teil oder Klasse fehlt.";
+                        continue;
+                    }
+
+                    if ($projektId && !Projekt::whereKey($projektId)->exists()) {
+                        $errors[] = "Zeile " . $rowNumber . ": Projekt_ID " . $projektId . " existiert nicht.";
+                        continue;
+                    }
+
+                    if ($standortId && !Standort::whereKey($standortId)->exists()) {
+                        $errors[] = "Zeile " . $rowNumber . ": Standort_ID " . $standortId . " existiert nicht.";
+                        continue;
+                    }
+
+                    if ($isBopImport && !Partner::whereKey($schuleId)->exists()) {
+                        $errors[] = "Zeile " . $rowNumber . ": Schule_id " . $schuleId . " existiert nicht.";
                         continue;
                     }
 
@@ -513,32 +551,17 @@ class TeilnehmerController extends Controller
                         continue;
                     }
 
-                    DB::transaction(function () use ($teilnehmerData, $row, $schuleId, $schuljahr, $teil, $klasse) {
-                        $teilnehmer = Personen::create($teilnehmerData);
+                    $validRows[] = [
+                        'row' => $row,
+                        'teilnehmerData' => $teilnehmerData,
+                        'projektId' => $projektId,
+                        'standortId' => $standortId,
+                        'schuleId' => $schuleId,
+                        'schuljahr' => $schuljahr,
+                        'teil' => $teil,
+                        'klasse' => $klasse,
+                    ];
 
-                        if (!empty($row[4])) {
-                            $teilnehmer->projekte()->attach(
-                                $row[4],
-                                [
-                                    'standort_id' => $row[5] ?? null
-                                ]
-                            );
-                        }
-
-                        if ($schuleId) {
-                            PersonenIstSchueler::create([
-                                'person_id' => $teilnehmer->id,
-                                'klasse' => $klasse,
-                                'schule_id' => $schuleId,
-                                'foerderschueler' => $this->parseImportBoolean($row[10] ?? null),
-                                'eee' => $this->parseImportBoolean($row[11] ?? null),
-                                'schuljahr' => $schuljahr,
-                                'teil' => $teil,
-                            ]);
-                        }
-                    });
-
-                    $createdCount++;
                     continue;
 
                     /* if (count($row) < 8) {
@@ -607,6 +630,50 @@ class TeilnehmerController extends Controller
                     Log::error("Import Fehler Zeile " . ($rowNumber ?? ($index + 2)) . ": " . $e->getMessage());
                 }
             }
+
+            if (!empty($errors)) {
+                Log::info('Import abgebrochen wegen Validierungsfehlern:', $errors);
+
+                return response()->json([
+                    'error' => true,
+                    'message' => 'Import abgebrochen. Bitte korrigiere die Fehler in der Excel-Datei.',
+                    'errors' => $errors,
+                ], 422);
+            }
+
+            $createdCount = DB::transaction(function () use ($validRows) {
+                $createdCount = 0;
+
+                foreach ($validRows as $validRow) {
+                    $teilnehmer = Personen::create($validRow['teilnehmerData']);
+
+                    if ($validRow['projektId']) {
+                        $teilnehmer->projekte()->attach(
+                            $validRow['projektId'],
+                            [
+                                'standort_id' => $validRow['standortId']
+                            ]
+                        );
+                    }
+
+                    if ($validRow['schuleId']) {
+                        PersonenIstSchueler::create([
+                            'person_id' => $teilnehmer->id,
+                            'klasse' => $validRow['klasse'],
+                            'schule_id' => $validRow['schuleId'],
+                            'foerderschueler' => $this->parseImportBoolean($validRow['row'][10] ?? null),
+                            'eee' => $this->parseImportBoolean($validRow['row'][11] ?? null),
+                            'schuljahr' => $validRow['schuljahr'],
+                            'teil' => $validRow['teil'],
+                        ]);
+                    }
+
+                    $createdCount++;
+                }
+
+                return $createdCount;
+            });
+
              Log::info('Importierte Zeilen:', $errors);
             if ($createdCount > 0) {
                /*  $rollen = Role::whereIn('name', ['Administrator', 'Abteilungsleiter', 'Anleiter'])->get();

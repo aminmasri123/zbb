@@ -49,7 +49,7 @@ function statusClass(status) {
           <div>
             <Link :href="route('klassenbuch.index')" class="inline-flex items-center gap-2 text-sm font-medium text-zbb hover:underline">
               <i class="las la-arrow-left"></i>
-              Zurueck zur Uebersicht
+              Zurück zur Übersicht
             </Link>
             <div class="mt-4 flex flex-wrap items-center gap-3">
               <h1 class="text-2xl font-semibold text-zinc-900">{{ klassenbuch.titel }}</h1>
@@ -68,7 +68,7 @@ function statusClass(status) {
             class="inline-flex h-10 items-center justify-center gap-2 rounded bg-zbb px-4 text-sm font-semibold text-white hover:bg-zbb/90"
           >
             <i class="las la-calendar-week"></i>
-            Naechste Woche bearbeiten
+            Nächste Woche bearbeiten
           </Link>
         </div>
       </section>
@@ -132,7 +132,7 @@ function statusClass(status) {
           </div>
 
           <p class="mt-4 rounded border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-600">
-            Eine Woche wird nach der Prüfung gesperrt. Korrektur oeffnet genau diese Woche wieder fuer den Ausbilder
+            Eine Woche wird nach der Prüfung gesperrt. Korrektur öffnet genau diese Woche wieder für den Ausbilder
             oder die Lehrkraft.
           </p>
         </div>

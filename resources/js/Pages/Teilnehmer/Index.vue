@@ -22,15 +22,15 @@ const teilnehmerList = ref([...teilnehmers.data]);
 watch(() => teilnehmers.data, (newValue) => {
     teilnehmerList.value = [...newValue];
 });
-// Suchfeld und Dropdown für Projekte
+// Suchfeld und Dropdown fuer Standorte
 let seite = 'teilnehmer'; // Für die Löschseite
-let search = ref('');
-let searchProject = ref('');
+let search = ref(filters?.search ?? '');
+let searchStandort = ref('');
 let checkBoxListeTeilnehmer = ref(false); //Teilnehmer zur Projekten/Gruppen hinzufügen
-let selectedProject = ref(null); // Für das ausgewählte Projekt
+let selectedStandort = ref(filters?.standort ?? null);
 let isModalOpen = ref(false); // Modal-Zustand
-let sortColumn = ref('');  // Spalte zum Sortieren
-let sortDirection = ref('desc'); // Sortierrichtung ('asc' oder 'desc')
+let sortColumn = ref(filters?.sort ?? 'id');  // Spalte zum Sortieren
+let sortDirection = ref(filters?.direction ?? 'desc'); // Sortierrichtung ('asc' oder 'desc')
 
 const selected = ref([]);
 const groupModal = ref(null);
@@ -38,7 +38,7 @@ const groupModal = ref(null);
 let teilnehmerToDelete = ref(null); // Speichert den Namen der Teilnehmer, die gelöscht werden sollen
 let showModalLöschen = ref(false); // Modal für die Löschung
 
-const { teilnehmers, authProjekte, rollen, gruppen, projekte, standorte, defaultProjekt  } = defineProps({
+const { teilnehmers, authProjekte, rollen, gruppen, projekte, standorte, defaultProjekt, filters  } = defineProps({
     pagination: {
         type: Object,
     },
@@ -64,6 +64,10 @@ const { teilnehmers, authProjekte, rollen, gruppen, projekte, standorte, default
         default: () => []
     },
      defaultProjekt: { type: Number, default: null },
+     filters: {
+        type: Object,
+        default: () => ({})
+     },
 
 });
 const showImportModal = ref(false);
@@ -106,9 +110,19 @@ const initDropzone = () => {
 
         dictDefaultMessage: "Datei hier hineinziehen oder klicken",
 
-        success() {
+        success(file, response) {
+            if (response?.error) {
+                Swal.fire({
+                    title: "Fehler",
+                    text: formatImportMessage(response),
+                    icon: "error"
+                });
+                return;
+            }
+
             Swal.fire({
                 title: "Import erfolgreich",
+                text: response?.message || "Teilnehmer wurden importiert.",
                 icon: "success"
             });
 
@@ -120,11 +134,26 @@ const initDropzone = () => {
         error(file, message) {
             Swal.fire({
                 title: "Fehler",
-                text: message,
+                text: formatImportMessage(message),
                 icon: "error"
             });
         }
     });
+};
+
+const formatImportMessage = (response) => {
+    if (typeof response === 'string') {
+        return response;
+    }
+
+    const message = response?.message || 'Der Import konnte nicht abgeschlossen werden.';
+    const errors = Array.isArray(response?.errors) ? response.errors : [];
+
+    if (errors.length === 0) {
+        return message;
+    }
+
+    return `${message}\n\n${errors.join('\n')}`;
 };
 // Löschbestätigung anzeigen und Abteilungsnamen speichern
 const confirmDelete = (teilnehmer) => {
@@ -153,12 +182,12 @@ const deleteTeilnehmer = (id) => {
     });
 };
 
-// Watch für Änderungen in der Suche
-watch([search, selectedProject, sortColumn, sortDirection], () => {
-    router.get('/teilnehmer',
+// Watch fuer Aenderungen in Suche, Standort und Sortierung
+watch([search, selectedStandort, sortColumn, sortDirection], () => {
+    router.get(route('teilnehmer.index'),
         {
             search: search.value,
-            project: selectedProject.value,
+            standort: selectedStandort.value,
             sort: sortColumn.value,
             direction: sortDirection.value
         },
@@ -166,27 +195,14 @@ watch([search, selectedProject, sortColumn, sortDirection], () => {
     );
 });
 
-// Watch für das ausgewählte Projekt
-watch(selectedProject, value => {
-    router.get('/teilnehmer', { search: search.value, project: value }, { preserveState: true });
-});
-
-// Gefilterte Projekte
-const filteredProjects = computed(() => {
-    return projekte.filter(projekt =>
-        projekt.name.toLowerCase().includes(searchProject.value.toLowerCase())
+// Gefilterte Standorte
+const filteredStandorte = computed(() => {
+    return standorte.filter(standort =>
+        standort.name.toLowerCase().includes(searchStandort.value.toLowerCase())
     );
 });
 
-// Teilnehmer nach Projekt filtern
-const filteredTeilnehmerByProject = computed(() => {
-  if (!selectedProject.value) {
-    return teilnehmerList.value   // jetzt wird deine lokale Liste genutzt
-  }
-  return teilnehmerList.value.filter(teilnehmer =>
-    teilnehmer.projekte?.some(projekt => projekt.name === selectedProject.value)
-  )
-});
+const filteredTeilnehmerByProject = computed(() => teilnehmerList.value);
 
 
 // Projekt auswählen
@@ -277,8 +293,8 @@ const deleteSelectedTeilnehmer = async () => {
         });
     }
 };
-const selectProject = (projekt) => {
-    selectedProject.value = projekt.name;
+const selectStandort = (standortId) => {
+    selectedStandort.value = standortId;
 };
 
 // Modal öffnen und schließen
@@ -399,7 +415,7 @@ const sortByColumn = (column) => {
             <Dropdown align="right">
                 <template #trigger>
                     <button class="inline-flex items-center px-3 py-3 border border-gray-300 text-sm leading-4 font-medium text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
-                        <span class="mr-5">Projekte</span>
+                        <span class="mr-5">Standorte</span>
                         <span class="transform transition-transform duration-300 menu-arrow"></span>
                     </button>
                 </template>
@@ -407,15 +423,15 @@ const sortByColumn = (column) => {
                 <template #content>
                     <!-- Projektsuche -->
                     <div class="px-4 py-2" @click.stop>
-                        <input v-model="searchProject" type="text" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg w-full p-2" placeholder="Projekte suchen..." />
+                        <input v-model="searchStandort" type="text" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg w-full p-2" placeholder="Standorte suchen..." />
                     </div>
 
                     <!-- Gefilterte Projektauswahl -->
-                    <DropdownLink v-for="projekt in filteredProjects" :key="projekt.id" @click="selectProject(projekt)" href="#">
-                        {{ projekt.name }}
+                    <DropdownLink @click="selectStandort(null)" href="#">
+                        Alle Standorte
                     </DropdownLink>
-                    <DropdownLink @click="selectProject('refresh')" href="#">
-                        <i class="la la-lg la-refresh" aria-hidden="true"></i>
+                    <DropdownLink v-for="standort in filteredStandorte" :key="standort.id" @click="selectStandort(standort.id)" href="#">
+                        {{ standort.name }}
                     </DropdownLink>
                 </template>
             </Dropdown>

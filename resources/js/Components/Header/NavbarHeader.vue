@@ -59,8 +59,13 @@
                     <!-- Teams Dropdown -->
                     <Dropdown v-if="$page.props.auth.user.projekte" align="right" width="60">
                         <template #trigger>
-                                <button type="button" class="inline-flex items-center py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-primary hover:text-buttonPrimary transition ease-in-out duration-150">
-                                    <i class="la text-lg la-briefcase" aria-hidden="true"></i>
+                                <button
+                                    type="button"
+                                    class="inline-flex max-w-[220px] items-center gap-2 rounded-md border border-[var(--border)] bg-white/40 px-3 py-2 text-sm font-medium leading-4 text-primary shadow-sm transition duration-150 ease-in-out hover:text-buttonPrimary"
+                                    :title="`Aktives Projekt: ${currentProjektName}`"
+                                >
+                                    <i class="la text-lg la-briefcase shrink-0" aria-hidden="true"></i>
+                                    <span class="hidden sm:inline min-w-0 truncate text-gray-800">{{ currentProjektName }}</span>
                                 </button>
                         </template>
                         <template #content>
@@ -292,7 +297,7 @@
 </template>
 
 <script setup>
-    import { ref } from 'vue';
+    import { computed, ref } from 'vue';
     import { Link, router } from '@inertiajs/vue3';
     import ApplicationMark from '@/Components/ApplicationMark.vue';
     import NavLink from '@/Components/NavLink.vue';
@@ -303,7 +308,6 @@
     import axios from 'axios';
     import { useI18n } from 'vue-i18n';
     import { switchTheme } from '../../theme';
-    import { Inertia } from '@inertiajs/inertia'
 
     const sidebarTextHidden = ref(false);
     const props = defineProps({
@@ -314,9 +318,16 @@
 
 
 function switchToProjekt(projekt) {
-    Inertia.post(route('projekt.switch'), { projekt_id: projekt.id }, {
-        preserveScroll: true,
-        preserveState: true,
+    const offeneGruppe = page.component === 'Gruppe/GruppeHasTeilnehmer/Index'
+        ? page.props.gruppe
+        : null;
+
+    router.post(route('projekt.switch'), {
+        projekt_id: projekt.id,
+        gruppe_id: offeneGruppe?.id || null,
+    }, {
+        preserveScroll: false,
+        preserveState: false,
         onSuccess: () => {
             console.log('Projekt gewechselt, bleibt auf derselben Seite');
         }
@@ -327,6 +338,15 @@ function switchToProjekt(projekt) {
 
 const page = usePage();
 const notifications = ref(page.props.notify?.notifications || []);
+const currentProjektName = computed(() => {
+    if (page.props.currentProjekt?.name) {
+        return page.props.currentProjekt.name;
+    }
+
+    const currentProjekt = page.props.auth.user.projekte?.find((projekt) => projekt.id === page.props.auth.user.current_team_id);
+
+    return currentProjekt?.name || 'Kein Projekt';
+});
 
 
 const markAllAsRead = async () => {

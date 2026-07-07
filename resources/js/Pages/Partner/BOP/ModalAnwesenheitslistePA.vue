@@ -68,14 +68,31 @@ const save = async () => {
     link.click();
     link.remove();
     window.URL.revokeObjectURL(url);
-
-    Swal.fire('Erfolg', 'Export wurde heruntergeladen!', 'success');
+    close();
 
   } catch (error) {
-    Swal.fire('Fehler', 'Export fehlgeschlagen', 'error');
+    Swal.fire('Fehler', await exportErrorMessage(error), 'error');
   } finally {
     loading.value = false;
   }
+};
+
+const exportErrorMessage = async (error) => {
+  const fallback = 'Export fehlgeschlagen';
+  const data = error.response?.data;
+
+  if (data instanceof Blob) {
+    const text = await data.text();
+
+    try {
+      const json = JSON.parse(text);
+      return json.message || json.error || fallback;
+    } catch {
+      return text || fallback;
+    }
+  }
+
+  return data?.message || data?.error || fallback;
 };
 </script>
 

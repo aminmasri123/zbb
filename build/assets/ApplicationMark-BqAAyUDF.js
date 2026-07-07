@@ -1,0 +1,1 @@
+import{e as s,o as e,g as t}from"./main-DTjznLjq.js";const n=["src"],c={__name:"ApplicationMark",setup(a){const o=window.asset?window.asset("img/logo/logoSimpliste.png"):`${window.assetBaseUrl||""}/img/logo/logoSimpliste.png`;return(i,l)=>(e(),s("img",{src:t(o),alt:"Logo"},null,8,n))}};export{c as _};

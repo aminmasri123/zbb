@@ -116,7 +116,7 @@ const save = () => {
         </FloatLabel>
         <FloatLabel class="mb-3">
             <InputText v-model="form.name" class="w-full" />
-            <label>Partnername</label>
+            <label>Partnername <span class="text-red-500">*</span></label>
         </FloatLabel>
 
         <!-- Typen -->
@@ -130,7 +130,7 @@ const save = () => {
                 filter
                 class="w-full"
             />
-            <label>Partnerschaftstypen wählen</label>
+            <label>Partnerschaftstypen wählen <span class="text-red-500">*</span></label>
         </FloatLabel>
 
         <!-- Beschreibung -->
@@ -154,12 +154,12 @@ const save = () => {
             <div class="grid grid-cols-2 gap-2 mb-2">
                 <FloatLabel variant="in">
                     <InputText v-model="p.vorname" class="w-full"/>
-                    <label>Vorname</label>
+                    <label>Vorname <span class="text-red-500">*</span></label>
                 </FloatLabel>
 
                 <FloatLabel variant="in">
                     <InputText v-model="p.nachname" class="w-full"/>
-                    <label>Nachname</label>
+                    <label>Nachname <span class="text-red-500">*</span></label>
                 </FloatLabel>
             </div>
 

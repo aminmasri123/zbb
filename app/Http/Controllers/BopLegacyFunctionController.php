@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 use Carbon\Carbon;
 use Inertia\Inertia;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
@@ -272,12 +273,169 @@ class BopLegacyFunctionController extends Controller
         return back()->with('success', 'BOP-Ordner wurden angelegt: ' . $folder);
     }
 
-    public function anwesenheitslisteVorbereitung(int $schuleId, string $schuljahr, string $teil)
+    public function anwesenheitslisteVorbereitung(Request $request, int $schuleId, string $schuljahr, string $teil)
     {
-        return $this->downloadSpreadsheet(
-            $this->simpleSpreadsheet('Anwesenheitsliste BO Vorbereitung', $schuleId, $schuljahr, $teil, ['Termin', 'Unterschrift']),
-            'Anwesenheitsliste_BO_Vorbereitung_' . $schuleId . '_' . $this->safeName($schuljahr) . '_Teil_' . $this->safeName($teil) . '.xlsx'
-        );
+        $termin = $request->query('termin');
+        $klasse = $this->cleanQueryValue($request->query('klasse'));
+        $partner = $this->partner($schuleId);
+        $schueler = $this->schueler($schuleId, $schuljahr, $teil);
+
+        if ($schueler->isEmpty()) {
+            return back()->with('error', 'Die gewaehlte Schule verfuegt ueber keine Teilnehmer.');
+        }
+
+        if (!$termin) {
+            return back()->with('error', 'Bitte waehle einen Termin fuer die Anwesenheitsliste BO Vorbereitung.');
+        }
+
+        $template = storage_path('vorlage/projekte/bop/excel/Anwesenheitsliste-Vorbereitung-BO-Tage.xlsx');
+        if (!file_exists($template)) {
+            return back()->with('error', 'Die Vorlage fuer die Anwesenheitsliste BO Vorbereitung wurde nicht gefunden.');
+        }
+
+        $terminDatum = $this->formatTermin($termin);
+        $klassen = $klasse
+            ? collect([$klasse])
+            : $schueler->pluck('klasse')->filter()->unique()->sort()->values();
+
+        if ($klassen->isEmpty()) {
+            return back()->with('error', 'Es wurden keine Klassen fuer diesen Export gefunden.');
+        }
+
+        if ($klasse && !$schueler->contains(fn ($item) => (string) $item->klasse === (string) $klasse)) {
+            return back()->with('error', 'Die gewaehlte Klasse wurde fuer diese Schule nicht gefunden.');
+        }
+
+        if ($klasse) {
+            $spreadsheet = $this->buildAnwesenheitslisteVorbereitungSpreadsheet(
+                $template,
+                $partner,
+                $schueler->filter(fn ($item) => (string) $item->klasse === (string) $klasse)->values(),
+                $schuljahr,
+                $teil,
+                $klasse,
+                $terminDatum
+            );
+
+            return $this->downloadSpreadsheet(
+                $spreadsheet,
+                'Anwesenheitsliste_Vorbereitung_BO_Tage_' . $this->safeName($partner->name) . '_' . $this->safeName($klasse) . '_' . $this->safeName($terminDatum) . '.xlsx'
+            );
+        }
+
+        $tempDir = storage_path('app/tmp/' . Str::uuid());
+        File::ensureDirectoryExists($tempDir);
+
+        foreach ($klassen as $klasseName) {
+            $spreadsheet = $this->buildAnwesenheitslisteVorbereitungSpreadsheet(
+                $template,
+                $partner,
+                $schueler->filter(fn ($item) => (string) $item->klasse === (string) $klasseName)->values(),
+                $schuljahr,
+                $teil,
+                $klasseName,
+                $terminDatum
+            );
+
+            (new Xlsx($spreadsheet))->save(
+                $tempDir . DIRECTORY_SEPARATOR . 'Anwesenheitsliste_Vorbereitung_BO_Tage_' . $this->safeName($partner->name) . '_' . $this->safeName($klasseName) . '_' . $this->safeName($terminDatum) . '.xlsx'
+            );
+        }
+
+        $zipName = 'Anwesenheitslisten_Vorbereitung_BO_Tage_' . $this->safeName($partner->name) . '_' . $this->safeName($terminDatum) . '.zip';
+        $zipPath = storage_path('app/tmp/' . Str::uuid() . '_' . $zipName);
+        $zip = new ZipArchive();
+
+        if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+            File::deleteDirectory($tempDir);
+            return back()->with('error', 'Das ZIP-Archiv konnte nicht erstellt werden.');
+        }
+
+        foreach (glob($tempDir . DIRECTORY_SEPARATOR . '*.xlsx') as $file) {
+            $zip->addFile($file, basename($file));
+        }
+
+        $zip->close();
+        File::deleteDirectory($tempDir);
+
+        return response()->download($zipPath, $zipName)->deleteFileAfterSend(true);
+    }
+
+    private function buildAnwesenheitslisteVorbereitungSpreadsheet(
+        string $template,
+        Partner $partner,
+        $schueler,
+        string $schuljahr,
+        string $teil,
+        string $klasse,
+        string $terminDatum
+    ): Spreadsheet {
+        $spreadsheet = IOFactory::load($template);
+        $sheet = $spreadsheet->getActiveSheet();
+        $schulform = $this->schulformFromSchueler($schueler->first());
+
+        $sheet->setCellValue('B2', $partner->name);
+        $sheet->setCellValue('B4', $schulform);
+        $sheet->setCellValue('B5', $klasse);
+        $sheet->setCellValue('E6', $terminDatum);
+
+        $row = 8;
+        foreach ($schueler->sortBy(fn ($item) => $item->person?->nachname)->values() as $index => $item) {
+            $person = $item->person;
+
+            $sheet->setCellValue('A' . $row, $index + 1);
+            $sheet->setCellValue('B' . $row, $person?->nachname);
+            $sheet->setCellValue('C' . $row, $person?->vorname);
+            $sheet->setCellValue('D' . $row, $person?->geschlecht);
+
+            $sheet->getStyle('A' . $row . ':E' . $row)->applyFromArray([
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['rgb' => '000000'],
+                    ],
+                ],
+            ]);
+
+            $row++;
+        }
+
+        return $spreadsheet;
+    }
+
+    private function cleanQueryValue($value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        return $value === '' || $value === 'alle' ? null : $value;
+    }
+
+    private function formatTermin(string $termin): string
+    {
+        foreach (['Y-m-d', 'd.m.Y', 'd/m/Y'] as $format) {
+            $date = \DateTime::createFromFormat($format, $termin);
+
+            if ($date instanceof \DateTime) {
+                return $date->format('d.m.Y');
+            }
+        }
+
+        return $termin;
+    }
+
+    private function schulformFromSchueler($schueler): string
+    {
+        if (!$schueler) {
+            return '';
+        }
+
+        return ($schueler->foerderschueler ?? $schueler->foederschueler ?? false)
+            ? 'Foerderschule'
+            : 'Gemeinschaftsschule';
     }
 
     public function anwesenheitslisteRechnung(int $idSchule, string $schuljahr, string $teil)

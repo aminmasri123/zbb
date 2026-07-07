@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use Inertia\Inertia;
 use Inertia\Response;
+use App\Models\Gruppe;
 use App\Models\Projekt;
 use App\Models\Personen;
 use App\Models\Standort;
@@ -101,6 +102,7 @@ class UserController extends Controller
         $user = User::findOrFail(auth()->id());
         $projektId = $request->input('projekt_id');
         $projektName = Projekt::where('id', $projektId)->value('name');
+        $gruppeId = $request->input('gruppe_id');
 
         if ($user->projekte()->where('projekts.id', $projektId)->exists()) {
             $user->current_team_id = $projektId;
@@ -109,6 +111,16 @@ class UserController extends Controller
 
         // Flash setzen
         session()->flash('success', "Super! \"$projektName\" wurde als aktives Projekt ausgewählt.");
+
+        if ($gruppeId) {
+            $gruppeGehortZumProjekt = Gruppe::where('id', $gruppeId)
+                ->where('projekt_id', $projektId)
+                ->exists();
+
+            if (! $gruppeGehortZumProjekt) {
+                return redirect()->route('gruppe.index');
+            }
+        }
 
         return back();
     }

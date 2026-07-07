@@ -20,6 +20,7 @@ use Carbon\Carbon;
 use DateTime;
 use Illuminate\Support\Collection;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -340,9 +341,11 @@ class ProjektBopController extends Controller
                 $i++;
             }
                 $filename = 'Teilnehmendenliste_zum_Nachweis_der_praxisorientierten_Berufsorientierung_' . $schule->name . '_' . $schuljahr . '_' .  date('Ymd_His') . '.docx';
+                $exportPath = storage_path('exports/' . $filename);
 
-                $templateProcessor->saveAs(storage_path('exports/' . $filename));
-                return response()->download(storage_path('exports/' . $filename ))->deleteFileAfterSend(true);
+                File::ensureDirectoryExists(dirname($exportPath));
+                $templateProcessor->saveAs($exportPath);
+                return response()->download($exportPath)->deleteFileAfterSend(true);
     }
     public function anwesenheitslistePAexportWord(Request $request)
     {
@@ -418,9 +421,11 @@ class ProjektBopController extends Controller
                 $i++;
             }
                 $filename = 'Anwesenheitsliste_PA_' . $schule->name . '_' . $request->klasse . '_' . $tag1 . '_' . $tag2 . '_'  . date('Ymd_His') . '.docx';
+                $exportPath = storage_path('exports/' . $filename);
 
-                $templateProcessor->saveAs(storage_path('exports/' . $filename));
-                return response()->download(storage_path('exports/' . $filename ))->deleteFileAfterSend(true);
+                File::ensureDirectoryExists(dirname($exportPath));
+                $templateProcessor->saveAs($exportPath);
+                return response()->download($exportPath)->deleteFileAfterSend(true);
     }
 
     public function anwesenheitslistePOBOTag1($partnerID, $schuljahr, $teil, $klasse = 'exportAlleKlassen', Request $request)

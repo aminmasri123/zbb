@@ -22,12 +22,12 @@ use Inertia\Inertia;
 
 class KlassenbuchController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $user = auth()->user();
 
         if (!$user->current_team_id) {
-            return redirect()->route('dashboard')->with('error', 'Bitte waehlen Sie zuerst ein Projekt aus.');
+            return redirect()->route('dashboard')->with('error', 'Bitte wählen Sie zuerst ein Projekt aus.');
         }
 
         $this->ensureCurrentProjectUsesKlassenbuch($user);
@@ -40,6 +40,11 @@ class KlassenbuchController extends Controller
             ->orderBy('anfangsdatum')
             ->orderBy('startzeit')
             ->get();
+
+        $selectedGruppeId = $request->integer('gruppe_id');
+        if (! $selectedGruppeId || ! $gruppen->contains('id', $selectedGruppeId)) {
+            $selectedGruppeId = $gruppen->first()?->id;
+        }
 
         $klassenbuecher = Klassenbuch::query()
             ->with(['typ', 'gruppe.bereich', 'gruppe.betreuer', 'gruppe.projekt.abteilung'])
@@ -64,6 +69,7 @@ class KlassenbuchController extends Controller
             'klassenbuecher' => $klassenbuecher,
             'pruefungen' => $pruefungen,
             'typen' => KlassenbuchTyp::where('aktiv', true)->orderBy('name')->get(),
+            'selectedGruppeId' => $selectedGruppeId,
             'canReview' => $this->userCanReviewInCurrentProject($user),
         ]);
     }
@@ -255,7 +261,7 @@ class KlassenbuchController extends Controller
 
         if ($validated['entscheidung'] === 'korrektur' && empty($validated['kommentar'])) {
             throw ValidationException::withMessages([
-                'kommentar' => 'Bitte schreiben Sie eine Rueckmeldung, wenn eine Korrektur erforderlich ist.',
+                'kommentar' => 'Bitte schreiben Sie eine Rückmeldung, wenn eine Korrektur erforderlich ist.',
             ]);
         }
 
@@ -272,7 +278,7 @@ class KlassenbuchController extends Controller
                 $this->createKommentar($woche, $validated['kommentar'], 'pruefung', (bool) ($validated['intern'] ?? false));
             }
 
-            return redirect()->back()->with('success', 'Woche wurde geprueft und gesperrt.');
+            return redirect()->back()->with('success', 'Woche wurde geprüft und gesperrt.');
         }
 
         $woche->update([
@@ -285,7 +291,7 @@ class KlassenbuchController extends Controller
 
         $this->createKommentar($woche, $validated['kommentar'], 'korrektur', false);
 
-        return redirect()->back()->with('warning', 'Woche wurde mit Rueckmeldung zur Korrektur geoeffnet.');
+        return redirect()->back()->with('warning', 'Woche wurde mit Rückmeldung zur Korrektur geöffnet.');
     }
 
     public function storeKommentar(Request $request, Klassenbuch $klassenbuch, KlassenbuchWoche $woche)
@@ -344,7 +350,7 @@ class KlassenbuchController extends Controller
         $this->authorizeGruppe($klassenbuch->gruppe);
 
         abort_if($woche->status === 'gesperrt', 423, 'Diese Woche ist gesperrt.');
-        abort_if($woche->status === 'eingereicht', 423, 'Diese Woche wartet auf Prüfung und ist vorlaeufig gesperrt.');
+        abort_if($woche->status === 'eingereicht', 423, 'Diese Woche wartet auf Prüfung und ist vorläufig gesperrt.');
     }
 
     private function assertWocheBelongsToKlassenbuch(Klassenbuch $klassenbuch, KlassenbuchWoche $woche): void
@@ -361,7 +367,7 @@ class KlassenbuchController extends Controller
         $hasProject = (int) $gruppe->projekt_id === (int) $user->current_team_id;
         $ownsGroup = (int) $gruppe->personen_id === (int) $this->userPersonId($user);
 
-        abort_unless((bool) $gruppe->projekt?->klassenbuch_aktiv, 403, 'Klassenbuch ist fuer dieses Projekt nicht aktiviert.');
+        abort_unless((bool) $gruppe->projekt?->klassenbuch_aktiv, 403, 'Klassenbuch ist für dieses Projekt nicht aktiviert.');
         abort_unless($hasProject && ($ownsGroup || $this->canSeeAllGroups($user) || $this->canReviewByDepartment($user, $gruppe)), 403);
     }
 
@@ -369,7 +375,7 @@ class KlassenbuchController extends Controller
     {
         $projekt = Projekt::query()->find($user?->current_team_id, ['id', 'klassenbuch_aktiv']);
 
-        abort_unless($projekt && (bool) $projekt->klassenbuch_aktiv, 403, 'Klassenbuch ist fuer dieses Projekt nicht aktiviert.');
+        abort_unless($projekt && (bool) $projekt->klassenbuch_aktiv, 403, 'Klassenbuch ist für dieses Projekt nicht aktiviert.');
     }
 
     private function canSeeAllGroups($user): bool
