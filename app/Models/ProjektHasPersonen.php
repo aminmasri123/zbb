@@ -4,7 +4,7 @@ namespace App\Models;
 use App\Models\Projekt;
 
 use App\Models\Standort;
-use App\Models\zeitraum;
+use App\Models\Zeitraum;
 use App\Models\Austritttypen;
 use App\Models\ProjektHasPersonenMeta;
 use App\Models\ProjektHasTeilnehmerLuv;
