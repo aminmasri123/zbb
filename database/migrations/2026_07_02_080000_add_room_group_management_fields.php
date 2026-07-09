@@ -53,31 +53,26 @@ return new class extends Migration
 
         $this->setGruppeRaumNullable(true);
 
-        DB::statement("
-            CREATE TABLE IF NOT EXISTS raum_meldungen (
-                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                raum_id BIGINT UNSIGNED NULL,
-                projekt_id BIGINT UNSIGNED NULL,
-                gruppe_id BIGINT UNSIGNED NULL,
-                gemeldet_von_user_id BIGINT UNSIGNED NULL,
-                gemeldet_von_personen_id BIGINT UNSIGNED NULL,
-                titel VARCHAR(255) NOT NULL,
-                kategorie VARCHAR(60) NOT NULL DEFAULT 'sonstiges',
-                prioritaet VARCHAR(30) NOT NULL DEFAULT 'normal',
-                status VARCHAR(30) NOT NULL DEFAULT 'offen',
-                beschreibung TEXT NULL,
-                erledigt_am TIMESTAMP NULL,
-                created_at TIMESTAMP NULL,
-                updated_at TIMESTAMP NULL,
-                INDEX raum_meldungen_raum_id_status_index (raum_id, status),
-                INDEX raum_meldungen_projekt_id_status_index (projekt_id, status),
-                CONSTRAINT raum_meldungen_raum_id_foreign FOREIGN KEY (raum_id) REFERENCES raeumes(id) ON DELETE SET NULL,
-                CONSTRAINT raum_meldungen_projekt_id_foreign FOREIGN KEY (projekt_id) REFERENCES projekts(id) ON DELETE SET NULL,
-                CONSTRAINT raum_meldungen_gruppe_id_foreign FOREIGN KEY (gruppe_id) REFERENCES gruppes(id) ON DELETE SET NULL,
-                CONSTRAINT raum_meldungen_gemeldet_von_user_id_foreign FOREIGN KEY (gemeldet_von_user_id) REFERENCES users(id) ON DELETE SET NULL,
-                CONSTRAINT raum_meldungen_gemeldet_von_personen_id_foreign FOREIGN KEY (gemeldet_von_personen_id) REFERENCES personens(id) ON DELETE SET NULL
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        ");
+        if (! Schema::hasTable('raum_meldungen')) {
+            Schema::create('raum_meldungen', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('raum_id')->nullable()->constrained('raeumes')->nullOnDelete();
+                $table->foreignId('projekt_id')->nullable()->constrained('projekts')->nullOnDelete();
+                $table->foreignId('gruppe_id')->nullable()->constrained('gruppes')->nullOnDelete();
+                $table->foreignId('gemeldet_von_user_id')->nullable()->constrained('users')->nullOnDelete();
+                $table->foreignId('gemeldet_von_personen_id')->nullable()->constrained('personens')->nullOnDelete();
+                $table->string('titel');
+                $table->string('kategorie', 60)->default('sonstiges');
+                $table->string('prioritaet', 30)->default('normal');
+                $table->string('status', 30)->default('offen');
+                $table->text('beschreibung')->nullable();
+                $table->timestamp('erledigt_am')->nullable();
+                $table->timestamps();
+
+                $table->index(['raum_id', 'status']);
+                $table->index(['projekt_id', 'status']);
+            });
+        }
     }
 
     public function down(): void
@@ -128,6 +123,10 @@ return new class extends Migration
 
     private function statementIgnoreDuplicate(string $statement): void
     {
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         try {
             DB::statement($statement);
         } catch (QueryException $exception) {

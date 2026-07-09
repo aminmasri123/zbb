@@ -15,9 +15,9 @@ const props = defineProps({
 const stats = [
     { label: 'Projekte', value: props.projekte || 0, icon: 'la-project-diagram', color: 'bg-blue-100 text-blue-800' },
     { label: 'Teilnehmer', value: props.teilnehmer || 0, icon: 'la-user-graduate', color: 'bg-green-100 text-green-800' },
-    { label: 'Raeumlichkeiten', value: props.raeume || 0, icon: 'la-building', color: 'bg-yellow-100 text-yellow-800' },
+    { label: 'Räumlichkeiten', value: props.raeume || 0, icon: 'la-building', color: 'bg-yellow-100 text-yellow-800' },
     { label: 'Dienstwagen', value: props.dienstwagen || 0, icon: 'la-car', color: 'bg-red-100 text-red-800' },
-    { label: 'Geraete', value: props.geraete || 0, icon: 'la-laptop', color: 'bg-purple-100 text-purple-800' },
+    { label: 'Geräte', value: props.geraete || 0, icon: 'la-laptop', color: 'bg-purple-100 text-purple-800' },
 ];
 
 const apps = [
@@ -38,7 +38,7 @@ const apps = [
             <div class="mx-auto mb-8 max-w-7xl px-4">
                 <div class="rounded-lg px-8 py-4 text-[var(--buttonTextPrimary)] shadow-lg" style="background: linear-gradient(90deg, var(--buttonPrimary), var(--borderHover));">
                     <h1 class="mb-2 text-2xl font-bold">Willkommen im webbasierten ERP-System des ZBB</h1>
-                    <p class="text-lg">Das webbasierte Verwaltungssystem des Zentrums fuer Bildung und Beruf Saar.</p>
+                    <p class="text-lg">Das webbasierte Verwaltungssystem des Zentrums für Bildung und Beruf Saar.</p>
                 </div>
             </div>
 

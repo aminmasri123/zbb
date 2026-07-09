@@ -10,8 +10,11 @@ class KostenstelleController extends Controller
 {
     public function index()
     {
-        $kostenstelle = Kostenstelle::all();
-        dd($kostenstelle);
+        return response()->json([
+            'kostenstellen' => Kostenstelle::query()
+                ->orderBy('kostenstelle')
+                ->get(),
+        ]);
     }
 
     public function store(Request $request)

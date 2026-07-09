@@ -28,38 +28,34 @@ return new class extends Migration
             });
         }
 
-        DB::statement("
-            CREATE TABLE IF NOT EXISTS dokument_kategories (
-                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                name VARCHAR(80) NOT NULL,
-                beschreibung TEXT NULL,
-                created_at TIMESTAMP NULL,
-                updated_at TIMESTAMP NULL,
-                UNIQUE KEY dokument_kategories_name_unique (name)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        ");
+        if (! Schema::hasTable('dokument_kategories')) {
+            Schema::create('dokument_kategories', function (Blueprint $table) {
+                $table->id();
+                $table->string('name', 80)->unique();
+                $table->text('beschreibung')->nullable();
+                $table->timestamps();
+            });
+        }
 
-        DB::statement("
-            CREATE TABLE IF NOT EXISTS dokument_has_kategories (
-                dokument_id BIGINT UNSIGNED NOT NULL,
-                dokument_kategorie_id BIGINT UNSIGNED NOT NULL,
-                gruppen_export TINYINT(1) NOT NULL DEFAULT 1,
-                serienbrief TINYINT(1) NOT NULL DEFAULT 1,
-                PRIMARY KEY (dokument_id, dokument_kategorie_id),
-                CONSTRAINT dokument_has_kategories_dokument_id_foreign FOREIGN KEY (dokument_id) REFERENCES dokumentes(id) ON DELETE CASCADE,
-                CONSTRAINT dokument_has_kategories_kategorie_id_foreign FOREIGN KEY (dokument_kategorie_id) REFERENCES dokument_kategories(id) ON DELETE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        ");
+        if (! Schema::hasTable('dokument_has_kategories')) {
+            Schema::create('dokument_has_kategories', function (Blueprint $table) {
+                $table->foreignId('dokument_id')->constrained('dokumentes')->cascadeOnDelete();
+                $table->foreignId('dokument_kategorie_id')->constrained('dokument_kategories')->cascadeOnDelete();
+                $table->boolean('gruppen_export')->default(true);
+                $table->boolean('serienbrief')->default(true);
 
-        DB::statement("
-            CREATE TABLE IF NOT EXISTS projekt_has_dokument_kategories (
-                projekt_id BIGINT UNSIGNED NOT NULL,
-                dokument_kategorie_id BIGINT UNSIGNED NOT NULL,
-                PRIMARY KEY (projekt_id, dokument_kategorie_id),
-                CONSTRAINT projekt_has_dokument_kategories_projekt_id_foreign FOREIGN KEY (projekt_id) REFERENCES projekts(id) ON DELETE CASCADE,
-                CONSTRAINT projekt_has_dokument_kategories_kategorie_id_foreign FOREIGN KEY (dokument_kategorie_id) REFERENCES dokument_kategories(id) ON DELETE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        ");
+                $table->primary(['dokument_id', 'dokument_kategorie_id']);
+            });
+        }
+
+        if (! Schema::hasTable('projekt_has_dokument_kategories')) {
+            Schema::create('projekt_has_dokument_kategories', function (Blueprint $table) {
+                $table->foreignId('projekt_id')->constrained('projekts')->cascadeOnDelete();
+                $table->foreignId('dokument_kategorie_id')->constrained('dokument_kategories')->cascadeOnDelete();
+
+                $table->primary(['projekt_id', 'dokument_kategorie_id']);
+            });
+        }
 
         foreach (['AGH', 'SGB II', 'SGB III', 'ESF', 'BOP', 'INTEQRA'] as $name) {
             DB::table('dokument_kategories')->updateOrInsert(
@@ -172,6 +168,11 @@ return new class extends Migration
 
     private function statementIgnoreMissing(string $statement): void
     {
+        if (DB::getDriverName() !== 'mysql') {
+            DB::statement($statement);
+            return;
+        }
+
         try {
             DB::statement($statement);
         } catch (QueryException $exception) {

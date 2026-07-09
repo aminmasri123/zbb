@@ -39,7 +39,7 @@ function createQrMatrix(text) {
     const bytes = Array.from(new TextEncoder().encode(text));
 
     if (bytes.length > 134) {
-        throw new Error('Der Link ist zu lang fuer den QR-Code.');
+        throw new Error('Der Link ist zu lang für den QR-Code.');
     }
 
     const data = createDataCodewords(bytes, dataCodewords);

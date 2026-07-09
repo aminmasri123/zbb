@@ -1149,6 +1149,9 @@ class UserSeeder extends Seeder
             $this->permission('raeumlichkeiten.destroy', 24, 'Erlaubt das Loeschen von Raeumen. Diese Berechtigung sollte wegen Gruppen- und Projektbezug zurueckhaltend vergeben werden.'),
             $this->permission('raeumlichkeiten.meldung.store', 24, 'Erlaubt das Melden von Schaeden, Problemen oder Aufgaben zu einem Raum.'),
             $this->permission('raeumlichkeiten.meldung.update', 24, 'Erlaubt das Bearbeiten, Priorisieren oder Abschliessen bestehender Raummeldungen.'),
+            $this->permission('raeumlichkeiten.buchung.store', 24, 'Erlaubt das Anlegen von Raumbuchungen, Wartungsfenstern oder Sperrzeiten.'),
+            $this->permission('raeumlichkeiten.buchung.update', 24, 'Erlaubt das Bearbeiten bestehender Raumbuchungen, Wartungsfenster oder Sperrzeiten.'),
+            $this->permission('raeumlichkeiten.buchung.destroy', 24, 'Erlaubt das Stornieren von Raumbuchungen, Wartungsfenstern oder Sperrzeiten.'),
 
             // Dienstwagen
             $this->permission('dienstwagen.index', 25, 'Erlaubt das Einsehen der Dienstwagenuebersicht.'),

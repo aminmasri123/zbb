@@ -17,13 +17,12 @@ use Laravel\Jetstream\HasProfilePhoto;
 use Spatie\Permission\Traits\HasRoles;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
-use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
-class User extends Authenticatable implements MustVerifyEmail
+class User extends Authenticatable
 {
     use HasApiTokens;
     use HasFactory;
@@ -82,9 +81,29 @@ class User extends Authenticatable implements MustVerifyEmail
      * @var array<int, string>
      */
     protected $appends = [
+        'first_name',
+        'last_name',
+        'name',
         'profile_photo_url',
     ];
 
+
+    public function getFirstNameAttribute(): ?string
+    {
+        return $this->person?->vorname;
+    }
+
+    public function getLastNameAttribute(): ?string
+    {
+        return $this->person?->nachname;
+    }
+
+    public function getNameAttribute(): string
+    {
+        $fullName = trim(($this->first_name ?? '') . ' ' . ($this->last_name ?? ''));
+
+        return $fullName !== '' ? $fullName : ($this->username ?? $this->email ?? '');
+    }
 
 
      /**

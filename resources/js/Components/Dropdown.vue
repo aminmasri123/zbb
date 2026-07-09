@@ -147,12 +147,12 @@ const widthClass = computed(() => {
                 <div
                     v-show="open"
                     ref="dropdownElement"
-                    class="fixed z-50 rounded-md shadow-lg"
+                    class="fixed z-50 max-w-[calc(100vw-1rem)] overflow-hidden rounded-md shadow-lg"
                     :class="widthClass"
                     :style="dropdownStyle"
                     @click="close"
                 >
-                    <div class="rounded-md ring-1 ring-black ring-opacity-5" :class="contentClasses">
+                    <div class="max-h-[min(70vh,32rem)] overflow-y-auto rounded-md ring-1 ring-black ring-opacity-5" :class="contentClasses">
                         <slot name="content" />
                     </div>
                 </div>

@@ -100,7 +100,7 @@ Route::get('/bereichsauswahl/zugang/{token}/danke', [ProjektBopController::class
 
 //Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProjekte'])->group(function() {
 
-Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'configuredNotifications'])->group(function() {
+Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'routePermission', 'configuredNotifications'])->group(function() {
 
     Route::post('/benutzer/theme', function () {
         $data = request()->validate([
@@ -281,15 +281,15 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'confi
 
     //Teilnehmer
     Route::get('/teilnehmer', [TeilnehmerController::class, 'index'])->name('teilnehmer.index')->can('teilnehmer.index');
-    Route::get('/teilnehmer/anlegen', function () { return Inertia::render('Teilnehmer/CreateTeilnehmer'); })->name('teilnehmer.create')->can('teilnehmer.store');
+    Route::get('/teilnehmer/anlegen', [TeilnehmerController::class, 'create'])->name('teilnehmer.create')->can('teilnehmer.store');
     Route::post('/teilnehmer/anlegen', [TeilnehmerController::class, 'store'])->name('teilnehmer.store')->can('teilnehmer.store');
-    Route::post('/teilnehmer/import', [TeilnehmerController::class, 'import'])->name('teilnehmer.import')->can('teilnehmer.store');
-    Route::delete('/teilnehmer/entfernen', [TeilnehmerController::class, 'bulkDestroy'])->name('teilnehmer.bulkDestroy')->can('teilnehmer.destroy');
+    Route::post('/teilnehmer/import', [TeilnehmerController::class, 'import'])->name('teilnehmer.import')->middleware('canAnyPermission:teilnehmer.import,teilnehmer.store');
+    Route::delete('/teilnehmer/entfernen', [TeilnehmerController::class, 'bulkDestroy'])->name('teilnehmer.bulkDestroy')->middleware('canAnyPermission:teilnehmer.bulkDestroy,teilnehmer.destroy');
     Route::delete('/teilnehmer/entfernen/{id}', [TeilnehmerController::class, 'destroy'])->name('teilnehmer.destroy')->can('teilnehmer.destroy');
     Route::get('/teilnehmer/bearbeiten/{id}', [TeilnehmerController::class, 'show'])->name('teilnehmer.edit')->can('teilnehmer.update');
     Route::patch('/teilnehmer/update/{id}', [TeilnehmerController::class, 'update'])->name('teilnehmer.update')->can('teilnehmer.update');
-    Route::patch('/teilnehmer/{person}/sozialdaten', [TeilnehmerController::class, 'updateSozialdaten'])->name('person.sozialdaten.update')->can('teilnehmer.update');
-    Route::get('/teilnehmer/{id}', [TeilnehmerController::class, 'indexNachProjekt'])->name('teilnehmer.projekt.index')->can('teilnehmer.index');
+    Route::patch('/teilnehmer/{person}/sozialdaten', [TeilnehmerController::class, 'updateSozialdaten'])->name('person.sozialdaten.update')->middleware('canAnyPermission:person.sozialdaten.update,teilnehmer.update');
+    Route::get('/teilnehmer/{id}', [TeilnehmerController::class, 'indexNachProjekt'])->name('teilnehmer.projekt.index')->middleware('canAnyPermission:teilnehmer.projekt.index,teilnehmer.index');
 
     // Personen Has Abschluss
     Route::post('/teilnehmer/abschluss/anlegen', [AbschlusseController::class, 'store'])->name('abschluss.store')->can('teilnehmer.update');
@@ -323,14 +323,14 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'confi
     Route::delete('/teilnehmer/adresse/entfernen/{id}', [AdresseController::class, 'destroy'])->name('adresse.destroy')->can('teilnehmer.update');
 
     //ProjektHasTeilnehmer
-    Route::post('/teilnehmer/projekt/anlegen', [ProjektHasTeilnehmerController::class, 'store'])->name('projekthasteilnehmer.store')->can('teilnehmer.update');
-    Route::put('/teilnehmer/projekt/edit', [ProjektHasTeilnehmerController::class, 'update'])->name('projekthasteilnehmer.update')->can('teilnehmer.update');
+    Route::post('/teilnehmer/projekt/anlegen', [ProjektHasTeilnehmerController::class, 'store'])->name('projekthasteilnehmer.store')->middleware('canAnyPermission:projekthasteilnehmer.store,teilnehmer.update');
+    Route::put('/teilnehmer/projekt/edit', [ProjektHasTeilnehmerController::class, 'update'])->name('projekthasteilnehmer.update')->middleware('canAnyPermission:projekthasteilnehmer.update,teilnehmer.update');
 
     //ProjektHasTeilnehmerLuv
-    Route::post('/teilnehmer/projekt/luv/anlegen', [ProjektHasTeilnehmerLuvController::class, 'store'])->name('projekthasteilnehmer.luv.store')->can('teilnehmer.update');
-    Route::put('/teilnehmer/projekt/luv/edit', [ProjektHasTeilnehmerLuvController::class, 'update'])->name('projekthasteilnehmer.luv.update')->can('teilnehmer.update');
-    Route::delete('/teilnehmer/projekt/luv/entfernen/{id}', [ProjektHasTeilnehmerLuvController::class, 'destroy'])->name('projekthasteilnehmer.luv.destroy')->can('teilnehmer.update');
-    Route::get('/teilnehmer/projekt/luv/export/{id}', [ProjektHasTeilnehmerLuvController::class, 'export'])->name('projekthasteilnehmer.luv.export')->can('teilnehmer.index');
+    Route::post('/teilnehmer/projekt/luv/anlegen', [ProjektHasTeilnehmerLuvController::class, 'store'])->name('projekthasteilnehmer.luv.store')->middleware('canAnyPermission:projekthasteilnehmer.luv.store,teilnehmer.update');
+    Route::put('/teilnehmer/projekt/luv/edit', [ProjektHasTeilnehmerLuvController::class, 'update'])->name('projekthasteilnehmer.luv.update')->middleware('canAnyPermission:projekthasteilnehmer.luv.update,teilnehmer.update');
+    Route::delete('/teilnehmer/projekt/luv/entfernen/{id}', [ProjektHasTeilnehmerLuvController::class, 'destroy'])->name('projekthasteilnehmer.luv.destroy')->middleware('canAnyPermission:projekthasteilnehmer.luv.destroy,teilnehmer.update');
+    Route::get('/teilnehmer/projekt/luv/export/{id}', [ProjektHasTeilnehmerLuvController::class, 'export'])->name('projekthasteilnehmer.luv.export')->middleware('canAnyPermission:projekthasteilnehmer.luv.export,teilnehmer.index');
 
     //ProjektHasPersonen
     Route::post('/personen/projekt/zuweisen', [ProjektHasPersonenController::class, 'store'])->name('projekthaspersonen.store')->can('benutzer.update');
@@ -466,24 +466,24 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'confi
     Route::post('/ressourcen/geraet-update/{id}', [GeraetController::class, 'update'])->name('geraet.update');
     Route::post('/import/geraet', [GeraetController::class, 'import'])->name('geraet.import');
     Route::get('/get-geraet-id', [GeraetController::class, 'getGeraeteID'])->name('getGeraeteID');
-    Route::get('/ausleihende', [GeraetController::class, 'indexAusleihende'])->name('geraet.index.ausleihende')->middleware(['check.permission:index-ausleihende'])->middleware('notifications');
+    Route::get('/ausleihende', [GeraetController::class, 'indexAusleihende'])->name('geraet.index.ausleihende')->middleware('canAnyPermission:geraet.index.ausleihende,index-ausleihende');
 
     /*   Gerät Ausgabe */
-    Route::get('/ressourcen/geraetausgabe', [GeraetausgabeController::class,'index'])->name('geraet.ausgabe.index');
-    Route::post('/gressourcen/eraetausgabe', [GeraetausgabeController::class,'store'])->name('geraet.ausgabe.store');
-    Route::delete('/ressourcen/geraetausgabe/{id}', [GeraetausgabeController::class, 'destroy'])->name('geraetausgabe.destroy');
-    Route::get('/ressourcen/geraetausgabe-view/{id}', [GeraetausgabeController::class, 'view'])->name('ausgabe.view');
-    Route::get('/ressourcen/geraetausgabe-excel/{id}', [GeraetausgabeController::class, 'exportExcel'])->name('geraet.ausgabe.export.excel');
-    Route::post('/ressourcen/geraetausgabe-store-add', [GeraetausgabeController::class, 'storeAdd'])->name('geraet.ausgabe.store.add');
+    Route::get('/ressourcen/geraetausgabe', [GeraetausgabeController::class,'index'])->name('geraet.ausgabe.index')->can('geraet.ausgabe.index');
+    Route::post('/ressourcen/geraetausgabe', [GeraetausgabeController::class,'store'])->name('geraet.ausgabe.store')->can('geraet.ausgabe.store');
+    Route::delete('/ressourcen/geraetausgabe/{id}', [GeraetausgabeController::class, 'destroy'])->name('geraetausgabe.destroy')->can('geraet.ausgabe.destroy');
+    Route::get('/ressourcen/geraetausgabe-view/{id}', [GeraetausgabeController::class, 'view'])->name('ausgabe.view')->can('geraet.ausgabe.index');
+    Route::get('/ressourcen/geraetausgabe-excel/{id}', [GeraetausgabeController::class, 'exportExcel'])->name('geraet.ausgabe.export.excel')->can('geraet.ausgabe.export.excel');
+    Route::post('/ressourcen/geraetausgabe-store-add', [GeraetausgabeController::class, 'storeAdd'])->name('geraet.ausgabe.store.add')->can('geraet.ausgabe.store.add');
 
     /*   Gerät Rückgabe */
-    Route::get('/ressourcen/geraet/rueckgabe', [GeraetrueckgabeController::class,'index'])->name('geraet.rueckgabe.index');
-    Route::post('/ressourcen/geraet/rueckgabe', [GeraetrueckgabeController::class,'store'])->name('geraet.rueckgabe.store');
-    Route::delete('/ressourcen/geraetrueckgabe/{id}', [GeraetrueckgabeController::class, 'destroy'])->name('geraetrueckgabe.destroy');
-    Route::get('/ressourcen/geraetrueckgabe-view/{id}', [GeraetrueckgabeController::class, 'view'])->name('rueckgabe.view');
-    Route::get('/ressourcen/geraetrueckgabe-excel/{id}', [GeraetrueckgabeController::class, 'exportExcel'])->name('geraet.rueckgabe.export.excel');
-    Route::post('/ressourcen/geraetrueckgabe-store-add', [GeraetrueckgabeController::class, 'storeAdd'])->name('geraet.rueckgabe.store.add');
-    Route::get('/ressourcen/geraet/rueckgabe/{id}/geraete', [GeraetrueckgabeController::class, 'geraete'])->name('geraet.rueckgabe.geraete');
+    Route::get('/ressourcen/geraet/rueckgabe', [GeraetrueckgabeController::class,'index'])->name('geraet.rueckgabe.index')->can('geraet.rueckgabe.index');
+    Route::post('/ressourcen/geraet/rueckgabe', [GeraetrueckgabeController::class,'store'])->name('geraet.rueckgabe.store')->can('geraet.rueckgabe.store');
+    Route::delete('/ressourcen/geraetrueckgabe/{id}', [GeraetrueckgabeController::class, 'destroy'])->name('geraetrueckgabe.destroy')->can('geraet.rueckgabe.destroy');
+    Route::get('/ressourcen/geraetrueckgabe-view/{id}', [GeraetrueckgabeController::class, 'view'])->name('rueckgabe.view')->can('geraet.rueckgabe.index');
+    Route::get('/ressourcen/geraetrueckgabe-excel/{id}', [GeraetrueckgabeController::class, 'exportExcel'])->name('geraet.rueckgabe.export.excel')->can('geraet.rueckgabe.export.excel');
+    Route::post('/ressourcen/geraetrueckgabe-store-add', [GeraetrueckgabeController::class, 'storeAdd'])->name('geraet.rueckgabe.store.add')->can('geraet.rueckgabe.store.add');
+    Route::get('/ressourcen/geraet/rueckgabe/{id}/geraete', [GeraetrueckgabeController::class, 'geraete'])->name('geraet.rueckgabe.geraete')->can('geraet.rueckgabe.geraete');
 
     /*   IT-Service */
     Route::prefix('ressourcen/it-service')->name('it-service.')->group(function () {

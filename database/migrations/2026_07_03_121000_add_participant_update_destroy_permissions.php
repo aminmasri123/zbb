@@ -12,11 +12,13 @@ return new class extends Migration
 
     public function up(): void
     {
+        $categoryId = $this->participantCategoryId();
+
         foreach ($this->permissionNames as $name) {
             DB::table('permissions')->insertOrIgnore([
                 'name' => $name,
                 'guard_name' => 'web',
-                'berechtigungskategorie_id' => 5,
+                'berechtigungskategorie_id' => $categoryId,
                 'beschreibung' => null,
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -45,6 +47,22 @@ return new class extends Migration
         app('cache')
             ->store(config('permission.cache.store') !== 'default' ? config('permission.cache.store') : null)
             ->forget(config('permission.cache.key'));
+    }
+
+    private function participantCategoryId(): int
+    {
+        $categoryId = DB::table('berechtigungskategories')
+            ->where('name', 'Teilnehmer')
+            ->value('id');
+
+        if ($categoryId) {
+            return (int) $categoryId;
+        }
+
+        return (int) DB::table('berechtigungskategories')->insertGetId([
+            'name' => 'Teilnehmer',
+            'beschreibung' => '',
+        ]);
     }
 
     public function down(): void

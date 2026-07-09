@@ -154,7 +154,7 @@ async function exportErrorMessage(error) {
     <template #body>
       <div class="space-y-5">
         <div class="rounded border border-orange-200 bg-orange-50 p-4">
-          <p class="text-sm text-gray-600">Gesamtzahl Schueler fuer diese Schule und diesen Teil</p>
+          <p class="text-sm text-gray-600">Gesamtzahl Schüler für diese Schule und diesen Teil</p>
           <p class="text-2xl font-bold text-zbb">{{ teilnehmerCount }}</p>
         </div>
 
@@ -167,7 +167,7 @@ async function exportErrorMessage(error) {
           <label class="cursor-pointer rounded border p-4" :class="selectedExport === 'klasse' ? 'border-zbb bg-orange-50' : 'border-gray-200'">
             <input v-model="selectedExport" type="radio" value="klasse" class="mr-2 text-zbb focus:ring-zbb" />
             <span class="font-semibold text-gray-800">Einzelne Klasse</span>
-            <p class="mt-1 text-xs text-gray-500">Eine Excel-Datei fuer die ausgewaehlte Klasse.</p>
+            <p class="mt-1 text-xs text-gray-500">Eine Excel-Datei für die ausgewählte Klasse.</p>
           </label>
 
           <label class="cursor-pointer rounded border p-4" :class="selectedExport === 'klassenZip' ? 'border-zbb bg-orange-50' : 'border-gray-200'">
@@ -178,8 +178,8 @@ async function exportErrorMessage(error) {
 
           <label class="cursor-pointer rounded border p-4" :class="selectedExport === 'raeume' ? 'border-zbb bg-orange-50' : 'border-gray-200'">
             <input v-model="selectedExport" type="radio" value="raeume" class="mr-2 text-zbb focus:ring-zbb" />
-            <span class="font-semibold text-gray-800">Nach Raeumen</span>
-            <p class="mt-1 text-xs text-gray-500">Schueler nach Kapazitaeten auf Raeume verteilen.</p>
+            <span class="font-semibold text-gray-800">Nach Räumen</span>
+            <p class="mt-1 text-xs text-gray-500">Schüler nach Kapazitäten auf Räume verteilen.</p>
           </label>
         </div>
 
@@ -194,23 +194,23 @@ async function exportErrorMessage(error) {
 
         <div v-if="selectedExport === 'raeume'" class="space-y-3 rounded border border-gray-200 p-4">
           <label class="block">
-            <span class="mb-2 block text-sm font-medium text-gray-700">Anzahl Raeume</span>
+            <span class="mb-2 block text-sm font-medium text-gray-700">Anzahl Räume</span>
             <input v-model.number="roomCount" type="number" min="1" class="w-full rounded border border-gray-300 p-2 focus:border-zbb focus:ring-zbb" />
           </label>
 
           <div class="grid gap-2">
             <div v-for="(_, index) in raumKapazitaeten" :key="index" class="grid gap-2 md:grid-cols-2">
               <input v-model="raumNamen[index]" type="text" class="rounded border border-gray-300 p-2" :placeholder="`Raum ${index + 1}`" />
-              <input v-model="raumKapazitaeten[index]" type="number" min="1" class="rounded border border-gray-300 p-2" :placeholder="`Kapazitaet Raum ${index + 1}`" />
+              <input v-model="raumKapazitaeten[index]" type="number" min="1" class="rounded border border-gray-300 p-2" :placeholder="`Kapazität Raum ${index + 1}`" />
             </div>
           </div>
 
           <div class="rounded bg-gray-50 p-3 text-sm text-gray-700">
-            <p>Gesamtkapazitaet: <strong>{{ capacitySum }}</strong></p>
+            <p>Gesamtkapazität: <strong>{{ capacitySum }}</strong></p>
             <p v-if="missingCapacity > 0" class="text-red-600">
-              Es fehlen noch {{ missingCapacity }} Plaetze fuer alle Schueler.
+              Es fehlen noch {{ missingCapacity }} Plätze für alle Schüler.
             </p>
-            <p v-else class="text-green-700">Die Kapazitaeten reichen fuer alle Schueler.</p>
+            <p v-else class="text-green-700">Die Kapazitäten reichen für alle Schüler.</p>
           </div>
         </div>
 

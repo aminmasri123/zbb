@@ -87,7 +87,7 @@
                     <span v-if="!displayHideTextSidebar" :class="{'rotate-180': activeMenu === 'lager', 'text-zbb': $page.component.startsWith('Lager')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
                 </a>
                 <ul v-show="activeMenu === 'lager'" class="pl-6 mt-2 space-y-2">
-                    <li v-if="can('lager.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('lager.index')">Lageruebersicht</Link></li>
+                    <li v-if="can('lager.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('lager.index')">Lagerübersicht</Link></li>
                 </ul>
             </li>
             <!-- IT-Service Submenu -->

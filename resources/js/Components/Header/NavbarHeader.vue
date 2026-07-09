@@ -2,14 +2,14 @@
     <nav class="sticky top-0 w-full z-50 border-b border-[var(--border)] bg-[var(--headerBg)] text-[var(--primary)] shadow-sm">
 
         <!-- Primary Navigation Menu -->
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-[var(--primary)]">
-            <div class="flex justify-between h-20 ">
+        <div class="mx-auto max-w-7xl px-3 text-[var(--primary)] sm:px-6 lg:px-8">
+            <div class="flex h-16 min-w-0 justify-between gap-2 sm:h-20">
 
-                <div class="flex ">
+                <div class="flex min-w-0 items-center">
                     <!-- Hamburger Button (nur auf Mobilgeräten sichtbar) -->
                     <button
                         @click="$emit('toggle-sidebar')"
-                        class="text-[var(--primary)] pr-4 block md:hidden"
+                        class="block pr-3 text-[var(--primary)] md:hidden"
                         :class="{' ':sidebarOpen}"
                     >
                         <i class="la la-bars text-2xl"></i>
@@ -18,7 +18,7 @@
                     <!-- Knopf Sidebar displayHideTextSidebar -->
                     <button
                         @click="$emit('toggle-sidebar-text')"
-                        class="text-[var(--primary)] pr-4 hidden md:block"
+                        class="hidden pr-4 text-[var(--primary)] md:block"
                         :class="{' ':displayHideTextSidebar}"
                     >
                         <i class="la la-bars text-2xl"></i>
@@ -30,7 +30,7 @@
                         </Link>
                     </div>
                 </div>
-                <div class="hidden space-x-8 sm:-my-px sm:flex text-center ">
+                <div class="hidden space-x-8 lg:-my-px lg:flex text-center ">
                     <NavLink v-if="canAny(dashboardNavPermissions)" :href="route('dashboard')"
                         :active="route().current('dashboard')
                             || route().current('dashboard.*')
@@ -55,13 +55,13 @@
                     </NavLink>
                 </div>
 
-                <div class="flex items-center sm:ml-6">
+                <div class="flex min-w-0 items-center justify-end gap-1 sm:ml-4">
                     <!-- Teams Dropdown -->
                     <Dropdown v-if="$page.props.auth.user.projekte" align="right" width="60">
                         <template #trigger>
                                 <button
                                     type="button"
-                                    class="inline-flex max-w-[220px] items-center gap-2 rounded-md border border-[var(--border)] bg-white/40 px-3 py-2 text-sm font-medium leading-4 text-primary shadow-sm transition duration-150 ease-in-out hover:text-buttonPrimary"
+                                    class="inline-flex max-w-[2.75rem] items-center gap-2 rounded-md border border-[var(--border)] bg-white/40 px-2 py-2 text-sm font-medium leading-4 text-primary shadow-sm transition duration-150 ease-in-out hover:text-buttonPrimary sm:max-w-[220px] sm:px-3"
                                     :title="`Aktives Projekt: ${currentProjektName}`"
                                 >
                                     <i class="la text-lg la-briefcase shrink-0" aria-hidden="true"></i>
@@ -117,7 +117,7 @@
                     <!-- Sprache Dropdown -->
                     <Dropdown align="right" width="48">
                         <template #trigger >
-                            <button class="inline-flex items-center px-3 py-2 mx-1 border border-transparent text-sm leading-4 font-medium rounded-md text-primary hover:text-buttonPrimary focus:outline-none transition ease-in-out duration-150">
+                            <button class="inline-flex items-center rounded-md border border-transparent px-2 py-2 text-sm font-medium leading-4 text-primary transition duration-150 ease-in-out hover:text-buttonPrimary focus:outline-none sm:mx-1 sm:px-3">
                                 <i class="las la-globe text-lg"></i>
                             </button>
                         </template>
@@ -149,7 +149,7 @@
 
                     <button
                         @click="cycleTheme"
-                        class="inline-flex items-center py-2 mr-3 border border-transparent text-sm leading-4 font-medium rounded-md text-primary hover:text-buttonPrimary focus:outline-none transition ease-in-out duration-150">
+                        class="inline-flex items-center rounded-md border border-transparent px-2 py-2 text-sm font-medium leading-4 text-primary transition duration-150 ease-in-out hover:text-buttonPrimary focus:outline-none sm:mr-2">
                             <i class="las la-adjust text-lg"></i>
                     </button>
 
@@ -158,7 +158,7 @@
                     <!-- Notification Dropdown -->
                     <Dropdown align="right" width="80">
                         <template #trigger >
-                            <button class="inline-flex items-center py-2 mx-1 border border-transparent text-sm leading-4 font-medium rounded-md text-primary hover:text-buttonPrimary focus:outline-none transition ease-in-out duration-150">
+                            <button class="relative inline-flex items-center rounded-md border border-transparent px-2 py-2 text-sm font-medium leading-4 text-primary transition duration-150 ease-in-out hover:text-buttonPrimary focus:outline-none sm:mx-1">
                                 <i class="las la-bell text-lg"></i>
                                 <span v-if="notifications.length > 0" class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full text-xs w-5 h-5 flex items-center justify-center">
                                     {{ notifications.length }}
@@ -188,11 +188,11 @@
                     <Dropdown align="right" width="48">
                         <template #trigger>
                             <button v-if="$page.props.jetstream.managesProfilePhotos" class="flex text-sm border-2 border-transparent rounded-full focus:outline-none focus:border-gray-300 transition">
-                                <img class="h-12 w-12 rounded-full object-cover" :src="$page.props.auth.user.profile_photo_url" :alt="$page.props.auth.user.name">
+                                <img class="h-10 w-10 rounded-full object-cover sm:h-12 sm:w-12" :src="$page.props.auth.user.profile_photo_url" :alt="$page.props.auth.user.name">
                             </button>
 
                             <span v-else class="inline-flex rounded-md">
-                                <button type="button" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
+                                <button type="button" class="inline-flex items-center rounded-md border border-transparent bg-white px-2 py-2 text-sm font-medium leading-4 text-gray-500 transition duration-150 ease-in-out hover:text-gray-700 focus:bg-gray-50 focus:outline-none active:bg-gray-50 sm:px-3">
                                     <i class="la la-lg la-user" aria-hidden="true"></i>
                                 </button>
                             </span>
@@ -232,7 +232,7 @@
                     </Dropdown>
                 </div>
                 <!-- Hamburger Menu -->
-                <div class="-mr-2 flex items-center sm:hidden">
+                <div class="-mr-2 flex items-center lg:hidden">
                     <button class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:bg-gray-100 focus:text-gray-500 transition duration-150 ease-in-out" @click="toggleNavigationDropdown">
                         <svg
                             class="h-6 w-6"
@@ -261,7 +261,7 @@
         </div>
 
         <!-- Responsive Navigation Menu -->
-        <div :class="{'block': showingNavigationDropdown, 'hidden': !showingNavigationDropdown}" class="sm:hidden">
+        <div :class="{'block': showingNavigationDropdown, 'hidden': !showingNavigationDropdown}" class="lg:hidden">
             <div class="pt-2 pb-3 space-y-1">
                 <ResponsiveNavLink v-if="canAny(dashboardNavPermissions)" :href="route('dashboard')" :active="['dashboard','benutzer','partner','abteilung','projekt','bereich','einstellung'].includes(route().current()) || route().current('klassenbuch.*')">
                     {{$t('dashboard')}}
@@ -284,9 +284,9 @@
                         <img class="h-10 w-10 rounded-full object-cover" :src="$page.props.auth.user.profile_photo_url" :alt="$page.props.auth.user.name">
                     </div>
 
-                    <div>
-                        <div class="font-medium text-sm text-gray-500">{{ $page.props.auth.user.first_name }} {{ $page.props.auth.user.last_name }}</div>
-                        <div class="font-medium text-sm text-gray-500">{{ $page.props.auth.user.email }} </div>
+                    <div class="min-w-0">
+                        <div class="truncate text-sm font-medium text-gray-500">{{ $page.props.auth.user.first_name }} {{ $page.props.auth.user.last_name }}</div>
+                        <div class="truncate text-sm font-medium text-gray-500">{{ $page.props.auth.user.email }} </div>
                     </div>
                 </div>
 
@@ -323,6 +323,7 @@
     const sidebarTextHidden = ref(false);
     const props = defineProps({
     //sidebarOpen: Boolean,
+    sidebarOpen: Boolean,
     displayHideTextSidebar: Boolean,
     });
 

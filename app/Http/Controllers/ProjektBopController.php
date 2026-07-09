@@ -1718,7 +1718,7 @@ class ProjektBopController extends Controller
                 return response()->download($exportPath)->deleteFileAfterSend(true);
     }
 
-    public function anwesenheitslistePOBOTag1($partnerID, $schuljahr, $teil, $klasse = 'exportAlleKlassen', Request $request)
+    public function anwesenheitslistePOBOTag1(Request $request, $partnerID, $schuljahr, $teil, $klasse = 'exportAlleKlassen')
     {
         // Query Parameter
         $anzahlBereiche = request()->query('anzahlBereiche', 6);

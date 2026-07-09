@@ -6,7 +6,6 @@
     import  Modal from '@/Components/ModalForm.vue';
     import ModalDestroy from '@/Components/ModalDestroyForm.vue';
     import Swal from 'sweetalert2';
-    import { Inertia } from '@inertiajs/inertia';
     import Dropdown from '@/Components/Dropdown.vue';
     import DropdownLink from '@/Components/DropdownLink.vue';
     import ModalCreate from './ModalCreate.vue';

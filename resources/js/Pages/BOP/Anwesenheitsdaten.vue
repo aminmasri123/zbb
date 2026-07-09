@@ -157,8 +157,8 @@ function sortBy(key) {
 
 async function confirmGenerate() {
     const result = await Swal.fire({
-        title: 'Generieren bestaetigen',
-        text: 'Bist du sicher, dass du generieren moechtest? Bestehende Haken und Kreuze werden ueberschrieben.',
+        title: 'Generieren bestätigen',
+        text: 'Bist du sicher, dass du generieren möchtest? Bestehende Haken und Kreuze werden überschrieben.',
         icon: 'question',
         showCancelButton: true,
         confirmButtonText: 'Ja, generieren',
@@ -271,7 +271,7 @@ function printPage() {
 
             <section class="flex flex-wrap gap-4 text-sm font-semibold text-[var(--primary)]">
                 <span>Gesamtanzahl Anwesenheitstage: {{ totalPresent }}</span>
-                <span>Schueleranzahl PA: {{ paAnzahl }}</span>
+                <span>Schüleranzahl PA: {{ paAnzahl }}</span>
                 <span>Schule: {{ partner.name }}</span>
                 <span>Schuljahr: {{ schuljahr }}</span>
                 <span>Teil: {{ teil }}</span>

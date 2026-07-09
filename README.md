@@ -47,6 +47,54 @@ Um das Programm auf einem anderen Rechner zu installieren, folge diesen Schritte
 6. **Frontend-Abhängigkeiten (optional)**: Falls verwendet, installiere mit `npm install` und baue die Assets mit `npm run dev`.
 7. **Webserver starten**: Starte den Webserver (z.B. über XAMPP) und rufe die Anwendung im Browser auf.
 
+## Tests und Updates
+
+Vor jedem Update und nach jeder groesseren Änderung sollten diese Befehle erfolgreich laufen:
+
+```bash
+composer test
+composer check
+```
+
+`composer test` leert zuerst alte Laravel-Caches und prueft dann das Laravel-Backend mit einer frischen SQLite-Testdatenbank. Dadurch wird kontrolliert, ob Login, Registrierung, Passwortfunktionen, API-Tokens und wichtige Grundfunktionen noch laufen.
+
+`composer check` fuehrt zuerst dieselben Tests aus und baut danach das Frontend mit `npm run build`. Dieser Befehl ist die wichtigste Kontrolle, bevor Aenderungen auf den echten Server kommen.
+
+Der einfachste Gesamtcheck nach einem Update ist:
+
+```bash
+composer check:update
+```
+
+`composer check:update` fuehrt Tests, Frontend-Build, Fresh-Seed-Check, Sicherheitspruefungen, Route-Liste und Laravel-Cache-Pruefung aus. Fuer `composer audit` und `npm audit` wird Internetzugang benoetigt.
+
+Wenn das Projekt in GitHub liegt, fuehrt `.github/workflows/ci.yml` denselben Update-Check automatisch bei `push` und `pull_request` aus.
+
+Wenn Migrationen oder Seeder geaendert wurden, sollte zusaetzlich dieser Befehl laufen:
+
+```bash
+composer check:fresh-seed
+```
+
+`composer check:fresh-seed` nutzt eine temporaere SQLite-Datenbank unter `tmp/`, fuehrt `migrate:fresh --seed` aus und prueft danach, ob Benutzer, Rollen, Berechtigungen, Personen und Projekte wirklich angelegt wurden. Die echte MySQL-Datenbank wird dabei nicht veraendert.
+
+Fuer eine produktionsnahe Kontrolle kann zusaetzlich geprueft werden, ob Laravel seine Caches sauber erzeugen kann:
+
+```bash
+php artisan optimize
+php artisan optimize:clear
+```
+
+`php artisan optimize` prueft, ob Konfiguration, Routen, Events und Views cachebar sind. `php artisan optimize:clear` entfernt diese lokalen Cache-Dateien danach wieder, damit Entwicklung und Tests nicht versehentlich mit alten Einstellungen laufen.
+
+Wenn einer dieser Befehle fehlschlaegt, sollte das Update nicht live geschaltet werden, bis der Fehler behoben ist.
+
+Eine genaue Schritt-fuer-Schritt-Liste fuer sichere Updates, Backups und Datenbankbefehle steht hier:
+
+```text
+docs/update-checklist.md
+```
+
 **php voraussetzungen (php.ini) für phpoffice/phpspreadsheet**
 
 extension=zip

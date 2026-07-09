@@ -516,7 +516,7 @@ function closeImportModal() {
 
 async function previewCalendarImport() {
     if (!importForm.value.file) {
-        showToast('Bitte zuerst eine Excel-Datei auswaehlen.', 'error');
+        showToast('Bitte zuerst eine Excel-Datei auswählen.', 'error');
         return;
     }
 
@@ -567,7 +567,7 @@ async function confirmCalendarImport() {
     const selectedEvents = importPreviewEvents.value.filter((event) => importKeySelected(event.key));
 
     if (selectedEvents.length === 0) {
-        showToast('Bitte mindestens einen Termin auswaehlen.', 'error');
+        showToast('Bitte mindestens einen Termin auswählen.', 'error');
         return;
     }
 
@@ -1275,7 +1275,7 @@ function germanHolidays(year) {
                 v-if="fullscreen"
                 type="button"
                 class="fixed right-2 top-2 z-[70] flex h-8 w-8 items-center justify-center rounded-full bg-white text-xl font-semibold text-gray-900 shadow ring-1 ring-gray-200 hover:bg-gray-50"
-                title="Vollbild schliessen"
+                title="Vollbild schließen"
                 @click="toggleFullscreen"
             >
                 &times;
@@ -1492,7 +1492,7 @@ function germanHolidays(year) {
                             </button>
                         </div>
                         <div class="space-y-2">
-                            <label class="text-xs font-semibold text-gray-600">Kopie fuer bestimmte Tage oder Zeitraeume erstellen</label>
+                            <label class="text-xs font-semibold text-gray-600">Kopie für bestimmte Tage oder Zeiträume erstellen</label>
                             <div class="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
                                 <label class="text-xs font-semibold text-gray-600">
                                     Von
@@ -1503,7 +1503,7 @@ function germanHolidays(year) {
                                     <input v-model="copyRangeEnd" type="date" class="mt-1 w-full rounded border-gray-300 text-sm" @keydown.enter.prevent="addCopyRange" />
                                 </label>
                                 <div class="flex items-end">
-                                    <button type="button" class="w-full rounded border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700" @click="addCopyRange">Zeitraum hinzufuegen</button>
+                                    <button type="button" class="w-full rounded border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700" @click="addCopyRange">Zeitraum hinzufügen</button>
                                 </div>
                             </div>
                             <div class="flex flex-wrap items-center gap-2">
@@ -1628,15 +1628,15 @@ function germanHolidays(year) {
 
                     <div v-if="importSummary" class="grid gap-2 text-sm sm:grid-cols-4">
                         <div class="rounded border bg-gray-50 p-3"><strong>{{ importSummary.total }}</strong><br />erkannt</div>
-                        <div class="rounded border bg-gray-50 p-3"><strong>{{ selectedImportKeys.length }}</strong><br />ausgewaehlt</div>
+                        <div class="rounded border bg-gray-50 p-3"><strong>{{ selectedImportKeys.length }}</strong><br />ausgewählt</div>
                         <div class="rounded border bg-gray-50 p-3"><strong>{{ importSummary.weekend }}</strong><br />Wochenende</div>
                         <div class="rounded border bg-gray-50 p-3"><strong>{{ importSummary.holiday }}</strong><br />Feiertage</div>
                     </div>
 
                     <div v-if="importPreviewEvents.length" class="flex flex-wrap gap-2">
-                        <button type="button" class="rounded border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700" @click="selectImportKind('all')">Alle erlaubten auswaehlen</button>
-                        <button type="button" class="rounded border border-orange-200 px-3 py-2 text-sm font-semibold text-orange-600" @click="selectImportKind('is_weekend')">Wochenenden auch auswaehlen</button>
-                        <button type="button" class="rounded border border-red-200 px-3 py-2 text-sm font-semibold text-red-600" @click="selectImportKind('is_holiday')">Feiertage auch auswaehlen</button>
+                        <button type="button" class="rounded border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700" @click="selectImportKind('all')">Alle erlaubten auswählen</button>
+                        <button type="button" class="rounded border border-orange-200 px-3 py-2 text-sm font-semibold text-orange-600" @click="selectImportKind('is_weekend')">Wochenenden auch auswählen</button>
+                        <button type="button" class="rounded border border-red-200 px-3 py-2 text-sm font-semibold text-red-600" @click="selectImportKind('is_holiday')">Feiertage auch auswählen</button>
                         <button type="button" class="rounded border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700" @click="clearImportSelection">Auswahl leeren</button>
                     </div>
 
@@ -1681,7 +1681,7 @@ function germanHolidays(year) {
                 </div>
 
                 <div class="flex flex-wrap items-center justify-between gap-3 border-t bg-gray-50 px-5 py-4">
-                    <p class="text-xs text-gray-500">Wochenenden und Feiertage werden standardmaessig nicht importiert. Du kannst sie oben bewusst auswaehlen.</p>
+                    <p class="text-xs text-gray-500">Wochenenden und Feiertage werden standardmäßig nicht importiert. Du kannst sie oben bewusst auswählen.</p>
                     <button type="button" class="rounded bg-orange-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="importSaving || selectedImportKeys.length === 0" @click="confirmCalendarImport">
                         {{ importSaving ? 'Importiert ...' : 'Auswahl importieren' }}
                     </button>

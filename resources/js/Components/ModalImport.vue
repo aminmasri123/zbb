@@ -1,6 +1,6 @@
 <template>
-  <div v-if="show" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-    <div class="bg-white p-6 rounded-lg w-1/2">
+  <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+    <div class="max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-lg bg-white p-4 sm:p-6">
 
       <!-- Header -->
       <div class="flex justify-between mb-4">

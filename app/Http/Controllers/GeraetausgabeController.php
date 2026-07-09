@@ -21,7 +21,6 @@ class GeraetausgabeController extends Controller
 {
     public function index()
     {
-       // dd(Geraetausgabe::with(['ausleiher','projekte', 'projekte.kostenstellen' ,'geraete'])->get());
         return Inertia::render('Geraet/Ausgabe/Index', [
             'ausgaben' => Geraetausgabe::with(['ausleiher','projekte', 'projekte.kostenstellen' ,'geraete'])->get(),
             'ausleiher' => Personen::where('typ', 'mitarbeiter')->select('id', 'nachname', 'vorname')->get(),
@@ -41,8 +40,6 @@ class GeraetausgabeController extends Controller
 
     public function view($id)
     {
-                //dd(Geraetausgabe::where('id', $id)->with(['ausleiher','projekte', 'projekte.kostenstellen' ,'geraete'])->first());
-
         return Inertia::render('Geraet/Ausgabe/View', [
             'ausgabe' => Geraetausgabe::where('id', $id)->with(['ausleiher','projekte', 'projekte.kostenstellen' ,'geraete'])->first(),
             'alle_kontakte' => Personen::mitarbeiter()->get(),
@@ -80,13 +77,13 @@ class GeraetausgabeController extends Controller
         foreach ($validated['sn'] as $SN) {
 
                 $geraet = Geraet::where('sn', $SN)->first();
-                $geraet->update([
-                    'verfuegbarkeit' => false,
-                ]);
                 if (!$geraet) {
                     $error[] = $SN;
                     continue;
                 }
+                $geraet->update([
+                    'verfuegbarkeit' => false,
+                ]);
 
                 GeraetHasAusgabe::create([
                     'geraet_id' => $geraet->id,
@@ -123,7 +120,14 @@ class GeraetausgabeController extends Controller
 
         catch (Exception $e) {
             DB::rollBack();
-            dd($e->getMessage(), $e->getTraceAsString());
+            report($e);
+
+            return redirect()
+                ->back()
+                ->withInput()
+                ->withErrors([
+                    'error' => 'Fehler beim Speichern der Ausgabe.',
+                ]);
         }
     }
 

@@ -314,3 +314,130 @@ html[class*="theme-"] body :where(.border-zbb) {
 .theme-sidebar :where(.hover\:text-white:hover) {
     color: #fff !important;
 }
+
+html {
+    min-width: 0;
+    -webkit-text-size-adjust: 100%;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    min-width: 0;
+    overflow-x: hidden;
+}
+
+#app,
+.main-wrapper,
+.main-wrapper :where(main, section, article, form, fieldset) {
+    min-width: 0;
+}
+
+.main-wrapper :where(img, video, canvas, iframe) {
+    max-width: 100%;
+}
+
+.main-wrapper :where(input, select, textarea, button, .p-component, .p-inputtext, .p-dropdown, .p-multiselect, .p-password) {
+    max-width: 100%;
+    min-width: 0;
+}
+
+.main-wrapper :where(input, select, textarea) {
+    font-size: 16px;
+}
+
+.main-wrapper :where(button, a, input, select, textarea) {
+    touch-action: manipulation;
+}
+
+@media (max-width: 1024px) {
+    .main-wrapper table {
+        display: block;
+        width: max-content;
+        min-width: 100% !important;
+        max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .main-wrapper table :where(th, td) {
+        max-width: 24rem;
+        overflow-wrap: anywhere;
+    }
+
+    .main-wrapper table :where(th) {
+        white-space: nowrap;
+    }
+}
+
+@media (max-width: 768px) {
+    .main-wrapper table {
+        font-size: 0.8125rem;
+    }
+
+    .main-wrapper table :where(th, td) {
+        padding: 0.625rem 0.75rem;
+    }
+
+    .p-dialog {
+        width: calc(100vw - 2rem) !important;
+        max-width: calc(100vw - 2rem) !important;
+        margin: 1rem !important;
+    }
+
+    .p-dialog-content {
+        max-height: calc(100vh - 10rem);
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .swal2-popup {
+        max-width: calc(100vw - 2rem) !important;
+    }
+
+    .main-wrapper :where(.fixed.inset-0) > :where(.bg-white) {
+        width: calc(100vw - 2rem) !important;
+        max-width: calc(100vw - 2rem);
+        max-height: calc(100vh - 2rem);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
+@media (min-width: 769px) {
+    .p-dialog {
+        max-width: calc(100vw - 3rem) !important;
+    }
+}
+
+@media (max-width: 640px) {
+    .main-wrapper :where(.grid-cols-2, .grid-cols-3, .grid-cols-4, .grid-cols-5, .grid-cols-6) {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    .main-wrapper :where(.col-span-2, .col-span-3, .col-span-4, .col-span-5, .col-span-6) {
+        grid-column: 1 / -1 !important;
+    }
+
+    .main-wrapper :where(.w-1\/2, .w-1\/3, .w-2\/3, .w-1\/4, .w-3\/4, .w-1\/5, .w-2\/5, .w-3\/5, .w-4\/5, .w-1\/6, .w-5\/6) {
+        width: 100% !important;
+    }
+
+    .main-wrapper :where(div, section, form, main, article, aside)[class*="min-w-["] {
+        min-width: 0 !important;
+    }
+
+    .main-wrapper :where(.px-8, .px-10, .p-8, .p-10) {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+
+    .main-wrapper :where(.py-8, .py-10, .p-8, .p-10) {
+        padding-top: 1rem !important;
+        padding-bottom: 1rem !important;
+    }
+}

@@ -11,6 +11,7 @@ use Closure;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Spatie\Permission\Exceptions\PermissionDoesNotExist;
 
 class NotificationRecipientService
 {
@@ -138,14 +139,22 @@ class NotificationRecipientService
 
     private function usersWithPermission(string $permission): Collection
     {
-        return $this->uniqueUsers(User::permission($permission)->get());
+        try {
+            return $this->uniqueUsers(User::permission($permission)->get());
+        } catch (PermissionDoesNotExist) {
+            return collect();
+        }
     }
 
     private function usersWithPermissionInProject(string $permission, ?int $projektId): Collection
     {
-        $users = User::permission($permission)
-            ->with(['person.projekte'])
-            ->get();
+        try {
+            $users = User::permission($permission)
+                ->with(['person.projekte'])
+                ->get();
+        } catch (PermissionDoesNotExist) {
+            return collect();
+        }
 
         if (! $projektId) {
             return $this->uniqueUsers($users);

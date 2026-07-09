@@ -248,7 +248,7 @@ const handleKostenstelleCreated = (kostenstelle) => {
               @click="addZeitraum"
             >
               <i class="la la-plus"></i>
-              Antrag hinzufuegen
+              Antrag hinzufügen
             </button>
           </div>
 

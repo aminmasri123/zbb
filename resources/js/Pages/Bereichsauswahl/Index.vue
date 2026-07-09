@@ -223,7 +223,7 @@ const copyPublicUrl = async () => {
                             </button>
                         </div>
                         <p class="mt-2 text-xs text-gray-500">
-                            Der QR-Code fuehrt zur Teilnehmerseite fuer diese Schule, dieses Schuljahr und diesen Teil.
+                            Der QR-Code führt zur Teilnehmerseite für diese Schule, dieses Schuljahr und diesen Teil.
                         </p>
                     </div>
                 </div>

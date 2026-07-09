@@ -70,6 +70,7 @@ class Kernel extends HttpKernel
         'injectUserPermissions' => \App\Http\Middleware\InjectUserPermissions::class, // Permission und Rolle überprüfen
         'injectUserProjekte'=> \App\Http\Middleware\InjectUserProjekte::class,
         'canAnyPermission' => \App\Http\Middleware\AuthorizeAnyPermission::class,
+        'routePermission' => \App\Http\Middleware\AuthorizeRoutePermission::class,
         'configuredNotifications' => \App\Http\Middleware\DispatchConfiguredRouteNotification::class,
     ];
 }

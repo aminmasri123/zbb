@@ -16,15 +16,14 @@ return new class extends Migration
             });
         }
 
-        DB::statement("
-            CREATE TABLE IF NOT EXISTS dokument_has_bereiches (
-                dokument_id BIGINT UNSIGNED NOT NULL,
-                bereich_id BIGINT UNSIGNED NOT NULL,
-                PRIMARY KEY (dokument_id, bereich_id),
-                CONSTRAINT dokument_has_bereiches_dokument_id_foreign FOREIGN KEY (dokument_id) REFERENCES dokumentes(id) ON DELETE CASCADE,
-                CONSTRAINT dokument_has_bereiches_bereich_id_foreign FOREIGN KEY (bereich_id) REFERENCES bereiches(id) ON DELETE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        ");
+        if (! Schema::hasTable('dokument_has_bereiches')) {
+            Schema::create('dokument_has_bereiches', function (Blueprint $table) {
+                $table->foreignId('dokument_id')->constrained('dokumentes')->cascadeOnDelete();
+                $table->foreignId('bereich_id')->constrained('bereiches')->cascadeOnDelete();
+
+                $table->primary(['dokument_id', 'bereich_id']);
+            });
+        }
 
         $potenzialanalyseId = DB::table('bereiches')->where('name', 'Potenzialanalyse')->value('id');
         if (!$potenzialanalyseId) {
@@ -88,6 +87,11 @@ return new class extends Migration
 
     private function statementIgnoreMissing(string $statement): void
     {
+        if (DB::getDriverName() !== 'mysql') {
+            DB::statement($statement);
+            return;
+        }
+
         try {
             DB::statement($statement);
         } catch (QueryException $exception) {

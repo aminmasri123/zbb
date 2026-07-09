@@ -11,8 +11,8 @@ const apps = [
     { title: 'Kontakte', text: 'Gemeinsame und private Ansprechpartner sauber pflegen.', route: 'apps.contacts', icon: 'la-address-book', count: 'contacts' },
     { title: 'Dateimanager', text: 'Dateien und Ordner privat, im Team, projektbezogen oder offen teilen.', route: 'apps.files', icon: 'la-folder-open', count: 'files' },
     { title: 'Teilnehmer', text: 'Teilnehmerliste, Import und Projektzuweisungen verwalten.', route: 'teilnehmer.index', icon: 'la-user-graduate', count: 'participants' },
-    { title: 'Taskmanager', text: 'Aufgaben nach Status, Prioritaet und Verantwortlichen steuern.', route: 'apps.tasks', icon: 'la-tasks', count: 'tasks' },
-    { title: 'Popups', text: 'Hinweise gezielt fuer Personen, Teams oder Projekte ausspielen.', route: 'apps.popups', icon: 'la-bullhorn', count: 'popups' },
+    { title: 'Taskmanager', text: 'Aufgaben nach Status, Priorität und Verantwortlichen steuern.', route: 'apps.tasks', icon: 'la-tasks', count: 'tasks' },
+    { title: 'Popups', text: 'Hinweise gezielt für Personen, Teams oder Projekte ausspielen.', route: 'apps.popups', icon: 'la-bullhorn', count: 'popups' },
 ];
 </script>
 

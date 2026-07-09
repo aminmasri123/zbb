@@ -1,6 +1,9 @@
 <template>
-    <div :class="{'block ': sidebarOpen, 'hidden ': !sidebarOpen, 'md:block': true}" class="theme-sidebar absolute w-full sm:w-auto md:relative z-40 transition duration-300">
-            <div class="overflow-y-auto">
+    <div
+        :class="{'block ': sidebarOpen, 'hidden ': !sidebarOpen, 'md:block': true}"
+        class="theme-sidebar fixed inset-x-0 bottom-0 top-16 z-40 w-full overflow-hidden transition duration-300 sm:top-20 md:sticky md:top-20 md:h-[calc(100vh-5rem)] md:w-auto md:max-w-xs"
+    >
+            <div class="h-full overflow-y-auto overscroll-contain">
                 <div id="sidebar-menu " class="p-4">
                     <ul class="space-y-4 pl-0">
                         <slot/>

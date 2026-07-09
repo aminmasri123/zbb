@@ -6,7 +6,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Anwesenheitsdaten</title>
     <link rel="shortcut icon" type="image/x-icon" href="{{ asset('img/logo/zbb-icon2.ico') }}">
-    <link rel="stylesheet" href="{{ asset('css/line-awesome.min.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/line-awesome.css') }}">
     <style>
         :root {
             --bg: #f7f8fa;

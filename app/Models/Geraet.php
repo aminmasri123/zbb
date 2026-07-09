@@ -44,11 +44,11 @@ class Geraet extends Model
 
     public function ausgaben()
     {
-        return $this->belongsToMany(Ausgabe::class, 'geraet_ausgabes', 'ausgabe_id', 'geraet_id');
+        return $this->belongsToMany(Geraetausgabe::class, 'geraet_has_ausgabes', 'geraet_id', 'ausgabe_id');
     }
     public function rueckgaben()
     {
-        return $this->belongsToMany(Rueckgabe::class, 'geraet_rueckgabes', 'rueckgabe_id', 'geraet_id');
+        return $this->belongsToMany(Geraetrueckgabe::class, 'geraet_has_rueckgabes', 'geraet_id', 'rueckgabe_id');
     }
 
     public function standort()

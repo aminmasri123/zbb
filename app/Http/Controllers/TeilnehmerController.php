@@ -48,7 +48,7 @@ class TeilnehmerController extends Controller
 
         $benutzer = auth()->user();
         $projekte = $benutzer->projekte;
-        $defaultProjekt = $benutzer->current_team_id;
+        $defaultProjekt = $request->integer('projekt_id') ?: $benutzer->current_team_id;
         $standortId = $request->integer('standort') ?: null;
         $standorte = $defaultProjekt
             ? Standort::whereIn('id', ProjektHasPersonen::query()
@@ -128,7 +128,14 @@ class TeilnehmerController extends Controller
 
     public function create()
     {
-        //
+        return redirect()->route('teilnehmer.index');
+    }
+
+    public function indexNachProjekt(Request $request, $id)
+    {
+        $request->merge(['projekt_id' => (int) $id]);
+
+        return $this->index($request);
     }
 
     public function store(Request $request)

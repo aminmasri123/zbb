@@ -79,7 +79,7 @@ const submit = async () => {
             <div class="mb-6 flex items-center justify-between">
                 <h1 class="text-xl font-bold">Mitarbeiter anlegen</h1>
                 <Link :href="route('user.index')" class="border px-3 py-2 text-sm">
-                    Zurueck
+                    Zurück
                 </Link>
             </div>
 
@@ -147,7 +147,7 @@ const submit = async () => {
                 </div>
 
                 <div>
-                    <InputLabel for="password_confirmation" value="Passwort bestaetigen" />
+                    <InputLabel for="password_confirmation" value="Passwort bestätigen" />
                     <TextInput
                         id="password_confirmation"
                         v-model="form.password_confirmation"
@@ -170,7 +170,7 @@ const submit = async () => {
                         display="chip"
                         filter
                         class="mt-1 w-full"
-                        placeholder="Rollen auswaehlen"
+                        placeholder="Rollen auswählen"
                     />
                     <InputError class="mt-2" :message="errorFor('rollen')" />
                 </div>
@@ -192,7 +192,7 @@ const submit = async () => {
                                 v-model="row.projekt_id"
                                 class="mt-1 block w-full rounded border p-2"
                             >
-                                <option :value="null">Projekt auswaehlen</option>
+                                <option :value="null">Projekt auswählen</option>
                                 <option
                                     v-for="projekt in props.alleProjekte"
                                     :key="projekt.id"
@@ -215,7 +215,7 @@ const submit = async () => {
                                 display="chip"
                                 filter
                                 class="mt-1 w-full"
-                                placeholder="Standorte auswaehlen"
+                                placeholder="Standorte auswählen"
                             />
                             <InputError class="mt-2" :message="errorFor(`projekt_zuweisungen.${index}.standort_ids`)" />
                         </div>
@@ -232,7 +232,7 @@ const submit = async () => {
                 </div>
 
                 <button type="button" @click="addProjekt" class="rounded bg-gray-200 px-3 py-1 text-sm">
-                    + Projekt hinzufuegen
+                    + Projekt hinzufügen
                 </button>
             </div>
 

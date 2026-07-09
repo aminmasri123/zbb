@@ -22,8 +22,15 @@ class BerechtigungController extends Controller
     public function index($id = null)
     {
         // Default Rolle ist Administrator, falls kein ID übergeben wurde
-        $id = $id ?? 1;
-        $role = Role::findById($id);
+        if ($id === null) {
+            $role = Role::where('guard_name', 'web')
+                ->where('name', 'Administrator')
+                ->first()
+                ?? Role::where('guard_name', 'web')->orderBy('id')->firstOrFail();
+            $id = $role->id;
+        } else {
+            $role = Role::where('guard_name', 'web')->findOrFail($id);
+        }
 
         // Aktuell angemeldeten Benutzer abrufen
         $user = Auth::user();

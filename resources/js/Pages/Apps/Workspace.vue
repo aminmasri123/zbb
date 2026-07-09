@@ -364,7 +364,7 @@ function ownerLabel(item) {
                                 </div>
                             </div>
 
-                            <button type="button" class="w-full rounded border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700" @click="addWorkflowStep">Schritt hinzufuegen</button>
+                            <button type="button" class="w-full rounded border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700" @click="addWorkflowStep">Schritt hinzufügen</button>
                             <VisibilityFields :form="forms.workflowTemplate" :projects="projects" :options="visibilityOptions" />
                             <button class="w-full rounded bg-gray-900 px-3 py-2 text-sm font-semibold text-white">Vorlage speichern</button>
                         </form>
@@ -430,8 +430,8 @@ function ownerLabel(item) {
                                 </select>
                                 <select v-model="fileSort" class="rounded border-gray-300 text-sm" @change="visitFiles({ page: 1 })">
                                     <option value="name">Name</option>
-                                    <option value="updated">Zuletzt geaendert</option>
-                                    <option value="size">Groesse</option>
+                                    <option value="updated">Zuletzt geändert</option>
+                                    <option value="size">Größe</option>
                                 </select>
                                 <div class="flex gap-2">
                                     <button class="rounded border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:border-orange-300" @click="fileDirection = fileDirection === 'asc' ? 'desc' : 'asc'; visitFiles({ page: 1 })">
@@ -456,7 +456,7 @@ function ownerLabel(item) {
                                     <p class="text-lg font-semibold text-gray-950">{{ fileStats?.files || 0 }}</p>
                                 </div>
                                 <div class="rounded border border-gray-200 bg-gray-50 p-3">
-                                    <p class="text-xs text-gray-500">Groesse</p>
+                                    <p class="text-xs text-gray-500">Größe</p>
                                     <p class="text-lg font-semibold text-gray-950">{{ formatBytes(fileStats?.size || 0) }}</p>
                                 </div>
                             </div>
@@ -510,9 +510,9 @@ function ownerLabel(item) {
                                 <div v-else class="overflow-hidden rounded border border-gray-200">
                                     <div class="grid grid-cols-[1fr_110px_120px_120px] bg-gray-50 px-4 py-2 text-xs font-semibold uppercase text-gray-500">
                                         <span>Name</span>
-                                        <span>Groesse</span>
+                                        <span>Größe</span>
                                         <span>Sichtbarkeit</span>
-                                        <span>Geaendert</span>
+                                        <span>Geändert</span>
                                     </div>
                                     <div v-for="item in items" :key="item.id" class="grid cursor-pointer grid-cols-[1fr_110px_120px_120px] items-center border-t px-4 py-3 text-sm hover:bg-orange-50" @click="selectedFile = item">
                                         <a :href="fileRoute(item)" class="min-w-0 truncate font-semibold text-gray-900 hover:text-orange-600" @click.stop>
@@ -525,7 +525,7 @@ function ownerLabel(item) {
                                 </div>
 
                                 <div v-if="pagination && pagination.last_page > 1" class="mt-4 flex items-center justify-between border-t pt-4 text-sm">
-                                    <button class="rounded border px-3 py-2 disabled:opacity-40" :disabled="!pagination.prev_page_url" @click="visitFiles({ page: pagination.current_page - 1 })">Zurueck</button>
+                                    <button class="rounded border px-3 py-2 disabled:opacity-40" :disabled="!pagination.prev_page_url" @click="visitFiles({ page: pagination.current_page - 1 })">Zurück</button>
                                     <span class="text-gray-500">Seite {{ pagination.current_page }} von {{ pagination.last_page }} · {{ pagination.total }} Einträge</span>
                                     <button class="rounded border px-3 py-2 disabled:opacity-40" :disabled="!pagination.next_page_url" @click="visitFiles({ page: pagination.current_page + 1 })">Weiter</button>
                                 </div>
@@ -545,7 +545,7 @@ function ownerLabel(item) {
 
                                     <div class="grid grid-cols-2 gap-2 text-sm">
                                         <a :href="fileRoute(selectedFile)" class="rounded bg-gray-900 px-3 py-2 text-center font-semibold text-white">
-                                            {{ selectedFile.type === 'folder' ? 'Oeffnen' : 'Download' }}
+                                            {{ selectedFile.type === 'folder' ? 'Öffnen' : 'Download' }}
                                         </a>
                                         <button class="rounded border border-gray-200 bg-white px-3 py-2 font-semibold text-gray-700" @click="openShare(selectedFile, 'file')">Teilen</button>
                                         <button class="rounded border border-gray-200 bg-white px-3 py-2 font-semibold text-gray-700" @click="openFileEdit(selectedFile)">Bearbeiten</button>
@@ -554,16 +554,16 @@ function ownerLabel(item) {
 
                                     <dl class="space-y-2 rounded border border-gray-200 bg-white p-3 text-sm">
                                         <div class="flex justify-between gap-3"><dt class="text-gray-500">Besitzer</dt><dd class="text-right text-gray-900">{{ ownerLabel(selectedFile) }}</dd></div>
-                                        <div class="flex justify-between gap-3"><dt class="text-gray-500">Groesse</dt><dd class="text-right text-gray-900">{{ selectedFile.type === 'folder' ? '-' : formatBytes(selectedFile.size) }}</dd></div>
+                                        <div class="flex justify-between gap-3"><dt class="text-gray-500">Größe</dt><dd class="text-right text-gray-900">{{ selectedFile.type === 'folder' ? '-' : formatBytes(selectedFile.size) }}</dd></div>
                                         <div class="flex justify-between gap-3"><dt class="text-gray-500">Sichtbar</dt><dd class="text-right text-gray-900">{{ visibilityLabel(selectedFile.visibility) }}</dd></div>
-                                        <div class="flex justify-between gap-3"><dt class="text-gray-500">Geaendert</dt><dd class="text-right text-gray-900">{{ formatDate(selectedFile.updated_at) }}</dd></div>
+                                        <div class="flex justify-between gap-3"><dt class="text-gray-500">Geändert</dt><dd class="text-right text-gray-900">{{ formatDate(selectedFile.updated_at) }}</dd></div>
                                     </dl>
 
                                     <p v-if="selectedFile.notes" class="rounded border border-gray-200 bg-white p-3 text-sm text-gray-700">{{ selectedFile.notes }}</p>
                                 </div>
                                 <div v-else class="rounded border border-dashed border-gray-300 bg-white p-5 text-center text-sm text-gray-500">
                                     <i class="la la-info-circle mb-2 text-3xl text-gray-300"></i>
-                                    <p>Eintrag auswaehlen, um Details und Aktionen zu sehen.</p>
+                                    <p>Eintrag auswählen, um Details und Aktionen zu sehen.</p>
                                 </div>
                             </aside>
                         </div>
@@ -639,7 +639,7 @@ function ownerLabel(item) {
                             <div class="flex items-center justify-between border-b px-4 py-3">
                                 <div>
                                     <h2 class="text-lg font-semibold text-gray-900">Workflow-Vorlagen</h2>
-                                    <p class="text-sm text-gray-500">Gespeicherte Muster koennen als Kopie in ein Projekt uebernommen werden.</p>
+                                    <p class="text-sm text-gray-500">Gespeicherte Muster können als Kopie in ein Projekt übernommen werden.</p>
                                 </div>
                                 <span class="text-sm text-gray-500">{{ taskTemplates.length }} Vorlagen</span>
                             </div>
@@ -683,7 +683,7 @@ function ownerLabel(item) {
                         <div class="flex items-center justify-between border-b px-4 py-3">
                             <div>
                                 <h2 class="text-lg font-semibold text-gray-900">{{ title }}</h2>
-                                <Link v-if="section === 'files' && currentFolder" :href="route('apps.files')" class="text-sm text-orange-600">Zurueck zur Dateiuebersicht</Link>
+                                <Link v-if="section === 'files' && currentFolder" :href="route('apps.files')" class="text-sm text-orange-600">Zurück zur Dateiübersicht</Link>
                             </div>
                             <span class="text-sm text-gray-500">{{ items.length }} Einträge</span>
                         </div>
@@ -770,7 +770,7 @@ function ownerLabel(item) {
                 <form class="space-y-4 p-5" @submit.prevent="submitForm('upload', 'apps.files.upload', { forceFormData: true, onSuccess: () => showUploadModal = false })">
                     <label class="flex cursor-pointer flex-col items-center justify-center rounded border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-center hover:border-orange-300 hover:bg-orange-50">
                         <i class="la la-cloud-upload-alt mb-2 text-4xl text-orange-500"></i>
-                        <span class="text-sm font-semibold text-gray-900">{{ forms.upload.file?.name || 'Datei auswaehlen' }}</span>
+                        <span class="text-sm font-semibold text-gray-900">{{ forms.upload.file?.name || 'Datei auswählen' }}</span>
                         <span class="mt-1 text-xs text-gray-500">Maximal 50 MB</span>
                         <input type="file" class="hidden" @input="forms.upload.file = $event.target.files[0]" />
                     </label>
@@ -817,7 +817,7 @@ function ownerLabel(item) {
 
                 <form class="space-y-3" @submit.prevent="applyWorkflowTemplate">
                     <select v-model="workflowApplyForm.project_id" class="w-full rounded border-gray-300 text-sm">
-                        <option value="">Projekt auswaehlen</option>
+                        <option value="">Projekt auswählen</option>
                         <option v-for="project in projects" :key="project.id" :value="project.id">{{ project.name }}</option>
                     </select>
                     <select v-model="workflowApplyForm.assignee_person_id" class="w-full rounded border-gray-300 text-sm">
@@ -847,7 +847,7 @@ function ownerLabel(item) {
 
                 <form class="space-y-3" @submit.prevent="submitShare">
                     <select v-model="shareForm.person_id" class="w-full rounded border-gray-300 text-sm">
-                        <option value="">Person auswaehlen</option>
+                        <option value="">Person auswählen</option>
                         <option v-for="person in people" :key="person.id" :value="person.id">{{ person.nachname }}, {{ person.vorname }}</option>
                     </select>
                     <input v-model="shareForm.email" class="w-full rounded border-gray-300 text-sm" placeholder="Oder E-Mail-Adresse" />

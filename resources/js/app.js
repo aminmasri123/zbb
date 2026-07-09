@@ -1,6 +1,6 @@
 import './bootstrap';
 import '../css/app.css';
-import '../../public/css/line-awesome.min.css';
+import '../../public/css/line-awesome.css';
 //import '../../public/css/font-awesome.min.css';
 import '../../public/css/css.css';
 
@@ -18,7 +18,7 @@ import i18n from './i18n'; // Stelle sicher, dass i18n korrekt importiert wird
 import PrimeVue from "primevue/config";
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
-import Aura from '@primevue/themes/aura';
+import Aura from '@primeuix/themes/aura';
 import { setThemeOnLoad } from './theme';
 
 

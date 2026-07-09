@@ -159,7 +159,7 @@
                     <span :class="{'rotate-180': activeMenu === 'klassenbuch', 'text-zbb': $page.component.startsWith('Klassenbuch')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
                 </a>
                 <ul v-show="activeMenu === 'klassenbuch'" class="pl-6 mt-2 space-y-2">
-                    <li v-if="can('klassenbuch.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('klassenbuch.index')">Uebersicht</Link></li>
+                    <li v-if="can('klassenbuch.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('klassenbuch.index')">Übersicht</Link></li>
                 </ul>
             </li>
 

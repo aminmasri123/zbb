@@ -3,6 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Geraet;
+use App\Models\Geraetausgabe;
+use App\Models\Personen;
+use App\Models\Projekt;
 use App\Notifications\ConfiguredEventNotification;
 use App\Services\NotificationRecipientService;
 use Carbon\Carbon;
@@ -141,6 +144,26 @@ class GeraetController extends Controller
     public function destroy(string $id)
     {
         //
+    }
+
+    public function getGeraeteID()
+    {
+        return response()->json(
+            Geraet::query()
+                ->select('id', 'sn', 'productID', 'geraet', 'modell', 'verfuegbarkeit')
+                ->orderBy('productID')
+                ->get()
+        );
+    }
+
+    public function indexAusleihende()
+    {
+        return Inertia::render('Geraet/Ausgabe/Index', [
+            'ausgaben' => Geraetausgabe::with(['ausleiher', 'projekte', 'projekte.kostenstellen', 'geraete'])->get(),
+            'ausleiher' => Personen::where('typ', 'mitarbeiter')->select('id', 'nachname', 'vorname')->get(),
+            'projekte' => Projekt::all(),
+            'geraete' => Geraet::where('verfuegbarkeit', true)->get(),
+        ]);
     }
 
 

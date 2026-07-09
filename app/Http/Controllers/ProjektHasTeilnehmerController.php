@@ -63,11 +63,14 @@ class ProjektHasTeilnehmerController extends Controller
                 ->where('projekt_id', $validated['projekt_id'])
                 ->first();
 
-            // ---------------------------------------------------------
-            // 🔵 FALL 1: Bestehende Projektzuweisung → Zeitraum anhängen
-            // ---------------------------------------------------------
-            /* if ($existingPivot) {
-                Zeitraum::create([
+            if ($existingPivot) {
+                if (array_key_exists('standort_id', $validated)) {
+                    $existingPivot->update([
+                        'standort_id' => $validated['standort_id'],
+                    ]);
+                }
+
+                $zeitraum = Zeitraum::create([
                     'antragsdatum' => $validated['antragsdatum'] ?? null,
                     'starttermin'  => $validated['starttermin'] ?? null,
                     'endtermin'    => $validated['endtermin'] ?? null,
@@ -77,10 +80,9 @@ class ProjektHasTeilnehmerController extends Controller
                     'model_id'     => $existingPivot->id,
                 ]);
 
-                // 🟢 Meta prüfen oder anlegen/aktualisieren
                 $meta = $existingPivot->meta;
                 if (!$meta) {
-                    $existingPivot->meta()->create([
+                    $meta = $existingPivot->meta()->create([
                         'projekt_person_id'   => $existingPivot->id,
                         'projektbegleiter_id' => $validated['massnahmebegleiter'] ?? null,
                         'betreuer_id'         => $validated['betreuer'] ?? null,
@@ -94,13 +96,9 @@ class ProjektHasTeilnehmerController extends Controller
 
                 DB::commit();
                 return back()->with('success', 'Zeitraum zum bestehenden Projekt hinzugefügt!');
-            } */
+            }
 
-            // ---------------------------------------------------------
-            // 🔵 FALL 2: Neues Projekt → Pivot + Meta + Zeitraum anlegen
-            // ---------------------------------------------------------
-            $projekt = Projekt::find($validated['projekt_id']);
-            $standortId = $validated['standort_id'] ?? $projekt?->abteilung?->standort_id ?? 1;
+            $standortId = $validated['standort_id'] ?? null;
 
             $pivot = ProjektHasPersonen::create([
                 'personen_id' => $validated['teilnehmer_id'],

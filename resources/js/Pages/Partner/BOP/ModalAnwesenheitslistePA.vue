@@ -142,7 +142,7 @@ const exportErrorMessage = async (error) => {
             required
             class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-1 focus:ring-zbb focus:border-zbb transition-colors"
           >
-            <option value="" disabled>Klasse auswaehlen</option>
+            <option value="" disabled>Klasse auswählen</option>
             <option v-for="klasseOption in klassen" :key="klasseOption" :value="klasseOption">
               {{ klasseOption }}
             </option>

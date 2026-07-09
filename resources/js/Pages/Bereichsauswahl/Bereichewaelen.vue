@@ -163,7 +163,7 @@ const statusText = (row) => {
     if (row.saving) return 'Speichert';
     if (!isComplete(row)) return 'Offen';
     if (row.saved) return 'Gespeichert';
-    return 'Geaendert';
+    return 'Geändert';
 };
 
 const statusClass = (row) => {
@@ -376,7 +376,7 @@ const copyCode = async (code) => {
                     class="bg-zbb px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
                     @click="showOpenModal = false"
                 >
-                    Schliessen
+                    Schließen
                 </button>
             </div>
         </div>

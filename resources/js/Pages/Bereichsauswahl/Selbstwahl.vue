@@ -69,8 +69,8 @@ const verifyCode = async () => {
 const saveChoices = async () => {
     if (!isComplete.value) {
         Swal.fire({
-            title: 'Unvollstaendig',
-            text: `Bitte ${props.context.auswahl_anzahl} Bereiche auswaehlen.`,
+            title: 'Unvollständig',
+            text: `Bitte ${props.context.auswahl_anzahl} Bereiche auswählen.`,
             icon: 'warning',
         });
         return;

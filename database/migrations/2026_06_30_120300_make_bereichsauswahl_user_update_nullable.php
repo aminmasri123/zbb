@@ -10,6 +10,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         DB::statement('ALTER TABLE bereichsauswahls MODIFY user_update BIGINT UNSIGNED NULL');
     }
 
@@ -18,6 +22,10 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         DB::statement('UPDATE bereichsauswahls SET user_update = user_create WHERE user_update IS NULL');
         DB::statement('ALTER TABLE bereichsauswahls MODIFY user_update BIGINT UNSIGNED NOT NULL');
     }

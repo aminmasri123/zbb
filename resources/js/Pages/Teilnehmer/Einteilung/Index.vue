@@ -29,7 +29,7 @@
             <i class="la la-arrows-alt mr-1"></i>Einteilen
           </button>
           <button type="button" :disabled="isBusy" @click="submitDestroy" class="rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600 disabled:opacity-50">
-            <i class="la la-trash mr-1"></i>Loeschen
+            <i class="la la-trash mr-1"></i>Löschen
           </button>
           <button type="button" @click="openExportModal" class="rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600">
             <i class="la la-download mr-1"></i>Exportieren
@@ -204,7 +204,7 @@
               </select>
             </div>
             <div>
-              <label class="mb-1 block text-sm font-semibold text-gray-700">Standard-Kapazitaet</label>
+              <label class="mb-1 block text-sm font-semibold text-gray-700">Standard-Kapazität</label>
               <input v-model.number="parameterForm.standard_kapazitaet" min="0" max="999" type="number" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb sm:text-sm" />
             </div>
           </div>
@@ -214,7 +214,7 @@
               <thead class="bg-gray-50">
                 <tr>
                   <th class="px-3 py-2 text-left font-semibold text-gray-700">Bereich</th>
-                  <th class="w-40 px-3 py-2 text-left font-semibold text-gray-700">Plaetze</th>
+                  <th class="w-40 px-3 py-2 text-left font-semibold text-gray-700">Plätze</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-200 bg-white">
@@ -467,7 +467,7 @@ const readError = async (error) => {
   }
 
   const firstFieldError = data?.errors ? Object.values(data.errors)?.[0]?.[0] : null
-  return firstFieldError || data?.message || 'Die Aktion konnte nicht ausgefuehrt werden.'
+  return firstFieldError || data?.message || 'Die Aktion konnte nicht ausgeführt werden.'
 }
 // Bereichsnamen für Tabellen-Header nur für die Anzeige
 const headerBereiche = computed(() => {
@@ -636,7 +636,7 @@ const submitParameter = async () => {
 
 const submitSwitchRunden = async () => {
   if (!switchForm.quelle_runde || !switchForm.ziel_runde || switchForm.quelle_runde === switchForm.ziel_runde) {
-    setStatus('Bitte zwei unterschiedliche Runden auswaehlen.', 'error')
+    setStatus('Bitte zwei unterschiedliche Runden auswählen.', 'error')
     return
   }
 
@@ -678,7 +678,7 @@ const submitCreate = async () => {
 }
 
 const submitEinteilen = async () => {
-  if (!confirm('Alle bestehenden Einteilungen fuer diese Schule neu generieren?')) return
+  if (!confirm('Alle bestehenden Einteilungen für diese Schule neu generieren?')) return
   isBusy.value = true
   try {
     const response = await axios.post(route('einteilung.store'), contextPayload())
@@ -692,7 +692,7 @@ const submitEinteilen = async () => {
 }
 
 const submitDestroy = async () => {
-  if (!confirm('Alle Einteilungen fuer diese Schule loeschen?')) return
+  if (!confirm('Alle Einteilungen für diese Schule löschen?')) return
   isBusy.value = true
   try {
     const response = await axios.post(route('einteilung.destroy'), contextPayload())

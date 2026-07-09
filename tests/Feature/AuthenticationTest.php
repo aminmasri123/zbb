@@ -31,6 +31,21 @@ class AuthenticationTest extends TestCase
         $response->assertRedirect(RouteServiceProvider::HOME);
     }
 
+    public function test_users_can_authenticate_with_trimmed_case_insensitive_email(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'Amin.Masri@Outlook.com',
+        ]);
+
+        $response = $this->post('/login', [
+            'email' => '  amin.masri@outlook.com  ',
+            'password' => 'password',
+        ]);
+
+        $this->assertAuthenticatedAs($user);
+        $response->assertRedirect(RouteServiceProvider::HOME);
+    }
+
     public function test_users_can_not_authenticate_with_invalid_password(): void
     {
         $user = User::factory()->create();

@@ -864,7 +864,7 @@ class AppsController extends Controller
     {
         $start = Carbon::parse($event->starts_at);
         $end = Carbon::parse($event->ends_at ?: $event->starts_at);
-        $deltaDays = Carbon::parse($start->toDateString())->diffInDays(Carbon::parse($targetDate), false);
+        $deltaDays = (int) Carbon::parse($start->toDateString())->diffInDays(Carbon::parse($targetDate), false);
 
         $excludedDates = collect($event->excluded_dates ?: [])
             ->map(fn (string $date) => Carbon::parse($date)->addDays($deltaDays)->toDateString())

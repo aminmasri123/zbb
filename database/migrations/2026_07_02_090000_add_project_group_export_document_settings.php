@@ -139,6 +139,10 @@ return new class extends Migration
 
     private function statementIgnoreDuplicate(string $statement): void
     {
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         try {
             DB::statement($statement);
         } catch (QueryException $exception) {

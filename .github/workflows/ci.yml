@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  update-check:
+    name: Update Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      APP_ENV: testing
+      APP_DEBUG: false
+      BCRYPT_ROUNDS: 4
+      CACHE_DRIVER: array
+      CACHE_STORE: array
+      DB_CONNECTION: sqlite
+      DB_DATABASE: ${{ github.workspace }}/database/ci.sqlite
+      MAIL_MAILER: array
+      QUEUE_CONNECTION: sync
+      SESSION_DRIVER: array
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: ctype, dom, fileinfo, filter, gd, mbstring, openssl, pdo, pdo_sqlite, session, tokenizer, xml, xmlwriter, zip
+          coverage: none
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Prepare Laravel environment
+        run: |
+          cp ".env copy.example" .env
+          touch database/ci.sqlite
+          php artisan key:generate --ansi
+
+      - name: Run update safety check
+        run: composer check:update

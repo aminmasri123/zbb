@@ -100,18 +100,18 @@ const exportAnwesenheitslisteVorbereitungBo = async (jahr, teil, partner) => {
     const klassen = getKlassen(jahr, teil, partner).filter(Boolean);
 
     if (klassen.length === 0) {
-        Swal.fire('Keine Klassen', 'Fuer diesen Zeitraum wurden keine Klassen gefunden.', 'warning');
+        Swal.fire('Keine Klassen', 'Für diesen Zeitraum wurden keine Klassen gefunden.', 'warning');
         return;
     }
 
     const terminResult = await Swal.fire({
-        title: 'Termin auswaehlen',
+        title: 'Termin auswählen',
         input: 'date',
         inputLabel: 'Termin zur Vorbereitung BO-Tage',
         showCancelButton: true,
         confirmButtonText: 'Weiter',
         cancelButtonText: 'Abbrechen',
-        inputValidator: (value) => !value ? 'Bitte waehle einen Termin aus.' : null,
+        inputValidator: (value) => !value ? 'Bitte wähle einen Termin aus.' : null,
     });
 
     if (!terminResult.isConfirmed) {
@@ -119,7 +119,7 @@ const exportAnwesenheitslisteVorbereitungBo = async (jahr, teil, partner) => {
     }
 
     const modeResult = await Swal.fire({
-        title: 'Export auswaehlen',
+        title: 'Export auswählen',
         input: 'select',
         inputOptions: {
             alle: 'Alle Klassen als ZIP',
@@ -138,7 +138,7 @@ const exportAnwesenheitslisteVorbereitungBo = async (jahr, teil, partner) => {
     let klasse = null;
     if (modeResult.value === 'klasse') {
         const klasseResult = await Swal.fire({
-            title: 'Klasse auswaehlen',
+            title: 'Klasse auswählen',
             input: 'select',
             inputOptions: Object.fromEntries(klassen.map((klasse) => [klasse, klasse])),
             showCancelButton: true,

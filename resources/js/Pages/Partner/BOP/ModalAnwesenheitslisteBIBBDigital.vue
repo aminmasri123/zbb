@@ -1464,7 +1464,7 @@ onBeforeUnmount(() => {
 
     <template #footer>
       <Button
-        label="Schliessen"
+        label="Schließen"
         icon="pi pi-times"
         class="p-button-text"
         @click="localVisible = false"

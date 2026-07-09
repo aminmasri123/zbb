@@ -19,6 +19,16 @@ return new class extends Migration
             });
         }
 
+        if (DB::getDriverName() === 'sqlite') {
+            DB::table('gruppes')
+                ->whereNotNull('raum_id')
+                ->update([
+                    'standort_id' => DB::raw('(SELECT standort_id FROM raeumes WHERE raeumes.id = gruppes.raum_id)'),
+                ]);
+
+            return;
+        }
+
         DB::table('gruppes')
             ->join('raeumes', 'raeumes.id', '=', 'gruppes.raum_id')
             ->whereNotNull('gruppes.raum_id')

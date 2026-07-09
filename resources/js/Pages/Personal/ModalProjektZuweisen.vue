@@ -71,7 +71,7 @@ const removeRow = (index) => {
 const removeExistingProjekt = (projekt) => {
     Swal.fire({
         title: 'Projekt entfernen?',
-        text: `${projekt.name} wird fuer diesen Mitarbeiter entfernt.`,
+        text: `${projekt.name} wird für diesen Mitarbeiter entfernt.`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonText: 'Entfernen',

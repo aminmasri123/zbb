@@ -483,7 +483,7 @@ const submitArtikel = () => {
 
 const deleteArtikel = () => {
     if (!selectedArtikel.value) return
-    if (!window.confirm('Lagerartikel deaktivieren oder loeschen?')) return
+    if (!window.confirm('Lagerartikel deaktivieren oder löschen?')) return
 
     router.delete(route('lager.artikel.destroy', selectedArtikel.value.id), {
         preserveScroll: true,

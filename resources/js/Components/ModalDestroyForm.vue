@@ -1,6 +1,6 @@
 <template>
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
-      <div class="bg-white rounded-lg shadow-lg w-11/12 sm:w-1/3 ">
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 backdrop-blur-sm">
+      <div class="max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-lg bg-white shadow-lg">
         <div class="flex justify-between items-center p-4">
             <div class="text-center w-full uppercase text-lg font-bold">
                 <h3>{{ $t('Bestätigung der Löschung') }}</h3>
@@ -26,9 +26,9 @@
             </div>
         </div>
         <div class="m-4 flex justify-end">
-            <div class="w-full flex justify-center">
-                <button @click="deleteItem" class="bg-zbb text-white mx-2 px-4 py-2 rounded">{{ $t('Löschen') }}</button>
-                <button @click="$emit('close')" class="border mx-2 border-zbb text-zbb px-4 py-2 rounded">{{ $t('Abbrechen') }}</button>
+            <div class="flex w-full flex-col-reverse justify-center gap-2 sm:flex-row">
+                <button @click="deleteItem" class="rounded bg-zbb px-4 py-2 text-white">{{ $t('Löschen') }}</button>
+                <button @click="$emit('close')" class="rounded border border-zbb px-4 py-2 text-zbb">{{ $t('Abbrechen') }}</button>
             </div>
             <slot name="footer"></slot>
         </div>

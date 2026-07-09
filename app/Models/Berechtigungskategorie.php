@@ -10,6 +10,9 @@ use Spatie\Permission\Models\Permission;
 class Berechtigungskategorie extends Model
 {
     use HasFactory;
+
+    public $timestamps = false;
+
     protected $fillable = [
         'name',
         'beschreibung',

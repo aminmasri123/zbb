@@ -164,7 +164,7 @@ export default {
 
              <!-- End Sweetalert Success Error Message -->
 
-             <div v-if="visibleAppPopups.length" class="fixed right-5 top-20 z-50 w-full max-w-sm space-y-3">
+             <div v-if="visibleAppPopups.length" class="fixed inset-x-4 top-20 z-50 w-auto space-y-3 sm:left-auto sm:right-5 sm:w-full sm:max-w-sm">
                 <div
                     v-for="popup in visibleAppPopups"
                     :key="popup.id"
@@ -185,8 +185,8 @@ export default {
 
              <Banner />
 
-             <div id="app" class="main-wrapper ">
-                 <div class="min-h-screen bg-[var(--bg)] text-[var(--primary)]">
+             <div id="app" class="main-wrapper min-w-0">
+                 <div class="min-h-screen overflow-x-hidden bg-[var(--bg)] text-[var(--primary)]">
                 <!-- Page Sidebar -->
                 <!-- Sidebar -->
                 <NavigationMenu :sidebar-open="sidebarOpen" :display-hide-text-sidebar="displayHideTextSidebar"
@@ -194,23 +194,23 @@ export default {
                         @toggle-sidebar-text="displayHideTextSidebar = !displayHideTextSidebar"
                     />
 
-                <div class="flex">
-                    <component class="min-h-screen" :is="currentSidebar" :displayHideTextSidebar="displayHideTextSidebar" :sidebarOpen="sidebarOpen" :activeMenu="activeMenu" :toggleMenu="toggleMenu"/>
+                <div class="flex min-w-0">
+                    <component class="min-h-screen shrink-0" :is="currentSidebar" :displayHideTextSidebar="displayHideTextSidebar" :sidebarOpen="sidebarOpen" :activeMenu="activeMenu" :toggleMenu="toggleMenu"/>
 
-                    <main class="w-full bg-[var(--bg)] h-full "
-                        :class="{'hidden sm:block':sidebarOpen}">
+                    <main class="min-w-0 w-full bg-[var(--bg)] h-full"
+                        :class="{'hidden md:block':sidebarOpen}">
 
                         <!-- Page Heading -->
                         <header v-if="$slots.header" class="bg-[var(--surfaceTint)] border-b border-[var(--border)] relative w-full shadow mb-5 z-20">
-                            <div class="px-10">
-                                <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-                                    <div class="font-semibold text-xl text-[var(--primary)] leading-tight">
+                            <div class="px-4 sm:px-6 lg:px-10">
+                                <div class="max-w-7xl mx-auto py-4 sm:py-6 sm:px-6 lg:px-8">
+                                    <div class="break-words font-semibold text-lg text-[var(--primary)] leading-tight sm:text-xl">
                                         <slot name="header" />
                                     </div>
                                 </div>
                             </div>
                         </header>
-                        <div class="px-10">
+                        <div class="min-w-0 px-4 pb-6 sm:px-6 lg:px-10">
                             <slot  />
                         </div>
                     </main>

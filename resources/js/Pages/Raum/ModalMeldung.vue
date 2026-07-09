@@ -34,7 +34,7 @@
               optionValue="value"
               class="w-full"
             />
-            <label>Prioritaet</label>
+            <label>Priorität</label>
           </FloatLabel>
         </div>
 
