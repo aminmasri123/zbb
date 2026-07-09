@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch, computed } from 'vue';
-import { router, Head, Link, usePage } from '@inertiajs/vue3';
+import { router, Head, Link } from '@inertiajs/vue3';
 import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Pagination from '@/Components/Pagination.vue';
@@ -9,6 +9,7 @@ import Dropdown from '@/Components/Dropdown.vue';
 import Swal from 'sweetalert2';
 import ModalCreateUser from '@/Pages/User/ModalCreateUser.vue';
 import ModalProjektZuweisen from '@/Pages/Personal/ModalProjektZuweisen.vue';
+import { usePermissions } from '@/utils/permissions';
 
 const { users, authProjekte, rollen, alleProjekte, standorte } = defineProps({
     users: Object,
@@ -17,8 +18,7 @@ const { users, authProjekte, rollen, alleProjekte, standorte } = defineProps({
     alleProjekte: Array,
     standorte: Array,
 });
-const page = usePage();
-const can = (permission) => (page.props.permissions || []).includes(permission);
+const { can } = usePermissions();
 
 // Reactive states
 let search = ref('');

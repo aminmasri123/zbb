@@ -9,6 +9,7 @@ use App\Models\BibbAttendanceListDraft;
 use App\Models\EinteilungBereiche;
 use App\Models\Gruppe;
 use App\Models\GruppeHasPersonen;
+use App\Models\PaAttendanceListDraft;
 use App\Models\Partner;
 use App\Models\Personen;
 use App\Models\PersonenIstSchueler;
@@ -21,10 +22,12 @@ use BaconQrCode\Writer;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use DateTime;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -37,6 +40,11 @@ use ZipArchive;
 
 class ProjektBopController extends Controller
 {
+    private const BIBB_DRAFT_RETENTION_DAYS = 90;
+    private const BIBB_SIGNATURE_ENCRYPTION_PREFIX = 'enc:v1:';
+    private const PA_DRAFT_RETENTION_DAYS = 90;
+    private const PA_SIGNATURE_ENCRYPTION_PREFIX = 'enc:v1:';
+
     private const ACCESS_CODE_PARTS = [
         'BA', 'BE', 'BI', 'BO',
         'DA', 'DE', 'DI', 'DO',
@@ -259,19 +267,23 @@ class ProjektBopController extends Controller
 
     public function anwesenheitslistePOBODraftShowBIBB(Request $request)
     {
+        $this->purgeExpiredBibbDrafts();
         $scope = $this->bibbDraftScope($request);
         $draft = BibbAttendanceListDraft::where('draft_hash', $scope['draft_hash'])->first();
 
         return response()->json([
             'exists' => (bool) $draft,
-            'payload' => $draft?->payload,
+            'payload' => $draft ? $this->decryptBibbDraftPayloadSignatures($draft->payload ?? []) : null,
             'revision' => $draft?->revision ?? 0,
             'updated_at' => $draft?->updated_at?->toIso8601String(),
+            'expires_at' => $draft?->expires_at?->toIso8601String(),
+            'final_pdf_path' => $draft?->final_pdf_path,
         ]);
     }
 
     public function anwesenheitslistePOBODraftStoreBIBB(Request $request)
     {
+        $this->purgeExpiredBibbDrafts();
         $scope = $this->bibbDraftScope($request);
         $validated = $request->validate([
             'payload' => ['required', 'array'],
@@ -285,7 +297,7 @@ class ProjektBopController extends Controller
         $incomingPayload = $this->sanitizeBibbDraftPayload($validated['payload']);
         $userId = auth()->id();
 
-        $draft = DB::transaction(function () use ($scope, $incomingPayload, $userId) {
+        [$draft, $payload] = DB::transaction(function () use ($scope, $incomingPayload, $userId) {
             $now = now();
 
             BibbAttendanceListDraft::query()->insertOrIgnore([
@@ -306,22 +318,25 @@ class ProjektBopController extends Controller
                 ->lockForUpdate()
                 ->first();
 
-            $payload = $this->mergeBibbDraftPayload($draft?->payload ?? [], $incomingPayload);
+            $existingPayload = $this->decryptBibbDraftPayloadSignatures($draft?->payload ?? []);
+            $payload = $this->mergeBibbDraftPayload($existingPayload, $incomingPayload);
             $payload['saved_at'] = now()->toIso8601String();
 
-            $draft->payload = $payload;
+            $draft->payload = $this->encryptBibbDraftPayloadSignatures($payload);
             $draft->revision = ($draft->revision ?: 0) + 1;
             $draft->user_update = $userId;
             $draft->save();
 
-            return $draft;
+            return [$draft, $payload];
         });
 
         return response()->json([
             'success' => true,
-            'payload' => $draft->payload,
+            'payload' => $payload,
             'revision' => $draft->revision,
             'updated_at' => $draft->updated_at?->toIso8601String(),
+            'expires_at' => $draft->expires_at?->toIso8601String(),
+            'final_pdf_path' => $draft->final_pdf_path,
         ]);
     }
 
@@ -332,6 +347,223 @@ class ProjektBopController extends Controller
         BibbAttendanceListDraft::where('draft_hash', $scope['draft_hash'])->delete();
 
         return response()->json(['success' => true]);
+    }
+
+    public function anwesenheitslistePOBOArchiveFolderBIBB(Request $request)
+    {
+        $scope = $this->bibbDraftScope($request);
+        $partner = Partner::findOrFail($scope['partner_id']);
+        $folder = $this->bibbBaseFolder($partner, $scope['schuljahr'], $scope['teil']);
+        $subfolders = $this->ensureBibbArchiveSubfolders($folder);
+
+        return response()->json([
+            'success' => true,
+            'folder' => $this->relativeStoragePath($folder),
+            'subfolders' => array_map(fn ($path) => $this->relativeStoragePath($path), $subfolders),
+        ]);
+    }
+
+    public function anwesenheitslistePOBOSignedPdfStoreBIBB(Request $request)
+    {
+        $this->purgeExpiredBibbDrafts();
+        $scope = $this->bibbDraftScope($request);
+
+        $validated = $request->validate([
+            'pdf' => ['required', 'file', 'mimetypes:application/pdf', 'max:51200'],
+            'filename' => ['nullable', 'string', 'max:180'],
+        ]);
+
+        $partner = Partner::findOrFail($scope['partner_id']);
+        $folder = $this->bibbBaseFolder($partner, $scope['schuljahr'], $scope['teil'])
+            . DIRECTORY_SEPARATOR
+            . 'Anwesenheit';
+
+        File::ensureDirectoryExists($folder);
+
+        $filename = $this->bibbSignedPdfFilename(
+            $validated['filename'] ?? null,
+            $partner,
+            $scope['schuljahr'],
+            $scope['teil']
+        );
+        $path = $folder . DIRECTORY_SEPARATOR . $filename;
+
+        if (File::exists($path)) {
+            File::delete($path);
+        }
+
+        $request->file('pdf')->move($folder, $filename);
+
+        $relativePath = $this->relativeStoragePath($path);
+        $expiresAt = now()->addDays(self::BIBB_DRAFT_RETENTION_DAYS);
+
+        $draft = BibbAttendanceListDraft::where('draft_hash', $scope['draft_hash'])->first();
+        if ($draft) {
+            $payload = is_array($draft->payload) ? $draft->payload : [];
+            $payload['final_pdf'] = [
+                'path' => $relativePath,
+                'saved_at' => now()->toIso8601String(),
+                'draft_expires_at' => $expiresAt->toIso8601String(),
+            ];
+
+            $draft->payload = $this->encryptBibbDraftPayloadSignatures($payload);
+            $draft->final_pdf_path = $relativePath;
+            $draft->finalized_at = now();
+            $draft->expires_at = $expiresAt;
+            $draft->revision = ($draft->revision ?: 0) + 1;
+            $draft->user_update = auth()->id();
+            $draft->save();
+        }
+
+        return response()->json([
+            'success' => true,
+            'filename' => $filename,
+            'path' => $relativePath,
+            'folder' => $this->relativeStoragePath($folder),
+            'revision' => $draft?->revision ?? 0,
+            'updated_at' => $draft?->updated_at?->toIso8601String(),
+            'expires_at' => $draft?->expires_at?->toIso8601String() ?? $expiresAt->toIso8601String(),
+        ]);
+    }
+
+    private function purgeExpiredBibbDrafts(): int
+    {
+        return BibbAttendanceListDraft::query()
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '<=', now())
+            ->delete();
+    }
+
+    private function bibbBaseFolder(Partner $partner, string $schuljahr, string $teil): string
+    {
+        $folder = storage_path('app/bop/'
+            . $this->bibbSafeName($partner->name)
+            . '/'
+            . $this->bibbSafeName($schuljahr)
+            . '/Teil_'
+            . $this->bibbSafeName($teil));
+
+        File::ensureDirectoryExists($folder);
+
+        return $folder;
+    }
+
+    private function ensureBibbArchiveSubfolders(string $folder): array
+    {
+        $subfolders = [
+            'Anwesenheit',
+            'Teilnehmerliste',
+            'Zertifikate_POBO',
+            'Auswertung_POBO',
+            'Auswertung_PA',
+        ];
+
+        return collect($subfolders)
+            ->map(function (string $subfolder) use ($folder) {
+                $path = $folder . DIRECTORY_SEPARATOR . $subfolder;
+                File::ensureDirectoryExists($path);
+
+                return $path;
+            })
+            ->all();
+    }
+
+    private function bibbSignedPdfFilename(?string $filename, Partner $partner, string $schuljahr, string $teil): string
+    {
+        $baseName = $filename
+            ? Str::beforeLast($filename, '.pdf')
+            : 'Anwesenheitsliste_BIBB_' . $partner->name . '_' . $schuljahr . '_Teil_' . $teil;
+
+        return $this->bibbSafeName($baseName) . '.pdf';
+    }
+
+    private function bibbSafeName(string $value): string
+    {
+        $safeName = preg_replace('/[^A-Za-z0-9_\-\.]+/', '_', trim($value));
+
+        return $safeName ?: 'Datei';
+    }
+
+    private function relativeStoragePath(string $path): string
+    {
+        $storageRoot = rtrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, storage_path('app')), DIRECTORY_SEPARATOR)
+            . DIRECTORY_SEPARATOR;
+        $normalizedPath = str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $path);
+
+        if (Str::startsWith($normalizedPath, $storageRoot)) {
+            return str_replace(DIRECTORY_SEPARATOR, '/', Str::after($normalizedPath, $storageRoot));
+        }
+
+        return str_replace('\\', '/', $path);
+    }
+
+    private function encryptBibbDraftPayloadSignatures(array $payload): array
+    {
+        if (!is_array($payload['signatures'] ?? null)) {
+            return $payload;
+        }
+
+        $payload['signatures'] = collect($payload['signatures'])
+            ->mapWithKeys(function ($value, $key) {
+                if (!is_string($key) || !is_string($value) || $value === '') {
+                    return [$key => $value];
+                }
+
+                return [$key => $this->encryptBibbSignature($value)];
+            })
+            ->all();
+
+        return $payload;
+    }
+
+    private function decryptBibbDraftPayloadSignatures(array $payload): array
+    {
+        if (!is_array($payload['signatures'] ?? null)) {
+            return $payload;
+        }
+
+        $signatures = [];
+        foreach ($payload['signatures'] as $key => $value) {
+            if (!is_string($key) || !is_string($value) || $value === '') {
+                continue;
+            }
+
+            $decrypted = $this->decryptBibbSignature($value);
+            if ($decrypted) {
+                $signatures[$key] = $decrypted;
+            }
+        }
+
+        $payload['signatures'] = $signatures;
+
+        return $payload;
+    }
+
+    private function encryptBibbSignature(string $value): string
+    {
+        if ($this->isEncryptedBibbSignature($value)) {
+            return $value;
+        }
+
+        return self::BIBB_SIGNATURE_ENCRYPTION_PREFIX . Crypt::encryptString($value);
+    }
+
+    private function decryptBibbSignature(string $value): ?string
+    {
+        if (!$this->isEncryptedBibbSignature($value)) {
+            return $value;
+        }
+
+        try {
+            return Crypt::decryptString(Str::after($value, self::BIBB_SIGNATURE_ENCRYPTION_PREFIX));
+        } catch (DecryptException) {
+            return null;
+        }
+    }
+
+    private function isEncryptedBibbSignature(string $value): bool
+    {
+        return Str::startsWith($value, self::BIBB_SIGNATURE_ENCRYPTION_PREFIX);
     }
 
     private function bibbDraftScope(Request $request): array
@@ -796,6 +1028,571 @@ class ProjektBopController extends Controller
                 $templateProcessor->saveAs($exportPath);
                 return response()->download($exportPath)->deleteFileAfterSend(true);
     }
+
+    public function anwesenheitslistePAPreviewDigital(Request $request)
+    {
+        $validated = $request->validate([
+            'schuleId' => ['required', 'integer', 'exists:partners,id'],
+            'schuljahr' => ['required', 'string'],
+            'teil' => ['required', 'string'],
+            'exportMode' => ['nullable', 'in:alle,klasse'],
+            'klasse' => ['nullable', 'required_if:exportMode,klasse', 'string'],
+            'startDate' => ['nullable', 'date'],
+            'endDate' => ['nullable', 'date', 'after_or_equal:startDate'],
+            'feedbackDate' => ['nullable', 'date'],
+            'includeSaturday' => ['nullable', 'boolean'],
+            'includeSunday' => ['nullable', 'boolean'],
+            'days' => ['nullable', 'array'],
+            'days.*.date' => ['required_with:days', 'date'],
+            'days.*.selected' => ['nullable', 'boolean'],
+            'days.*.note' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $exportMode = $validated['exportMode'] ?? (empty($validated['klasse']) ? 'alle' : 'klasse');
+
+        return response()->json($this->paPreviewPayload(
+            (int) $validated['schuleId'],
+            (string) $validated['schuljahr'],
+            (string) $validated['teil'],
+            $exportMode,
+            $validated['klasse'] ?? null,
+            $validated['days'] ?? [],
+            $validated['startDate'] ?? null,
+            $validated['endDate'] ?? null,
+            $validated['feedbackDate'] ?? null,
+            (bool) ($validated['includeSaturday'] ?? false),
+            (bool) ($validated['includeSunday'] ?? false)
+        ));
+    }
+
+    public function anwesenheitslistePADraftShow(Request $request)
+    {
+        $this->purgeExpiredPaDrafts();
+        $scope = $this->paDraftScope($request);
+        $draft = PaAttendanceListDraft::where('draft_hash', $scope['draft_hash'])->first();
+
+        return response()->json([
+            'exists' => (bool) $draft,
+            'payload' => $draft ? $this->decryptPaDraftPayloadSignatures($draft->payload ?? []) : null,
+            'revision' => $draft?->revision ?? 0,
+            'updated_at' => $draft?->updated_at?->toIso8601String(),
+            'expires_at' => $draft?->expires_at?->toIso8601String(),
+            'final_pdf_path' => $draft?->final_pdf_path,
+        ]);
+    }
+
+    public function anwesenheitslistePADraftStore(Request $request)
+    {
+        $this->purgeExpiredPaDrafts();
+        $scope = $this->paDraftScope($request);
+        $validated = $request->validate([
+            'payload' => ['required', 'array'],
+            'payload.form' => ['nullable', 'array'],
+            'payload.days' => ['nullable', 'array'],
+            'payload.selectedDayId' => ['nullable', 'string'],
+            'payload.signatures' => ['nullable', 'array'],
+            'payload.signatures.*' => ['nullable', 'string'],
+        ]);
+
+        $incomingPayload = $this->sanitizePaDraftPayload($validated['payload']);
+        $userId = auth()->id();
+
+        [$draft, $payload] = DB::transaction(function () use ($scope, $incomingPayload, $userId) {
+            $now = now();
+
+            PaAttendanceListDraft::query()->insertOrIgnore([
+                'draft_hash' => $scope['draft_hash'],
+                'projekt_id' => $scope['projekt_id'],
+                'partner_id' => $scope['partner_id'],
+                'schuljahr' => $scope['schuljahr'],
+                'teil' => $scope['teil'],
+                'export_mode' => $scope['export_mode'],
+                'klasse' => $scope['klasse'],
+                'payload' => json_encode([]),
+                'revision' => 0,
+                'user_create' => $userId,
+                'user_update' => $userId,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+            $draft = PaAttendanceListDraft::where('draft_hash', $scope['draft_hash'])
+                ->lockForUpdate()
+                ->first();
+
+            $existingPayload = $this->decryptPaDraftPayloadSignatures($draft?->payload ?? []);
+            $payload = $this->mergePaDraftPayload($existingPayload, $incomingPayload);
+            $payload['saved_at'] = now()->toIso8601String();
+
+            $draft->payload = $this->encryptPaDraftPayloadSignatures($payload);
+            $draft->revision = ($draft->revision ?: 0) + 1;
+            $draft->user_update = $userId;
+            $draft->save();
+
+            return [$draft, $payload];
+        });
+
+        return response()->json([
+            'success' => true,
+            'payload' => $payload,
+            'revision' => $draft->revision,
+            'updated_at' => $draft->updated_at?->toIso8601String(),
+            'expires_at' => $draft->expires_at?->toIso8601String(),
+            'final_pdf_path' => $draft->final_pdf_path,
+        ]);
+    }
+
+    public function anwesenheitslistePADraftDestroy(Request $request)
+    {
+        $scope = $this->paDraftScope($request);
+
+        PaAttendanceListDraft::where('draft_hash', $scope['draft_hash'])->delete();
+
+        return response()->json(['success' => true]);
+    }
+
+    public function anwesenheitslistePAArchiveFolder(Request $request)
+    {
+        $scope = $this->paDraftScope($request);
+        $partner = Partner::findOrFail($scope['partner_id']);
+        $folder = $this->bibbBaseFolder($partner, $scope['schuljahr'], $scope['teil']);
+        $subfolders = $this->ensureBibbArchiveSubfolders($folder);
+
+        return response()->json([
+            'success' => true,
+            'folder' => $this->relativeStoragePath($folder),
+            'subfolders' => array_map(fn ($path) => $this->relativeStoragePath($path), $subfolders),
+        ]);
+    }
+
+    public function anwesenheitslistePASignedPdfStore(Request $request)
+    {
+        $this->purgeExpiredPaDrafts();
+        $scope = $this->paDraftScope($request);
+
+        $validated = $request->validate([
+            'pdf' => ['required', 'file', 'mimetypes:application/pdf', 'max:51200'],
+            'filename' => ['nullable', 'string', 'max:180'],
+        ]);
+
+        $partner = Partner::findOrFail($scope['partner_id']);
+        $folder = $this->bibbBaseFolder($partner, $scope['schuljahr'], $scope['teil'])
+            . DIRECTORY_SEPARATOR
+            . 'Anwesenheit';
+
+        File::ensureDirectoryExists($folder);
+
+        $filename = $this->paSignedPdfFilename(
+            $validated['filename'] ?? null,
+            $partner,
+            $scope['schuljahr'],
+            $scope['teil'],
+            $scope['export_mode'],
+            $scope['klasse']
+        );
+        $path = $folder . DIRECTORY_SEPARATOR . $filename;
+
+        if (File::exists($path)) {
+            File::delete($path);
+        }
+
+        $request->file('pdf')->move($folder, $filename);
+
+        $relativePath = $this->relativeStoragePath($path);
+        $expiresAt = now()->addDays(self::PA_DRAFT_RETENTION_DAYS);
+
+        $draft = PaAttendanceListDraft::where('draft_hash', $scope['draft_hash'])->first();
+        if ($draft) {
+            $payload = is_array($draft->payload) ? $draft->payload : [];
+            $payload['final_pdf'] = [
+                'path' => $relativePath,
+                'saved_at' => now()->toIso8601String(),
+                'draft_expires_at' => $expiresAt->toIso8601String(),
+            ];
+
+            $draft->payload = $this->encryptPaDraftPayloadSignatures($payload);
+            $draft->final_pdf_path = $relativePath;
+            $draft->finalized_at = now();
+            $draft->expires_at = $expiresAt;
+            $draft->revision = ($draft->revision ?: 0) + 1;
+            $draft->user_update = auth()->id();
+            $draft->save();
+        }
+
+        return response()->json([
+            'success' => true,
+            'filename' => $filename,
+            'path' => $relativePath,
+            'folder' => $this->relativeStoragePath($folder),
+            'revision' => $draft?->revision ?? 0,
+            'updated_at' => $draft?->updated_at?->toIso8601String(),
+            'expires_at' => $draft?->expires_at?->toIso8601String() ?? $expiresAt->toIso8601String(),
+        ]);
+    }
+
+    private function purgeExpiredPaDrafts(): int
+    {
+        return PaAttendanceListDraft::query()
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '<=', now())
+            ->delete();
+    }
+
+    private function paSignedPdfFilename(
+        ?string $filename,
+        Partner $partner,
+        string $schuljahr,
+        string $teil,
+        string $exportMode,
+        ?string $klasse
+    ): string {
+        $baseName = $filename
+            ? Str::beforeLast($filename, '.pdf')
+            : 'Anwesenheitsliste_PA_' . $partner->name . '_' . $schuljahr . '_Teil_' . $teil;
+
+        if (!$filename && $exportMode === 'klasse' && $klasse) {
+            $baseName .= '_Klasse_' . $klasse;
+        }
+
+        return $this->bibbSafeName($baseName) . '.pdf';
+    }
+
+    private function encryptPaDraftPayloadSignatures(array $payload): array
+    {
+        if (!is_array($payload['signatures'] ?? null)) {
+            return $payload;
+        }
+
+        $payload['signatures'] = collect($payload['signatures'])
+            ->mapWithKeys(function ($value, $key) {
+                if (!is_string($key) || !is_string($value) || $value === '') {
+                    return [$key => $value];
+                }
+
+                return [$key => $this->encryptPaSignature($value)];
+            })
+            ->all();
+
+        return $payload;
+    }
+
+    private function decryptPaDraftPayloadSignatures(array $payload): array
+    {
+        if (!is_array($payload['signatures'] ?? null)) {
+            return $payload;
+        }
+
+        $signatures = [];
+        foreach ($payload['signatures'] as $key => $value) {
+            if (!is_string($key) || !is_string($value) || $value === '') {
+                continue;
+            }
+
+            $decrypted = $this->decryptPaSignature($value);
+            if ($decrypted) {
+                $signatures[$key] = $decrypted;
+            }
+        }
+
+        $payload['signatures'] = $signatures;
+
+        return $payload;
+    }
+
+    private function encryptPaSignature(string $value): string
+    {
+        if ($this->isEncryptedPaSignature($value)) {
+            return $value;
+        }
+
+        return self::PA_SIGNATURE_ENCRYPTION_PREFIX . Crypt::encryptString($value);
+    }
+
+    private function decryptPaSignature(string $value): ?string
+    {
+        if (!$this->isEncryptedPaSignature($value)) {
+            return $value;
+        }
+
+        try {
+            return Crypt::decryptString(Str::after($value, self::PA_SIGNATURE_ENCRYPTION_PREFIX));
+        } catch (DecryptException) {
+            return null;
+        }
+    }
+
+    private function isEncryptedPaSignature(string $value): bool
+    {
+        return Str::startsWith($value, self::PA_SIGNATURE_ENCRYPTION_PREFIX);
+    }
+
+    private function paDraftScope(Request $request): array
+    {
+        $validated = $request->validate([
+            'schuleId' => ['required', 'integer', 'exists:partners,id'],
+            'schuljahr' => ['required', 'string'],
+            'teil' => ['required', 'string'],
+            'exportMode' => ['nullable', 'in:alle,klasse'],
+            'klasse' => ['nullable', 'required_if:exportMode,klasse', 'string'],
+        ]);
+
+        $exportMode = $validated['exportMode'] ?? (empty($validated['klasse']) ? 'alle' : 'klasse');
+        $klasse = $exportMode === 'klasse' ? (string) ($validated['klasse'] ?? '') : null;
+
+        if ($exportMode === 'klasse' && $klasse === '') {
+            throw ValidationException::withMessages([
+                'klasse' => 'Bitte eine Klasse auswaehlen.',
+            ]);
+        }
+
+        $projektId = auth()->user()?->current_team_id;
+        $partnerId = (int) $validated['schuleId'];
+        $schuljahr = (string) $validated['schuljahr'];
+        $teil = (string) $validated['teil'];
+
+        return [
+            'draft_hash' => hash('sha256', implode('|', [
+                $projektId ?: 0,
+                $partnerId,
+                $schuljahr,
+                $teil,
+                $exportMode,
+                $klasse ?: '',
+                'pa-attendance-list',
+            ])),
+            'projekt_id' => $projektId,
+            'partner_id' => $partnerId,
+            'schuljahr' => $schuljahr,
+            'teil' => $teil,
+            'export_mode' => $exportMode,
+            'klasse' => $klasse,
+        ];
+    }
+
+    private function sanitizePaDraftPayload(array $payload): array
+    {
+        $form = is_array($payload['form'] ?? null) ? $payload['form'] : [];
+        $allowedFormKeys = [
+            'exportFormat',
+            'startDate',
+            'endDate',
+            'includeSaturday',
+            'includeSunday',
+            'feedbackDate',
+            'exportMode',
+            'klasse',
+        ];
+
+        $signatures = [];
+        foreach (($payload['signatures'] ?? []) as $key => $value) {
+            if (!is_string($key) || (!is_null($value) && !is_string($value))) {
+                continue;
+            }
+
+            if ($value === null || $value === '') {
+                $signatures[$key] = '';
+                continue;
+            }
+
+            if (!Str::startsWith($value, 'data:image/png;base64,')) {
+                continue;
+            }
+
+            $signatures[$key] = $value;
+        }
+
+        return [
+            'version' => 1,
+            'form' => array_intersect_key($form, array_flip($allowedFormKeys)),
+            'days' => is_array($payload['days'] ?? null) ? array_values($payload['days']) : [],
+            'selectedDayId' => is_string($payload['selectedDayId'] ?? null) ? $payload['selectedDayId'] : null,
+            'signatures' => $signatures,
+        ];
+    }
+
+    private function mergePaDraftPayload(array $existingPayload, array $incomingPayload): array
+    {
+        $payload = $existingPayload;
+
+        foreach (['version', 'form', 'days', 'selectedDayId'] as $key) {
+            if (array_key_exists($key, $incomingPayload)) {
+                $payload[$key] = $incomingPayload[$key];
+            }
+        }
+
+        $signatures = is_array($payload['signatures'] ?? null) ? $payload['signatures'] : [];
+        foreach (($incomingPayload['signatures'] ?? []) as $key => $value) {
+            if ($value === '' || $value === null) {
+                unset($signatures[$key]);
+                continue;
+            }
+
+            $signatures[$key] = $value;
+        }
+
+        $payload['signatures'] = $signatures;
+
+        return $payload;
+    }
+
+    private function paPreviewPayload(
+        int $schuleId,
+        string $schuljahr,
+        string $teil,
+        string $exportMode,
+        ?string $klasse,
+        array $inputDays,
+        ?string $startDate = null,
+        ?string $endDate = null,
+        ?string $feedbackDate = null,
+        bool $includeSaturday = false,
+        bool $includeSunday = false
+    ): array {
+        $schule = Partner::findOrFail($schuleId);
+        $teilnehmer = $this->paTeilnehmer($schuleId, $schuljahr, $teil, $exportMode, $klasse);
+
+        if ($teilnehmer->isEmpty()) {
+            throw ValidationException::withMessages([
+                'teilnehmer' => 'Die Schule hat keine Teilnehmer fuer diese PA-Auswahl.',
+            ]);
+        }
+
+        $participants = $teilnehmer->map(fn ($item) => $this->bibbTeilnehmerPayload($item))->values();
+        $klasseText = $exportMode === 'klasse' && $klasse
+            ? $klasse
+            : $teilnehmer->pluck('klasse')->unique()->implode(', ');
+        $schulform = PersonenIstSchueler::query()->schulform($teilnehmer);
+        $inputDays = collect($inputDays)
+            ->filter(fn ($day) => is_array($day) && !empty($day['date']))
+            ->reject(fn ($day) => ($day['type'] ?? null) === 'feedback'
+                || ($day['source'] ?? null) === 'feedback'
+                || Str::startsWith((string) ($day['id'] ?? ''), 'feedback-'))
+            ->values()
+            ->all();
+
+        if (empty($inputDays) && $startDate && $endDate) {
+            $inputDays = $this->paDaysFromRange($startDate, $endDate, $includeSaturday, $includeSunday);
+        }
+
+        if ($feedbackDate) {
+            $date = Carbon::parse($feedbackDate)->toDateString();
+            $inputDays[] = [
+                'id' => 'feedback-' . $date,
+                'date' => $date,
+                'type' => 'feedback',
+                'selected' => true,
+                'source' => 'feedback',
+                'note' => 'Feedbackgespraech',
+            ];
+        }
+
+        $days = collect($inputDays)
+            ->map(function ($day) use ($participants) {
+                $date = Carbon::parse($day['date'])->toDateString();
+                $type = ($day['type'] ?? null) === 'feedback' ? 'feedback' : 'pa_day';
+
+                return [
+                    'id' => $day['id'] ?? ($type === 'feedback' ? 'feedback-' : 'pa-') . $date,
+                    'date' => $date,
+                    'date_label' => Carbon::parse($date)->format('d.m.Y'),
+                    'type' => $type,
+                    'type_label' => $type === 'feedback' ? 'Feedbackgespraech' : 'PA-Tag',
+                    'source' => $day['source'] ?? ($type === 'feedback' ? 'feedback' : 'manual'),
+                    'selected' => $day['selected'] ?? true,
+                    'note' => $day['note'] ?? null,
+                    'groups' => [[
+                        'id' => 'pa-all-' . $date,
+                        'label' => 'Alle Teilnehmer',
+                        'bereich' => null,
+                        'runde' => null,
+                        'participants' => $participants,
+                        'participants_count' => $participants->count(),
+                    ]],
+                    'participants_count' => $participants->count(),
+                ];
+            })
+            ->unique(fn ($day) => $day['date'] . '|' . $day['type'])
+            ->sortBy(fn ($day) => ($day['type'] === 'feedback' ? '9999-99-99' : $day['date']) . '|' . $day['date'])
+            ->values();
+
+        return [
+            'context' => [
+                'schule' => [
+                    'id' => $schule->id,
+                    'name' => $schule->name,
+                ],
+                'schulform' => $schulform,
+                'klasse' => $klasseText,
+                'schuljahr' => $schuljahr,
+                'teil' => $teil,
+                'export_mode' => $exportMode,
+                'teilnehmer_count' => $participants->count(),
+            ],
+            'participants' => $participants,
+            'days' => $days,
+        ];
+    }
+
+    private function paDaysFromRange(
+        string $startDate,
+        string $endDate,
+        bool $includeSaturday,
+        bool $includeSunday
+    ): array {
+        $days = [];
+        $start = Carbon::parse($startDate)->startOfDay();
+        $end = Carbon::parse($endDate)->startOfDay();
+
+        for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
+            if ($date->isSaturday() && !$includeSaturday) {
+                continue;
+            }
+
+            if ($date->isSunday() && !$includeSunday) {
+                continue;
+            }
+
+            $dateValue = $date->toDateString();
+            $days[] = [
+                'id' => 'range-' . $dateValue,
+                'date' => $dateValue,
+                'selected' => true,
+                'source' => 'range',
+                'note' => null,
+            ];
+        }
+
+        return $days;
+    }
+
+    private function paTeilnehmer(
+        int $schuleId,
+        string $schuljahr,
+        string $teil,
+        string $exportMode,
+        ?string $klasse
+    ): Collection {
+        return PersonenIstSchueler::query()
+            ->filterSchueler($schuleId, $schuljahr, $teil)
+            ->when($exportMode === 'klasse', fn ($query) => $query->where('klasse', $klasse))
+            ->with('person')
+            ->get()
+            ->sort(function ($a, $b) {
+                $klasseCompare = strnatcasecmp((string) $a->klasse, (string) $b->klasse);
+                if ($klasseCompare !== 0) {
+                    return $klasseCompare;
+                }
+
+                $nachnameCompare = strnatcasecmp((string) ($a->person?->nachname ?? ''), (string) ($b->person?->nachname ?? ''));
+                if ($nachnameCompare !== 0) {
+                    return $nachnameCompare;
+                }
+
+                return strnatcasecmp((string) ($a->person?->vorname ?? ''), (string) ($b->person?->vorname ?? ''));
+            })
+            ->values();
+    }
+
     public function anwesenheitslistePAexportWord(Request $request)
     {
 

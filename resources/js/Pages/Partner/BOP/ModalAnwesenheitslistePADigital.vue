@@ -12,12 +12,20 @@ const props = defineProps({
   partnerId: [String, Number],
   schuljahr: [String, Number],
   teil: [String, Number],
+  klasse: {
+    type: String,
+    default: '',
+  },
+  klassen: {
+    type: Array,
+    default: () => [],
+  },
 })
 
 const emit = defineEmits(['update:visible', 'close'])
-const BibbSwal = Swal.mixin({
+const PaSwal = Swal.mixin({
   customClass: {
-    container: 'bibb-swal-container',
+    container: 'pa-swal-container',
   },
 })
 
@@ -27,13 +35,14 @@ const localVisible = computed({
 })
 
 const form = reactive({
-  exportFormat: 'A3',
-  rolltagDate: '',
+  exportFormat: 'A4',
   startDate: '',
   endDate: '',
   includeSaturday: false,
   includeSunday: false,
   feedbackDate: '',
+  exportMode: props.klasse ? 'klasse' : 'alle',
+  klasse: props.klasse || '',
 })
 
 const previewContext = ref(null)
@@ -56,10 +65,8 @@ const draftDirty = ref(false)
 const draftLastSavedAt = ref(null)
 const draftExpiresAt = ref(null)
 const sheetFullscreen = ref(false)
-const bibbFooterImageSrc = '/img/bibb/logoleiste_bop_2020.jpg'
 const draftAutoSaveDelayMs = 5000
 const draftPollIntervalMs = 12000
-let bibbFooterImagePromise = null
 let draftSaveTimer = null
 let draftPollTimer = null
 let previousBodyOverflow = ''
@@ -67,66 +74,9 @@ let draftSaveRequestId = 0
 
 const selectedDays = computed(() => days.value.filter((day) => day.selected))
 const selectedDay = computed(() => days.value.find((day) => day.id === selectedDayId.value) || selectedDays.value[0] || null)
-const dayRows = computed(() => selectedDay.value ? participantsForDay(selectedDay.value) : [])
-const programDays = computed(() => selectedDays.value.filter((day) => day.type !== 'feedback').slice(0, 10))
-const feedbackDay = computed(() => {
-  if (!form.feedbackDate) return null
-
-  return {
-    id: `feedback-${form.feedbackDate}`,
-    date: form.feedbackDate,
-    date_label: dateLabel(form.feedbackDate),
-    type: 'feedback',
-    type_label: 'Feedbackgespraech',
-    source: 'feedback',
-    selected: true,
-    groups: [{
-      id: `feedback-all-${form.feedbackDate}`,
-      label: 'Alle Teilnehmer',
-      bereich: null,
-      runde: null,
-      participants: allParticipants.value,
-      participants_count: allParticipants.value.length,
-    }],
-    participants_count: allParticipants.value.length,
-  }
-})
-const signatureDays = computed(() => [...programDays.value, ...(feedbackDay.value ? [feedbackDay.value] : [])])
-const sheetParticipants = computed(() => {
-  if (allParticipants.value.length) return allParticipants.value
-
-  const byPerson = new Map()
-  selectedDays.value.forEach((day) => {
-    participantsForDay(day).forEach((participant) => {
-      byPerson.set(participant.person_id || participant.id, participant)
-    })
-  })
-
-  return Array.from(byPerson.values()).sort((a, b) => {
-    const classCompare = String(a.klasse || '').localeCompare(String(b.klasse || ''), 'de', { numeric: true })
-    if (classCompare !== 0) return classCompare
-    return String(a.nachname || '').localeCompare(String(b.nachname || ''), 'de')
-  })
-})
-const klasseText = computed(() => {
-  if (previewContext.value?.klasse) return previewContext.value.klasse
-
-  const values = [...new Set(sheetParticipants.value.map((participant) => participant.klasse).filter(Boolean))]
-  return values.join(', ')
-})
-const schulformText = computed(() => previewContext.value?.schulform || '')
-const bereicheText = computed(() => {
-  if (previewContext.value?.bereiche) return previewContext.value.bereiche
-
-  const values = []
-  selectedDays.value.forEach((day) => {
-    ;(day.groups || []).forEach((group) => {
-      if (group.bereich && !values.includes(group.bereich)) values.push(group.bereich)
-    })
-  })
-  return values.join('/ ')
-})
+const sheetParticipants = computed(() => allParticipants.value)
 const signatureCount = computed(() => Object.values(signatures).filter(Boolean).length)
+const scopeReady = computed(() => props.partnerId && props.schuljahr && props.teil && (form.exportMode === 'alle' || form.klasse))
 const draftStatusText = computed(() => {
   if (draftLoading.value) return 'wird geladen'
   if (draftSaving.value) return 'wird gespeichert'
@@ -148,6 +98,12 @@ const draftExpiryText = computed(() => {
     month: '2-digit',
     year: 'numeric',
   })
+})
+const periodText = computed(() => {
+  const values = selectedDays.value.map((day) => day.date).sort()
+  if (!values.length) return ''
+
+  return values.length === 1 ? dateLabel(values[0]) : `${dateLabel(values[0])} - ${dateLabel(values.at(-1))}`
 })
 const sheetSectionClass = computed(() => sheetFullscreen.value
   ? 'fixed inset-0 z-[9999] overflow-hidden border-0 bg-white p-4 shadow-2xl'
@@ -179,80 +135,9 @@ const weekdayLabel = (date) => {
   return new Date(`${date}T00:00:00`).toLocaleDateString('de-DE', { weekday: 'short' })
 }
 
-const normalizeDayType = (type) => {
-  if (type === 'rolltag') return 'Rolltag'
-  if (type === 'group_day') return 'Gruppentag'
-  if (type === 'program_day') return 'Programmtag'
-  if (type === 'feedback') return 'Feedbackgespraech'
-  return 'Manueller Tag'
-}
-
-const groupSubtitle = (group) => {
-  const pieces = []
-  if (group.runde) pieces.push(`Runde ${group.runde}`)
-  if (group.bereich) pieces.push(group.bereich)
-  return pieces.join(' / ')
-}
+const dayTypeLabel = (day) => day?.type_label || (day?.type === 'feedback' ? 'Feedbackgespraech' : 'PA-Tag')
 
 const signatureKey = (day, participant) => `${day.id}:${participant.person_id || participant.id}`
-
-function participantsForDay(day) {
-  const rows = []
-
-  ;(day.groups || []).forEach((group) => {
-    ;(group.participants || []).forEach((participant) => {
-      rows.push({
-        ...participant,
-        group_label: group.label,
-        bereich: group.bereich,
-        runde: group.runde,
-      })
-    })
-  })
-
-  return rows
-}
-
-const participantGroupText = (participant) => {
-  const pieces = []
-  if (participant.group_label) pieces.push(participant.group_label)
-  if (participant.runde) pieces.push(`R${participant.runde}`)
-  if (participant.bereich) pieces.push(participant.bereich)
-  return pieces.join(' / ')
-}
-
-const participantCanSignDay = (participant, day) => {
-  if (!day || day.type === 'rolltag' || day.type === 'program_day' || day.type === 'feedback' || day.source === 'manual' || day.source === 'auto') return true
-
-  const participantId = participant.person_id || participant.id
-  return participantsForDay(day).some((entry) => (entry.person_id || entry.id) === participantId)
-}
-
-const hasSignature = (day, participant) => Boolean(day && participant && signatures[signatureKey(day, participant)])
-
-const expectedSignatureCountForDay = (day) => sheetParticipants.value
-  .filter((participant) => participantCanSignDay(participant, day))
-  .length
-
-const signedCountForDay = (day) => sheetParticipants.value
-  .filter((participant) => participantCanSignDay(participant, day) && hasSignature(day, participant))
-  .length
-
-const selectedProgramDaysPayload = () => programDays.value.map((day) => ({
-  id: day.id,
-  date: day.date,
-  type: day.type,
-  selected: day.selected,
-  note: day.note || null,
-}))
-
-const manualDaysPayload = () => days.value
-  .filter((day) => day.source === 'manual' && day.selected)
-  .map((day) => ({
-    date: day.date,
-    type: day.type,
-    note: day.note || null,
-  }))
 
 const readBlobError = async (error) => {
   let data = error.response?.data
@@ -276,9 +161,11 @@ const safePdfFilePart = (value, fallback = 'Datei') => {
 }
 
 const draftScopePayload = () => ({
-  schuleIdInputBibb: props.partnerId,
-  schuljahrInputBibb: props.schuljahr,
-  teilInputBibb: props.teil,
+  schuleId: props.partnerId,
+  schuljahr: props.schuljahr,
+  teil: props.teil,
+  exportMode: form.exportMode,
+  klasse: form.exportMode === 'klasse' ? form.klasse : '',
 })
 
 const cloneForDraft = (value) => JSON.parse(JSON.stringify(value ?? null))
@@ -297,6 +184,47 @@ const signatureSnapshot = (signaturePayload = {}) => JSON.stringify(
     .sort(([left], [right]) => left.localeCompare(right))
 )
 
+const hasSignature = (day, participant) => Boolean(day && participant && signatures[signatureKey(day, participant)])
+
+const signedCountForDay = (day) => sheetParticipants.value
+  .filter((participant) => hasSignature(day, participant))
+  .length
+
+const selectedDaysPayload = () => selectedDays.value.map((day) => ({
+  id: day.id,
+  date: day.date,
+  type: day.type,
+  selected: day.selected,
+  source: day.source,
+  note: day.note || null,
+}))
+
+const previewDaysPayload = () => {
+  const preservedDays = selectedDays.value
+    .filter((day) => day.source !== 'range' && day.type !== 'feedback' && day.source !== 'feedback')
+    .map((day) => ({
+      id: day.id,
+      date: day.date,
+      type: day.type,
+      selected: day.selected,
+      source: day.source,
+      note: day.note || null,
+    }))
+
+  if (!form.startDate || !form.endDate) return preservedDays
+
+  const rangeDays = rangeDates(form.startDate, form.endDate).map((date) => ({
+    id: `range-${date}`,
+    date,
+    type: 'pa_day',
+    selected: true,
+    source: 'range',
+    note: null,
+  }))
+
+  return [...rangeDays, ...preservedDays]
+}
+
 const syncSignatures = (nextSignatures = {}, { removeMissing = true } = {}) => {
   if (removeMissing) {
     Object.keys(signatures).forEach((key) => {
@@ -311,6 +239,36 @@ const syncSignatures = (nextSignatures = {}, { removeMissing = true } = {}) => {
   })
 }
 
+const dayWithGroups = (day) => ({
+  ...day,
+  groups: [{
+    id: `pa-all-${day.date}`,
+    label: 'Alle Teilnehmer',
+    bereich: null,
+    runde: null,
+    participants: allParticipants.value,
+    participants_count: allParticipants.value.length,
+  }],
+  participants_count: allParticipants.value.length,
+})
+
+const hydrateDays = (payloadDays) => {
+  const previous = new Map(days.value.map((day) => [day.id, day]))
+
+  days.value = (payloadDays || []).map((day) => {
+    const old = previous.get(day.id)
+    return dayWithGroups({
+      ...day,
+      selected: old?.selected ?? day.selected ?? true,
+      note: old?.note ?? day.note ?? '',
+    })
+  })
+
+  if (!selectedDayId.value || !days.value.some((day) => day.id === selectedDayId.value)) {
+    selectedDayId.value = selectedDays.value[0]?.id || days.value[0]?.id || null
+  }
+}
+
 const applyDraftPayload = (payload) => {
   if (!payload) return
 
@@ -319,16 +277,17 @@ const applyDraftPayload = (payload) => {
   try {
     if (payload.form) {
       form.exportFormat = payload.form.exportFormat || form.exportFormat
-      form.rolltagDate = payload.form.rolltagDate || ''
       form.startDate = payload.form.startDate || ''
       form.endDate = payload.form.endDate || ''
       form.includeSaturday = Boolean(payload.form.includeSaturday)
       form.includeSunday = Boolean(payload.form.includeSunday)
       form.feedbackDate = payload.form.feedbackDate || ''
+      form.exportMode = payload.form.exportMode || form.exportMode
+      form.klasse = payload.form.klasse || form.klasse || ''
     }
 
     if (Array.isArray(payload.days) && payload.days.length) {
-      days.value = payload.days
+      days.value = payload.days.map(dayWithGroups)
       selectedDayId.value = payload.selectedDayId && days.value.some((day) => day.id === payload.selectedDayId)
         ? payload.selectedDayId
         : selectedDays.value[0]?.id || days.value[0]?.id || null
@@ -344,11 +303,11 @@ const applyDraftPayload = (payload) => {
 }
 
 const loadDraft = async ({ silent = true } = {}) => {
-  if (!props.partnerId || !props.schuljahr || !props.teil) return
+  if (!scopeReady.value) return
   if (!silent) draftLoading.value = true
 
   try {
-    const response = await axios.post(route('anwesenheitsliste.POBO.bibb.draft.show'), draftScopePayload())
+    const response = await axios.post(route('anwesenheitsliste.PA.digital.draft.show'), draftScopePayload())
 
     if (!draftDirty.value) {
       if (response.data.exists && response.data.payload) {
@@ -366,7 +325,7 @@ const loadDraft = async ({ silent = true } = {}) => {
     draftLoaded.value = true
   } catch (error) {
     if (!silent) {
-      BibbSwal.fire('Fehler', await readBlobError(error), 'error')
+      PaSwal.fire('Fehler', await readBlobError(error), 'error')
     }
   } finally {
     draftLoading.value = false
@@ -374,7 +333,7 @@ const loadDraft = async ({ silent = true } = {}) => {
 }
 
 const saveDraft = async ({ silent = true, payload = null, signatureSnapshotGuard = null } = {}) => {
-  if (!props.partnerId || !props.schuljahr || !props.teil) return
+  if (!scopeReady.value) return
 
   const draftPayload = payload || buildDraftPayload()
   const requestSignatureSnapshot = signatureSnapshotGuard ?? signatureSnapshot(signatures)
@@ -382,7 +341,7 @@ const saveDraft = async ({ silent = true, payload = null, signatureSnapshotGuard
   draftSaving.value = true
 
   try {
-    const response = await axios.put(route('anwesenheitsliste.POBO.bibb.draft.store'), {
+    const response = await axios.put(route('anwesenheitsliste.PA.digital.draft.store'), {
       ...draftScopePayload(),
       payload: draftPayload,
     })
@@ -400,7 +359,7 @@ const saveDraft = async ({ silent = true, payload = null, signatureSnapshotGuard
     }
   } catch (error) {
     if (!silent && requestId === draftSaveRequestId) {
-      BibbSwal.fire('Fehler', await readBlobError(error), 'error')
+      PaSwal.fire('Fehler', await readBlobError(error), 'error')
     }
   } finally {
     if (requestId === draftSaveRequestId) {
@@ -411,10 +370,9 @@ const saveDraft = async ({ silent = true, payload = null, signatureSnapshotGuard
 
 const saveCompletedSignature = (day, participant, value) => {
   if (!day || !participant || !previewContext.value || draftHydrating.value) return
-
-  const key = signatureKey(day, participant)
   if (!value) return
 
+  const key = signatureKey(day, participant)
   signatures[key] = value
   draftDirty.value = true
   window.clearTimeout(draftSaveTimer)
@@ -478,80 +436,219 @@ const stopDraftTimers = () => {
   draftPollTimer = null
 }
 
-const closeSheetFullscreen = () => {
-  sheetFullscreen.value = false
-}
-
-const toggleSheetFullscreen = () => {
-  sheetFullscreen.value = !sheetFullscreen.value
-}
-
-const handleSheetFullscreenKeydown = (event) => {
-  if (event.key === 'Escape') {
-    closeSheetFullscreen()
+const loadPreview = async ({ includeDraft = false } = {}) => {
+  if (!scopeReady.value) {
+    PaSwal.fire('Klasse fehlt', 'Bitte eine Klasse auswaehlen oder Alle Klassen verwenden.', 'warning')
+    return
   }
-}
 
-const clearDraft = async () => {
-  const result = await BibbSwal.fire({
-    title: 'Entwurf leeren?',
-    text: 'Der zentrale Zwischenstand dieser Anwesenheitsliste wird geloescht.',
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonText: 'Ja, leeren',
-    cancelButtonText: 'Abbrechen',
-  })
-
-  if (!result.isConfirmed) return
+  loadingPreview.value = true
 
   try {
-    await axios.delete(route('anwesenheitsliste.POBO.bibb.draft.destroy'), {
-      data: draftScopePayload(),
+    const response = await axios.post(route('anwesenheitsliste.PA.digital.preview'), {
+      ...draftScopePayload(),
+      startDate: form.startDate || null,
+      endDate: form.endDate || null,
+      feedbackDate: form.feedbackDate || null,
+      includeSaturday: form.includeSaturday,
+      includeSunday: form.includeSunday,
+      days: previewDaysPayload(),
     })
 
-    window.clearTimeout(draftSaveTimer)
-    draftSaveTimer = null
-    draftSaveRequestId++
-    draftHydrating.value = true
-    previewContext.value = null
-    allParticipants.value = []
-    days.value = []
-    selectedDayId.value = null
-    manualDate.value = ''
-    manualNote.value = ''
-    syncSignatures({}, { removeMissing: true })
-    draftHydrating.value = false
-    draftDirty.value = false
-    draftRevision.value = 0
-    draftLastSavedAt.value = null
-    draftExpiresAt.value = null
-    BibbSwal.fire('Geloescht', 'Der zentrale Entwurf wurde geleert.', 'success')
+    previewContext.value = response.data.context
+    allParticipants.value = response.data.participants || []
+    const responseDays = response.data.days || []
+    hydrateDays(responseDays.length ? responseDays : days.value)
+    if (includeDraft) await loadDraft({ silent: true })
   } catch (error) {
-    BibbSwal.fire('Fehler', await readBlobError(error), 'error')
+    PaSwal.fire('Fehler', await readBlobError(error), 'error')
+  } finally {
+    loadingPreview.value = false
   }
 }
 
-const loadBibbFooterImage = () => {
-  if (!bibbFooterImagePromise) {
-    bibbFooterImagePromise = new Promise((resolve, reject) => {
-      const image = new Image()
-      image.onload = () => resolve(image)
-      image.onerror = reject
-      image.src = bibbFooterImageSrc
-    })
+const rangeDates = (startValue, endValue) => {
+  if (!startValue || !endValue) return []
+
+  const start = new Date(`${startValue}T00:00:00`)
+  const end = new Date(`${endValue}T00:00:00`)
+
+  if (end < start) return []
+
+  const values = []
+  for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
+    const weekday = date.getDay()
+    if (weekday === 6 && !form.includeSaturday) continue
+    if (weekday === 0 && !form.includeSunday) continue
+    values.push(toDateInput(date))
   }
 
-  return bibbFooterImagePromise
+  return values
 }
 
-const pdfFormat = () => form.exportFormat === 'A3' ? 'a3' : 'a4'
+const appendPaDays = (dates, source = 'manual') => {
+  const existing = new Set(days.value.map((day) => day.date))
+  const generated = dates
+    .filter((date) => !existing.has(date))
+    .map((date) => dayWithGroups({
+      id: `${source}-${date}`,
+      date,
+      date_label: dateLabel(date),
+      type: 'pa_day',
+      type_label: 'PA-Tag',
+      source,
+      selected: true,
+      note: '',
+    }))
 
-const pdfPrintStyle = {
-  headerTitleFontSize: 7.8,
-  headerFontSize: 7.1,
-  tableHeaderFontSize: 5.9,
-  rowFontSize: 6.1,
-  tableLineWidth: 0.2,
+  if (!generated.length) return
+
+  days.value = [...days.value, ...generated].sort((a, b) => a.date.localeCompare(b.date))
+  selectedDayId.value = selectedDayId.value || generated[0]?.id || null
+}
+
+const createRangeDays = () => {
+  if (!form.startDate || !form.endDate) {
+    PaSwal.fire('Zeitraum fehlt', 'Bitte Start- und Enddatum eintragen.', 'warning')
+    return
+  }
+
+  if (new Date(`${form.endDate}T00:00:00`) < new Date(`${form.startDate}T00:00:00`)) {
+    PaSwal.fire('Datum pruefen', 'Das Enddatum muss nach dem Startdatum liegen.', 'warning')
+    return
+  }
+
+  appendPaDays(rangeDates(form.startDate, form.endDate), 'range')
+}
+
+const addManualDay = () => {
+  if (!manualDate.value) return
+
+  const exists = days.value.some((day) => day.date === manualDate.value)
+  if (exists) {
+    PaSwal.fire('Datum vorhanden', 'Dieser Tag ist bereits in der Liste.', 'info')
+    return
+  }
+
+  days.value.push(dayWithGroups({
+    id: `manual-${manualDate.value}`,
+    date: manualDate.value,
+    date_label: dateLabel(manualDate.value),
+    type: 'pa_day',
+    type_label: 'PA-Tag',
+    source: 'manual',
+    selected: true,
+    note: manualNote.value,
+  }))
+
+  days.value.sort((a, b) => a.date.localeCompare(b.date))
+  selectedDayId.value = selectedDayId.value || `manual-${manualDate.value}`
+  manualDate.value = ''
+  manualNote.value = ''
+}
+
+const resetDraftMeta = () => {
+  draftLoaded.value = false
+  draftDirty.value = false
+  draftRevision.value = 0
+  draftSaving.value = false
+  draftLoading.value = false
+  draftLastSavedAt.value = null
+  draftExpiresAt.value = null
+}
+
+const reloadScope = async () => {
+  if (!props.visible || draftHydrating.value) return
+
+  flushDraftSave()
+  stopDraftTimers()
+  draftHydrating.value = true
+  days.value = []
+  selectedDayId.value = null
+  syncSignatures({}, { removeMissing: true })
+  resetDraftMeta()
+  draftHydrating.value = false
+  await loadPreview({ includeDraft: true })
+  startDraftPolling()
+}
+
+const handleWordExport = async () => {
+  if (!form.startDate || !form.endDate || (form.exportMode === 'klasse' && !form.klasse)) {
+    PaSwal.fire('Angaben fehlen', 'Bitte Zeitraum und Klasse pruefen.', 'warning')
+    return
+  }
+
+  exportingWord.value = true
+
+  try {
+    const response = await axios.post(route('anwesenheitsliste.PA.export.word'), {
+      startDate: form.startDate,
+      endDate: form.endDate,
+      schuleId: props.partnerId,
+      schuljahr: props.schuljahr,
+      teil: props.teil,
+      exportMode: form.exportMode,
+      klasse: form.exportMode === 'klasse' ? form.klasse : '',
+    }, { responseType: 'blob' })
+
+    const disposition = response.headers['content-disposition'] || ''
+    const match = disposition.match(/filename="?([^"]+)"?/)
+    const filename = match?.[1] || (form.exportMode === 'alle'
+      ? 'Anwesenheitslisten_PA_alle_Klassen.zip'
+      : `Anwesenheitsliste_PA_${form.klasse}.docx`)
+    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    PaSwal.fire('Fehler', await readBlobError(error), 'error')
+  } finally {
+    exportingWord.value = false
+  }
+}
+
+const createArchiveFolder = async () => {
+  if (!scopeReady.value) return
+
+  creatingArchiveFolder.value = true
+
+  try {
+    const response = await axios.post(route('anwesenheitsliste.PA.digital.archive.folder'), draftScopePayload())
+    PaSwal.fire(
+      'Archiv-Ordner erstellt',
+      `Der Ordner wurde angelegt/aktualisiert: ${response.data.folder}`,
+      'success'
+    )
+  } catch (error) {
+    PaSwal.fire('Fehler', await readBlobError(error), 'error')
+  } finally {
+    creatingArchiveFolder.value = false
+  }
+}
+
+const storeSignedPdfInFolder = async (pdfBlob, filename) => {
+  const formData = new FormData()
+  formData.append('schuleId', props.partnerId)
+  formData.append('schuljahr', props.schuljahr)
+  formData.append('teil', props.teil)
+  formData.append('exportMode', form.exportMode)
+  formData.append('klasse', form.exportMode === 'klasse' ? form.klasse : '')
+  formData.append('filename', filename)
+  formData.append('pdf', pdfBlob, filename)
+
+  const response = await axios.post(route('anwesenheitsliste.PA.digital.pdf.store'), formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+
+  draftRevision.value = response.data.revision || draftRevision.value
+  draftLastSavedAt.value = response.data.updated_at || draftLastSavedAt.value
+  draftExpiresAt.value = response.data.expires_at || draftExpiresAt.value
+
+  return response.data
 }
 
 const applyPdfPrintInk = (doc) => {
@@ -586,442 +683,169 @@ const drawPdfSignature = (doc, signature, x, y, width, height) => {
   )
 }
 
+const pdfFormat = () => form.exportFormat === 'A3' ? 'a3' : 'a4'
+
 const pdfLayout = (doc) => {
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
-  const widthScale = pageWidth / 297
-  const rowScale = form.exportFormat === 'A3' ? widthScale : 1
-  const tableX = 7 * widthScale
+  const rowHeight = form.exportFormat === 'A3' ? 7.1 : 6.5
+  const tableY = form.exportFormat === 'A3' ? 42 : 39
+  const bottomMargin = 12
+  const headHeight = 16
+  const rowsPerPage = Math.floor((pageHeight - tableY - headHeight - bottomMargin) / rowHeight)
 
   return {
     pageWidth,
     pageHeight,
-    widthScale,
-    rowScale,
-    tableX,
-    headerX: tableX,
-    headerTitleY: form.exportFormat === 'A3' ? 16 : 11,
-    headerFirstRowY: form.exportFormat === 'A3' ? 24 : 18,
-    headerRowGap: 5.6,
-    headerPageX: form.exportFormat === 'A3' ? tableX + 225 : tableX + 205,
-    headerLabelWidth: 24.92,
-    headerValueWidth: 75,
-    headerSecondLabelWidth: 50,
-    headerSecondValueWidth: 96.45,
-    tableWidth: 281 * widthScale,
-    tableY: form.exportFormat === 'A3' ? 54 : 50,
-    tableHeadTopHeight: 9.4 * rowScale,
-    tableHeadBottomHeight: 5.8 * rowScale,
-    rowHeight: 7.2 * rowScale,
-    rowsPerPage: form.exportFormat === 'A3' ? 17 : 13,
-    footerWidth: 141.7,
-    footerHeight: 24.9,
-    footerBottom: 6,
+    tableX: 8,
+    tableY,
+    tableWidth: pageWidth - 16,
+    headHeight,
+    rowHeight,
+    rowsPerPage: Math.max(rowsPerPage, 10),
   }
 }
 
-const ensureManualDayGroups = (day) => ({
-  ...day,
-  groups: day.groups?.length ? day.groups : [{
-    id: `manual-all-${day.date}`,
-    label: 'Alle Teilnehmer',
-    bereich: null,
-    runde: null,
-    participants: allParticipants.value,
-    participants_count: allParticipants.value.length,
-  }],
-  participants_count: day.participants_count || allParticipants.value.length,
-})
+const pdfColumns = (layout) => {
+  const staticColumns = [
+    { key: 'nr', label: 'Nr.', width: 8 },
+    { key: 'nachname', label: 'Name', width: 34 },
+    { key: 'vorname', label: 'Vorname', width: 31 },
+    { key: 'klasse', label: 'Klasse', width: 17 },
+  ]
+  const staticWidth = staticColumns.reduce((sum, column) => sum + column.width, 0)
+  const dayCount = Math.max(selectedDays.value.length, 1)
+  const dayWidth = Math.max(18, (layout.tableWidth - staticWidth) / dayCount)
 
-const rangeDates = (startValue, endValue, { excludeFeedback = true } = {}) => {
-  if (!startValue || !endValue) return []
-
-  const start = new Date(`${startValue}T00:00:00`)
-  const end = new Date(`${endValue}T00:00:00`)
-
-  if (end < start) {
-    return []
-  }
-
-  const values = []
-
-  for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
-    const weekday = date.getDay()
-    if (weekday === 6 && !form.includeSaturday) continue
-    if (weekday === 0 && !form.includeSunday) continue
-
-    const value = toDateInput(date)
-    if (excludeFeedback && form.feedbackDate && value === form.feedbackDate) continue
-
-    values.push(value)
-  }
-
-  return values
+  return [
+    ...staticColumns,
+    ...selectedDays.value.map((day, index) => ({
+      key: day.id,
+      day,
+      label: `Tag ${index + 1}`,
+      width: dayWidth,
+    })),
+  ]
 }
 
-const appendProgramDays = (dates, source = 'auto') => {
-  const existing = new Set(days.value.map((day) => day.date))
-  const generated = dates
-    .filter((date) => !existing.has(date))
-    .map((date) => ensureManualDayGroups({
-      id: `${source}-${date}`,
-      date,
-      date_label: dateLabel(date),
-      type: 'program_day',
-      type_label: 'Programmtag',
-      source,
-      selected: true,
-      note: '',
-    }))
-
-  if (!generated.length) return
-
-  days.value = [...days.value, ...generated].sort((a, b) => a.date.localeCompare(b.date))
-}
-
-const syncAutoProgramDays = () => {
-  const start = form.startDate || form.rolltagDate
-  const end = form.endDate || form.feedbackDate
-  if (!start || !end) return
-
-  appendProgramDays(rangeDates(start, end), 'auto')
-}
-
-const createRangeDays = () => {
-  const start = form.startDate || form.rolltagDate
-  const end = form.endDate || form.feedbackDate
-
-  if (!start || !end) {
-    BibbSwal.fire('Zeitraum fehlt', 'Bitte Anfangs- und Enddatum oder Rolltag und Feedbackgespraech waehlen.', 'warning')
-    return
-  }
-
-  if (new Date(`${end}T00:00:00`) < new Date(`${start}T00:00:00`)) {
-    BibbSwal.fire('Datum pruefen', 'Das Enddatum muss nach dem Anfangsdatum liegen.', 'warning')
-    return
-  }
-
-  appendProgramDays(rangeDates(start, end), 'manual')
-}
-
-const addManualDay = () => {
-  if (!manualDate.value) return
-
-  const exists = days.value.some((day) => day.date === manualDate.value)
-  if (exists) {
-    BibbSwal.fire('Datum vorhanden', 'Dieser Tag ist bereits in der Vorschau.', 'info')
-    return
-  }
-
-  days.value.push(ensureManualDayGroups({
-    id: `manual-${manualDate.value}`,
-    date: manualDate.value,
-    date_label: dateLabel(manualDate.value),
-    type: 'program_day',
-    type_label: 'Programmtag',
-    source: 'manual',
-    selected: true,
-    note: manualNote.value,
-  }))
-
-  days.value.sort((a, b) => a.date.localeCompare(b.date))
-  manualDate.value = ''
-  manualNote.value = ''
-}
-const hydrateDays = (payloadDays) => {
-  const previous = new Map(days.value.map((day) => [day.id, day]))
-
-  days.value = (payloadDays || []).map((day) => {
-    const old = previous.get(day.id)
-    return {
-      ...day,
-      selected: old?.selected ?? true,
-      note: old?.note ?? day.note ?? '',
-    }
-  })
-
-  if (!selectedDayId.value || !days.value.some((day) => day.id === selectedDayId.value)) {
-    selectedDayId.value = selectedDays.value[0]?.id || days.value[0]?.id || null
-  }
-}
-
-const loadPreview = async ({ includeDraft = false } = {}) => {
-  loadingPreview.value = true
-
-  try {
-    const response = await axios.post(route('anwesenheitsliste.POBO.bibb.preview'), {
-      schuleIdInputBibb: props.partnerId,
-      schuljahrInputBibb: props.schuljahr,
-      teilInputBibb: props.teil,
-      rolltagDate: form.rolltagDate || null,
-      manualDays: manualDaysPayload(),
-    })
-
-    previewContext.value = response.data.context
-    allParticipants.value = response.data.participants || []
-    hydrateDays(response.data.days || [])
-    syncAutoProgramDays()
-    if (includeDraft) await loadDraft({ silent: true })
-  } catch (error) {
-    BibbSwal.fire('Fehler', await readBlobError(error), 'error')
-  } finally {
-    loadingPreview.value = false
-  }
-}
-
-const handleWordExport = async () => {
-  if (selectedDays.value.length === 0) {
-    BibbSwal.fire('Keine Tage', 'Bitte mindestens einen Tag auswaehlen.', 'warning')
-    return
-  }
-
-  exportingWord.value = true
-
-  try {
-    const response = await axios.post(route('anwesenheitsliste.POBO.bibb.export.word'), {
-      exportFormat: form.exportFormat,
-      schuleIdInputBibb: props.partnerId,
-      schuljahrInputBibb: props.schuljahr,
-      teilInputBibb: props.teil,
-      feedbackDate: form.feedbackDate || null,
-      days: selectedProgramDaysPayload(),
-    }, { responseType: 'blob' })
-
-    const disposition = response.headers['content-disposition'] || ''
-    const match = disposition.match(/filename="?([^"]+)"?/)
-    const filename = match?.[1] || 'Anwesenheitsliste_BIBB.docx'
-    const url = window.URL.createObjectURL(new Blob([response.data]))
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    window.URL.revokeObjectURL(url)
-  } catch (error) {
-    BibbSwal.fire('Fehler', await readBlobError(error), 'error')
-  } finally {
-    exportingWord.value = false
-  }
-}
-
-const createArchiveFolder = async () => {
-  creatingArchiveFolder.value = true
-
-  try {
-    const response = await axios.post(route('anwesenheitsliste.POBO.bibb.archive.folder'), draftScopePayload())
-    BibbSwal.fire(
-      'Archiv-Ordner erstellt',
-      `Der Ordner wurde angelegt/aktualisiert: ${response.data.folder}`,
-      'success'
-    )
-  } catch (error) {
-    BibbSwal.fire('Fehler', await readBlobError(error), 'error')
-  } finally {
-    creatingArchiveFolder.value = false
-  }
-}
-
-const drawOriginalHeader = (doc, pageNumber, totalPages, layout) => {
+const drawPdfHeader = (doc, pageNumber, totalPages, layout) => {
+  const x = layout.tableX
   const school = previewContext.value?.schule?.name || 'Schule'
-  const x0 = layout.headerX
-  const x1 = x0 + layout.headerLabelWidth
-  const x2 = x1 + layout.headerValueWidth
-  const x3 = x2 + layout.headerSecondLabelWidth
-  const rowY = (index) => layout.headerFirstRowY + (index * layout.headerRowGap)
-  const periodText = [
-    programDays.value[0] ? dateLabel(programDays.value[0].date) : '',
-    programDays.value.at(-1) ? dateLabel(programDays.value.at(-1).date) : '',
-  ].filter(Boolean).join(' - ')
+  const classText = previewContext.value?.klasse || (form.exportMode === 'klasse' ? form.klasse : '')
 
   applyPdfPrintInk(doc)
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(pdfPrintStyle.headerTitleFontSize)
-  doc.text('Unterschriftenliste zum Nachweis der praxisorientierten Berufsorientierung - BO-Tage/ Ausbilder/-innen', x0, layout.headerTitleY)
-  doc.text(`Seite ${pageNumber} von ${totalPages}`, layout.headerPageX, layout.headerTitleY)
+  doc.setFontSize(10.5)
+  doc.text('Anwesenheitsliste Potenzialanalyse (PA)', x, 13)
+  doc.setFontSize(8)
+  doc.text(`Seite ${pageNumber} von ${totalPages}`, layout.pageWidth - 40, 13)
 
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(pdfPrintStyle.headerFontSize)
-  doc.text('Schule:', x0, rowY(0))
-  doc.text(school, x1, rowY(0), { maxWidth: layout.headerValueWidth - 2 })
-  doc.text('Schulform:', x0, rowY(2))
-  doc.text(schulformText.value || '', x1, rowY(2), { maxWidth: layout.headerValueWidth - 2 })
-  doc.text('Klasse/n:', x0, rowY(3))
-  doc.text(klasseText.value || '', x1, rowY(3), { maxWidth: layout.headerValueWidth - 2 })
-  doc.text('Berufsfelder:', x0, rowY(4))
-  doc.text(bereicheText.value || '', x1, rowY(4), { maxWidth: layout.headerValueWidth - 2 })
+  doc.setFontSize(7.2)
+  doc.text('Schule:', x, 21)
+  doc.text(String(school), x + 18, 21, { maxWidth: 82 })
+  doc.text('Schulform:', x, 27)
+  doc.text(String(previewContext.value?.schulform || ''), x + 18, 27, { maxWidth: 82 })
+  doc.text('Klasse/n:', x, 33)
+  doc.text(String(classText || ''), x + 18, 33, { maxWidth: 82 })
 
-  doc.text('Zuwendungsempfänger/', x2, rowY(0))
-  doc.text('- ZBB -', x3, rowY(0), { maxWidth: layout.headerSecondValueWidth - 2 })
-  doc.text('Ausführende Stelle:', x2, rowY(1))
-  doc.text('Zentrum für Bildung und Beruf Saar gGmbH in Burbach', x3, rowY(1), { maxWidth: layout.headerSecondValueWidth - 2 })
-  doc.text('AZ/:', x2, rowY(2))
-  doc.text('4.5-3444-10/0004', x3, rowY(2), { maxWidth: layout.headerSecondValueWidth - 2 })
-  doc.text('Zeitraum vom:', x2, rowY(3))
-  doc.text(periodText, x3, rowY(3), { maxWidth: layout.headerSecondValueWidth - 2 })
-  doc.text('PA durchgeführt:', x2, rowY(4))
-  doc.text('Ja', x3, rowY(4), { maxWidth: layout.headerSecondValueWidth - 2 })
+  doc.text('Zuwendungsempfaenger:', x + 110, 21)
+  doc.text('- ZBB -', x + 150, 21)
+  doc.text('Ausfuehrende Stelle:', x + 110, 27)
+  doc.text('Zentrum fuer Bildung und Beruf Saar gGmbH in Burbach', x + 150, 27, { maxWidth: 100 })
+  doc.text('Zeitraum:', x + 110, 33)
+  doc.text(periodText.value || '', x + 150, 33, { maxWidth: 100 })
 }
 
-const originalColumns = (layout) => {
-  const sw = (value) => value * layout.widthScale
-  const tableWidth = layout.tableWidth
-  const staticWidth = sw(6 + 22 + 20 + 15 + 21 + 11 + 11)
-  const termCount = Math.max(programDays.value.length, 1)
-  const termWidth = Math.max(sw(13), (tableWidth - staticWidth) / termCount)
-  const columns = [
-    { key: 'nr', label: 'Nr.', width: sw(6) },
-    { key: 'nachname', label: 'Name', width: sw(22) },
-    { key: 'vorname', label: 'Vorname', width: sw(20) },
-    { key: 'klasse', label: 'Klasse', width: sw(15) },
-  ]
+const drawPdfTableHeader = (doc, columns, layout) => {
+  let cursorX = layout.tableX
+  const y = layout.tableY
 
-  programDays.value.forEach((day, index) => {
-    columns.push({
-      key: day.id,
-      day,
-      label: `Termin ${index + 1}`,
-      width: termWidth,
+  applyPdfPrintInk(doc)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(6.4)
+  doc.setLineWidth(0.25)
+
+  columns.forEach((column) => {
+    doc.rect(cursorX, y, column.width, layout.headHeight)
+
+    if (column.day) {
+      doc.text(column.label, cursorX + 1.2, y + 4)
+      doc.setFont('helvetica', 'normal')
+      doc.text(dateLabel(column.day.date), cursorX + 1.2, y + 8)
+      doc.text(dayTypeLabel(column.day), cursorX + 1.2, y + 11)
+      doc.text('Unterschrift', cursorX + 1.2, y + 14)
+      doc.setFont('helvetica', 'bold')
+    } else {
+      doc.text(column.label, cursorX + 1.2, y + 9)
+    }
+
+    cursorX += column.width
+  })
+}
+
+const drawPdfRows = (doc, columns, rows, page, layout) => {
+  const pageStart = (page - 1) * layout.rowsPerPage
+
+  Array.from({ length: layout.rowsPerPage }).forEach((_, index) => {
+    const participant = rows[pageStart + index] || null
+    const rowNumber = pageStart + index + 1
+    const y = layout.tableY + layout.headHeight + (index * layout.rowHeight)
+    let cursorX = layout.tableX
+
+    columns.forEach((column) => {
+      applyPdfPrintInk(doc)
+      doc.setLineWidth(0.25)
+      doc.rect(cursorX, y, column.width, layout.rowHeight)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(6.4)
+      const textY = y + 4.4
+
+      if (column.key === 'nr') {
+        doc.text(String(rowNumber), cursorX + 1.2, textY)
+      } else if (column.key === 'nachname') {
+        doc.text(String(participant?.nachname || ''), cursorX + 1.2, textY, { maxWidth: column.width - 2.4 })
+      } else if (column.key === 'vorname') {
+        doc.text(String(participant?.vorname || ''), cursorX + 1.2, textY, { maxWidth: column.width - 2.4 })
+      } else if (column.key === 'klasse') {
+        doc.text(String(participant?.klasse || ''), cursorX + 1.2, textY, { maxWidth: column.width - 2.4 })
+      } else if (column.day && participant) {
+        const signature = signatures[signatureKey(column.day, participant)]
+        if (signature) {
+          drawPdfSignature(doc, signature, cursorX + 1, y + 0.5, column.width - 2, layout.rowHeight - 1)
+        }
+      }
+
+      cursorX += column.width
     })
   })
-
-  columns.push({ key: 'feedback', day: feedbackDay.value, label: 'Termin 11\nFeedbackgespräch', width: sw(21) })
-  columns.push({ key: 'angebot', label: 'Ange-\nbotstag', width: sw(11) })
-  columns.push({ key: 'zertifikat', label: 'Zertifikat\nja/nein', width: sw(11) })
-
-  return columns
-}
-
-const drawOriginalTableHeader = (doc, columns, x, y, layout) => {
-  let cursorX = x
-  const pad = Math.max(1, layout.widthScale)
-  const topHeight = layout.tableHeadTopHeight
-  const bottomHeight = layout.tableHeadBottomHeight
-  applyPdfPrintInk(doc)
-  doc.setLineWidth(pdfPrintStyle.tableLineWidth)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(pdfPrintStyle.tableHeaderFontSize)
-
-  columns.forEach((column) => {
-    doc.rect(cursorX, y, column.width, topHeight)
-    if (column.day) {
-      doc.text(column.label, cursorX + pad, y + (2.4 * layout.rowScale))
-      doc.text('Datum:', cursorX + pad, y + (4.4 * layout.rowScale))
-      doc.text(dateLabel(column.day.date), cursorX + pad, y + (6.5 * layout.rowScale), { maxWidth: column.width - (2 * pad) })
-    } else if (column.key === 'feedback') {
-      doc.text('Termin 11', cursorX + pad, y + (2.4 * layout.rowScale))
-      doc.text('Feedback-', cursorX + pad, y + (4.4 * layout.rowScale))
-      doc.text('gespräch', cursorX + pad, y + (6.5 * layout.rowScale))
-      if (column.day?.date) {
-        doc.text(dateLabel(column.day.date), cursorX + pad, y + (8.5 * layout.rowScale), { maxWidth: column.width - (2 * pad) })
-      }
-    }
-    cursorX += column.width
-  })
-
-  cursorX = x
-  columns.forEach((column) => {
-    doc.rect(cursorX, y + topHeight, column.width, bottomHeight)
-    if (column.day) {
-      doc.text('Unterschrift', cursorX + pad, y + topHeight + (2.2 * layout.rowScale))
-      doc.text('Schüler/-in', cursorX + pad, y + topHeight + (4.1 * layout.rowScale))
-    } else {
-      const lines = String(column.label).split('\n')
-      lines.forEach((line, index) => doc.text(line, cursorX + pad, y + topHeight + (2.2 * layout.rowScale) + (index * 1.9 * layout.rowScale)))
-    }
-    cursorX += column.width
-  })
-}
-
-const drawOriginalFooter = (doc, footerImage, layout) => {
-  const x = (layout.pageWidth - layout.footerWidth) / 2
-  const y = layout.pageHeight - layout.footerHeight - layout.footerBottom
-  doc.addImage(footerImage, 'JPEG', x, y, layout.footerWidth, layout.footerHeight)
-  doc.setTextColor(0, 0, 0)
-}
-
-const storeSignedPdfInFolder = async (pdfBlob, filename) => {
-  const formData = new FormData()
-  formData.append('schuleIdInputBibb', props.partnerId)
-  formData.append('schuljahrInputBibb', props.schuljahr)
-  formData.append('teilInputBibb', props.teil)
-  formData.append('filename', filename)
-  formData.append('pdf', pdfBlob, filename)
-
-  const response = await axios.post(route('anwesenheitsliste.POBO.bibb.pdf.store'), formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  })
-
-  draftRevision.value = response.data.revision || draftRevision.value
-  draftLastSavedAt.value = response.data.updated_at || draftLastSavedAt.value
-  draftExpiresAt.value = response.data.expires_at || draftExpiresAt.value
-
-  return response.data
 }
 
 const createSignedPdf = async () => {
-  if (selectedDays.value.length === 0) {
-    BibbSwal.fire('Keine Tage', 'Bitte mindestens einen Tag auswaehlen.', 'warning')
+  if (!selectedDays.value.length) {
+    PaSwal.fire('Keine Tage', 'Bitte mindestens einen PA-Tag auswaehlen.', 'warning')
     return
   }
 
   exportingPdf.value = true
 
   try {
-    const footerImage = await loadBibbFooterImage()
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: pdfFormat() })
     const layout = pdfLayout(doc)
+    const columns = pdfColumns(layout)
     const rows = sheetParticipants.value
-    const rowsPerPage = layout.rowsPerPage
-    const totalPages = Math.max(1, Math.ceil(rows.length / rowsPerPage))
-    const columns = originalColumns(layout)
+    const totalPages = Math.max(1, Math.ceil(Math.max(rows.length, 1) / layout.rowsPerPage))
 
     for (let page = 1; page <= totalPages; page++) {
       if (page > 1) doc.addPage()
-
-      drawOriginalHeader(doc, page, totalPages, layout)
-      drawOriginalTableHeader(doc, columns, layout.tableX, layout.tableY, layout)
-
-      Array.from({ length: rowsPerPage }).forEach((_, index) => {
-        const absoluteIndex = ((page - 1) * rowsPerPage) + index
-        const participant = rows[absoluteIndex] || null
-        const y = layout.tableY + layout.tableHeadTopHeight + layout.tableHeadBottomHeight + (index * layout.rowHeight)
-        let cursorX = layout.tableX
-
-        columns.forEach((column) => {
-          applyPdfPrintInk(doc)
-          doc.setLineWidth(pdfPrintStyle.tableLineWidth)
-          doc.rect(cursorX, y, column.width, layout.rowHeight)
-          doc.setFont('helvetica', 'normal')
-          doc.setFontSize(pdfPrintStyle.rowFontSize)
-          const pad = Math.max(1, layout.widthScale)
-          const textY = y + (4.7 * layout.rowScale)
-
-          if (column.key === 'nr') {
-            doc.text(String(absoluteIndex + 1), cursorX + pad, textY)
-          } else if (column.key === 'nachname') {
-            doc.text(String(participant?.nachname || ''), cursorX + pad, textY, { maxWidth: column.width - (2 * pad) })
-          } else if (column.key === 'vorname') {
-            doc.text(String(participant?.vorname || ''), cursorX + pad, textY, { maxWidth: column.width - (2 * pad) })
-          } else if (column.key === 'klasse') {
-            doc.text(String(participant?.klasse || ''), cursorX + pad, textY, { maxWidth: column.width - (2 * pad) })
-          } else if (column.day && participant) {
-            const key = signatureKey(column.day, participant)
-            const signature = signatures[key]
-            if (signature) {
-              drawPdfSignature(doc, signature, cursorX + pad, y + (0.25 * layout.rowScale), column.width - (2 * pad), layout.rowHeight - (0.5 * layout.rowScale))
-            }
-          }
-
-          cursorX += column.width
-        })
-      })
-
-      drawOriginalFooter(doc, footerImage, layout)
+      drawPdfHeader(doc, page, totalPages, layout)
+      drawPdfTableHeader(doc, columns, layout)
+      drawPdfRows(doc, columns, rows, page, layout)
     }
 
     const school = previewContext.value?.schule?.name || 'Schule'
-    const filename = `Anwesenheitsliste_BIBB_${safePdfFilePart(school, 'Schule')}_${safePdfFilePart(props.schuljahr, 'Schuljahr')}_Teil_${safePdfFilePart(props.teil, 'Teil')}.pdf`
+    const classPart = form.exportMode === 'klasse' && form.klasse ? `_Klasse_${safePdfFilePart(form.klasse, 'Klasse')}` : ''
+    const filename = `Anwesenheitsliste_PA_${safePdfFilePart(school, 'Schule')}_${safePdfFilePart(props.schuljahr, 'Schuljahr')}_Teil_${safePdfFilePart(props.teil, 'Teil')}${classPart}.pdf`
     const pdfBlob = doc.output('blob')
     let folderSave = null
     let folderSaveError = null
@@ -1035,38 +859,88 @@ const createSignedPdf = async () => {
     doc.save(filename)
 
     if (folderSave) {
-      BibbSwal.fire(
+      PaSwal.fire(
         'PDF erstellt',
         `Die PDF wurde heruntergeladen und im Ordner gespeichert: ${folderSave.folder}`,
         'success'
       )
     } else if (folderSaveError) {
-      BibbSwal.fire(
+      PaSwal.fire(
         'PDF heruntergeladen',
         `Die lokale PDF wurde erstellt, aber die Ordner-Speicherung ist fehlgeschlagen: ${folderSaveError}`,
         'warning'
       )
     }
   } catch (error) {
-    BibbSwal.fire('Fehler', 'Das PDF konnte nicht erstellt werden.', 'error')
+    PaSwal.fire('Fehler', 'Das PDF konnte nicht erstellt werden.', 'error')
   } finally {
     exportingPdf.value = false
   }
+}
+
+const clearDraft = async () => {
+  const result = await PaSwal.fire({
+    title: 'Entwurf leeren?',
+    text: 'Der zentrale Zwischenstand dieser PA-Anwesenheitsliste wird geloescht.',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Ja, leeren',
+    cancelButtonText: 'Abbrechen',
+  })
+
+  if (!result.isConfirmed) return
+
+  try {
+    await axios.delete(route('anwesenheitsliste.PA.digital.draft.destroy'), {
+      data: draftScopePayload(),
+    })
+
+    window.clearTimeout(draftSaveTimer)
+    draftSaveTimer = null
+    draftSaveRequestId++
+    draftHydrating.value = true
+    previewContext.value = null
+    allParticipants.value = []
+    days.value = []
+    selectedDayId.value = null
+    manualDate.value = ''
+    manualNote.value = ''
+    syncSignatures({}, { removeMissing: true })
+    draftHydrating.value = false
+    draftDirty.value = false
+    draftRevision.value = 0
+    draftLastSavedAt.value = null
+    draftExpiresAt.value = null
+    PaSwal.fire('Geloescht', 'Der zentrale Entwurf wurde geleert.', 'success')
+  } catch (error) {
+    PaSwal.fire('Fehler', await readBlobError(error), 'error')
+  }
+}
+
+const closeSheetFullscreen = () => {
+  sheetFullscreen.value = false
+}
+
+const toggleSheetFullscreen = () => {
+  sheetFullscreen.value = !sheetFullscreen.value
+}
+
+const handleSheetFullscreenKeydown = (event) => {
+  if (event.key === 'Escape') closeSheetFullscreen()
 }
 
 const resetState = () => {
   stopDraftTimers()
   closeSheetFullscreen()
   draftHydrating.value = true
-  draftLoaded.value = false
-  draftDirty.value = false
-  form.exportFormat = 'A3'
-  form.rolltagDate = ''
+  form.exportFormat = 'A4'
   form.startDate = ''
   form.endDate = ''
   form.includeSaturday = false
   form.includeSunday = false
   form.feedbackDate = ''
+  form.exportMode = props.klasse ? 'klasse' : 'alle'
+  form.klasse = props.klasse || ''
   previewContext.value = null
   allParticipants.value = []
   days.value = []
@@ -1074,12 +948,8 @@ const resetState = () => {
   manualDate.value = ''
   manualNote.value = ''
   Object.keys(signatures).forEach((key) => delete signatures[key])
-  draftRevision.value = 0
-  draftSaving.value = false
-  draftLoading.value = false
+  resetDraftMeta()
   draftHydrating.value = false
-  draftLastSavedAt.value = null
-  draftExpiresAt.value = null
 }
 
 const onHide = () => {
@@ -1129,7 +999,7 @@ onBeforeUnmount(() => {
 <template>
   <Dialog
     v-model:visible="localVisible"
-    header="Anwesenheitsliste BIBB"
+    header="Anwesenheitsliste PA"
     :modal="true"
     class="w-full max-w-7xl"
     @hide="onHide"
@@ -1148,16 +1018,29 @@ onBeforeUnmount(() => {
           <label class="text-sm font-semibold text-gray-700">
             <span class="mb-1 block">Format</span>
             <select v-model="form.exportFormat" class="w-full rounded border-gray-300 text-sm">
-              <option value="A3">A3</option>
               <option value="A4">A4</option>
+              <option value="A3">A3</option>
             </select>
           </label>
 
           <label class="text-sm font-semibold text-gray-700">
-            <span class="mb-1 block">Rolltag</span>
-            <input v-model="form.rolltagDate" type="date" class="w-full rounded border-gray-300 text-sm" />
+            <span class="mb-1 block">Auswahl</span>
+            <select v-model="form.exportMode" class="w-full rounded border-gray-300 text-sm" @change="reloadScope">
+              <option value="alle">Alle Klassen</option>
+              <option value="klasse">Eine Klasse</option>
+            </select>
           </label>
         </div>
+
+        <label v-if="form.exportMode === 'klasse'" class="block text-sm font-semibold text-gray-700">
+          <span class="mb-1 block">Klasse</span>
+          <select v-model="form.klasse" class="w-full rounded border-gray-300 text-sm" @change="reloadScope">
+            <option value="" disabled>Klasse auswaehlen</option>
+            <option v-for="klasseOption in klassen" :key="klasseOption" :value="klasseOption">
+              {{ klasseOption }}
+            </option>
+          </select>
+        </label>
 
         <div class="rounded border border-gray-200 p-3">
           <p class="mb-3 text-sm font-semibold text-gray-700">Zeitraum</p>
@@ -1193,6 +1076,11 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
+        <label class="block text-sm font-semibold text-gray-700">
+          <span class="mb-1 block">Feedbackgespräch</span>
+          <input v-model="form.feedbackDate" type="date" class="w-full rounded border-gray-300 text-sm" />
+        </label>
+
         <div class="rounded border border-gray-200 p-3">
           <p class="mb-3 text-sm font-semibold text-gray-700">Sondertag</p>
           <div class="grid gap-2">
@@ -1209,15 +1097,10 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <label class="block text-sm font-semibold text-gray-700">
-          <span class="mb-1 block">Feedbackgespraech</span>
-          <input v-model="form.feedbackDate" type="date" class="w-full rounded border-gray-300 text-sm" />
-        </label>
-
         <button
           type="button"
           class="inline-flex w-full items-center justify-center gap-2 rounded bg-zbb px-4 py-2 text-sm font-semibold text-white hover:bg-zbb/90 disabled:opacity-50"
-          :disabled="loadingPreview"
+          :disabled="loadingPreview || !scopeReady"
           @click="loadPreview"
         >
           <i class="la la-sync"></i>
@@ -1229,7 +1112,7 @@ onBeforeUnmount(() => {
         <div class="rounded border border-gray-200 bg-white p-4">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p class="text-xs font-semibold uppercase text-gray-500">Tage</p>
+              <p class="text-xs font-semibold uppercase text-gray-500">PA-Tage</p>
               <h3 class="text-base font-bold text-gray-900">
                 {{ selectedDays.length }} ausgewaehlt / {{ days.length }} in der Vorschau
               </h3>
@@ -1239,7 +1122,7 @@ onBeforeUnmount(() => {
               <button
                 type="button"
                 class="inline-flex items-center gap-2 rounded border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                :disabled="exportingWord || selectedDays.length === 0"
+                :disabled="exportingWord"
                 @click="handleWordExport"
               >
                 <i class="la la-file-word"></i>
@@ -1298,7 +1181,7 @@ onBeforeUnmount(() => {
           </p>
 
           <div v-if="days.length === 0" class="mt-4 rounded border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
-            Keine Tage gefunden.
+            Keine PA-Tage angelegt.
           </div>
 
           <div v-else class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -1316,26 +1199,14 @@ onBeforeUnmount(() => {
                   <span>{{ dateLabel(day.date) }}</span>
                 </label>
                 <span class="rounded bg-gray-100 px-2 py-1 text-[11px] font-semibold text-gray-700">
-                  {{ normalizeDayType(day.type) }}
+                  {{ dayTypeLabel(day) }}
                 </span>
               </div>
 
               <p class="mt-1 text-xs text-gray-500">
                 {{ weekdayLabel(day.date) }} / {{ day.participants_count }} Teilnehmer /
-                {{ signedCountForDay(day) }}/{{ expectedSignatureCountForDay(day) }} unterschrieben
+                {{ signedCountForDay(day) }}/{{ sheetParticipants.length }} unterschrieben
               </p>
-
-              <div class="mt-3 space-y-1">
-                <div v-for="group in day.groups" :key="group.id" class="rounded bg-gray-50 px-2 py-1">
-                  <p class="text-xs font-semibold text-gray-800">
-                    {{ group.label }}
-                    <span v-if="group.bereich">, Bereich {{ group.bereich }}</span>
-                  </p>
-                  <p class="text-[11px] text-gray-500">
-                    {{ groupSubtitle(group) || 'Gemeinsame Liste' }} / {{ group.participants_count }} TN
-                  </p>
-                </div>
-              </div>
 
               <input
                 v-model="day.note"
@@ -1348,16 +1219,16 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div v-if="programDays.length" :class="sheetSectionClass">
+        <div v-if="selectedDays.length" :class="sheetSectionClass">
           <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <p class="text-xs font-semibold uppercase text-gray-500">Digitales Original-Blatt</p>
               <h3 class="text-base font-bold text-gray-900">
-                Unterschriften direkt in den Termin-Spalten
+                Potenzialanalyse mit digitalen Unterschriften
               </h3>
             </div>
             <div class="flex items-center gap-2">
-              <span class="text-sm text-gray-600">{{ sheetParticipants.length }} Teilnehmer / {{ programDays.length }} Termine</span>
+              <span class="text-sm text-gray-600">{{ sheetParticipants.length }} Teilnehmer / {{ selectedDays.length }} Tage</span>
               <button
                 type="button"
                 class="inline-flex h-10 w-10 items-center justify-center rounded border border-gray-300 text-gray-700 hover:bg-gray-50"
@@ -1370,7 +1241,7 @@ onBeforeUnmount(() => {
           </div>
 
           <div :class="sheetTableWrapperClass">
-            <table class="min-w-[1180px] border-collapse text-[11px]">
+            <table class="min-w-[980px] border-collapse text-[11px]">
               <thead class="sticky top-0 z-10 bg-white">
                 <tr>
                   <th class="border border-gray-800 px-2 py-2 text-left font-semibold">Nr.</th>
@@ -1378,27 +1249,18 @@ onBeforeUnmount(() => {
                   <th class="border border-gray-800 px-2 py-2 text-left font-semibold">Vorname</th>
                   <th class="border border-gray-800 px-2 py-2 text-left font-semibold">Klasse</th>
                   <th
-                    v-for="(day, index) in programDays"
+                    v-for="(day, index) in selectedDays"
                     :key="`head-${day.id}`"
-                    class="min-w-[118px] border border-gray-800 px-2 py-2 text-left align-top font-semibold"
+                    class="min-w-[132px] border border-gray-800 px-2 py-2 text-left align-top font-semibold"
                   >
-                    <span class="block">Termin {{ index + 1 }}</span>
+                    <span class="block">Tag {{ index + 1 }}</span>
                     <span class="block font-normal">Datum: {{ dateLabel(day.date) }}</span>
-                    <span class="block font-normal">{{ normalizeDayType(day.type) }}</span>
+                    <span class="block font-normal">{{ dayTypeLabel(day) }}</span>
+                    <span class="block font-normal">Unterschrift Schueler/-in</span>
                     <span class="mt-1 block text-[10px] font-semibold text-emerald-700">
-                      {{ signedCountForDay(day) }}/{{ expectedSignatureCountForDay(day) }}
+                      {{ signedCountForDay(day) }}/{{ sheetParticipants.length }}
                     </span>
                   </th>
-                  <th class="min-w-[110px] border border-gray-800 px-2 py-2 text-left align-top font-semibold">
-                    <span class="block">Termin 11</span>
-                    <span class="block font-normal">Feedbackgespräch</span>
-                    <span class="block font-normal">Datum: {{ form.feedbackDate ? dateLabel(form.feedbackDate) : '-' }}</span>
-                    <span v-if="feedbackDay" class="mt-1 block text-[10px] font-semibold text-emerald-700">
-                      {{ signedCountForDay(feedbackDay) }}/{{ expectedSignatureCountForDay(feedbackDay) }}
-                    </span>
-                  </th>
-                  <th class="border border-gray-800 px-2 py-2 text-left font-semibold">Angebotstag</th>
-                  <th class="border border-gray-800 px-2 py-2 text-left font-semibold">Zertifikat</th>
                 </tr>
               </thead>
               <tbody>
@@ -1408,7 +1270,7 @@ onBeforeUnmount(() => {
                   <td class="border border-gray-800 px-2 py-2 align-middle">{{ participant.vorname }}</td>
                   <td class="border border-gray-800 px-2 py-2 align-middle">{{ participant.klasse }}</td>
                   <td
-                    v-for="day in programDays"
+                    v-for="day in selectedDays"
                     :key="`${day.id}-${participant.person_id || participant.id}`"
                     class="border border-gray-800 p-1 align-middle"
                     :class="hasSignature(day, participant) ? 'bg-emerald-50' : 'bg-white'"
@@ -1422,38 +1284,13 @@ onBeforeUnmount(() => {
                         <i class="la la-check-circle"></i>
                       </span>
                       <SignatureBox
-                        v-if="participantCanSignDay(participant, day)"
                         :model-value="signatures[signatureKey(day, participant)] || ''"
                         compact
                         @update:model-value="saveCompletedSignature(day, participant, $event)"
                         @cleared="removeSignature(day, participant)"
                       />
-                      <div v-else class="h-10 min-w-[92px] rounded bg-gray-100"></div>
                     </div>
                   </td>
-                  <td
-                    class="border border-gray-800 p-1 align-middle"
-                    :class="feedbackDay && hasSignature(feedbackDay, participant) ? 'bg-emerald-50' : 'bg-white'"
-                  >
-                    <div class="relative">
-                      <span
-                        v-if="feedbackDay && hasSignature(feedbackDay, participant)"
-                        class="pointer-events-none absolute right-1 top-1 z-10 text-[11px] text-emerald-700"
-                        title="Unterschrieben"
-                      >
-                        <i class="la la-check-circle"></i>
-                      </span>
-                      <SignatureBox
-                        v-if="feedbackDay"
-                        :model-value="signatures[signatureKey(feedbackDay, participant)] || ''"
-                        compact
-                        @update:model-value="saveCompletedSignature(feedbackDay, participant, $event)"
-                        @cleared="removeSignature(feedbackDay, participant)"
-                      />
-                    </div>
-                  </td>
-                  <td class="border border-gray-800 p-1 align-middle"></td>
-                  <td class="border border-gray-800 p-1 align-middle"></td>
                 </tr>
               </tbody>
             </table>
@@ -1474,7 +1311,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style>
-.bibb-swal-container {
+.pa-swal-container {
   z-index: 13000 !important;
 }
 </style>

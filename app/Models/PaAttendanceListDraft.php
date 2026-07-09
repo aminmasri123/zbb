@@ -5,7 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class BibbAttendanceListDraft extends Model
+class PaAttendanceListDraft extends Model
 {
     use HasFactory;
 
@@ -15,6 +15,8 @@ class BibbAttendanceListDraft extends Model
         'partner_id',
         'schuljahr',
         'teil',
+        'export_mode',
+        'klasse',
         'payload',
         'final_pdf_path',
         'finalized_at',

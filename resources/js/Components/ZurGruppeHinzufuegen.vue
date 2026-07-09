@@ -92,7 +92,7 @@ defineExpose({ open })
     <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-lg">
       <div class="flex justify-between items-center mb-4">
         <h2 class="text-lg font-semibold">
-          {{ $t('zur gruppe hinzufügen') }}
+          {{ $t('zur Gruppe hinzufügen') }}
         </h2>
         <button
           @click="showModal = false"

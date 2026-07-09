@@ -15,7 +15,13 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule)
     {
-        // $schedule->command('inspire')->hourly();
+        $schedule->command('bibb:purge-expired-attendance-drafts')
+            ->dailyAt('02:30')
+            ->withoutOverlapping();
+
+        $schedule->command('pa:purge-expired-attendance-drafts')
+            ->dailyAt('02:35')
+            ->withoutOverlapping();
     }
 
     /**

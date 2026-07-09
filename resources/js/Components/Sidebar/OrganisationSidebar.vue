@@ -5,7 +5,7 @@
             <span>{{$t('übersicht')}}</span>
         </li>
         <!-- Dashboard Submenu -->
-        <li class="submenu">
+        <li v-if="can('dashboard.index')" class="submenu">
             <a href="#" @click.prevent="toggleMenu('dashboard')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                 <i class="la la-dashboard la-lg mr-2"></i>
                 <span v-if="!displayHideTextSidebar" class="pr-16">{{$t('dashboard')}}</span>
@@ -16,25 +16,25 @@
             </ul>
         </li>
         <!-- Partner Submenu -->
-        <li v-if="$page.props.roles.includes('Administrator')" class="submenu" >
+        <li v-if="canAny(['kooperationspartner.index', 'kooperationspartner.store', 'kooperationspartner.update'])" class="submenu" >
             <a href="#" @click.prevent="toggleMenu('partner')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                 <i class="la la-handshake la-lg mr-2"></i>
                 <span v-if="!displayHideTextSidebar" class="pr-16">{{$t('Partner')}}</span>
                 <span :class="{'rotate-180': activeMenu === 'partner'}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
             </a>
             <ul v-show="activeMenu === 'partner'" class="pl-6 mt-2 space-y-2">
-                <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('partner.index')">{{$t('Partnerübersicht')}}</Link></li>
+                <li v-if="can('kooperationspartner.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('partner.index')">{{$t('Partnerübersicht')}}</Link></li>
             </ul>
         </li>
         <!-- Benutzer Submenu -->
-        <li v-if="$page.props.roles.includes('Administrator')" class="submenu" >
+        <li v-if="canAny(['benutzer.index', 'benutzer.store'])" class="submenu" >
             <a href="#" @click.prevent="toggleMenu('benutzer')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                 <i class="la la-dashboard la-lg mr-2"></i>
                 <span v-if="!displayHideTextSidebar" class="pr-16">{{$t('benutzer')}}</span>
                 <span :class="{'rotate-180': activeMenu === 'benutzer'}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
             </a>
             <ul v-show="activeMenu === 'benutzer'" class="pl-6 mt-2 space-y-2">
-                <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('user.index')">{{$t('benutzerübersicht')}}</Link></li>
+                <li v-if="can('benutzer.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('user.index')">{{$t('benutzerübersicht')}}</Link></li>
             </ul>
         </li>
 
@@ -47,6 +47,9 @@
 <script setup>
 import { Head, Link, router } from '@inertiajs/vue3';
 import SidebarLayout from '../Sidebar/SidebarLayout.vue';
+import { usePermissions } from '@/utils/permissions';
+
+const { can, canAny } = usePermissions();
 
 </script>
 <script>

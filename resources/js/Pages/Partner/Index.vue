@@ -9,7 +9,7 @@ import ModalCreate from '@/Pages/Partner/ModalCreate.vue';
 import ModalDestroy from '@/Components/ModalDestroyForm.vue';
 import ModalEdit from '@/Pages/Partner/ModalEdit.vue';
 import ModalAnwesenheitslisteBIBB from './BOP/ModalAnwesenheitslisteBIBBDigital.vue';
-import ModalAnwesenheitslistePA from './BOP/ModalAnwesenheitslistePA.vue'; // fehlte
+import ModalAnwesenheitslistePA from './BOP/ModalAnwesenheitslistePADigital.vue';
 import ModalBoTag1 from './BOP/ModalBoTag1.vue'
 import ModalHausordnung from './BOP/ModalHausordnung.vue';
 

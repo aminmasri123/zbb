@@ -31,7 +31,7 @@
                     </div>
                 </div>
                 <div class="hidden space-x-8 sm:-my-px sm:flex text-center ">
-                    <NavLink :href="route('dashboard')"
+                    <NavLink v-if="canAny(dashboardNavPermissions)" :href="route('dashboard')"
                         :active="route().current('dashboard')
                             || route().current('dashboard.*')
                             || route().current('user.*')
@@ -44,13 +44,13 @@
                     class="text-[17px] text-[var(--primary)]">
                         {{ $t('dashboard') }}
                     </NavLink>
-                    <NavLink :href="route('organisation.index')" :active="route().current('organisation.index')" class="text-[17px] text-[var(--primary)]">
+                    <NavLink v-if="canAny(organisationNavPermissions)" :href="route('organisation.index')" :active="route().current('organisation.index')" class="text-[17px] text-[var(--primary)]">
                         {{ $t('organisation') }}
                     </NavLink>
-                    <NavLink :href="route('ressourcen.index')" :active="route().current('ressourcen.index')" class="text-[17px] text-[var(--primary)]">
+                    <NavLink v-if="canAny(ressourcenNavPermissions)" :href="route('ressourcen.index')" :active="route().current('ressourcen.index')" class="text-[17px] text-[var(--primary)]">
                         {{ $t('Ressourcen') }}
                     </NavLink>
-                    <NavLink :href="route('finanzen.index')" :active="route().current('finanzen.index')" class="text-[17px] text-[var(--primary)]">
+                    <NavLink v-if="canAny(finanzenNavPermissions)" :href="route('finanzen.index')" :active="route().current('finanzen.index')" class="text-[17px] text-[var(--primary)]">
                         {{ $t('Finanzen') }}
                     </NavLink>
                 </div>
@@ -176,7 +176,7 @@
 
 
 
-                            <span @click="markAllAsRead" class=" flex text-xs text-gray-100 justify-center cursor-pointer p-2 bg-gray-700 hover:bg-gray-900">{{$t('Alle als gelesen markieren')}}</span>
+                            <span v-if="can('notifications.readAll')" @click="markAllAsRead" class=" flex text-xs text-gray-100 justify-center cursor-pointer p-2 bg-gray-700 hover:bg-gray-900">{{$t('Alle als gelesen markieren')}}</span>
                         </template>
                         <!-- Dropdown content -->
                     </Dropdown>
@@ -256,14 +256,17 @@
         <!-- Responsive Navigation Menu -->
         <div :class="{'block': showingNavigationDropdown, 'hidden': !showingNavigationDropdown}" class="sm:hidden">
             <div class="pt-2 pb-3 space-y-1">
-                <ResponsiveNavLink :href="route('dashboard')" :active="['dashboard','benutzer','partner','abteilung','projekt','bereich','einstellung'].includes(route().current()) || route().current('klassenbuch.*')">
+                <ResponsiveNavLink v-if="canAny(dashboardNavPermissions)" :href="route('dashboard')" :active="['dashboard','benutzer','partner','abteilung','projekt','bereich','einstellung'].includes(route().current()) || route().current('klassenbuch.*')">
                     {{$t('dashboard')}}
                 </ResponsiveNavLink>
-                <ResponsiveNavLink :href="route('organisation.index')" :active="route().current('organisation.index')">
+                <ResponsiveNavLink v-if="canAny(organisationNavPermissions)" :href="route('organisation.index')" :active="route().current('organisation.index')">
                     {{$t('organisation')}}
                 </ResponsiveNavLink>
-                <ResponsiveNavLink :href="route('ressourcen.index')" :active="route().current('ressourcen.index')">
+                <ResponsiveNavLink v-if="canAny(ressourcenNavPermissions)" :href="route('ressourcen.index')" :active="route().current('ressourcen.index')">
                     {{ $t('Ressourcen') }}
+                </ResponsiveNavLink>
+                <ResponsiveNavLink v-if="canAny(finanzenNavPermissions)" :href="route('finanzen.index')" :active="route().current('finanzen.index')">
+                    {{ $t('Finanzen') }}
                 </ResponsiveNavLink>
             </div>
 
@@ -308,6 +311,7 @@
     import axios from 'axios';
     import { useI18n } from 'vue-i18n';
     import { switchTheme } from '../../theme';
+    import { usePermissions } from '@/utils/permissions';
 
     const sidebarTextHidden = ref(false);
     const props = defineProps({
@@ -337,7 +341,47 @@ function switchToProjekt(projekt) {
 
 
 const page = usePage();
+const { can, canAny } = usePermissions();
 const notifications = ref(page.props.notify?.notifications || []);
+const dashboardNavPermissions = [
+    'dashboard.index',
+    'apps.index',
+    'benutzer.index',
+    'kooperationspartner.index',
+    'standort.index',
+    'abteilung.index',
+    'projekt.index',
+    'bereich.index',
+    'gruppe.index',
+    'teilnehmer.index',
+    'klassenbuch.index',
+    'berechtigung.index',
+    'materialanforderung.index',
+];
+const organisationNavPermissions = [
+    'organisation.index',
+    'kooperationspartner.index',
+    'benutzer.index',
+];
+const ressourcenNavPermissions = [
+    'ressourcen.index',
+    'personal.index',
+    'dienstwagen.index',
+    'dienstwagen.fahrtenbuch.index',
+    'dienstwagen.wartung.index',
+    'dienstwagen.reports.index',
+    'raeumlichkeiten.index',
+    'geraet.index',
+    'geraet.ausgabe.index',
+    'geraet.rueckgabe.index',
+];
+const finanzenNavPermissions = [
+    'finanzen.index',
+    'fahrtarten.index',
+    'fahrtkosten.index',
+    'fahrtkostenAbrechnung.store',
+    'printing.index',
+];
 const currentProjektName = computed(() => {
     if (page.props.currentProjekt?.name) {
         return page.props.currentProjekt.name;

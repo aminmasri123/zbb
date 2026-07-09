@@ -466,7 +466,15 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::post('export-anwesenheitsliste-pobo/draft', [ProjektBopController::class, 'anwesenheitslistePOBODraftShowBIBB'])->name('anwesenheitsliste.POBO.bibb.draft.show');
     Route::put('export-anwesenheitsliste-pobo/draft', [ProjektBopController::class, 'anwesenheitslistePOBODraftStoreBIBB'])->name('anwesenheitsliste.POBO.bibb.draft.store');
     Route::delete('export-anwesenheitsliste-pobo/draft', [ProjektBopController::class, 'anwesenheitslistePOBODraftDestroyBIBB'])->name('anwesenheitsliste.POBO.bibb.draft.destroy');
+    Route::post('export-anwesenheitsliste-pobo/archive-folder', [ProjektBopController::class, 'anwesenheitslistePOBOArchiveFolderBIBB'])->name('anwesenheitsliste.POBO.bibb.archive.folder');
+    Route::post('export-anwesenheitsliste-pobo/pdf-folder', [ProjektBopController::class, 'anwesenheitslistePOBOSignedPdfStoreBIBB'])->name('anwesenheitsliste.POBO.bibb.pdf.store');
     Route::post('export-anwesenheitsliste-pobo', [ProjektBopController::class, 'anwesenheitslistePOBOExportWordBIBB'])->name('anwesenheitsliste.POBO.bibb.export.word');
+    Route::post('export-anwesenheitsliste/pa/preview', [ProjektBopController::class, 'anwesenheitslistePAPreviewDigital'])->name('anwesenheitsliste.PA.digital.preview');
+    Route::post('export-anwesenheitsliste/pa/draft', [ProjektBopController::class, 'anwesenheitslistePADraftShow'])->name('anwesenheitsliste.PA.digital.draft.show');
+    Route::put('export-anwesenheitsliste/pa/draft', [ProjektBopController::class, 'anwesenheitslistePADraftStore'])->name('anwesenheitsliste.PA.digital.draft.store');
+    Route::delete('export-anwesenheitsliste/pa/draft', [ProjektBopController::class, 'anwesenheitslistePADraftDestroy'])->name('anwesenheitsliste.PA.digital.draft.destroy');
+    Route::post('export-anwesenheitsliste/pa/archive-folder', [ProjektBopController::class, 'anwesenheitslistePAArchiveFolder'])->name('anwesenheitsliste.PA.digital.archive.folder');
+    Route::post('export-anwesenheitsliste/pa/pdf-folder', [ProjektBopController::class, 'anwesenheitslistePASignedPdfStore'])->name('anwesenheitsliste.PA.digital.pdf.store');
     Route::post('export-anwesenheitsliste/pa', [ProjektBopController::class, 'anwesenheitslistePAexportWord'])->name('anwesenheitsliste.PA.export.word');
     Route::get('/export-anwesenheitsliste-pobo/tag1/{partnerID}/{schuljahr}/{teil}/{klasse?}', [ProjektBopController::class, 'anwesenheitslistePOBOTag1'])->name('anwesenheitsliste.BoTag1.export');
     Route::get('/export/hausordnung/{partnerId}/{schuljahr}/{teil}/{sortBy}/{termin}', [ProjektBopController::class, 'hausordnungExportPdf'])->name('hausordnung.export.schule.pdf');
