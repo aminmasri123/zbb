@@ -69,5 +69,7 @@ class Kernel extends HttpKernel
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'injectUserPermissions' => \App\Http\Middleware\InjectUserPermissions::class, // Permission und Rolle überprüfen
         'injectUserProjekte'=> \App\Http\Middleware\InjectUserProjekte::class,
+        'canAnyPermission' => \App\Http\Middleware\AuthorizeAnyPermission::class,
+        'configuredNotifications' => \App\Http\Middleware\DispatchConfiguredRouteNotification::class,
     ];
 }

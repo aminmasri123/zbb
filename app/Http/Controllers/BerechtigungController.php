@@ -2,10 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
+use App\Models\Role;
 use Inertia\Inertia;
 use App\Models\RoleDataAccessSetting;
-use Spatie\Permission\Models\Role;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use App\Models\Berechtigungskategorie;
@@ -27,7 +26,7 @@ class BerechtigungController extends Controller
         $role = Role::findById($id);
 
         // Aktuell angemeldeten Benutzer abrufen
-        $user = User::find(Auth::user())->first(); // Auth::user() gibt bereits das Benutzerobjekt zurück
+        $user = Auth::user();
         $userRoles = $user->getRoleNames();
         // IDs der Rollen abrufen
         $userRoleIds = Role::whereIn('name', $userRoles)->pluck('id'); // IDs der Rollen abrufen

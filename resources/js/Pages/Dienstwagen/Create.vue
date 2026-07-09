@@ -5,6 +5,9 @@ import { ref, computed  } from 'vue';
 import Select from 'primevue/select';
 import FloatLabel from 'primevue/floatlabel';
 import DatePicker from 'primevue/datepicker';
+import InputText from 'primevue/inputtext';
+import Textarea from 'primevue/textarea';
+import { toLocalDateString } from '@/utils/dateFormat.js';
 
 const props = defineProps({
     drivers: Array,
@@ -29,7 +32,7 @@ const statuswerte = ref([
 
 const form = ref({
     typ: "",
-    Kennzeichen: "",
+    kennzeichen: "",
     marke: "",
     modell: "",
     baujahr: "",
@@ -38,6 +41,20 @@ const form = ref({
     standort_id: "",
     status: "verfügbar",
     naechste_wartung: "",
+    bild: null,
+    fin: "",
+    hsn_tsn: "",
+    tuev_bis: "",
+    au_bis: "",
+    oelwechsel_am: "",
+    oelwechsel_km: "",
+    versicherung_bis: "",
+    steuer_faellig_am: "",
+    inspektion_am: "",
+    reifenwechsel_am: "",
+    leasing_bis: "",
+    tankkarte: "",
+    notizen: "",
     allowed_drivers: []
 });
 
@@ -60,8 +77,28 @@ const gefilterteFahrer = computed(() => {
     });
 });
 
+const dateFields = [
+    'naechste_wartung',
+    'tuev_bis',
+    'au_bis',
+    'oelwechsel_am',
+    'versicherung_bis',
+    'steuer_faellig_am',
+    'inspektion_am',
+    'reifenwechsel_am',
+    'leasing_bis',
+];
+
 function submit() {
-    router.post(route('dienstwagen.store'), form.value);
+    const payload = { ...form.value };
+
+    dateFields.forEach((field) => {
+        payload[field] = toLocalDateString(payload[field]);
+    });
+
+    router.post(route('dienstwagen.store'), payload, {
+        forceFormData: true,
+    });
 }
 </script>
 
@@ -137,17 +174,86 @@ function submit() {
                 <label for="status">Fahrzeugtyp wählen</label>
             </FloatLabel>
 
-              <!-- Nächste Wartung -->
-            <FloatLabel variant="on" >
-                <DatePicker  v-model="form.naechste_wartung" dateFormat="dd-mm-yy" class="w-full" inputClass="w-full" showIcon iconDisplay="input" />
-                <label for="naechste_wartungs">Nächste Wartung</label>
-            </FloatLabel>
+	              <!-- Nächste Wartung -->
+	            <FloatLabel variant="on" >
+	                <DatePicker  v-model="form.naechste_wartung" dateFormat="dd-mm-yy" class="w-full" inputClass="w-full" showIcon iconDisplay="input" />
+	                <label for="naechste_wartungs">Nächste Wartung</label>
+	            </FloatLabel>
 
+                <div class="col-span-2 grid grid-cols-2 gap-6 border-t pt-6">
+                    <FloatLabel variant="on">
+                        <InputText v-model="form.fin" class="w-full" />
+                        <label>FIN / Fahrgestellnummer</label>
+                    </FloatLabel>
 
+                    <FloatLabel variant="on">
+                        <InputText v-model="form.hsn_tsn" class="w-full" />
+                        <label>HSN / TSN</label>
+                    </FloatLabel>
 
+                    <FloatLabel variant="on">
+                        <DatePicker v-model="form.tuev_bis" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" showIcon iconDisplay="input" />
+                        <label>TÜV bis</label>
+                    </FloatLabel>
 
-           <!-- Fahrerberechtigungen -->
-            <div class="col-span-2">
+                    <FloatLabel variant="on">
+                        <DatePicker v-model="form.au_bis" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" showIcon iconDisplay="input" />
+                        <label>AU bis</label>
+                    </FloatLabel>
+
+                    <FloatLabel variant="on">
+                        <DatePicker v-model="form.oelwechsel_am" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" showIcon iconDisplay="input" />
+                        <label>Ölwechsel am</label>
+                    </FloatLabel>
+
+                    <FloatLabel variant="on">
+                        <InputText v-model="form.oelwechsel_km" type="number" class="w-full" />
+                        <label>Ölwechsel bei km</label>
+                    </FloatLabel>
+
+                    <FloatLabel variant="on">
+                        <DatePicker v-model="form.versicherung_bis" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" showIcon iconDisplay="input" />
+                        <label>Versicherung bis</label>
+                    </FloatLabel>
+
+                    <FloatLabel variant="on">
+                        <DatePicker v-model="form.steuer_faellig_am" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" showIcon iconDisplay="input" />
+                        <label>Steuer fällig am</label>
+                    </FloatLabel>
+
+                    <FloatLabel variant="on">
+                        <DatePicker v-model="form.inspektion_am" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" showIcon iconDisplay="input" />
+                        <label>Inspektionstermin</label>
+                    </FloatLabel>
+
+                    <FloatLabel variant="on">
+                        <DatePicker v-model="form.reifenwechsel_am" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" showIcon iconDisplay="input" />
+                        <label>Reifenwechsel am</label>
+                    </FloatLabel>
+
+                    <FloatLabel variant="on">
+                        <DatePicker v-model="form.leasing_bis" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" showIcon iconDisplay="input" />
+                        <label>Leasing bis</label>
+                    </FloatLabel>
+
+                    <FloatLabel variant="on">
+                        <InputText v-model="form.tankkarte" class="w-full" />
+                        <label>Tankkarte / Ladekarte</label>
+                    </FloatLabel>
+
+                    <div class="col-span-2">
+                        <label class="block mb-2 font-semibold">Fahrzeugbild</label>
+                        <input type="file" accept="image/*" class="form-input" @change="form.bild = $event.target.files[0] || null" />
+                    </div>
+
+                    <FloatLabel variant="on" class="col-span-2">
+                        <Textarea v-model="form.notizen" rows="4" class="w-full" />
+                        <label>Interne Notizen</label>
+                    </FloatLabel>
+                </div>
+
+	           <!-- Fahrerberechtigungen -->
+	            <div class="col-span-2">
                 <label class="block mb-2 font-semibold">Zugelassene Fahrer</label>
 
                 <!-- Suchfeld -->

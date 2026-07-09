@@ -378,6 +378,7 @@ const ressourcenNavPermissions = [
     'dienstwagen.wartung.index',
     'dienstwagen.reports.index',
     'raeumlichkeiten.index',
+    'lager.index',
     'geraet.index',
     'geraet.ausgabe.index',
     'geraet.rueckgabe.index',

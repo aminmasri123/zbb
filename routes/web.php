@@ -13,8 +13,10 @@ use App\Http\Controllers\BopLegacyFunctionController;
 use App\Http\Controllers\BriefController;
 use App\Http\Controllers\DashbaordController;
 use App\Http\Controllers\DienstwagenController;
+use App\Http\Controllers\DienstwagenBuchungController;
 use App\Http\Controllers\DienstwagenfahrtenbuchController;
 use App\Http\Controllers\DienstwagenkostenController;
+use App\Http\Controllers\DienstwagenMeldungController;
 use App\Http\Controllers\DienstwagenreportsController;
 use App\Http\Controllers\DienstwagenwartungController;
 use App\Http\Controllers\DokumenteController;
@@ -29,9 +31,11 @@ use App\Http\Controllers\GeraetController;
 use App\Http\Controllers\GeraetrueckgabeController;
 use App\Http\Controllers\GruppeController;
 use App\Http\Controllers\GruppeHasTeilnehmerController;
+use App\Http\Controllers\ItServiceController;
 use App\Http\Controllers\KlassenbuchController;
 use App\Http\Controllers\KontaktController;
 use App\Http\Controllers\KostenstelleController;
+use App\Http\Controllers\LagerController;
 use App\Http\Controllers\MaterialanforderungController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\NotificationRuleController;
@@ -96,7 +100,7 @@ Route::get('/bereichsauswahl/zugang/{token}/danke', [ProjektBopController::class
 
 //Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProjekte'])->group(function() {
 
-Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->group(function() {
+Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'configuredNotifications'])->group(function() {
 
     Route::post('/benutzer/theme', function () {
         $data = request()->validate([
@@ -114,6 +118,10 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     })->name('user.theme.update');
 
     Route::get('/dashboard', [DashbaordController::class, 'dashboard'])->name('dashboard');
+    Route::get('/fw/{id}', [DienstwagenfahrtenbuchController::class, 'scan'])
+        ->name('dienstwagen.fahrtenbuch.scan')
+        ->can('dienstwagen.fahrtenbuch.index');
+
     Route::prefix('apps')->name('apps.')->group(function () {
         Route::get('/', [AppsController::class, 'index'])->name('index');
 
@@ -180,16 +188,16 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
 
     //Einstellung -- Rolle
     Route::get('/berechtigung/{id?}', [BerechtigungController::class, 'index'])->name('berechtigung.index')->can('berechtigung.index');
-    Route::post('/berechtigungZuweisen', [BerechtigungController::class, 'berechtigungZuweisen'])->name('berechtigung.zuweisen')->can('berechtigung.update');
-    Route::post('/berechtigungKategorieZuweisen', [BerechtigungController::class, 'berechtigungKategorieZuweisen'])->name('berechtigung.kategorie.zuweisen')->can('berechtigung.update');
-    Route::put('/rolle/{role}/datenzugriff', [RoleDataAccessController::class, 'update'])->name('rolle.data-access.update')->can('berechtigung.update');
-    Route::get('/einstellung/benachrichtigungen', [NotificationRuleController::class, 'index'])->name('notification-rules.index')->can('berechtigung.update');
-    Route::post('/einstellung/benachrichtigungen', [NotificationRuleController::class, 'store'])->name('notification-rules.store')->can('berechtigung.update');
-    Route::put('/einstellung/benachrichtigungen/{notificationRule}', [NotificationRuleController::class, 'update'])->name('notification-rules.update')->can('berechtigung.update');
-    Route::delete('/einstellung/benachrichtigungen/{notificationRule}', [NotificationRuleController::class, 'destroy'])->name('notification-rules.destroy')->can('berechtigung.update');
+    Route::post('/berechtigungZuweisen', [BerechtigungController::class, 'berechtigungZuweisen'])->name('berechtigung.zuweisen')->middleware('canAnyPermission:berechtigung.zuweisen,berechtigung.update');
+    Route::post('/berechtigungKategorieZuweisen', [BerechtigungController::class, 'berechtigungKategorieZuweisen'])->name('berechtigung.kategorie.zuweisen')->middleware('canAnyPermission:berechtigung.zuweisen,berechtigung.update');
+    Route::put('/rolle/{role}/datenzugriff', [RoleDataAccessController::class, 'update'])->name('rolle.data-access.update')->middleware('canAnyPermission:rolle.data-access.update,berechtigung.update');
+    Route::get('/einstellung/benachrichtigungen', [NotificationRuleController::class, 'index'])->name('notification-rules.index')->middleware('canAnyPermission:notification-rules.index,notification-rules.update,berechtigung.update');
+    Route::post('/einstellung/benachrichtigungen', [NotificationRuleController::class, 'store'])->name('notification-rules.store')->middleware('canAnyPermission:notification-rules.store,notification-rules.update,berechtigung.update');
+    Route::put('/einstellung/benachrichtigungen/{notificationRule}', [NotificationRuleController::class, 'update'])->name('notification-rules.update')->middleware('canAnyPermission:notification-rules.update,berechtigung.update');
+    Route::delete('/einstellung/benachrichtigungen/{notificationRule}', [NotificationRuleController::class, 'destroy'])->name('notification-rules.destroy')->middleware('canAnyPermission:notification-rules.destroy,notification-rules.update,berechtigung.update');
 
-    Route::delete('/rolle/loeschen/{id}', [RolleController::class, 'destroy'])->name('rolle.destroy');
-    Route::post('/rolle/anlegen', [RolleController::class, 'store'])->name('rolle.store');
+    Route::delete('/rolle/loeschen/{id}', [RolleController::class, 'destroy'])->name('rolle.destroy')->middleware('canAnyPermission:rolle.destroy,berechtigung.update');
+    Route::post('/rolle/anlegen', [RolleController::class, 'store'])->name('rolle.store')->middleware('canAnyPermission:rolle.store,berechtigung.store,berechtigung.update');
 
     //Benutzer
     Route::get('/benutzer', [UserController::class, 'index'])->name('user.index')->can('benutzer.index');
@@ -297,6 +305,9 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::delete('/ressourcen/standort/raeumlichkeiten/entfernen/{id}', [RaumlichkeitenController::class, 'destroy'])->name('raeumlichkeiten.destroy');
     Route::post('/ressourcen/standort/raeumlichkeiten/{raum}/meldung', [RaumlichkeitenController::class, 'storeMeldung'])->name('raeumlichkeiten.meldung.store');
     Route::put('/ressourcen/standort/raeumlichkeiten/meldung/{meldung}', [RaumlichkeitenController::class, 'updateMeldung'])->name('raeumlichkeiten.meldung.update');
+    Route::post('/ressourcen/standort/raeumlichkeiten/buchung', [RaumlichkeitenController::class, 'storeBuchung'])->name('raeumlichkeiten.buchung.store');
+    Route::put('/ressourcen/standort/raeumlichkeiten/buchung/{buchung}', [RaumlichkeitenController::class, 'updateBuchung'])->name('raeumlichkeiten.buchung.update');
+    Route::delete('/ressourcen/standort/raeumlichkeiten/buchung/{buchung}', [RaumlichkeitenController::class, 'destroyBuchung'])->name('raeumlichkeiten.buchung.destroy');
 
     //Anwesenheiten
     Route::post('/anwesenheit/speichern', [AnwesenheitController::class, 'store'])->name('anwesenheit.store');
@@ -382,37 +393,53 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
 
     Route::prefix('ressourcen')->name('dienstwagen.')->group(function () {
         // Fahrzeuge
-        Route::get('/dienstwagen', [DienstwagenController::class, 'index'])->name('index');
-        Route::get('/dienstwagen/edit/{id}', [DienstwagenController::class, 'edit'])->name('edit');
-        Route::get('/dienstwagen/create', [DienstwagenController::class, 'create'])->name('create');
-        Route::post('/dienstwagen', [DienstwagenController::class, 'store'])->name('store');
-        Route::delete('/dienstwagen/{wagen}', [DienstwagenController::class, 'destroy'])->name('destroy');
-        Route::put('dienstwagen/update/{id}', [DienstwagenController::class, 'update'])->name('update');
+        Route::get('/dienstwagen', [DienstwagenController::class, 'index'])->name('index')->can('dienstwagen.index');
+        Route::get('/dienstwagen/edit/{id}', [DienstwagenController::class, 'edit'])->name('edit')->can('dienstwagen.edit');
+        Route::get('/dienstwagen/create', [DienstwagenController::class, 'create'])->name('create')->can('dienstwagen.create');
+        Route::get('/dienstwagen/{id}/verlauf', [DienstwagenController::class, 'verlauf'])->name('verlauf.index')->can('dienstwagen.verlauf.index');
+        Route::get('/dienstwagen/{id}/fahrtenbuch-code', [DienstwagenController::class, 'fahrtenbuchCode'])->name('fahrtenbuch.code')->can('dienstwagen.fahrtenbuch.index');
+        Route::post('/dienstwagen', [DienstwagenController::class, 'store'])->name('store')->can('dienstwagen.store');
+        Route::delete('/dienstwagen/{wagen}', [DienstwagenController::class, 'destroy'])->name('destroy')->can('dienstwagen.destroy');
+        Route::put('dienstwagen/update/{id}', [DienstwagenController::class, 'update'])->name('update')->can('dienstwagen.update');
 
         // Fahrer
-        Route::get('/drivers', [DienstwagenController::class, 'index'])->name('drivers.index');
+        Route::get('/drivers', [DienstwagenController::class, 'index'])->name('drivers.index')->can('dienstwagen.drivers.index');
 
         // Wartung
-        Route::get('/wartung', [DienstwagenwartungController::class, 'index'])->name('wartung.index');
-        Route::post('/wartung', [DienstwagenwartungController::class, 'store'])->name('wartung.store');
-        Route::put('/wartung/edit/{id}', [DienstwagenwartungController::class, 'update'])->name('wartung.update');
-        Route::delete('/wartung/{id}', [DienstwagenwartungController::class, 'destroy'])->name('wartung.destroy');
+        Route::get('/wartung', [DienstwagenwartungController::class, 'index'])->name('wartung.index')->can('dienstwagen.wartung.index');
+        Route::post('/wartung', [DienstwagenwartungController::class, 'store'])->name('wartung.store')->can('dienstwagen.wartung.store');
+        Route::put('/wartung/edit/{id}', [DienstwagenwartungController::class, 'update'])->name('wartung.update')->can('dienstwagen.wartung.update');
+        Route::delete('/wartung/{id}', [DienstwagenwartungController::class, 'destroy'])->name('wartung.destroy')->can('dienstwagen.wartung.destroy');
 
         // Kosten
-        Route::get('/kosten', [DienstwagenkostenController::class, 'index'])->name('kosten.index');
-        Route::post('/kosten', [DienstwagenkostenController::class, 'store'])->name('kosten.store');
+        Route::get('/kosten', [DienstwagenkostenController::class, 'index'])->name('kosten.index')->can('dienstwagen.kosten.index');
+        Route::post('/kosten', [DienstwagenkostenController::class, 'store'])->name('kosten.store')->can('dienstwagen.kosten.store');
+        Route::put('/kosten/{id}', [DienstwagenkostenController::class, 'update'])->name('kosten.update')->can('dienstwagen.kosten.update');
+        Route::delete('/kosten/{id}', [DienstwagenkostenController::class, 'destroy'])->name('kosten.destroy')->can('dienstwagen.kosten.destroy');
+
+        // Buchungen
+        Route::get('/buchungen', [DienstwagenBuchungController::class, 'index'])->name('buchungen.index')->can('dienstwagen.buchungen.index');
+        Route::post('/buchungen', [DienstwagenBuchungController::class, 'store'])->name('buchungen.store')->can('dienstwagen.buchungen.store');
+        Route::put('/buchungen/{id}', [DienstwagenBuchungController::class, 'update'])->name('buchungen.update')->can('dienstwagen.buchungen.update');
+        Route::delete('/buchungen/{id}', [DienstwagenBuchungController::class, 'destroy'])->name('buchungen.destroy')->can('dienstwagen.buchungen.destroy');
+
+        // Meldungen
+        Route::get('/meldungen', [DienstwagenMeldungController::class, 'index'])->name('meldungen.index')->can('dienstwagen.meldungen.index');
+        Route::post('/meldungen', [DienstwagenMeldungController::class, 'store'])->name('meldungen.store')->can('dienstwagen.meldungen.store');
+        Route::put('/meldungen/{id}', [DienstwagenMeldungController::class, 'update'])->name('meldungen.update')->can('dienstwagen.meldungen.update');
+        Route::delete('/meldungen/{id}', [DienstwagenMeldungController::class, 'destroy'])->name('meldungen.destroy')->can('dienstwagen.meldungen.destroy');
 
         // Berichte
-        Route::get('/dienstwagen/reports', [DienstwagenreportsController::class, 'index'])->name('reports.index');
+        Route::get('/dienstwagen/reports', [DienstwagenreportsController::class, 'index'])->name('reports.index')->can('dienstwagen.reports.index');
 
         // Fahrtenbuch
-        Route::get('/fahrtenbuch', [DienstwagenfahrtenbuchController::class, 'index'])->name('fahrtenbuch.index');
-        Route::post('/fahrtenbuch', [DienstwagenfahrtenbuchController::class, 'store'])->name('fahrtenbuch.store');
-        Route::put('/fahrtenbuch/edit/{id}', [DienstwagenfahrtenbuchController::class, 'update'])->name('fahrtenbuch.update');
-        Route::delete('/fahrtenbuch/{id}', [DienstwagenfahrtenbuchController::class, 'destroy'])->name('fahrtenbuch.destroy');
-        Route::get('/fahrtenbuch/report', [DienstwagenfahrtenbuchController::class, 'generateFahrtenbuchReport'])->name('fahrtenbuch.report');
-        Route::get('/fahrtenbuch/report/pdf', [DienstwagenfahrtenbuchController::class, 'generateFahrtenbuchPDF'])->name('fahrtenbuch.report.pdf');
-        Route::get('/fahrtenbuch/report/excel', [DienstwagenfahrtenbuchController::class, 'generateFahrtenbuchExcel'])->name('fahrtenbuch.report.excel');
+        Route::get('/fahrtenbuch', [DienstwagenfahrtenbuchController::class, 'index'])->name('fahrtenbuch.index')->can('dienstwagen.fahrtenbuch.index');
+        Route::post('/fahrtenbuch', [DienstwagenfahrtenbuchController::class, 'store'])->name('fahrtenbuch.store')->can('dienstwagen.fahrtenbuch.store');
+        Route::put('/fahrtenbuch/edit/{id}', [DienstwagenfahrtenbuchController::class, 'update'])->name('fahrtenbuch.update')->can('dienstwagen.fahrtenbuch.update');
+        Route::delete('/fahrtenbuch/{id}', [DienstwagenfahrtenbuchController::class, 'destroy'])->name('fahrtenbuch.destroy')->can('dienstwagen.fahrtenbuch.destroy');
+        Route::get('/fahrtenbuch/report', [DienstwagenfahrtenbuchController::class, 'generateFahrtenbuchReport'])->name('fahrtenbuch.report')->can('dienstwagen.fahrtenbuch.report');
+        Route::get('/fahrtenbuch/report/pdf', [DienstwagenfahrtenbuchController::class, 'generateFahrtenbuchPDF'])->name('fahrtenbuch.report.pdf')->can('dienstwagen.fahrtenbuch.report.pdf');
+        Route::get('/fahrtenbuch/report/excel', [DienstwagenfahrtenbuchController::class, 'generateFahrtenbuchExcel'])->name('fahrtenbuch.report.excel')->can('dienstwagen.fahrtenbuch.report.excel');
     });
     //End Prefix Ressourcen
 
@@ -457,6 +484,28 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::get('/ressourcen/geraetrueckgabe-excel/{id}', [GeraetrueckgabeController::class, 'exportExcel'])->name('geraet.rueckgabe.export.excel');
     Route::post('/ressourcen/geraetrueckgabe-store-add', [GeraetrueckgabeController::class, 'storeAdd'])->name('geraet.rueckgabe.store.add');
     Route::get('/ressourcen/geraet/rueckgabe/{id}/geraete', [GeraetrueckgabeController::class, 'geraete'])->name('geraet.rueckgabe.geraete');
+
+    /*   IT-Service */
+    Route::prefix('ressourcen/it-service')->name('it-service.')->group(function () {
+        Route::get('/', [ItServiceController::class, 'index'])->name('index');
+        Route::post('/tickets', [ItServiceController::class, 'storeTicket'])->name('tickets.store');
+        Route::put('/tickets/{ticket}', [ItServiceController::class, 'updateTicket'])->name('tickets.update');
+        Route::delete('/tickets/{ticket}', [ItServiceController::class, 'destroyTicket'])->name('tickets.destroy');
+        Route::post('/geraete', [ItServiceController::class, 'storeGeraet'])->name('geraete.store');
+        Route::put('/geraete/{geraet}', [ItServiceController::class, 'updateGeraet'])->name('geraete.update');
+        Route::delete('/geraete/{geraet}', [ItServiceController::class, 'destroyGeraet'])->name('geraete.destroy');
+    });
+
+    /*   Internes Lager */
+    Route::prefix('ressourcen/lager')->name('lager.')->group(function () {
+        Route::get('/', [LagerController::class, 'index'])->name('index');
+        Route::post('/artikel', [LagerController::class, 'storeArtikel'])->name('artikel.store');
+        Route::put('/artikel/{artikel}', [LagerController::class, 'updateArtikel'])->name('artikel.update');
+        Route::delete('/artikel/{artikel}', [LagerController::class, 'destroyArtikel'])->name('artikel.destroy');
+        Route::post('/artikel/{artikel}/bewegungen', [LagerController::class, 'storeBewegung'])->name('bewegung.store');
+        Route::post('/artikel/{artikel}/reservierungen', [LagerController::class, 'storeReservierung'])->name('reservierung.store');
+        Route::put('/reservierungen/{reservierung}', [LagerController::class, 'updateReservierung'])->name('reservierung.update');
+    });
 
     /*   Bestellungen // Materialanforderung */
     Route::get('/Bestellungen', [MaterialanforderungController::class, 'index'])->name('materialanforderung.index');

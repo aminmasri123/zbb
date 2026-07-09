@@ -8,12 +8,14 @@ import DatePicker from 'primevue/datepicker';
 import InputText from 'primevue/inputtext';
 import Textarea from 'primevue/textarea';
 import Swal from 'sweetalert2';
-import { formatDate } from '@/utils/dateFormat.js';
+import { toLocalDateString } from '@/utils/dateFormat.js';
 
 const props = defineProps({
     visible: Boolean,
     vehicles: Array,
     drivers: Array,
+    selectedVehicle: Object,
+    selectedVehicleId: Number,
 });
 
 const emit = defineEmits(["close", "update:visible"]);
@@ -23,7 +25,9 @@ const localVisible = ref(props.visible);
 
 // Fahrzeuge gefiltert nach ausgewähltem Fahrer
 const filteredVehicles = computed(() => {
-    if (!form.value.person_id) return [];
+    if (!form.value.person_id) {
+        return props.selectedVehicle ? [props.selectedVehicle] : [];
+    }
 
     const driver = props.drivers.find(d => d.id === form.value.person_id);
 
@@ -39,18 +43,34 @@ const filteredVehicles = computed(() => {
 
 
 // Sichtbarkeit synchron halten
-watch(() => props.visible, val => localVisible.value = val);
+watch(() => props.visible, (val) => {
+    localVisible.value = val;
+
+    if (val) {
+        applySelectedVehicleDefaults();
+    }
+});
 
 // Formular
 const form = ref({
     dienstwagen_id: "",
     person_id: "",
-    date: "",
-    start_km: "",
-    end_km: "",
-    zweck: "",
-    ziel: "",
+	date: "",
+    startort: "",
+	start_km: "",
+	end_km: "",
+	zweck: "",
+	ziel: "",
+    fahrtart: "dienstlich",
+    geschaeftspartner: "",
+    bemerkung: "",
 });
+
+const fahrtarten = [
+    { label: "Dienstlich", value: "dienstlich" },
+    { label: "Privat", value: "privat" },
+    { label: "Arbeitsweg", value: "arbeitsweg" },
+];
 
 // Distanz
 const distance = computed(() => {
@@ -61,14 +81,54 @@ const distance = computed(() => {
 
 watch(() => form.value.person_id, () => {
     form.value.dienstwagen_id = "";
+
+    if (props.selectedVehicleId && filteredVehicles.value.some(v => Number(v.id) === Number(props.selectedVehicleId))) {
+        form.value.dienstwagen_id = Number(props.selectedVehicleId);
+    }
 });
 
-function submit() {
-     if (form.value.date instanceof Date) {
-        form.value.date = formatDate(form.value.date);
+function emptyForm() {
+    return {
+        dienstwagen_id: "",
+        person_id: props.drivers.length === 1 ? props.drivers[0].id : "",
+        date: "",
+        startort: "",
+        start_km: props.selectedVehicle?.kilometerstand ?? "",
+        end_km: "",
+        zweck: "",
+        ziel: "",
+        fahrtart: "dienstlich",
+        geschaeftspartner: "",
+        bemerkung: "",
+    };
+}
+
+function applySelectedVehicleDefaults() {
+    if (!props.selectedVehicleId) {
+        return;
     }
 
-    router.post(route("dienstwagen.fahrtenbuch.store"), form.value, {
+    if (!form.value.person_id && props.drivers.length === 1) {
+        form.value.person_id = props.drivers[0].id;
+    }
+
+    if (!form.value.start_km && props.selectedVehicle?.kilometerstand !== undefined) {
+        form.value.start_km = props.selectedVehicle.kilometerstand;
+    }
+
+    if (filteredVehicles.value.some(v => Number(v.id) === Number(props.selectedVehicleId))) {
+        form.value.dienstwagen_id = Number(props.selectedVehicleId);
+    }
+}
+
+function submit() {
+    const payload = {
+        ...form.value,
+        date: toLocalDateString(form.value.date),
+        redirect_dienstwagen_id: props.selectedVehicleId || null,
+    };
+
+    router.post(route("dienstwagen.fahrtenbuch.store"), payload, {
         preserveScroll: true,
         preserveState: true,
 
@@ -102,15 +162,8 @@ function submit() {
             });
 
             // Felder zurücksetzen
-            form.value = {
-                dienstwagen_id: "",
-                person_id: "",
-                date: "",
-                start_km: "",
-                end_km: "",
-                zweck: "",
-                ziel: "",
-            };
+            form.value = emptyForm();
+            applySelectedVehicleDefaults();
 
             emit("update:visible", false);
             emit("close");
@@ -185,6 +238,25 @@ function submit() {
             <div class="grid grid-cols-2 gap-6">
                 <FloatLabel variant="on">
                     <InputText
+                        v-model="form.startort"
+                        class="w-full"
+                    />
+                    <label>Startort</label>
+                </FloatLabel>
+
+                <FloatLabel variant="on">
+                    <Select
+                        v-model="form.fahrtart"
+                        :options="fahrtarten"
+                        optionLabel="label"
+                        optionValue="value"
+                        class="w-full"
+                    />
+                    <label>Fahrtart *</label>
+                </FloatLabel>
+
+                <FloatLabel variant="on">
+                    <InputText
                         v-model="form.start_km"
                         type="number"
                         class="w-full"
@@ -208,13 +280,21 @@ function submit() {
             </div>
 
             <!-- Ziel -->
-            <div>
+            <div class="grid grid-cols-2 gap-6">
                 <FloatLabel variant="on">
                     <InputText
                         v-model="form.ziel"
                         class="w-full"
                     />
                     <label>Ziel *</label>
+                </FloatLabel>
+
+                <FloatLabel variant="on">
+                    <InputText
+                        v-model="form.geschaeftspartner"
+                        class="w-full"
+                    />
+                    <label>Geschäftspartner / Kontakt</label>
                 </FloatLabel>
             </div>
 
@@ -227,6 +307,17 @@ function submit() {
                         rows="3"
                     />
                     <label>Zweck *</label>
+                </FloatLabel>
+            </div>
+
+            <div>
+                <FloatLabel variant="on">
+                    <Textarea
+                        v-model="form.bemerkung"
+                        class="w-full"
+                        rows="2"
+                    />
+                    <label>Bemerkung / Umweg</label>
                 </FloatLabel>
             </div>
 
@@ -251,4 +342,3 @@ function submit() {
         </form>
     </Dialog>
 </template>
-

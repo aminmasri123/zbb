@@ -9,7 +9,7 @@ import DatePicker from 'primevue/datepicker';
 import InputText from 'primevue/inputtext';
 import Textarea from 'primevue/textarea';
 import Swal from 'sweetalert2';
-import { formatDate } from '@/utils/dateFormat.js';
+import { toLocalDateString } from '@/utils/dateFormat.js';
 
 const props = defineProps({
     visible: Boolean,
@@ -36,11 +36,21 @@ const form = ref({
     dienstwagen_id: "",
     person_id: "",
     date: "",
+    startort: "",
     start_km: "",
     end_km: "",
     ziel: "",
     zweck: "",
+    fahrtart: "dienstlich",
+    geschaeftspartner: "",
+    bemerkung: "",
 });
+
+const fahrtarten = [
+    { label: "Dienstlich", value: "dienstlich" },
+    { label: "Privat", value: "privat" },
+    { label: "Arbeitsweg", value: "arbeitsweg" },
+];
 
 /* -----------------------------------------------------
    Initialisierungs-Flag verhindert Reset beim Öffnen
@@ -61,10 +71,14 @@ watch(
             dienstwagen_id: val.dienstwagen_id,
             person_id: val.person_id,
             date: val.date,
+            startort: val.startort || "",
             start_km: val.start_km,
             end_km: val.end_km,
             ziel: val.ziel,
             zweck: val.zweck,
+            fahrtart: val.fahrtart || "dienstlich",
+            geschaeftspartner: val.geschaeftspartner || "",
+            bemerkung: val.bemerkung || "",
         };
 
         // nach einem Tick zurück auf "Nutzer darf ändern"
@@ -105,11 +119,12 @@ const distance = computed(() => {
    Update absenden
 ----------------------------------------------------- */
 function submit() {
-    if (form.value.date instanceof Date) {
-        form.value.date = formatDate(form.value.date);
-    }
+    const payload = {
+        ...form.value,
+        date: toLocalDateString(form.value.date),
+    };
 
-    router.put(route("dienstwagen.fahrtenbuch.update", props.entry.id), form.value, {
+    router.put(route("dienstwagen.fahrtenbuch.update", props.entry.id), payload, {
         preserveScroll: true,
         preserveState: true,
 
@@ -203,6 +218,22 @@ function submit() {
             <!-- KM Start / Ende -->
             <div class="grid grid-cols-2 gap-6">
                 <FloatLabel variant="on">
+                    <InputText v-model="form.startort" class="w-full" />
+                    <label>Startort</label>
+                </FloatLabel>
+
+                <FloatLabel variant="on">
+                    <Select
+                        v-model="form.fahrtart"
+                        :options="fahrtarten"
+                        optionLabel="label"
+                        optionValue="value"
+                        class="w-full"
+                    />
+                    <label>Fahrtart *</label>
+                </FloatLabel>
+
+                <FloatLabel variant="on">
                     <InputText v-model="form.start_km" type="number" class="w-full" />
                     <label>KM Start *</label>
                 </FloatLabel>
@@ -219,10 +250,15 @@ function submit() {
             </div>
 
             <!-- Ziel -->
-            <div>
+            <div class="grid grid-cols-2 gap-6">
                 <FloatLabel variant="on">
                     <InputText v-model="form.ziel" class="w-full" />
                     <label>Ziel *</label>
+                </FloatLabel>
+
+                <FloatLabel variant="on">
+                    <InputText v-model="form.geschaeftspartner" class="w-full" />
+                    <label>Geschäftspartner / Kontakt</label>
                 </FloatLabel>
             </div>
 
@@ -231,6 +267,13 @@ function submit() {
                 <FloatLabel variant="on">
                     <Textarea v-model="form.zweck" rows="3" class="w-full" />
                     <label>Zweck *</label>
+                </FloatLabel>
+            </div>
+
+            <div>
+                <FloatLabel variant="on">
+                    <Textarea v-model="form.bemerkung" rows="2" class="w-full" />
+                    <label>Bemerkung / Umweg</label>
                 </FloatLabel>
             </div>
 
@@ -255,5 +298,4 @@ function submit() {
         </form>
     </Dialog>
 </template>
-
 

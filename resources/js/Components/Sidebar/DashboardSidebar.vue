@@ -17,6 +17,27 @@
                 </ul>
             </li>
 
+            <!-- Admin Submenu -->
+            <li v-if="canAny(adminPermissions) || $page.component.startsWith('Einstellung')" class="submenu">
+                <a href="#" @click.prevent="toggleMenu('admin')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
+                    <i class="la la-user-shield la-lg mr-2"></i>
+                    <span v-if="!displayHideTextSidebar">Admin</span>
+                    <span :class="{'rotate-180': activeMenu === 'admin', 'hidden': displayHideTextSidebar === true, 'text-zbb': $page.component.startsWith('Einstellung')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
+                </a>
+                <ul v-show="activeMenu === 'admin'" class="pl-6 mt-2 space-y-2">
+                    <li v-if="canAny(permissionAdminPermissions) || $page.component.startsWith('Einstellung/RollePermission')">
+                        <Link class="text-gray-400 hover:text-white transition duration-200" :href="route('berechtigung.index')">
+                            {{$t('Berechtigungen')}}
+                        </Link>
+                    </li>
+                    <li v-if="canAny(notificationAdminPermissions) || $page.component.startsWith('Einstellung/NotificationRules')">
+                        <Link class="text-gray-400 hover:text-white transition duration-200" :href="route('notification-rules.index')">
+                            {{$t('Benachrichtigungsregeln')}}
+                        </Link>
+                    </li>
+                </ul>
+            </li>
+
             <!-- Team Apps Submenu -->
             <li v-if="canAny(['apps.index', 'apps.calendar', 'apps.contacts', 'apps.files', 'apps.tasks', 'apps.popups', 'teilnehmer.index'])" class="submenu">
                 <a href="#" @click.prevent="toggleMenu('teamApps')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
@@ -160,22 +181,6 @@
                     <li v-if="can('teilnehmer.store')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('teilnehmer.create')">{{$t('Teilnehmer anlegen')}}</Link></li>
                 </ul>
             </li>
-            <!-- Berechtigung Submenu -->
-             <li v-if="canAny(['berechtigung.index', 'berechtigung.store', 'berechtigung.update'])" class="submenu">
-                <a href="#" @click.prevent="toggleMenu('berechtigung')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
-                    <i class="la la-lg la-unlock mr-2"></i>
-
-                    <span v-if="!displayHideTextSidebar" >{{$t('Berechtigungen')}}</span>
-                    <span v-if="!displayHideTextSidebar" :class="{'rotate-180': activeMenu === 'berechtigung', 'text-zbb': $page.component.startsWith('Einstellung')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
-                </a>
-                <ul v-show="activeMenu === 'berechtigung'" class="pl-6 mt-2 space-y-2">
-                    <li v-if="can('berechtigung.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('berechtigung.index')">{{$t('berechtigungsübersicht')}}</Link></li>
-                    <li v-if="can('berechtigung.update')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('notification-rules.index')">{{$t('Benachrichtigungsregeln')}}</Link></li>
-                </ul>
-            </li>
-
-
-
              <li v-if="canAny(['materialanforderung.index', 'materialanforderung.store', 'materialanforderung.update'])" class="submenu">
                 <a href="#" @click.prevent="toggleMenu('materialanforderung')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                     <i class="las la-shopping-bag mr-2"></i>
@@ -206,6 +211,9 @@
     import { usePermissions } from '@/utils/permissions';
 
     const { can, canAny } = usePermissions();
+    const permissionAdminPermissions = ['berechtigung.index', 'berechtigung.store', 'berechtigung.update'];
+    const notificationAdminPermissions = ['notification-rules.index', 'notification-rules.update', 'berechtigung.update'];
+    const adminPermissions = [...permissionAdminPermissions, ...notificationAdminPermissions];
 
 </script>
   <script>

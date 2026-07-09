@@ -5,9 +5,10 @@ import { ref, computed } from 'vue';
 import Select from 'primevue/select';
 import FloatLabel from 'primevue/floatlabel';
 import InputText from 'primevue/inputtext'; // ❗ Import vergessen
+import Textarea from 'primevue/textarea';
 import Swal from 'sweetalert2';
 import DatePicker from 'primevue/datepicker';
-import { formatDate } from '@/utils/dateFormat.js';
+import { formatDate, toLocalDateString } from '@/utils/dateFormat.js';
 
 const props = defineProps({
   vehicle: Object,
@@ -53,6 +54,21 @@ const form = ref({
   standort_id: props.vehicle.standort_id || "",
   status: props.vehicle.status || "verfügbar",
   naechste_wartung: formatDate(props.vehicle.naechste_wartung) || "",
+  bild: null,
+  remove_image: false,
+  fin: props.vehicle.fin || "",
+  hsn_tsn: props.vehicle.hsn_tsn || "",
+  tuev_bis: formatDate(props.vehicle.tuev_bis) || "",
+  au_bis: formatDate(props.vehicle.au_bis) || "",
+  oelwechsel_am: formatDate(props.vehicle.oelwechsel_am) || "",
+  oelwechsel_km: props.vehicle.oelwechsel_km || "",
+  versicherung_bis: formatDate(props.vehicle.versicherung_bis) || "",
+  steuer_faellig_am: formatDate(props.vehicle.steuer_faellig_am) || "",
+  inspektion_am: formatDate(props.vehicle.inspektion_am) || "",
+  reifenwechsel_am: formatDate(props.vehicle.reifenwechsel_am) || "",
+  leasing_bis: formatDate(props.vehicle.leasing_bis) || "",
+  tankkarte: props.vehicle.tankkarte || "",
+  notizen: props.vehicle.notizen || "",
   allowed_drivers: Array.isArray(props.vehicle.fahrer)
     ? props.vehicle.fahrer.map(d => typeof d === "object" ? d.id : d)
     : []
@@ -69,8 +85,30 @@ const gefilterteFahrer = computed(() => {
 });
 
 // Update-Funktion
+const dateFields = [
+  'naechste_wartung',
+  'tuev_bis',
+  'au_bis',
+  'oelwechsel_am',
+  'versicherung_bis',
+  'steuer_faellig_am',
+  'inspektion_am',
+  'reifenwechsel_am',
+  'leasing_bis',
+];
+
 function update() {
-  router.put(route('dienstwagen.update', props.vehicle.id), form.value, {
+  const payload = { ...form.value };
+
+  dateFields.forEach((field) => {
+    payload[field] = toLocalDateString(payload[field]);
+  });
+
+  router.post(route('dienstwagen.update', props.vehicle.id), {
+    ...payload,
+    _method: 'put',
+  }, {
+    forceFormData: true,
     onSuccess: () => {
       Swal.fire({
         title: '✅ Erfolgreich!',
@@ -185,6 +223,86 @@ function update() {
         <DatePicker  v-model="form.naechste_wartung" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" showIcon iconDisplay="input" />
         <label>Nächste Wartung</label>
       </FloatLabel>
+
+      <div class="col-span-2 grid grid-cols-2 gap-6 border-t pt-6">
+        <div v-if="props.vehicle.bild_url" class="col-span-2 flex items-center gap-4 rounded border p-3">
+          <img :src="props.vehicle.bild_url" class="h-24 w-36 rounded object-cover" alt="Fahrzeugbild" />
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" v-model="form.remove_image" />
+            Bild entfernen
+          </label>
+        </div>
+
+        <FloatLabel variant="on">
+          <InputText v-model="form.fin" class="w-full" />
+          <label>FIN / Fahrgestellnummer</label>
+        </FloatLabel>
+
+        <FloatLabel variant="on">
+          <InputText v-model="form.hsn_tsn" class="w-full" />
+          <label>HSN / TSN</label>
+        </FloatLabel>
+
+        <FloatLabel variant="on">
+          <DatePicker v-model="form.tuev_bis" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" showIcon iconDisplay="input" />
+          <label>TÜV bis</label>
+        </FloatLabel>
+
+        <FloatLabel variant="on">
+          <DatePicker v-model="form.au_bis" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" showIcon iconDisplay="input" />
+          <label>AU bis</label>
+        </FloatLabel>
+
+        <FloatLabel variant="on">
+          <DatePicker v-model="form.oelwechsel_am" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" showIcon iconDisplay="input" />
+          <label>Ölwechsel am</label>
+        </FloatLabel>
+
+        <FloatLabel variant="on">
+          <InputText v-model="form.oelwechsel_km" type="number" class="w-full" />
+          <label>Ölwechsel bei km</label>
+        </FloatLabel>
+
+        <FloatLabel variant="on">
+          <DatePicker v-model="form.versicherung_bis" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" showIcon iconDisplay="input" />
+          <label>Versicherung bis</label>
+        </FloatLabel>
+
+        <FloatLabel variant="on">
+          <DatePicker v-model="form.steuer_faellig_am" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" showIcon iconDisplay="input" />
+          <label>Steuer fällig am</label>
+        </FloatLabel>
+
+        <FloatLabel variant="on">
+          <DatePicker v-model="form.inspektion_am" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" showIcon iconDisplay="input" />
+          <label>Inspektionstermin</label>
+        </FloatLabel>
+
+        <FloatLabel variant="on">
+          <DatePicker v-model="form.reifenwechsel_am" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" showIcon iconDisplay="input" />
+          <label>Reifenwechsel am</label>
+        </FloatLabel>
+
+        <FloatLabel variant="on">
+          <DatePicker v-model="form.leasing_bis" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" showIcon iconDisplay="input" />
+          <label>Leasing bis</label>
+        </FloatLabel>
+
+        <FloatLabel variant="on">
+          <InputText v-model="form.tankkarte" class="w-full" />
+          <label>Tankkarte / Ladekarte</label>
+        </FloatLabel>
+
+        <div class="col-span-2">
+          <label class="block mb-2 font-semibold">Fahrzeugbild</label>
+          <input type="file" accept="image/*" class="form-input" @change="form.bild = $event.target.files[0] || null" />
+        </div>
+
+        <FloatLabel variant="on" class="col-span-2">
+          <Textarea v-model="form.notizen" rows="4" class="w-full" />
+          <label>Interne Notizen</label>
+        </FloatLabel>
+      </div>
 
       <!-- Fahrer -->
       <div class="col-span-2">

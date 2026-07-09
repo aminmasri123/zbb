@@ -1,7 +1,7 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { router, Head } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import Swal from 'sweetalert2';
 import Select from 'primevue/select';
 import FloatLabel from 'primevue/floatlabel';
@@ -20,6 +20,9 @@ const props = defineProps({
 
 // 🔹 Lokale Kopie der Kostendaten
 const localCosts = ref([...props.costs]);
+watch(() => props.costs, (value) => {
+    localCosts.value = [...value];
+});
 
 // 🔹 Modal & Status
 const showModal = ref(false);
@@ -73,7 +76,7 @@ function openModalEdit(record) {
 function submit() {
     if (isEditing.value && editId.value) {
         // UPDATE
-        router.put(route("fleet.costs.update", editId.value), form.value, {
+	        router.put(route("dienstwagen.kosten.update", editId.value), form.value, {
             onSuccess: () => {
                 Swal.fire({
                     icon: "success",
@@ -91,7 +94,7 @@ function submit() {
                     localCosts.value[index] = {
                         ...localCosts.value[index],
                         ...form.value,
-                        vehicle: vehicle ?? localCosts.value[index].vehicle,
+	                        dienstwagen: vehicle ?? localCosts.value[index].dienstwagen,
                     };
 
                     localCosts.value = [...localCosts.value];
@@ -330,7 +333,7 @@ const totalAmount = computed(() =>
                 v-if="showModalLöschen"
                 @delete="handleDelete"
                 @close="showModalLöschen = false"
-                seite="fleet.costs"
+	                seite="dienstwagen.kosten"
                 :toDelete="costToDelete"
             />
 

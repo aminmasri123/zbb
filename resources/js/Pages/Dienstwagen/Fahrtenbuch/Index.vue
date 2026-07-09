@@ -1,7 +1,7 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { Head } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { Head, Link } from '@inertiajs/vue3';
+import { computed, ref, watch } from 'vue';
 import Swal from 'sweetalert2';
 import { formatDate } from '@/utils/dateFormat.js';
 import Dropdown from '@/Components/Dropdown.vue';
@@ -14,11 +14,14 @@ const props = defineProps({
     entries: Array,
     vehicles: Array,
     drivers: Array,
+    selectedVehicle: Object,
+    selectedVehicleId: Number,
 });
 
 const localEntries = ref([...props.entries]);
+const selectedVehicleId = computed(() => props.selectedVehicleId ? Number(props.selectedVehicleId) : null);
+const reportQuery = computed(() => selectedVehicleId.value ? { dienstwagen_id: selectedVehicleId.value } : {});
 
-console.log('Fahrtenbuch Einträge:', props.drivers);
 watch(() => props.entries, (newVal) => {
     localEntries.value = [...newVal];
 });
@@ -81,14 +84,32 @@ const handleDelete = (id) => {
         <div class="space-y-10">
 
             <!-- Kopf + Button -->
-            <div class="flex justify-between items-center">
-                <button
-                    @click="openModalCreate"
-                    class="bg-zbb hover:bg-orange-300 text-white px-4 py-2 rounded-lg font-semibold shadow-md"
-                >
-                    ➕ Neue Fahrt erfassen
-                </button>
-            </div>
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                    <button
+                        @click="openModalCreate"
+                        class="bg-zbb hover:bg-orange-300 text-white px-4 py-2 rounded-lg font-semibold shadow-md"
+                    >
+                        ➕ Neue Fahrt erfassen
+                    </button>
+                    <div v-if="selectedVehicle" class="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                        Fahrtenbuch für
+                        <strong>{{ selectedVehicle.kennzeichen }}</strong>
+                        <span class="text-blue-700">({{ selectedVehicle.marke }} {{ selectedVehicle.modell }})</span>
+                        <Link :href="route('dienstwagen.fahrtenbuch.index')" class="ml-3 font-semibold text-blue-700 hover:text-blue-900">
+                            Alle Fahrzeuge anzeigen
+                        </Link>
+                    </div>
+                </div>
+                    <div class="flex gap-3">
+                        <a :href="route('dienstwagen.fahrtenbuch.report.pdf', reportQuery)" class="rounded border px-4 py-2 text-sm font-semibold hover:bg-gray-50">
+                            PDF Export
+                        </a>
+                        <a :href="route('dienstwagen.fahrtenbuch.report.excel', reportQuery)" class="rounded border px-4 py-2 text-sm font-semibold hover:bg-gray-50">
+                            Excel Export
+                        </a>
+                    </div>
+	            </div>
 
             <!-- TABELLE -->
             <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border p-6">
@@ -98,12 +119,14 @@ const handleDelete = (id) => {
                             <th class="table-head">Datum</th>
                             <th class="table-head">Fahrzeug</th>
                             <th class="table-head">Fahrer</th>
-                            <th class="table-head">Start (km)</th>
-                            <th class="table-head">Ende (km)</th>
-                            <th class="table-head">Distanz</th>
-                            <th class="table-head">Ziel</th>
-                            <th class="table-head">Zweck</th>
-                            <th class="table-head text-center">*</th>
+	                            <th class="table-head">Start (km)</th>
+	                            <th class="table-head">Ende (km)</th>
+	                            <th class="table-head">Distanz</th>
+                                <th class="table-head">Startort</th>
+	                            <th class="table-head">Ziel</th>
+                                <th class="table-head">Art</th>
+	                            <th class="table-head">Zweck</th>
+	                            <th class="table-head text-center">*</th>
                         </tr>
                     </thead>
 
@@ -127,12 +150,14 @@ const handleDelete = (id) => {
                             <td class="table-cell">{{ e.start_km }} km</td>
                             <td class="table-cell">{{ e.end_km }} km</td>
 
-                            <td class="table-cell">
-                                {{ (e.end_km - e.start_km) > 0 ? (e.end_km - e.start_km) + ' km' : '0 km' }}
-                            </td>
+	                            <td class="table-cell">
+	                                {{ (e.end_km - e.start_km) > 0 ? (e.end_km - e.start_km) + ' km' : '0 km' }}
+	                            </td>
 
-                            <td class="table-cell">{{ e.ziel }}</td>
-                            <td class="table-cell">{{ e.zweck }}</td>
+                                <td class="table-cell">{{ e.startort || '-' }}</td>
+	                            <td class="table-cell">{{ e.ziel }}</td>
+                                <td class="table-cell">{{ e.fahrtart || '-' }}</td>
+	                            <td class="table-cell">{{ e.zweck }}</td>
                             <td class="w-10 px-6 py-4 text-center m-auto">
                                 <!-- Dropdown für Aktion -->
                                 <Dropdown >
@@ -159,8 +184,8 @@ const handleDelete = (id) => {
 
                         </tr>
 
-                        <tr v-if="entries.length === 0">
-                            <td colspan="9" class="table-cell text-center text-gray-500">
+                        <tr v-if="localEntries.length === 0">
+	                            <td colspan="12" class="table-cell text-center text-gray-500">
                                 Noch keine Fahrten erfasst.
                             </td>
                         </tr>
@@ -175,6 +200,8 @@ const handleDelete = (id) => {
     :visible="showCreate"
     :vehicles="vehicles"
     :drivers="drivers"
+    :selectedVehicle="selectedVehicle"
+    :selectedVehicleId="selectedVehicleId"
     @update:visible="showCreate = $event"
     @close="showCreate = false"
 />

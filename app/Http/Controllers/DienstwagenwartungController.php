@@ -9,6 +9,7 @@ use App\Models\Dienstwagen;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Database\QueryException;
+use App\Services\DienstwagenVerlaufService;
 use App\Models\Dienstwagenwartungsaufzeichnungen;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
@@ -50,6 +51,15 @@ class DienstwagenwartungController extends Controller
 
             // 🔹 Relation laden (Fahrzeug anzeigen)
             $record->load('dienstwagen');
+
+            app(DienstwagenVerlaufService::class)->record(
+                $record->dienstwagen,
+                'wartung.created',
+                'Wartung erfasst',
+                $record->art . ' am ' . Carbon::parse($record->datum)->format('d.m.Y'),
+                [],
+                $record
+            );
 
             // 🔹 JSON-Antwort zurückgeben
             return response()->json([
@@ -106,11 +116,24 @@ public function update(Request $request, $id)
             }
         }
 
+        $original = $wartung->getOriginal();
+
         // 🔹 Update durchführen
+        $wartung->fill($data);
+        $dirty = $wartung->getDirty();
         $wartung->update($data);
 
         // 🔹 Aktualisierten Datensatz mit Relation zurückgeben
         $updated = Dienstwagenwartungsaufzeichnungen::with('dienstwagen')->find($id);
+
+        app(DienstwagenVerlaufService::class)->record(
+            $updated->dienstwagen,
+            'wartung.updated',
+            'Wartung aktualisiert',
+            $updated->art . ' am ' . Carbon::parse($updated->datum)->format('d.m.Y'),
+            $this->formatChanges($original, $dirty),
+            $updated
+        );
 
         return back()->with([
             'success' => '✅ Wartungseintrag erfolgreich aktualisiert.',
@@ -143,6 +166,17 @@ public function update(Request $request, $id)
          try {
             $dienstwagenwartung = Dienstwagenwartungsaufzeichnungen::findOrFail($id);
 
+            $dienstwagenwartung->load('dienstwagen');
+
+            app(DienstwagenVerlaufService::class)->record(
+                $dienstwagenwartung->dienstwagen,
+                'wartung.deleted',
+                'Wartung geloescht',
+                $dienstwagenwartung->art . ' am ' . Carbon::parse($dienstwagenwartung->datum)->format('d.m.Y'),
+                [],
+                $dienstwagenwartung
+            );
+
             $dienstwagenwartung->delete(); // Lösche die Projekt
 
             return response()->json(['message' => 'Dienstwagen erfolgreich gelöscht!'], 200);
@@ -151,5 +185,19 @@ public function update(Request $request, $id)
         } catch (Exception $e) {
             return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
         }
+    }
+
+    private function formatChanges(array $original, array $dirty): array
+    {
+        $changes = [];
+
+        foreach ($dirty as $field => $newValue) {
+            $changes[$field] = [
+                'old' => $original[$field] ?? null,
+                'new' => $newValue,
+            ];
+        }
+
+        return $changes;
     }
 }

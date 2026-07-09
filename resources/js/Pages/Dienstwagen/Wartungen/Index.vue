@@ -1,7 +1,7 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { router, Head } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import Swal from 'sweetalert2';
 import Select from 'primevue/select';
 import FloatLabel from 'primevue/floatlabel';
@@ -21,6 +21,9 @@ const props = defineProps({
 
 // 🔹 Lokale Kopie der Datensätze
 const localRecords = ref([...props.records]);
+watch(() => props.records, (value) => {
+    localRecords.value = [...value];
+});
 
 // 🔹 Sichtbarkeiten
 const seite = 'dienstwagen.wartung';
@@ -87,6 +90,25 @@ function openModalEdit(record) {
 
 // 🟢 Neuer Eintrag mit direktem Hinzufügen
 const submit = async () => {
+  if (isEditing.value && editId.value) {
+    router.put(route('dienstwagen.wartung.update', editId.value), form.value, {
+      preserveScroll: true,
+      onSuccess: () => {
+        Swal.fire({
+          icon: 'success',
+          title: 'Aktualisiert!',
+          text: 'Wartungseintrag erfolgreich aktualisiert!',
+          timer: 2000,
+          showConfirmButton: false,
+        });
+        showModal.value = false;
+        router.reload({ only: ['records'] });
+      },
+      onError: () => Swal.fire('Fehler', 'Aktualisieren fehlgeschlagen', 'error'),
+    });
+    return;
+  }
+
   try {
     const response = await axios.post(route('dienstwagen.wartung.store'), form.value);
 

@@ -12,8 +12,11 @@ use App\Models\Personen;
 use App\Models\Standort;
 use App\Models\Abteilung;
 use App\Models\Kostenstelle;
+use App\Notifications\ConfiguredEventNotification;
+use App\Services\NotificationRecipientService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\ValidationException;
 
 class ProjektController extends Controller
@@ -160,6 +163,21 @@ class ProjektController extends Controller
 
                 return $projekt;
             });
+
+            Notification::send(
+                app(NotificationRecipientService::class)->forEvent('projekt.created', [
+                    'actor' => $request->user(),
+                    'creator_user' => $request->user(),
+                    'project_id' => $projekt->id,
+                ]),
+                new ConfiguredEventNotification([
+                    'event_key' => 'projekt.created',
+                    'message' => 'Neues Projekt "' . $projekt->name . '" wurde erstellt.',
+                    'link' => route('projekt.show', $projekt->id),
+                    'id' => $projekt->id,
+                    'typ' => 'Projekt',
+                ])
+            );
 
             // 3️⃣ Projekt mit Relationen zurückgeben
             return response()->json([

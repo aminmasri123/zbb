@@ -15,10 +15,14 @@ class Dienstwagenfahrtenbuch extends Model
         'dienstwagen_id',
         'person_id',
         'date',
+        'startort',
         'start_km',
         'end_km',
         'zweck',
-        'ziel'
+        'ziel',
+        'fahrtart',
+        'geschaeftspartner',
+        'bemerkung',
     ];
     protected $dates = [
         'date',

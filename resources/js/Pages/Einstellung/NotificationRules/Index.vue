@@ -2,6 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import { usePermissions } from '@/utils/permissions'
 
 const props = defineProps({
     rules: Array,
@@ -9,8 +10,8 @@ const props = defineProps({
     targetTypes: Object,
     scopes: Object,
     channels: Object,
-    roles: Array,
-    permissions: Array,
+    targetRoles: Array,
+    targetPermissions: Array,
 })
 
 const emptyRule = () => ({
@@ -28,6 +29,11 @@ const emptyRule = () => ({
 const localRules = ref([])
 const form = reactive(emptyRule())
 const savingIds = ref([])
+const { canAny } = usePermissions()
+
+const canCreateRule = computed(() => canAny(['notification-rules.store', 'notification-rules.update', 'berechtigung.update']))
+const canUpdateRule = computed(() => canAny(['notification-rules.update', 'berechtigung.update']))
+const canDeleteRule = computed(() => canAny(['notification-rules.destroy', 'notification-rules.update', 'berechtigung.update']))
 
 const cloneRule = (rule) => ({
     id: rule.id,
@@ -54,11 +60,11 @@ const scopeOptions = computed(() => Object.entries(props.scopes || {}).map(([val
 
 const targetValueOptions = (targetType) => {
     if (targetType === 'role') {
-        return props.roles || []
+        return props.targetRoles || []
     }
 
     if (targetType === 'permission') {
-        return props.permissions || []
+        return props.targetPermissions || []
     }
 
     return []
@@ -93,6 +99,10 @@ const setSaving = (id, saving) => {
 const isSaving = (id) => savingIds.value.includes(id)
 
 const storeRule = () => {
+    if (!canCreateRule.value) {
+        return
+    }
+
     router.post(route('notification-rules.store'), normalizeRule(form), {
         preserveScroll: true,
         onSuccess: () => Object.assign(form, emptyRule()),
@@ -100,6 +110,10 @@ const storeRule = () => {
 }
 
 const updateRule = (rule) => {
+    if (!canUpdateRule.value) {
+        return
+    }
+
     setSaving(rule.id, true)
 
     router.put(route('notification-rules.update', rule.id), normalizeRule(rule), {
@@ -109,6 +123,10 @@ const updateRule = (rule) => {
 }
 
 const destroyRule = (rule) => {
+    if (!canDeleteRule.value) {
+        return
+    }
+
     if (!window.confirm('Diese Regel entfernen?')) {
         return
     }
@@ -180,6 +198,7 @@ const destroyRule = (rule) => {
                         <button
                             type="button"
                             @click="storeRule"
+                            :disabled="!canCreateRule"
                             class="inline-flex w-full items-center justify-center gap-2 border border-zbb bg-zbb px-3 py-2 text-sm font-medium text-white hover:bg-orange-700"
                         >
                             <i class="las la-plus"></i>
@@ -261,7 +280,7 @@ const destroyRule = (rule) => {
                                     <button
                                         type="button"
                                         @click="updateRule(rule)"
-                                        :disabled="isSaving(rule.id)"
+                                        :disabled="!canUpdateRule || isSaving(rule.id)"
                                         class="inline-flex h-8 w-8 items-center justify-center border border-emerald-700 text-emerald-700 hover:bg-emerald-700 hover:text-white disabled:opacity-60"
                                         title="Speichern"
                                     >
@@ -270,7 +289,8 @@ const destroyRule = (rule) => {
                                     <button
                                         type="button"
                                         @click="destroyRule(rule)"
-                                        class="inline-flex h-8 w-8 items-center justify-center border border-red-500 text-red-600 hover:bg-red-600 hover:text-white"
+                                        :disabled="!canDeleteRule"
+                                        class="inline-flex h-8 w-8 items-center justify-center border border-red-500 text-red-600 hover:bg-red-600 hover:text-white disabled:opacity-60"
                                         title="Entfernen"
                                     >
                                         <i class="las la-trash"></i>

@@ -6,8 +6,8 @@ use App\Models\NotificationRule;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
+use App\Models\Role;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 
 class NotificationRuleController extends Controller
 {
@@ -21,12 +21,12 @@ class NotificationRuleController extends Controller
                 ->orderBy('event_key')
                 ->orderBy('id')
                 ->get(),
-            'events' => NotificationRule::EVENTS,
+            'events' => NotificationRule::events(),
             'targetTypes' => NotificationRule::TARGET_TYPES,
             'scopes' => NotificationRule::SCOPES,
             'channels' => NotificationRule::CHANNELS,
-            'roles' => Role::orderBy('name')->get(['id', 'name']),
-            'permissions' => Permission::orderBy('name')->get(['id', 'name']),
+            'targetRoles' => Role::orderBy('name')->get(['id', 'name']),
+            'targetPermissions' => Permission::orderBy('name')->get(['id', 'name']),
         ]);
     }
 
@@ -54,7 +54,7 @@ class NotificationRuleController extends Controller
     private function validatedRuleData(Request $request): array
     {
         $data = $request->validate([
-            'event_key' => ['required', 'string', Rule::in(array_keys(NotificationRule::EVENTS))],
+            'event_key' => ['required', 'string', Rule::in(array_keys(NotificationRule::events()))],
             'label' => ['required', 'string', 'max:255'],
             'target_type' => ['required', 'string', Rule::in(array_keys(NotificationRule::TARGET_TYPES))],
             'target_value' => ['nullable', 'string', 'max:255'],

@@ -12,15 +12,21 @@ use App\Models\Dienstwagen;
 use Illuminate\Http\Request;
 use App\Models\ProjektHasPersonen;
 use Illuminate\Support\Facades\Log;
+use App\Services\DienstwagenVerlaufService;
 use App\Models\Dienstwagenfahrtenbuch;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+use Barryvdh\DomPDF\Facade\Pdf;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class DienstwagenfahrtenbuchController extends Controller
 {
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
 {
     $user = auth()->user();
     $person = $user->person;
@@ -33,12 +39,14 @@ class DienstwagenfahrtenbuchController extends Controller
     $projektIds   = $person->projekte->pluck('id');
     $standortIds  = $person->projekte->pluck('pivotModel.standort_id');
     $abteilungId  = $person->projekte()->distinct()->pluck('abteilung_id') ?? null;
+    $selectedVehicleId = $request->filled('dienstwagen_id') ? $request->integer('dienstwagen_id') : null;
     /** -----------------------------------------------
      * ROLLE 1: DIENSTWAGENKOORDINATOR → Vollzugriff
      * -----------------------------------------------*/
     if ($user->can('dienstwagen.fahrtenbuch.view.all')) {
 
         $fahrten = Dienstwagenfahrtenbuch::with(['dienstwagen', 'fahrer'])
+            ->when($selectedVehicleId, fn ($query) => $query->where('dienstwagen_id', $selectedVehicleId))
             ->orderBy('date', 'desc')
             ->get();
 
@@ -54,6 +62,8 @@ class DienstwagenfahrtenbuchController extends Controller
             'entries'  => $fahrten,
             'drivers'  => $fahrer,
             'vehicles' => $dienstwagen,
+            'selectedVehicle' => $this->selectedVehicleFrom($dienstwagen, $selectedVehicleId),
+            'selectedVehicleId' => $selectedVehicleId,
         ]);
     }
     /** -----------------------------------------------
@@ -84,6 +94,7 @@ class DienstwagenfahrtenbuchController extends Controller
                     ->whereIn('standort_id', $standortIds)
                     ->where('status', 'aktiv');
                 })
+                ->when($selectedVehicleId, fn ($query) => $query->where('dienstwagen_id', $selectedVehicleId))
                 ->orderBy('date', 'desc')
                 ->get();
 
@@ -94,6 +105,8 @@ class DienstwagenfahrtenbuchController extends Controller
                 'entries'  => $fahrten,
                 'drivers'  => $fahrer,
                 'vehicles' => $dienstwagen,
+                'selectedVehicle' => $this->selectedVehicleFrom($dienstwagen, $selectedVehicleId),
+                'selectedVehicleId' => $selectedVehicleId,
             ]);
     }
 
@@ -118,6 +131,7 @@ class DienstwagenfahrtenbuchController extends Controller
                   ->whereIn('standort_id', $standortIds)
                   ->where('status', 'aktiv');
             })
+            ->when($selectedVehicleId, fn ($query) => $query->where('dienstwagen_id', $selectedVehicleId))
             ->orderBy('date', 'desc')
             ->get();
 
@@ -127,6 +141,8 @@ class DienstwagenfahrtenbuchController extends Controller
             'entries'  => $fahrten,
             'drivers'  => $fahrer,
             'vehicles' => $dienstwagen,
+            'selectedVehicle' => $this->selectedVehicleFrom($dienstwagen, $selectedVehicleId),
+            'selectedVehicleId' => $selectedVehicleId,
         ]);
     }
     /** -----------------------------------------------
@@ -135,6 +151,7 @@ class DienstwagenfahrtenbuchController extends Controller
      * -----------------------------------------------*/
     $fahrten = Dienstwagenfahrtenbuch::with(['dienstwagen', 'fahrer'])
         ->where('person_id', $person->id)
+        ->when($selectedVehicleId, fn ($query) => $query->where('dienstwagen_id', $selectedVehicleId))
         ->orderBy('date', 'desc')
         ->get();
 
@@ -148,27 +165,30 @@ class DienstwagenfahrtenbuchController extends Controller
         'entries'  => $fahrten,
         'drivers'  => $fahrer,
         'vehicles' => $dienstwagen,
+        'selectedVehicle' => $this->selectedVehicleFrom($dienstwagen, $selectedVehicleId),
+        'selectedVehicleId' => $selectedVehicleId,
     ]);
 }
+
+    public function scan($id)
+    {
+        Dienstwagen::findOrFail($id);
+
+        return redirect()->route('dienstwagen.fahrtenbuch.index', [
+            'dienstwagen_id' => $id,
+        ]);
+    }
 
 
     public function store(Request $request)
     {
         try {
             // 1. Validierung
-            $data = $request->validate([
-                'dienstwagen_id' => 'required|exists:dienstwagens,id',
-                'person_id'      => 'nullable|exists:personens,id',
-                'date'           => 'required|date',
-                'start_km'       => 'required|integer|min:0',
-                'end_km'         => 'required|integer|gte:start_km',
-                'zweck'          => 'required|string|max:255',
-                'ziel'           => 'required|string|max:255',
-            ]);
+            $data = $this->validatedFahrt($request);
             // 2. Datum parsen
 
             try {
-                $data['date'] = date('Y-m-d', strtotime($data['date']));
+                $data['date'] = Carbon::parse($data['date'])->format('Y-m-d');
             } catch (\Exception $e) {
                 Log::error('Fehler beim Datum-Parsing (store): ' . $e->getMessage());
                 return back()->withErrors(['date' => 'Ungültiges Datum.'])->withInput();
@@ -194,10 +214,20 @@ class DienstwagenfahrtenbuchController extends Controller
             // Wenn es keine Fahrt gibt → keine Prüfung nötig
 
             // 4. Speichern
-            Dienstwagenfahrtenbuch::create($data);
+            $fahrt = Dienstwagenfahrtenbuch::create($data);
+            $this->syncVehicleKilometerstand((int) $data['dienstwagen_id']);
+
+            app(DienstwagenVerlaufService::class)->record(
+                $fahrt->dienstwagen,
+                'fahrt.created',
+                'Fahrt erfasst',
+                $this->tripSummary($fahrt),
+                [],
+                $fahrt
+            );
 
             return redirect()
-                ->route('dienstwagen.fahrtenbuch.index')
+                ->route('dienstwagen.fahrtenbuch.index', $this->redirectVehicleFilter($request))
                 ->with('success', 'Fahrt wurde erfolgreich gespeichert.');
 
         } catch (\Throwable $e) {
@@ -228,15 +258,8 @@ class DienstwagenfahrtenbuchController extends Controller
         try {
             $fahrt = Dienstwagenfahrtenbuch::findOrFail($id);
             // 1. Validierung
-            $data = $request->validate([
-                'dienstwagen_id' => 'required|exists:dienstwagens,id',
-                'person_id'      => 'nullable|exists:personens,id',
-                'date'           => 'required|date',
-                'start_km'       => 'required|integer|min:0',
-                'end_km'         => 'required|integer|gte:start_km',
-                'zweck'          => 'required|string|max:255',
-                'ziel'           => 'required|string|max:255',
-            ]);
+            $oldVehicleId = $fahrt->dienstwagen_id;
+            $data = $this->validatedFahrt($request);
 
             // 2. Datum sauber parsen
             try {
@@ -249,11 +272,7 @@ class DienstwagenfahrtenbuchController extends Controller
             // -----------------------------------------
             // 3. Prüfung: stimmt der Start-KM mit vorheriger Fahrt überein?
             // -----------------------------------------
-            $previousTrip = Dienstwagenfahrtenbuch::where('dienstwagen_id', $data['dienstwagen_id'])
-                ->where('id', '!=', $id) // eigene Fahrt ignorieren
-                ->orderBy('date', 'desc')
-                ->orderBy('id', 'desc')
-                ->first();
+            $previousTrip = $this->previousTrip((int) $data['dienstwagen_id'], $data['date'], (int) $id);
 
             if ($previousTrip) {
                 if ((int)$previousTrip->end_km !== (int)$data['start_km']) {
@@ -265,8 +284,33 @@ class DienstwagenfahrtenbuchController extends Controller
                 }
             }
 
+            $nextTrip = $this->nextTrip((int) $data['dienstwagen_id'], $data['date'], (int) $id);
+
+            if ($nextTrip && (int) $nextTrip->start_km !== (int) $data['end_km']) {
+                return back()
+                    ->withErrors([
+                        'end_km' => "Der End-Kilometerstand muss zum naechsten Start-KM passen: {$nextTrip->start_km} km."
+                    ])
+                    ->withInput();
+            }
+
             // 4. Fahrt aktualisieren
-            $fahrt->update($data);
+            $original = $fahrt->getOriginal();
+            $fahrt->fill($data);
+            $dirty = $fahrt->getDirty();
+            $fahrt->save();
+            $fahrt->load('dienstwagen');
+            $this->syncVehicleKilometerstand((int) $oldVehicleId);
+            $this->syncVehicleKilometerstand((int) $data['dienstwagen_id']);
+
+            app(DienstwagenVerlaufService::class)->record(
+                $fahrt->dienstwagen,
+                'fahrt.updated',
+                'Fahrt aktualisiert',
+                $this->tripSummary($fahrt),
+                $this->formatChanges($original, $dirty),
+                $fahrt
+            );
 
             return redirect()
                 ->route('dienstwagen.fahrtenbuch.index')
@@ -286,9 +330,20 @@ class DienstwagenfahrtenbuchController extends Controller
     public function destroy($id)
     {
         try {
-            $fahrt = Dienstwagenfahrtenbuch::findOrFail($id);
+            $fahrt = Dienstwagenfahrtenbuch::with('dienstwagen')->findOrFail($id);
+            $vehicleId = $fahrt->dienstwagen_id;
+
+            app(DienstwagenVerlaufService::class)->record(
+                $fahrt->dienstwagen,
+                'fahrt.deleted',
+                'Fahrt geloescht',
+                $this->tripSummary($fahrt),
+                [],
+                $fahrt
+            );
 
             $fahrt->delete(); // Lösche die Projekt
+            $this->syncVehicleKilometerstand((int) $vehicleId);
 
             return response()->json(['message' => 'Fahrt erfolgreich gelöscht!'], 200);
         } catch (ModelNotFoundException $e) {
@@ -296,5 +351,180 @@ class DienstwagenfahrtenbuchController extends Controller
         } catch (Exception $e) {
             return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
         }
+    }
+
+    public function generateFahrtenbuchReport(Request $request)
+    {
+        return $this->generateFahrtenbuchPDF($request);
+    }
+
+    public function generateFahrtenbuchPDF(Request $request)
+    {
+        $entries = $this->reportEntries($request);
+        $vehicle = $this->reportVehicle($request);
+
+        $pdf = Pdf::loadView('pdf.dienstwagen-fahrtenbuch', [
+            'entries' => $entries,
+            'vehicle' => $vehicle,
+            'month' => $request->get('monat'),
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->download('Fahrtenbuch_' . now()->format('Ymd_His') . '.pdf');
+    }
+
+    public function generateFahrtenbuchExcel(Request $request)
+    {
+        $entries = $this->reportEntries($request);
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Fahrtenbuch');
+
+        $headers = ['Datum', 'Fahrzeug', 'Fahrer', 'Startort', 'Ziel', 'Start km', 'Ende km', 'Distanz', 'Fahrtart', 'Zweck', 'Geschaeftspartner', 'Bemerkung'];
+        $sheet->fromArray($headers, null, 'A1');
+
+        $row = 2;
+        foreach ($entries as $entry) {
+            $sheet->fromArray([
+                optional($entry->date)->format('d.m.Y'),
+                $entry->dienstwagen?->kennzeichen,
+                trim(($entry->fahrer?->nachname ?? '') . ' ' . ($entry->fahrer?->vorname ?? '')),
+                $entry->startort,
+                $entry->ziel,
+                $entry->start_km,
+                $entry->end_km,
+                $entry->end_km - $entry->start_km,
+                $entry->fahrtart,
+                $entry->zweck,
+                $entry->geschaeftspartner,
+                $entry->bemerkung,
+            ], null, 'A' . $row);
+            $row++;
+        }
+
+        foreach (range('A', 'L') as $column) {
+            $sheet->getColumnDimension($column)->setAutoSize(true);
+        }
+
+        $tmpDir = storage_path('app/tmp');
+        if (! is_dir($tmpDir)) {
+            mkdir($tmpDir, 0775, true);
+        }
+
+        $filename = 'Fahrtenbuch_' . now()->format('Ymd_His') . '.xlsx';
+        $path = $tmpDir . DIRECTORY_SEPARATOR . uniqid('fahrtenbuch_', true) . '.xlsx';
+        (new Xlsx($spreadsheet))->save($path);
+
+        return response()->download($path, $filename)->deleteFileAfterSend(true);
+    }
+
+    private function validatedFahrt(Request $request): array
+    {
+        return $request->validate([
+            'dienstwagen_id' => 'required|exists:dienstwagens,id',
+            'person_id'      => 'required|exists:personens,id',
+            'date'           => 'required|date',
+            'startort'       => 'nullable|string|max:255',
+            'start_km'       => 'required|integer|min:0',
+            'end_km'         => 'required|integer|gte:start_km',
+            'zweck'          => 'required|string|max:255',
+            'ziel'           => 'required|string|max:255',
+            'fahrtart'       => ['required', Rule::in(['dienstlich', 'privat', 'arbeitsweg'])],
+            'geschaeftspartner' => 'nullable|string|max:255',
+            'bemerkung'      => 'nullable|string',
+        ]);
+    }
+
+    private function previousTrip(int $vehicleId, string $date, ?int $ignoreId = null): ?Dienstwagenfahrtenbuch
+    {
+        return Dienstwagenfahrtenbuch::where('dienstwagen_id', $vehicleId)
+            ->when($ignoreId, fn ($query) => $query->where('id', '!=', $ignoreId))
+            ->where('date', '<=', $date)
+            ->orderBy('date', 'desc')
+            ->orderBy('id', 'desc')
+            ->first();
+    }
+
+    private function nextTrip(int $vehicleId, string $date, ?int $ignoreId = null): ?Dienstwagenfahrtenbuch
+    {
+        return Dienstwagenfahrtenbuch::where('dienstwagen_id', $vehicleId)
+            ->when($ignoreId, fn ($query) => $query->where('id', '!=', $ignoreId))
+            ->where('date', '>=', $date)
+            ->orderBy('date')
+            ->orderBy('id')
+            ->first();
+    }
+
+    private function syncVehicleKilometerstand(int $vehicleId): void
+    {
+        $maxKm = Dienstwagenfahrtenbuch::where('dienstwagen_id', $vehicleId)->max('end_km');
+
+        if ($maxKm !== null) {
+            Dienstwagen::where('id', $vehicleId)->update(['kilometerstand' => $maxKm]);
+        }
+    }
+
+    private function tripSummary(Dienstwagenfahrtenbuch $fahrt): string
+    {
+        return trim(($fahrt->date ? Carbon::parse($fahrt->date)->format('d.m.Y') : '') . ' | ' .
+            ($fahrt->dienstwagen?->kennzeichen ?? 'Dienstwagen') . ' | ' .
+            $fahrt->start_km . ' - ' . $fahrt->end_km . ' km | ' .
+            $fahrt->ziel);
+    }
+
+    private function formatChanges(array $original, array $dirty): array
+    {
+        $changes = [];
+
+        foreach ($dirty as $field => $newValue) {
+            $changes[$field] = [
+                'old' => $original[$field] ?? null,
+                'new' => $newValue,
+            ];
+        }
+
+        return $changes;
+    }
+
+    private function reportEntries(Request $request)
+    {
+        return Dienstwagenfahrtenbuch::with(['dienstwagen', 'fahrer'])
+            ->when($request->filled('dienstwagen_id'), fn ($query) => $query->where('dienstwagen_id', $request->integer('dienstwagen_id')))
+            ->when($request->filled('monat'), function ($query) use ($request) {
+                $start = Carbon::parse($request->get('monat') . '-01')->startOfMonth();
+                $end = Carbon::parse($request->get('monat') . '-01')->endOfMonth();
+                $query->whereBetween('date', [$start, $end]);
+            })
+            ->orderBy('date')
+            ->orderBy('id')
+            ->get();
+    }
+
+    private function reportVehicle(Request $request): ?Dienstwagen
+    {
+        if (! $request->filled('dienstwagen_id')) {
+            return null;
+        }
+
+        return Dienstwagen::find($request->integer('dienstwagen_id'));
+    }
+
+    private function selectedVehicleFrom($vehicles, ?int $vehicleId): ?Dienstwagen
+    {
+        if (! $vehicleId) {
+            return null;
+        }
+
+        return $vehicles->firstWhere('id', $vehicleId);
+    }
+
+    private function redirectVehicleFilter(Request $request): array
+    {
+        if (! $request->filled('redirect_dienstwagen_id')) {
+            return [];
+        }
+
+        return [
+            'dienstwagen_id' => $request->integer('redirect_dienstwagen_id'),
+        ];
     }
 }

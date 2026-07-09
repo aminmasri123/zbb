@@ -56,7 +56,7 @@ const save = async () => {
   try {
     const response = await axios.post(route('rolle.store'), form.value);
     //const response = form.post(route('rolle.store'), form.value);
-    Swal.fire('Erfolg!', 'Standort erfolgreich angelegt!', 'success');
+    Swal.fire('Erfolg!', 'Rolle erfolgreich angelegt!', 'success');
     emit('added', response.data.role);
     resetForm();
     emit('close');

@@ -1,5 +1,5 @@
 <script setup>
-    import { ref, watch } from 'vue';
+    import { computed, ref, watch } from 'vue';
     import { router, Link, Head } from '@inertiajs/vue3';
     import AppLayout from '@/Layouts/AppLayout.vue';
     import axios from 'axios';
@@ -10,6 +10,7 @@
     import Dropdown from '@/Components/Dropdown.vue';
     import DropdownLink from '@/Components/DropdownLink.vue';
     import ModalCreate from './ModalCreate.vue';
+    import { usePermissions } from '@/utils/permissions';
     // Search input state
     let seite = 'rolle';
     let search = ref('');
@@ -27,6 +28,12 @@
         dataAccess:{ type:Object, default:()=> ({})},
         dataAccessOptions:{ type:Object, default:()=> ({ team: {}, participant: {} })},
     });
+
+    const { canAny } = usePermissions();
+    const canManagePermissions = computed(() => canAny(['berechtigung.zuweisen', 'berechtigung.update']));
+    const canManageDataAccess = computed(() => canAny(['rolle.data-access.update', 'berechtigung.update']));
+    const canCreateRole = computed(() => canAny(['rolle.store', 'berechtigung.store', 'berechtigung.update']));
+    const canDeleteRole = computed(() => canAny(['rolle.destroy', 'berechtigung.update']));
 
     const dataAccessForm = ref({
         team_scope: props.dataAccess?.team_scope || 'none',
@@ -372,7 +379,7 @@
                 <div class="flex flex-col sm:flex-row">
                     <div class="mb-5 sm:relative sm:w-1/4 ">
                         <div class=" hidden sm:block sm:w-1/5 sm:fixed">
-                            <div @click="openModalCreate" class="w-full bg-orange-500 py-2 rounded-md text-center">
+                            <div v-if="canCreateRole" @click="openModalCreate" class="w-full bg-orange-500 py-2 rounded-md text-center">
                                 <a href="#" class="text-white">
                                     <i class="fa fa-plus"></i> {{ $t('rolle_anlegen') }}
                                 </a>
@@ -386,7 +393,7 @@
                                             >
                                             <div class="cursor-pointer">{{ rolle.name }}</div>
                                         </Link>
-                                        <span class="cursor-pointer  py-2">
+                                        <span v-if="canDeleteRole" class="cursor-pointer  py-2">
                                             <!-- Dropdown für Aktion -->
                                             <Dropdown >
                                                 <template #trigger>
@@ -422,7 +429,7 @@
                                         <button
                                             type="button"
                                             class="rounded bg-zbb px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                                            :disabled="isSavingDataAccess"
+                                            :disabled="!canManageDataAccess || isSavingDataAccess"
                                             @click="saveDataAccess"
                                         >
                                             {{ isSavingDataAccess ? 'Speichern ...' : 'Speichern' }}
@@ -471,7 +478,7 @@
                                                         <button
                                                             type="button"
                                                             class="rounded bg-white px-3 py-2 text-sm font-semibold text-zbb transition hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
-                                                            :disabled="isSavingCategory(kategorie.id) || categoryAllAssigned(kategorie)"
+                                                            :disabled="!canManagePermissions || isSavingCategory(kategorie.id) || categoryAllAssigned(kategorie)"
                                                             @click="toggleKategorie(kategorie, true)"
                                                         >
                                                             Alle aktivieren
@@ -479,7 +486,7 @@
                                                         <button
                                                             type="button"
                                                             class="rounded border border-white px-3 py-2 text-sm font-semibold text-white transition hover:bg-white hover:text-zbb disabled:cursor-not-allowed disabled:opacity-60"
-                                                            :disabled="isAdministratorRole || isSavingCategory(kategorie.id) || categoryAssignedCount(kategorie) === 0"
+                                                            :disabled="!canManagePermissions || isAdministratorRole || isSavingCategory(kategorie.id) || categoryAssignedCount(kategorie) === 0"
                                                             @click="toggleKategorie(kategorie, false)"
                                                         >
                                                             Alle deaktivieren
@@ -500,7 +507,7 @@
                                                                 <input type="checkbox"
                                                                     class="sr-only peer"
                                                                     :checked="hasPermission(permission.id)"
-                                                                    :disabled="isAdministratorRole && hasPermission(permission.id)"
+                                                                    :disabled="!canManagePermissions || (isAdministratorRole && hasPermission(permission.id))"
                                                                     @change="toggleCheck(permission.id, roleId, $event.target.checked)" />
                                                                     <div class="w-[53px] h-7 flex items-center bg-gray-300 rounded-full text-[9px] peer-checked:text-zbb text-gray-300 font-extrabold after:flex after:items-center after:justify-center peer after:content-['Off'] peer-checked:after:content-['On'] peer-checked:after:translate-x-full after:absolute after:left-[2px] peer-checked:after:border-white after:bg-white after:border after:border-gray-300 after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-zbb">
                                                                 </div>
@@ -528,7 +535,8 @@
             -->
         </ModalDestroy>
 
-        <ModalCreate :visible="isModalCreateOpen"
+        <ModalCreate v-if="canCreateRole"
+                 :visible="isModalCreateOpen"
                  @close="closeModalCreate"
                  @added="addRolle" />
     </app-layout>

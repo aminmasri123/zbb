@@ -6,6 +6,8 @@ use Inertia\Inertia;
 use App\Models\Gruppe;
 use App\Models\Raeume;
 use App\Models\Projekt;
+use App\Services\RaumBelegungService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -50,7 +52,7 @@ class GruppeController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, RaumBelegungService $belegungService)
     {
         $user = auth()->user();
         $this->authorizeAny($user, ['gruppe.store']);
@@ -77,6 +79,7 @@ class GruppeController extends Controller
         $this->validateProjektZuordnung($projekt, (int) $validated['bereich'], $validated['raum_id'] ?? null);
         $standortId = $this->resolveStandortId($projekt, $validated);
         $this->validateBetreuer($user, $projekt, (int) $validated['betreuer']);
+        $this->validateRaumBelegung($belegungService, $validated);
 
         $gruppe = Gruppe::create([
             'personen_id' => $validated['betreuer'],
@@ -102,7 +105,7 @@ class GruppeController extends Controller
         ], 201);
     }
 
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, RaumBelegungService $belegungService)
     {
         $user = auth()->user();
         $gruppe = Gruppe::findOrFail($id);
@@ -131,6 +134,7 @@ class GruppeController extends Controller
             $this->validateProjektZuordnung($projekt, (int) $validated['bereich'], $validated['raum_id'] ?? null);
             $standortId = $this->resolveStandortId($projekt, $validated);
             $this->validateBetreuer($user, $projekt, (int) $validated['betreuer']);
+            $this->validateRaumBelegung($belegungService, $validated, $gruppe->id);
 
             $gruppe->update([
                 'bereich_id' => $validated['bereich'],
@@ -310,6 +314,26 @@ class GruppeController extends Controller
         }
 
         return $standortId;
+    }
+
+    private function validateRaumBelegung(RaumBelegungService $belegungService, array $validated, ?int $ignoreGruppeId = null): void
+    {
+        if (($validated['ort_typ'] ?? 'raum') !== 'raum' || empty($validated['raum_id'])) {
+            return;
+        }
+
+        $startDate = $validated['startDate'] ?? $validated['anfangsdatum'];
+        $endDate = $validated['endDate'] ?? $validated['enddatum'] ?? $startDate;
+        $startTime = $validated['startZeit'] ?? $validated['startzeit'];
+        $endTime = $validated['endZeit'] ?? $validated['endzeit'];
+
+        $belegungService->assertAvailable(
+            (int) $validated['raum_id'],
+            Carbon::parse($startDate . ' ' . $startTime),
+            Carbon::parse($endDate . ' ' . $endTime),
+            null,
+            $ignoreGruppeId
+        );
     }
 
     private function validateBetreuer($user, Projekt $projekt, int $betreuerId): void

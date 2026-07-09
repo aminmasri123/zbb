@@ -62,6 +62,19 @@ class NotificationRecipientService
         ));
     }
 
+    public function forEvent(string $eventKey, array $context = [], ?Closure $fallback = null): Collection
+    {
+        if (Schema::hasTable('notification_rules')) {
+            NotificationRule::ensureDefaultRules();
+        }
+
+        return $this->configuredRecipients(
+            $eventKey,
+            $context,
+            $fallback ?: fn () => collect()
+        );
+    }
+
     private function configuredRecipients(string $eventKey, array $context, Closure $fallback): Collection
     {
         if (! Schema::hasTable('notification_rules')) {
@@ -90,7 +103,7 @@ class NotificationRecipientService
         $users = match ($rule->target_type) {
             'permission' => $rule->target_value ? $this->usersWithPermission($rule->target_value) : collect(),
             'role' => $rule->target_value ? $this->uniqueUsers(User::role($rule->target_value)->get()) : collect(),
-            'creator' => isset($context['anforderung']) ? $this->creatorOfMaterialanforderung($context['anforderung']) : collect(),
+            'creator' => $this->creatorFromContext($context),
             'department_reviewers' => $this->reviewersForKlassenbuch($context['klassenbuch'] ?? null),
             default => collect(),
         };
@@ -152,6 +165,19 @@ class NotificationRecipientService
         }
 
         return $this->uniqueUsers($users);
+    }
+
+    private function creatorFromContext(array $context): Collection
+    {
+        if (isset($context['anforderung'])) {
+            return $this->creatorOfMaterialanforderung($context['anforderung']);
+        }
+
+        if (($context['creator_user'] ?? null) instanceof User) {
+            return collect([$context['creator_user']]);
+        }
+
+        return collect();
     }
 
     private function projectIdForMaterialanforderung(Materialanforderung $anforderung, ?User $actor): ?int

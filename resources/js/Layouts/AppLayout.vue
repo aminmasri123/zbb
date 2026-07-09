@@ -90,6 +90,14 @@ export default {
       sidebarTextHidden:[],
     };
   },
+  mounted() {
+    this.syncActiveMenuWithPage();
+  },
+  watch: {
+    '$page.component'() {
+      this.syncActiveMenuWithPage();
+    },
+  },
   props: {
         href: {
             type: String,
@@ -102,6 +110,11 @@ export default {
         }
     },
   methods: {
+    syncActiveMenuWithPage() {
+      if (this.$page.component?.startsWith('Einstellung') && !this.activeMenu) {
+        this.activeMenu = 'admin';
+      }
+    },
     toggleMenu(menu) {
       if (this.activeMenu === menu) {
         // Close if already open

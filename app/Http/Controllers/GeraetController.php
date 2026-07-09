@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Geraet;
+use App\Notifications\ConfiguredEventNotification;
+use App\Services\NotificationRecipientService;
 use Carbon\Carbon;
 use DateTime;
 use Exception;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -72,6 +75,20 @@ class GeraetController extends Controller
             $geraet->garantiefrist = Carbon::parse($request->garantiefrist)->format('Y-m-d');
         }
         $geraet->save();
+
+        Notification::send(
+            app(NotificationRecipientService::class)->forEvent('geraet.created', [
+                'actor' => $request->user(),
+                'creator_user' => $request->user(),
+            ]),
+            new ConfiguredEventNotification([
+                'event_key' => 'geraet.created',
+                'message' => 'Neues Gerät mit der SN "' . $geraet->sn . '" wurde angelegt.',
+                'link' => route('geraet.index'),
+                'id' => $geraet->id,
+                'typ' => 'Gerät',
+            ])
+        );
 
         /*
         |-----------------------------

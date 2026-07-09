@@ -8,15 +8,16 @@ use Inertia\Response;
 use App\Models\Gruppe;
 use App\Models\Projekt;
 use App\Models\Personen;
+use App\Models\Role;
 use App\Models\Standort;
 use App\Models\RoleDataAccessSetting;
+use App\Notifications\ConfiguredEventNotification;
+use App\Services\NotificationRecipientService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-
-use Spatie\Permission\Models\Role;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Validator;
-use App\Notifications\CreateUserNotification;
 
 class UserController extends Controller
 {
@@ -158,13 +159,6 @@ class UserController extends Controller
      */
     public function store(Request $request)
     {
-         // 🔔 Alle User mit Rollen benachrichtigen
-         $rollen = ['Abteilungsleitung', 'Assistenz der Abt.-Leitung']; // <- deine Rollennamen
-         $empfaenger = User::role($rollen)->get();
-
-         foreach ($empfaenger as $user) {
-             $user->notify(new CreateUserNotification($user));
-         }
         try {
             // Verwende die Facade für das Abrufen der Eingabedaten
             $data = $request->all(); // holt alle Daten
@@ -209,6 +203,22 @@ class UserController extends Controller
 
                 return $user->load('person', 'roles', 'projekte');
             });
+
+            $name = trim(($user->person?->vorname ?? '') . ' ' . ($user->person?->nachname ?? '')) ?: $user->username;
+
+            Notification::send(
+                app(NotificationRecipientService::class)->forEvent('user.created', [
+                    'actor' => $request->user(),
+                    'creator_user' => $request->user(),
+                ]),
+                new ConfiguredEventNotification([
+                    'event_key' => 'user.created',
+                    'message' => 'Neuer User "' . $name . '" wurde erstellt.',
+                    'link' => route('user.edit', $user->id),
+                    'id' => $user->id,
+                    'typ' => 'User',
+                ])
+            );
 
 
             return response()->json(['message' => 'Benutzer erfolgreich erstellt!', 'user' => $user], 201);

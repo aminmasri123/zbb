@@ -17,7 +17,12 @@ class Role extends SpatieRole
         'id',
     ];
     public function berechtigungskategories(){
-        return $this->belongsToMany(Berechtigungskategorie::class);
+        return $this->belongsToMany(
+            Berechtigungskategorie::class,
+            'role_berechtigungskategories',
+            'role_id',
+            'berechtigungskategorie_id'
+        );
     }
 
 

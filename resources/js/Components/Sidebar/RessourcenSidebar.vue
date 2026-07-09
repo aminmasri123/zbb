@@ -30,7 +30,7 @@
             </li>
 
             <!-- Dienstwagen Submenu -->
-            <li v-if="canAny(['dienstwagen.index', 'dienstwagen.store', 'dienstwagen.fahrtenbuch.index', 'dienstwagen.wartung.index', 'dienstwagen.reports.index'])" class="submenu">
+            <li v-if="canAny(['dienstwagen.index', 'dienstwagen.store', 'dienstwagen.fahrtenbuch.index', 'dienstwagen.wartung.index', 'dienstwagen.buchungen.index', 'dienstwagen.meldungen.index', 'dienstwagen.reports.index'])" class="submenu">
                 <a href="#" @click.prevent="toggleMenu('dienstwagen')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                     <i class="la la-car la-lg mr-2"></i>
                     <span v-if="!displayHideTextSidebar">{{$t('Dienstwagen')}}</span>
@@ -39,6 +39,8 @@
                 <ul v-show="activeMenu === 'dienstwagen'" class="pl-6 mt-2 space-y-2">
                     <li v-if="can('dienstwagen.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dienstwagen.index')">{{$t('Dienstwagenübersicht')}}</Link></li>
                     <li v-if="can('dienstwagen.store')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dienstwagen.index')">{{$t('Dienstwagen anlegen')}}</Link></li>
+                    <li v-if="can('dienstwagen.buchungen.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dienstwagen.buchungen.index')">Buchungen</Link></li>
+                    <li v-if="can('dienstwagen.meldungen.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dienstwagen.meldungen.index')">Meldungen</Link></li>
                     <li v-if="can('dienstwagen.fahrtenbuch.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dienstwagen.fahrtenbuch.index')">{{$t('Fahrtenbuch')}}</Link></li>
                     <li v-if="can('dienstwagen.wartung.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dienstwagen.wartung.index')">{{$t('Wartungen')}}</Link></li>
                     <li v-if="can('dienstwagen.reports.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dienstwagen.reports.index')">{{$t('Reports')}}</Link></li>
@@ -77,26 +79,28 @@
             </li>
 
             <!-- Lager Submenu -->
-            <li v-if="canAny(['abteilung.index', 'abteilung.store', 'abteilung.update'])" class="submenu">
-                <a href="#" @click.prevent="toggleMenu('abteilung')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
+            <li v-if="canAny(['lager.index', 'lager.artikel.store', 'lager.bewegung.store', 'lager.reservierung.store'])" class="submenu">
+                <a href="#" @click.prevent="toggleMenu('lager')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                     <i class="la la-warehouse la-lg mr-2"></i>
 
                     <span v-if="!displayHideTextSidebar" >{{$t('Lager')}}</span>
-                    <span v-if="!displayHideTextSidebar" :class="{'rotate-180': activeMenu === 'abteilung', 'text-zbb': $page.component.startsWith('Abteilung')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
+                    <span v-if="!displayHideTextSidebar" :class="{'rotate-180': activeMenu === 'lager', 'text-zbb': $page.component.startsWith('Lager')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
                 </a>
-                <ul v-show="activeMenu === 'abteilung'" class="pl-6 mt-2 space-y-2">
-                    <li v-if="can('abteilung.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('abteilung.index')">{{$t('berechtigungsübersicht')}}</Link></li>
+                <ul v-show="activeMenu === 'lager'" class="pl-6 mt-2 space-y-2">
+                    <li v-if="can('lager.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('lager.index')">Lageruebersicht</Link></li>
                 </ul>
             </li>
             <!-- IT-Service Submenu -->
-            <li v-if="canAny(['projekt.index', 'projekt.store', 'projekt.update'])" class="submenu">
-                <a href="#" @click.prevent="toggleMenu('projekt')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
-                    <i class="la la-lg la-project-diagram mr-2"></i>
+            <li v-if="canAny(['it.service.index', 'it.ticket.store', 'it.ticket.update', 'it.geraet.store', 'it.geraet.update'])" class="submenu">
+                <a href="#" @click.prevent="toggleMenu('it-service')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
+                    <i class="la la-lg la-headset mr-2"></i>
                     <span v-if="!displayHideTextSidebar" >{{$t('IT-Service')}}</span>
-                    <span v-if="!displayHideTextSidebar" :class="{'rotate-180': activeMenu === 'projekt', 'text-zbb': $page.component.startsWith('Projekt')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
+                    <span v-if="!displayHideTextSidebar" :class="{'rotate-180': activeMenu === 'it-service', 'text-zbb': $page.component.startsWith('ITService')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
                 </a>
-                <ul v-show="activeMenu === 'projekt'" class="pl-6 mt-2 space-y-2">
-                    <li v-if="can('projekt.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('projekt.index')">{{$t('berechtigungsübersicht')}}</Link></li>
+                <ul v-show="activeMenu === 'it-service'" class="pl-6 mt-2 space-y-2">
+                    <li v-if="canAny(['it.service.index', 'it.ticket.update'])"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('it-service.index')">Tickets und Geräte</Link></li>
+                    <li v-if="can('it.ticket.store')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('it-service.index')">Ticket erfassen</Link></li>
+                    <li v-if="canAny(['it.geraet.store', 'it.geraet.update'])"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('it-service.index')">Geräte verwalten</Link></li>
                 </ul>
             </li>
             <!-- Bestellungen Submenu -->

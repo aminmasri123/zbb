@@ -6,10 +6,10 @@ use App\Models\User;
 use Inertia\Inertia;
 use App\Models\Projekt;
 use App\Models\Personen;
+use App\Models\Role;
 use App\Models\Standort;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Spatie\Permission\Models\Role;
 
 class PersonalController extends Controller
 {

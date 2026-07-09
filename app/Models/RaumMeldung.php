@@ -17,16 +17,26 @@ class RaumMeldung extends Model
         'gruppe_id',
         'gemeldet_von_user_id',
         'gemeldet_von_personen_id',
+        'zugewiesen_an_personen_id',
+        'behoben_von_personen_id',
         'titel',
         'kategorie',
         'prioritaet',
         'status',
+        'faellig_am',
         'beschreibung',
+        'massnahme',
+        'kosten',
+        'interne_notiz',
         'erledigt_am',
+        'behoben_am',
     ];
 
     protected $casts = [
+        'faellig_am' => 'date',
         'erledigt_am' => 'datetime',
+        'behoben_am' => 'datetime',
+        'kosten' => 'decimal:2',
     ];
 
     public function raum()
@@ -52,5 +62,15 @@ class RaumMeldung extends Model
     public function gemeldetVonPerson()
     {
         return $this->belongsTo(Personen::class, 'gemeldet_von_personen_id');
+    }
+
+    public function zugewiesenAnPerson()
+    {
+        return $this->belongsTo(Personen::class, 'zugewiesen_an_personen_id');
+    }
+
+    public function behobenVonPerson()
+    {
+        return $this->belongsTo(Personen::class, 'behoben_von_personen_id');
     }
 }

@@ -3,9 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\RoleDataAccessSetting;
+use App\Models\Role;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
-use Spatie\Permission\Models\Role;
 
 class RoleDataAccessController extends Controller
 {

@@ -24,8 +24,48 @@
     'verfügbar': '✅',
     'in Nutzung': '🚗',
     'Werkstatt': '🛠️',
-    'außer Betrieb': '⛔'
+    'außer Betrieb': '⛔',
+    'passiv': '·'
     };
+
+    const deadlineFields = [
+        { key: 'tuev_bis', label: 'TÜV' },
+        { key: 'au_bis', label: 'AU' },
+        { key: 'versicherung_bis', label: 'Versicherung' },
+        { key: 'steuer_faellig_am', label: 'Steuer' },
+        { key: 'inspektion_am', label: 'Inspektion' },
+        { key: 'reifenwechsel_am', label: 'Reifen' },
+        { key: 'naechste_wartung', label: 'Wartung' },
+    ];
+
+    const daysUntil = (value) => {
+        if (!value) return null;
+        const due = new Date(value);
+        if (Number.isNaN(due.getTime())) return null;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        due.setHours(0, 0, 0, 0);
+        return Math.ceil((due - today) / 86400000);
+    };
+
+    const deadlineClass = (days) => {
+        if (days === null) return '';
+        if (days < 0) return 'bg-red-100 text-red-700';
+        if (days <= 14) return 'bg-orange-100 text-orange-700';
+        if (days <= 30) return 'bg-yellow-100 text-yellow-700';
+        return 'bg-green-100 text-green-700';
+    };
+
+    const deadlineText = (days) => {
+        if (days < 0) return `${Math.abs(days)} Tage überfällig`;
+        if (days === 0) return 'heute fällig';
+        return `in ${days} Tagen`;
+    };
+
+    const vehicleDeadlines = (vehicle) => deadlineFields
+        .map((field) => ({ ...field, days: daysUntil(vehicle[field.key]) }))
+        .filter((field) => field.days !== null && field.days <= 30)
+        .sort((a, b) => a.days - b.days);
 
     // Gefilterte Liste
     const filteredVehicles = computed(() => {
@@ -92,12 +132,18 @@
                     </option>
                 </select>
                    <Link
-                    :href="route('dienstwagen.create')"
-                    class="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold py-3 px-5 rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all"
-                >
-                    <span class="text-xl">＋</span> Neues Fahrzeug
-                </Link>
-            </div>
+	                    :href="route('dienstwagen.create')"
+	                    class="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold py-3 px-5 rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all"
+	                >
+	                    <span class="text-xl">＋</span> Neues Fahrzeug
+	                </Link>
+                    <Link :href="route('dienstwagen.buchungen.index')" class="inline-flex items-center gap-2 bg-white border border-gray-300 text-gray-800 font-semibold py-3 px-5 rounded-xl hover:bg-gray-50">
+                        <i class="la la-calendar"></i> Buchungen
+                    </Link>
+                    <Link :href="route('dienstwagen.meldungen.index')" class="inline-flex items-center gap-2 bg-white border border-gray-300 text-gray-800 font-semibold py-3 px-5 rounded-xl hover:bg-gray-50">
+                        <i class="la la-exclamation-circle"></i> Meldungen
+                    </Link>
+	            </div>
 
             <!-- Fahrzeuge -->
             <div v-if="filteredVehicles.length" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -105,9 +151,15 @@
                     v-for="v in filteredVehicles"
                     :key="v.id"
                     class="group bg-white dark:bg-gray-800 rounded-2xl shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden"
-                >
-                    <!-- Header -->
-                    <div class="p-5 flex justify-between items-start border-b border-gray-100 dark:border-gray-700">
+	                >
+                    <div v-if="v.bild_url" class="h-40 overflow-hidden bg-gray-100">
+                        <img :src="v.bild_url" class="h-full w-full object-cover" :alt="v.kennzeichen" />
+                    </div>
+                    <div v-else class="h-40 bg-gray-100 dark:bg-gray-900 flex items-center justify-center text-gray-400">
+                        <i class="la la-car text-5xl"></i>
+                    </div>
+	                    <!-- Header -->
+	                    <div class="p-5 flex justify-between items-start border-b border-gray-100 dark:border-gray-700">
                         <div>
                             <h2 class="text-2xl font-bold text-gray-900 dark:text-white">{{ v.kennzeichen }}</h2>
                             <p class="text-gray-500 dark:text-gray-400">{{ v.marke }} {{ v.modell }}</p>
@@ -140,20 +192,54 @@
 
                     <!-- Inhalt -->
                     <div class="p-5 text-sm text-gray-600 dark:text-gray-300 space-y-2">
-                        <p>⛽ <b>Kraftstoff:</b> {{ v.kraftstoffart }}</p>
-                        <p>🛞 <b>Kilometerstand:</b> {{ v.kilometerstand.toLocaleString() }} km</p>
-                        <p>📅 <b>Baujahr:</b> {{ v.baujahr }}</p>
-                    </div>
+	                        <p>⛽ <b>Kraftstoff:</b> {{ v.kraftstoffart }}</p>
+	                        <p>🛞 <b>Kilometerstand:</b> {{ v.kilometerstand.toLocaleString() }} km</p>
+	                        <p>📅 <b>Baujahr:</b> {{ v.baujahr }}</p>
+                            <div class="flex flex-wrap gap-2 pt-2">
+                                <span v-if="v.offene_meldungen_count" class="rounded bg-red-100 px-2 py-1 text-xs font-semibold text-red-700">
+                                    {{ v.offene_meldungen_count }} offene Meldung(en)
+                                </span>
+                                <span v-if="v.aktive_buchungen_count" class="rounded bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-700">
+                                    {{ v.aktive_buchungen_count }} aktive Buchung(en)
+                                </span>
+                                <span
+                                    v-for="deadline in vehicleDeadlines(v)"
+                                    :key="`${v.id}-${deadline.key}`"
+                                    class="rounded px-2 py-1 text-xs font-semibold"
+                                    :class="deadlineClass(deadline.days)"
+                                >
+                                    {{ deadline.label }} {{ deadlineText(deadline.days) }}
+                                </span>
+                            </div>
+	                    </div>
 
                     <!-- Aktionen -->
-                    <div class="flex justify-between items-center border-t border-gray-100 dark:border-gray-700 p-5 bg-gray-50 dark:bg-gray-900/40">
+                    <div class="grid grid-cols-2 gap-3 border-t border-gray-100 bg-gray-50 p-5 text-sm font-semibold dark:border-gray-700 dark:bg-gray-900/40">
                         <Link
                             :href="route('dienstwagen.edit', v.id)"
-                            class="text-blue-600 hover:text-blue-800 font-semibold transition-colors"
+                            class="text-blue-600 transition-colors hover:text-blue-800"
                         >
-                            ✏️ Bearbeiten
-                        </Link>
-                        <span class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"  @click="confirmDelete(v)">
+	                            ✏️ Bearbeiten
+	                        </Link>
+                            <Link
+                                :href="route('dienstwagen.fahrtenbuch.index', { dienstwagen_id: v.id })"
+                                class="text-green-700 transition-colors hover:text-green-900"
+                            >
+                                Fahrtenbuch
+                            </Link>
+                            <Link
+                                :href="route('dienstwagen.verlauf.index', v.id)"
+                                class="text-gray-600 transition-colors hover:text-gray-900"
+                            >
+                                Verlauf
+                            </Link>
+                            <Link
+                                :href="route('dienstwagen.fahrtenbuch.code', v.id)"
+                                class="text-indigo-700 transition-colors hover:text-indigo-900"
+                            >
+                                QR drucken
+                            </Link>
+	                        <span class="col-span-2 flex cursor-pointer items-center justify-center rounded border border-red-200 px-4 py-2 text-red-700 hover:bg-red-50"  @click="confirmDelete(v)">
                             🗑️ {{ $t('Löschen') }}
                         </span>
 

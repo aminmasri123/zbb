@@ -23,11 +23,14 @@ use App\Models\Standort;
 use App\Models\Teilnehmer;
 use App\Models\User;
 use App\Models\RoleDataAccessSetting;
+use App\Notifications\ConfiguredEventNotification;
+use App\Services\NotificationRecipientService;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -164,6 +167,21 @@ class TeilnehmerController extends Controller
                 [
                     'standort_id' => $validatedData['standort']
                 ]
+            );
+
+            Notification::send(
+                app(NotificationRecipientService::class)->forEvent('teilnehmer.created', [
+                    'actor' => $request->user(),
+                    'creator_user' => $request->user(),
+                    'project_id' => $validatedData['projekt'],
+                ]),
+                new ConfiguredEventNotification([
+                    'event_key' => 'teilnehmer.created',
+                    'message' => 'Neuer Teilnehmer "' . $teilnehmer->vorname . ' ' . $teilnehmer->nachname . '" wurde erstellt.',
+                    'link' => route('teilnehmer.edit', $teilnehmer->id),
+                    'id' => $teilnehmer->id,
+                    'typ' => 'Teilnehmer',
+                ])
             );
 
 

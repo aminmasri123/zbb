@@ -13,6 +13,18 @@
                     </FloatLabel>
                 </div>
 
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <FloatLabel>
+                        <InputText v-model="form.raumnummer" class="w-full" />
+                        <label>Raumnummer</label>
+                    </FloatLabel>
+
+                    <FloatLabel>
+                        <InputText v-model="form.etage" class="w-full" />
+                        <label>Etage / Bereich</label>
+                    </FloatLabel>
+                </div>
+
                 <!-- Standort -->
                 <div>
                     <FloatLabel>
@@ -67,6 +79,19 @@
                     </FloatLabel>
                 </div>
 
+                <div>
+                    <FloatLabel>
+                        <Dropdown
+                            v-model="form.status"
+                            :options="statusOptionen"
+                            optionLabel="label"
+                            optionValue="value"
+                            class="w-full"
+                        />
+                        <label>Status</label>
+                    </FloatLabel>
+                </div>
+
                 <div v-if="standardPersonSichtbar">
                     <FloatLabel>
                         <Dropdown
@@ -83,12 +108,37 @@
 
                 <div>
                     <FloatLabel>
+                        <Dropdown
+                            v-model="form.verantwortliche_personen_id"
+                            :options="personalOptionen"
+                            optionLabel="label"
+                            optionValue="id"
+                            showClear
+                            class="w-full"
+                        />
+                        <label>Verantwortliche Person</label>
+                    </FloatLabel>
+                </div>
+
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <FloatLabel>
                         <InputNumber
                             v-model="form.kapazitaet"
                             class="w-full"
                             :min="0"
                         />
                         <label>Kapazität</label>
+                    </FloatLabel>
+
+                    <FloatLabel>
+                        <InputNumber
+                            v-model="form.flaeche_qm"
+                            class="w-full"
+                            :min="0"
+                            :minFractionDigits="0"
+                            :maxFractionDigits="2"
+                        />
+                        <label>Fläche qm</label>
                     </FloatLabel>
                 </div>
 
@@ -100,10 +150,17 @@
                     </FloatLabel>
                 </div>
 
-                <label class="inline-flex items-center gap-2 text-sm text-slate-700">
-                    <input v-model="form.aktiv" type="checkbox" class="rounded border-slate-300 text-zbb focus:ring-zbb" />
-                    Aktiv verfuegbar
-                </label>
+                <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+                        <input v-model="form.aktiv" type="checkbox" class="rounded border-slate-300 text-zbb focus:ring-zbb" />
+                        Aktiv verfügbar
+                    </label>
+
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+                        <input v-model="form.buchbar" type="checkbox" class="rounded border-slate-300 text-zbb focus:ring-zbb" />
+                        Buchbar
+                    </label>
+                </div>
 
             </div>
         </template>
@@ -156,6 +213,13 @@ const belegungsarten = [
   { label: 'Blockiert', value: 'blockiert' },
 ];
 
+const statusOptionen = [
+  { label: 'Verfügbar', value: 'verfuegbar' },
+  { label: 'Eingeschränkt', value: 'eingeschraenkt' },
+  { label: 'In Wartung', value: 'wartung' },
+  { label: 'Gesperrt', value: 'gesperrt' },
+];
+
 const belegungsartenMitStandardPerson = ['standard', 'teilweise'];
 
 const standardPersonSichtbar = computed(() =>
@@ -182,14 +246,20 @@ const raumOptionen = computed(() =>
 
 let form = ref({
   name: '',
+  raumnummer: '',
+  etage: '',
   standort_id: null,
   parent_id: null,
   typ: null,
   belegungsart: 'frei',
+  status: 'verfuegbar',
   standard_personen_id: null,
+  verantwortliche_personen_id: null,
   beschreibung: '',
   kapazitaet: null,
+  flaeche_qm: null,
   aktiv: true,
+  buchbar: true,
 });
 
 watch(
@@ -204,14 +274,20 @@ watch(
 const resetForm = () => {
   form.value = {
     name: '',
+    raumnummer: '',
+    etage: '',
     standort_id: null,
     parent_id: null,
     typ: null,
     belegungsart: 'frei',
+    status: 'verfuegbar',
     standard_personen_id: null,
+    verantwortliche_personen_id: null,
     beschreibung: '',
     kapazitaet: null,
+    flaeche_qm: null,
     aktiv: true,
+    buchbar: true,
   };
 };
 

@@ -573,6 +573,16 @@ class UserSeeder extends Seeder
                 'name' => 'Bestellungen',
                 'beschreibung' => '',
             ],
+            [
+                // id = 28
+                'name' => 'Lager',
+                'beschreibung' => 'Interne Lagerverwaltung fuer Verbrauchsmaterial und Betriebsmittel.',
+            ],
+            [
+                // id = 29
+                'name' => 'IT-Service',
+                'beschreibung' => 'Helpdesk, IT-Tickets und IT-Geraeteverwaltung.',
+            ],
 
         ]);
 
@@ -667,6 +677,11 @@ class UserSeeder extends Seeder
                 'name' => 'Qualitätsmanagement',
                 'guard_name' => 'web',
                 'color' => 'bg-violet-300',
+            ],
+            [
+                'name' => 'IT',
+                'guard_name' => 'web',
+                'color' => 'bg-sky-300',
             ]
 
         ];
@@ -768,6 +783,31 @@ class UserSeeder extends Seeder
             'raeumlichkeiten.meldung.update',
             'teilnehmer.update',
             'teilnehmer.destroy',
+            'dienstwagen.buchungen.index',
+            'dienstwagen.buchungen.store',
+            'dienstwagen.buchungen.update',
+            'dienstwagen.buchungen.destroy',
+            'dienstwagen.meldungen.index',
+            'dienstwagen.meldungen.store',
+            'dienstwagen.meldungen.update',
+            'dienstwagen.meldungen.destroy',
+            'dienstwagen.verlauf.index',
+            'dienstwagen.kosten.update',
+            'dienstwagen.kosten.destroy',
+            'lager.index',
+            'lager.artikel.store',
+            'lager.artikel.update',
+            'lager.artikel.destroy',
+            'lager.bewegung.store',
+            'lager.reservierung.store',
+            'lager.reservierung.update',
+            'it.service.index',
+            'it.ticket.store',
+            'it.ticket.update',
+            'it.ticket.destroy',
+            'it.geraet.store',
+            'it.geraet.update',
+            'it.geraet.destroy',
         ];
 
         $extraPermissionIds = DB::table('permissions')
@@ -776,7 +816,7 @@ class UserSeeder extends Seeder
             ->pluck('id');
 
         $extraRoleIds = DB::table('roles')
-            ->whereIn('name', ['Administrator', 'Developer'])
+            ->whereIn('name', ['Administrator', 'Developer', 'IT'])
             ->where('guard_name', 'web')
             ->pluck('id');
 
@@ -866,6 +906,10 @@ class UserSeeder extends Seeder
             $this->permission('rolle.store', 7, 'Erlaubt das Anlegen neuer Rollen, die anschliessend mit Berechtigungskategorien, Permissions und Datenzugriffen ausgestattet werden koennen.'),
             $this->permission('rolle.destroy', 7, 'Erlaubt das Loeschen bestehender Rollen. Diese Berechtigung sollte nur an Administratoren oder sehr eingeschraenkte Systemverantwortliche vergeben werden.'),
             $this->permission('rolle.data-access.update', 8, 'Erlaubt das Bearbeiten des rollenbezogenen Datenzugriffs, also welche Mitarbeiter- und Teilnehmerdaten eine Rolle grundsaetzlich sehen darf.'),
+            $this->permission('notification-rules.index', 8, 'Erlaubt das Einsehen der Benachrichtigungsregeln und der verfuegbaren Ereignisse, Empfaenger und Kanaele.'),
+            $this->permission('notification-rules.store', 8, 'Erlaubt das Anlegen neuer Benachrichtigungsregeln fuer konfigurierbare Ereignisse.'),
+            $this->permission('notification-rules.update', 8, 'Erlaubt das Bearbeiten und Aktivieren oder Deaktivieren bestehender Benachrichtigungsregeln.'),
+            $this->permission('notification-rules.destroy', 8, 'Erlaubt das Entfernen bestehender Benachrichtigungsregeln.'),
 
             // Benutzer / Personal
             $this->permission('benutzer.index', 9, 'Erlaubt das Einsehen der Benutzeruebersicht mit Benutzerkonten, Rollen, Projektzuweisungen und zugehoerigen Personendaten im erlaubten Datenbereich.'),
@@ -1089,6 +1133,15 @@ class UserSeeder extends Seeder
             $this->permission('geraet.rueckgabe.geraete', 20, 'Erlaubt das Laden der zu einer Rueckgabe gehoerenden Geraeteliste.'),
             $this->permission('rueckgabe.view', 20, 'Erlaubt das Oeffnen der Detailansicht einer Geraeterueckgabe.'),
 
+            // IT-Service
+            $this->permission('it.service.index', 29, 'Erlaubt das Einsehen des IT-Service-Dashboards mit Tickets und Geraeten aller Standorte.'),
+            $this->permission('it.ticket.store', 29, 'Erlaubt das Anlegen neuer IT-Tickets fuer Standorte, Personen oder Geraete.'),
+            $this->permission('it.ticket.update', 29, 'Erlaubt das Priorisieren, Planen, Zuweisen und Abschliessen von IT-Tickets.'),
+            $this->permission('it.ticket.destroy', 29, 'Erlaubt das Loeschen von IT-Tickets.'),
+            $this->permission('it.geraet.store', 29, 'Erlaubt das Anlegen neuer IT-Geraete im IT-Service.'),
+            $this->permission('it.geraet.update', 29, 'Erlaubt das Bearbeiten von IT-Geraeten inklusive Standort, Verantwortlichkeit und Wartungsdaten.'),
+            $this->permission('it.geraet.destroy', 29, 'Erlaubt das Loeschen oder Aussondern von IT-Geraeten.'),
+
             // Raeume
             $this->permission('raeumlichkeiten.index', 24, 'Erlaubt das Einsehen der Raumuebersicht inklusive Standorten, Unterraeumen, Standardbelegung und Raummeldungen.'),
             $this->permission('raeumlichkeiten.store', 24, 'Erlaubt das Anlegen neuer Raeume inklusive Standort, Raumtyp, Kapazitaet und Belegungsart.'),
@@ -1111,7 +1164,18 @@ class UserSeeder extends Seeder
             $this->permission('dienstwagen.wartung.destroy', 25, 'Erlaubt das Loeschen von Wartungseintraegen.'),
             $this->permission('dienstwagen.kosten.index', 25, 'Erlaubt das Einsehen der Dienstwagenkostenuebersicht.'),
             $this->permission('dienstwagen.kosten.store', 25, 'Erlaubt das Erfassen neuer Dienstwagenkosten.'),
+            $this->permission('dienstwagen.kosten.update', 25, 'Erlaubt das Bearbeiten von Dienstwagenkosten.'),
+            $this->permission('dienstwagen.kosten.destroy', 25, 'Erlaubt das Loeschen von Dienstwagenkosten.'),
             $this->permission('dienstwagen.reports.index', 25, 'Erlaubt das Einsehen von Dienstwagenberichten und Auswertungen.'),
+            $this->permission('dienstwagen.buchungen.index', 25, 'Erlaubt das Einsehen von Dienstwagenbuchungen.'),
+            $this->permission('dienstwagen.buchungen.store', 25, 'Erlaubt das Anlegen von Dienstwagenbuchungen.'),
+            $this->permission('dienstwagen.buchungen.update', 25, 'Erlaubt das Bearbeiten von Dienstwagenbuchungen.'),
+            $this->permission('dienstwagen.buchungen.destroy', 25, 'Erlaubt das Loeschen oder Stornieren von Dienstwagenbuchungen.'),
+            $this->permission('dienstwagen.meldungen.index', 25, 'Erlaubt das Einsehen von Dienstwagenmeldungen.'),
+            $this->permission('dienstwagen.meldungen.store', 25, 'Erlaubt das Erfassen von Schaeden, Reparaturen und Aufgaben an Dienstwagen.'),
+            $this->permission('dienstwagen.meldungen.update', 25, 'Erlaubt das Bearbeiten und Abschliessen von Dienstwagenmeldungen.'),
+            $this->permission('dienstwagen.meldungen.destroy', 25, 'Erlaubt das Loeschen von Dienstwagenmeldungen.'),
+            $this->permission('dienstwagen.verlauf.index', 25, 'Erlaubt das Einsehen des Dienstwagenverlaufs.'),
             $this->permission('dienstwagen.fahrtenbuch.index', 25, 'Erlaubt das Einsehen des Dienstwagen-Fahrtenbuchs entsprechend der zusaetzlichen Sichtrechte.'),
             $this->permission('dienstwagen.fahrtenbuch.store', 25, 'Erlaubt das Anlegen neuer Fahrtenbucheintraege.'),
             $this->permission('dienstwagen.fahrtenbuch.update', 25, 'Erlaubt das Bearbeiten bestehender Fahrtenbucheintraege.'),
@@ -1176,6 +1240,15 @@ class UserSeeder extends Seeder
             $this->permission('materialanforderung.kaufmännische_freigabe.show', 27, 'Erlaubt das Einsehen der Detaildaten einer Materialanforderung im Rahmen der kaufmaennischen Pruefung.'),
             $this->permission('materialanforderung.kaufmännische_freigabe.update', 27, 'Erlaubt die kaufmaennische Bearbeitung, Freigabe oder Rueckgabe einer Materialanforderung.'),
             $this->permission('materialanforderung.bestellwesen.update', 27, 'Erlaubt die Bearbeitung im Bestellwesen, insbesondere Statuswechsel wie bestellt, geliefert oder teilweise geliefert.'),
+
+            // Lager
+            $this->permission('lager.index', 28, 'Erlaubt das Einsehen der internen Lageruebersicht inklusive Verfuegbarkeit und Reservierungen.'),
+            $this->permission('lager.artikel.store', 28, 'Erlaubt das Anlegen neuer interner Lagerartikel.'),
+            $this->permission('lager.artikel.update', 28, 'Erlaubt das Bearbeiten interner Lagerartikel und Stammdaten.'),
+            $this->permission('lager.artikel.destroy', 28, 'Erlaubt das Deaktivieren oder Loeschen interner Lagerartikel.'),
+            $this->permission('lager.bewegung.store', 28, 'Erlaubt das Buchen von Lagerbewegungen wie Eingang, Ausgang oder Korrektur.'),
+            $this->permission('lager.reservierung.store', 28, 'Erlaubt das interne Reservieren von verfuegbaren Lagerartikeln.'),
+            $this->permission('lager.reservierung.update', 28, 'Erlaubt das Ausgeben oder Stornieren interner Lagerreservierungen.'),
 
             // Printing
             $this->permission('printing.index', 23, 'Erlaubt das Einsehen des Druck- bzw. Printingbereichs.'),
