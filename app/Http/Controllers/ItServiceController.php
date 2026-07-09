@@ -28,8 +28,15 @@ class ItServiceController extends Controller
             'geraet.update',
         ]);
 
+        $canManageTickets = $this->userCanAny($request, [
+            'it.service.index',
+            'it.ticket.update',
+            'it.ticket.destroy',
+        ]);
+
         $tickets = ItTicket::query()
             ->with($this->ticketRelations())
+            ->when(! $canManageTickets, fn ($query) => $query->where('gemeldet_von_user_id', $request->user()?->id))
             ->latest()
             ->get();
 
@@ -321,15 +328,24 @@ class ItServiceController extends Controller
 
     private function authorizeAny(Request $request, array $permissions): void
     {
+        if ($this->userCanAny($request, $permissions)) {
+            return;
+        }
+
+        abort(403);
+    }
+
+    private function userCanAny(Request $request, array $permissions): bool
+    {
         $user = $request->user();
 
         foreach ($permissions as $permission) {
             if ($user?->can($permission)) {
-                return;
+                return true;
             }
         }
 
-        abort(403);
+        return false;
     }
 
     private function statusOptions(): array

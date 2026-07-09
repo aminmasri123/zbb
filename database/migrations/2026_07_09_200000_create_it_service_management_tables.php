@@ -186,6 +186,8 @@ return new class extends Migration
 
     private function upsertPermissions(int $categoryId, array $permissions): void
     {
+        $this->ensureItRole();
+
         foreach ($permissions as $name => $description) {
             DB::table('permissions')->updateOrInsert(
                 [
@@ -226,6 +228,21 @@ return new class extends Migration
         }
 
         $this->clearPermissionCache();
+    }
+
+    private function ensureItRole(): void
+    {
+        DB::table('roles')->updateOrInsert(
+            [
+                'name' => 'IT',
+                'guard_name' => 'web',
+            ],
+            [
+                'color' => 'bg-sky-300',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
+        );
     }
 
     private function clearPermissionCache(): void
