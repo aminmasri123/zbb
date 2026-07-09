@@ -15,6 +15,11 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:visible', 'close'])
+const BibbSwal = Swal.mixin({
+  customClass: {
+    container: 'bibb-swal-container',
+  },
+})
 
 const localVisible = computed({
   get: () => props.visible,
@@ -48,10 +53,12 @@ const draftLoaded = ref(false)
 const draftHydrating = ref(false)
 const draftDirty = ref(false)
 const draftLastSavedAt = ref(null)
+const sheetFullscreen = ref(false)
 const bibbFooterImageSrc = '/img/bibb/logoleiste_bop_2020.jpg'
 let bibbFooterImagePromise = null
 let draftSaveTimer = null
 let draftPollTimer = null
+let previousBodyOverflow = ''
 
 const selectedDays = computed(() => days.value.filter((day) => day.selected))
 const selectedDay = computed(() => days.value.find((day) => day.id === selectedDayId.value) || selectedDays.value[0] || null)
@@ -128,6 +135,14 @@ const draftStatusText = computed(() => {
 
   return 'bereit'
 })
+const sheetSectionClass = computed(() => sheetFullscreen.value
+  ? 'fixed inset-0 z-[9999] overflow-hidden border-0 bg-white p-4 shadow-2xl'
+  : 'rounded border border-gray-200 bg-white p-4'
+)
+const sheetTableWrapperClass = computed(() => sheetFullscreen.value
+  ? 'h-[calc(100vh-116px)] overflow-auto rounded border border-gray-300 bg-white'
+  : 'max-h-[52vh] overflow-auto rounded border border-gray-300 bg-white'
+)
 
 const toDateInput = (date) => {
   const year = date.getFullYear()
@@ -256,6 +271,12 @@ const buildDraftPayload = () => ({
   signatures: { ...signatures },
 })
 
+const signatureSnapshot = (signaturePayload = {}) => JSON.stringify(
+  Object.entries(signaturePayload || {})
+    .filter(([, value]) => Boolean(value))
+    .sort(([left], [right]) => left.localeCompare(right))
+)
+
 const syncSignatures = (nextSignatures = {}, { removeMissing = true } = {}) => {
   if (removeMissing) {
     Object.keys(signatures).forEach((key) => {
@@ -324,7 +345,7 @@ const loadDraft = async ({ silent = true } = {}) => {
     draftLoaded.value = true
   } catch (error) {
     if (!silent) {
-      Swal.fire('Fehler', await readBlobError(error), 'error')
+      BibbSwal.fire('Fehler', await readBlobError(error), 'error')
     }
   } finally {
     draftLoading.value = false
@@ -335,6 +356,7 @@ const saveDraft = async ({ silent = true, payload = null } = {}) => {
   if (!props.partnerId || !props.schuljahr || !props.teil) return
 
   const draftPayload = payload || buildDraftPayload()
+  const requestSignatureSnapshot = signatureSnapshot(draftPayload.signatures)
   draftSaving.value = true
 
   try {
@@ -343,18 +365,33 @@ const saveDraft = async ({ silent = true, payload = null } = {}) => {
       payload: draftPayload,
     })
 
-    if (response.data.payload) applyDraftPayload(response.data.payload)
+    const signatureChangedDuringSave = signatureSnapshot(signatures) !== requestSignatureSnapshot
+    if (response.data.payload && !signatureChangedDuringSave) applyDraftPayload(response.data.payload)
     draftRevision.value = response.data.revision || draftRevision.value
     draftLastSavedAt.value = response.data.updated_at || new Date().toISOString()
     draftLoaded.value = true
-    draftDirty.value = false
+    draftDirty.value = signatureChangedDuringSave
   } catch (error) {
     if (!silent) {
-      Swal.fire('Fehler', await readBlobError(error), 'error')
+      BibbSwal.fire('Fehler', await readBlobError(error), 'error')
     }
   } finally {
     draftSaving.value = false
   }
+}
+
+const removeSignature = (day, participant) => {
+  if (!day || !participant) return
+
+  const key = signatureKey(day, participant)
+  delete signatures[key]
+  draftDirty.value = true
+  window.clearTimeout(draftSaveTimer)
+  draftSaveTimer = null
+
+  const payload = buildDraftPayload()
+  payload.signatures[key] = ''
+  saveDraft({ silent: true, payload })
 }
 
 const scheduleDraftSave = () => {
@@ -393,8 +430,22 @@ const stopDraftTimers = () => {
   draftPollTimer = null
 }
 
+const closeSheetFullscreen = () => {
+  sheetFullscreen.value = false
+}
+
+const toggleSheetFullscreen = () => {
+  sheetFullscreen.value = !sheetFullscreen.value
+}
+
+const handleSheetFullscreenKeydown = (event) => {
+  if (event.key === 'Escape') {
+    closeSheetFullscreen()
+  }
+}
+
 const clearDraft = async () => {
-  const result = await Swal.fire({
+  const result = await BibbSwal.fire({
     title: 'Entwurf leeren?',
     text: 'Der zentrale Zwischenstand dieser Anwesenheitsliste wird geloescht.',
     icon: 'warning',
@@ -416,9 +467,9 @@ const clearDraft = async () => {
     draftDirty.value = false
     draftRevision.value = 0
     draftLastSavedAt.value = null
-    Swal.fire('Geloescht', 'Der zentrale Entwurf wurde geleert.', 'success')
+    BibbSwal.fire('Geloescht', 'Der zentrale Entwurf wurde geleert.', 'success')
   } catch (error) {
-    Swal.fire('Fehler', await readBlobError(error), 'error')
+    BibbSwal.fire('Fehler', await readBlobError(error), 'error')
   }
 }
 
@@ -543,12 +594,12 @@ const createRangeDays = () => {
   const end = form.endDate || form.feedbackDate
 
   if (!start || !end) {
-    Swal.fire('Zeitraum fehlt', 'Bitte Anfangs- und Enddatum oder Rolltag und Feedbackgespraech waehlen.', 'warning')
+    BibbSwal.fire('Zeitraum fehlt', 'Bitte Anfangs- und Enddatum oder Rolltag und Feedbackgespraech waehlen.', 'warning')
     return
   }
 
   if (new Date(`${end}T00:00:00`) < new Date(`${start}T00:00:00`)) {
-    Swal.fire('Datum pruefen', 'Das Enddatum muss nach dem Anfangsdatum liegen.', 'warning')
+    BibbSwal.fire('Datum pruefen', 'Das Enddatum muss nach dem Anfangsdatum liegen.', 'warning')
     return
   }
 
@@ -560,7 +611,7 @@ const addManualDay = () => {
 
   const exists = days.value.some((day) => day.date === manualDate.value)
   if (exists) {
-    Swal.fire('Datum vorhanden', 'Dieser Tag ist bereits in der Vorschau.', 'info')
+    BibbSwal.fire('Datum vorhanden', 'Dieser Tag ist bereits in der Vorschau.', 'info')
     return
   }
 
@@ -614,7 +665,7 @@ const loadPreview = async ({ includeDraft = false } = {}) => {
     syncAutoProgramDays()
     if (includeDraft) await loadDraft({ silent: true })
   } catch (error) {
-    Swal.fire('Fehler', await readBlobError(error), 'error')
+    BibbSwal.fire('Fehler', await readBlobError(error), 'error')
   } finally {
     loadingPreview.value = false
   }
@@ -622,7 +673,7 @@ const loadPreview = async ({ includeDraft = false } = {}) => {
 
 const handleWordExport = async () => {
   if (selectedDays.value.length === 0) {
-    Swal.fire('Keine Tage', 'Bitte mindestens einen Tag auswaehlen.', 'warning')
+    BibbSwal.fire('Keine Tage', 'Bitte mindestens einen Tag auswaehlen.', 'warning')
     return
   }
 
@@ -650,7 +701,7 @@ const handleWordExport = async () => {
     link.remove()
     window.URL.revokeObjectURL(url)
   } catch (error) {
-    Swal.fire('Fehler', await readBlobError(error), 'error')
+    BibbSwal.fire('Fehler', await readBlobError(error), 'error')
   } finally {
     exportingWord.value = false
   }
@@ -775,7 +826,7 @@ const drawOriginalFooter = (doc, footerImage, layout) => {
 
 const createSignedPdf = async () => {
   if (selectedDays.value.length === 0) {
-    Swal.fire('Keine Tage', 'Bitte mindestens einen Tag auswaehlen.', 'warning')
+    BibbSwal.fire('Keine Tage', 'Bitte mindestens einen Tag auswaehlen.', 'warning')
     return
   }
 
@@ -837,7 +888,7 @@ const createSignedPdf = async () => {
     const safeSchool = school.replace(/[^A-Za-z0-9_\-.]+/g, '_')
     doc.save(`Anwesenheitsliste_BIBB_${safeSchool}_${props.schuljahr}_Teil_${props.teil}.pdf`)
   } catch (error) {
-    Swal.fire('Fehler', 'Das PDF konnte nicht erstellt werden.', 'error')
+    BibbSwal.fire('Fehler', 'Das PDF konnte nicht erstellt werden.', 'error')
   } finally {
     exportingPdf.value = false
   }
@@ -845,6 +896,7 @@ const createSignedPdf = async () => {
 
 const resetState = () => {
   stopDraftTimers()
+  closeSheetFullscreen()
   draftHydrating.value = true
   draftLoaded.value = false
   draftDirty.value = false
@@ -891,10 +943,26 @@ watch(form, scheduleDraftSave, { deep: true })
 watch(days, scheduleDraftSave, { deep: true })
 watch(signatures, scheduleDraftSave, { deep: true })
 watch(selectedDayId, scheduleDraftSave)
+watch(sheetFullscreen, (fullscreen) => {
+  if (typeof document === 'undefined') return
+
+  if (fullscreen) {
+    previousBodyOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', handleSheetFullscreenKeydown)
+    return
+  }
+
+  document.body.style.overflow = previousBodyOverflow
+  window.removeEventListener('keydown', handleSheetFullscreenKeydown)
+})
 
 onBeforeUnmount(() => {
   flushDraftSave()
   stopDraftTimers()
+  closeSheetFullscreen()
+  window.removeEventListener('keydown', handleSheetFullscreenKeydown)
+  if (typeof document !== 'undefined') document.body.style.overflow = previousBodyOverflow
 })
 </script>
 
@@ -1110,7 +1178,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div v-if="programDays.length" class="rounded border border-gray-200 bg-white p-4">
+        <div v-if="programDays.length" :class="sheetSectionClass">
           <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <p class="text-xs font-semibold uppercase text-gray-500">Digitales Original-Blatt</p>
@@ -1118,10 +1186,20 @@ onBeforeUnmount(() => {
                 Unterschriften direkt in den Termin-Spalten
               </h3>
             </div>
-            <span class="text-sm text-gray-600">{{ sheetParticipants.length }} Teilnehmer / {{ programDays.length }} Termine</span>
+            <div class="flex items-center gap-2">
+              <span class="text-sm text-gray-600">{{ sheetParticipants.length }} Teilnehmer / {{ programDays.length }} Termine</span>
+              <button
+                type="button"
+                class="inline-flex h-10 w-10 items-center justify-center rounded border border-gray-300 text-gray-700 hover:bg-gray-50"
+                :title="sheetFullscreen ? 'Vollbild verlassen' : 'Digitales Blatt im Vollbild anzeigen'"
+                @click="toggleSheetFullscreen"
+              >
+                <i :class="sheetFullscreen ? 'la la-compress' : 'la la-expand'"></i>
+              </button>
+            </div>
           </div>
 
-          <div class="max-h-[52vh] overflow-auto rounded border border-gray-300 bg-white">
+          <div :class="sheetTableWrapperClass">
             <table class="min-w-[1180px] border-collapse text-[11px]">
               <thead class="sticky top-0 z-10 bg-white">
                 <tr>
@@ -1177,6 +1255,7 @@ onBeforeUnmount(() => {
                         v-if="participantCanSignDay(participant, day)"
                         v-model="signatures[signatureKey(day, participant)]"
                         compact
+                        @cleared="removeSignature(day, participant)"
                       />
                       <div v-else class="h-10 min-w-[92px] rounded bg-gray-100"></div>
                     </div>
@@ -1197,6 +1276,7 @@ onBeforeUnmount(() => {
                         v-if="feedbackDay"
                         v-model="signatures[signatureKey(feedbackDay, participant)]"
                         compact
+                        @cleared="removeSignature(feedbackDay, participant)"
                       />
                     </div>
                   </td>
@@ -1220,3 +1300,9 @@ onBeforeUnmount(() => {
     </template>
   </Dialog>
 </template>
+
+<style>
+.bibb-swal-container {
+  z-index: 13000 !important;
+}
+</style>

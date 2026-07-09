@@ -16,7 +16,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'cleared'])
 
 const canvas = ref(null)
 let ctx = null
@@ -83,6 +83,7 @@ const clearSignature = () => {
 
   ctx.clearRect(0, 0, canvas.value.width, canvas.value.height)
   emit('update:modelValue', '')
+  emit('cleared')
 }
 
 watch(
@@ -124,7 +125,8 @@ onMounted(() => {
       type="button"
       class="inline-flex items-center justify-center rounded border border-gray-300 text-gray-600 hover:bg-gray-50"
       :class="compact ? 'h-8 w-8' : 'h-9 w-9'"
-      title="Unterschrift loeschen"
+      title="Unterschrift löschen"
+      @pointerdown.stop
       @click="clearSignature"
     >
       <i class="la la-eraser"></i>
