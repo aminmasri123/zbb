@@ -114,10 +114,77 @@
         data() {
             return {
                 activeMenu: null,
+                assignedPermissionIds: [],
+                savingCategoryIds: [],
             };
+        },
+        computed: {
+            selectedRole() {
+                const rollen = Array.isArray(this.rollen) ? this.rollen : [];
+
+                return rollen.find(rolle => Number(rolle.id) === Number(this.roleId)) || null;
+            },
+            isAdministratorRole() {
+                return this.selectedRole?.name === 'Administrator';
+            },
+        },
+        watch: {
+            alleZugewiesenePermission: {
+                handler() {
+                    this.syncAssignedPermissions();
+                },
+                immediate: true,
+                deep: true,
+            },
         },
 
         methods: {
+            syncAssignedPermissions() {
+                this.assignedPermissionIds = (this.alleZugewiesenePermission || [])
+                    .map(permission => Number(permission.id));
+            },
+            hasPermission(permissionId) {
+                return this.assignedPermissionIds.includes(Number(permissionId));
+            },
+            assignLocalPermissions(permissionIds) {
+                const nextIds = new Set(this.assignedPermissionIds);
+
+                permissionIds.forEach(permissionId => nextIds.add(Number(permissionId)));
+                this.assignedPermissionIds = Array.from(nextIds);
+            },
+            revokeLocalPermissions(permissionIds) {
+                const removeIds = new Set(permissionIds.map(permissionId => Number(permissionId)));
+
+                this.assignedPermissionIds = this.assignedPermissionIds
+                    .filter(permissionId => !removeIds.has(Number(permissionId)));
+            },
+            categoryPermissionIds(kategorie) {
+                return (kategorie.permissions || []).map(permission => Number(permission.id));
+            },
+            categoryAssignedCount(kategorie) {
+                const permissionIds = this.categoryPermissionIds(kategorie);
+
+                return permissionIds.filter(permissionId => this.hasPermission(permissionId)).length;
+            },
+            categoryAllAssigned(kategorie) {
+                const permissionIds = this.categoryPermissionIds(kategorie);
+
+                return permissionIds.length > 0 && permissionIds.every(permissionId => this.hasPermission(permissionId));
+            },
+            isSavingCategory(kategorieId) {
+                return this.savingCategoryIds.includes(Number(kategorieId));
+            },
+            setCategorySaving(kategorieId, isSaving) {
+                const id = Number(kategorieId);
+
+                if (isSaving && !this.savingCategoryIds.includes(id)) {
+                    this.savingCategoryIds = [...this.savingCategoryIds, id];
+                }
+
+                if (!isSaving) {
+                    this.savingCategoryIds = this.savingCategoryIds.filter(value => value !== id);
+                }
+            },
             toggleListRolle() {
             this.activeMenu = this.activeMenu === 'rolle' ? null : 'rolle';
         },
@@ -127,8 +194,26 @@
             // Methode für Toggle-Check
             toggleCheck(permissionId, roleId, isChecked) {
             const action = isChecked ? 'addPermission' : 'removePermission';
+            const previousPermissionIds = [...this.assignedPermissionIds];
 
-        axios.post('/berechtigungZuweisen', { roleId: roleId, permissionId: permissionId, action: action })
+            if (!isChecked && this.isAdministratorRole) {
+                Swal.fire({
+                    title: 'Nicht möglich',
+                    text: 'Die Administrator-Rolle muss alle Berechtigungen behalten.',
+                    icon: 'info',
+                    timer: 3000,
+                    timerProgressBar: true,
+                });
+                return;
+            }
+
+            if (isChecked) {
+                this.assignLocalPermissions([permissionId]);
+            } else {
+                this.revokeLocalPermissions([permissionId]);
+            }
+
+        axios.post(route('berechtigung.zuweisen'), { roleId: roleId, permissionId: permissionId, action: action })
             .then(response => {
                 if (response.data.success) {
                     // Finde die richtige Kategorie
@@ -149,6 +234,7 @@
                         }
                     }
                 } else {
+                    this.assignedPermissionIds = previousPermissionIds;
                     Swal.fire({
                         title: 'Error!',
                         text: 'Die Berechtigung konnte nicht zugewiesen werden .',
@@ -160,9 +246,75 @@
                 }
             })
             .catch(error => {
+                this.assignedPermissionIds = previousPermissionIds;
                 console.error("Error: ", error.response ? error.response.data : error.message);
+                Swal.fire({
+                    title: 'Fehler!',
+                    text: 'Die Berechtigung konnte nicht gespeichert werden.',
+                    icon: 'error',
+                    timer: 3000,
+                    timerProgressBar: true,
+                });
             });
     },
+            toggleKategorie(kategorie, isChecked) {
+                const permissionIds = this.categoryPermissionIds(kategorie);
+
+                if (permissionIds.length === 0 || this.isSavingCategory(kategorie.id)) {
+                    return;
+                }
+
+                const previousPermissionIds = [...this.assignedPermissionIds];
+                const action = isChecked ? 'addCategoryPermissions' : 'removeCategoryPermissions';
+
+                this.setCategorySaving(kategorie.id, true);
+
+                if (isChecked) {
+                    this.assignLocalPermissions(permissionIds);
+                } else {
+                    this.revokeLocalPermissions(permissionIds);
+                }
+
+                axios.post(route('berechtigung.kategorie.zuweisen'), {
+                    roleId: this.roleId,
+                    berechtigungskategorieId: kategorie.id,
+                    action,
+                })
+                    .then(response => {
+                        if (response.data.success) {
+                            Swal.fire({
+                                title: 'Gespeichert!',
+                                text: response.data.message,
+                                icon: 'success',
+                                timer: 2500,
+                                timerProgressBar: true,
+                            });
+                        } else {
+                            this.assignedPermissionIds = previousPermissionIds;
+                            Swal.fire({
+                                title: 'Fehler!',
+                                text: response.data.message || 'Die Kategorie konnte nicht aktualisiert werden.',
+                                icon: 'error',
+                                timer: 3000,
+                                timerProgressBar: true,
+                            });
+                        }
+                    })
+                    .catch(error => {
+                        this.assignedPermissionIds = previousPermissionIds;
+                        console.error('Error: ', error.response ? error.response.data : error.message);
+                        Swal.fire({
+                            title: 'Fehler!',
+                            text: error.response?.data?.message || 'Die Kategorie konnte nicht gespeichert werden.',
+                            icon: 'error',
+                            timer: 3000,
+                            timerProgressBar: true,
+                        });
+                    })
+                    .finally(() => {
+                        this.setCategorySaving(kategorie.id, false);
+                    });
+            },
 
             openModal() {
         this.isModalOpen = true;
@@ -304,8 +456,36 @@
                                     <div v-for="kategorie in kategorienDerUser" :key="kategorie.id">
                                         <div v-if="kategorie.permissions && kategorie.permissions.length">
 
-                                            <div colspan="3" class="text-center bg-zbb text-white text-2xl py-2 mt-4">
-                                                {{ kategorie.name }}
+                                            <div colspan="3" class="bg-zbb text-white py-3 mt-4">
+                                                <div class="flex flex-col gap-3 px-8 sm:flex-row sm:items-center sm:justify-between">
+                                                    <div>
+                                                        <div class="text-2xl font-semibold">{{ kategorie.name }}</div>
+                                                        <div class="mt-1 text-sm text-white/80">
+                                                            {{ categoryAssignedCount(kategorie) }} / {{ kategorie.permissions.length }} Berechtigungen aktiv
+                                                        </div>
+                                                        <div v-if="isAdministratorRole" class="mt-1 text-xs text-white/70">
+                                                            Administrator behält immer alle Berechtigungen.
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex flex-wrap gap-2">
+                                                        <button
+                                                            type="button"
+                                                            class="rounded bg-white px-3 py-2 text-sm font-semibold text-zbb transition hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                                            :disabled="isSavingCategory(kategorie.id) || categoryAllAssigned(kategorie)"
+                                                            @click="toggleKategorie(kategorie, true)"
+                                                        >
+                                                            Alle aktivieren
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            class="rounded border border-white px-3 py-2 text-sm font-semibold text-white transition hover:bg-white hover:text-zbb disabled:cursor-not-allowed disabled:opacity-60"
+                                                            :disabled="isAdministratorRole || isSavingCategory(kategorie.id) || categoryAssignedCount(kategorie) === 0"
+                                                            @click="toggleKategorie(kategorie, false)"
+                                                        >
+                                                            Alle deaktivieren
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             </div>
                                             <div v-for="(permission) in kategorie.permissions" v-if="kategorie.permissions.length" :key="permission.id">
                                                 <div class="flex flex-row px-8 py-2">
@@ -319,7 +499,8 @@
                                                             <label class="relative cursor-pointer">
                                                                 <input type="checkbox"
                                                                     class="sr-only peer"
-                                                                    :checked="alleZugewiesenePermission.some(zugewiesenePermission => zugewiesenePermission.name === permission.name)"
+                                                                    :checked="hasPermission(permission.id)"
+                                                                    :disabled="isAdministratorRole && hasPermission(permission.id)"
                                                                     @change="toggleCheck(permission.id, roleId, $event.target.checked)" />
                                                                     <div class="w-[53px] h-7 flex items-center bg-gray-300 rounded-full text-[9px] peer-checked:text-zbb text-gray-300 font-extrabold after:flex after:items-center after:justify-center peer after:content-['Off'] peer-checked:after:content-['On'] peer-checked:after:translate-x-full after:absolute after:left-[2px] peer-checked:after:border-white after:bg-white after:border after:border-gray-300 after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-zbb">
                                                                 </div>

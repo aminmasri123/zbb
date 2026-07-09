@@ -2,5 +2,7 @@
     "dashboard": "Dashboard",
     "schule": "School",
     "abmelden": "Logout",
-    "Ressourcen": "Resources"
+    "Ressourcen": "Resources",
+    "Alle anzeigen": "Show all",
+    "Benachrichtigungsregeln": "Notification rules"
 }

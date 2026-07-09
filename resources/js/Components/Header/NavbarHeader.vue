@@ -176,6 +176,9 @@
 
 
 
+                            <Link :href="route('notifications.index')" class="flex text-xs text-gray-700 justify-center cursor-pointer p-2 bg-gray-100 hover:bg-gray-200">
+                                {{$t('Alle anzeigen')}}
+                            </Link>
                             <span v-if="can('notifications.readAll')" @click="markAllAsRead" class=" flex text-xs text-gray-100 justify-center cursor-pointer p-2 bg-gray-700 hover:bg-gray-900">{{$t('Alle als gelesen markieren')}}</span>
                         </template>
                         <!-- Dropdown content -->
@@ -205,6 +208,10 @@
 
                             <DropdownLink :href="route('profile.show')">
                                 Profile
+                            </DropdownLink>
+
+                            <DropdownLink :href="route('notifications.index')">
+                                {{ $t('Benachrichtigungen') }}
                             </DropdownLink>
 
                             <DropdownLink v-if="$page.props.jetstream.hasApiFeatures" :href="route('api-tokens.index')">

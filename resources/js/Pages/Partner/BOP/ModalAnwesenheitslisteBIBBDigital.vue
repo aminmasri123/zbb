@@ -77,7 +77,7 @@ const feedbackDay = computed(() => {
     date: form.feedbackDate,
     date_label: dateLabel(form.feedbackDate),
     type: 'feedback',
-    type_label: 'Feedbackgespraech',
+    type_label: 'Feedbackgespräch',
     source: 'feedback',
     selected: true,
     groups: [{
@@ -130,7 +130,7 @@ const signatureCount = computed(() => Object.values(signatures).filter(Boolean).
 const draftStatusText = computed(() => {
   if (draftLoading.value) return 'wird geladen'
   if (draftSaving.value) return 'wird gespeichert'
-  if (draftDirty.value) return 'Aenderungen offen'
+  if (draftDirty.value) return 'Änderungen offen'
   if (draftLastSavedAt.value) {
     return `gespeichert ${new Date(draftLastSavedAt.value).toLocaleTimeString('de-DE', {
       hour: '2-digit',
@@ -183,7 +183,7 @@ const normalizeDayType = (type) => {
   if (type === 'rolltag') return 'Rolltag'
   if (type === 'group_day') return 'Gruppentag'
   if (type === 'program_day') return 'Programmtag'
-  if (type === 'feedback') return 'Feedbackgespraech'
+  if (type === 'feedback') return 'Feedbackgespräch'
   return 'Manueller Tag'
 }
 
@@ -266,7 +266,7 @@ const readBlobError = async (error) => {
   }
 
   const firstFieldError = data?.errors ? Object.values(data.errors)?.[0]?.[0] : null
-  return firstFieldError || data?.message || 'Die Aktion konnte nicht ausgefuehrt werden.'
+  return firstFieldError || data?.message || 'Die Aktion konnte nicht ausgeführt werden.'
 }
 
 const safePdfFilePart = (value, fallback = 'Datei') => {
@@ -495,7 +495,7 @@ const handleSheetFullscreenKeydown = (event) => {
 const clearDraft = async () => {
   const result = await BibbSwal.fire({
     title: 'Entwurf leeren?',
-    text: 'Der zentrale Zwischenstand dieser Anwesenheitsliste wird geloescht.',
+    text: 'Der zentrale Zwischenstand dieser Anwesenheitsliste wird gelöscht.',
     icon: 'warning',
     showCancelButton: true,
     confirmButtonText: 'Ja, leeren',
@@ -525,7 +525,7 @@ const clearDraft = async () => {
     draftRevision.value = 0
     draftLastSavedAt.value = null
     draftExpiresAt.value = null
-    BibbSwal.fire('Geloescht', 'Der zentrale Entwurf wurde geleert.', 'success')
+    BibbSwal.fire('Gelöscht', 'Der zentrale Entwurf wurde geleert.', 'success')
   } catch (error) {
     BibbSwal.fire('Fehler', await readBlobError(error), 'error')
   }
@@ -692,12 +692,12 @@ const createRangeDays = () => {
   const end = form.endDate || form.feedbackDate
 
   if (!start || !end) {
-    BibbSwal.fire('Zeitraum fehlt', 'Bitte Anfangs- und Enddatum oder Rolltag und Feedbackgespraech waehlen.', 'warning')
+    BibbSwal.fire('Zeitraum fehlt', 'Bitte Anfangs- und Enddatum oder Rolltag und Feedbackgespräch wählen.', 'warning')
     return
   }
 
   if (new Date(`${end}T00:00:00`) < new Date(`${start}T00:00:00`)) {
-    BibbSwal.fire('Datum pruefen', 'Das Enddatum muss nach dem Anfangsdatum liegen.', 'warning')
+    BibbSwal.fire('Datum prüfen', 'Das Enddatum muss nach dem Anfangsdatum liegen.', 'warning')
     return
   }
 
@@ -771,7 +771,7 @@ const loadPreview = async ({ includeDraft = false } = {}) => {
 
 const handleWordExport = async () => {
   if (selectedDays.value.length === 0) {
-    BibbSwal.fire('Keine Tage', 'Bitte mindestens einen Tag auswaehlen.', 'warning')
+    BibbSwal.fire('Keine Tage', 'Bitte mindestens einen Tag auswählen.', 'warning')
     return
   }
 
@@ -961,7 +961,7 @@ const storeSignedPdfInFolder = async (pdfBlob, filename) => {
 
 const createSignedPdf = async () => {
   if (selectedDays.value.length === 0) {
-    BibbSwal.fire('Keine Tage', 'Bitte mindestens einen Tag auswaehlen.', 'warning')
+    BibbSwal.fire('Keine Tage', 'Bitte mindestens einen Tag auswählen.', 'warning')
     return
   }
 
@@ -1189,7 +1189,7 @@ onBeforeUnmount(() => {
             @click="createRangeDays"
           >
             <i class="la la-calendar-plus"></i>
-            Tage uebernehmen
+            Tage übernehmen
           </button>
         </div>
 
@@ -1204,13 +1204,13 @@ onBeforeUnmount(() => {
               @click="addManualDay"
             >
               <i class="la la-plus"></i>
-              Hinzufuegen
+              Hinzufügen
             </button>
           </div>
         </div>
 
         <label class="block text-sm font-semibold text-gray-700">
-          <span class="mb-1 block">Feedbackgespraech</span>
+          <span class="mb-1 block">Feedbackgespräch</span>
           <input v-model="form.feedbackDate" type="date" class="w-full rounded border-gray-300 text-sm" />
         </label>
 
@@ -1221,7 +1221,7 @@ onBeforeUnmount(() => {
           @click="loadPreview"
         >
           <i class="la la-sync"></i>
-          {{ loadingPreview ? 'Laedt...' : 'Vorschau laden' }}
+          {{ loadingPreview ? 'Lädt...' : 'Vorschau laden' }}
         </button>
       </section>
 
@@ -1231,7 +1231,7 @@ onBeforeUnmount(() => {
             <div>
               <p class="text-xs font-semibold uppercase text-gray-500">Tage</p>
               <h3 class="text-base font-bold text-gray-900">
-                {{ selectedDays.length }} ausgewaehlt / {{ days.length }} in der Vorschau
+                {{ selectedDays.length }} ausgewählt / {{ days.length }} in der Vorschau
               </h3>
             </div>
 
@@ -1276,7 +1276,7 @@ onBeforeUnmount(() => {
                 type="button"
                 class="inline-flex h-10 w-10 items-center justify-center rounded border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                 :disabled="draftLoading || draftDirty"
-                title="Entwurf von anderen Geraeten aktualisieren"
+                title="Entwurf von anderen Geräten aktualisieren"
                 @click="loadDraft({ silent: false })"
               >
                 <i class="la la-cloud-download-alt"></i>

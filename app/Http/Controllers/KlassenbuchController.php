@@ -9,19 +9,23 @@ use App\Models\KlassenbuchKommentar;
 use App\Models\KlassenbuchTyp;
 use App\Models\KlassenbuchWoche;
 use App\Models\Projekt;
-use App\Models\User;
 use App\Notifications\KlassenbuchWocheZurPruefungNotification;
+use App\Services\NotificationRecipientService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class KlassenbuchController extends Controller
 {
+    public function __construct(private readonly NotificationRecipientService $notificationRecipients)
+    {
+    }
+
     public function index(Request $request)
     {
         $user = auth()->user();
@@ -517,55 +521,9 @@ class KlassenbuchController extends Controller
 
     private function notifyReviewers(KlassenbuchWoche $woche): void
     {
-        $reviewers = $this->reviewersFor($woche->klassenbuch)->reject(fn ($user) => (int) $user->id === (int) auth()->id());
-
-        foreach ($reviewers as $reviewer) {
-            $reviewer->notify(new KlassenbuchWocheZurPruefungNotification($woche));
-        }
-    }
-
-    private function reviewersFor(Klassenbuch $klassenbuch): Collection
-    {
-        $projekt = $klassenbuch->gruppe?->projekt;
-        $ids = collect();
-
-        if ($projekt?->abteilung_id) {
-            $ids = $ids->merge(
-                DB::table('abteilungsassistents')
-                    ->where('abteilung_id', $projekt->abteilung_id)
-                    ->pluck('user_id')
-            );
-
-            if (Schema::hasColumn('abteilungs', 'user_id')) {
-                $leitungId = DB::table('abteilungs')
-                    ->where('id', $projekt->abteilung_id)
-                    ->value('user_id');
-
-                if ($leitungId) {
-                    $ids->push($leitungId);
-                }
-            }
-
-            if (Schema::hasColumn('abteilungs', 'personen_id')) {
-                $leitungPersonId = DB::table('abteilungs')
-                    ->where('id', $projekt->abteilung_id)
-                    ->value('personen_id');
-
-                if ($leitungPersonId) {
-                    $userId = User::where('person_id', $leitungPersonId)->value('id');
-                    if ($userId) {
-                        $ids->push($userId);
-                    }
-                }
-            }
-        }
-
-        $reviewers = User::whereIn('id', $ids->filter()->unique()->values())->get();
-
-        if ($reviewers->isNotEmpty()) {
-            return $reviewers;
-        }
-
-        return User::role(['Abteilungsleitung', 'Assistenz der Abt.-Leitung'])->get();
+        Notification::send(
+            $this->notificationRecipients->forKlassenbuchWocheZurPruefung($woche, auth()->user()),
+            new KlassenbuchWocheZurPruefungNotification($woche)
+        );
     }
 }

@@ -180,13 +180,13 @@ class ProjektBopController extends Controller
 
         if ($choices->unique()->count() !== $choices->count()) {
             throw ValidationException::withMessages([
-                'choices' => 'Jeder Bereich darf nur einmal gewaehlt werden.',
+                'choices' => 'Jeder Bereich darf nur einmal gewählt werden.',
             ]);
         }
 
         if ($choices->diff($allowedBereichIds)->isNotEmpty()) {
             throw ValidationException::withMessages([
-                'choices' => 'Mindestens ein Bereich ist fuer dieses Projekt nicht erlaubt.',
+                'choices' => 'Mindestens ein Bereich ist für dieses Projekt nicht erlaubt.',
             ]);
         }
 
@@ -666,7 +666,7 @@ class ProjektBopController extends Controller
 
         if ($teilnehmer->isEmpty()) {
             throw ValidationException::withMessages([
-                'teilnehmer' => 'Die gewaehlte Schule weist zurzeit noch keine Schueler auf.',
+                'teilnehmer' => 'Die gewählte Schule weist zurzeit noch keine Schüler auf.',
             ]);
         }
 
@@ -940,7 +940,7 @@ class ProjektBopController extends Controller
             [$programmTage, $tag11] = $this->bibbDateListFromRequest($request);
 
             if (empty($programmTage)) {
-                return response()->json(['message' => 'Bitte mindestens einen Anwesenheitstag auswaehlen.'], 422);
+                return response()->json(['message' => 'Bitte mindestens einen Anwesenheitstag auswählen.'], 422);
             }
 
             $schuljahr = $request->schuljahrInputBibb;
@@ -1040,10 +1040,11 @@ class ProjektBopController extends Controller
             'startDate' => ['nullable', 'date'],
             'endDate' => ['nullable', 'date', 'after_or_equal:startDate'],
             'feedbackDate' => ['nullable', 'date'],
-            'includeSaturday' => ['nullable', 'boolean'],
-            'includeSunday' => ['nullable', 'boolean'],
             'days' => ['nullable', 'array'],
+            'days.*.id' => ['nullable', 'string', 'max:100'],
             'days.*.date' => ['required_with:days', 'date'],
+            'days.*.type' => ['nullable', 'in:pa_day,feedback'],
+            'days.*.source' => ['nullable', 'string', 'max:50'],
             'days.*.selected' => ['nullable', 'boolean'],
             'days.*.note' => ['nullable', 'string', 'max:255'],
         ]);
@@ -1059,9 +1060,7 @@ class ProjektBopController extends Controller
             $validated['days'] ?? [],
             $validated['startDate'] ?? null,
             $validated['endDate'] ?? null,
-            $validated['feedbackDate'] ?? null,
-            (bool) ($validated['includeSaturday'] ?? false),
-            (bool) ($validated['includeSunday'] ?? false)
+            $validated['feedbackDate'] ?? null
         ));
     }
 
@@ -1341,7 +1340,7 @@ class ProjektBopController extends Controller
 
         if ($exportMode === 'klasse' && $klasse === '') {
             throw ValidationException::withMessages([
-                'klasse' => 'Bitte eine Klasse auswaehlen.',
+                'klasse' => 'Bitte eine Klasse auswählen.',
             ]);
         }
 
@@ -1376,8 +1375,6 @@ class ProjektBopController extends Controller
             'exportFormat',
             'startDate',
             'endDate',
-            'includeSaturday',
-            'includeSunday',
             'feedbackDate',
             'exportMode',
             'klasse',
@@ -1444,16 +1441,14 @@ class ProjektBopController extends Controller
         array $inputDays,
         ?string $startDate = null,
         ?string $endDate = null,
-        ?string $feedbackDate = null,
-        bool $includeSaturday = false,
-        bool $includeSunday = false
+        ?string $feedbackDate = null
     ): array {
         $schule = Partner::findOrFail($schuleId);
         $teilnehmer = $this->paTeilnehmer($schuleId, $schuljahr, $teil, $exportMode, $klasse);
 
         if ($teilnehmer->isEmpty()) {
             throw ValidationException::withMessages([
-                'teilnehmer' => 'Die Schule hat keine Teilnehmer fuer diese PA-Auswahl.',
+                'teilnehmer' => 'Die Schule hat keine Teilnehmer für diese PA-Auswahl.',
             ]);
         }
 
@@ -1470,8 +1465,8 @@ class ProjektBopController extends Controller
             ->values()
             ->all();
 
-        if (empty($inputDays) && $startDate && $endDate) {
-            $inputDays = $this->paDaysFromRange($startDate, $endDate, $includeSaturday, $includeSunday);
+        if (empty($inputDays) && ($startDate || $endDate)) {
+            $inputDays = $this->paDaysFromFixedDates($startDate, $endDate);
         }
 
         if ($feedbackDate) {
@@ -1482,7 +1477,7 @@ class ProjektBopController extends Controller
                 'type' => 'feedback',
                 'selected' => true,
                 'source' => 'feedback',
-                'note' => 'Feedbackgespraech',
+                'note' => 'Feedbackgespräch',
             ];
         }
 
@@ -1496,7 +1491,7 @@ class ProjektBopController extends Controller
                     'date' => $date,
                     'date_label' => Carbon::parse($date)->format('d.m.Y'),
                     'type' => $type,
-                    'type_label' => $type === 'feedback' ? 'Feedbackgespraech' : 'PA-Tag',
+                    'type_label' => $type === 'feedback' ? 'Feedbackgespräch' : 'PA-Tag',
                     'source' => $day['source'] ?? ($type === 'feedback' ? 'feedback' : 'manual'),
                     'selected' => $day['selected'] ?? true,
                     'note' => $day['note'] ?? null,
@@ -1533,36 +1528,29 @@ class ProjektBopController extends Controller
         ];
     }
 
-    private function paDaysFromRange(
-        string $startDate,
-        string $endDate,
-        bool $includeSaturday,
-        bool $includeSunday
+    private function paDaysFromFixedDates(
+        ?string $startDate,
+        ?string $endDate
     ): array {
-        $days = [];
-        $start = Carbon::parse($startDate)->startOfDay();
-        $end = Carbon::parse($endDate)->startOfDay();
+        return collect([
+            ['id' => 'pa-tag-1', 'date' => $startDate, 'note' => 'PA-Tag 1'],
+            ['id' => 'pa-tag-2', 'date' => $endDate, 'note' => 'PA-Tag 2'],
+        ])
+            ->filter(fn ($day) => filled($day['date']))
+            ->map(function ($day) {
+                $date = Carbon::parse($day['date'])->toDateString();
 
-        for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
-            if ($date->isSaturday() && !$includeSaturday) {
-                continue;
-            }
-
-            if ($date->isSunday() && !$includeSunday) {
-                continue;
-            }
-
-            $dateValue = $date->toDateString();
-            $days[] = [
-                'id' => 'range-' . $dateValue,
-                'date' => $dateValue,
-                'selected' => true,
-                'source' => 'range',
-                'note' => null,
-            ];
-        }
-
-        return $days;
+                return [
+                    'id' => $day['id'] . '-' . $date,
+                    'date' => $date,
+                    'type' => 'pa_day',
+                    'selected' => true,
+                    'source' => 'pa-term',
+                    'note' => $day['note'],
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     private function paTeilnehmer(
@@ -1906,7 +1894,7 @@ class ProjektBopController extends Controller
 
             if (array_sum($kapazitaeten) < $anzahlTeilnehmer) {
                 return response()->json([
-                    'message' => 'Die eingegebenen Kapazitaeten reichen nicht fuer alle Schueler aus.',
+                    'message' => 'Die eingegebenen Kapazitäten reichen nicht für alle Schüler aus.',
                 ], 422);
             }
 
@@ -2406,7 +2394,7 @@ class ProjektBopController extends Controller
             ->values();
 
         if ($schueler->isEmpty()) {
-            return redirect()->back()->with('error', 'Die Schule: ' . $schule->name . ' verfuegt ueber keine Teilnehmer.');
+            return redirect()->back()->with('error', 'Die Schule: ' . $schule->name . ' verfügt über keine Teilnehmer.');
         }
 
         $klasseCounter = [];

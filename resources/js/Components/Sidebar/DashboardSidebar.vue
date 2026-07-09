@@ -170,6 +170,7 @@
                 </a>
                 <ul v-show="activeMenu === 'berechtigung'" class="pl-6 mt-2 space-y-2">
                     <li v-if="can('berechtigung.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('berechtigung.index')">{{$t('berechtigungsübersicht')}}</Link></li>
+                    <li v-if="can('berechtigung.update')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('notification-rules.index')">{{$t('Benachrichtigungsregeln')}}</Link></li>
                 </ul>
             </li>
 

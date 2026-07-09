@@ -25,7 +25,7 @@
               </a>
               <ul v-show="activeMenu === 'settings'" class="pl-6 mt-2 space-y-2">
                 <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('profile.show')">{{$t('Passwort_ändern')}}</Link></li>
-                <li><a class="text-gray-400 hover:text-white transition duration-200" href="#">{{$t('Benachrichtigungen')}}</a></li>
+                <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('notifications.index')">{{$t('Benachrichtigungen')}}</Link></li>
               </ul>
             </li>
             <!-- Weitere Menüpunkte -->

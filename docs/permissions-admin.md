@@ -105,7 +105,7 @@ Dort gilt:
 - Jede Permission ist einer Berechtigungskategorie zugeordnet.
 - Jede Permission hat eine ausfuehrliche Beschreibung im Feld `beschreibung`.
 
-Bei der letzten Pruefung enthielt der Katalog `292` Permissions, ohne doppelte Namen und ohne leere Beschreibungen.
+Bei der letzten Pruefung enthielt der Katalog `298` Permissions, ohne doppelte Namen und ohne leere Beschreibungen.
 
 ## Vue-Oberflaeche
 

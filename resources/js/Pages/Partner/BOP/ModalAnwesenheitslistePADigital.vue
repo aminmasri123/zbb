@@ -38,8 +38,6 @@ const form = reactive({
   exportFormat: 'A4',
   startDate: '',
   endDate: '',
-  includeSaturday: false,
-  includeSunday: false,
   feedbackDate: '',
   exportMode: props.klasse ? 'klasse' : 'alle',
   klasse: props.klasse || '',
@@ -80,7 +78,7 @@ const scopeReady = computed(() => props.partnerId && props.schuljahr && props.te
 const draftStatusText = computed(() => {
   if (draftLoading.value) return 'wird geladen'
   if (draftSaving.value) return 'wird gespeichert'
-  if (draftDirty.value) return 'Aenderungen offen'
+  if (draftDirty.value) return 'Änderungen offen'
   if (draftLastSavedAt.value) {
     return `gespeichert ${new Date(draftLastSavedAt.value).toLocaleTimeString('de-DE', {
       hour: '2-digit',
@@ -114,13 +112,6 @@ const sheetTableWrapperClass = computed(() => sheetFullscreen.value
   : 'max-h-[52vh] overflow-auto rounded border border-gray-300 bg-white'
 )
 
-const toDateInput = (date) => {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
 const dateLabel = (date) => {
   if (!date) return ''
   return new Date(`${date}T00:00:00`).toLocaleDateString('de-DE', {
@@ -135,7 +126,7 @@ const weekdayLabel = (date) => {
   return new Date(`${date}T00:00:00`).toLocaleDateString('de-DE', { weekday: 'short' })
 }
 
-const dayTypeLabel = (day) => day?.type_label || (day?.type === 'feedback' ? 'Feedbackgespraech' : 'PA-Tag')
+const dayTypeLabel = (day) => day?.type_label || (day?.type === 'feedback' ? 'Feedbackgespräch' : 'PA-Tag')
 
 const signatureKey = (day, participant) => `${day.id}:${participant.person_id || participant.id}`
 
@@ -151,7 +142,7 @@ const readBlobError = async (error) => {
   }
 
   const firstFieldError = data?.errors ? Object.values(data.errors)?.[0]?.[0] : null
-  return firstFieldError || data?.message || 'Die Aktion konnte nicht ausgefuehrt werden.'
+  return firstFieldError || data?.message || 'Die Aktion konnte nicht ausgeführt werden.'
 }
 
 const safePdfFilePart = (value, fallback = 'Datei') => {
@@ -201,7 +192,7 @@ const selectedDaysPayload = () => selectedDays.value.map((day) => ({
 
 const previewDaysPayload = () => {
   const preservedDays = selectedDays.value
-    .filter((day) => day.source !== 'range' && day.type !== 'feedback' && day.source !== 'feedback')
+    .filter((day) => !['range', 'pa-term'].includes(day.source) && day.type !== 'feedback' && day.source !== 'feedback')
     .map((day) => ({
       id: day.id,
       date: day.date,
@@ -211,18 +202,7 @@ const previewDaysPayload = () => {
       note: day.note || null,
     }))
 
-  if (!form.startDate || !form.endDate) return preservedDays
-
-  const rangeDays = rangeDates(form.startDate, form.endDate).map((date) => ({
-    id: `range-${date}`,
-    date,
-    type: 'pa_day',
-    selected: true,
-    source: 'range',
-    note: null,
-  }))
-
-  return [...rangeDays, ...preservedDays]
+  return [...paTermDaysPayload(), ...preservedDays]
 }
 
 const syncSignatures = (nextSignatures = {}, { removeMissing = true } = {}) => {
@@ -279,8 +259,6 @@ const applyDraftPayload = (payload) => {
       form.exportFormat = payload.form.exportFormat || form.exportFormat
       form.startDate = payload.form.startDate || ''
       form.endDate = payload.form.endDate || ''
-      form.includeSaturday = Boolean(payload.form.includeSaturday)
-      form.includeSunday = Boolean(payload.form.includeSunday)
       form.feedbackDate = payload.form.feedbackDate || ''
       form.exportMode = payload.form.exportMode || form.exportMode
       form.klasse = payload.form.klasse || form.klasse || ''
@@ -438,7 +416,7 @@ const stopDraftTimers = () => {
 
 const loadPreview = async ({ includeDraft = false } = {}) => {
   if (!scopeReady.value) {
-    PaSwal.fire('Klasse fehlt', 'Bitte eine Klasse auswaehlen oder Alle Klassen verwenden.', 'warning')
+    PaSwal.fire('Klasse fehlt', 'Bitte eine Klasse auswählen oder Alle Klassen verwenden.', 'warning')
     return
   }
 
@@ -450,8 +428,6 @@ const loadPreview = async ({ includeDraft = false } = {}) => {
       startDate: form.startDate || null,
       endDate: form.endDate || null,
       feedbackDate: form.feedbackDate || null,
-      includeSaturday: form.includeSaturday,
-      includeSunday: form.includeSunday,
       days: previewDaysPayload(),
     })
 
@@ -467,38 +443,37 @@ const loadPreview = async ({ includeDraft = false } = {}) => {
   }
 }
 
-const rangeDates = (startValue, endValue) => {
-  if (!startValue || !endValue) return []
+const paTermDaysPayload = () => {
+  const termDays = [
+    { id: 'pa-tag-1', date: form.startDate, note: 'PA-Tag 1' },
+    { id: 'pa-tag-2', date: form.endDate, note: 'PA-Tag 2' },
+  ]
 
-  const start = new Date(`${startValue}T00:00:00`)
-  const end = new Date(`${endValue}T00:00:00`)
-
-  if (end < start) return []
-
-  const values = []
-  for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
-    const weekday = date.getDay()
-    if (weekday === 6 && !form.includeSaturday) continue
-    if (weekday === 0 && !form.includeSunday) continue
-    values.push(toDateInput(date))
-  }
-
-  return values
+  return termDays
+    .filter((day) => day.date)
+    .map((day) => ({
+      id: `${day.id}-${day.date}`,
+      date: day.date,
+      type: 'pa_day',
+      selected: true,
+      source: 'pa-term',
+      note: day.note,
+    }))
 }
 
-const appendPaDays = (dates, source = 'manual') => {
+const appendPaDays = (dayPayloads, source = 'manual') => {
   const existing = new Set(days.value.map((day) => day.date))
-  const generated = dates
-    .filter((date) => !existing.has(date))
-    .map((date) => dayWithGroups({
-      id: `${source}-${date}`,
-      date,
-      date_label: dateLabel(date),
+  const generated = dayPayloads
+    .filter((day) => !existing.has(day.date))
+    .map((day) => dayWithGroups({
+      id: day.id || `${source}-${day.date}`,
+      date: day.date,
+      date_label: dateLabel(day.date),
       type: 'pa_day',
       type_label: 'PA-Tag',
-      source,
+      source: day.source || source,
       selected: true,
-      note: '',
+      note: day.note || '',
     }))
 
   if (!generated.length) return
@@ -507,18 +482,20 @@ const appendPaDays = (dates, source = 'manual') => {
   selectedDayId.value = selectedDayId.value || generated[0]?.id || null
 }
 
-const createRangeDays = () => {
+const createPaTermDays = () => {
   if (!form.startDate || !form.endDate) {
-    PaSwal.fire('Zeitraum fehlt', 'Bitte Start- und Enddatum eintragen.', 'warning')
+    PaSwal.fire('PA-Termine fehlen', 'Bitte PA-Tag 1 und PA-Tag 2 eintragen.', 'warning')
     return
   }
 
   if (new Date(`${form.endDate}T00:00:00`) < new Date(`${form.startDate}T00:00:00`)) {
-    PaSwal.fire('Datum pruefen', 'Das Enddatum muss nach dem Startdatum liegen.', 'warning')
+    PaSwal.fire('Datum prüfen', 'PA-Tag 2 muss nach PA-Tag 1 liegen.', 'warning')
     return
   }
 
-  appendPaDays(rangeDates(form.startDate, form.endDate), 'range')
+  days.value = days.value.filter((day) => day.source !== 'range' && day.source !== 'pa-term')
+  appendPaDays(paTermDaysPayload(), 'pa-term')
+  scheduleDraftSave()
 }
 
 const addManualDay = () => {
@@ -574,7 +551,7 @@ const reloadScope = async () => {
 
 const handleWordExport = async () => {
   if (!form.startDate || !form.endDate || (form.exportMode === 'klasse' && !form.klasse)) {
-    PaSwal.fire('Angaben fehlen', 'Bitte Zeitraum und Klasse pruefen.', 'warning')
+    PaSwal.fire('Angaben fehlen', 'Bitte PA-Tag 1, PA-Tag 2 und Klasse prüfen.', 'warning')
     return
   }
 
@@ -749,10 +726,10 @@ const drawPdfHeader = (doc, pageNumber, totalPages, layout) => {
   doc.text('Klasse/n:', x, 33)
   doc.text(String(classText || ''), x + 18, 33, { maxWidth: 82 })
 
-  doc.text('Zuwendungsempfaenger:', x + 110, 21)
+  doc.text('Zuwendungsempfänger:', x + 110, 21)
   doc.text('- ZBB -', x + 150, 21)
-  doc.text('Ausfuehrende Stelle:', x + 110, 27)
-  doc.text('Zentrum fuer Bildung und Beruf Saar gGmbH in Burbach', x + 150, 27, { maxWidth: 100 })
+  doc.text('Ausführende Stelle:', x + 110, 27)
+  doc.text('Zentrum für Bildung und Beruf Saar gGmbH in Burbach', x + 150, 27, { maxWidth: 100 })
   doc.text('Zeitraum:', x + 110, 33)
   doc.text(periodText.value || '', x + 150, 33, { maxWidth: 100 })
 }
@@ -823,7 +800,7 @@ const drawPdfRows = (doc, columns, rows, page, layout) => {
 
 const createSignedPdf = async () => {
   if (!selectedDays.value.length) {
-    PaSwal.fire('Keine Tage', 'Bitte mindestens einen PA-Tag auswaehlen.', 'warning')
+    PaSwal.fire('Keine Tage', 'Bitte mindestens einen PA-Tag auswählen.', 'warning')
     return
   }
 
@@ -881,7 +858,7 @@ const createSignedPdf = async () => {
 const clearDraft = async () => {
   const result = await PaSwal.fire({
     title: 'Entwurf leeren?',
-    text: 'Der zentrale Zwischenstand dieser PA-Anwesenheitsliste wird geloescht.',
+    text: 'Der zentrale Zwischenstand dieser PA-Anwesenheitsliste wird gelöscht.',
     icon: 'warning',
     showCancelButton: true,
     confirmButtonText: 'Ja, leeren',
@@ -891,9 +868,7 @@ const clearDraft = async () => {
   if (!result.isConfirmed) return
 
   try {
-    await axios.delete(route('anwesenheitsliste.PA.digital.draft.destroy'), {
-      data: draftScopePayload(),
-    })
+    await axios.post(route('anwesenheitsliste.PA.digital.draft.clear'), draftScopePayload())
 
     window.clearTimeout(draftSaveTimer)
     draftSaveTimer = null
@@ -911,7 +886,7 @@ const clearDraft = async () => {
     draftRevision.value = 0
     draftLastSavedAt.value = null
     draftExpiresAt.value = null
-    PaSwal.fire('Geloescht', 'Der zentrale Entwurf wurde geleert.', 'success')
+    PaSwal.fire('Gelöscht', 'Der zentrale Entwurf wurde geleert.', 'success')
   } catch (error) {
     PaSwal.fire('Fehler', await readBlobError(error), 'error')
   }
@@ -936,8 +911,6 @@ const resetState = () => {
   form.exportFormat = 'A4'
   form.startDate = ''
   form.endDate = ''
-  form.includeSaturday = false
-  form.includeSunday = false
   form.feedbackDate = ''
   form.exportMode = props.klasse ? 'klasse' : 'alle'
   form.klasse = props.klasse || ''
@@ -1035,7 +1008,7 @@ onBeforeUnmount(() => {
         <label v-if="form.exportMode === 'klasse'" class="block text-sm font-semibold text-gray-700">
           <span class="mb-1 block">Klasse</span>
           <select v-model="form.klasse" class="w-full rounded border-gray-300 text-sm" @change="reloadScope">
-            <option value="" disabled>Klasse auswaehlen</option>
+            <option value="" disabled>Klasse auswählen</option>
             <option v-for="klasseOption in klassen" :key="klasseOption" :value="klasseOption">
               {{ klasseOption }}
             </option>
@@ -1043,36 +1016,25 @@ onBeforeUnmount(() => {
         </label>
 
         <div class="rounded border border-gray-200 p-3">
-          <p class="mb-3 text-sm font-semibold text-gray-700">Zeitraum</p>
+          <p class="mb-3 text-sm font-semibold text-gray-700">PA-Termine</p>
           <div class="grid grid-cols-2 gap-3">
             <label class="text-xs font-semibold text-gray-600">
-              <span class="mb-1 block">Von</span>
+              <span class="mb-1 block">PA-Tag 1</span>
               <input v-model="form.startDate" type="date" class="w-full rounded border-gray-300 text-sm" />
             </label>
             <label class="text-xs font-semibold text-gray-600">
-              <span class="mb-1 block">Bis</span>
+              <span class="mb-1 block">PA-Tag 2</span>
               <input v-model="form.endDate" type="date" class="w-full rounded border-gray-300 text-sm" />
-            </label>
-          </div>
-
-          <div class="mt-3 flex flex-wrap gap-3 text-sm text-gray-700">
-            <label class="inline-flex items-center gap-2">
-              <input v-model="form.includeSaturday" type="checkbox" class="rounded border-gray-300 text-zbb" />
-              <span>Samstag</span>
-            </label>
-            <label class="inline-flex items-center gap-2">
-              <input v-model="form.includeSunday" type="checkbox" class="rounded border-gray-300 text-zbb" />
-              <span>Sonntag</span>
             </label>
           </div>
 
           <button
             type="button"
             class="mt-3 inline-flex items-center gap-2 rounded bg-gray-800 px-3 py-2 text-sm font-semibold text-white hover:bg-gray-900"
-            @click="createRangeDays"
+            @click="createPaTermDays"
           >
             <i class="la la-calendar-plus"></i>
-            Tage uebernehmen
+            PA-Tage übernehmen
           </button>
         </div>
 
@@ -1092,7 +1054,7 @@ onBeforeUnmount(() => {
               @click="addManualDay"
             >
               <i class="la la-plus"></i>
-              Hinzufuegen
+              Hinzufügen
             </button>
           </div>
         </div>
@@ -1104,7 +1066,7 @@ onBeforeUnmount(() => {
           @click="loadPreview"
         >
           <i class="la la-sync"></i>
-          {{ loadingPreview ? 'Laedt...' : 'Vorschau laden' }}
+          {{ loadingPreview ? 'Lädt...' : 'Vorschau laden' }}
         </button>
       </section>
 
@@ -1114,7 +1076,7 @@ onBeforeUnmount(() => {
             <div>
               <p class="text-xs font-semibold uppercase text-gray-500">PA-Tage</p>
               <h3 class="text-base font-bold text-gray-900">
-                {{ selectedDays.length }} ausgewaehlt / {{ days.length }} in der Vorschau
+                {{ selectedDays.length }} ausgewählt / {{ days.length }} in der Vorschau
               </h3>
             </div>
 
@@ -1159,7 +1121,7 @@ onBeforeUnmount(() => {
                 type="button"
                 class="inline-flex h-10 w-10 items-center justify-center rounded border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                 :disabled="draftLoading || draftDirty"
-                title="Entwurf von anderen Geraeten aktualisieren"
+                title="Entwurf von anderen Geräten aktualisieren"
                 @click="loadDraft({ silent: false })"
               >
                 <i class="la la-cloud-download-alt"></i>
@@ -1167,7 +1129,7 @@ onBeforeUnmount(() => {
               <button
                 type="button"
                 class="inline-flex h-10 w-10 items-center justify-center rounded border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
-                :disabled="draftSaving || draftLoading"
+                :disabled="draftSaving || draftLoading || !scopeReady"
                 title="Zentralen Entwurf leeren"
                 @click="clearDraft"
               >
@@ -1256,7 +1218,7 @@ onBeforeUnmount(() => {
                     <span class="block">Tag {{ index + 1 }}</span>
                     <span class="block font-normal">Datum: {{ dateLabel(day.date) }}</span>
                     <span class="block font-normal">{{ dayTypeLabel(day) }}</span>
-                    <span class="block font-normal">Unterschrift Schueler/-in</span>
+                    <span class="block font-normal">Unterschrift Schüler/-in</span>
                     <span class="mt-1 block text-[10px] font-semibold text-emerald-700">
                       {{ signedCountForDay(day) }}/{{ sheetParticipants.length }}
                     </span>

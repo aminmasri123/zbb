@@ -5,18 +5,19 @@ namespace App\Http\Controllers;
 use App\Models\Materialanforderung;
 use App\Models\MaterialanforderungGenehmigung;
 use App\Models\Projekt;
-use App\Models\User;
-use App\Notifications\CreateMaterialanforderungGenehmigenKufmaenischNotification;
 use App\Notifications\CreateMaterialanforderungNotification;
 use App\Notifications\UpdateMaterialanforderungNotification;
+use App\Services\NotificationRecipientService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Inertia\Inertia;
-use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 
 class MaterialanforderungController extends Controller
 {
+    public function __construct(private readonly NotificationRecipientService $notificationRecipients)
+    {
+    }
+
     /* public function index(Request $request)
     {
         $search = $request->get('search', '');
@@ -152,31 +153,10 @@ class MaterialanforderungController extends Controller
                 'gesamtpreis' => $pos['gesamtpreis'],
             ]);
         }
-        /*
-        |-----------------------------
-        | Notifications
-        |-----------------------------
-        */
-
-        /*
-            $roles = Role::whereIn('name', ['Administrator', 'IT-Administrator'])
-            ->with('users')
-            ->get();
-        */
-
-
-                $users = User::permission('materialanforderung.sachlische_freigabe.index')
-                ->with('person', 'person.projekte')
-                ->get(); // Returns only users with the permission 'edit articles' (inherited or directly)
-
-                $meinProjekt = Auth()->User()->current_team_id;
-                $users = $users->filter(function ($user) use ($meinProjekt) {
-                    return $user->person && $user->person->projekte->contains('id', $meinProjekt);
-                });
-
-        foreach ($users as $user) {
-            $user->notify(new CreateMaterialanforderungNotification($anforderung));
-        }
+        Notification::send(
+            $this->notificationRecipients->forMaterialanforderung($anforderung, 'eingereicht', auth()->user()),
+            new CreateMaterialanforderungNotification($anforderung)
+        );
 
 
         return redirect()->route('materialanforderung.index');
@@ -353,41 +333,11 @@ class MaterialanforderungController extends Controller
             $anforderung->update([
                 'status' => $status,
             ]);
-        //noch zu bearbeiten
-         //'geliefert', 'teilweise_geliefert',
+        Notification::send(
+            $this->notificationRecipients->forMaterialanforderung($anforderung, $status, auth()->user()),
+            new UpdateMaterialanforderungNotification($anforderung, $status)
+        );
 
-            if($status == 'eingereicht')
-            {
-                $users = User::permission('materialanforderung.sachlische_freigabe.index')
-                ->with('person', 'person.projekte')
-                ->get(); // Returns only users with the permission 'edit articles' (inherited or directly)
-
-                $meinProjekt = Auth()->User()->current_team_id;
-                $users = $users->filter(function ($user) use ($meinProjekt) {
-                    return $user->person && $user->person->projekte->contains('id', $meinProjekt);
-                });
-
-            }
-            elseif($status == 'sachlich_genehmigt')
-            {
-                $users = User::permission('materialanforderung.kaufmännische_freigabe.update')->get();
-
-            }
-            elseif($status == 'kaufmaennisch_genehmigt')
-            {
-                $users = User::permission('materialanforderung.bestellwesen.update')->get();
-
-            }
-            elseif($status == 'zur_ueberarbeitung' || $status == 'stornieren' || $status == 'bestellt')
-            {
-                $user = User::find($anforderung->ersteller_id);
-                $user->notify(new UpdateMaterialanforderungNotification($anforderung, $status));
-                return back()->with('success', 'Materialanforderung erfolgreich ' . $status . '.');
-            }
-
-        foreach ($users as $user) {
-            $user->notify(new CreateMaterialanforderungGenehmigenKufmaenischNotification($anforderung, $status));
-        }
         return back()->with('success', 'Materialanforderung erfolgreich ' . $status . '.');
     }
 }

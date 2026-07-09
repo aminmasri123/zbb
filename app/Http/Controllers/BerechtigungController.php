@@ -7,9 +7,11 @@ use Inertia\Inertia;
 use App\Models\RoleDataAccessSetting;
 use Spatie\Permission\Models\Role;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use App\Models\Berechtigungskategorie;
 use Illuminate\Http\Request;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\PermissionRegistrar;
 
 class BerechtigungController extends Controller
 {
@@ -68,27 +70,93 @@ class BerechtigungController extends Controller
 
     public function berechtigungZuweisen(Request $request)
         {
-            $roleId = $request->input('roleId');
-            $permissionId = $request->input('permissionId');
-            $action = $request->input('action');
-            $role = Role::find($roleId);
-            $permission = Permission::find($permissionId);
+            $data = $request->validate([
+                'roleId' => ['required', 'integer', 'exists:roles,id'],
+                'permissionId' => ['required', 'integer', 'exists:permissions,id'],
+                'action' => ['required', 'in:addPermission,removePermission'],
+            ]);
 
-            if ($action === 'addPermission') {
+            $role = Role::findOrFail($data['roleId']);
+            $permission = Permission::findOrFail($data['permissionId']);
+
+            if ($role->name === 'Administrator' && $data['action'] === 'removePermission') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Die Administrator-Rolle muss alle Berechtigungen behalten.',
+                ], 422);
+            }
+
+            if ($data['action'] === 'addPermission') {
                 // Die Berechtigung zur Rolle hinzufügen
                 $role->givePermissionTo($permission);
+                app(PermissionRegistrar::class)->forgetCachedPermissions();
+
                 return response()->json([
                     'success' => true,
                     'message' => 'Berechtigung wurde erfolgreich zur Rolle hinzugefügt.',
                 ]);
-            } elseif ($action === 'removePermission') {
+            } elseif ($data['action'] === 'removePermission') {
                 // Die Berechtigung von der Rolle entfernen
                 $role->revokePermissionTo($permission);
+                app(PermissionRegistrar::class)->forgetCachedPermissions();
+
                 return response()->json(['success' => true, 'message' => 'Berechtigung von der Rolle entfernt.']);
             } else {
                 return response()->json(['success' => false, 'message' => 'Ungültige Aktion.']);
             }
         }
+
+    public function berechtigungKategorieZuweisen(Request $request)
+    {
+        $data = $request->validate([
+            'roleId' => ['required', 'integer', 'exists:roles,id'],
+            'berechtigungskategorieId' => ['required', 'integer', 'exists:berechtigungskategories,id'],
+            'action' => ['required', 'in:addCategoryPermissions,removeCategoryPermissions'],
+        ]);
+
+        $role = Role::findOrFail($data['roleId']);
+        $kategorie = Berechtigungskategorie::with('permissions:id,berechtigungskategorie_id')->findOrFail($data['berechtigungskategorieId']);
+        $permissionIds = $kategorie->permissions->pluck('id')->values();
+
+        if ($role->name === 'Administrator' && $data['action'] === 'removeCategoryPermissions') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Die Administrator-Rolle muss alle Berechtigungen behalten.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($data, $role, $permissionIds) {
+            if ($data['action'] === 'addCategoryPermissions') {
+                $rows = $permissionIds
+                    ->map(fn ($permissionId) => [
+                        'permission_id' => $permissionId,
+                        'role_id' => $role->id,
+                    ])
+                    ->all();
+
+                if ($rows !== []) {
+                    DB::table('role_has_permissions')->insertOrIgnore($rows);
+                }
+
+                return;
+            }
+
+            DB::table('role_has_permissions')
+                ->where('role_id', $role->id)
+                ->whereIn('permission_id', $permissionIds)
+                ->delete();
+        });
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        return response()->json([
+            'success' => true,
+            'message' => $data['action'] === 'addCategoryPermissions'
+                ? 'Alle Berechtigungen der Kategorie wurden zur Rolle hinzugefügt.'
+                : 'Alle Berechtigungen der Kategorie wurden von der Rolle entfernt.',
+            'permissionIds' => $permissionIds,
+        ]);
+    }
 
 
 

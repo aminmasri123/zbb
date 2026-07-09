@@ -34,6 +34,7 @@ use App\Http\Controllers\KontaktController;
 use App\Http\Controllers\KostenstelleController;
 use App\Http\Controllers\MaterialanforderungController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\NotificationRuleController;
 use App\Http\Controllers\NotizController;
 use App\Http\Controllers\PartnerController;
 use App\Http\Controllers\PersonalController;
@@ -180,7 +181,12 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     //Einstellung -- Rolle
     Route::get('/berechtigung/{id?}', [BerechtigungController::class, 'index'])->name('berechtigung.index')->can('berechtigung.index');
     Route::post('/berechtigungZuweisen', [BerechtigungController::class, 'berechtigungZuweisen'])->name('berechtigung.zuweisen')->can('berechtigung.update');
+    Route::post('/berechtigungKategorieZuweisen', [BerechtigungController::class, 'berechtigungKategorieZuweisen'])->name('berechtigung.kategorie.zuweisen')->can('berechtigung.update');
     Route::put('/rolle/{role}/datenzugriff', [RoleDataAccessController::class, 'update'])->name('rolle.data-access.update')->can('berechtigung.update');
+    Route::get('/einstellung/benachrichtigungen', [NotificationRuleController::class, 'index'])->name('notification-rules.index')->can('berechtigung.update');
+    Route::post('/einstellung/benachrichtigungen', [NotificationRuleController::class, 'store'])->name('notification-rules.store')->can('berechtigung.update');
+    Route::put('/einstellung/benachrichtigungen/{notificationRule}', [NotificationRuleController::class, 'update'])->name('notification-rules.update')->can('berechtigung.update');
+    Route::delete('/einstellung/benachrichtigungen/{notificationRule}', [NotificationRuleController::class, 'destroy'])->name('notification-rules.destroy')->can('berechtigung.update');
 
     Route::delete('/rolle/loeschen/{id}', [RolleController::class, 'destroy'])->name('rolle.destroy');
     Route::post('/rolle/anlegen', [RolleController::class, 'store'])->name('rolle.store');
@@ -340,7 +346,11 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     })->name('responsive');
 
     //Notification
+    Route::get('/user/notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead'])->name('notifications.readAll');
+    Route::post('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
+    Route::post('/notifications/{notification}/unread', [NotificationController::class, 'markAsUnread'])->name('notifications.unread');
+    Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
 
     //Brief
         Route::post('/brief', [BriefController::class, 'store'])->name('brief.store');
@@ -472,6 +482,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
     Route::post('export-anwesenheitsliste/pa/preview', [ProjektBopController::class, 'anwesenheitslistePAPreviewDigital'])->name('anwesenheitsliste.PA.digital.preview');
     Route::post('export-anwesenheitsliste/pa/draft', [ProjektBopController::class, 'anwesenheitslistePADraftShow'])->name('anwesenheitsliste.PA.digital.draft.show');
     Route::put('export-anwesenheitsliste/pa/draft', [ProjektBopController::class, 'anwesenheitslistePADraftStore'])->name('anwesenheitsliste.PA.digital.draft.store');
+    Route::post('export-anwesenheitsliste/pa/draft/clear', [ProjektBopController::class, 'anwesenheitslistePADraftDestroy'])->name('anwesenheitsliste.PA.digital.draft.clear');
     Route::delete('export-anwesenheitsliste/pa/draft', [ProjektBopController::class, 'anwesenheitslistePADraftDestroy'])->name('anwesenheitsliste.PA.digital.draft.destroy');
     Route::post('export-anwesenheitsliste/pa/archive-folder', [ProjektBopController::class, 'anwesenheitslistePAArchiveFolder'])->name('anwesenheitsliste.PA.digital.archive.folder');
     Route::post('export-anwesenheitsliste/pa/pdf-folder', [ProjektBopController::class, 'anwesenheitslistePASignedPdfStore'])->name('anwesenheitsliste.PA.digital.pdf.store');
