@@ -55,10 +55,13 @@ const draftDirty = ref(false)
 const draftLastSavedAt = ref(null)
 const sheetFullscreen = ref(false)
 const bibbFooterImageSrc = '/img/bibb/logoleiste_bop_2020.jpg'
+const draftAutoSaveDelayMs = 5000
+const draftPollIntervalMs = 12000
 let bibbFooterImagePromise = null
 let draftSaveTimer = null
 let draftPollTimer = null
 let previousBodyOverflow = ''
+let draftSaveRequestId = 0
 
 const selectedDays = computed(() => days.value.filter((day) => day.selected))
 const selectedDay = computed(() => days.value.find((day) => day.id === selectedDayId.value) || selectedDays.value[0] || null)
@@ -263,12 +266,12 @@ const draftScopePayload = () => ({
 
 const cloneForDraft = (value) => JSON.parse(JSON.stringify(value ?? null))
 
-const buildDraftPayload = () => ({
+const buildDraftPayload = ({ signaturesPayload = { ...signatures } } = {}) => ({
   version: 1,
   form: { ...form },
   days: cloneForDraft(days.value) || [],
   selectedDayId: selectedDayId.value,
-  signatures: { ...signatures },
+  signatures: signaturesPayload,
 })
 
 const signatureSnapshot = (signaturePayload = {}) => JSON.stringify(
@@ -352,11 +355,12 @@ const loadDraft = async ({ silent = true } = {}) => {
   }
 }
 
-const saveDraft = async ({ silent = true, payload = null } = {}) => {
+const saveDraft = async ({ silent = true, payload = null, signatureSnapshotGuard = null } = {}) => {
   if (!props.partnerId || !props.schuljahr || !props.teil) return
 
   const draftPayload = payload || buildDraftPayload()
-  const requestSignatureSnapshot = signatureSnapshot(draftPayload.signatures)
+  const requestSignatureSnapshot = signatureSnapshotGuard ?? signatureSnapshot(signatures)
+  const requestId = ++draftSaveRequestId
   draftSaving.value = true
 
   try {
@@ -366,18 +370,40 @@ const saveDraft = async ({ silent = true, payload = null } = {}) => {
     })
 
     const signatureChangedDuringSave = signatureSnapshot(signatures) !== requestSignatureSnapshot
-    if (response.data.payload && !signatureChangedDuringSave) applyDraftPayload(response.data.payload)
-    draftRevision.value = response.data.revision || draftRevision.value
-    draftLastSavedAt.value = response.data.updated_at || new Date().toISOString()
-    draftLoaded.value = true
-    draftDirty.value = signatureChangedDuringSave
+    const isLatestSaveResponse = requestId === draftSaveRequestId
+
+    if (isLatestSaveResponse) {
+      if (response.data.payload && !signatureChangedDuringSave) applyDraftPayload(response.data.payload)
+      draftRevision.value = response.data.revision || draftRevision.value
+      draftLastSavedAt.value = response.data.updated_at || new Date().toISOString()
+      draftLoaded.value = true
+      draftDirty.value = signatureChangedDuringSave
+    }
   } catch (error) {
-    if (!silent) {
+    if (!silent && requestId === draftSaveRequestId) {
       BibbSwal.fire('Fehler', await readBlobError(error), 'error')
     }
   } finally {
-    draftSaving.value = false
+    if (requestId === draftSaveRequestId) {
+      draftSaving.value = false
+    }
   }
+}
+
+const saveCompletedSignature = (day, participant, value) => {
+  if (!day || !participant || !previewContext.value || draftHydrating.value) return
+
+  const key = signatureKey(day, participant)
+  if (!value) return
+
+  signatures[key] = value
+  draftDirty.value = true
+  window.clearTimeout(draftSaveTimer)
+  draftSaveTimer = null
+
+  const signatureGuard = signatureSnapshot(signatures)
+  const payload = buildDraftPayload({ signaturesPayload: { [key]: value } })
+  saveDraft({ silent: true, payload, signatureSnapshotGuard: signatureGuard })
 }
 
 const removeSignature = (day, participant) => {
@@ -389,9 +415,8 @@ const removeSignature = (day, participant) => {
   window.clearTimeout(draftSaveTimer)
   draftSaveTimer = null
 
-  const payload = buildDraftPayload()
-  payload.signatures[key] = ''
-  saveDraft({ silent: true, payload })
+  const payload = buildDraftPayload({ signaturesPayload: { [key]: '' } })
+  saveDraft({ silent: true, payload, signatureSnapshotGuard: signatureSnapshot(signatures) })
 }
 
 const scheduleDraftSave = () => {
@@ -401,8 +426,12 @@ const scheduleDraftSave = () => {
   window.clearTimeout(draftSaveTimer)
   draftSaveTimer = window.setTimeout(() => {
     draftSaveTimer = null
-    saveDraft({ silent: true })
-  }, 900)
+    saveDraft({
+      silent: true,
+      payload: buildDraftPayload({ signaturesPayload: {} }),
+      signatureSnapshotGuard: signatureSnapshot(signatures),
+    })
+  }, draftAutoSaveDelayMs)
 }
 
 const flushDraftSave = () => {
@@ -420,7 +449,7 @@ const startDraftPolling = () => {
     if (!props.visible || draftDirty.value || draftSaving.value || draftHydrating.value) return
 
     loadDraft({ silent: true })
-  }, 12000)
+  }, draftPollIntervalMs)
 }
 
 const stopDraftTimers = () => {
@@ -487,6 +516,19 @@ const loadBibbFooterImage = () => {
 }
 
 const pdfFormat = () => form.exportFormat === 'A3' ? 'a3' : 'a4'
+
+const pdfPrintStyle = {
+  headerTitleFontSize: 7.8,
+  headerFontSize: 7.1,
+  tableHeaderFontSize: 5.9,
+  rowFontSize: 6.1,
+  tableLineWidth: 0.2,
+}
+
+const applyPdfPrintInk = (doc) => {
+  doc.setTextColor(0, 0, 0)
+  doc.setDrawColor(0, 0, 0)
+}
 
 const pdfLayout = (doc) => {
   const pageWidth = doc.internal.pageSize.getWidth()
@@ -719,13 +761,14 @@ const drawOriginalHeader = (doc, pageNumber, totalPages, layout) => {
     programDays.value.at(-1) ? dateLabel(programDays.value.at(-1).date) : '',
   ].filter(Boolean).join(' - ')
 
+  applyPdfPrintInk(doc)
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7)
+  doc.setFontSize(pdfPrintStyle.headerTitleFontSize)
   doc.text('Unterschriftenliste zum Nachweis der praxisorientierten Berufsorientierung - BO-Tage/ Ausbilder/-innen', x0, layout.headerTitleY)
   doc.text(`Seite ${pageNumber} von ${totalPages}`, layout.headerPageX, layout.headerTitleY)
 
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(6.5)
+  doc.setFontSize(pdfPrintStyle.headerFontSize)
   doc.text('Schule:', x0, rowY(0))
   doc.text(school, x1, rowY(0), { maxWidth: layout.headerValueWidth - 2 })
   doc.text('Schulform:', x0, rowY(2))
@@ -781,10 +824,10 @@ const drawOriginalTableHeader = (doc, columns, x, y, layout) => {
   const pad = Math.max(1, layout.widthScale)
   const topHeight = layout.tableHeadTopHeight
   const bottomHeight = layout.tableHeadBottomHeight
-  doc.setDrawColor(0, 0, 0)
-  doc.setLineWidth(0.1)
+  applyPdfPrintInk(doc)
+  doc.setLineWidth(pdfPrintStyle.tableLineWidth)
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(5.3)
+  doc.setFontSize(pdfPrintStyle.tableHeaderFontSize)
 
   columns.forEach((column) => {
     doc.rect(cursorX, y, column.width, topHeight)
@@ -821,7 +864,7 @@ const drawOriginalFooter = (doc, footerImage, layout) => {
   const x = (layout.pageWidth - layout.footerWidth) / 2
   const y = layout.pageHeight - layout.footerHeight - layout.footerBottom
   doc.addImage(footerImage, 'JPEG', x, y, layout.footerWidth, layout.footerHeight)
-  doc.setTextColor(17, 24, 39)
+  doc.setTextColor(0, 0, 0)
 }
 
 const createSignedPdf = async () => {
@@ -854,10 +897,11 @@ const createSignedPdf = async () => {
         let cursorX = layout.tableX
 
         columns.forEach((column) => {
-          doc.setDrawColor(0, 0, 0)
+          applyPdfPrintInk(doc)
+          doc.setLineWidth(pdfPrintStyle.tableLineWidth)
           doc.rect(cursorX, y, column.width, layout.rowHeight)
           doc.setFont('helvetica', 'normal')
-          doc.setFontSize(5.3)
+          doc.setFontSize(pdfPrintStyle.rowFontSize)
           const pad = Math.max(1, layout.widthScale)
           const textY = y + (4.7 * layout.rowScale)
 
@@ -873,7 +917,7 @@ const createSignedPdf = async () => {
             const key = signatureKey(column.day, participant)
             const signature = signatures[key]
             if (signature) {
-              doc.addImage(signature, 'PNG', cursorX + pad, y + (0.8 * layout.rowScale), column.width - (2 * pad), layout.rowHeight - (1.4 * layout.rowScale))
+              doc.addImage(signature, 'PNG', cursorX + pad, y + (0.25 * layout.rowScale), column.width - (2 * pad), layout.rowHeight - (0.5 * layout.rowScale))
             }
           }
 
@@ -941,7 +985,6 @@ watch(
 
 watch(form, scheduleDraftSave, { deep: true })
 watch(days, scheduleDraftSave, { deep: true })
-watch(signatures, scheduleDraftSave, { deep: true })
 watch(selectedDayId, scheduleDraftSave)
 watch(sheetFullscreen, (fullscreen) => {
   if (typeof document === 'undefined') return
@@ -1253,8 +1296,9 @@ onBeforeUnmount(() => {
                       </span>
                       <SignatureBox
                         v-if="participantCanSignDay(participant, day)"
-                        v-model="signatures[signatureKey(day, participant)]"
+                        :model-value="signatures[signatureKey(day, participant)] || ''"
                         compact
+                        @update:model-value="saveCompletedSignature(day, participant, $event)"
                         @cleared="removeSignature(day, participant)"
                       />
                       <div v-else class="h-10 min-w-[92px] rounded bg-gray-100"></div>
@@ -1274,8 +1318,9 @@ onBeforeUnmount(() => {
                       </span>
                       <SignatureBox
                         v-if="feedbackDay"
-                        v-model="signatures[signatureKey(feedbackDay, participant)]"
+                        :model-value="signatures[signatureKey(feedbackDay, participant)] || ''"
                         compact
+                        @update:model-value="saveCompletedSignature(feedbackDay, participant, $event)"
                         @cleared="removeSignature(feedbackDay, participant)"
                       />
                     </div>

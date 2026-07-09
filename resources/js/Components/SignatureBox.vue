@@ -17,6 +17,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:modelValue', 'cleared'])
+const signatureInkColor = '#003f9e'
 
 const canvas = ref(null)
 let ctx = null
@@ -27,8 +28,8 @@ const setupContext = () => {
   ctx = canvas.value.getContext('2d')
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
-  ctx.lineWidth = 3
-  ctx.strokeStyle = '#111827'
+  ctx.lineWidth = 4.5
+  ctx.strokeStyle = signatureInkColor
 }
 
 const drawValue = (value) => {
