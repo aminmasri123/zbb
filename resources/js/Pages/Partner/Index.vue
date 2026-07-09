@@ -8,7 +8,7 @@ import Dropdown from '@/Components/Dropdown.vue';
 import ModalCreate from '@/Pages/Partner/ModalCreate.vue';
 import ModalDestroy from '@/Components/ModalDestroyForm.vue';
 import ModalEdit from '@/Pages/Partner/ModalEdit.vue';
-import ModalAnwesenheitslisteBIBB from './BOP/ModalAnwesenheitslisteBIBB.vue';
+import ModalAnwesenheitslisteBIBB from './BOP/ModalAnwesenheitslisteBIBBDigital.vue';
 import ModalAnwesenheitslistePA from './BOP/ModalAnwesenheitslistePA.vue'; // fehlte
 import ModalBoTag1 from './BOP/ModalBoTag1.vue'
 import ModalHausordnung from './BOP/ModalHausordnung.vue';

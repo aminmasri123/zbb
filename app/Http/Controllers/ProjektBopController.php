@@ -5,7 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\Bereich;
 use App\Models\Bereichsauswahl;
 use App\Models\BereichsauswahlSetting;
+use App\Models\BibbAttendanceListDraft;
 use App\Models\EinteilungBereiche;
+use App\Models\Gruppe;
+use App\Models\GruppeHasPersonen;
 use App\Models\Partner;
 use App\Models\Personen;
 use App\Models\PersonenIstSchueler;
@@ -20,6 +23,7 @@ use Carbon\Carbon;
 use DateTime;
 use Illuminate\Support\Collection;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -231,11 +235,480 @@ class ProjektBopController extends Controller
         ];
     }
 
+    public function anwesenheitslistePOBOPreviewBIBB(Request $request)
+    {
+        $validated = $request->validate([
+            'schuleIdInputBibb' => ['required', 'integer', 'exists:partners,id'],
+            'schuljahrInputBibb' => ['required', 'string'],
+            'teilInputBibb' => ['required', 'string'],
+            'rolltagDate' => ['nullable', 'date'],
+            'manualDays' => ['nullable', 'array'],
+            'manualDays.*.date' => ['required_with:manualDays', 'date'],
+            'manualDays.*.type' => ['nullable', 'string'],
+            'manualDays.*.note' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        return response()->json($this->bibbPreviewPayload(
+            (int) $validated['schuleIdInputBibb'],
+            (string) $validated['schuljahrInputBibb'],
+            (string) $validated['teilInputBibb'],
+            $validated['rolltagDate'] ?? null,
+            $validated['manualDays'] ?? []
+        ));
+    }
+
+    public function anwesenheitslistePOBODraftShowBIBB(Request $request)
+    {
+        $scope = $this->bibbDraftScope($request);
+        $draft = BibbAttendanceListDraft::where('draft_hash', $scope['draft_hash'])->first();
+
+        return response()->json([
+            'exists' => (bool) $draft,
+            'payload' => $draft?->payload,
+            'revision' => $draft?->revision ?? 0,
+            'updated_at' => $draft?->updated_at?->toIso8601String(),
+        ]);
+    }
+
+    public function anwesenheitslistePOBODraftStoreBIBB(Request $request)
+    {
+        $scope = $this->bibbDraftScope($request);
+        $validated = $request->validate([
+            'payload' => ['required', 'array'],
+            'payload.form' => ['nullable', 'array'],
+            'payload.days' => ['nullable', 'array'],
+            'payload.selectedDayId' => ['nullable', 'string'],
+            'payload.signatures' => ['nullable', 'array'],
+            'payload.signatures.*' => ['nullable', 'string'],
+        ]);
+
+        $incomingPayload = $this->sanitizeBibbDraftPayload($validated['payload']);
+        $userId = auth()->id();
+
+        $draft = DB::transaction(function () use ($scope, $incomingPayload, $userId) {
+            $now = now();
+
+            BibbAttendanceListDraft::query()->insertOrIgnore([
+                'draft_hash' => $scope['draft_hash'],
+                'projekt_id' => $scope['projekt_id'],
+                'partner_id' => $scope['partner_id'],
+                'schuljahr' => $scope['schuljahr'],
+                'teil' => $scope['teil'],
+                'payload' => json_encode([]),
+                'revision' => 0,
+                'user_create' => $userId,
+                'user_update' => $userId,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+            $draft = BibbAttendanceListDraft::where('draft_hash', $scope['draft_hash'])
+                ->lockForUpdate()
+                ->first();
+
+            $payload = $this->mergeBibbDraftPayload($draft?->payload ?? [], $incomingPayload);
+            $payload['saved_at'] = now()->toIso8601String();
+
+            $draft->payload = $payload;
+            $draft->revision = ($draft->revision ?: 0) + 1;
+            $draft->user_update = $userId;
+            $draft->save();
+
+            return $draft;
+        });
+
+        return response()->json([
+            'success' => true,
+            'payload' => $draft->payload,
+            'revision' => $draft->revision,
+            'updated_at' => $draft->updated_at?->toIso8601String(),
+        ]);
+    }
+
+    public function anwesenheitslistePOBODraftDestroyBIBB(Request $request)
+    {
+        $scope = $this->bibbDraftScope($request);
+
+        BibbAttendanceListDraft::where('draft_hash', $scope['draft_hash'])->delete();
+
+        return response()->json(['success' => true]);
+    }
+
+    private function bibbDraftScope(Request $request): array
+    {
+        $validated = $request->validate([
+            'schuleIdInputBibb' => ['required', 'integer', 'exists:partners,id'],
+            'schuljahrInputBibb' => ['required', 'string'],
+            'teilInputBibb' => ['required', 'string'],
+        ]);
+
+        $projektId = auth()->user()?->current_team_id;
+        $partnerId = (int) $validated['schuleIdInputBibb'];
+        $schuljahr = (string) $validated['schuljahrInputBibb'];
+        $teil = (string) $validated['teilInputBibb'];
+
+        return [
+            'draft_hash' => hash('sha256', implode('|', [
+                $projektId ?: 0,
+                $partnerId,
+                $schuljahr,
+                $teil,
+                'bibb-attendance-list',
+            ])),
+            'projekt_id' => $projektId,
+            'partner_id' => $partnerId,
+            'schuljahr' => $schuljahr,
+            'teil' => $teil,
+        ];
+    }
+
+    private function sanitizeBibbDraftPayload(array $payload): array
+    {
+        $form = is_array($payload['form'] ?? null) ? $payload['form'] : [];
+        $allowedFormKeys = [
+            'exportFormat',
+            'rolltagDate',
+            'startDate',
+            'endDate',
+            'includeSaturday',
+            'includeSunday',
+            'feedbackDate',
+        ];
+
+        $signatures = [];
+        foreach (($payload['signatures'] ?? []) as $key => $value) {
+            if (!is_string($key) || (!is_null($value) && !is_string($value))) {
+                continue;
+            }
+
+            if ($value === null || $value === '') {
+                $signatures[$key] = '';
+                continue;
+            }
+
+            if (!Str::startsWith($value, 'data:image/png;base64,')) {
+                continue;
+            }
+
+            $signatures[$key] = $value;
+        }
+
+        return [
+            'version' => 1,
+            'form' => array_intersect_key($form, array_flip($allowedFormKeys)),
+            'days' => is_array($payload['days'] ?? null) ? array_values($payload['days']) : [],
+            'selectedDayId' => is_string($payload['selectedDayId'] ?? null) ? $payload['selectedDayId'] : null,
+            'signatures' => $signatures,
+        ];
+    }
+
+    private function mergeBibbDraftPayload(array $existingPayload, array $incomingPayload): array
+    {
+        $payload = $existingPayload;
+
+        foreach (['version', 'form', 'days', 'selectedDayId'] as $key) {
+            if (array_key_exists($key, $incomingPayload)) {
+                $payload[$key] = $incomingPayload[$key];
+            }
+        }
+
+        $signatures = is_array($payload['signatures'] ?? null) ? $payload['signatures'] : [];
+        foreach (($incomingPayload['signatures'] ?? []) as $key => $value) {
+            if ($value === '' || $value === null) {
+                unset($signatures[$key]);
+                continue;
+            }
+
+            $signatures[$key] = $value;
+        }
+
+        $payload['signatures'] = $signatures;
+
+        return $payload;
+    }
+
+    private function bibbPreviewPayload(int $schulId, string $schuljahr, string $teil, ?string $rolltagDate, array $manualDays): array
+    {
+        $schule = Partner::findOrFail($schulId);
+        $teilnehmer = $this->bibbTeilnehmer($schulId, $schuljahr, $teil);
+
+        if ($teilnehmer->isEmpty()) {
+            throw ValidationException::withMessages([
+                'teilnehmer' => 'Die gewaehlte Schule weist zurzeit noch keine Schueler auf.',
+            ]);
+        }
+
+        $alleTeilnehmer = $teilnehmer->map(fn ($item) => $this->bibbTeilnehmerPayload($item))->values();
+        $projekt = auth()->user()?->current_team_id
+            ? Projekt::with('bereiche')->find(auth()->user()->current_team_id)
+            : null;
+        $bereiche = $projekt?->bereiche
+            ->pluck('code')
+            ->unique()
+            ->implode('/ ');
+        $klassen = $teilnehmer->pluck('klasse')->unique()->implode(', ');
+        $schulform = PersonenIstSchueler::query()->schulform($teilnehmer);
+        $days = collect();
+
+        if ($rolltagDate) {
+            $date = Carbon::parse($rolltagDate)->toDateString();
+            $days->push([
+                'id' => 'rolltag-' . $date,
+                'date' => $date,
+                'date_label' => Carbon::parse($date)->format('d.m.Y'),
+                'type' => 'rolltag',
+                'type_label' => 'Rolltag',
+                'source' => 'rolltag',
+                'note' => null,
+                'groups' => [[
+                    'id' => 'rolltag-all',
+                    'label' => 'Alle Rolltag-Gruppen',
+                    'bereich' => null,
+                    'runde' => null,
+                    'participants' => $alleTeilnehmer,
+                    'participants_count' => $alleTeilnehmer->count(),
+                ]],
+                'participants_count' => $alleTeilnehmer->count(),
+            ]);
+        }
+
+        $days = $days->merge($this->bibbGeneratedGroupDays($schulId, $schuljahr, $teil, $teilnehmer));
+
+        foreach ($manualDays as $manualDay) {
+            if (empty($manualDay['date'])) {
+                continue;
+            }
+
+            $date = Carbon::parse($manualDay['date'])->toDateString();
+            if ($days->contains(fn ($day) => $day['date'] === $date)) {
+                continue;
+            }
+
+            $type = $manualDay['type'] ?? 'manual';
+            $days->push([
+                'id' => 'manual-' . $date,
+                'date' => $date,
+                'date_label' => Carbon::parse($date)->format('d.m.Y'),
+                'type' => $type,
+                'type_label' => $type === 'rolltag' ? 'Rolltag' : 'Manueller Tag',
+                'source' => 'manual',
+                'note' => $manualDay['note'] ?? null,
+                'groups' => [[
+                    'id' => 'manual-all-' . $date,
+                    'label' => 'Alle Teilnehmer',
+                    'bereich' => null,
+                    'runde' => null,
+                    'participants' => $alleTeilnehmer,
+                    'participants_count' => $alleTeilnehmer->count(),
+                ]],
+                'participants_count' => $alleTeilnehmer->count(),
+            ]);
+        }
+
+        $days = $days
+            ->sortBy(fn ($day) => $day['date'] . '|' . ($day['type'] === 'rolltag' ? '0' : '1'))
+            ->values();
+
+        return [
+            'context' => [
+                'schule' => [
+                    'id' => $schule->id,
+                    'name' => $schule->name,
+                ],
+                'schulform' => $schulform,
+                'klasse' => $klassen,
+                'bereiche' => $bereiche,
+                'schuljahr' => $schuljahr,
+                'teil' => $teil,
+                'teilnehmer_count' => $alleTeilnehmer->count(),
+            ],
+            'participants' => $alleTeilnehmer,
+            'days' => $days,
+        ];
+    }
+
+    private function bibbTeilnehmer(int $schulId, string $schuljahr, string $teil): Collection
+    {
+        return PersonenIstSchueler::query()
+            ->filterSchueler($schulId, $schuljahr, $teil)
+            ->with('person')
+            ->get()
+            ->sort(function ($a, $b) {
+                $klasseCompare = strnatcasecmp((string) $a->klasse, (string) $b->klasse);
+                if ($klasseCompare !== 0) {
+                    return $klasseCompare;
+                }
+
+                $nachnameCompare = strnatcasecmp((string) ($a->person?->nachname ?? ''), (string) ($b->person?->nachname ?? ''));
+                if ($nachnameCompare !== 0) {
+                    return $nachnameCompare;
+                }
+
+                return strnatcasecmp((string) ($a->person?->vorname ?? ''), (string) ($b->person?->vorname ?? ''));
+            })
+            ->values();
+    }
+
+    private function bibbTeilnehmerPayload(PersonenIstSchueler $schueler): array
+    {
+        $vorname = (string) ($schueler->person?->vorname ?? '');
+        $nachname = (string) ($schueler->person?->nachname ?? '');
+
+        return [
+            'id' => $schueler->id,
+            'person_id' => $schueler->person_id,
+            'vorname' => $vorname,
+            'nachname' => $nachname,
+            'name' => trim($nachname . ', ' . $vorname, ' ,') ?: 'Teilnehmer #' . $schueler->id,
+            'klasse' => $schueler->klasse,
+            'geschlecht' => $schueler->person?->geschlecht,
+        ];
+    }
+
+    private function bibbGeneratedGroupDays(int $schulId, string $schuljahr, string $teil, Collection $teilnehmer): Collection
+    {
+        $projektId = auth()->user()?->current_team_id;
+        if (!$projektId) {
+            return collect();
+        }
+
+        $gruppen = Gruppe::query()
+            ->with('bereich')
+            ->where('projekt_id', $projektId)
+            ->where('bemerkung', 'like', $this->bibbGeneratedGroupLike($schulId, $schuljahr, $teil))
+            ->get();
+
+        if ($gruppen->isEmpty()) {
+            return collect();
+        }
+
+        $schuelerNachPerson = $teilnehmer
+            ->filter(fn ($item) => $item->person_id)
+            ->keyBy('person_id');
+
+        $entries = GruppeHasPersonen::query()
+            ->with(['tag', 'gruppe.bereich'])
+            ->whereIn('gruppe_id', $gruppen->pluck('id'))
+            ->whereIn('personen_id', $schuelerNachPerson->keys())
+            ->get()
+            ->filter(fn ($entry) => $entry->tag?->datum && $entry->gruppe);
+
+        return $entries
+            ->groupBy(fn ($entry) => $entry->tag->datum)
+            ->map(function ($dateEntries, $date) use ($schuelerNachPerson) {
+                $groupIndex = 0;
+                $groups = $dateEntries
+                    ->groupBy('gruppe_id')
+                    ->sortKeys()
+                    ->map(function ($groupEntries) use (&$groupIndex, $schuelerNachPerson) {
+                        $gruppe = $groupEntries->first()->gruppe;
+                        $runde = $this->bibbRundeFromBemerkung((string) $gruppe->bemerkung);
+                        $letter = chr(65 + ($groupIndex % 26));
+                        $groupIndex++;
+
+                        $participants = $groupEntries
+                            ->unique('personen_id')
+                            ->map(fn ($entry) => $schuelerNachPerson->get($entry->personen_id))
+                            ->filter()
+                            ->sort(function ($a, $b) {
+                                $klasseCompare = strnatcasecmp((string) $a->klasse, (string) $b->klasse);
+                                if ($klasseCompare !== 0) {
+                                    return $klasseCompare;
+                                }
+
+                                return strnatcasecmp(
+                                    (string) ($a->person?->nachname ?? ''),
+                                    (string) ($b->person?->nachname ?? '')
+                                );
+                            })
+                            ->map(fn ($item) => $this->bibbTeilnehmerPayload($item))
+                            ->values();
+
+                        return [
+                            'id' => $gruppe->id,
+                            'label' => 'Gruppe ' . $letter,
+                            'bereich' => $gruppe->bereich?->name,
+                            'runde' => $runde,
+                            'participants' => $participants,
+                            'participants_count' => $participants->count(),
+                        ];
+                    })
+                    ->values();
+
+                return [
+                    'id' => 'gruppen-' . $date,
+                    'date' => Carbon::parse($date)->toDateString(),
+                    'date_label' => Carbon::parse($date)->format('d.m.Y'),
+                    'type' => 'group_day',
+                    'type_label' => 'Gruppentag',
+                    'source' => 'generated_groups',
+                    'note' => null,
+                    'groups' => $groups,
+                    'participants_count' => $groups->sum('participants_count'),
+                ];
+            })
+            ->sortKeys()
+            ->values();
+    }
+
+    private function bibbGeneratedGroupLike(int $schulId, string $schuljahr, string $teil): string
+    {
+        return "BOP Einteilung Schule {$schulId} Schuljahr {$schuljahr} Teil {$teil} Runde %";
+    }
+
+    private function bibbRundeFromBemerkung(string $bemerkung): ?int
+    {
+        if (preg_match('/Runde\s+(\d+)/', $bemerkung, $matches)) {
+            return (int) $matches[1];
+        }
+
+        return null;
+    }
+
+    private function bibbDateListFromRequest(Request $request): array
+    {
+        $dates = collect($request->input('days', []))
+            ->filter(fn ($day) => ($day['selected'] ?? true) && !empty($day['date']))
+            ->pluck('date')
+            ->map(fn ($date) => Carbon::parse($date)->format('d.m.Y'))
+            ->unique()
+            ->values();
+
+        if ($dates->isEmpty()) {
+            $dates = collect(range(1, 10))
+                ->map(fn ($index) => $request->input('termin' . $index))
+                ->filter()
+                ->map(fn ($date) => Carbon::parse($date)->format('d.m.Y'))
+                ->values();
+        }
+
+        $feedbackDate = $request->filled('feedbackDate')
+            ? Carbon::parse($request->input('feedbackDate'))->format('d.m.Y')
+            : ($request->filled('termin11') ? Carbon::parse($request->input('termin11'))->format('d.m.Y') : '');
+
+        return [
+            $dates->take(10)->values()->all(),
+            $feedbackDate,
+        ];
+    }
+
     public function anwesenheitslistePOBOExportWordBIBB(Request $request)
     {
-            if(!$request->exportFormat OR !$request->termin1 OR !$request->termin2 OR !$request->termin3 OR !$request->termin4 OR !$request->termin5 OR !$request->termin6 OR !$request->termin7 OR !$request->termin8 OR !$request->termin9 OR !$request->termin10 OR !$request->schuljahrInputBibb OR !$request->schuleIdInputBibb OR !$request->teilInputBibb)
-            {
-                return redirect()->back()->with('error', 'Fehlenden Daten.');
+            $request->validate([
+                'exportFormat' => ['required', 'in:A3,A4'],
+                'schuleIdInputBibb' => ['required', 'integer', 'exists:partners,id'],
+                'schuljahrInputBibb' => ['required', 'string'],
+                'teilInputBibb' => ['required', 'string'],
+                'days' => ['nullable', 'array'],
+                'days.*.date' => ['required_with:days', 'date'],
+                'days.*.selected' => ['nullable', 'boolean'],
+                'feedbackDate' => ['nullable', 'date'],
+            ]);
+
+            [$programmTage, $tag11] = $this->bibbDateListFromRequest($request);
+
+            if (empty($programmTage)) {
+                return response()->json(['message' => 'Bitte mindestens einen Anwesenheitstag auswaehlen.'], 422);
             }
 
             $schuljahr = $request->schuljahrInputBibb;
@@ -281,24 +754,7 @@ class ProjektBopController extends Controller
                 return redirect()->back()->with('error', 'Die gewählte Schule weist zurzeit noch keine Schüler auf.');
             }
 
-            $tag1 = Carbon::parse($request->termin1)->format('d.m.Y');
-            $tag2 = Carbon::parse($request->termin2)->format('d.m.Y');
-            $tag3 = Carbon::parse($request->termin3)->format('d.m.Y');
-            $tag4 = Carbon::parse($request->termin4)->format('d.m.Y');
-            $tag5 = Carbon::parse($request->termin5)->format('d.m.Y');
-            $tag6 = Carbon::parse($request->termin6)->format('d.m.Y');
-            $tag7 = Carbon::parse($request->termin7)->format('d.m.Y');
-            $tag8 = Carbon::parse($request->termin8)->format('d.m.Y');
-            $tag9 = Carbon::parse($request->termin9)->format('d.m.Y');
-            $tag10 = Carbon::parse($request->termin10)->format('d.m.Y');
-
-
-            if($request->termin11){
-                $tag11 = Carbon::parse($request->termin11)->format('d.m.Y');
-
-            }else{
-                $tag11 = "";
-            }
+            $tagWerte = array_pad($programmTage, 10, '');
             $i = 1;
             $templateProcessor = new TemplateProcessor($templateFile);
 
@@ -311,20 +767,13 @@ class ProjektBopController extends Controller
 
             $templateProcessor->setValue('schulform', $schulform);
             $templateProcessor->setValue('klasse', $klassen);
-            $templateProcessor->setValue('tag1', $tag1);
-            $templateProcessor->setValue('tag2', $tag2);
-            $templateProcessor->setValue('tag3', $tag3);
-            $templateProcessor->setValue('tag4', $tag4);
-            $templateProcessor->setValue('tag5', $tag5);
-            $templateProcessor->setValue('tag6', $tag6);
-            $templateProcessor->setValue('tag7', $tag7);
-            $templateProcessor->setValue('tag8', $tag8);
-            $templateProcessor->setValue('tag9', $tag9);
-            $templateProcessor->setValue('tag10', $tag10);
+            foreach (range(1, 10) as $tagIndex) {
+                $templateProcessor->setValue('tag' . $tagIndex, $tagWerte[$tagIndex - 1] ?? '');
+            }
             $templateProcessor->setValue('tag11', $tag11);
 
-            $templateProcessor->setValue('anfangsdatum', $tag1);
-            $templateProcessor->setValue('enddatum', $tag11);
+            $templateProcessor->setValue('anfangsdatum', $tagWerte[0] ?? '');
+            $templateProcessor->setValue('enddatum', $tag11 ?: (collect($tagWerte)->filter()->last() ?: ''));
 
             foreach ($alle_teilnehmer as $teilnehmer)
             {

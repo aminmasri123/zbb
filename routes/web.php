@@ -462,6 +462,10 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte'])->grou
 
 
 
+    Route::post('export-anwesenheitsliste-pobo/preview', [ProjektBopController::class, 'anwesenheitslistePOBOPreviewBIBB'])->name('anwesenheitsliste.POBO.bibb.preview');
+    Route::post('export-anwesenheitsliste-pobo/draft', [ProjektBopController::class, 'anwesenheitslistePOBODraftShowBIBB'])->name('anwesenheitsliste.POBO.bibb.draft.show');
+    Route::put('export-anwesenheitsliste-pobo/draft', [ProjektBopController::class, 'anwesenheitslistePOBODraftStoreBIBB'])->name('anwesenheitsliste.POBO.bibb.draft.store');
+    Route::delete('export-anwesenheitsliste-pobo/draft', [ProjektBopController::class, 'anwesenheitslistePOBODraftDestroyBIBB'])->name('anwesenheitsliste.POBO.bibb.draft.destroy');
     Route::post('export-anwesenheitsliste-pobo', [ProjektBopController::class, 'anwesenheitslistePOBOExportWordBIBB'])->name('anwesenheitsliste.POBO.bibb.export.word');
     Route::post('export-anwesenheitsliste/pa', [ProjektBopController::class, 'anwesenheitslistePAexportWord'])->name('anwesenheitsliste.PA.export.word');
     Route::get('/export-anwesenheitsliste-pobo/tag1/{partnerID}/{schuljahr}/{teil}/{klasse?}', [ProjektBopController::class, 'anwesenheitslistePOBOTag1'])->name('anwesenheitsliste.BoTag1.export');
