@@ -1,5 +1,5 @@
 <script setup>
-    import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+    import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
     import { Head, Link, router } from '@inertiajs/vue3'
     import AppLayout from '@/Layouts/AppLayout.vue'
     import InputText from 'primevue/inputtext'
@@ -32,10 +32,12 @@
     const selectedPaTeilnehmerId = ref(null)
     const paSaving = ref(false)
     const paAutoSaveStatus = ref('idle')
+    const paAutoSaveBereit = ref(false)
     const paAutoSaveTimers = new Map()
     const paSaveVersions = new Map()
     const paSaveInFlight = new Set()
     const paSavePending = new Set()
+    const paDirtyTeilnehmerIds = new Set()
     const klassenbuchErlaubt = computed(() => Boolean(props.gruppe?.projekt?.klassenbuch_aktiv))
     const erstesKlassenbuch = computed(() => props.gruppe?.klassenbuecher?.[0] || null)
     const klassenbuchHref = computed(() =>
@@ -592,8 +594,57 @@ const paAutoSaveStatusClass = computed(() => {
 const resolvePaTeilnehmerId = (personenId = null) =>
   personenId ?? selectedPaTeilnehmer.value?.id ?? null
 
-const paEintragSnapshot = (personenId) =>
-  JSON.parse(JSON.stringify(paEintrag(personenId)))
+const paBewertungPayload = (eintrag, feld) =>
+  paMerkmale.reduce((payload, merkmal) => {
+    const wert = eintrag?.[feld]?.[merkmal.key] || defaultPaBewertung()
+    const bewertung = normalisierePaZahl(wert.bewertung, { min: 1, max: 5 })
+
+    payload[merkmal.key] = {
+      bewertung,
+      bemerkung: wert.bemerkung || '',
+    }
+
+    return payload
+  }, {})
+
+const paUebungenPayload = (eintrag) =>
+  paUebungen.value.reduce((payload, uebung) => {
+    const key = String(uebung.id)
+    const wert = eintrag?.uebungen?.[key] || defaultPaUebungErgebnis()
+
+    payload[key] = {
+      punkte: normalisierePaZahl(wert.punkte, {
+        min: 0,
+        max: Number.isFinite(Number(uebung.hoechstwert)) ? Number(uebung.hoechstwert) : null,
+      }),
+      zeit_min: normalisierePaZahl(wert.zeit_min, { min: 0, max: 999 }) ?? 0,
+      zeit_sec: normalisierePaZahl(wert.zeit_sec, { min: 0, max: 59 }) ?? 0,
+    }
+
+    return payload
+  }, {})
+
+const paEintragSnapshot = (personenId) => {
+  const eintrag = paEintrag(personenId)
+  const selbsteinschaetzung = paBewertungPayload(eintrag, 'selbsteinschaetzung')
+  const kompetenzen = paBewertungPayload(eintrag, 'kompetenzen')
+
+  return {
+    uebungen: paUebungenPayload(eintrag),
+    selbsteinschaetzung,
+    kompetenzen,
+    beurteilungen: JSON.parse(JSON.stringify(eintrag.beurteilungen || {})),
+    selbsteinschaetzungen: JSON.parse(JSON.stringify(eintrag.selbsteinschaetzungen || {})),
+    bericht: JSON.parse(JSON.stringify(eintrag.bericht || defaultPaBericht())),
+    merkmale_snapshot: {
+      selbsteinschaetzung,
+      kompetenzen,
+    },
+  }
+}
+
+const csrfToken = () =>
+  document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
 
 const speicherePotenzialanalyse = async ({ personenId = null, silent = false, version = null } = {}) => {
   const teilnehmerId = resolvePaTeilnehmerId(personenId)
@@ -631,6 +682,7 @@ const speicherePotenzialanalyse = async ({ personenId = null, silent = false, ve
     }), payload)
 
     if ((paSaveVersions.get(key) || 0) === saveVersion) {
+      paDirtyTeilnehmerIds.delete(key)
       paAutoSaveStatus.value = 'saved'
     } else {
       paAutoSaveStatus.value = 'pending'
@@ -689,11 +741,16 @@ const planePotenzialanalyseSpeichern = ({ personenId = null, sofort = false } = 
   const nextVersion = (paSaveVersions.get(key) || 0) + 1
   const geplanterTimer = paAutoSaveTimers.get(key)
 
+  if (!paAutoSaveBereit.value) {
+    return
+  }
+
   if (geplanterTimer) {
     clearTimeout(geplanterTimer)
   }
 
   paSaveVersions.set(key, nextVersion)
+  paDirtyTeilnehmerIds.add(key)
   paAutoSaveStatus.value = sofort ? 'saving' : 'pending'
 
   const timer = window.setTimeout(() => {
@@ -707,6 +764,63 @@ const planePotenzialanalyseSpeichern = ({ personenId = null, sofort = false } = 
 
   paAutoSaveTimers.set(key, timer)
 }
+
+const speichereOffenePaAenderungen = () => {
+  const offeneIds = new Set([
+    ...paDirtyTeilnehmerIds,
+    ...paAutoSaveTimers.keys(),
+  ])
+
+  if (!offeneIds.size) {
+    return
+  }
+
+  paAutoSaveTimers.forEach((timer) => clearTimeout(timer))
+  paAutoSaveTimers.clear()
+
+  offeneIds.forEach((key) => {
+    const teilnehmerId = Number(key)
+
+    if (!teilnehmerId) {
+      return
+    }
+
+    normalisierePaUebungswerte(teilnehmerId)
+
+    try {
+      fetch(route('potenzialanalyse.gruppe.teilnehmer.update', {
+        gruppe: props.gruppe.id,
+        personen: teilnehmerId,
+      }), {
+        method: 'PUT',
+        credentials: 'same-origin',
+        keepalive: true,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': csrfToken(),
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify(paEintragSnapshot(teilnehmerId)),
+      })
+    } catch (error) {
+      console.error('Potenzialanalyse konnte vor dem Verlassen nicht gespeichert werden:', error)
+    }
+  })
+}
+
+watch(paTeilnehmerDaten, () => {
+  if (!paAutoSaveBereit.value) {
+    return
+  }
+
+  const teilnehmerId = selectedPaTeilnehmer.value?.id
+
+  if (!teilnehmerId) {
+    return
+  }
+
+  planePotenzialanalyseSpeichern({ personenId: teilnehmerId })
+}, { deep: true })
 
 const waehlePaTeilnehmer = (teilnehmer) => {
   selectedPaTeilnehmerId.value = teilnehmer.id
@@ -1234,9 +1348,17 @@ onMounted(() => {
     selectedPaTeilnehmerId.value = gruppenTeilnehmer.value[0].id
     gruppenTeilnehmer.value.forEach((teilnehmer) => ensurePaEintrag(teilnehmer.id))
   }
+
+  window.setTimeout(() => {
+    paAutoSaveBereit.value = true
+  }, 0)
+
+  window.addEventListener('beforeunload', speichereOffenePaAenderungen)
 })
 
 onBeforeUnmount(() => {
+  speichereOffenePaAenderungen()
+  window.removeEventListener('beforeunload', speichereOffenePaAenderungen)
   paAutoSaveTimers.forEach((timer) => clearTimeout(timer))
   paAutoSaveTimers.clear()
 })

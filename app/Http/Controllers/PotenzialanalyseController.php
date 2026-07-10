@@ -142,6 +142,13 @@ class PotenzialanalyseController extends Controller
             'kompetenzen' => ['nullable', 'array'],
             'kompetenzen.*.bewertung' => ['nullable', 'integer', 'min:1', 'max:5'],
             'kompetenzen.*.bemerkung' => ['nullable', 'string', 'max:5000'],
+            'merkmale_snapshot' => ['nullable', 'array'],
+            'merkmale_snapshot.selbsteinschaetzung' => ['nullable', 'array'],
+            'merkmale_snapshot.selbsteinschaetzung.*.bewertung' => ['nullable', 'integer', 'min:1', 'max:5'],
+            'merkmale_snapshot.selbsteinschaetzung.*.bemerkung' => ['nullable', 'string', 'max:5000'],
+            'merkmale_snapshot.kompetenzen' => ['nullable', 'array'],
+            'merkmale_snapshot.kompetenzen.*.bewertung' => ['nullable', 'integer', 'min:1', 'max:5'],
+            'merkmale_snapshot.kompetenzen.*.bemerkung' => ['nullable', 'string', 'max:5000'],
             'beurteilungen' => ['nullable', 'array'],
             'beurteilungen.*.bewertung' => ['nullable', 'integer', 'min:1', 'max:5'],
             'beurteilungen.*.bemerkung' => ['nullable', 'string', 'max:5000'],
@@ -158,8 +165,16 @@ class PotenzialanalyseController extends Controller
 
         $kriteriumIds = $this->projektKriteriumIds((int) $gruppe->projekt_id);
         $uebungen = $this->projektUebungenMap((int) $gruppe->projekt_id);
+        $selbsteinschaetzung = $this->normalizeMerkmalEntries(
+            $request->input('selbsteinschaetzung', []),
+            $request->input('merkmale_snapshot.selbsteinschaetzung', [])
+        );
+        $kompetenzen = $this->normalizeMerkmalEntries(
+            $request->input('kompetenzen', []),
+            $request->input('merkmale_snapshot.kompetenzen', [])
+        );
 
-        DB::transaction(function () use ($gruppe, $personen, $validated, $kriteriumIds, $uebungen) {
+        DB::transaction(function () use ($gruppe, $personen, $validated, $kriteriumIds, $uebungen, $selbsteinschaetzung, $kompetenzen) {
             $this->syncUebungErgebnisse(
                 $validated['uebungen'] ?? [],
                 $gruppe,
@@ -169,14 +184,14 @@ class PotenzialanalyseController extends Controller
 
             $this->syncKompetenzbewertungen(
                 'selbst',
-                $validated['selbsteinschaetzung'] ?? [],
+                $selbsteinschaetzung,
                 $gruppe,
                 $personen
             );
 
             $this->syncKompetenzbewertungen(
                 'anleiter',
-                $validated['kompetenzen'] ?? [],
+                $kompetenzen,
                 $gruppe,
                 $personen
             );
@@ -345,6 +360,57 @@ class PotenzialanalyseController extends Controller
                 ]
             );
         }
+    }
+
+    private function normalizeMerkmalEntries(mixed $entries, mixed $fallback = []): array
+    {
+        $normalized = $this->normalizeMerkmalEntrySet($entries);
+
+        if ($normalized !== []) {
+            return $normalized;
+        }
+
+        return $this->normalizeMerkmalEntrySet($fallback);
+    }
+
+    private function normalizeMerkmalEntrySet(mixed $entries): array
+    {
+        if (! is_array($entries)) {
+            return [];
+        }
+
+        $normalized = [];
+
+        foreach ($entries as $merkmal => $entry) {
+            if (! in_array($merkmal, self::PA_MERKMALE, true) || ! is_array($entry)) {
+                continue;
+            }
+
+            $bewertung = $entry['bewertung'] ?? null;
+            $bewertung = $bewertung === '' ? null : $bewertung;
+            $bemerkung = $entry['bemerkung'] ?? null;
+
+            if ($bewertung !== null) {
+                $bewertung = (int) $bewertung;
+
+                if ($bewertung < 1 || $bewertung > 5) {
+                    throw ValidationException::withMessages([
+                        "{$merkmal}.bewertung" => 'Die Bewertung muss zwischen 1 und 5 liegen.',
+                    ]);
+                }
+            }
+
+            if ($bewertung === null && blank($bemerkung)) {
+                continue;
+            }
+
+            $normalized[$merkmal] = [
+                'bewertung' => $bewertung,
+                'bemerkung' => $bemerkung,
+            ];
+        }
+
+        return $normalized;
     }
 
     private function normalizeUebungZeit(array $entry): int
