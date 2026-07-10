@@ -20,6 +20,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  listType: {
+    type: String,
+    default: 'pa',
+  },
 })
 
 const emit = defineEmits(['update:visible', 'close'])
@@ -32,6 +36,27 @@ const PaSwal = Swal.mixin({
 const localVisible = computed({
   get: () => props.visible,
   set: (value) => emit('update:visible', value),
+})
+
+const normalizedListType = computed(() => props.listType === 'pa_preparation' ? 'pa_preparation' : 'pa')
+const isPreparationPa = computed(() => normalizedListType.value === 'pa_preparation')
+const modalTitle = computed(() => isPreparationPa.value ? 'Anwesenheitsliste Vorbereitung PA' : 'Anwesenheitsliste PA')
+const dayPluralLabel = computed(() => isPreparationPa.value ? 'Vorbereitung PA' : 'PA-Tage')
+const dateConfigTitle = computed(() => isPreparationPa.value ? 'Vorbereitung PA' : 'PA-Termine')
+const primaryDateLabel = computed(() => isPreparationPa.value ? 'Termin Vorbereitung PA' : 'PA-Tag 1')
+const createDaysButtonText = computed(() => isPreparationPa.value ? 'Vorbereitungstag übernehmen' : 'PA-Tage übernehmen')
+const noDaysText = computed(() => isPreparationPa.value ? 'Kein Vorbereitungstag angelegt.' : 'Keine PA-Tage angelegt.')
+const sheetTitle = computed(() => isPreparationPa.value
+  ? 'Vorbereitung PA mit digitalen Unterschriften'
+  : 'Potenzialanalyse mit digitalen Unterschriften')
+const pdfDocumentTitle = computed(() => isPreparationPa.value
+  ? 'Anwesenheitsliste Vorbereitung PA'
+  : 'Anwesenheitsliste Potenzialanalyse (PA)')
+const pdfFilenamePrefix = computed(() => isPreparationPa.value ? 'Anwesenheitsliste_Vorbereitung_PA' : 'Anwesenheitsliste_PA')
+const selectedDaysSummary = computed(() => {
+  const label = isPreparationPa.value ? (selectedDays.value.length === 1 ? 'Termin' : 'Termine') : (selectedDays.value.length === 1 ? 'Tag' : 'Tage')
+
+  return `${sheetParticipants.value.length} Teilnehmer / ${selectedDays.value.length} ${label}`
 })
 
 const form = reactive({
@@ -126,7 +151,15 @@ const weekdayLabel = (date) => {
   return new Date(`${date}T00:00:00`).toLocaleDateString('de-DE', { weekday: 'short' })
 }
 
-const dayTypeLabel = (day) => day?.type_label || (day?.type === 'feedback' ? 'Feedbackgespräch' : 'PA-Tag')
+const dayTypeLabel = (day) => {
+  if (day?.type_label) return day.type_label
+  if (day?.type === 'feedback') return 'Feedbackgespräch'
+  if (day?.type === 'preparation') return 'Vorbereitung PA'
+
+  return 'PA-Tag'
+}
+
+const dayColumnLabel = (index) => isPreparationPa.value ? 'Termin' : `Tag ${index + 1}`
 
 const signatureKey = (day, participant) => `${day.id}:${participant.person_id || participant.id}`
 
@@ -155,6 +188,7 @@ const draftScopePayload = () => ({
   schuleId: props.partnerId,
   schuljahr: props.schuljahr,
   teil: props.teil,
+  listType: normalizedListType.value,
   exportMode: form.exportMode,
   klasse: form.exportMode === 'klasse' ? form.klasse : '',
 })
@@ -163,6 +197,7 @@ const cloneForDraft = (value) => JSON.parse(JSON.stringify(value ?? null))
 
 const buildDraftPayload = ({ signaturesPayload = { ...signatures } } = {}) => ({
   version: 1,
+  listType: normalizedListType.value,
   form: { ...form },
   days: cloneForDraft(days.value) || [],
   selectedDayId: selectedDayId.value,
@@ -191,6 +226,10 @@ const selectedDaysPayload = () => selectedDays.value.map((day) => ({
 }))
 
 const previewDaysPayload = () => {
+  if (isPreparationPa.value) {
+    return preparationDaysPayload()
+  }
+
   const preservedDays = selectedDays.value
     .filter((day) => !['range', 'pa-term'].includes(day.source) && day.type !== 'feedback' && day.source !== 'feedback')
     .map((day) => ({
@@ -426,8 +465,8 @@ const loadPreview = async ({ includeDraft = false } = {}) => {
     const response = await axios.post(route('anwesenheitsliste.PA.digital.preview'), {
       ...draftScopePayload(),
       startDate: form.startDate || null,
-      endDate: form.endDate || null,
-      feedbackDate: form.feedbackDate || null,
+      endDate: isPreparationPa.value ? null : form.endDate || null,
+      feedbackDate: isPreparationPa.value ? null : form.feedbackDate || null,
       days: previewDaysPayload(),
     })
 
@@ -461,20 +500,37 @@ const paTermDaysPayload = () => {
     }))
 }
 
+const preparationDaysPayload = () => {
+  if (!form.startDate) return []
+
+  return [{
+    id: `pa-vorbereitung-${form.startDate}`,
+    date: form.startDate,
+    type: 'preparation',
+    selected: true,
+    source: 'pa-preparation',
+    note: 'Vorbereitung PA',
+  }]
+}
+
 const appendPaDays = (dayPayloads, source = 'manual') => {
   const existing = new Set(days.value.map((day) => day.date))
   const generated = dayPayloads
     .filter((day) => !existing.has(day.date))
-    .map((day) => dayWithGroups({
-      id: day.id || `${source}-${day.date}`,
-      date: day.date,
-      date_label: dateLabel(day.date),
-      type: 'pa_day',
-      type_label: 'PA-Tag',
-      source: day.source || source,
-      selected: true,
-      note: day.note || '',
-    }))
+    .map((day) => {
+      const type = day.type || 'pa_day'
+
+      return dayWithGroups({
+        id: day.id || `${source}-${day.date}`,
+        date: day.date,
+        date_label: dateLabel(day.date),
+        type,
+        type_label: day.type_label || dayTypeLabel({ type }),
+        source: day.source || source,
+        selected: true,
+        note: day.note || '',
+      })
+    })
 
   if (!generated.length) return
 
@@ -483,6 +539,18 @@ const appendPaDays = (dayPayloads, source = 'manual') => {
 }
 
 const createPaTermDays = () => {
+  if (isPreparationPa.value) {
+    if (!form.startDate) {
+      PaSwal.fire('Termin fehlt', 'Bitte den Termin für die Vorbereitung PA eintragen.', 'warning')
+      return
+    }
+
+    days.value = days.value.filter((day) => day.source !== 'pa-preparation')
+    appendPaDays(preparationDaysPayload(), 'pa-preparation')
+    scheduleDraftSave()
+    return
+  }
+
   if (!form.startDate || !form.endDate) {
     PaSwal.fire('PA-Termine fehlen', 'Bitte PA-Tag 1 und PA-Tag 2 eintragen.', 'warning')
     return
@@ -550,6 +618,8 @@ const reloadScope = async () => {
 }
 
 const handleWordExport = async () => {
+  if (isPreparationPa.value) return
+
   if (!form.startDate || !form.endDate || (form.exportMode === 'klasse' && !form.klasse)) {
     PaSwal.fire('Angaben fehlen', 'Bitte PA-Tag 1, PA-Tag 2 und Klasse prüfen.', 'warning')
     return
@@ -612,6 +682,7 @@ const storeSignedPdfInFolder = async (pdfBlob, filename) => {
   formData.append('schuleId', props.partnerId)
   formData.append('schuljahr', props.schuljahr)
   formData.append('teil', props.teil)
+  formData.append('listType', normalizedListType.value)
   formData.append('exportMode', form.exportMode)
   formData.append('klasse', form.exportMode === 'klasse' ? form.klasse : '')
   formData.append('filename', filename)
@@ -699,7 +770,7 @@ const pdfColumns = (layout) => {
     ...selectedDays.value.map((day, index) => ({
       key: day.id,
       day,
-      label: `Tag ${index + 1}`,
+      label: dayColumnLabel(index),
       width: dayWidth,
     })),
   ]
@@ -713,7 +784,7 @@ const drawPdfHeader = (doc, pageNumber, totalPages, layout) => {
   applyPdfPrintInk(doc)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10.5)
-  doc.text('Anwesenheitsliste Potenzialanalyse (PA)', x, 13)
+  doc.text(pdfDocumentTitle.value, x, 13)
   doc.setFontSize(8)
   doc.text(`Seite ${pageNumber} von ${totalPages}`, layout.pageWidth - 40, 13)
 
@@ -800,7 +871,7 @@ const drawPdfRows = (doc, columns, rows, page, layout) => {
 
 const createSignedPdf = async () => {
   if (!selectedDays.value.length) {
-    PaSwal.fire('Keine Tage', 'Bitte mindestens einen PA-Tag auswählen.', 'warning')
+    PaSwal.fire('Keine Tage', isPreparationPa.value ? 'Bitte den Vorbereitungstag übernehmen.' : 'Bitte mindestens einen PA-Tag auswählen.', 'warning')
     return
   }
 
@@ -822,7 +893,7 @@ const createSignedPdf = async () => {
 
     const school = previewContext.value?.schule?.name || 'Schule'
     const classPart = form.exportMode === 'klasse' && form.klasse ? `_Klasse_${safePdfFilePart(form.klasse, 'Klasse')}` : ''
-    const filename = `Anwesenheitsliste_PA_${safePdfFilePart(school, 'Schule')}_${safePdfFilePart(props.schuljahr, 'Schuljahr')}_Teil_${safePdfFilePart(props.teil, 'Teil')}${classPart}.pdf`
+    const filename = `${pdfFilenamePrefix.value}_${safePdfFilePart(school, 'Schule')}_${safePdfFilePart(props.schuljahr, 'Schuljahr')}_Teil_${safePdfFilePart(props.teil, 'Teil')}${classPart}.pdf`
     const pdfBlob = doc.output('blob')
     let folderSave = null
     let folderSaveError = null
@@ -858,7 +929,7 @@ const createSignedPdf = async () => {
 const clearDraft = async () => {
   const result = await PaSwal.fire({
     title: 'Entwurf leeren?',
-    text: 'Der zentrale Zwischenstand dieser PA-Anwesenheitsliste wird gelöscht.',
+    text: `Der zentrale Zwischenstand dieser ${modalTitle.value} wird gelöscht.`,
     icon: 'warning',
     showCancelButton: true,
     confirmButtonText: 'Ja, leeren',
@@ -874,6 +945,9 @@ const clearDraft = async () => {
     draftSaveTimer = null
     draftSaveRequestId++
     draftHydrating.value = true
+    form.startDate = ''
+    form.endDate = ''
+    form.feedbackDate = ''
     previewContext.value = null
     allParticipants.value = []
     days.value = []
@@ -972,7 +1046,7 @@ onBeforeUnmount(() => {
 <template>
   <Dialog
     v-model:visible="localVisible"
-    header="Anwesenheitsliste PA"
+    :header="modalTitle"
     :modal="true"
     class="w-full max-w-7xl"
     @hide="onHide"
@@ -1016,13 +1090,13 @@ onBeforeUnmount(() => {
         </label>
 
         <div class="rounded border border-gray-200 p-3">
-          <p class="mb-3 text-sm font-semibold text-gray-700">PA-Termine</p>
-          <div class="grid grid-cols-2 gap-3">
+          <p class="mb-3 text-sm font-semibold text-gray-700">{{ dateConfigTitle }}</p>
+          <div class="grid gap-3" :class="isPreparationPa ? 'grid-cols-1' : 'grid-cols-2'">
             <label class="text-xs font-semibold text-gray-600">
-              <span class="mb-1 block">PA-Tag 1</span>
+              <span class="mb-1 block">{{ primaryDateLabel }}</span>
               <input v-model="form.startDate" type="date" class="w-full rounded border-gray-300 text-sm" />
             </label>
-            <label class="text-xs font-semibold text-gray-600">
+            <label v-if="!isPreparationPa" class="text-xs font-semibold text-gray-600">
               <span class="mb-1 block">PA-Tag 2</span>
               <input v-model="form.endDate" type="date" class="w-full rounded border-gray-300 text-sm" />
             </label>
@@ -1034,16 +1108,16 @@ onBeforeUnmount(() => {
             @click="createPaTermDays"
           >
             <i class="la la-calendar-plus"></i>
-            PA-Tage übernehmen
+            {{ createDaysButtonText }}
           </button>
         </div>
 
-        <label class="block text-sm font-semibold text-gray-700">
+        <label v-if="!isPreparationPa" class="block text-sm font-semibold text-gray-700">
           <span class="mb-1 block">Feedbackgespräch</span>
           <input v-model="form.feedbackDate" type="date" class="w-full rounded border-gray-300 text-sm" />
         </label>
 
-        <div class="rounded border border-gray-200 p-3">
+        <div v-if="!isPreparationPa" class="rounded border border-gray-200 p-3">
           <p class="mb-3 text-sm font-semibold text-gray-700">Sondertag</p>
           <div class="grid gap-2">
             <input v-model="manualDate" type="date" class="w-full rounded border-gray-300 text-sm" />
@@ -1074,7 +1148,7 @@ onBeforeUnmount(() => {
         <div class="rounded border border-gray-200 bg-white p-4">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p class="text-xs font-semibold uppercase text-gray-500">PA-Tage</p>
+              <p class="text-xs font-semibold uppercase text-gray-500">{{ dayPluralLabel }}</p>
               <h3 class="text-base font-bold text-gray-900">
                 {{ selectedDays.length }} ausgewählt / {{ days.length }} in der Vorschau
               </h3>
@@ -1082,6 +1156,7 @@ onBeforeUnmount(() => {
 
             <div class="flex flex-wrap gap-2">
               <button
+                v-if="!isPreparationPa"
                 type="button"
                 class="inline-flex items-center gap-2 rounded border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                 :disabled="exportingWord"
@@ -1143,7 +1218,7 @@ onBeforeUnmount(() => {
           </p>
 
           <div v-if="days.length === 0" class="mt-4 rounded border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
-            Keine PA-Tage angelegt.
+            {{ noDaysText }}
           </div>
 
           <div v-else class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -1186,11 +1261,11 @@ onBeforeUnmount(() => {
             <div>
               <p class="text-xs font-semibold uppercase text-gray-500">Digitales Original-Blatt</p>
               <h3 class="text-base font-bold text-gray-900">
-                Potenzialanalyse mit digitalen Unterschriften
+                {{ sheetTitle }}
               </h3>
             </div>
             <div class="flex items-center gap-2">
-              <span class="text-sm text-gray-600">{{ sheetParticipants.length }} Teilnehmer / {{ selectedDays.length }} Tage</span>
+              <span class="text-sm text-gray-600">{{ selectedDaysSummary }}</span>
               <button
                 type="button"
                 class="inline-flex h-10 w-10 items-center justify-center rounded border border-gray-300 text-gray-700 hover:bg-gray-50"
@@ -1215,7 +1290,7 @@ onBeforeUnmount(() => {
                     :key="`head-${day.id}`"
                     class="min-w-[132px] border border-gray-800 px-2 py-2 text-left align-top font-semibold"
                   >
-                    <span class="block">Tag {{ index + 1 }}</span>
+                    <span class="block">{{ dayColumnLabel(index) }}</span>
                     <span class="block font-normal">Datum: {{ dateLabel(day.date) }}</span>
                     <span class="block font-normal">{{ dayTypeLabel(day) }}</span>
                     <span class="block font-normal">Unterschrift Schüler/-in</span>

@@ -50,6 +50,13 @@ class RoutePermissionMap
         'notifications.unread' => 'notifications.readAll',
         'notifications.destroy' => 'notifications.readAll',
         'anwesenheitsliste.PA.digital.draft.clear' => 'anwesenheitsliste.PA.digital.draft.destroy',
+        'potenzialanalyse.projekt.uebungen.store' => 'projekt.update',
+        'potenzialanalyse.projekt.uebungen.update' => 'projekt.update',
+        'potenzialanalyse.projekt.uebungen.destroy' => 'projekt.update',
+        'potenzialanalyse.projekt.kriterien.store' => 'projekt.update',
+        'potenzialanalyse.projekt.kriterien.update' => 'projekt.update',
+        'potenzialanalyse.projekt.kriterien.destroy' => 'projekt.update',
+        'potenzialanalyse.gruppe.teilnehmer.update' => 'gruppe.update',
     ];
 
     /**

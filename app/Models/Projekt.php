@@ -9,6 +9,7 @@ use App\Models\Kostenstelle;
 use App\Models\Partner;
 use App\Models\PartnerHasPartnerschaftstypen;
 use App\Models\Personen;
+use App\Models\PotenzialanalyseUebung;
 use App\Models\ProjektHasAnsprechpartner;
 use App\Models\ProjektHasPartner;
 use App\Models\Raeume;
@@ -29,11 +30,15 @@ class Projekt extends Model
         'beschreibung',
         'aktiv',
         'klassenbuch_aktiv',
+        'potenzialanalyse_aktiv',
+        'potenzialanalyse_tage',
     ];
 
     protected $casts = [
         'aktiv' => 'boolean',
         'klassenbuch_aktiv' => 'boolean',
+        'potenzialanalyse_aktiv' => 'boolean',
+        'potenzialanalyse_tage' => 'integer',
     ];
 
 
@@ -137,6 +142,14 @@ class Projekt extends Model
     {
         return $this->belongsToMany(DokumentKategorie::class, 'projekt_has_dokument_kategories', 'projekt_id', 'dokument_kategorie_id')
             ->orderBy('dokument_kategories.name');
+    }
+
+    public function potenzialanalyseUebungen()
+    {
+        return $this->hasMany(PotenzialanalyseUebung::class, 'projekt_id')
+            ->orderBy('sort_order')
+            ->orderBy('tag')
+            ->orderBy('name');
     }
 
     public function zeitraume()

@@ -1,5 +1,5 @@
 <script setup>
-    import { ref, computed, onMounted } from 'vue'
+    import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
     import { Head, Link, router } from '@inertiajs/vue3'
     import AppLayout from '@/Layouts/AppLayout.vue'
     import InputText from 'primevue/inputtext'
@@ -18,6 +18,7 @@
     teilnehmer: { type: Array, required: true },
     anwesenheitsstatuten: { type: Array, required: true },
     bopLegacyExporte: { type: Array, default: () => [] },
+    potenzialanalyse: { type: Object, default: () => ({ aktiv: false, tage: null, uebungen: [], teilnehmer: {} }) },
     })
     console.log('Props:', props.gruppe    )
     // Modal-Steuerung + Auswahl
@@ -27,6 +28,14 @@
     const legacyExportLoading = ref(null)
     const selectedTeilnehmerIds = ref([])
     const isSubmittingTeilnehmer = ref(false)
+    const paTeilnehmerDaten = ref(JSON.parse(JSON.stringify(props.potenzialanalyse?.teilnehmer || {})))
+    const selectedPaTeilnehmerId = ref(null)
+    const paSaving = ref(false)
+    const paAutoSaveStatus = ref('idle')
+    const paAutoSaveTimers = new Map()
+    const paSaveVersions = new Map()
+    const paSaveInFlight = new Set()
+    const paSavePending = new Set()
     const klassenbuchErlaubt = computed(() => Boolean(props.gruppe?.projekt?.klassenbuch_aktiv))
     const erstesKlassenbuch = computed(() => props.gruppe?.klassenbuecher?.[0] || null)
     const klassenbuchHref = computed(() =>
@@ -130,6 +139,10 @@ const confirmTeilnehmer = async () => {
               ende: zeitgeplantEnd.value,
             })),
           });
+          ensurePaEintrag(nt.id);
+          if (!selectedPaTeilnehmerId.value) {
+            selectedPaTeilnehmerId.value = nt.id;
+          }
         }
       });
     }
@@ -298,6 +311,809 @@ const gefilterteExportVorlagen = computed(() => {
 })
 
 const bopLegacyExporte = computed(() => props.bopLegacyExporte || [])
+const paAktiv = computed(() => Boolean(props.potenzialanalyse?.aktiv))
+const paUebungen = computed(() => props.potenzialanalyse?.uebungen || [])
+const paBerichtStatusOptionen = [
+  { label: 'Entwurf', value: 'entwurf' },
+  { label: 'In Bearbeitung', value: 'in_bearbeitung' },
+  { label: 'Fertig', value: 'fertig' },
+  { label: 'Geprueft', value: 'geprueft' },
+]
+const paTabs = [
+  { key: 'selbst', label: 'Selbsteinschaetzung' },
+  { key: 'uebungen', label: 'Uebungen' },
+  { key: 'kompetenzen', label: 'Kompetenzen' },
+  { key: 'bericht', label: 'Bericht' },
+]
+const activePaTab = ref(paTabs[0].key)
+const activePaTabIndex = computed(() => {
+  const index = paTabs.findIndex((tab) => tab.key === activePaTab.value)
+  return index >= 0 ? index : 0
+})
+const paBewertungWerte = [1, 2, 3, 4, 5]
+const paMerkmale = [
+  { key: 'feinmotorik', label: 'Feinmotorik', kategorie: 'BP' },
+  { key: 'grobmotorik', label: 'Grobmotorik', kategorie: 'BP' },
+  { key: 'wahrnehmung_symmetrie', label: 'Wahrnehmung und Symmetrie', kategorie: 'BP' },
+  { key: 'analyse_problemloesefaehigkeit', label: 'Analyse- und Problemloesefaehigkeit', kategorie: 'MP' },
+  { key: 'arbeitsplanung', label: 'Arbeitsplanung', kategorie: 'MP' },
+  { key: 'motivation_leistungsbereitschaft', label: 'Motivation und Leistungsbereitschaft', kategorie: 'PP' },
+  { key: 'durchhaltevermoegen', label: 'Durchhaltevermoegen', kategorie: 'PP' },
+  { key: 'sorgfalt', label: 'Sorgfalt', kategorie: 'PP' },
+  { key: 'kommunikation', label: 'Kommunikation', kategorie: 'SP' },
+  { key: 'teamfaehigkeit', label: 'Teamfaehigkeit', kategorie: 'SP' },
+  { key: 'umgangsformen', label: 'Umgangsformen', kategorie: 'SP' },
+]
+
+const paKompetenzBemerkungTexte = {
+  feinmotorik: [
+    'Mit Werkzeugen an vorgegebenen Grenzen oder Linien entlang zu arbeiten, ist bedingt möglich; gefühlvoller Werkzeugeinsatz und sichere Steuerung gelingen teilweise.',
+    'Mit Werkzeugen an vorgegebenen Grenzen oder Linien entlang zu arbeiten, gelingt teilweise; Werkzeuge werden zunehmend sicherer gesteuert.',
+    'Mit Werkzeugen an vorgegebenen Grenzen oder Linien entlang zu arbeiten, gelingt meist; der Werkzeugeinsatz ist überwiegend sicher.',
+    'Werkzeuge gefühlvoll und sicher zu steuern, gelingt gut und häufig fehlerfrei.',
+    'Werkzeuge gefühlvoll und sicher zu steuern, gelingt sehr gut; in der Regel kann fehlerfrei gearbeitet werden.',
+  ],
+  grobmotorik: [
+    'Kraftvolles und formgebendes Arbeiten mit komplexeren Werkzeugen gelingt bedingt und benötigt Unterstützung.',
+    'Kraftvolles und formgebendes Arbeiten mit komplexeren Werkzeugen gelingt teilweise.',
+    'Kraftvolles und formgebendes Arbeiten gelingt meist; Werkzeuge können kontrolliert geführt werden.',
+    'Kraftvolles und formgebendes Arbeiten gelingt gut; die Werkzeuge werden kontrolliert geführt.',
+    'Kraftvolles und formgebendes Arbeiten gelingt sehr gut; Werkzeuge werden kontrolliert und sicher geführt.',
+  ],
+  wahrnehmung_symmetrie: [
+    'Benötigt Unterstützung beim Abschätzen von Abständen und Herstellen von Symmetrien; der Abgleich mit Vorgaben gelingt bedingt.',
+    'Das Abschätzen von Abständen, Herstellen von Symmetrien und der Abgleich mit Vorgaben gelingen teilweise.',
+    'Das Abschätzen von Abständen, Herstellen von Symmetrien und der Abgleich mit Vorgaben gelingen meist.',
+    'Das Abschätzen von Abständen, Herstellen von Symmetrien und der Abgleich mit Vorgaben gelingen gut; Formen werden erkannt.',
+    'Das Abschätzen von Abständen, Herstellen von Symmetrien und der Abgleich mit Vorgaben gelingen sehr gut und mit hoher Genauigkeit.',
+  ],
+  analyse_problemloesefaehigkeit: [
+    'Benötigt Unterstützung, um Problemstellungen zu erkennen und Lösungen zu entwickeln; logische Zusammenhänge können bedingt hergestellt werden.',
+    'Problemstellungen werden in der Regel erkannt; Lösungen werden teilweise strukturiert und zielgerichtet umgesetzt.',
+    'Problemstellungen werden erkannt, logische Zusammenhänge hergestellt und Lösungen strukturiert umgesetzt.',
+    'Problemstellungen werden sicher erkannt; Lösungen und alternative Vorgehensweisen werden zielgerichtet entwickelt.',
+    'Problemstellungen werden sicher erkannt; auf unterschiedliche Aufgabenstellungen wird angemessen flexibel und lösungsorientiert reagiert.',
+  ],
+  arbeitsplanung: [
+    'Benötigt Unterstützung, um Hilfsmittel vorzubereiten und Aufgaben in sinnvolle Teilschritte zu untergliedern.',
+    'Aufgaben können teilweise in sinnvolle Teilschritte untergliedert werden; Hilfsmittel werden zunehmend genutzt.',
+    'Aufgaben werden in sinnvolle Teilschritte untergliedert; Hilfsmittel werden vorbereitet und genutzt.',
+    'Aufgaben werden strukturiert bearbeitet; auf vorhandenes Wissen kann zugegriffen werden.',
+    'Aufgaben werden sehr strukturiert bearbeitet; es besteht Bereitschaft, sich weiteres Wissen anzueignen.',
+  ],
+  motivation_leistungsbereitschaft: [
+    'Setzt sich nach Aufforderung mit gestellten Aufgaben auseinander; das Streben nach guten Ergebnissen ist bedingt vorhanden.',
+    'Setzt sich mit Unterstützung mit Aufgaben auseinander und strebt in erkennbarem Maß nach guten Ergebnissen.',
+    'Setzt sich mit den gestellten Aufgaben auseinander, strebt nach guten Ergebnissen und erkennt, was dafür nötig ist.',
+    'Setzt sich motiviert mit Aufgaben auseinander, strebt nach guten Ergebnissen und entwickelt hierzu eigene Ideen.',
+    'Zeigt hohe Motivation und Leistungsbereitschaft auch bei schwierigen Aufgabenstellungen und sucht aktiv neue Herausforderungen.',
+  ],
+  durchhaltevermoegen: [
+    'Benötigt Unterstützung, um Aufgaben bei Schwierigkeiten oder Misserfolgen weiterzubearbeiten.',
+    'Beendet Aufgaben in der Regel erst nach Fertigstellung und benötigt kaum Anstöße von außen.',
+    'Widmet sich auch schwierigen Aufgaben mit angemessener Intensität und gibt bei Misserfolgen nicht schnell auf.',
+    'Bleibt auch bei schwierigen Aufgaben dran und kämpft gegen Motivationsschwankungen an.',
+    'Zeigt sehr gutes Durchhaltevermögen; belastende Situationen werden erkannt und Lösungsmöglichkeiten entwickelt.',
+  ],
+  sorgfalt: [
+    'Benötigt Unterstützung, um Aufgaben gewissenhaft zu bearbeiten; fehlerfreies Arbeiten scheint zweitrangig.',
+    'Ist um genaues und gewissenhaftes Arbeiten bemüht und geht größtenteils sorgsam mit Materialien um.',
+    'Arbeitet gewissenhaft und genau, geht sorgsam mit Materialien um und überprüft die Qualität meist.',
+    'Arbeitet genau, kontrolliert Ergebnisse, korrigiert Fehler und hält sich an Hinweise und Vorschriften.',
+    'Arbeitet außerordentlich gewissenhaft und genau; Ergebnisse werden mit den vorgegebenen Zielen überprüft.',
+  ],
+  kommunikation: [
+    'Benötigt Unterstützung bei der Kontaktaufnahme, beim Ausdruck eigener Gedanken und beim angemessenen Reagieren auf Botschaften.',
+    'Kontaktaufnahme, Interpretation von Botschaften und angemessenes Reagieren sind weitgehend vorhanden.',
+    'Kontaktaufnahme, Interpretation von Botschaften und angemessenes Reagieren sind deutlich erkennbar.',
+    'Kommunikative Fähigkeiten sind in hohem Maß vorhanden; Austausch gelingt sachlich und angemessen.',
+    'Kommunikative Fähigkeiten sind in sehr hohem Maß vorhanden; es wird sachlich argumentiert und angemessen nachgefragt.',
+  ],
+  teamfaehigkeit: [
+    'Ist bedingt in der Lage, konstruktiv und aufgabenorientiert in einer Gruppe zu arbeiten.',
+    'Kann eigene Ziele weitgehend mit den Zielen anderer abstimmen und arbeitet teilweise konstruktiv in der Gruppe.',
+    'Kann eigene Ziele mit den Zielen anderer abstimmen; konstruktive Gruppenarbeit ist deutlich erkennbar.',
+    'Arbeitet in hohem Maß konstruktiv und aufgabenorientiert in der Gruppe und kann eigene Interessen zurückstellen.',
+    'Arbeitet sehr konstruktiv in der Gruppe; Anregungen werden aufgenommen und eigenes Wissen wird eingebracht.',
+  ],
+  umgangsformen: [
+    'Benötigt Unterstützung, um in unterschiedlichen Situationen angemessen und respektvoll zu agieren.',
+    'Ist weitgehend in der Lage, in unterschiedlichen Situationen angemessen und respektvoll zu agieren.',
+    'Ist erkennbar in der Lage, angemessen und respektvoll zu agieren und zeigt die erwartete Höflichkeit.',
+    'Agiert angemessen und respektvoll, verhält sich höflich und nimmt Rücksicht auf andere.',
+    'Agiert stets angemessen und respektvoll, nimmt Rücksicht auf andere und setzt Mimik, Gestik und Blickkontakt passend ein.',
+  ],
+}
+
+const defaultPaBewertung = () => ({ bewertung: null, bemerkung: '' })
+const defaultPaUebungErgebnis = () => ({ punkte: null, zeit: null, zeit_min: 0, zeit_sec: 0 })
+
+const defaultPaBericht = () => ({
+  status: 'entwurf',
+  staerken: '',
+  entwicklungsfelder: '',
+  empfehlung: '',
+  bericht_text: '',
+  fertiggestellt_at: null,
+})
+
+const ensurePaEintrag = (personenId) => {
+  const key = String(personenId)
+
+  if (!paTeilnehmerDaten.value[key]) {
+    paTeilnehmerDaten.value[key] = {
+      uebungen: {},
+      selbsteinschaetzung: {},
+      kompetenzen: {},
+      beurteilungen: {},
+      selbsteinschaetzungen: {},
+      bericht: defaultPaBericht(),
+    }
+  }
+
+  const eintrag = paTeilnehmerDaten.value[key]
+  eintrag.uebungen ||= {}
+  eintrag.selbsteinschaetzung ||= {}
+  eintrag.kompetenzen ||= {}
+  eintrag.beurteilungen ||= {}
+  eintrag.selbsteinschaetzungen ||= {}
+  eintrag.bericht ||= defaultPaBericht()
+
+  paUebungen.value.forEach((uebung) => {
+    const uebungKey = String(uebung.id)
+    eintrag.uebungen[uebungKey] ||= defaultPaUebungErgebnis()
+  })
+
+  paMerkmale.forEach((merkmal) => {
+    eintrag.selbsteinschaetzung[merkmal.key] ||= defaultPaBewertung()
+    eintrag.kompetenzen[merkmal.key] ||= defaultPaBewertung()
+  })
+
+  return eintrag
+}
+
+const paEintrag = (personenId) => ensurePaEintrag(personenId)
+
+const paUebungErgebnis = (personenId, uebungId) => {
+  const eintrag = ensurePaEintrag(personenId)
+  const key = String(uebungId)
+  eintrag.uebungen[key] ||= defaultPaUebungErgebnis()
+  return eintrag.uebungen[key]
+}
+
+const paKompetenzBemerkungText = (merkmalKey, wert) =>
+  paKompetenzBemerkungTexte[merkmalKey]?.[Number(wert) - 1] || ''
+
+const setzePaBewertung = (personenId, feld, merkmalKey, wert, autoSave = true) => {
+  const eintrag = ensurePaEintrag(personenId)
+  eintrag[feld][merkmalKey].bewertung = wert
+
+  if (feld === 'kompetenzen') {
+    eintrag[feld][merkmalKey].bemerkung = paKompetenzBemerkungText(merkmalKey, wert)
+  }
+
+  if (autoSave) {
+    planePotenzialanalyseSpeichern({ personenId, sofort: true })
+  }
+}
+
+const setzePaBewertungSpalte = (feld, wert) => {
+  const teilnehmer = selectedPaTeilnehmer.value
+
+  if (!teilnehmer) {
+    return
+  }
+
+  paMerkmale.forEach((merkmal) => {
+    setzePaBewertung(teilnehmer.id, feld, merkmal.key, wert, false)
+  })
+
+  planePotenzialanalyseSpeichern({ personenId: teilnehmer.id, sofort: true })
+}
+
+const normalisierePaZahl = (value, { min = 0, max = null } = {}) => {
+  if (value === '' || value === null || value === undefined) {
+    return null
+  }
+
+  const zahl = Number(value)
+  if (!Number.isFinite(zahl)) {
+    return null
+  }
+
+  let normalisiert = Math.trunc(zahl)
+  normalisiert = Math.max(min, normalisiert)
+
+  if (max !== null && Number.isFinite(max)) {
+    normalisiert = Math.min(normalisiert, max)
+  }
+
+  return normalisiert
+}
+
+const normalisierePaUebungswerte = (personenId) => {
+  paUebungen.value.forEach((uebung) => {
+    const ergebnis = paUebungErgebnis(personenId, uebung.id)
+    const maxPunkte = Number(uebung.hoechstwert)
+
+    ergebnis.punkte = normalisierePaZahl(ergebnis.punkte, {
+      min: 0,
+      max: Number.isFinite(maxPunkte) ? maxPunkte : null,
+    })
+    ergebnis.zeit_min = normalisierePaZahl(ergebnis.zeit_min, { min: 0, max: 999 }) ?? 0
+    ergebnis.zeit_sec = normalisierePaZahl(ergebnis.zeit_sec, { min: 0, max: 59 }) ?? 0
+    ergebnis.zeit = (ergebnis.zeit_min * 60) + ergebnis.zeit_sec
+  })
+}
+
+const clampUebungPunkte = (personenId, uebung) => {
+  const ergebnis = paUebungErgebnis(personenId, uebung.id)
+  if (ergebnis.punkte === '' || ergebnis.punkte === undefined) {
+    ergebnis.punkte = null
+    planePotenzialanalyseSpeichern({ personenId, sofort: true })
+    return
+  }
+
+  if (ergebnis.punkte === null) {
+    planePotenzialanalyseSpeichern({ personenId, sofort: true })
+    return
+  }
+
+  const max = Number(uebung.hoechstwert)
+  const wert = Math.max(0, Number(ergebnis.punkte || 0))
+  ergebnis.punkte = Number.isFinite(max) && max >= 0 ? Math.min(wert, max) : wert
+  planePotenzialanalyseSpeichern({ personenId, sofort: true })
+}
+
+const selectedPaTeilnehmer = computed(() =>
+  gruppenTeilnehmer.value.find((teilnehmer) => teilnehmer.id === selectedPaTeilnehmerId.value)
+  || gruppenTeilnehmer.value[0]
+  || null
+)
+
+const paAutoSaveStatusText = computed(() => {
+  if (paAutoSaveStatus.value === 'pending') return 'Aenderungen werden gespeichert ...'
+  if (paAutoSaveStatus.value === 'saving') return 'Speichert automatisch ...'
+  if (paAutoSaveStatus.value === 'saved') return 'Automatisch gespeichert'
+  if (paAutoSaveStatus.value === 'error') return 'Auto-Speichern fehlgeschlagen'
+
+  return 'Auto-Speichern aktiv'
+})
+
+const paAutoSaveStatusClass = computed(() => {
+  if (paAutoSaveStatus.value === 'error') return 'text-red-600'
+  if (paAutoSaveStatus.value === 'saved') return 'text-green-700'
+  if (paAutoSaveStatus.value === 'saving') return 'text-zbb'
+  if (paAutoSaveStatus.value === 'pending') return 'text-amber-700'
+
+  return 'text-gray-500'
+})
+
+const resolvePaTeilnehmerId = (personenId = null) =>
+  personenId ?? selectedPaTeilnehmer.value?.id ?? null
+
+const paEintragSnapshot = (personenId) =>
+  JSON.parse(JSON.stringify(paEintrag(personenId)))
+
+const speicherePotenzialanalyse = async ({ personenId = null, silent = false, version = null } = {}) => {
+  const teilnehmerId = resolvePaTeilnehmerId(personenId)
+
+  if (!teilnehmerId) {
+    return false
+  }
+
+  const key = String(teilnehmerId)
+  const geplanterTimer = paAutoSaveTimers.get(key)
+
+  if (geplanterTimer) {
+    clearTimeout(geplanterTimer)
+    paAutoSaveTimers.delete(key)
+  }
+
+  if (paSaveInFlight.has(key)) {
+    paSavePending.add(key)
+    return false
+  }
+
+  paSaveInFlight.add(key)
+  paSaving.value = true
+  paAutoSaveStatus.value = 'saving'
+
+  const saveVersion = version ?? (paSaveVersions.get(key) || 0)
+
+  try {
+    normalisierePaUebungswerte(teilnehmerId)
+    const payload = paEintragSnapshot(teilnehmerId)
+
+    const response = await axios.put(route('potenzialanalyse.gruppe.teilnehmer.update', {
+      gruppe: props.gruppe.id,
+      personen: teilnehmerId,
+    }), payload)
+
+    if ((paSaveVersions.get(key) || 0) === saveVersion) {
+      paAutoSaveStatus.value = 'saved'
+    } else {
+      paAutoSaveStatus.value = 'pending'
+    }
+
+    if (!silent) {
+      await Swal.fire({
+        icon: 'success',
+        title: 'Gespeichert',
+        text: response.data?.message || 'Potenzialanalyse wurde gespeichert.',
+        timer: 1600,
+        showConfirmButton: false,
+      })
+    }
+
+    return true
+  } catch (error) {
+    paAutoSaveStatus.value = 'error'
+
+    if (!silent) {
+      await Swal.fire({
+        icon: 'error',
+        title: 'Fehler',
+        text: error.response?.data?.message || 'Potenzialanalyse konnte nicht gespeichert werden.',
+      })
+    } else {
+      console.error('Potenzialanalyse Auto-Save fehlgeschlagen:', error)
+    }
+
+    return false
+  } finally {
+    paSaveInFlight.delete(key)
+    paSaving.value = paSaveInFlight.size > 0
+
+    if (paSavePending.has(key)) {
+      paSavePending.delete(key)
+      window.setTimeout(() => {
+        speicherePotenzialanalyse({
+          personenId: teilnehmerId,
+          silent: true,
+          version: paSaveVersions.get(key) || 0,
+        })
+      }, 0)
+    }
+  }
+}
+
+const planePotenzialanalyseSpeichern = ({ personenId = null, sofort = false } = {}) => {
+  const teilnehmerId = resolvePaTeilnehmerId(personenId)
+
+  if (!teilnehmerId) {
+    return
+  }
+
+  const key = String(teilnehmerId)
+  const nextVersion = (paSaveVersions.get(key) || 0) + 1
+  const geplanterTimer = paAutoSaveTimers.get(key)
+
+  if (geplanterTimer) {
+    clearTimeout(geplanterTimer)
+  }
+
+  paSaveVersions.set(key, nextVersion)
+  paAutoSaveStatus.value = sofort ? 'saving' : 'pending'
+
+  const timer = window.setTimeout(() => {
+    paAutoSaveTimers.delete(key)
+    speicherePotenzialanalyse({
+      personenId: teilnehmerId,
+      silent: true,
+      version: nextVersion,
+    })
+  }, sofort ? 0 : 650)
+
+  paAutoSaveTimers.set(key, timer)
+}
+
+const waehlePaTeilnehmer = (teilnehmer) => {
+  selectedPaTeilnehmerId.value = teilnehmer.id
+  ensurePaEintrag(teilnehmer.id)
+}
+
+const setPaTab = (tabKey) => {
+  activePaTab.value = tabKey
+}
+
+const wechselPaTab = (richtung) => {
+  const nextIndex = activePaTabIndex.value + richtung
+
+  if (nextIndex >= 0 && nextIndex < paTabs.length) {
+    activePaTab.value = paTabs[nextIndex].key
+  }
+}
+
+const paMerkmalBerichtPhrasen = {
+  feinmotorik: [
+    'du konntest bei den praktischen Aufgaben durch eine gute Feinmotorik überzeugen',
+    'bei den praktischen Übungen war deine gute Feinmotorik deutlich zu erkennen',
+    'du hast feinmotorische Aufgaben geschickt und sicher bearbeitet',
+  ],
+  grobmotorik: [
+    'du hast bei den praktischen Aufgaben eine gute Koordination gezeigt',
+    'bei bewegungsbezogenen Aufgaben hast du sicher und koordiniert gearbeitet',
+    'du konntest deine Bewegungen gut einsetzen und praktisch umsetzen',
+  ],
+  wahrnehmung_symmetrie: [
+    'du hast Aufgaben aufmerksam wahrgenommen und sorgfältig bearbeitet',
+    'du hast genau hingeschaut und wichtige Details erkannt',
+    'bei den Aufgaben hast du eine gute Wahrnehmung und Aufmerksamkeit gezeigt',
+  ],
+  analyse_problemloesefaehigkeit: [
+    'du konntest Probleme erkennen und passende Lösungen finden',
+    'du hast dich mit Aufgaben auseinandergesetzt und eigene Lösungswege entwickelt',
+    'bei herausfordernden Aufgaben hast du überlegt gehandelt und Lösungen gesucht',
+  ],
+  arbeitsplanung: [
+    'du hast deine Aufgaben strukturiert geplant und bearbeitet',
+    'deine Arbeitsschritte waren gut überlegt und nachvollziehbar',
+    'du bist planvoll an die Aufgaben herangegangen',
+  ],
+  motivation_leistungsbereitschaft: [
+    'du bist motiviert an die Aufgaben herangegangen und hast Leistungsbereitschaft gezeigt',
+    'du hast Einsatzbereitschaft gezeigt und wolltest gute Ergebnisse erreichen',
+    'deine Motivation war während der Aufgaben gut erkennbar',
+  ],
+  durchhaltevermoegen: [
+    'du hast auch bei anspruchsvolleren Aufgaben Durchhaltevermögen gezeigt',
+    'du bist drangeblieben, auch wenn Aufgaben schwieriger wurden',
+    'deine Ausdauer hat dir geholfen, Aufgaben konsequent weiterzubearbeiten',
+  ],
+  sorgfalt: [
+    'du hast sorgfältig gearbeitet und auf genaue Ergebnisse geachtet',
+    'bei der Bearbeitung hast du Genauigkeit und Sorgfalt gezeigt',
+    'du hast deine Aufgaben ordentlich und aufmerksam umgesetzt',
+  ],
+  kommunikation: [
+    'du hast dich verständlich mit anderen ausgetauscht',
+    'im Austausch mit anderen konntest du dich klar einbringen',
+    'du hast Informationen verständlich weitergegeben und aufgenommen',
+  ],
+  teamfaehigkeit: [
+    'du konntest gut im Team arbeiten und dich kooperativ einbringen',
+    'in der Zusammenarbeit hast du dich hilfsbereit und teamorientiert gezeigt',
+    'du hast mit anderen zusammengearbeitet und zum gemeinsamen Ziel beigetragen',
+  ],
+  umgangsformen: [
+    'du bist anderen respektvoll und freundlich begegnet',
+    'dein Umgang mit anderen war freundlich und wertschätzend',
+    'du hast dich im Kontakt mit anderen respektvoll verhalten',
+  ],
+}
+
+const paMerkmalEntwicklungPhrasen = {
+  feinmotorik: ['deine Feinmotorik weiter zu üben', 'feinmotorische Aufgaben noch sicherer zu bearbeiten'],
+  grobmotorik: ['bei praktischen Aufgaben noch sicherer zu werden', 'deine Bewegungsabläufe weiter zu festigen'],
+  wahrnehmung_symmetrie: ['Aufgaben noch genauer wahrzunehmen', 'Details noch bewusster zu beachten'],
+  analyse_problemloesefaehigkeit: ['Lösungswege noch selbstständiger zu entwickeln', 'bei Problemen noch gezielter nach Lösungen zu suchen'],
+  arbeitsplanung: ['deine Arbeitsschritte noch klarer zu planen', 'Aufgaben noch strukturierter vorzubereiten'],
+  motivation_leistungsbereitschaft: ['deine Motivation auch bei schwierigen Aufgaben zu halten', 'auch bei weniger beliebten Aufgaben weiter engagiert zu bleiben'],
+  durchhaltevermoegen: ['auch bei Schwierigkeiten weiter dranzubleiben', 'anspruchsvolle Aufgaben noch ausdauernder zu bearbeiten'],
+  sorgfalt: ['weiter auf Genauigkeit und Sorgfalt zu achten', 'Ergebnisse noch genauer zu kontrollieren'],
+  kommunikation: ['dich noch klarer mit anderen auszutauschen', 'deine Gedanken noch deutlicher mitzuteilen'],
+  teamfaehigkeit: ['deine Ideen im Team noch stärker einzubringen', 'dich in Gruppenaufgaben noch aktiver einzubringen'],
+  umgangsformen: ['weiter auf einen respektvollen Umgang zu achten', 'deine freundliche Umgangsweise weiter bewusst einzusetzen'],
+}
+
+const paUebungsSaetze = {
+  stark: [
+    'Bei den Übungen hast du insgesamt gute Ergebnisse erzielt.',
+    'Die Übungsergebnisse zeigen, dass du viele Aufgaben sicher bearbeitet hast.',
+    'In den Übungen konntest du deine Fähigkeiten gut einsetzen.',
+  ],
+  solide: [
+    'Bei den Übungen hast du solide Ergebnisse erzielt und engagiert mitgearbeitet.',
+    'Die Ergebnisse der Übungen zeigen eine ordentliche Grundlage, auf der du weiter aufbauen kannst.',
+    'In den Übungen hast du viele Aufgaben nachvollziehbar bearbeitet.',
+  ],
+  ausbau: [
+    'Bei den Übungen hast du dich bemüht und kannst durch weiteres Üben noch sicherer werden.',
+    'Die Übungen zeigen, dass du bereits mitarbeitest und durch weitere Übung noch mehr Sicherheit gewinnen kannst.',
+    'Bei den Aufgaben konntest du Erfahrungen sammeln, auf denen du weiter aufbauen kannst.',
+  ],
+}
+
+const paStaerkenPrefixes = [
+  'Besonders positiv aufgefallen sind',
+  'Stark gezeigt hast du',
+  'Gut erkennbar waren bei dir',
+]
+
+const paEntwicklungPrefixes = [
+  'Weiterentwickeln kannst du',
+  'Für deinen nächsten Schritt kannst du an',
+  'Noch sicherer werden kannst du bei',
+]
+
+const paEmpfehlungPrefixes = [
+  'Als nächsten Schritt empfehlen wir dir',
+  'Für deine weitere Entwicklung ist hilfreich',
+  'Weiterbringen kann dich',
+]
+
+const paFallbackSaetze = [
+  'du hast die Aufgaben der Potenzialanalyse bearbeitet und dich mit deinen Fähigkeiten auseinandergesetzt.',
+  'du hast dich auf die Aufgaben der Potenzialanalyse eingelassen und dabei verschiedene Fähigkeiten gezeigt.',
+  'du hast während der Potenzialanalyse mitgearbeitet und unterschiedliche Aufgaben kennengelernt.',
+]
+
+const paAbschlussSaetze = [
+  'Für deinen weiteren schulischen und beruflichen Weg wünschen wir dir alles Gute und viel Erfolg.',
+  'Wir wünschen dir für deinen weiteren Weg in Schule und Beruf alles Gute und viel Erfolg.',
+  'Für deine weitere schulische und berufliche Zukunft wünschen wir dir viel Erfolg und alles Gute.',
+]
+const paBerichtGenerierungZaehler = ref(0)
+
+const bereinigeText = (value) => String(value || '').replace(/\s+/g, ' ').trim()
+
+const hashText = (value) =>
+  Array.from(String(value || '')).reduce((hash, char) =>
+    ((hash << 5) - hash + char.charCodeAt(0)) >>> 0
+  , 0)
+
+const waehleVariante = (varianten, seed, offset = 0) => {
+  const liste = Array.isArray(varianten) ? varianten.filter(Boolean) : [varianten].filter(Boolean)
+
+  if (!liste.length) {
+    return ''
+  }
+
+  return liste[(hashText(`${seed}-${offset}`) + offset) % liste.length]
+}
+
+const rotiereListe = (items, steps = 0) => {
+  if (!items.length) {
+    return items
+  }
+
+  const start = Math.abs(steps) % items.length
+  return [...items.slice(start), ...items.slice(0, start)]
+}
+
+const normalisiereGeschlecht = (value) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace('ä', 'ae')
+
+const kleinschreibeAbsatzanfang = (value) => {
+  const text = String(value || '')
+
+  return text.replace(/^(\s*)([A-ZÄÖÜ])/, (match, leerraum, ersterBuchstabe) =>
+    `${leerraum}${ersterBuchstabe.toLowerCase()}`
+  )
+}
+
+const alsSatz = (value) => {
+  const text = bereinigeText(value)
+  if (!text) return ''
+
+  return /[.!?]$/.test(text) ? text : `${text}.`
+}
+
+const joinMitUnd = (items) => {
+  const werte = items.filter(Boolean)
+
+  if (werte.length <= 1) return werte[0] || ''
+  if (werte.length === 2) return `${werte[0]} und ${werte[1]}`
+
+  return `${werte.slice(0, -1).join(', ')} und ${werte[werte.length - 1]}`
+}
+
+const textWirktWieSatz = (value) =>
+  /\b(du|dein|deine|hast|bist|zeigst|arbeitest|konntest|warst|bleibst|kannst|gehst)\b/i.test(value)
+
+const formatiereFreitextFuerBericht = (value, prefix) => {
+  const text = bereinigeText(value)
+
+  if (!text) return ''
+  if (textWirktWieSatz(text)) return alsSatz(text)
+
+  return alsSatz(`${prefix} ${text}`)
+}
+
+const paBewertungenAlsListe = (eintrag, feld) =>
+  paMerkmale
+    .map((merkmal) => ({
+      ...merkmal,
+      bewertung: Number(eintrag?.[feld]?.[merkmal.key]?.bewertung),
+      bemerkung: bereinigeText(eintrag?.[feld]?.[merkmal.key]?.bemerkung),
+    }))
+    .filter((item) => Number.isFinite(item.bewertung))
+
+const paUebungsQuote = (eintrag) => {
+  const quoten = paUebungen.value
+    .map((uebung) => {
+      const ergebnis = eintrag?.uebungen?.[String(uebung.id)]
+      const punkte = Number(ergebnis?.punkte)
+      const max = Number(uebung.hoechstwert)
+
+      if (!Number.isFinite(punkte) || !Number.isFinite(max) || max <= 0) {
+        return null
+      }
+
+      return Math.max(0, Math.min(1, punkte / max))
+    })
+    .filter((quote) => quote !== null)
+
+  if (!quoten.length) {
+    return null
+  }
+
+  return quoten.reduce((summe, quote) => summe + quote, 0) / quoten.length
+}
+
+const paUebungsSatz = (eintrag, seed, variante = 0) => {
+  const quote = paUebungsQuote(eintrag)
+
+  if (quote === null) return ''
+  if (quote >= 0.8) return waehleVariante(paUebungsSaetze.stark, `${seed}-uebungen-stark`, variante)
+  if (quote >= 0.6) return waehleVariante(paUebungsSaetze.solide, `${seed}-uebungen-solide`, variante)
+
+  return waehleVariante(paUebungsSaetze.ausbau, `${seed}-uebungen-ausbau`, variante)
+}
+
+const paBerichtAnrede = (teilnehmer) => {
+  const vorname = teilnehmer?.vorname || 'Teilnehmer'
+  const geschlecht = normalisiereGeschlecht(teilnehmer?.geschlecht)
+
+  if (['w', 'weiblich', 'frau', 'f', 'female'].includes(geschlecht)) return `Liebe ${vorname},`
+  if (['m', 'maennlich', 'mann', 'herr', 'male'].includes(geschlecht)) return `Lieber ${vorname},`
+
+  return `Liebe/r ${vorname},`
+}
+
+const paSelbststaerkenSatz = (items, seed, variante = 0) => {
+  const staerken = joinMitUnd(items.map((item) => item.label))
+
+  return waehleVariante([
+    `Auch in deiner Selbsteinschätzung wird deutlich, dass du ${staerken} als Stärke wahrnimmst.`,
+    `Deine Selbsteinschätzung zeigt ebenfalls, dass du deine Stärke in ${staerken} siehst.`,
+    `Du nimmst selbst besonders ${staerken} als Stärke wahr.`,
+  ], `${seed}-selbststaerken`, variante)
+}
+
+const sortiereBerichtswerte = (items, seed, absteigend = true) =>
+  [...items].sort((a, b) => {
+    const bewertung = absteigend ? b.bewertung - a.bewertung : a.bewertung - b.bewertung
+
+    if (bewertung !== 0) {
+      return bewertung
+    }
+
+    return hashText(`${seed}-${a.key}`) - hashText(`${seed}-${b.key}`)
+  })
+
+const bauePaBerichtstext = (teilnehmer, eintrag, variante = 0) => {
+  const bericht = eintrag.bericht || defaultPaBericht()
+  const seed = `${teilnehmer?.id || ''}-${teilnehmer?.vorname || ''}-${teilnehmer?.nachname || ''}-${variante}`
+  const kompetenzen = paBewertungenAlsListe(eintrag, 'kompetenzen')
+  const selbsteinschaetzung = paBewertungenAlsListe(eintrag, 'selbsteinschaetzung')
+  const starkeKompetenzen = rotiereListe(
+    sortiereBerichtswerte(kompetenzen.filter((item) => item.bewertung >= 4), `${seed}-stark`),
+    variante
+  )
+  const entwicklungsKompetenzen = rotiereListe(
+    sortiereBerichtswerte(kompetenzen.filter((item) => item.bewertung <= 2), `${seed}-entwicklung`, false),
+    variante
+  )
+  const selbstStaerken = rotiereListe(
+    sortiereBerichtswerte(selbsteinschaetzung.filter((item) => item.bewertung >= 4), `${seed}-selbst`),
+    variante
+  )
+
+  const hauptsaetze = []
+  const manuelleStaerken = formatiereFreitextFuerBericht(
+    bericht.staerken,
+    waehleVariante(paStaerkenPrefixes, `${seed}-staerken-prefix`, variante)
+  )
+
+  if (manuelleStaerken) {
+    hauptsaetze.push(manuelleStaerken)
+  }
+
+  starkeKompetenzen
+    .slice(0, manuelleStaerken ? 1 : 2)
+    .forEach((item, index) => {
+      hauptsaetze.push(alsSatz(
+        waehleVariante(paMerkmalBerichtPhrasen[item.key], `${seed}-${item.key}`, variante + index)
+        || `du hast ${item.label} gezeigt`
+      ))
+    })
+
+  const uebungsSatz = paUebungsSatz(eintrag, seed, variante)
+  if (uebungsSatz && hauptsaetze.length < 4) {
+    hauptsaetze.push(uebungsSatz)
+  }
+
+  const nichtSchonGenannt = selbstStaerken
+    .filter((item) => !starkeKompetenzen.some((kompetenz) => kompetenz.key === item.key))
+    .slice(0, 2)
+
+  if (nichtSchonGenannt.length && hauptsaetze.length < 4) {
+    hauptsaetze.push(paSelbststaerkenSatz(nichtSchonGenannt, seed, variante))
+  }
+
+  if (!hauptsaetze.length) {
+    hauptsaetze.push(waehleVariante(paFallbackSaetze, `${seed}-fallback`, variante))
+  }
+
+  const entwicklungsSaetze = []
+  const manuelleEntwicklung = formatiereFreitextFuerBericht(
+    bericht.entwicklungsfelder,
+    waehleVariante(paEntwicklungPrefixes, `${seed}-entwicklung-prefix`, variante)
+  )
+
+  if (manuelleEntwicklung) {
+    entwicklungsSaetze.push(manuelleEntwicklung)
+  } else if (entwicklungsKompetenzen.length) {
+    entwicklungsSaetze.push(
+      alsSatz(`Weiter üben kannst du besonders daran, ${joinMitUnd(
+        entwicklungsKompetenzen
+          .slice(0, 2)
+          .map((item, index) =>
+            waehleVariante(paMerkmalEntwicklungPhrasen[item.key], `${seed}-entwicklung-${item.key}`, variante + index)
+            || item.label.toLowerCase()
+          )
+      )}`)
+    )
+  }
+
+  const empfehlung = formatiereFreitextFuerBericht(
+    bericht.empfehlung,
+    waehleVariante(paEmpfehlungPrefixes, `${seed}-empfehlung-prefix`, variante)
+  )
+
+  if (empfehlung) {
+    entwicklungsSaetze.push(empfehlung)
+  }
+
+  const haupttext = kleinschreibeAbsatzanfang(hauptsaetze.join(' '))
+
+  return [
+    paBerichtAnrede(teilnehmer),
+    haupttext,
+    entwicklungsSaetze.join(' '),
+    waehleVariante(paAbschlussSaetze, `${seed}-abschluss`, variante),
+  ].filter(Boolean).join('\n\n')
+}
+
+const generierePaBerichtstext = async () => {
+  const teilnehmer = selectedPaTeilnehmer.value
+
+  if (!teilnehmer) {
+    return
+  }
+
+  const eintrag = paEintrag(teilnehmer.id)
+  const vorhandenerText = bereinigeText(eintrag.bericht?.bericht_text)
+
+  if (vorhandenerText) {
+    const bestaetigung = await Swal.fire({
+      icon: 'question',
+      title: 'Berichtstext ersetzen?',
+      text: 'Der vorhandene Berichtstext wird durch einen neuen Vorschlag ersetzt.',
+      showCancelButton: true,
+      confirmButtonText: 'Ja, neu generieren',
+      cancelButtonText: 'Abbrechen',
+    })
+
+    if (!bestaetigung.isConfirmed) {
+      return
+    }
+  }
+
+  paBerichtGenerierungZaehler.value += 1
+  eintrag.bericht.bericht_text = bauePaBerichtstext(
+    teilnehmer,
+    eintrag,
+    paBerichtGenerierungZaehler.value + Date.now()
+  )
+  activePaTab.value = 'bericht'
+  planePotenzialanalyseSpeichern({ personenId: teilnehmer.id, sofort: true })
+}
 
 const gefilterteBopLegacyExporte = computed(() => {
   const suche = exportSuche.value.trim().toLowerCase()
@@ -413,6 +1229,16 @@ onMounted(() => {
       }),
     }
   })
+
+  if (paAktiv.value && gruppenTeilnehmer.value.length) {
+    selectedPaTeilnehmerId.value = gruppenTeilnehmer.value[0].id
+    gruppenTeilnehmer.value.forEach((teilnehmer) => ensurePaEintrag(teilnehmer.id))
+  }
+})
+
+onBeforeUnmount(() => {
+  paAutoSaveTimers.forEach((timer) => clearTimeout(timer))
+  paAutoSaveTimers.clear()
 })
 
 
@@ -917,6 +1743,328 @@ const exportMitTag = async () => {
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <div v-if="paAktiv" class="space-y-4 border-t border-gray-200 pt-6">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 class="font-semibold text-gray-700">Potenzialanalyse</h3>
+            <p class="text-sm text-gray-500">{{ props.potenzialanalyse?.tage || '?' }} Tage</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="text-xs font-medium" :class="paAutoSaveStatusClass">
+              {{ paAutoSaveStatusText }}
+            </span>
+            <Button
+              label="Jetzt speichern"
+              icon="pi pi-save"
+              class="!bg-zbb hover:!bg-zbb/80 border-none"
+              :disabled="paSaving || !selectedPaTeilnehmer"
+              @click="speicherePotenzialanalyse()"
+            />
+          </div>
+        </div>
+
+        <div v-if="!paUebungen.length" class="rounded border border-dashed border-gray-300 px-4 py-8 text-center text-sm text-gray-500">
+          Für dieses Projekt sind noch keine PA-Übungen angelegt.
+        </div>
+
+        <div v-else class="grid gap-4 lg:grid-cols-[260px_1fr]">
+          <div class="rounded border border-gray-200 bg-white">
+            <button
+              v-for="teilnehmerItem in gruppenTeilnehmer"
+              :key="'pa-' + teilnehmerItem.id"
+              type="button"
+              class="flex w-full items-center justify-between border-b border-gray-100 px-4 py-3 text-left text-sm last:border-b-0 hover:bg-gray-50"
+              :class="selectedPaTeilnehmer?.id === teilnehmerItem.id ? 'bg-zbbTrp text-zbb' : 'text-gray-700'"
+              @click="waehlePaTeilnehmer(teilnehmerItem)"
+            >
+              <span class="min-w-0 truncate">{{ teilnehmerItem.vorname }} {{ teilnehmerItem.nachname }}</span>
+              <i class="la la-chevron-right text-xs"></i>
+            </button>
+          </div>
+
+          <div v-if="selectedPaTeilnehmer" class="space-y-2">
+            <div class="rounded border border-gray-200 bg-gray-50 px-3 py-2">
+              <h4 class="text-sm font-semibold text-gray-800">
+                {{ selectedPaTeilnehmer.vorname }} {{ selectedPaTeilnehmer.nachname }}
+              </h4>
+              <p class="text-xs text-gray-500">Selbsteinschaetzung, Uebungsergebnisse, Kompetenzbewertung und Bericht</p>
+            </div>
+
+            <div class="rounded border border-gray-200 bg-white px-2 pt-2">
+              <div class="flex gap-2 overflow-x-auto">
+                <button
+                  v-for="(tab, index) in paTabs"
+                  :key="'pa-tab-' + tab.key"
+                  type="button"
+                  class="-mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-2 pb-2 text-xs font-medium transition"
+                  :class="activePaTab === tab.key ? 'border-zbb text-zbb' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'"
+                  @click="setPaTab(tab.key)"
+                >
+                  <span
+                    class="flex h-5 w-5 items-center justify-center rounded-full text-xs font-semibold"
+                    :class="activePaTab === tab.key ? 'bg-zbb text-white' : 'bg-gray-100 text-gray-500'"
+                  >
+                    {{ index + 1 }}
+                  </span>
+                  <span class="whitespace-nowrap">{{ tab.label }}</span>
+                </button>
+              </div>
+            </div>
+
+            <div v-show="activePaTab === 'selbst'" class="rounded border border-gray-200 bg-white">
+              <div class="border-b border-gray-100 bg-gray-50 px-3 py-2">
+                <h5 class="text-sm font-semibold text-gray-800">Schritt 1: Selbsteinschaetzung</h5>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full min-w-[720px] text-xs">
+                  <thead class="bg-white text-xs uppercase text-gray-500">
+                    <tr>
+                      <th class="border-b px-2 py-1.5 text-left">Merkmal</th>
+                      <th class="border-b px-2 py-1.5 text-center">Kat.</th>
+                      <th v-for="wert in paBewertungWerte" :key="'selbst-head-' + wert" class="border-b px-1 py-1 text-center">
+                        <button
+                          type="button"
+                          class="inline-flex h-6 w-6 items-center justify-center rounded text-xs font-semibold text-gray-600 hover:bg-zbb hover:text-white"
+                          :title="`Alle Merkmale mit ${wert} bewerten`"
+                          @click="setzePaBewertungSpalte('selbsteinschaetzung', wert)"
+                        >
+                          {{ wert }}
+                        </button>
+                      </th>
+                      <th class="border-b px-2 py-1.5 text-left">Bemerkung</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="merkmal in paMerkmale" :key="'selbst-' + merkmal.key" class="border-b last:border-b-0">
+                      <td class="px-2 py-1.5 font-medium text-gray-800">{{ merkmal.label }}</td>
+                      <td class="px-2 py-1.5 text-center text-xs text-gray-500">{{ merkmal.kategorie }}</td>
+                      <td v-for="wert in paBewertungWerte" :key="'selbst-' + merkmal.key + '-' + wert" class="px-2 py-1.5 text-center">
+                        <input
+                          v-model.number="paEintrag(selectedPaTeilnehmer.id).selbsteinschaetzung[merkmal.key].bewertung"
+                          type="radio"
+                          :name="`pa-selbst-${selectedPaTeilnehmer.id}-${merkmal.key}`"
+                          :value="wert"
+                          class="h-3.5 w-3.5 text-zbb focus:ring-zbb"
+                          @change="setzePaBewertung(selectedPaTeilnehmer.id, 'selbsteinschaetzung', merkmal.key, wert)"
+                        />
+                      </td>
+                      <td class="px-2 py-1.5">
+                        <textarea
+                          v-model="paEintrag(selectedPaTeilnehmer.id).selbsteinschaetzung[merkmal.key].bemerkung"
+                          rows="1"
+                          class="h-8 min-h-0 w-full resize-none rounded border-gray-300 py-1 text-xs leading-tight"
+                          @input="planePotenzialanalyseSpeichern({ personenId: selectedPaTeilnehmer.id })"
+                        ></textarea>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div v-show="activePaTab === 'uebungen'" class="rounded border border-gray-200 bg-white">
+              <div class="border-b border-gray-100 bg-gray-50 px-3 py-2">
+                <h5 class="text-sm font-semibold text-gray-800">Schritt 2: Uebungen</h5>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full min-w-[820px] text-sm">
+                  <thead class="bg-white text-xs uppercase text-gray-500">
+                    <tr>
+                      <th class="border-b px-3 py-2 text-left">Uebung</th>
+                      <th class="border-b px-3 py-2 text-left">Punkte</th>
+                      <th class="border-b px-3 py-2 text-left">Zeit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="uebung in paUebungen" :key="'pa-uebung-' + uebung.id" class="border-b last:border-b-0">
+                      <td class="px-3 py-3 align-top">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <p class="font-medium text-gray-800">{{ uebung.name }}</p>
+                          <span v-if="uebung.tag" class="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-500">Tag {{ uebung.tag }}</span>
+                          <span class="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-500">Max. {{ uebung.hoechstwert ?? '-' }}</span>
+                          <span v-if="uebung.auswertbar" class="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">Auswertbar</span>
+                        </div>
+                        <p v-if="uebung.beschreibung" class="mt-1 text-xs text-gray-500">{{ uebung.beschreibung }}</p>
+                      </td>
+                      <td class="px-3 py-3 align-top">
+                        <div class="flex items-center gap-2">
+                          <InputText
+                            v-model.number="paUebungErgebnis(selectedPaTeilnehmer.id, uebung.id).punkte"
+                            type="number"
+                            min="0"
+                            :max="uebung.hoechstwert ?? undefined"
+                            class="w-28"
+                            @update:modelValue="planePotenzialanalyseSpeichern({ personenId: selectedPaTeilnehmer.id })"
+                            @blur="clampUebungPunkte(selectedPaTeilnehmer.id, uebung)"
+                          />
+                          <span class="text-sm text-gray-500">/ {{ uebung.hoechstwert ?? '-' }}</span>
+                        </div>
+                      </td>
+                      <td class="px-3 py-3 align-top">
+                        <div class="flex items-center gap-2">
+                          <InputText
+                            v-model.number="paUebungErgebnis(selectedPaTeilnehmer.id, uebung.id).zeit_min"
+                            type="number"
+                            min="0"
+                            class="w-24"
+                            @update:modelValue="planePotenzialanalyseSpeichern({ personenId: selectedPaTeilnehmer.id })"
+                          />
+                          <span class="text-xs text-gray-500">Min.</span>
+                          <InputText
+                            v-model.number="paUebungErgebnis(selectedPaTeilnehmer.id, uebung.id).zeit_sec"
+                            type="number"
+                            min="0"
+                            max="59"
+                            class="w-20"
+                            @update:modelValue="planePotenzialanalyseSpeichern({ personenId: selectedPaTeilnehmer.id })"
+                          />
+                          <span class="text-xs text-gray-500">Sek.</span>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div v-show="activePaTab === 'kompetenzen'" class="rounded border border-gray-200 bg-white">
+              <div class="border-b border-gray-100 bg-gray-50 px-3 py-2">
+                <h5 class="text-sm font-semibold text-gray-800">Schritt 3: Einschaetzung der Kompetenzen</h5>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full min-w-[720px] text-xs">
+                  <thead class="bg-white text-xs uppercase text-gray-500">
+                    <tr>
+                      <th class="border-b px-2 py-1.5 text-left">Merkmal</th>
+                      <th class="border-b px-2 py-1.5 text-center">Kat.</th>
+                      <th v-for="wert in paBewertungWerte" :key="'kompetenz-head-' + wert" class="border-b px-1 py-1 text-center">
+                        <button
+                          type="button"
+                          class="inline-flex h-6 w-6 items-center justify-center rounded text-xs font-semibold text-gray-600 hover:bg-zbb hover:text-white"
+                          :title="`Alle Kompetenzen mit ${wert} bewerten`"
+                          @click="setzePaBewertungSpalte('kompetenzen', wert)"
+                        >
+                          {{ wert }}
+                        </button>
+                      </th>
+                      <th class="border-b px-2 py-1.5 text-left">Bemerkung</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="merkmal in paMerkmale" :key="'kompetenz-' + merkmal.key" class="border-b last:border-b-0">
+                      <td class="px-2 py-1.5 font-medium text-gray-800">{{ merkmal.label }}</td>
+                      <td class="px-2 py-1.5 text-center text-xs text-gray-500">{{ merkmal.kategorie }}</td>
+                      <td v-for="wert in paBewertungWerte" :key="'kompetenz-' + merkmal.key + '-' + wert" class="px-2 py-1.5 text-center">
+                        <input
+                          v-model.number="paEintrag(selectedPaTeilnehmer.id).kompetenzen[merkmal.key].bewertung"
+                          type="radio"
+                          :name="`pa-kompetenz-${selectedPaTeilnehmer.id}-${merkmal.key}`"
+                          :value="wert"
+                          class="h-3.5 w-3.5 text-zbb focus:ring-zbb"
+                          @change="setzePaBewertung(selectedPaTeilnehmer.id, 'kompetenzen', merkmal.key, wert)"
+                        />
+                      </td>
+                      <td class="px-2 py-1.5">
+                        <textarea
+                          v-model="paEintrag(selectedPaTeilnehmer.id).kompetenzen[merkmal.key].bemerkung"
+                          rows="1"
+                          class="h-8 min-h-0 w-full resize-none rounded border-gray-300 py-1 text-xs leading-tight"
+                          @input="planePotenzialanalyseSpeichern({ personenId: selectedPaTeilnehmer.id })"
+                        ></textarea>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div v-show="activePaTab === 'bericht'" class="rounded border border-gray-200 bg-white p-4">
+              <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <h5 class="font-semibold text-gray-800">Bericht</h5>
+                <div class="flex flex-wrap items-center gap-2">
+                  <Button
+                    label="Text generieren"
+                    icon="pi pi-pencil"
+                    severity="secondary"
+                    outlined
+                    @click="generierePaBerichtstext"
+                  />
+                  <Select
+                    v-model="paEintrag(selectedPaTeilnehmer.id).bericht.status"
+                    :options="paBerichtStatusOptionen"
+                    optionLabel="label"
+                    optionValue="value"
+                    class="w-56 max-w-full"
+                    @update:modelValue="planePotenzialanalyseSpeichern({ personenId: selectedPaTeilnehmer.id, sofort: true })"
+                  />
+                </div>
+              </div>
+
+              <div class="grid gap-3 md:grid-cols-2">
+                <label class="text-sm text-gray-600">
+                  Staerken
+                  <textarea
+                    v-model="paEintrag(selectedPaTeilnehmer.id).bericht.staerken"
+                    rows="4"
+                    class="mt-1 w-full rounded border-gray-300 text-sm"
+                    @input="planePotenzialanalyseSpeichern({ personenId: selectedPaTeilnehmer.id })"
+                  ></textarea>
+                </label>
+                <label class="text-sm text-gray-600">
+                  Entwicklungsfelder
+                  <textarea
+                    v-model="paEintrag(selectedPaTeilnehmer.id).bericht.entwicklungsfelder"
+                    rows="4"
+                    class="mt-1 w-full rounded border-gray-300 text-sm"
+                    @input="planePotenzialanalyseSpeichern({ personenId: selectedPaTeilnehmer.id })"
+                  ></textarea>
+                </label>
+                <label class="text-sm text-gray-600 md:col-span-2">
+                  Empfehlung
+                  <textarea
+                    v-model="paEintrag(selectedPaTeilnehmer.id).bericht.empfehlung"
+                    rows="3"
+                    class="mt-1 w-full rounded border-gray-300 text-sm"
+                    @input="planePotenzialanalyseSpeichern({ personenId: selectedPaTeilnehmer.id })"
+                  ></textarea>
+                </label>
+                <label class="text-sm text-gray-600 md:col-span-2">
+                  Berichtstext
+                  <textarea
+                    v-model="paEintrag(selectedPaTeilnehmer.id).bericht.bericht_text"
+                    rows="6"
+                    class="mt-1 w-full rounded border-gray-300 text-sm"
+                    @input="planePotenzialanalyseSpeichern({ personenId: selectedPaTeilnehmer.id })"
+                  ></textarea>
+                </label>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-3 rounded border border-gray-200 bg-white px-3 py-2">
+              <Button
+                label="Zurueck"
+                icon="pi pi-arrow-left"
+                severity="secondary"
+                outlined
+                :disabled="activePaTabIndex === 0"
+                @click="wechselPaTab(-1)"
+              />
+              <span class="text-sm text-gray-500">
+                Schritt {{ activePaTabIndex + 1 }} von {{ paTabs.length }}
+              </span>
+              <Button
+                label="Weiter"
+                icon="pi pi-arrow-right"
+                iconPos="right"
+                class="!bg-zbb hover:!bg-zbb/80 border-none"
+                :disabled="activePaTabIndex === paTabs.length - 1"
+                @click="wechselPaTab(1)"
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -43,6 +43,7 @@ use App\Http\Controllers\NotizController;
 use App\Http\Controllers\PartnerController;
 use App\Http\Controllers\PersonalController;
 use App\Http\Controllers\PersonenHasBildungsmassnahmenController;
+use App\Http\Controllers\PotenzialanalyseController;
 use App\Http\Controllers\ProjektBopController;
 use App\Http\Controllers\ProjektController;
 use App\Http\Controllers\ProjektHasPersonenController;
@@ -233,6 +234,12 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::put('/projekt/{projekt}/dokumente', [ProjektController::class, 'updateDokumente'])->name('projekt.dokumente.update');
     Route::put('/projekt/{id}', [ProjektController::class, 'update'])->name('projekt.update');
     Route::delete('/projekt/{id}', [ProjektController::class, 'destroy'])->name('projekt.destroy');
+    Route::post('/projekt/{projekt}/potenzialanalyse/uebungen', [PotenzialanalyseController::class, 'storeUebung'])->name('potenzialanalyse.projekt.uebungen.store');
+    Route::put('/potenzialanalyse/uebungen/{uebung}', [PotenzialanalyseController::class, 'updateUebung'])->name('potenzialanalyse.projekt.uebungen.update');
+    Route::delete('/potenzialanalyse/uebungen/{uebung}', [PotenzialanalyseController::class, 'destroyUebung'])->name('potenzialanalyse.projekt.uebungen.destroy');
+    Route::post('/potenzialanalyse/uebungen/{uebung}/kriterien', [PotenzialanalyseController::class, 'storeKriterium'])->name('potenzialanalyse.projekt.kriterien.store');
+    Route::put('/potenzialanalyse/kriterien/{kriterium}', [PotenzialanalyseController::class, 'updateKriterium'])->name('potenzialanalyse.projekt.kriterien.update');
+    Route::delete('/potenzialanalyse/kriterien/{kriterium}', [PotenzialanalyseController::class, 'destroyKriterium'])->name('potenzialanalyse.projekt.kriterien.destroy');
 
     // Export-Vorlagen / Dokumentenmanager
     Route::get('/dokumente', [DokumenteController::class, 'index'])->name('dokumente.index');
@@ -259,6 +266,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::get('/gruppe/{gruppe}/bop-export/zertifikat-pa', [BopGruppeExportController::class, 'zertifikatPa'])->name('gruppe.bop.export.zertifikat-pa');
     Route::get('/gruppe/{gruppe}/bop-export/teilnahme-pa', [BopGruppeExportController::class, 'teilnahmePa'])->name('gruppe.bop.export.teilnahme-pa');
     Route::get('/gruppe/{gruppe}/bop-export/auswertungsbogen-pa', [BopGruppeExportController::class, 'auswertungsbogenPa'])->name('gruppe.bop.export.auswertungsbogen-pa');
+    Route::put('/gruppe/{gruppe}/potenzialanalyse/teilnehmer/{personen}', [PotenzialanalyseController::class, 'updateTeilnehmer'])->name('potenzialanalyse.gruppe.teilnehmer.update');
 
     //GruppeHasTeilnehmer
     Route::get('/gruppehasteilnehmer/{id}', [GruppeHasTeilnehmerController::class, 'show'])->name('gruppeHasTeilnehmer.show');

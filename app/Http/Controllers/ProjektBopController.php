@@ -1035,6 +1035,7 @@ class ProjektBopController extends Controller
             'schuleId' => ['required', 'integer', 'exists:partners,id'],
             'schuljahr' => ['required', 'string'],
             'teil' => ['required', 'string'],
+            'listType' => ['nullable', 'in:pa,pa_preparation'],
             'exportMode' => ['nullable', 'in:alle,klasse'],
             'klasse' => ['nullable', 'required_if:exportMode,klasse', 'string'],
             'startDate' => ['nullable', 'date'],
@@ -1043,7 +1044,7 @@ class ProjektBopController extends Controller
             'days' => ['nullable', 'array'],
             'days.*.id' => ['nullable', 'string', 'max:100'],
             'days.*.date' => ['required_with:days', 'date'],
-            'days.*.type' => ['nullable', 'in:pa_day,feedback'],
+            'days.*.type' => ['nullable', 'in:pa_day,feedback,preparation'],
             'days.*.source' => ['nullable', 'string', 'max:50'],
             'days.*.selected' => ['nullable', 'boolean'],
             'days.*.note' => ['nullable', 'string', 'max:255'],
@@ -1060,7 +1061,8 @@ class ProjektBopController extends Controller
             $validated['days'] ?? [],
             $validated['startDate'] ?? null,
             $validated['endDate'] ?? null,
-            $validated['feedbackDate'] ?? null
+            $validated['feedbackDate'] ?? null,
+            $validated['listType'] ?? 'pa'
         ));
     }
 
@@ -1187,7 +1189,8 @@ class ProjektBopController extends Controller
             $scope['schuljahr'],
             $scope['teil'],
             $scope['export_mode'],
-            $scope['klasse']
+            $scope['klasse'],
+            $scope['list_type']
         );
         $path = $folder . DIRECTORY_SEPARATOR . $filename;
 
@@ -1243,11 +1246,15 @@ class ProjektBopController extends Controller
         string $schuljahr,
         string $teil,
         string $exportMode,
-        ?string $klasse
+        ?string $klasse,
+        string $listType = 'pa'
     ): string {
+        $prefix = $listType === 'pa_preparation'
+            ? 'Anwesenheitsliste_Vorbereitung_PA_'
+            : 'Anwesenheitsliste_PA_';
         $baseName = $filename
             ? Str::beforeLast($filename, '.pdf')
-            : 'Anwesenheitsliste_PA_' . $partner->name . '_' . $schuljahr . '_Teil_' . $teil;
+            : $prefix . $partner->name . '_' . $schuljahr . '_Teil_' . $teil;
 
         if (!$filename && $exportMode === 'klasse' && $klasse) {
             $baseName .= '_Klasse_' . $klasse;
@@ -1331,12 +1338,14 @@ class ProjektBopController extends Controller
             'schuleId' => ['required', 'integer', 'exists:partners,id'],
             'schuljahr' => ['required', 'string'],
             'teil' => ['required', 'string'],
+            'listType' => ['nullable', 'in:pa,pa_preparation'],
             'exportMode' => ['nullable', 'in:alle,klasse'],
             'klasse' => ['nullable', 'required_if:exportMode,klasse', 'string'],
         ]);
 
         $exportMode = $validated['exportMode'] ?? (empty($validated['klasse']) ? 'alle' : 'klasse');
         $klasse = $exportMode === 'klasse' ? (string) ($validated['klasse'] ?? '') : null;
+        $listType = $validated['listType'] ?? 'pa';
 
         if ($exportMode === 'klasse' && $klasse === '') {
             throw ValidationException::withMessages([
@@ -1357,12 +1366,14 @@ class ProjektBopController extends Controller
                 $teil,
                 $exportMode,
                 $klasse ?: '',
+                $listType,
                 'pa-attendance-list',
             ])),
             'projekt_id' => $projektId,
             'partner_id' => $partnerId,
             'schuljahr' => $schuljahr,
             'teil' => $teil,
+            'list_type' => $listType,
             'export_mode' => $exportMode,
             'klasse' => $klasse,
         ];
@@ -1378,6 +1389,7 @@ class ProjektBopController extends Controller
             'feedbackDate',
             'exportMode',
             'klasse',
+            'listType',
         ];
 
         $signatures = [];
@@ -1441,10 +1453,12 @@ class ProjektBopController extends Controller
         array $inputDays,
         ?string $startDate = null,
         ?string $endDate = null,
-        ?string $feedbackDate = null
+        ?string $feedbackDate = null,
+        string $listType = 'pa'
     ): array {
         $schule = Partner::findOrFail($schuleId);
         $teilnehmer = $this->paTeilnehmer($schuleId, $schuljahr, $teil, $exportMode, $klasse);
+        $listType = $listType === 'pa_preparation' ? 'pa_preparation' : 'pa';
 
         if ($teilnehmer->isEmpty()) {
             throw ValidationException::withMessages([
@@ -1459,17 +1473,33 @@ class ProjektBopController extends Controller
         $schulform = PersonenIstSchueler::query()->schulform($teilnehmer);
         $inputDays = collect($inputDays)
             ->filter(fn ($day) => is_array($day) && !empty($day['date']))
-            ->reject(fn ($day) => ($day['type'] ?? null) === 'feedback'
-                || ($day['source'] ?? null) === 'feedback'
-                || Str::startsWith((string) ($day['id'] ?? ''), 'feedback-'))
+            ->when($listType === 'pa_preparation', function ($days) {
+                return $days
+                    ->reject(fn ($day) => ($day['type'] ?? null) === 'feedback'
+                        || ($day['source'] ?? null) === 'feedback'
+                        || Str::startsWith((string) ($day['id'] ?? ''), 'feedback-'))
+                    ->map(function ($day) {
+                        $day['type'] = 'preparation';
+                        $day['source'] = $day['source'] ?? 'pa-preparation';
+                        $day['note'] = $day['note'] ?? 'Vorbereitung PA';
+
+                        return $day;
+                    });
+            }, function ($days) {
+                return $days->reject(fn ($day) => ($day['type'] ?? null) === 'feedback'
+                    || ($day['source'] ?? null) === 'feedback'
+                    || Str::startsWith((string) ($day['id'] ?? ''), 'feedback-'));
+            })
             ->values()
             ->all();
 
-        if (empty($inputDays) && ($startDate || $endDate)) {
+        if (empty($inputDays) && $listType === 'pa_preparation' && $startDate) {
+            $inputDays = $this->paPreparationDayFromDate($startDate);
+        } elseif (empty($inputDays) && ($startDate || $endDate)) {
             $inputDays = $this->paDaysFromFixedDates($startDate, $endDate);
         }
 
-        if ($feedbackDate) {
+        if ($listType !== 'pa_preparation' && $feedbackDate) {
             $date = Carbon::parse($feedbackDate)->toDateString();
             $inputDays[] = [
                 'id' => 'feedback-' . $date,
@@ -1484,15 +1514,29 @@ class ProjektBopController extends Controller
         $days = collect($inputDays)
             ->map(function ($day) use ($participants) {
                 $date = Carbon::parse($day['date'])->toDateString();
-                $type = ($day['type'] ?? null) === 'feedback' ? 'feedback' : 'pa_day';
+                $type = match ($day['type'] ?? null) {
+                    'feedback' => 'feedback',
+                    'preparation' => 'preparation',
+                    default => 'pa_day',
+                };
+                $typeLabel = match ($type) {
+                    'feedback' => 'Feedbackgespräch',
+                    'preparation' => 'Vorbereitung PA',
+                    default => 'PA-Tag',
+                };
+                $idPrefix = match ($type) {
+                    'feedback' => 'feedback-',
+                    'preparation' => 'pa-vorbereitung-',
+                    default => 'pa-',
+                };
 
                 return [
-                    'id' => $day['id'] ?? ($type === 'feedback' ? 'feedback-' : 'pa-') . $date,
+                    'id' => $day['id'] ?? $idPrefix . $date,
                     'date' => $date,
                     'date_label' => Carbon::parse($date)->format('d.m.Y'),
                     'type' => $type,
-                    'type_label' => $type === 'feedback' ? 'Feedbackgespräch' : 'PA-Tag',
-                    'source' => $day['source'] ?? ($type === 'feedback' ? 'feedback' : 'manual'),
+                    'type_label' => $typeLabel,
+                    'source' => $day['source'] ?? ($type === 'feedback' ? 'feedback' : ($type === 'preparation' ? 'pa-preparation' : 'manual')),
                     'selected' => $day['selected'] ?? true,
                     'note' => $day['note'] ?? null,
                     'groups' => [[
@@ -1520,6 +1564,7 @@ class ProjektBopController extends Controller
                 'klasse' => $klasseText,
                 'schuljahr' => $schuljahr,
                 'teil' => $teil,
+                'list_type' => $listType,
                 'export_mode' => $exportMode,
                 'teilnehmer_count' => $participants->count(),
             ],
@@ -1551,6 +1596,24 @@ class ProjektBopController extends Controller
             })
             ->values()
             ->all();
+    }
+
+    private function paPreparationDayFromDate(?string $date): array
+    {
+        if (!filled($date)) {
+            return [];
+        }
+
+        $date = Carbon::parse($date)->toDateString();
+
+        return [[
+            'id' => 'pa-vorbereitung-' . $date,
+            'date' => $date,
+            'type' => 'preparation',
+            'selected' => true,
+            'source' => 'pa-preparation',
+            'note' => 'Vorbereitung PA',
+        ]];
     }
 
     private function paTeilnehmer(

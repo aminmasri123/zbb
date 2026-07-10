@@ -39,6 +39,8 @@ const form = ref({
   endtermin: '',
   enddatum: '',
   klassenbuch_aktiv: false,
+  potenzialanalyse_aktiv: false,
+  potenzialanalyse_tage: null,
   bereiche: [],
 });
 
@@ -54,6 +56,8 @@ const resetForm = () => {
     endtermin: '',
     enddatum: '',
     klassenbuch_aktiv: false,
+    potenzialanalyse_aktiv: false,
+    potenzialanalyse_tage: null,
     bereiche: [],
   };
 };
@@ -82,6 +86,11 @@ const save = async () => {
 
   if (!form.value.name || !form.value.abteilung || !form.value.kostenstellen.length || !hasValidKostenstellen) {
     Swal.fire('Fehler', 'Bitte Projektname, Abteilung und je Kostenstelle einen gueltigen Zeitraum ausfuellen.', 'error');
+    return;
+  }
+
+  if (form.value.potenzialanalyse_aktiv && !form.value.potenzialanalyse_tage) {
+    Swal.fire('Fehler', 'Bitte geben Sie an, wie viele Tage die Potenzialanalyse dauert.', 'error');
     return;
   }
 
@@ -166,6 +175,24 @@ const handleKostenstelleCreated = (kostenstelle) => {
           <input v-model="form.klassenbuch_aktiv" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
           <span class="font-medium">Klassenbuch aktiv</span>
         </label>
+
+        <div class="mb-4 rounded border border-gray-200 bg-gray-50 px-3 py-3">
+          <label class="flex items-center gap-3 text-sm text-gray-700">
+            <input v-model="form.potenzialanalyse_aktiv" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
+            <span class="font-medium">Projekt macht Potenzialanalyse</span>
+          </label>
+
+          <label v-if="form.potenzialanalyse_aktiv" class="mt-3 block text-sm text-gray-600">
+            Anzahl PA-Tage
+            <input
+              v-model.number="form.potenzialanalyse_tage"
+              type="number"
+              min="1"
+              max="60"
+              class="mt-1 w-full rounded border-gray-300 text-sm"
+            />
+          </label>
+        </div>
 
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label class="text-sm text-gray-600">

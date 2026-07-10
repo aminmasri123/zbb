@@ -14,6 +14,11 @@ use Illuminate\Http\Request;
 use App\Models\GruppeHasPersonen;
 use App\Http\Controllers\Controller;
 use App\Models\Anwesenheitsstatuten;
+use App\Models\PotenzialanalyseBericht;
+use App\Models\PotenzialanalyseBeurteilung;
+use App\Models\PotenzialanalyseKompetenzbewertung;
+use App\Models\PotenzialanalyseSelbsteinschaetzung;
+use App\Models\PotenzialanalyseUebungErgebnis;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class GruppeHasTeilnehmerController extends Controller
@@ -120,8 +125,8 @@ class GruppeHasTeilnehmerController extends Controller
         $already = array_values(array_diff($ids, $new));
 
         // ✅ Rückgabe
-        $addedTeilnehmer = Personen::whereIn('id', $new)->get(['id', 'vorname', 'nachname']);
-        $alreadyTeilnehmer = Personen::whereIn('id', $already)->get(['id', 'vorname', 'nachname']);
+        $addedTeilnehmer = Personen::whereIn('id', $new)->get(['id', 'vorname', 'nachname', 'geschlecht']);
+        $alreadyTeilnehmer = Personen::whereIn('id', $already)->get(['id', 'vorname', 'nachname', 'geschlecht']);
 
         return response()->json([
             'success' => true,
@@ -151,6 +156,7 @@ class GruppeHasTeilnehmerController extends Controller
             'klassenbuecher.typ',
             'projekt.dokumente.bereiche',
             'projekt.dokumentKategorien.dokumente.bereiche',
+            'projekt.potenzialanalyseUebungen.kriterien',
 
         ])->findOrFail($id);
 
@@ -214,12 +220,13 @@ class GruppeHasTeilnehmerController extends Controller
             })
             ->orderBy('nachname')
             ->orderBy('vorname')
-            ->get(['id', 'vorname', 'nachname']);
+            ->get(['id', 'vorname', 'nachname', 'geschlecht']);
         return Inertia::render('Gruppe/GruppeHasTeilnehmer/Index', [
             'gruppe' => $gruppe,
             'teilnehmer' => $teilnehmer,
             'anwesenheitsstatuten' => $anwesenheitsstatuten,
             'bopLegacyExporte' => $this->bopLegacyExporte($gruppe),
+            'potenzialanalyse' => $this->potenzialanalysePayload($gruppe),
         ]);
 
     }
@@ -322,6 +329,164 @@ class GruppeHasTeilnehmerController extends Controller
         $bereichIds = $dokument->bereiche?->pluck('id') ?? collect();
 
         return $bereichIds->isEmpty() || $bereichIds->contains((int) $gruppe->bereich_id);
+    }
+
+    private function potenzialanalysePayload(Gruppe $gruppe): array
+    {
+        $projekt = $gruppe->projekt;
+
+        if (! $projekt?->potenzialanalyse_aktiv) {
+            return [
+                'aktiv' => false,
+                'tage' => null,
+                'uebungen' => [],
+                'teilnehmer' => [],
+            ];
+        }
+
+        $uebungen = $projekt->potenzialanalyseUebungen
+            ->filter(fn ($uebung) => $uebung->aktiv)
+            ->map(function ($uebung) {
+                return [
+                    'id' => $uebung->id,
+                    'name' => $uebung->name,
+                    'tag' => $uebung->tag,
+                    'beschreibung' => $uebung->beschreibung,
+                    'hoechstwert' => $uebung->hoechstwert,
+                    'auswertbar' => $uebung->auswertbar,
+                    'sort_order' => $uebung->sort_order,
+                    'kriterien' => $uebung->kriterien
+                        ->filter(fn ($kriterium) => $kriterium->aktiv)
+                        ->values()
+                        ->map(fn ($kriterium) => [
+                            'id' => $kriterium->id,
+                            'name' => $kriterium->name,
+                            'beschreibung' => $kriterium->beschreibung,
+                            'skala_min' => $kriterium->skala_min,
+                            'skala_max' => $kriterium->skala_max,
+                            'sort_order' => $kriterium->sort_order,
+                        ])
+                        ->all(),
+                ];
+            })
+            ->values();
+
+        $personenIds = $gruppe->teilnehmer
+            ->pluck('id')
+            ->unique()
+            ->values();
+
+        if ($personenIds->isEmpty()) {
+            return [
+                'aktiv' => true,
+                'tage' => $projekt->potenzialanalyse_tage,
+                'uebungen' => $uebungen,
+                'teilnehmer' => [],
+            ];
+        }
+
+        $beurteilungen = PotenzialanalyseBeurteilung::query()
+            ->where('gruppe_id', $gruppe->id)
+            ->whereIn('personen_id', $personenIds)
+            ->get()
+            ->groupBy('personen_id');
+
+        $selbsteinschaetzungen = PotenzialanalyseSelbsteinschaetzung::query()
+            ->where('gruppe_id', $gruppe->id)
+            ->whereIn('personen_id', $personenIds)
+            ->get()
+            ->groupBy('personen_id');
+
+        $uebungErgebnisse = PotenzialanalyseUebungErgebnis::query()
+            ->where('gruppe_id', $gruppe->id)
+            ->whereIn('personen_id', $personenIds)
+            ->get()
+            ->groupBy('personen_id');
+
+        $kompetenzbewertungen = PotenzialanalyseKompetenzbewertung::query()
+            ->where('gruppe_id', $gruppe->id)
+            ->whereIn('personen_id', $personenIds)
+            ->get()
+            ->groupBy('personen_id');
+
+        $berichte = PotenzialanalyseBericht::query()
+            ->where('gruppe_id', $gruppe->id)
+            ->whereIn('personen_id', $personenIds)
+            ->get()
+            ->keyBy('personen_id');
+
+        $teilnehmer = $personenIds
+            ->mapWithKeys(fn ($personenId) => [(int) $personenId => [
+                'uebungen' => ($uebungErgebnisse->get($personenId) ?? collect())
+                    ->keyBy('uebung_id')
+                    ->map(fn ($entry) => $this->formatPotenzialanalyseUebungErgebnis($entry))
+                    ->all(),
+                'selbsteinschaetzung' => ($kompetenzbewertungen->get($personenId) ?? collect())
+                    ->where('typ', 'selbst')
+                    ->keyBy('merkmal')
+                    ->map(fn ($entry) => [
+                        'bewertung' => $entry->bewertung,
+                        'bemerkung' => $entry->bemerkung,
+                    ])
+                    ->all(),
+                'kompetenzen' => ($kompetenzbewertungen->get($personenId) ?? collect())
+                    ->where('typ', 'anleiter')
+                    ->keyBy('merkmal')
+                    ->map(fn ($entry) => [
+                        'bewertung' => $entry->bewertung,
+                        'bemerkung' => $entry->bemerkung,
+                    ])
+                    ->all(),
+                'beurteilungen' => ($beurteilungen->get($personenId) ?? collect())
+                    ->keyBy('kriterium_id')
+                    ->map(fn ($entry) => [
+                        'bewertung' => $entry->bewertung,
+                        'bemerkung' => $entry->bemerkung,
+                    ])
+                    ->all(),
+                'selbsteinschaetzungen' => ($selbsteinschaetzungen->get($personenId) ?? collect())
+                    ->keyBy('kriterium_id')
+                    ->map(fn ($entry) => [
+                        'bewertung' => $entry->bewertung,
+                        'bemerkung' => $entry->bemerkung,
+                    ])
+                    ->all(),
+                'bericht' => $berichte->get($personenId)?->only([
+                    'status',
+                    'staerken',
+                    'entwicklungsfelder',
+                    'empfehlung',
+                    'bericht_text',
+                    'fertiggestellt_at',
+                ]) ?? [
+                    'status' => 'entwurf',
+                    'staerken' => null,
+                    'entwicklungsfelder' => null,
+                    'empfehlung' => null,
+                    'bericht_text' => null,
+                    'fertiggestellt_at' => null,
+                ],
+            ]])
+            ->all();
+
+        return [
+            'aktiv' => true,
+            'tage' => $projekt->potenzialanalyse_tage,
+            'uebungen' => $uebungen,
+            'teilnehmer' => $teilnehmer,
+        ];
+    }
+
+    private function formatPotenzialanalyseUebungErgebnis(PotenzialanalyseUebungErgebnis $entry): array
+    {
+        $zeit = (int) ($entry->zeit ?? 0);
+
+        return [
+            'punkte' => $entry->punkte,
+            'zeit' => $zeit,
+            'zeit_min' => intdiv($zeit, 60),
+            'zeit_sec' => $zeit % 60,
+        ];
     }
 
     private function bopLegacyExporte(Gruppe $gruppe): array

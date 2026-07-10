@@ -194,7 +194,7 @@ export default {
                         @toggle-sidebar-text="displayHideTextSidebar = !displayHideTextSidebar"
                     />
 
-                <div class="flex min-w-0">
+                <div class="flex min-w-0 items-stretch">
                     <component class="min-h-screen shrink-0" :is="currentSidebar" :displayHideTextSidebar="displayHideTextSidebar" :sidebarOpen="sidebarOpen" :activeMenu="activeMenu" :toggleMenu="toggleMenu"/>
 
                     <main class="min-w-0 w-full bg-[var(--bg)] h-full"

@@ -120,6 +120,8 @@ class ProjektController extends Controller
             'endtermin'    => 'required|date',
             'enddatum'     => 'required|date',
             'klassenbuch_aktiv' => 'sometimes|boolean',
+            'potenzialanalyse_aktiv' => 'sometimes|boolean',
+            'potenzialanalyse_tage' => 'nullable|integer|min:1|max:60',
             'kostenstellen' => 'nullable|array',
             'kostenstellen.*.kostenstelle_id' => 'required_with:kostenstellen|integer|exists:kostenstelles,id',
             'kostenstellen.*.gueltig_von' => 'required_with:kostenstellen|date',
@@ -138,13 +140,16 @@ class ProjektController extends Controller
                 ->mapWithKeys(fn ($id) => [$id => ['aktiv' => 1]])
                 ->all();
             $kostenstelleSyncData = $this->resolveKostenstelleSyncData($validatedData);
+            $potenzialanalyseConfig = $this->resolvePotenzialanalyseConfig($validatedData);
 
-            $projekt = DB::transaction(function () use ($validatedData, $bereichSyncData, $kostenstelleSyncData) {
+            $projekt = DB::transaction(function () use ($validatedData, $bereichSyncData, $kostenstelleSyncData, $potenzialanalyseConfig) {
             // 1️⃣ Projekt erstellen
             $projekt = Projekt::create([
                 'name'         => $validatedData['name'],
                 'abteilung_id' => $validatedData['abteilung'],
                 'klassenbuch_aktiv' => (bool) ($validatedData['klassenbuch_aktiv'] ?? false),
+                'potenzialanalyse_aktiv' => $potenzialanalyseConfig['potenzialanalyse_aktiv'],
+                'potenzialanalyse_tage' => $potenzialanalyseConfig['potenzialanalyse_tage'],
             ]);
 
             // 2️⃣ Zeitraum anlegen
@@ -213,6 +218,7 @@ class ProjektController extends Controller
                 'kostenstellen',
                 'dokumente.bereiche',
                 'dokumentKategorien',
+                'potenzialanalyseUebungen.kriterien',
                 'mitarbeiter.user.roles',
             ])
             ->findOrFail($id);
@@ -272,6 +278,8 @@ class ProjektController extends Controller
             'endtermin' => 'required_without:zeitraume|date',
             'enddatum' => 'required_without:zeitraume|date',
             'klassenbuch_aktiv' => 'sometimes|boolean',
+            'potenzialanalyse_aktiv' => 'sometimes|boolean',
+            'potenzialanalyse_tage' => 'nullable|integer|min:1|max:60',
             'zeitraume' => 'sometimes|array|min:1',
             'zeitraume.*.id' => 'nullable|integer|exists:zeitraums,id',
             'zeitraume.*.antragsdatum' => 'required_with:zeitraume|date',
@@ -297,8 +305,11 @@ class ProjektController extends Controller
                 ->mapWithKeys(fn ($id) => [$id => ['aktiv' => 1]])
                 ->all();
             $kostenstelleSyncData = $this->resolveKostenstelleSyncData($validatedData);
+            $potenzialanalyseConfig = ($request->has('potenzialanalyse_aktiv') || $request->has('potenzialanalyse_tage'))
+                ? $this->resolvePotenzialanalyseConfig($validatedData)
+                : null;
 
-            $projekt = DB::transaction(function () use ($id, $request, $validatedData, $bereichSyncData, $kostenstelleSyncData) {
+            $projekt = DB::transaction(function () use ($id, $request, $validatedData, $bereichSyncData, $kostenstelleSyncData, $potenzialanalyseConfig) {
             // Projekt finden
             $projekt = Projekt::findOrFail($id);
 
@@ -310,6 +321,11 @@ class ProjektController extends Controller
 
             if ($request->has('klassenbuch_aktiv')) {
                 $payload['klassenbuch_aktiv'] = (bool) $validatedData['klassenbuch_aktiv'];
+            }
+
+            if ($potenzialanalyseConfig !== null) {
+                $payload['potenzialanalyse_aktiv'] = $potenzialanalyseConfig['potenzialanalyse_aktiv'];
+                $payload['potenzialanalyse_tage'] = $potenzialanalyseConfig['potenzialanalyse_tage'];
             }
 
             $projekt->update($payload);
@@ -439,6 +455,25 @@ class ProjektController extends Controller
                 'gueltig_von' => null,
                 'gueltig_bis' => null,
             ],
+        ];
+    }
+
+    private function resolvePotenzialanalyseConfig(array $validatedData): array
+    {
+        $aktiv = (bool) ($validatedData['potenzialanalyse_aktiv'] ?? false);
+        $tage = isset($validatedData['potenzialanalyse_tage']) && $validatedData['potenzialanalyse_tage'] !== ''
+            ? (int) $validatedData['potenzialanalyse_tage']
+            : null;
+
+        if ($aktiv && !$tage) {
+            throw ValidationException::withMessages([
+                'potenzialanalyse_tage' => 'Bitte geben Sie an, wie viele Tage die Potenzialanalyse dauert.',
+            ]);
+        }
+
+        return [
+            'potenzialanalyse_aktiv' => $aktiv,
+            'potenzialanalyse_tage' => $aktiv ? $tage : null,
         ];
     }
 

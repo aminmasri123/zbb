@@ -96,75 +96,6 @@ function getSchuelerCount(jahr, teil, partner) {
     ).size;
 }
 
-const exportAnwesenheitslisteVorbereitungBo = async (jahr, teil, partner) => {
-    const klassen = getKlassen(jahr, teil, partner).filter(Boolean);
-
-    if (klassen.length === 0) {
-        Swal.fire('Keine Klassen', 'Für diesen Zeitraum wurden keine Klassen gefunden.', 'warning');
-        return;
-    }
-
-    const terminResult = await Swal.fire({
-        title: 'Termin auswählen',
-        input: 'date',
-        inputLabel: 'Termin zur Vorbereitung BO-Tage',
-        showCancelButton: true,
-        confirmButtonText: 'Weiter',
-        cancelButtonText: 'Abbrechen',
-        inputValidator: (value) => !value ? 'Bitte wähle einen Termin aus.' : null,
-    });
-
-    if (!terminResult.isConfirmed) {
-        return;
-    }
-
-    const modeResult = await Swal.fire({
-        title: 'Export auswählen',
-        input: 'select',
-        inputOptions: {
-            alle: 'Alle Klassen als ZIP',
-            klasse: 'Einzelne Klasse',
-        },
-        inputValue: 'alle',
-        showCancelButton: true,
-        confirmButtonText: 'Exportieren',
-        cancelButtonText: 'Abbrechen',
-    });
-
-    if (!modeResult.isConfirmed) {
-        return;
-    }
-
-    let klasse = null;
-    if (modeResult.value === 'klasse') {
-        const klasseResult = await Swal.fire({
-            title: 'Klasse auswählen',
-            input: 'select',
-            inputOptions: Object.fromEntries(klassen.map((klasse) => [klasse, klasse])),
-            showCancelButton: true,
-            confirmButtonText: 'Exportieren',
-            cancelButtonText: 'Abbrechen',
-        });
-
-        if (!klasseResult.isConfirmed) {
-            return;
-        }
-
-        klasse = klasseResult.value;
-    }
-
-    const params = new URLSearchParams({ termin: terminResult.value });
-    if (klasse) {
-        params.set('klasse', klasse);
-    }
-
-    window.location.href = `${route('anwesenheitslisteVorBOTage', {
-        schuleId: partner.id,
-        schuljahr: jahr,
-        teil,
-    })}?${params.toString()}`;
-};
-
 // -----------------------------
 // Modal-Funktionen
 // -----------------------------
@@ -450,10 +381,10 @@ const updatePartnerAPI = async (form) => {
 
                                                          <button
                                                             type="button"
-                                                            @click="exportAnwesenheitslisteVorbereitungBo(jahr, teil, partner)"
+                                                            @click="openModal('anwesenheitslisteVorbereitungPA', { jahr, teil, klassen: getKlassen(jahr, teil, partner), partnerId: partner.id })"
                                                             class="block w-full px-4 py-1 text-left hover:bg-gray-200"
                                                          >
-                                                            Anwesenheitsliste BO Vorbereitung
+                                                            Anwesenheitsliste Vorbereitung PA
                                                          </button>
 
                                                         <!-- 🔽 Anwesenheitsliste BO Bibb -->
@@ -647,6 +578,7 @@ const updatePartnerAPI = async (form) => {
 
         <ModalAnwesenheitslisteBIBB v-if="activeModal === 'anwesenheitslisteBoTagbibb'" :visible="true" :partnerId="modalData.partnerId" :schuljahr="modalData.jahr" :teil="modalData.teil" @update:visible="closeModal" @close="closeModal"/>
         <ModalAnwesenheitslistePA v-if="activeModal === 'anwesenheitslistePATage'" :visible="true" :partnerId="modalData.partnerId" :schuljahr="modalData.jahr" :klasse="modalData.klasse" :klassen="modalData.klassen" :teil="modalData.teil" @update:visible="closeModal" @close="closeModal"/>
+        <ModalAnwesenheitslistePA v-if="activeModal === 'anwesenheitslisteVorbereitungPA'" :visible="true" :partnerId="modalData.partnerId" :schuljahr="modalData.jahr" :klasse="modalData.klasse" :klassen="modalData.klassen" :teil="modalData.teil" list-type="pa_preparation" @update:visible="closeModal" @close="closeModal"/>
         <ModalBoTag1 v-if="activeModal === 'boTag1Config'" :visible="true" :anzahlBereiche="props.anzahlBereiche" :jahr="modalData.jahr" :teil="modalData.teil" :klassen="modalData.klassen" :teilnehmerCount="modalData.teilnehmerCount" :partnerId="modalData.partnerId" @close="closeModal" @submit="handleBoTag1" />
         <ModalHausordnung v-if="activeModal === 'hausordnungConfig'" :visible="true" :partnerId="modalData.partnerId" :jahr="modalData.jahr" :teil="modalData.teil" @close="closeModal"/>
 
