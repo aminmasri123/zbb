@@ -4,7 +4,7 @@ namespace App\Models;
 
 use App\Models\MaterialanforderungArtikel;
 use App\Models\MaterialanforderungVergabevermerk;
-use App\Models\Personen;
+use App\Models\User;
 use App\Models\Projekt;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -29,7 +29,7 @@ class Materialanforderung extends Model
     // Beziehungen
     public function besteller()
     {
-        return $this->hasOne(Personen::class, 'id', 'ersteller_id');
+        return $this->belongsTo(User::class, 'ersteller_id');
     }
 
     public function artikeln()
