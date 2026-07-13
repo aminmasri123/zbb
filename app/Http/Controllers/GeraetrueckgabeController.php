@@ -20,6 +20,11 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class GeraetrueckgabeController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('module:it_management');
+    }
+
     /**
      * Display a listing of the resource.
      */

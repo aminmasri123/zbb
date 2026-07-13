@@ -9,6 +9,7 @@ import ModalEdit from '@/Pages/Gruppe/ModalEdit.vue';
 import ModalMeldung from '@/Pages/Raum/ModalMeldung.vue';
 import { formatTime } from '@/utils/timeFormat';
 import { formatDate } from '@/utils/dateFormat';
+import { usePermissions } from '@/utils/permissions';
 let seite = 'gruppe';
 let search = ref('');
 let gruppeToDelete = ref(null);
@@ -19,6 +20,7 @@ let gruppeToEdit = ref(null);
 let isMeldungModalOpen = ref(false);
 let gruppeForMeldung = ref(null);
 let raumForMeldung = ref(null);
+const { can } = usePermissions();
 
 // Props
 const props = defineProps({
@@ -220,7 +222,7 @@ watch(search, () => {
                 <!-- Buttons -->
                 <div class="flex gap-2 mt-4 sm:mt-0">
                     <Link
-                    v-if="props.projekt?.klassenbuch_aktiv"
+                    v-if="props.projekt?.klassenbuch_aktiv && can('klassenbuch.index')"
                     :href="route('klassenbuch.index')"
                     class="px-4 py-2 text-sm font-medium rounded-md border border-zbb text-zbb shadow-sm hover:bg-zbb hover:text-white transition"
                     >

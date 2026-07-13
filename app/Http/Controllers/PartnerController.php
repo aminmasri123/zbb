@@ -12,6 +12,8 @@ use App\Models\Partnerschaftstypen;
 use App\Models\Personen;
 use App\Models\Projekt;
 use App\Models\ProjektHasPartner;
+use App\Models\User;
+use App\Services\Projects\ActiveProjectContext;
 use Exception;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
@@ -20,6 +22,18 @@ use Inertia\Inertia;
 
 class PartnerController extends Controller
 {
+    public function __construct(private readonly ActiveProjectContext $activeProjectContext)
+    {
+    }
+
+    private function activeProjectId(User $user): int
+    {
+        $project = $this->activeProjectContext->currentAvailableFor($user);
+        abort_unless($project, 409, 'Bitte wählen Sie zuerst ein aktives Projekt aus.');
+
+        return $project->id;
+    }
+
     private function projektPartnerPivotIds($projektId)
     {
         return DB::table('projekt_has_ansprechpartners')
@@ -95,7 +109,7 @@ class PartnerController extends Controller
         $search = $request->input('search');
 
         $user = auth()->user();
-        $userProjektAktiv = $user->current_team_id;
+        $userProjektAktiv = $this->activeProjectId($user);
         /* $projekt = Projekt::find($userProjektAktiv)->with('bereiche')->first(); */
         $projekt = Projekt::with('bereiche')->find($userProjektAktiv);
         $projektName = $projekt?->name;
@@ -124,7 +138,7 @@ class PartnerController extends Controller
     public function indexAjaxFresh(Request $request)
     {
         $user = auth()->user();
-        $userProjektAktiv = $user->current_team_id;
+        $userProjektAktiv = $this->activeProjectId($user);
         $search = $request->input('search');
 
        $partners = $this->applyPartnerSearch(Partner::query(), $search)
@@ -179,7 +193,7 @@ class PartnerController extends Controller
         ]);
 
         $user = auth()->user();
-        $userProjektAktiv = $user->current_team_id;
+        $userProjektAktiv = $this->activeProjectId($user);
 
 
 
@@ -388,7 +402,7 @@ class PartnerController extends Controller
         ]);
 
         $user = auth()->user();
-        $userProjektAktiv = $user->current_team_id;
+        $userProjektAktiv = $this->activeProjectId($user);
         $assignedPivotIds = [];
         $assignedPersonIds = [];
 
@@ -522,7 +536,7 @@ class PartnerController extends Controller
         try {
             $partner = Partner::findOrFail($id);
             $user = auth()->user();
-            $userProjektAktiv = $user->current_team_id;
+            $userProjektAktiv = $this->activeProjectId($user);
 
             $projectPivotIds = DB::table('projekt_has_ansprechpartners')
                 ->join('partner_has_partnerschaftstypens', 'projekt_has_ansprechpartners.ansprechpartner_id', '=', 'partner_has_partnerschaftstypens.id')

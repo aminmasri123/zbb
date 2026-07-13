@@ -1,0 +1,3 @@
+<?php
+namespace App\Models;use Illuminate\Database\Eloquent\Factories\HasFactory;use Illuminate\Database\Eloquent\Model;
+class PortalCourseQuiz extends Model{use HasFactory;protected $fillable=['course_id','lesson_id','title','description','passing_percent','max_attempts','published','sort_order'];protected $casts=['passing_percent'=>'integer','max_attempts'=>'integer','published'=>'boolean','sort_order'=>'integer'];public function course(){return $this->belongsTo(PortalCourse::class,'course_id');}public function questions(){return $this->hasMany(PortalQuizQuestion::class,'quiz_id')->orderBy('sort_order')->orderBy('id');}public function attempts(){return $this->hasMany(PortalQuizAttempt::class,'quiz_id');}}

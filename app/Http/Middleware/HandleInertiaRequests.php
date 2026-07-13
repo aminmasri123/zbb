@@ -3,7 +3,10 @@
 namespace App\Http\Middleware;
 
 use App\Models\AppPopup;
-use App\Models\Projekt;
+use App\Models\AccountDeletionRequest;
+use App\Services\Modules\ModuleStateResolver;
+use App\Services\Projects\ActiveProjectContext;
+use App\Models\ProjektHasPersonen;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -72,6 +75,14 @@ class HandleInertiaRequests extends Middleware
 
             'currentProjekt' => fn () => $this->currentProjektFor($request),
 
+            'accountDeletionRequest' => fn () => $this->accountDeletionRequestFor($request),
+
+            'enabledModules' => fn () => $request->user()
+                ? app(ModuleStateResolver::class)->availableStates()
+                : [],
+
+            'participantPortalNavigation' => fn () => $this->participantPortalNavigation($request),
+
            /*  'auth' => [
                 'user' => fn () => $request->user()
                     ? $request->user()->load('projekte') // Relation anhängen
@@ -129,25 +140,58 @@ class HandleInertiaRequests extends Middleware
     {
         $user = $request->user();
 
-        if (! $user?->current_team_id) {
+        if (!$user) {
             return null;
         }
 
-        $columns = ['id', 'name'];
-        if (Schema::hasColumn('projekts', 'klassenbuch_aktiv')) {
-            $columns[] = 'klassenbuch_aktiv';
+        $context = app(ActiveProjectContext::class);
+
+        return $context->payload($context->currentFor($user));
+    }
+
+    private function accountDeletionRequestFor(Request $request): ?array
+    {
+        $user = $request->user();
+
+        if (! $user || ! Schema::hasTable('account_deletion_requests')) {
+            return null;
         }
 
-        $projekt = Projekt::query()->find($user->current_team_id, $columns);
+        $deletionRequest = AccountDeletionRequest::query()
+            ->where('user_id', $user->id)
+            ->whereIn('status', ['submitted', 'approved'])
+            ->latest()
+            ->first();
 
-        if (! $projekt) {
+        if (! $deletionRequest) {
             return null;
         }
 
         return [
-            'id' => $projekt->id,
-            'name' => $projekt->name,
-            'klassenbuch_aktiv' => (bool) ($projekt->klassenbuch_aktiv ?? false),
+            'id' => $deletionRequest->id,
+            'status' => $deletionRequest->status,
+            'created_at' => $deletionRequest->created_at?->toISOString(),
+        ];
+    }
+
+    private function participantPortalNavigation(Request $request): ?array
+    {
+        $user = $request->user();
+        if (!$user?->person_id || $user->person?->typ !== 'teilnehmer') return null;
+
+        $features = ProjektHasPersonen::query()->where('personen_id', $user->person_id)
+            ->with('projekt:id,portal_feature_settings')->get()
+            ->map(fn ($participation) => $participation->projekt->portalFeatureSettings());
+
+        $enabled = fn (string $key) => $features->contains(fn (array $settings) => (bool) ($settings[$key] ?? false));
+
+        return [
+            'profile' => $enabled('profile'),
+            'attendance' => $enabled('attendance_self_service') || $enabled('tasks_and_appointments'),
+            'jobs' => $enabled('job_search') || $enabled('application_management'),
+            'learning' => $enabled('learning'),
+            'messaging' => $enabled('messaging'),
+            'consents' => $enabled('consents_and_approvals'),
         ];
     }
 }

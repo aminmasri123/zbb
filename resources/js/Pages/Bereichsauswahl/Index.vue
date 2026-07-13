@@ -9,6 +9,7 @@ import ModalDestroy from '@/Components/ModalDestroyForm.vue';
 import ModalCreate from '@/Pages/Bereich/ModalCreate.vue';
 import ModalEdit from '@/Pages/Bereich/ModalEdit.vue';
 import Bereichewaelen from './Bereichewaelen.vue';
+import { usePermissions } from '@/utils/permissions';
 const props = defineProps({
     projekt: Object,
     alle_teilnehmer: Array,
@@ -17,6 +18,16 @@ const props = defineProps({
     teil: String,
     setting: Object,
 });
+const { can, canAny } = usePermissions();
+const canPlanSelection = () => can('bereichsauswahl.planning');
+const canOpenAssignment = () => canAny([
+    'einteilung.index',
+    'einteilung.store',
+    'einteilung.update',
+    'einteilung.destroy',
+    'einteilung.export',
+    'einteilung.planning',
+]);
 
 const selectionCount = ref(props.setting?.auswahl_anzahl ?? 4);
 const accessEnabled = ref(props.setting?.zugang_aktiv ?? true);
@@ -170,7 +181,7 @@ const copyPublicUrl = async () => {
                                 v-for="count in [2, 3, 4]"
                                 :key="count"
                                 type="button"
-                                :disabled="settingSaving"
+                                :disabled="settingSaving || !canPlanSelection()"
                                 @click="updateSetting(count)"
                                 class="px-4 py-2 text-sm border-r border-gray-300 last:border-r-0 disabled:opacity-50"
                                 :class="selectionCount === count ? 'bg-zbb text-white' : 'bg-white text-gray-700 hover:bg-gray-100'"
@@ -184,6 +195,7 @@ const copyPublicUrl = async () => {
                         <input
                             v-model="accessEnabled"
                             type="checkbox"
+                            :disabled="!canPlanSelection()"
                             class="rounded border-gray-300 text-zbb focus:ring-zbb"
                             @change="updateSetting(selectionCount)"
                         />
@@ -193,6 +205,7 @@ const copyPublicUrl = async () => {
 
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
                     <Link
+                        v-if="canOpenAssignment()"
                         :href="route('einteilung.show', { partnerId: partner.id, schuljahr, teil })"
                         class="inline-flex items-center justify-center gap-2 bg-zbb px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
                     >
@@ -246,6 +259,8 @@ const copyPublicUrl = async () => {
             :alle_bereiche="projekt.bereiche"
             :selection-count="selectionCount"
             :search="search"
+            :can-create="can('bereichsauswahl.store')"
+            :can-update="can('bereichsauswahl.update')"
         />
     </div>
 

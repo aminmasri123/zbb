@@ -15,6 +15,11 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class DienstwagenwartungController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('module:vehicle_management');
+    }
+
    public function index()
     {
         return Inertia::render('Dienstwagen/Wartungen/Index', [

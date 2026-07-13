@@ -13,6 +13,8 @@ use App\Models\Standort;
 use App\Models\RoleDataAccessSetting;
 use App\Notifications\ConfiguredEventNotification;
 use App\Services\NotificationRecipientService;
+use App\Services\Projects\StaffProjectAssignmentSynchronizer;
+use App\Services\Projects\ActiveProjectContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -21,6 +23,12 @@ use Illuminate\Support\Facades\Validator;
 
 class UserController extends Controller
 {
+    public function __construct(
+        private readonly StaffProjectAssignmentSynchronizer $projectAssignments,
+        private readonly ActiveProjectContext $activeProjectContext,
+    ) {
+    }
+
      public function index(Request $request)
     {
         $rollen = Role::select('id', 'name')->get();
@@ -100,18 +108,24 @@ class UserController extends Controller
 
    public function switch(Request $request)
     {
+        $validated = $request->validate([
+            'projekt_id' => ['required', 'integer', 'exists:projekts,id'],
+            'gruppe_id' => ['nullable', 'integer', 'exists:gruppes,id'],
+        ]);
+
         $user = User::findOrFail(auth()->id());
-        $projektId = $request->input('projekt_id');
-        $projektName = Projekt::where('id', $projektId)->value('name');
+        $projektId = (int) $validated['projekt_id'];
+        $projekt = $this->activeProjectContext->forUser($user, $projektId);
+        abort_unless($projekt, 403);
+
         $gruppeId = $request->input('gruppe_id');
 
-        if ($user->projekte()->where('projekts.id', $projektId)->exists()) {
-            $user->current_team_id = $projektId;
-            $user->save();
-        }
+        $user->current_team_id = $projektId;
+        $user->default_projekt_id = $user->default_projekt_id ?: $projektId;
+        $user->save();
 
         // Flash setzen
-        session()->flash('success', "Super! \"$projektName\" wurde als aktives Projekt ausgewählt.");
+        session()->flash('success', "Super! \"{$projekt->name}\" wurde als aktives Projekt ausgewählt.");
 
         if ($gruppeId) {
             $gruppeGehortZumProjekt = Gruppe::where('id', $gruppeId)
@@ -199,7 +213,7 @@ class UserController extends Controller
                 ]);
 
                 $user->roles()->sync($validatedData['rollen']);
-                $this->syncProjektZuweisungen($person, $validatedData['projekt_zuweisungen'] ?? []);
+                $this->projectAssignments->sync($person, $validatedData['projekt_zuweisungen'] ?? []);
 
                 return $user->load('person', 'roles', 'projekte');
             });
@@ -316,7 +330,9 @@ class UserController extends Controller
 
             $user->save();
             $user->roles()->sync($validated['rollen']);
-            $this->syncProjektZuweisungen($person, $validated['projekt_zuweisungen'] ?? []);
+            if ($person->typ === 'mitarbeiter') {
+                $this->projectAssignments->sync($person, $validated['projekt_zuweisungen'] ?? []);
+            }
         });
 
         return redirect()->route('user.edit', $user->id)
@@ -327,6 +343,12 @@ class UserController extends Controller
         try {
 
             $user = User::findOrFail($id); // Suche die Abteilung
+
+            if ((int) $user->id === (int) auth()->id()) {
+                return response()->json([
+                    'message' => 'Sie koennen Ihr eigenes Konto nicht direkt loeschen. Bitte reichen Sie zuerst einen Loeschantrag ein.',
+                ], 403);
+            }
 
             $user->delete(); // Lösche die Abteilung
             return response()->json(['message' => 'der Konto von ' . $user->first_name . ' ' . $user->last_name . ' wurde  erfolgreich gelöscht!'], 200);
@@ -444,33 +466,4 @@ class UserController extends Controller
             ->all();
     }
 
-    private function syncProjektZuweisungen(Personen $person, array $zuweisungen): void
-    {
-        DB::table('projekt_has_personens')
-            ->where('personen_id', $person->id)
-            ->delete();
-
-        foreach ($zuweisungen as $item) {
-            $projektId = $item['projekt_id'] ?? null;
-            $standortIds = collect($item['standort_ids'] ?? [])
-                ->filter()
-                ->unique()
-                ->values();
-
-            if (! $projektId || $standortIds->isEmpty()) {
-                continue;
-            }
-
-            foreach ($standortIds as $standortId) {
-                DB::table('projekt_has_personens')->insert([
-                    'personen_id' => $person->id,
-                    'projekt_id' => $projektId,
-                    'standort_id' => $standortId,
-                    'status' => 'aktiv',
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            }
-        }
-    }
 }

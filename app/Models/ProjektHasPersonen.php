@@ -70,4 +70,39 @@ class ProjektHasPersonen extends Pivot //Model
     {
         return $this->hasMany(ProjektHasTeilnehmerLuv::class, 'projekt_person_id');
     }
+
+    public function intakeChecklistCompletions()
+    {
+        return $this->hasMany(ParticipationIntakeChecklistCompletion::class, 'project_person_id');
+    }
+
+    public function tasks()
+    {
+        return $this->hasMany(AppTask::class, 'project_person_id');
+    }
+
+    public function completionChecklistCompletions()
+    {
+        return $this->hasMany(ParticipationCompletionChecklistCompletion::class, 'project_person_id');
+    }
+
+    public function completionReports()
+    {
+        return $this->hasMany(ParticipationCompletionReport::class, 'project_person_id');
+    }
+
+    public function portalInvitations()
+    {
+        return $this->hasMany(ParticipantPortalInvitation::class, 'project_person_id');
+    }
+
+    public function portalMessages()
+    {
+        return $this->hasMany(ParticipantPortalMessage::class, 'project_person_id');
+    }
+
+    public function consentEvents()
+    {
+        return $this->hasMany(ParticipantConsentEvent::class, 'project_person_id');
+    }
 }

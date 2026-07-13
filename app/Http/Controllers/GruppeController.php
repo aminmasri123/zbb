@@ -7,6 +7,7 @@ use App\Models\Gruppe;
 use App\Models\Raeume;
 use App\Models\Projekt;
 use App\Services\RaumBelegungService;
+use App\Services\Projects\ActiveProjectContext;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -17,16 +18,22 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class GruppeController extends Controller
 {
+    public function __construct(private readonly ActiveProjectContext $activeProjectContext)
+    {
+    }
+
     public function index(Request $request)
     {
         $user = auth()->user();
         $this->authorizeAny($user, ['gruppe.index']);
 
-        if (!$user->current_team_id) {
+        $activeProject = $this->activeProjectContext->currentAvailableFor($user);
+
+        if (!$activeProject) {
             return redirect()->back()->with('error', 'Bitte waehlen Sie ein Projekt aus.');
         }
 
-        $projekt = $this->projektMitVerfuegbarenRaeumen((int) $user->current_team_id);
+        $projekt = $this->projektMitVerfuegbarenRaeumen($activeProject->id);
         $canSeeAllGroups = $this->canSeeAllGroups($user);
 
         $gruppen = Gruppe::query()
@@ -34,7 +41,7 @@ class GruppeController extends Controller
             ->withCount([
                 'teilnehmer as teilnehmer_count' => fn ($query) => $query->select(DB::raw('count(distinct personens.id)')),
             ])
-            ->where('projekt_id', $user->current_team_id)
+            ->where('projekt_id', $activeProject->id)
             ->when(!$canSeeAllGroups, fn ($query) => $query->where('personen_id', $this->userPersonId($user)))
             ->orderBy('anfangsdatum')
             ->orderBy('startzeit')
@@ -56,6 +63,8 @@ class GruppeController extends Controller
     {
         $user = auth()->user();
         $this->authorizeAny($user, ['gruppe.store']);
+        $activeProject = $this->activeProjectContext->currentAvailableFor($user);
+        abort_unless($activeProject, 409, 'Bitte wählen Sie zuerst ein aktives Projekt aus.');
 
         $request->merge([
             'ort_typ' => $request->input('ort_typ', 'raum'),
@@ -75,7 +84,7 @@ class GruppeController extends Controller
             'bemerkung' => 'nullable|string|max:1000',
         ]);
 
-        $projekt = $this->projektMitVerfuegbarenRaeumen((int) $user->current_team_id);
+        $projekt = $this->projektMitVerfuegbarenRaeumen($activeProject->id);
         $this->validateProjektZuordnung($projekt, (int) $validated['bereich'], $validated['raum_id'] ?? null);
         $standortId = $this->resolveStandortId($projekt, $validated);
         $this->validateBetreuer($user, $projekt, (int) $validated['betreuer']);
@@ -84,7 +93,7 @@ class GruppeController extends Controller
         $gruppe = Gruppe::create([
             'personen_id' => $validated['betreuer'],
             'bereich_id' => $validated['bereich'],
-            'projekt_id' => $user->current_team_id,
+            'projekt_id' => $activeProject->id,
             'standort_id' => $standortId,
             'ort_typ' => $validated['ort_typ'],
             'raum_id' => $validated['ort_typ'] === 'raum' ? $validated['raum_id'] : null,
@@ -109,6 +118,8 @@ class GruppeController extends Controller
     {
         $user = auth()->user();
         $gruppe = Gruppe::findOrFail($id);
+        $activeProject = $this->activeProjectContext->currentAvailableFor($user);
+        abort_unless($activeProject && (int) $gruppe->projekt_id === $activeProject->id, 403);
         abort_unless($this->canManageGroup($user, $gruppe, 'gruppe.update'), 403);
 
         try {
@@ -175,9 +186,13 @@ class GruppeController extends Controller
 
     public function destroy($id)
     {
+        $user = auth()->user();
+        $activeProject = $this->activeProjectContext->currentAvailableFor($user);
+        abort_unless($activeProject, 409, 'Bitte wählen Sie zuerst ein aktives Projekt aus.');
+
         try {
-            $user = auth()->user();
             $gruppe = Gruppe::findOrFail($id);
+            abort_unless((int) $gruppe->projekt_id === $activeProject->id, 403);
             abort_unless($this->canManageGroup($user, $gruppe, 'gruppe.destroy'), 403);
 
             $gruppe->delete();

@@ -1,0 +1,6 @@
+<?php
+use Illuminate\Database\Migrations\Migration;use Illuminate\Database\Schema\Blueprint;use Illuminate\Support\Facades\Schema;
+return new class extends Migration{
+ public function up():void{Schema::create('participant_portal_documents',function(Blueprint $table){$table->id();$table->foreignId('project_person_id')->constrained('projekt_has_personens',indexName:'portal_document_participation_fk')->cascadeOnDelete();$table->foreignId('uploaded_by_user_id')->constrained('users',indexName:'portal_document_uploader_fk')->cascadeOnDelete();$table->string('original_name');$table->string('path',1024);$table->string('mime_type',120);$table->unsignedBigInteger('size');$table->string('category',80)->default('other');$table->enum('status',['pending','approved','rejected'])->default('pending');$table->boolean('visible_to_participant')->default(true);$table->text('review_note')->nullable();$table->foreignId('reviewed_by_user_id')->nullable()->constrained('users',indexName:'portal_document_reviewer_fk')->nullOnDelete();$table->timestamp('reviewed_at')->nullable();$table->timestamps();$table->index(['project_person_id','status','created_at'],'portal_document_participation_status');});}
+ public function down():void{Schema::dropIfExists('participant_portal_documents');}
+};

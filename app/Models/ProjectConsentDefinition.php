@@ -1,0 +1,3 @@
+<?php
+namespace App\Models;use Illuminate\Database\Eloquent\Factories\HasFactory;use Illuminate\Database\Eloquent\Model;
+class ProjectConsentDefinition extends Model {use HasFactory;protected $fillable=['project_id','key','version','title','purpose','content','required','allow_withdrawal','active','sort_order','created_by_user_id'];protected $casts=['required'=>'boolean','allow_withdrawal'=>'boolean','active'=>'boolean'];public function project(){return $this->belongsTo(Projekt::class,'project_id');}public function events(){return $this->hasMany(ParticipantConsentEvent::class,'consent_definition_id');}}

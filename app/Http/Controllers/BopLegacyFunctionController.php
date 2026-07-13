@@ -6,6 +6,7 @@ use App\Models\Partner;
 use App\Models\PersonenIstSchueler;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 use Inertia\Inertia;
@@ -36,6 +37,16 @@ class BopLegacyFunctionController extends Controller
 
     private function partner(int $schuleId): Partner
     {
+        $projectId = auth()->user()?->current_team_id;
+        abort_unless($projectId, 409, 'Bitte waehlen Sie zuerst ein aktives Projekt aus.');
+        abort_unless(
+            DB::table('projekt_has_partners')
+                ->where('projekt_id', $projectId)
+                ->where('partner_id', $schuleId)
+                ->exists(),
+            404
+        );
+
         return Partner::findOrFail($schuleId);
     }
 

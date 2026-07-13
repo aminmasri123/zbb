@@ -12,9 +12,15 @@ use App\Models\ProjektHasPersonen;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\Controller;
+use App\Services\Projects\ActiveProjectContext;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class ProjektHasTeilnehmerController extends Controller
 {
+    public function __construct(private readonly ActiveProjectContext $activeProjectContext)
+    {
+    }
     /**
      * Display a listing of the resource.
      */
@@ -49,15 +55,24 @@ class ProjektHasTeilnehmerController extends Controller
             'anfangsdatum'        => ['nullable', 'date'],
             'enddatum'            => ['nullable', 'date'],
             'standort_id'         => ['nullable', 'exists:standorts,id'],
-            'model_type'          => ['required'],
+            'model_type'          => ['required', Rule::in([ProjektHasPersonen::class])],
         ]);
 
+        $activeProject = $this->activeProjectContext->currentAvailableFor($request->user());
+        abort_unless($activeProject, 409, 'Bitte wählen Sie zuerst ein aktives Projekt aus.');
+        abort_unless((int) $validated['projekt_id'] === (int) $activeProject->id, 403);
+        $validated['projekt_id'] = $activeProject->id;
+        $this->validateProjectStaff($activeProject, [
+            $validated['betreuer'] ?? null,
+        ]);
+        $teilnehmer = Personen::query()
+            ->teilnehmer()
+            ->whereHas('projekte', fn ($query) => $query->where('projekts.id', $activeProject->id))
+            ->findOrFail($validated['teilnehmer_id']);
 
         DB::beginTransaction();
 
         try {
-            $teilnehmer = Personen::findOrFail($validated['teilnehmer_id']);
-
             // 🔹 Prüfen: Projekt bereits zugewiesen?
             $existingPivot = ProjektHasPersonen::where('personen_id', $validated['teilnehmer_id'])
                 ->where('projekt_id', $validated['projekt_id'])
@@ -103,7 +118,7 @@ class ProjektHasTeilnehmerController extends Controller
             $pivot = ProjektHasPersonen::create([
                 'personen_id' => $validated['teilnehmer_id'],
                 'projekt_id'  => $validated['projekt_id'],
-                'status'      => 'aktiv',
+                'status'      => $activeProject->rule('participation_initial_status', 'aktiv'),
                 'standort_id' => $standortId,
             ]);
 
@@ -172,13 +187,21 @@ class ProjektHasTeilnehmerController extends Controller
             'anfangsdatum'  => ['nullable', 'date'],
             'enddatum'      => ['nullable', 'date'],
             'standort_id'   => ['nullable', 'exists:standorts,id'],
+            'status' => ['sometimes', 'string', Rule::in(Projekt::PARTICIPATION_STATUSES)],
         ]);
+
+        $activeProject = $this->activeProjectContext->currentAvailableFor($request->user());
+        abort_unless($activeProject, 409, 'Bitte wählen Sie zuerst ein aktives Projekt aus.');
+        $this->validateProjectStaff($activeProject, [
+            $validated['betreuer_id'] ?? null,
+        ]);
+        $pivot = ProjektHasPersonen::query()
+            ->where('projekt_id', $activeProject->id)
+            ->findOrFail($validated['id']);
 
         DB::beginTransaction();
         try {
             // 🟩 Pivot holen
-            $pivot = ProjektHasPersonen::findOrFail($validated['id']);
-
             if (!$pivot) {
                 return back()->with('error', 'Projektzuweisung nicht gefunden.');
             }
@@ -189,25 +212,31 @@ class ProjektHasTeilnehmerController extends Controller
                 ]);
             }
 
+            if (array_key_exists('status', $validated)) {
+                $pivot->update(['status' => $validated['status']]);
+            }
+
            // Prüfen, ob Meta existiert (angenommen: Relation heißt "meta")
             $meta = $pivot->meta;
+            $projektbegleiterId = $validated['projektbegleiter_id'] ?? null;
+            $betreuerId = $validated['betreuer_id'] ?? null;
 
-                if (!$meta && ($validated['projektbegleiter_id'] ?? null || $validated['betreuer_id'] ?? null)) {
+                if (!$meta && ($projektbegleiterId || $betreuerId)) {
                     // 🟢 1. Kein Meta vorhanden + einer der beiden Werte existiert → ERSTELLEN
                     $meta = $pivot->meta()->create([
                         'projekt_person_id'   => $pivot->id,
-                        'projektbegleiter_id' => $validated['projektbegleiter_id'] ?? null,
-                        'betreuer_id'         => $validated['betreuer_id'] ?? null,
+                        'projektbegleiter_id' => $projektbegleiterId,
+                        'betreuer_id'         => $betreuerId,
                     ]);
 
-                } elseif ($meta && ($validated['projektbegleiter_id'] ?? null || $validated['betreuer_id'] ?? null)) {
+                } elseif ($meta && ($projektbegleiterId || $betreuerId)) {
                     // 🟡 2. Meta existiert + einer der Werte gesetzt → UPDATE
                     $meta->update([
-                        'projektbegleiter_id' => $validated['projektbegleiter_id'] ?? $meta->projektbegleiter_id,
-                        'betreuer_id'         => $validated['betreuer_id'] ?? $meta->betreuer_id,
+                        'projektbegleiter_id' => $projektbegleiterId ?? $meta->projektbegleiter_id,
+                        'betreuer_id'         => $betreuerId ?? $meta->betreuer_id,
                     ]);
 
-                } elseif (!$meta && empty($validated['projektbegleiter_id']) && empty($validated['betreuer_id'])) {
+                } elseif (!$meta && !$projektbegleiterId && !$betreuerId) {
                     // 🔴 3. Kein Meta vorhanden + beide Werte NULL → NICHTS TUN
                     // (absichtlich leer)
                 }
@@ -258,6 +287,7 @@ class ProjektHasTeilnehmerController extends Controller
                 'meta'     => $meta ? $meta->load('projektbegleiter', 'betreuer') : null,
                 'standort_id' => $pivot->standort_id,
                 'standort' => $pivot->standort,
+                'status' => $pivot->status,
             ]);
         } catch (Throwable $e) {
 
@@ -269,6 +299,26 @@ class ProjektHasTeilnehmerController extends Controller
             ]);
 
             return back()->with('error', 'Fehler beim Aktualisieren der Projektzuweisung.');
+        }
+    }
+
+    private function validateProjectStaff(Projekt $project, array $personIds): void
+    {
+        $personIds = collect($personIds)->filter()->map(fn ($id) => (int) $id)->unique();
+        if ($personIds->isEmpty()) {
+            return;
+        }
+
+        $validIds = $project->mitarbeiter()
+            ->whereIn('personens.id', $personIds)
+            ->pluck('personens.id')
+            ->map(fn ($id) => (int) $id)
+            ->unique();
+
+        if ($validIds->count() !== $personIds->count()) {
+            throw ValidationException::withMessages([
+                'betreuer' => 'Betreuer und Ansprechpartner müssen dem aktiven Projekt zugewiesen sein.',
+            ]);
         }
     }
 }

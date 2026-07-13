@@ -17,6 +17,11 @@ use Inertia\Inertia;
 
 class ItServiceController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('module:it_management');
+    }
+
     public function index(Request $request)
     {
         $this->authorizeAny($request, [

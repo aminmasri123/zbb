@@ -13,25 +13,25 @@
         </div>
 
         <div class="flex flex-wrap items-center justify-end gap-2">
-          <button type="button" @click="openCreateModal" class="rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600">
+          <button v-if="can('einteilung.store')" type="button" @click="openCreateModal" class="rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600">
             <i class="la la-plus mr-1"></i>Anlegen
           </button>
-          <button type="button" @click="openGruppenModal" class="rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600">
+          <button v-if="can('einteilung.planning')" type="button" @click="openGruppenModal" class="rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600">
             <i class="la la-refresh mr-1"></i>Gruppen generieren
           </button>
-          <button type="button" @click="openParameterModal" class="rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600">
+          <button v-if="can('einteilung.planning')" type="button" @click="openParameterModal" class="rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600">
             <i class="la la-sliders-h mr-1"></i>Parameter
           </button>
-          <button type="button" @click="openSwitchModal" class="rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600">
+          <button v-if="can('einteilung.planning')" type="button" @click="openSwitchModal" class="rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600">
             <i class="la la-exchange-alt mr-1"></i>Runden tauschen
           </button>
-          <button type="button" :disabled="isBusy" @click="submitEinteilen" class="rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600 disabled:opacity-50">
+          <button v-if="can('einteilung.store')" type="button" :disabled="isBusy" @click="submitEinteilen" class="rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600 disabled:opacity-50">
             <i class="la la-arrows-alt mr-1"></i>Einteilen
           </button>
-          <button type="button" :disabled="isBusy" @click="submitDestroy" class="rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600 disabled:opacity-50">
+          <button v-if="can('einteilung.destroy')" type="button" :disabled="isBusy" @click="submitDestroy" class="rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600 disabled:opacity-50">
             <i class="la la-trash mr-1"></i>Löschen
           </button>
-          <button type="button" @click="openExportModal" class="rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600">
+          <button v-if="can('einteilung.export')" type="button" @click="openExportModal" class="rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600">
             <i class="la la-download mr-1"></i>Exportieren
           </button>
         </div>
@@ -79,8 +79,9 @@
                         <li
                         v-for="schueler in results[bereich]?.[runde]"
                         :key="schueler.id"
-                        @click="openEditModal(schueler)"
-                        class="cursor-pointer hover:bg-gray-200 rounded transition group"
+                        @click="can('einteilung.update') && openEditModal(schueler)"
+                        class="rounded transition group"
+                        :class="can('einteilung.update') ? 'cursor-pointer hover:bg-gray-200' : 'cursor-default'"
                         >
                         <span class="group-hover:text-zbb font-medium text-xs">
                             {{ schueler.nachname }}, {{ schueler.vorname }}
@@ -190,17 +191,11 @@
       <template #header>Einteilungs-Parameter</template>
       <template #body>
         <div class="space-y-5">
-          <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
               <label class="mb-1 block text-sm font-semibold text-gray-700">Runden</label>
               <select v-model.number="parameterForm.runden_anzahl" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb sm:text-sm">
                 <option v-for="count in [2, 3, 4, 5]" :key="count" :value="count">{{ count }}</option>
-              </select>
-            </div>
-            <div>
-              <label class="mb-1 block text-sm font-semibold text-gray-700">Bereichsauswahl</label>
-              <select v-model.number="parameterForm.auswahl_anzahl" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb sm:text-sm">
-                <option v-for="count in [2, 3, 4]" :key="count" :value="count">{{ count }}</option>
               </select>
             </div>
             <div>
@@ -376,6 +371,7 @@ import { Head } from '@inertiajs/vue3'
 import { ref, computed, reactive } from 'vue'
 import InputText from 'primevue/inputtext';
 import axios from 'axios'
+import { usePermissions } from '@/utils/permissions'
 
 const props = defineProps({
   results: Object,
@@ -393,6 +389,7 @@ const props = defineProps({
   runden: Array,
   parameter: Object,
 })
+const { can } = usePermissions()
 
 const teilnehmername = ref('');
 const showModal = ref(false)
@@ -418,7 +415,6 @@ const runden = ref([...(props.runden?.length ? props.runden : [1, 2, 3])])
 
 const normalizeParameter = (parameter = {}) => ({
   runden_anzahl: Number(parameter.runden_anzahl ?? 3),
-  auswahl_anzahl: Number(parameter.auswahl_anzahl ?? 4),
   standard_kapazitaet: Number(parameter.standard_kapazitaet ?? 15),
   kapazitaeten: { ...(parameter.kapazitaeten ?? {}) },
 })
@@ -518,7 +514,6 @@ const exportForm = reactive({
 })
 const parameterForm = reactive({
   runden_anzahl: parameter.value.runden_anzahl,
-  auswahl_anzahl: parameter.value.auswahl_anzahl,
   standard_kapazitaet: parameter.value.standard_kapazitaet,
   kapazitaeten: { ...parameter.value.kapazitaeten },
   processing: false,
@@ -573,7 +568,6 @@ const capacityForBereich = (bereichName) => {
 const openParameterModal = () => {
   const current = normalizeParameter(parameter.value)
   parameterForm.runden_anzahl = current.runden_anzahl
-  parameterForm.auswahl_anzahl = current.auswahl_anzahl
   parameterForm.standard_kapazitaet = current.standard_kapazitaet
   parameterForm.kapazitaeten = { ...current.kapazitaeten }
   allBereiche.value.forEach((bereich) => {
@@ -620,7 +614,6 @@ const submitParameter = async () => {
     const response = await axios.post(route('einteilung.parameter.update'), {
       ...contextPayload(),
       runden_anzahl: parameterForm.runden_anzahl,
-      auswahl_anzahl: parameterForm.auswahl_anzahl,
       standard_kapazitaet: parameterForm.standard_kapazitaet,
       kapazitaeten: parameterForm.kapazitaeten,
     })

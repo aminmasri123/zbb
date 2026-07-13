@@ -19,10 +19,17 @@ use App\Models\PotenzialanalyseBeurteilung;
 use App\Models\PotenzialanalyseKompetenzbewertung;
 use App\Models\PotenzialanalyseSelbsteinschaetzung;
 use App\Models\PotenzialanalyseUebungErgebnis;
+use App\Services\Projects\ActiveProjectContext;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class GruppeHasTeilnehmerController extends Controller
 {
+    public function __construct(private readonly ActiveProjectContext $activeProjectContext)
+    {
+    }
+
     /**
      * Display a listing of the resource.
      */
@@ -59,11 +66,45 @@ class GruppeHasTeilnehmerController extends Controller
             'enddatum'     => 'required|date',
         ]);
 
-        $anwesenheitsstatuten = Anwesenheitsstatuten::where('status', 'unentschuldigt')->first();
-
         $ids = array_map('intval', $validated['teilnehmer']);
         $gruppe = Gruppe::findOrFail($validated['gruppe_id']);
         abort_unless($this->canUseGroup(auth()->user(), $gruppe), 403);
+
+        $projekt = $gruppe->projekt()->firstOrFail();
+        $validParticipantIds = DB::table('projekt_has_personens')
+            ->join('personens', 'personens.id', '=', 'projekt_has_personens.personen_id')
+            ->where('projekt_has_personens.projekt_id', $projekt->id)
+            ->where('personens.typ', 'teilnehmer')
+            ->whereIn('personens.id', $ids)
+            ->pluck('personens.id')
+            ->map(fn ($id) => (int) $id)
+            ->unique();
+
+        if ($validParticipantIds->count() !== count(array_unique($ids))) {
+            throw ValidationException::withMessages([
+                'teilnehmer' => 'Alle Teilnehmer müssen dem aktiven Projekt zugewiesen sein.',
+            ]);
+        }
+
+        $maxParticipants = $projekt->rule('max_group_participants');
+        if ($maxParticipants !== null) {
+            $existingIds = GruppeHasPersonen::query()
+                ->where('gruppe_id', $gruppe->id)
+                ->pluck('personen_id')
+                ->map(fn ($id) => (int) $id)
+                ->unique();
+
+            if ($existingIds->merge($ids)->unique()->count() > (int) $maxParticipants) {
+                throw ValidationException::withMessages([
+                    'teilnehmer' => "Die maximale Gruppengröße von {$maxParticipants} Teilnehmern wird überschritten.",
+                ]);
+            }
+        }
+
+        $anwesenheitsstatuten = Anwesenheitsstatuten::where(
+            'status',
+            $projekt->rule('attendance_default_status', 'unentschuldigt')
+        )->firstOrFail();
 
 
         // IDs, die bereits existieren
@@ -84,6 +125,9 @@ class GruppeHasTeilnehmerController extends Controller
 
         $tageIDs = [];
         for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
+            if ($projekt->rule('attendance_skip_weekends', false) && $date->isWeekend()) {
+                continue;
+            }
             // Feiertage / Wochenenden kannst du hier optional überspringen
             $tag = Tage::firstOrCreate([
                 'datum' => $date->format('Y-m-d'),
@@ -162,6 +206,11 @@ class GruppeHasTeilnehmerController extends Controller
 
         $user = auth()->user();
         abort_unless($this->canUseGroup($user, $gruppe), 403);
+        $canReadAttendance = collect([
+            'anwesenheit.index',
+            'anwesenheit.manage',
+            'anwesenheit.destroy',
+        ])->contains(fn (string $permission) => $user->can($permission));
 
         $gruppenTeilnehmer = GruppeHasPersonen::query()
             ->where('gruppe_id', $gruppe->id)
@@ -174,7 +223,7 @@ class GruppeHasTeilnehmerController extends Controller
                 'user',
             ])
             ->get()
-            ->map(function (GruppeHasPersonen $eintrag) {
+            ->map(function (GruppeHasPersonen $eintrag) use ($canReadAttendance) {
                 if (! $eintrag->teilnehmer) {
                     return null;
                 }
@@ -182,6 +231,20 @@ class GruppeHasTeilnehmerController extends Controller
                 $teilnehmer = clone $eintrag->teilnehmer;
                 $pivot = clone $eintrag;
                 $pivot->unsetRelation('teilnehmer');
+                if (! $canReadAttendance) {
+                    $pivot->makeHidden([
+                        'anwesenheitsstatuten_id',
+                        'bemerkung',
+                        'tage_id',
+                        'zeitgeplant_id',
+                        'zeittatsaechlich_id',
+                        'status',
+                        'tag',
+                        'zeitgeplant',
+                        'zeittatsaechlich',
+                    ]);
+                    $pivot->unsetRelations();
+                }
                 $teilnehmer->setRelation('pivot', $pivot);
 
                 return $teilnehmer;
@@ -206,7 +269,7 @@ class GruppeHasTeilnehmerController extends Controller
             );
         }
 
-        $anwesenheitsstatuten = Anwesenheitsstatuten::all();
+        $anwesenheitsstatuten = $canReadAttendance ? Anwesenheitsstatuten::all() : collect();
 
         $projektId = $gruppe->projekt_id ?? $user->current_team_id;
         $standortId = $gruppe->standort_id;
@@ -286,6 +349,11 @@ class GruppeHasTeilnehmerController extends Controller
     private function canUseGroup($user, ?Gruppe $gruppe): bool
     {
         if (!$user || !$gruppe) {
+            return false;
+        }
+
+        $activeProject = $this->activeProjectContext->currentAvailableFor($user);
+        if (!$activeProject || (int) $gruppe->projekt_id !== (int) $activeProject->id) {
             return false;
         }
 
@@ -652,7 +720,7 @@ class GruppeHasTeilnehmerController extends Controller
             ],
         ];
 
-        if (!empty($context['klasse'])) {
+        if (!empty($context['klasse']) && auth()->user()?->can('anwesenheit.abrechnung')) {
             array_unshift($items, [
                 'id' => 'bop-pa-anwesenheitsliste',
                 'name' => 'Anwesenheitsliste PA',
@@ -672,7 +740,17 @@ class GruppeHasTeilnehmerController extends Controller
             ]);
         }
 
-        return $items;
+        return array_values(array_filter($items, function (array $item): bool {
+            if ($item['id'] === 'bop-pa-auswertungsbogen') {
+                return auth()->user()?->can('dokumente.schule.export') ?? false;
+            }
+
+            if ($item['id'] === 'bop-pa-berichte-ordner') {
+                return auth()->user()?->can('dokumente.ansprechpartner.manage') ?? false;
+            }
+
+            return true;
+        }));
     }
 
     private function poboExporte(Gruppe $gruppe, array $context): array
@@ -682,7 +760,7 @@ class GruppeHasTeilnehmerController extends Controller
         $teil = $context['teil'];
         $termin = $gruppe->anfangsdatum ?: now()->toDateString();
 
-        return [
+        $items = [
             [
                 'id' => 'bop-gruppe-namensschilder',
                 'name' => 'Namensschilder',
@@ -933,6 +1011,76 @@ class GruppeHasTeilnehmerController extends Controller
                 ]),
             ],
         ];
+
+        $accountingItems = [
+            'bop-anwesenheitsdaten',
+            'bop-anwesenheitsliste-tag1',
+            'bop-anwesenheitsliste-vorbereitung',
+            'bop-anwesenheitsliste-rechnung',
+        ];
+
+        $selectionPermissions = [
+            'bereichsauswahl.index',
+            'bereichsauswahl.store',
+            'bereichsauswahl.update',
+            'bereichsauswahl.planning',
+        ];
+        $assignmentPermissions = [
+            'einteilung.index',
+            'einteilung.store',
+            'einteilung.update',
+            'einteilung.destroy',
+            'einteilung.export',
+            'einteilung.planning',
+        ];
+        $schoolExportItems = [
+            'bop-hausordnung',
+            'bop-zertifikat-pobo',
+            'bop-zertifikat-pobo-pdf',
+            'bop-auswertung-pobo',
+            'bop-auswertung-runde',
+        ];
+        $contactDocumentItems = [
+            'bop-einverstaendnisliste',
+            'bop-ordner-anlegen',
+            'bop-auswertung-ordner',
+        ];
+
+        return array_values(array_filter($items, function (array $item) use ($accountingItems, $selectionPermissions, $assignmentPermissions, $schoolExportItems, $contactDocumentItems): bool {
+            if (in_array($item['id'], $accountingItems, true)) {
+                return auth()->user()?->can('anwesenheit.abrechnung') ?? false;
+            }
+
+            if ($item['id'] === 'bop-gruppe-anwesenheitsliste') {
+                return auth()->user()?->can('anwesenheit.export') ?? false;
+            }
+
+            if ($item['id'] === 'bop-bereichsauswahl') {
+                return collect($selectionPermissions)->contains(
+                    fn (string $permission) => auth()->user()?->can($permission) ?? false
+                );
+            }
+
+            if ($item['id'] === 'bop-einteilung') {
+                return collect($assignmentPermissions)->contains(
+                    fn (string $permission) => auth()->user()?->can($permission) ?? false
+                );
+            }
+
+            if (in_array($item['id'], $schoolExportItems, true)) {
+                return auth()->user()?->can('dokumente.schule.export') ?? false;
+            }
+
+            if ($item['id'] === 'bop-teilnehmerliste') {
+                return auth()->user()?->can('teilnehmer.liste.export') ?? false;
+            }
+
+            if (in_array($item['id'], $contactDocumentItems, true)) {
+                return auth()->user()?->can('dokumente.ansprechpartner.manage') ?? false;
+            }
+
+            return true;
+        }));
     }
 
     private function safeExportName(string $value): string

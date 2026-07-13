@@ -219,10 +219,10 @@ class DokumenteController extends Controller
 
     public function download(Dokumente $dokument)
     {
-        $this->authorizeManager();
+        abort_unless(auth()->user()?->can('dokumente.download'), 403);
 
-        $path = storage_path(ltrim($dokument->dateipfad ?? '', '/\\'));
-        if (!$dokument->dateipfad || !file_exists($path)) {
+        $path = $this->resolvedStoragePath($dokument->dateipfad);
+        if (!$path) {
             return back()->with('error', 'Die Vorlagendatei wurde nicht gefunden.');
         }
 
@@ -367,5 +367,31 @@ class DokumenteController extends Controller
     private function isManagedUploadPath(?string $path): bool
     {
         return is_string($path) && str_starts_with($path, '/app/export-vorlagen/');
+    }
+
+    private function resolvedStoragePath(?string $path): ?string
+    {
+        if (!$path || str_contains($path, "\0")) {
+            return null;
+        }
+
+        $storageRoot = realpath(storage_path());
+        $resolvedPath = realpath(storage_path(ltrim($path, '/\\')));
+
+        if (!$storageRoot || !$resolvedPath || !is_file($resolvedPath)) {
+            return null;
+        }
+
+        $rootPrefix = rtrim(str_replace('\\', '/', $storageRoot), '/') . '/';
+        $normalisedPath = str_replace('\\', '/', $resolvedPath);
+
+        if (PHP_OS_FAMILY === 'Windows') {
+            $rootPrefix = strtolower($rootPrefix);
+            $normalisedPath = strtolower($normalisedPath);
+        }
+
+        abort_unless(str_starts_with($normalisedPath, $rootPrefix), 404);
+
+        return $resolvedPath;
     }
 }

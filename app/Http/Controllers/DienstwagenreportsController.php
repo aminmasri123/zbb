@@ -8,6 +8,11 @@ use Illuminate\Http\Request;
 
 class DienstwagenreportsController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('module:vehicle_management');
+    }
+
    public function index(Request $request)
 {
     // Falls ein Monat ausgewählt wurde → diesen verwenden

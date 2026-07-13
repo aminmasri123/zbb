@@ -1,0 +1,3 @@
+<?php
+namespace App\Models;use Illuminate\Database\Eloquent\Factories\HasFactory;use Illuminate\Database\Eloquent\Model;
+class ParticipantConsentEvent extends Model {use HasFactory;protected $fillable=['project_person_id','consent_definition_id','actor_user_id','action','definition_key','definition_version','title_snapshot','content_sha256','occurred_at','ip_address','user_agent'];protected $casts=['occurred_at'=>'datetime'];public function participation(){return $this->belongsTo(ProjektHasPersonen::class,'project_person_id');}public function definition(){return $this->belongsTo(ProjectConsentDefinition::class,'consent_definition_id');}public function actor(){return $this->belongsTo(User::class,'actor_user_id');}}

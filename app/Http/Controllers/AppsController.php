@@ -587,7 +587,7 @@ class AppsController extends Controller
     {
         return $this->workspace('tasks', [
             'items' => $this->visible(AppTask::query(), AppTask::class)
-                ->with(['owner:id,username,email', 'assignee:id,vorname,nachname', 'workflowTemplate:id,name', 'shares.person:id,vorname,nachname'])
+                ->with(['owner:id,username,email', 'assignee:id,vorname,nachname', 'workflowTemplate:id,name', 'participation.teilnehmer:id,vorname,nachname', 'shares.person:id,vorname,nachname'])
                 ->orderByRaw("status = 'done' asc")
                 ->orderByRaw("priority = 'high' desc")
                 ->orderBy('due_at')
@@ -613,8 +613,17 @@ class AppsController extends Controller
     public function updateTask(Request $request, AppTask $task)
     {
         abort_unless($this->canWorkOnTask($task), 403);
+        $validated = $request->validate($this->taskRules());
+        if ($task->project_person_id && !empty($validated['assignee_person_id'])) {
+            $validAssignee = Personen::query()
+                ->mitarbeiter()
+                ->whereKey($validated['assignee_person_id'])
+                ->whereHas('projekte', fn ($query) => $query->where('projekts.id', $task->project_id))
+                ->exists();
+            abort_unless($validAssignee, 422, 'Die verantwortliche Person muss dem Projekt der Teilnahme zugewiesen sein.');
+        }
 
-        $task->update($this->taskPayload($request->validate($this->taskRules()), $task));
+        $task->update($this->taskPayload($validated, $task));
 
         return back()->with('success', 'Aufgabe wurde aktualisiert.');
     }
@@ -723,6 +732,12 @@ class AppsController extends Controller
     {
         $payload = $task ? $data : $this->ownedPayload($data);
         $previousStatus = $task?->status;
+
+        if ($task?->project_person_id) {
+            $payload['project_id'] = $task->project_id;
+            $payload['team_id'] = null;
+            $payload['visibility'] = 'project';
+        }
 
         if (($payload['status'] ?? null) === 'progress' && $previousStatus !== 'progress' && empty($task?->started_at)) {
             $payload['started_at'] = now();

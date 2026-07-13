@@ -31,6 +31,7 @@ class NotificationRule extends Model
 
     public const CORE_EVENTS = [
         'user.created' => 'Neuer User',
+        'user.account-deletion.requested' => 'Konto-Loeschantrag eingereicht',
         'projekt.created' => 'Neues Projekt',
         'teilnehmer.created' => 'Neuer Teilnehmer',
         'dienstwagen.created' => 'Neuer Dienstwagen',
@@ -327,6 +328,17 @@ class NotificationRule extends Model
                 'sort_order' => 1,
             ],
             [
+                'event_key' => 'user.account-deletion.requested',
+                'label' => self::CORE_EVENTS['user.account-deletion.requested'],
+                'target_type' => 'permission',
+                'target_value' => 'benutzer.destroy',
+                'scope' => 'none',
+                'channels' => ['database'],
+                'active' => true,
+                'exclude_actor' => true,
+                'sort_order' => 2,
+            ],
+            [
                 'event_key' => 'projekt.created',
                 'label' => self::CORE_EVENTS['projekt.created'],
                 'target_type' => 'permission',
@@ -335,7 +347,7 @@ class NotificationRule extends Model
                 'channels' => ['database'],
                 'active' => true,
                 'exclude_actor' => true,
-                'sort_order' => 2,
+                'sort_order' => 3,
             ],
             [
                 'event_key' => 'teilnehmer.created',
@@ -346,7 +358,7 @@ class NotificationRule extends Model
                 'channels' => ['database'],
                 'active' => true,
                 'exclude_actor' => true,
-                'sort_order' => 3,
+                'sort_order' => 4,
             ],
             [
                 'event_key' => 'dienstwagen.created',
@@ -357,7 +369,7 @@ class NotificationRule extends Model
                 'channels' => ['database'],
                 'active' => true,
                 'exclude_actor' => true,
-                'sort_order' => 4,
+                'sort_order' => 5,
             ],
             [
                 'event_key' => 'raeumlichkeiten.created',
@@ -368,7 +380,7 @@ class NotificationRule extends Model
                 'channels' => ['database'],
                 'active' => true,
                 'exclude_actor' => true,
-                'sort_order' => 5,
+                'sort_order' => 6,
             ],
             [
                 'event_key' => 'raeumlichkeiten.meldung.created',
@@ -379,7 +391,7 @@ class NotificationRule extends Model
                 'channels' => ['database'],
                 'active' => true,
                 'exclude_actor' => true,
-                'sort_order' => 6,
+                'sort_order' => 7,
             ],
             [
                 'event_key' => 'geraet.created',
@@ -390,7 +402,7 @@ class NotificationRule extends Model
                 'channels' => ['database'],
                 'active' => true,
                 'exclude_actor' => true,
-                'sort_order' => 7,
+                'sort_order' => 8,
             ],
             [
                 'event_key' => 'it.ticket.created',
@@ -401,7 +413,7 @@ class NotificationRule extends Model
                 'channels' => ['database'],
                 'active' => true,
                 'exclude_actor' => true,
-                'sort_order' => 8,
+                'sort_order' => 9,
             ],
             [
                 'event_key' => 'materialanforderung.eingereicht',

@@ -1,101 +1,108 @@
 <script setup>
-import { ref } from 'vue';
-import { useForm } from '@inertiajs/vue3';
+import { computed } from 'vue';
+import { useForm, usePage } from '@inertiajs/vue3';
 import ActionSection from '@/Components/ActionSection.vue';
-import DangerButton from '@/Components/DangerButton.vue';
-import DialogModal from '@/Components/DialogModal.vue';
 import InputError from '@/Components/InputError.vue';
-import SecondaryButton from '@/Components/SecondaryButton.vue';
-import TextInput from '@/Components/TextInput.vue';
+import PrimaryButton from '@/Components/PrimaryButton.vue';
 
-const confirmingUserDeletion = ref(false);
-const passwordInput = ref(null);
-
+const page = usePage();
 const form = useForm({
-    password: '',
+    request_details: '',
 });
 
-const confirmUserDeletion = () => {
-    confirmingUserDeletion.value = true;
+const deletionRequest = computed(() => page.props.accountDeletionRequest);
+const hasOpenDeletionRequest = computed(() => Boolean(deletionRequest.value) || form.wasSuccessful);
 
-    setTimeout(() => passwordInput.value.focus(), 250);
+const statusLabels = {
+    submitted: 'Eingereicht',
+    approved: 'Freigegeben',
 };
 
-const deleteUser = () => {
-    form.delete(route('current-user.destroy'), {
+const submittedAt = computed(() => {
+    if (!deletionRequest.value?.created_at) {
+        return null;
+    }
+
+    return new Date(deletionRequest.value.created_at).toLocaleString('de-DE');
+});
+
+function submitDeletionRequest() {
+    if (hasOpenDeletionRequest.value || form.processing) {
+        return;
+    }
+
+    form.post(route('account-deletion-requests.store'), {
         preserveScroll: true,
-        onSuccess: () => closeModal(),
-        onError: () => passwordInput.value.focus(),
-        onFinish: () => form.reset(),
+        onSuccess: () => form.reset('request_details'),
     });
-};
-
-const closeModal = () => {
-    confirmingUserDeletion.value = false;
-
-    form.reset();
-};
+}
 </script>
 
 <template>
     <ActionSection>
         <template #title>
-            {{$t('konto_löschen')}}
+            Konto löschen
         </template>
 
         <template #description>
-            {{$t('dauerhaft_konto_löschen')}}
+            Löschung nur per Antrag.
         </template>
 
         <template #content>
-            <div class="max-w-xl text-sm text-gray-600">
-                {{ $t('konto_löschen_nachricht') }}
+            <div class="max-w-xl text-sm leading-6 text-gray-600">
+                Mitarbeiterkonten können nicht direkt selbst gelöscht werden. Reichen Sie stattdessen einen
+                Löschantrag ein; die Administration prüft den Antrag und führt die Löschung kontrolliert durch.
             </div>
+
+            <div
+                v-if="hasOpenDeletionRequest"
+                class="mt-5 max-w-xl rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+            >
+                <p class="font-semibold">
+                    Löschantrag {{ statusLabels[deletionRequest?.status] || 'eingereicht' }}
+                </p>
+                <p v-if="submittedAt" class="mt-1">
+                    Eingereicht am {{ submittedAt }}.
+                </p>
+                <p class="mt-1">
+                    Der direkte Konto-Löschbutton bleibt deaktiviert, bis die Administration den Antrag bearbeitet.
+                </p>
+            </div>
+
+            <form v-else class="mt-5 max-w-xl space-y-4" @submit.prevent="submitDeletionRequest">
+                <label class="block text-sm font-medium text-gray-700" for="account-deletion-details">
+                    Begründung oder Hinweis für die Administration
+                </label>
+                <textarea
+                    id="account-deletion-details"
+                    v-model="form.request_details"
+                    rows="4"
+                    maxlength="5000"
+                    class="block w-full rounded border-gray-300 text-sm shadow-sm focus:border-orange-500 focus:ring-orange-500"
+                    placeholder="Optional"
+                ></textarea>
+                <InputError :message="form.errors.request_details" />
+
+                <div>
+                    <PrimaryButton :disabled="form.processing">
+                        {{ form.processing ? 'Wird eingereicht...' : 'Löschantrag erstellen' }}
+                    </PrimaryButton>
+                </div>
+
+                <p v-if="form.wasSuccessful" class="text-sm font-medium text-green-600">
+                    Ihr Löschantrag wurde eingereicht.
+                </p>
+            </form>
 
             <div class="mt-5">
-                <DangerButton @click="confirmUserDeletion">
-                    {{$t('konto_löschen')}}
-                </DangerButton>
+                <button
+                    type="button"
+                    class="cursor-not-allowed rounded bg-gray-300 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-gray-600"
+                    disabled
+                >
+                    Konto direkt löschen deaktiviert
+                </button>
             </div>
-
-            <!-- Delete Account Confirmation Modal -->
-            <DialogModal :show="confirmingUserDeletion" @close="closeModal">
-                <template #title>
-                    {{$t('konto_löschen')}}
-                </template>
-
-                <template #content>
-                    {{ $t('löschung_der_konto_nachricht') }}
-                    <div class="mt-4">
-                        <TextInput
-                            ref="passwordInput"
-                            v-model="form.password"
-                            type="password"
-                            class="mt-1 block w-3/4"
-                            placeholder="Password"
-                            autocomplete="current-password"
-                            @keyup.enter="deleteUser"
-                        />
-
-                        <InputError :message="form.errors.password" class="mt-2" />
-                    </div>
-                </template>
-
-                <template #footer>
-                    <SecondaryButton @click="closeModal">
-                        {{$t('abbrechen')}}
-                    </SecondaryButton>
-
-                    <DangerButton
-                        class="ml-3"
-                        :class="{ 'opacity-25': form.processing }"
-                        :disabled="form.processing"
-                        @click="deleteUser"
-                    >
-                    {{$t('konto_löschen')}}
-                    </DangerButton>
-                </template>
-            </DialogModal>
         </template>
     </ActionSection>
 </template>

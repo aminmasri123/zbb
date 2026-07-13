@@ -13,6 +13,7 @@ class AppTask extends Model
         'owner_user_id',
         'assignee_person_id',
         'project_id',
+        'project_person_id',
         'team_id',
         'workflow_template_id',
         'title',
@@ -24,12 +25,14 @@ class AppTask extends Model
         'started_at',
         'completed_at',
         'visibility',
+        'visible_to_participant',
     ];
 
     protected $casts = [
         'due_at' => 'date',
         'started_at' => 'datetime',
         'completed_at' => 'datetime',
+        'visible_to_participant' => 'boolean',
     ];
 
     public function owner()
@@ -50,5 +53,10 @@ class AppTask extends Model
     public function workflowTemplate()
     {
         return $this->belongsTo(AppTaskWorkflowTemplate::class, 'workflow_template_id');
+    }
+
+    public function participation()
+    {
+        return $this->belongsTo(ProjektHasPersonen::class, 'project_person_id');
     }
 }

@@ -6,6 +6,7 @@ import Swal from 'sweetalert2'
 import axios from 'axios'
 import { jsPDF } from 'jspdf'
 import SignatureBox from '@/Components/SignatureBox.vue'
+import { usePermissions } from '@/utils/permissions'
 
 const props = defineProps({
   visible: Boolean,
@@ -27,6 +28,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:visible', 'close'])
+const { can } = usePermissions()
+const canArchiveAttendance = computed(() => can('anwesenheit.archiv'))
 const PaSwal = Swal.mixin({
   customClass: {
     container: 'pa-swal-container',
@@ -1166,6 +1169,7 @@ onBeforeUnmount(() => {
                 {{ exportingWord ? 'Exportiert...' : 'Word' }}
               </button>
               <button
+                v-if="canArchiveAttendance"
                 type="button"
                 class="inline-flex items-center gap-2 rounded bg-gray-900 px-3 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
                 :disabled="exportingPdf || selectedDays.length === 0"
@@ -1175,6 +1179,7 @@ onBeforeUnmount(() => {
                 {{ exportingPdf ? 'Erstellt...' : 'PDF mit Unterschrift' }}
               </button>
               <button
+                v-if="canArchiveAttendance"
                 type="button"
                 class="inline-flex items-center gap-2 rounded border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                 :disabled="creatingArchiveFolder"

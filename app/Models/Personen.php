@@ -190,6 +190,11 @@ class Personen extends Model
             ->as('pivotModel');
     }
 
+    public function portalProfile()
+    {
+        return $this->hasOne(ParticipantPortalProfile::class, 'person_id');
+    }
+
     public function kontaktes()
     {
         return $this->morphMany(Kontakte::class, 'model');

@@ -30,7 +30,7 @@
             </li>
 
             <!-- Dienstwagen Submenu -->
-            <li v-if="canAny(['dienstwagen.index', 'dienstwagen.store', 'dienstwagen.fahrtenbuch.index', 'dienstwagen.wartung.index', 'dienstwagen.buchungen.index', 'dienstwagen.meldungen.index', 'dienstwagen.reports.index'])" class="submenu">
+            <li v-if="moduleEnabled('vehicle_management') && canAny(['dienstwagen.index', 'dienstwagen.store', 'dienstwagen.fahrtenbuch.index', 'dienstwagen.wartung.index', 'dienstwagen.buchungen.index', 'dienstwagen.meldungen.index', 'dienstwagen.reports.index'])" class="submenu">
                 <a href="#" @click.prevent="toggleMenu('dienstwagen')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                     <i class="la la-car la-lg mr-2"></i>
                     <span v-if="!displayHideTextSidebar">{{$t('Dienstwagen')}}</span>
@@ -49,7 +49,7 @@
 
 
             <!-- Räumlichkeiten Submenu -->
-            <li v-if="canAny(['raeumlichkeiten.index', 'raeumlichkeiten.store'])" class="submenu">
+            <li v-if="moduleEnabled('room_management') && canAny(['raeumlichkeiten.index', 'raeumlichkeiten.store'])" class="submenu">
                 <a href="#" @click.prevent="toggleMenu('räumlichkeiten')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                     <i class="las la-door-open la-lg mr-2"></i>
                     <span v-if="!displayHideTextSidebar">{{$t('Räumlichkeiten')}}</span>
@@ -63,7 +63,7 @@
 
 
              <!-- Geräte Submenu -->
-             <li v-if="canAny(['geraet.index', 'geraet.store', 'geraet.update', 'geraet.ausgabe.index', 'geraet.rueckgabe.index'])" class="submenu">
+             <li v-if="moduleEnabled('it_management') && canAny(['geraet.index', 'geraet.store', 'geraet.update', 'geraet.ausgabe.index', 'geraet.rueckgabe.index'])" class="submenu">
                 <a href="#" @click.prevent="toggleMenu('geraet')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                     <i class="la la-desktop la-lg mr-2"></i>
                     <span v-if="!displayHideTextSidebar" >{{$t('Geräte')}}</span>
@@ -79,7 +79,7 @@
             </li>
 
             <!-- Lager Submenu -->
-            <li v-if="canAny(['lager.index', 'lager.artikel.store', 'lager.bewegung.store', 'lager.reservierung.store'])" class="submenu">
+            <li v-if="moduleEnabled('warehouse_management') && canAny(['lager.index', 'lager.artikel.store', 'lager.bewegung.store', 'lager.reservierung.store'])" class="submenu">
                 <a href="#" @click.prevent="toggleMenu('lager')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                     <i class="la la-warehouse la-lg mr-2"></i>
 
@@ -91,7 +91,7 @@
                 </ul>
             </li>
             <!-- IT-Service Submenu -->
-            <li v-if="canAny(['it.service.index', 'it.ticket.store', 'it.ticket.update', 'it.geraet.store', 'it.geraet.update'])" class="submenu">
+            <li v-if="moduleEnabled('it_management') && canAny(['it.service.index', 'it.ticket.store', 'it.ticket.update', 'it.geraet.store', 'it.geraet.update'])" class="submenu">
                 <a href="#" @click.prevent="toggleMenu('it-service')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                     <i class="la la-lg la-headset mr-2"></i>
                     <span v-if="!displayHideTextSidebar" >{{$t('IT-Service')}}</span>
@@ -135,8 +135,10 @@
     import { Head, Link, router } from '@inertiajs/vue3';
     import SidebarLayout from '../Sidebar/SidebarLayout.vue';
     import { usePermissions } from '@/utils/permissions';
+    import { useModules } from '@/utils/modules';
 
     const { can, canAny } = usePermissions();
+    const { moduleEnabled } = useModules();
 
 </script>
 <script>

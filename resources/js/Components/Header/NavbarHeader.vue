@@ -95,7 +95,8 @@
                                     <template v-for="projekt in $page.props.auth.user.projekte" :key="projekt.id" >
                                         <button
                                             @click="switchToProjekt(projekt)"
-                                            class="border-t w-full text-left px-4 py-2"
+                                            :title="`Zu ${projekt.name} wechseln`"
+                                            class="border-t w-full px-4 py-2 text-left hover:bg-gray-50"
                                         >
                                             <div class="flex items-center justify-center">
                                                 <svg v-if="projekt.id == $page.props.auth.user.current_team_id"
@@ -304,10 +305,56 @@
             </div>
         </div>
     </nav>
+
+    <div
+        v-if="showProjectRequiredModal"
+        class="fixed inset-0 z-[120] flex items-center justify-center bg-black/45 p-4"
+        role="dialog"
+        aria-modal="true"
+    >
+        <div class="w-full max-w-lg overflow-hidden rounded-lg bg-white shadow-2xl">
+            <div class="flex items-start justify-between border-b border-gray-200 px-5 py-4">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900">Bitte zuerst ein Projekt auswählen</h2>
+                    <p class="mt-1 text-sm text-gray-600">
+                        Für diese Funktion muss ein aktives Projekt gesetzt sein.
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    class="rounded p-1 text-2xl leading-none text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                    aria-label="Modal schließen"
+                    @click="closeProjectRequiredModal"
+                >
+                    &times;
+                </button>
+            </div>
+
+            <div class="max-h-[60vh] overflow-y-auto p-5">
+                <div v-if="assignedProjects.length" class="space-y-2">
+                    <button
+                        v-for="projekt in assignedProjects"
+                        :key="projekt.id"
+                        type="button"
+                        class="flex w-full items-center justify-between rounded border border-gray-200 px-4 py-3 text-left text-sm font-medium text-gray-800 transition hover:border-orange-300 hover:bg-orange-50 disabled:cursor-wait disabled:opacity-70"
+                        :disabled="projectSwitching"
+                        @click="chooseProject(projekt)"
+                    >
+                        <span class="min-w-0 truncate">{{ projekt.name }}</span>
+                        <i class="las la-arrow-right text-lg text-orange-500"></i>
+                    </button>
+                </div>
+
+                <div v-else class="rounded border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-900">
+                    Ihrem Benutzer ist aktuell kein Projekt zugewiesen. Bitte wenden Sie sich an die Administration.
+                </div>
+            </div>
+        </div>
+    </div>
 </template>
 
 <script setup>
-    import { computed, ref } from 'vue';
+    import { computed, ref, watch } from 'vue';
     import { Link, router } from '@inertiajs/vue3';
     import ApplicationMark from '@/Components/ApplicationMark.vue';
     import NavLink from '@/Components/NavLink.vue';
@@ -327,12 +374,21 @@
     displayHideTextSidebar: Boolean,
     });
 
+const showProjectRequiredModal = ref(false);
+const projectSwitching = ref(false);
+
 
 
 function switchToProjekt(projekt) {
+    if (!projekt?.id || projectSwitching.value) {
+        return;
+    }
+
     const offeneGruppe = page.component === 'Gruppe/GruppeHasTeilnehmer/Index'
         ? page.props.gruppe
         : null;
+
+    projectSwitching.value = true;
 
     router.post(route('projekt.switch'), {
         projekt_id: projekt.id,
@@ -342,6 +398,12 @@ function switchToProjekt(projekt) {
         preserveState: false,
         onSuccess: () => {
             console.log('Projekt gewechselt, bleibt auf derselben Seite');
+        },
+        onError: () => {
+            showProjectRequiredModal.value = true;
+        },
+        onFinish: () => {
+            projectSwitching.value = false;
         }
     })
 }
@@ -351,6 +413,8 @@ function switchToProjekt(projekt) {
 const page = usePage();
 const { can, canAny } = usePermissions();
 const notifications = ref(page.props.notify?.notifications || []);
+const assignedProjects = computed(() => page.props.auth?.user?.projekte || []);
+const projectSelectionRequired = computed(() => !page.props.currentProjekt?.id && assignedProjects.value.length > 0);
 const dashboardNavPermissions = [
     'dashboard.index',
     'apps.index',
@@ -400,6 +464,21 @@ const currentProjektName = computed(() => {
 
     return currentProjekt?.name || 'Kein Projekt';
 });
+
+watch(projectSelectionRequired, (required) => {
+    if (required) {
+        showProjectRequiredModal.value = true;
+    }
+}, { immediate: true });
+
+function chooseProject(projekt) {
+    showProjectRequiredModal.value = false;
+    switchToProjekt(projekt);
+}
+
+function closeProjectRequiredModal() {
+    showProjectRequiredModal.value = false;
+}
 
 
 const markAllAsRead = async () => {

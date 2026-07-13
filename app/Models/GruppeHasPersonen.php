@@ -11,6 +11,7 @@ use App\Models\Anwesenheitsstatuten;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Validation\ValidationException;
 
 class GruppeHasPersonen extends Pivot
 {
@@ -23,6 +24,44 @@ class GruppeHasPersonen extends Pivot
 
 
     protected $fillable = ['id', 'personen_id', 'gruppe_id', 'user_id','tage_id','anwesenheitsstatuten_id', 'bemerkung', 'zeittatsaechlich_id', 'zeitgeplant_id'];
+
+    protected static function booted(): void
+    {
+        static::creating(function (GruppeHasPersonen $assignment): void {
+            $group = Gruppe::query()->with('projekt')->find($assignment->gruppe_id);
+            if (!$group?->projekt) {
+                return;
+            }
+
+            $isProjectParticipant = Personen::query()
+                ->whereKey($assignment->personen_id)
+                ->where('typ', 'teilnehmer')
+                ->whereHas('projekte', fn ($query) => $query->where('projekts.id', $group->projekt_id))
+                ->exists();
+
+            if (!$isProjectParticipant) {
+                throw ValidationException::withMessages([
+                    'teilnehmer' => 'Der Teilnehmer ist diesem Projekt nicht zugewiesen.',
+                ]);
+            }
+
+            $maximum = $group->projekt->rule('max_group_participants');
+            if ($maximum === null) {
+                return;
+            }
+
+            $alreadyInGroup = static::query()
+                ->where('gruppe_id', $group->id)
+                ->where('personen_id', $assignment->personen_id)
+                ->exists();
+
+            if (!$alreadyInGroup && static::query()->where('gruppe_id', $group->id)->distinct()->count('personen_id') >= (int) $maximum) {
+                throw ValidationException::withMessages([
+                    'teilnehmer' => "Die maximale Gruppengröße von {$maximum} Teilnehmern ist erreicht.",
+                ]);
+            }
+        });
+    }
 
 
      public function teilnehmer() //muss durch teilnehmer ersetzt werden

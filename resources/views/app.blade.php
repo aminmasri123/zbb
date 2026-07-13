@@ -1,7 +1,11 @@
 <!DOCTYPE html>
 <html lang="{{auth()->check() ? auth()->user()->lang : str_replace('_', '-', app()->getLocale()) }}" class="theme-{{ auth()->check() ? (auth()->user()->theme ?? 'air') : 'air' }}">
     <head>
-        <link rel="shortcut icon" type="image/x-icon" href="{{ asset('img/logo/zbb-icon2.ico') }}">
+        <link rel="icon" type="image/x-icon" href="{{ asset('favicon.ico') }}">
+        <link rel="icon" type="image/png" sizes="192x192" href="{{ asset('img/logo/zbb-app-icon-192.png') }}">
+        <link rel="apple-touch-icon" sizes="192x192" href="{{ asset('img/logo/zbb-app-icon-192.png') }}">
+        <link rel="manifest" href="{{ asset('site.webmanifest') }}">
+        <meta name="theme-color" content="#ff8500">
         
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">

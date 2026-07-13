@@ -29,6 +29,12 @@
         </div>
 
         <!-- STARTDATUM -->
+        <div><label class="text-sm text-gray-600">Ansprechpartner</label><InputText v-model="neuesPraktikum.contact_name" class="w-full mt-1" /></div>
+        <div><label class="text-sm text-gray-600">E-Mail</label><InputText v-model="neuesPraktikum.contact_email" type="email" class="w-full mt-1" /></div>
+        <div><label class="text-sm text-gray-600">Telefon</label><InputText v-model="neuesPraktikum.contact_phone" class="w-full mt-1" /></div>
+        <div><label class="text-sm text-gray-600">Wochenstunden</label><InputText v-model.number="neuesPraktikum.weekly_hours" type="number" min="1" max="168" class="w-full mt-1" /></div>
+
+        <!-- STARTDATUM -->
         <div>
           <label class="text-sm text-gray-600">Startdatum <span class="text-red-500">*</span></label>
           <DatePicker
@@ -61,6 +67,11 @@
             class="w-full mt-1"
           />
         </div>
+
+        <!-- BEMERKUNG -->
+        <div><label class="text-sm text-gray-600">Nächste Nachverfolgung</label><DatePicker v-model="neuesPraktikum.next_follow_up_at" dateFormat="yy-mm-dd" class="w-full mt-1" inputClass="w-full" /></div>
+        <div class="col-span-2"><label class="text-sm text-gray-600">Ziel</label><Textarea v-model="neuesPraktikum.objective" class="w-full mt-1" rows="3" /></div>
+        <div v-if="['abgeschlossen','abgebrochen'].includes(neuesPraktikum.status)" class="col-span-2"><label class="text-sm text-gray-600">Ergebnis <span class="text-red-500">*</span></label><Textarea v-model="neuesPraktikum.result" class="w-full mt-1" rows="3" /></div>
 
         <!-- BEMERKUNG -->
         <div>
@@ -115,9 +126,11 @@ let neuesPraktikum = ref({
   teilnehmer_id: props.teilnehmer?.id ?? null,
   typ: '',
   traeger: '',
+  contact_name: '', contact_email: '', contact_phone: '', weekly_hours: null,
   start: '',
   end: '',
   bemerkung: '',
+  objective: '', result: '', next_follow_up_at: '',
   status: 'geplant',
 });
 
@@ -126,9 +139,11 @@ const resetForm = () => {
     teilnehmer_id: props.teilnehmer.id,
     typ: '',
     traeger: '',
+    contact_name: '', contact_email: '', contact_phone: '', weekly_hours: null,
     start: '',
     end: '',
     bemerkung: '',
+    objective: '', result: '', next_follow_up_at: '',
     status: 'geplant',
   };
 };
@@ -139,9 +154,16 @@ const save = async () => {
       teilnehmer_id: props.teilnehmer.id,
       typ: neuesPraktikum.value.typ,
       traeger: neuesPraktikum.value.traeger,
+      contact_name: neuesPraktikum.value.contact_name,
+      contact_email: neuesPraktikum.value.contact_email,
+      contact_phone: neuesPraktikum.value.contact_phone,
+      weekly_hours: neuesPraktikum.value.weekly_hours,
       start: formatDate(neuesPraktikum.value.start),
       end: formatDate(neuesPraktikum.value.end),
       bemerkung: neuesPraktikum.value.bemerkung,
+      objective: neuesPraktikum.value.objective,
+      result: neuesPraktikum.value.result,
+      next_follow_up_at: neuesPraktikum.value.next_follow_up_at ? formatDate(neuesPraktikum.value.next_follow_up_at) : null,
       status: neuesPraktikum.value.status,
     };
 

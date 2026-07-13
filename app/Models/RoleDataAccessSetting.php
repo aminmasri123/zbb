@@ -75,6 +75,10 @@ class RoleDataAccessSetting extends Model
                 'team' => 'own_projects',
                 'participant' => 'own_locations',
             ],
+            'Projektleitung', 'Pädagogische Leitung', 'Ausbilder' => [
+                'team' => 'own_projects',
+                'participant' => 'own_projects',
+            ],
             'Anleiter' => [
                 'team' => 'own_projects',
                 'participant' => 'current_project_same_location',

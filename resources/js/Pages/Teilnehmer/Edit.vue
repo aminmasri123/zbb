@@ -167,13 +167,14 @@
                 <div v-else-if="activeTab === 'Projektverlauf'">
                     <!-- Projekt hinzufügen -->
                     <button @click="showModalProjektzuweisen = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
-                        <span v-if="!loadingProjekt">➕ Zuweisen</span>
+                        <span v-if="!loadingProjekt">Zeitraum hinzufügen</span>
                         <span v-else>...</span>
                     </button>
                     <table class="min-w-full border border-gray-300 text-sm text-center">
                         <thead class="bg-gray-100">
                             <tr>
                             <th class="px-4 py-2 border">Projekte</th>
+                            <th class="px-4 py-2 border">Teilnahmestatus</th>
                             <th class="px-4 py-2 border">Standort</th>
                             <th class="px-4 py-2 border">Betreuer</th>
                             <th class="px-4 py-2 border">Projektbegleiter</th>
@@ -201,6 +202,13 @@
                                         class="border px-4 py-2 align-middle font-medium bg-gray-50"
                                         >
                                         {{ projekt.name }}
+                                    </td>
+                                    <td
+                                        v-if="z === 0"
+                                        :rowspan="projekt.pivot_model?.zeitraume?.length || 1"
+                                        class="border px-4 py-2 align-middle bg-gray-50"
+                                    >
+                                        {{ participationStatusLabel(projekt.pivot_model?.status) }}
                                     </td>
                                     <td
                                         v-if="z === 0"
@@ -247,6 +255,7 @@
                                 <!-- Falls keine Zeiträume vorhanden sind -->
                                 <tr v-if="!projekt.pivot_model?.zeitraume?.length" class="hover:bg-gray-50">
                                     <td class="border px-4 py-2 font-medium bg-gray-50">{{ projekt.name }}</td>
+                                    <td class="border px-4 py-2 bg-gray-50">{{ participationStatusLabel(projekt.pivot_model?.status) }}</td>
                                     <td class="border px-4 py-2 bg-gray-50">{{ getProjektStandortName(projekt) }}</td>
                                     <td class="border px-4 py-2">{{ projekt.pivot_model.meta?.betreuer?.geschlecht == 'w' ? 'Frau' : (projekt.pivot_model.meta?.betreuer?.geschlecht == 'm' ? 'Herr' : '------') }} {{ projekt.pivot_model.meta?.betreuer?.vorname }} {{ projekt.pivot_model.meta?.betreuer?.nachname }}</td>
                                     <td class="border px-4 py-2 font-medium bg-gray-50">{{ projekt.pivot_model.meta?.projektbegleiter?.geschlecht == 'w' ? 'Frau' : 'Herr' }} {{ projekt.pivot_model.meta?.projektbegleiter?.vorname }} {{ projekt.pivot_model.meta?.projektbegleiter?.nachname }}</td>
@@ -282,11 +291,190 @@
                     </table>
                 </div>
 
+                <!-- =================== Aufnahme =================== -->
+                <div v-else-if="activeTab === 'Aufnahme'" class="mx-auto mt-6 max-w-5xl">
+                    <div class="rounded-2xl border bg-white p-6 shadow-sm">
+                        <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <h3 class="text-lg font-semibold text-zbb">Aufnahmecheckliste</h3>
+                                <p class="text-sm text-gray-500">Prüfstand der Teilnahme im aktuell gewählten Projekt.</p>
+                            </div>
+                            <div class="flex items-center gap-3 text-right">
+                                <div v-if="$page.props.enabledModules?.participant_portal">
+                                    <span v-if="props.portalAccess?.account" class="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">Portal aktiv · {{ props.portalAccess.account.email }}</span>
+                                    <button v-else type="button" class="rounded border border-zbb px-3 py-2 text-xs font-semibold text-zbb" @click="createPortalInvitation">Portalzugang einladen</button>
+                                </div>
+                                <div>
+                                <p class="text-2xl font-semibold text-zbb">{{ intakeProgress.completed }}/{{ intakeProgress.total }}</p>
+                                <p class="text-xs text-gray-500">{{ intakeProgress.percent }} % abgeschlossen</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-5 h-2 overflow-hidden rounded-full bg-gray-100">
+                            <div class="h-full bg-zbb transition-all" :style="{ width: `${intakeProgress.percent}%` }"></div>
+                        </div>
+
+                        <div v-if="intakeChecklistItems.length" class="space-y-3">
+                            <label v-for="item in intakeChecklistItems" :key="item.id" class="flex items-start gap-4 rounded-xl border p-4" :class="item.completions?.[0]?.completed ? 'border-green-200 bg-green-50' : 'border-gray-200'">
+                                <input
+                                    type="checkbox"
+                                    class="mt-1 rounded border-gray-300 text-zbb focus:ring-zbb"
+                                    :checked="Boolean(item.completions?.[0]?.completed)"
+                                    :disabled="intakeSavingItemId === item.id || !props.activeParticipationId"
+                                    @change="updateIntakeCompletion(item, $event.target.checked)"
+                                />
+                                <span class="flex-1">
+                                    <span class="font-semibold text-gray-800">{{ item.label }}</span>
+                                    <span v-if="item.required" class="ml-2 rounded bg-red-100 px-2 py-0.5 text-xs text-red-700">Pflicht</span>
+                                    <span v-if="item.description" class="mt-1 block text-sm text-gray-500">{{ item.description }}</span>
+                                    <span v-if="item.completions?.[0]?.completed_at" class="mt-1 block text-xs text-green-700">
+                                        Erledigt am {{ formatDateTime(item.completions[0].completed_at) }}
+                                        <template v-if="item.completions[0].completed_by?.name"> durch {{ item.completions[0].completed_by.name }}</template>
+                                    </span>
+                                </span>
+                            </label>
+                        </div>
+                        <p v-else class="rounded border border-dashed p-6 text-center text-sm text-gray-500">
+                            Für dieses Projekt wurde noch keine Aufnahmecheckliste konfiguriert.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- =================== Aufgaben =================== -->
+                <div v-else-if="activeTab === 'Aufgaben'" class="mx-auto mt-6 max-w-6xl">
+                    <div class="grid gap-6 lg:grid-cols-[360px_1fr]">
+                        <form class="rounded-2xl border bg-white p-5 shadow-sm" @submit.prevent="createParticipationTask">
+                            <h3 class="text-lg font-semibold text-zbb">Neue Aufgabe</h3>
+                            <p class="mb-4 text-sm text-gray-500">Aufgabe und Frist für diese Projektteilnahme.</p>
+                            <div class="space-y-3">
+                                <input v-model="taskForm.title" required maxlength="255" placeholder="Aufgabe" class="w-full rounded border-gray-300 text-sm" />
+                                <textarea v-model="taskForm.description" maxlength="2000" rows="3" placeholder="Beschreibung" class="w-full rounded border-gray-300 text-sm"></textarea>
+                                <select v-model="taskForm.assignee_person_id" class="w-full rounded border-gray-300 text-sm">
+                                    <option value="">Keine verantwortliche Person</option>
+                                    <option v-for="person in props.betreuer" :key="person.id" :value="person.id">{{ person.nachname }}, {{ person.vorname }}</option>
+                                </select>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <select v-model="taskForm.priority" class="rounded border-gray-300 text-sm">
+                                        <option value="low">Niedrig</option>
+                                        <option value="normal">Normal</option>
+                                        <option value="high">Hoch</option>
+                                    </select>
+                                    <input v-model="taskForm.due_at" type="date" class="rounded border-gray-300 text-sm" />
+                                </div>
+                                <label class="flex items-start gap-2 text-sm text-gray-600">
+                                    <input v-model="taskForm.visible_to_participant" type="checkbox" class="mt-1 rounded border-gray-300 text-zbb focus:ring-zbb" />
+                                    Im Teilnehmerportal anzeigen
+                                </label>
+                                <button type="submit" class="w-full rounded bg-zbb px-4 py-2 text-sm font-medium text-white disabled:opacity-50" :disabled="taskSaving || !props.activeParticipationId">
+                                    {{ taskSaving ? 'Speichert …' : 'Aufgabe anlegen' }}
+                                </button>
+                            </div>
+                        </form>
+
+                        <div class="rounded-2xl border bg-white p-5 shadow-sm">
+                            <div class="mb-4 flex items-center justify-between">
+                                <div>
+                                    <h3 class="text-lg font-semibold text-zbb">Aufgaben und Fristen</h3>
+                                    <p class="text-sm text-gray-500">{{ openParticipationTasks }} offen, {{ overdueParticipationTasks }} überfällig</p>
+                                </div>
+                            </div>
+                            <div v-if="participationTaskItems.length" class="space-y-3">
+                                <article v-for="task in participationTaskItems" :key="task.id" class="rounded-xl border p-4" :class="task.status === 'done' ? 'bg-green-50 border-green-200' : isTaskOverdue(task) ? 'bg-red-50 border-red-200' : 'border-gray-200'">
+                                    <div class="flex flex-wrap items-start justify-between gap-3">
+                                        <div class="min-w-0 flex-1">
+                                            <p class="font-semibold text-gray-800">{{ task.title }}</p>
+                                            <p v-if="task.description" class="mt-1 text-sm text-gray-500">{{ task.description }}</p>
+                                            <p class="mt-2 text-xs text-gray-500">
+                                                Verantwortlich: {{ task.assignee ? `${task.assignee.vorname} ${task.assignee.nachname}` : 'nicht zugewiesen' }}
+                                                <span v-if="task.due_at"> · Fällig: {{ formatDate(task.due_at) }}</span>
+                                            </p>
+                                            <p v-if="task.visible_to_participant" class="mt-1 text-xs font-medium text-blue-600">Für Teilnehmer sichtbar</p>
+                                        </div>
+                                        <span class="rounded px-2 py-1 text-xs font-semibold" :class="task.priority === 'high' ? 'bg-red-100 text-red-700' : task.priority === 'low' ? 'bg-gray-100 text-gray-600' : 'bg-blue-100 text-blue-700'">
+                                            {{ task.priority === 'high' ? 'Hoch' : task.priority === 'low' ? 'Niedrig' : 'Normal' }}
+                                        </span>
+                                    </div>
+                                    <div class="mt-3 flex flex-wrap items-center gap-2">
+                                        <select v-model="task.status" class="rounded border-gray-300 py-1 text-xs" @change="saveParticipationTask(task)">
+                                            <option value="open">Offen</option>
+                                            <option value="progress">In Arbeit</option>
+                                            <option value="done">Erledigt</option>
+                                        </select>
+                                        <button type="button" class="text-xs text-red-600" @click="deleteParticipationTask(task)">Löschen</button>
+                                    </div>
+                                </article>
+                            </div>
+                            <p v-else class="rounded border border-dashed p-6 text-center text-sm text-gray-500">Noch keine Aufgaben für diese Teilnahme.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- =================== Teilnahmeabschluss =================== -->
+                <div v-else-if="activeTab === 'Teilnahmeabschluss'" class="mx-auto mt-6 max-w-6xl">
+                    <div class="grid gap-6 lg:grid-cols-[1fr_420px]">
+                        <section class="rounded-2xl border bg-white p-6 shadow-sm"><h3 class="text-lg font-semibold text-zbb">Abschlusscheckliste</h3><p class="mb-4 text-sm text-gray-500">Pflichtpunkte müssen vor der Freigabe erledigt sein.</p><div v-if="completionChecklistItems.length" class="space-y-3"><label v-for="item in completionChecklistItems" :key="item.id" class="block rounded-xl border p-4" :class="item.completions?.[0]?.completed ? 'border-green-200 bg-green-50' : 'border-gray-200'"><div class="flex items-start gap-3"><input type="checkbox" class="mt-1 rounded border-gray-300 text-zbb" :checked="Boolean(item.completions?.[0]?.completed)" @change="updateCompletionCheck(item, $event.target.checked)"/><span class="flex-1"><span class="font-semibold">{{ item.label }}</span><span v-if="item.required" class="ml-2 rounded bg-red-100 px-2 py-0.5 text-xs text-red-700">Pflicht</span><span v-if="item.description" class="block text-sm text-gray-500">{{ item.description }}</span></span></div><textarea v-model="item.local_note" rows="2" maxlength="3000" placeholder="Optionaler Prüfvermerk" class="mt-3 w-full rounded border-gray-300 text-sm" @change="updateCompletionCheck(item, Boolean(item.completions?.[0]?.completed))"></textarea></label></div><p v-else class="rounded border border-dashed p-5 text-sm text-gray-500">Im Projekt sind noch keine Abschlussprüfpunkte konfiguriert.</p></section>
+                        <form class="rounded-2xl border bg-white p-6 shadow-sm" @submit.prevent="submitCompletionReport"><h3 class="text-lg font-semibold text-zbb">Bericht einreichen</h3><p class="mb-4 text-sm text-gray-500">Jedes Einreichen erzeugt eine unveränderliche neue Version.</p><div class="space-y-3"><select v-model="completionReportForm.completion_type" required class="w-full rounded border-gray-300 text-sm"><option value="completed">Regulär abgeschlossen</option><option value="terminated">Vorzeitig beendet</option></select><input v-model="completionReportForm.exit_date" type="date" required class="w-full rounded border-gray-300 text-sm"/><input v-model="completionReportForm.outcome" required maxlength="255" placeholder="Ergebnis / Verbleib" class="w-full rounded border-gray-300 text-sm"/><textarea v-model="completionReportForm.summary" required maxlength="20000" rows="6" placeholder="Sachliche Zusammenfassung" class="w-full rounded border-gray-300 text-sm"></textarea><textarea v-model="completionReportForm.recommendations" maxlength="10000" rows="3" placeholder="Empfehlungen / nächste Schritte" class="w-full rounded border-gray-300 text-sm"></textarea><button type="submit" class="w-full rounded bg-zbb px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="completionReportSaving">{{ completionReportSaving ? 'Wird eingereicht …' : 'Neue Version einreichen' }}</button></div></form>
+                    </div>
+                    <section class="mt-6 rounded-2xl border bg-white p-6 shadow-sm"><h3 class="text-lg font-semibold">Berichtsversionen</h3><div v-if="completionReportItems.length" class="mt-4 space-y-3"><article v-for="report in completionReportItems" :key="report.id" class="rounded-xl border p-4"><div class="flex flex-wrap justify-between gap-3"><div><p class="font-semibold">Version {{ report.version }} · {{ report.outcome }}</p><p class="text-xs text-gray-500">{{ formatDate(report.exit_date) }} · SHA-256 {{ report.snapshot_sha256 }}</p></div><span class="rounded-full px-3 py-1 text-xs font-semibold" :class="report.status === 'approved' ? 'bg-green-100 text-green-700' : report.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'">{{ report.status === 'approved' ? 'Freigegeben' : report.status === 'rejected' ? 'Abgelehnt' : 'Zur Freigabe' }}</span></div><p class="mt-3 whitespace-pre-wrap text-sm">{{ report.summary }}</p><p v-if="report.decision_note" class="mt-2 rounded bg-gray-50 p-3 text-sm">Entscheidung: {{ report.decision_note }}</p><div class="mt-3 flex flex-wrap gap-2"><template v-if="report.status === 'submitted'"><button type="button" class="rounded bg-green-700 px-3 py-1.5 text-xs text-white" @click="decideCompletionReport(report, 'approved')">Freigeben</button><button type="button" class="rounded bg-red-700 px-3 py-1.5 text-xs text-white" @click="decideCompletionReport(report, 'rejected')">Ablehnen</button></template><a v-if="report.status === 'approved'" :href="route('teilnehmer.completion-reports.export', report.id)" class="rounded border border-zbb px-3 py-1.5 text-xs text-zbb">JSON-Nachweis exportieren</a></div></article></div><p v-else class="mt-4 text-sm text-gray-500">Noch kein Abschlussbericht eingereicht.</p></section>
+                </div>
+
+                <!-- =================== Bewerbungen =================== -->
+                <div v-else-if="activeTab === 'Bewerbungen'" class="mx-auto mt-6 max-w-6xl">
+                    <div class="rounded-2xl border bg-white p-6 shadow-sm">
+                        <div class="mb-4"><h3 class="text-lg font-semibold text-zbb">Bewerbungscockpit</h3><p class="text-sm text-gray-500">Bewerbungen dieser Projektteilnahme und vereinbarte nächste Schritte.</p></div>
+                        <div class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4"><h4 class="font-semibold text-emerald-900">Stelle empfehlen</h4><div class="mt-3 grid gap-3 md:grid-cols-2"><input v-model="recommendationForm.title" maxlength="255" placeholder="Stellenbezeichnung" class="rounded border-gray-300 text-sm"/><input v-model="recommendationForm.employer" maxlength="255" placeholder="Arbeitgeber" class="rounded border-gray-300 text-sm"/><input v-model="recommendationForm.location" maxlength="255" placeholder="Ort" class="rounded border-gray-300 text-sm"/><input v-model="recommendationForm.source_url" maxlength="2048" placeholder="Link zur Stellenanzeige" class="rounded border-gray-300 text-sm"/><textarea v-model="recommendationForm.note" maxlength="3000" rows="2" placeholder="Warum passt diese Stelle?" class="rounded border-gray-300 text-sm md:col-span-2"></textarea></div><button class="mt-3 rounded bg-emerald-700 px-4 py-2 text-sm text-white disabled:opacity-50" :disabled="recommendationSaving||!recommendationForm.title.trim()" @click="createRecommendation">Empfehlen</button></div>
+                        <div v-if="jobRecommendationItems.length" class="mb-6"><h4 class="text-sm font-semibold text-gray-700">Bisherige Empfehlungen</h4><div class="mt-2 space-y-2"><p v-for="item in jobRecommendationItems" :key="item.id" class="rounded border p-3 text-sm"><span class="font-semibold">{{ item.title }}</span> · {{ item.employer || 'Arbeitgeber offen' }} · <span :class="item.converted_application_id?'text-green-700':item.dismissed_at?'text-red-600':item.viewed_at?'text-blue-600':'text-amber-600'">{{ item.converted_application_id?'als Bewerbung übernommen':item.dismissed_at?'nicht passend':item.viewed_at?'angesehen':'neu' }}</span></p></div></div>
+                        <div v-if="participationApplicationItems.length" class="space-y-4">
+                            <article v-for="application in participationApplicationItems" :key="application.id" class="rounded-xl border p-4">
+                                <div class="flex flex-wrap items-start justify-between gap-3"><div><p class="font-semibold text-gray-900">{{ application.title }}</p><p class="text-sm text-gray-500">{{ application.employer || 'Arbeitgeber nicht angegeben' }} · {{ application.location || 'Ort nicht angegeben' }}</p></div><a v-if="application.source_url" :href="application.source_url" target="_blank" rel="noopener noreferrer" class="text-xs text-zbb underline">Stellenanzeige</a></div>
+                                <div class="mt-4 grid gap-3 md:grid-cols-4">
+                                    <select v-model="application.status" class="rounded border-gray-300 text-sm"><option v-for="status in applicationStatuses" :key="status" :value="status">{{ applicationStatusLabels[status] }}</option></select>
+                                    <label class="text-xs text-gray-500">Beworben am<input v-model="application.applied_at" type="date" class="mt-1 w-full rounded border-gray-300 text-sm" /></label>
+                                    <label class="text-xs text-gray-500">Nächster Schritt<input v-model="application.next_action_at" type="date" class="mt-1 w-full rounded border-gray-300 text-sm" /></label>
+                                    <button type="button" class="self-end rounded bg-zbb px-3 py-2 text-sm text-white" @click="saveStaffApplication(application)">Speichern</button>
+                                </div>
+                                <textarea v-model="application.notes" rows="2" maxlength="3000" placeholder="Sachliche Notiz zum Bewerbungsprozess" class="mt-3 w-full rounded border-gray-300 text-sm"></textarea>
+                                <div class="mt-4 rounded-lg bg-gray-50 p-3"><p class="text-sm font-semibold">Bewerbungspaket</p><label v-for="doc in staffApplicationDocuments" :key="doc.id" class="mt-2 flex items-center gap-2 text-sm"><input v-model="application.selected_document_ids" type="checkbox" :value="doc.id"/>{{ doc.original_name }} · {{ doc.category }}</label><p v-if="!staffApplicationDocuments.length" class="mt-2 text-xs text-gray-500">Zuerst ein Portal-Dokument prüfen und freigeben.</p><div class="mt-3 flex flex-wrap items-center gap-2"><button class="rounded border px-3 py-2 text-xs" @click="saveStaffApplicationPackage(application)">Auswahl speichern</button><button class="rounded bg-green-600 px-3 py-2 text-xs text-white" :disabled="!application.selected_document_ids?.length" @click="approveStaffApplicationPackage(application)">Fachlich freigeben</button><span class="text-xs" :class="application.participant_package_approved_at?'text-green-700':'text-amber-700'">Teilnehmer: {{ application.participant_package_approved_at?'freigegeben':'offen' }}</span><span class="text-xs" :class="application.staff_package_approved_at?'text-green-700':'text-amber-700'">Team: {{ application.staff_package_approved_at?'geprüft':'offen' }}</span></div></div>
+                                <p class="mt-2 text-xs text-gray-400">{{ application.status_history?.length || 0 }} Statusereignisse dokumentiert</p>
+                            </article>
+                        </div>
+                        <p v-else class="rounded border border-dashed p-6 text-center text-sm text-gray-500">Noch keine Bewerbungen für diese Teilnahme.</p>
+                    </div>
+                </div>
+
+                <div v-else-if="activeTab === 'Nachrichten'" class="mx-auto mt-6 max-w-6xl">
+                    <div class="rounded-2xl border bg-white p-6 shadow-sm">
+                        <div class="mb-4"><h3 class="text-lg font-semibold text-zbb">Nachrichten</h3><p class="text-sm text-gray-500">Geschützter Verlauf innerhalb dieser Projektteilnahme.</p></div>
+                        <div class="max-h-[32rem] space-y-3 overflow-y-auto rounded-xl bg-gray-50 p-4">
+                            <article v-for="message in portalMessageItems" :key="message.id" class="flex" :class="message.sender_kind === 'staff' ? 'justify-end' : 'justify-start'"><div class="max-w-[80%] rounded-2xl px-4 py-3" :class="message.sender_kind === 'staff' ? 'bg-zbb text-white' : 'border bg-white text-gray-800'"><p class="text-xs font-semibold opacity-75">{{ message.sender_kind === 'staff' ? staffMessageSender(message) : 'Teilnehmer' }}</p><p class="mt-1 whitespace-pre-wrap text-sm">{{ message.body }}</p><p class="mt-1 text-right text-[11px] opacity-60">{{ formatDateTime(message.created_at) }}</p></div></article>
+                            <p v-if="!portalMessageItems.length" class="py-8 text-center text-sm text-gray-500">Noch keine Nachrichten.</p>
+                        </div>
+                        <form class="mt-4 flex gap-3" @submit.prevent="sendStaffMessage"><textarea v-model="staffMessageBody" maxlength="5000" rows="2" placeholder="Nachricht an den Teilnehmer" class="flex-1 rounded border-gray-300 text-sm"></textarea><button class="self-end rounded bg-zbb px-5 py-3 font-semibold text-white disabled:opacity-50" :disabled="staffMessageSending || !staffMessageBody.trim()">Senden</button></form>
+                    </div>
+                </div>
+
+                <div v-else-if="activeTab === 'Einwilligungen'" class="mx-auto mt-6 max-w-6xl">
+                    <div class="rounded-2xl border bg-white p-6 shadow-sm"><div class="mb-4"><h3 class="text-lg font-semibold text-zbb">Einwilligungen und Widerrufe</h3><p class="text-sm text-gray-500">Unveränderlicher Nachweis für diese Projektteilnahme.</p></div><div class="space-y-4"><article v-for="definition in consentDefinitionItems" :key="definition.id" class="rounded-xl border p-4"><div class="flex flex-wrap justify-between gap-3"><div><p class="font-semibold">{{ definition.title }} <span class="text-xs text-gray-500">v{{ definition.version }}</span></p><p class="mt-1 text-sm text-gray-600">{{ definition.purpose }}</p></div><span class="rounded-full px-3 py-1 text-xs" :class="latestConsentEvent(definition)?.action==='accepted'&&latestConsentEvent(definition)?.definition_version===definition.version?'bg-green-100 text-green-700':'bg-amber-100 text-amber-700'">{{ latestConsentEvent(definition)?.action==='accepted'&&latestConsentEvent(definition)?.definition_version===definition.version?'Zugestimmt':'Offen / widerrufen' }}</span></div><details class="mt-3 text-sm"><summary class="cursor-pointer text-zbb">Nachweisverlauf anzeigen</summary><div class="mt-2 space-y-2"><p v-for="event in consentHistory(definition)" :key="event.id" class="rounded bg-gray-50 p-2">{{ event.action==='accepted'?'Zustimmung':'Widerruf' }} · Version {{ event.definition_version }} · {{ formatDateTime(event.occurred_at) }} · SHA-256: {{ event.content_sha256 }}</p><p v-if="!consentHistory(definition).length" class="text-gray-500">Noch kein Ereignis.</p></div></details></article><p v-if="!consentDefinitionItems.length" class="text-sm text-gray-500">Für dieses Projekt sind keine Einwilligungen konfiguriert.</p></div></div>
+                </div>
+
+                <div v-else-if="activeTab === 'Datenauskunft'" class="mx-auto mt-6 max-w-6xl"><div class="rounded-2xl border bg-white p-6 shadow-sm"><div class="mb-4"><h3 class="text-lg font-semibold text-zbb">Datenauskunft und Betroffenenanfragen</h3><p class="text-sm text-gray-500">Identität prüfen und Entscheidung dokumentieren. Löschung oder Berichtigung erfolgt niemals automatisch.</p></div><div class="space-y-4"><article v-for="item in participantDataRequestItems" :key="item.id" class="rounded-xl border p-4"><div class="flex justify-between"><div><p class="font-semibold">{{ dataRequestLabels[item.type] }}</p><p class="text-xs text-gray-500">{{ formatDateTime(item.created_at) }}</p></div><span class="rounded-full bg-gray-100 px-3 py-1 text-xs">{{ dataRequestStatuses[item.status] }}</span></div><p v-if="item.request_details" class="mt-2 text-sm text-gray-600">{{ item.request_details }}</p><div v-if="item.status==='submitted'" class="mt-4 grid gap-3 md:grid-cols-2"><input v-model="item.identity_verification_method" maxlength="255" placeholder="Identitätsprüfung, z. B. Ausweis persönlich geprüft" class="rounded border-gray-300 text-sm"/><textarea v-model="item.resolution_note" maxlength="5000" placeholder="Entscheidung / Begründung" class="rounded border-gray-300 text-sm"></textarea><div class="flex gap-2 md:col-span-2"><button class="rounded bg-green-600 px-4 py-2 text-sm text-white" @click="resolveDataRequest(item,'approved')">Freigeben</button><button class="rounded bg-red-600 px-4 py-2 text-sm text-white" @click="resolveDataRequest(item,'rejected')">Ablehnen</button></div></div><p v-else-if="item.resolution_note" class="mt-3 rounded bg-gray-50 p-3 text-sm">{{ item.resolution_note }}</p></article><p v-if="!participantDataRequestItems.length" class="text-sm text-gray-500">Keine Anfragen für diese Projektteilnahme.</p></div></div></div>
+
+                <div v-else-if="activeTab === 'Lebenslauf'" class="mx-auto mt-6 max-w-6xl"><div class="rounded-2xl border bg-white p-6 shadow-sm"><h3 class="text-lg font-semibold text-zbb">Strukturierter Lebenslauf</h3><p v-if="!participantCv.visible" class="mt-4 rounded bg-amber-50 p-4 text-sm text-amber-800">Der Teilnehmer hat sein Portalprofil nicht für Projektmitarbeiter freigegeben.</p><template v-else><div class="mt-4 rounded bg-gray-50 p-4"><p class="font-semibold">{{ participantCv.profile?.professional_headline }}</p><p class="mt-1 text-sm">{{ participantCv.profile?.career_goal }}</p></div><div class="mt-4 space-y-3"><article v-for="entry in participantCv.entries" :key="entry.id" class="rounded border p-4"><div class="flex justify-between"><div><p class="font-semibold">{{ entry.title }}</p><p class="text-sm text-gray-500">{{ entry.organization }} · {{ entry.location }}</p></div><span class="text-xs text-gray-500">{{ entry.type }}</span></div><p class="mt-2 whitespace-pre-wrap text-sm">{{ entry.description }}</p></article></div><div class="mt-4"><p class="font-semibold">Veröffentlichte Versionen</p><p v-for="version in participantCv.versions" :key="version.id" class="mt-2 text-sm">Version {{ version.version }} · {{ version.label||'ohne Bezeichnung' }} · SHA-256 {{ version.snapshot_sha256 }}</p></div></template></div></div>
+
+                <div v-else-if="activeTab === 'Portal-Dokumente'" class="mx-auto mt-6 max-w-6xl">
+                    <div class="rounded-2xl border bg-white p-6 shadow-sm"><div class="mb-4"><h3 class="text-lg font-semibold text-zbb">Portal-Dokumente</h3><p class="text-sm text-gray-500">Unterlagen dieser Projektteilnahme prüfen oder bereitstellen.</p></div><div class="mb-5 grid gap-3 md:grid-cols-4"><select v-model="staffDocumentCategory" class="rounded border-gray-300"><option value="cv">Lebenslauf</option><option value="application">Bewerbungsunterlage</option><option value="certificate">Zeugnis/Nachweis</option><option value="other">Sonstiges</option></select><input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" class="rounded border p-2 text-sm" @change="staffDocumentFile=$event.target.files[0]"/><label class="flex items-center gap-2 text-sm"><input v-model="staffDocumentVisible" type="checkbox"/>Für Teilnehmer sichtbar</label><button class="rounded bg-zbb px-4 py-2 text-white" @click="uploadStaffDocument">Bereitstellen</button></div><div class="space-y-3"><article v-for="doc in portalDocumentItems" :key="doc.id" class="rounded-xl border p-4"><div class="flex flex-wrap justify-between gap-3"><div><p class="font-semibold">{{ doc.original_name }}</p><p class="text-xs text-gray-500">{{ doc.category }} · {{ Math.ceil(doc.size/1024) }} KB · {{ doc.status }}</p></div><a :href="route('teilnehmer.portal-documents.download',doc.id)" class="text-sm text-zbb underline">Download</a></div><div class="mt-3 flex flex-wrap gap-2"><input v-model="doc.review_note" class="min-w-64 flex-1 rounded border-gray-300 text-sm" placeholder="Prüfhinweis"/><label class="flex items-center gap-2 text-sm"><input v-model="doc.visible_to_participant" type="checkbox"/>sichtbar</label><button class="rounded bg-green-600 px-3 py-2 text-xs text-white" @click="reviewPortalDocument(doc,'approved')">Freigeben</button><button class="rounded bg-red-600 px-3 py-2 text-xs text-white" @click="reviewPortalDocument(doc,'rejected')">Ablehnen</button></div></article><p v-if="!portalDocumentItems.length" class="text-sm text-gray-500">Keine Portal-Dokumente vorhanden.</p></div></div>
+                </div>
+
                 <!-- =================== Anwesenheit =================== -->
                 <div v-else-if="activeTab === 'Anwesenheit'">
+                    <div v-if="attendanceCorrectionItems.length" class="mx-auto mt-4 w-5/6 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                        <h3 class="font-semibold text-amber-900">Korrekturanfragen</h3>
+                        <div class="mt-3 space-y-3"><article v-for="correction in attendanceCorrectionItems" :key="correction.id" class="rounded border bg-white p-3"><p class="text-sm font-semibold">{{ formatDate(correction.attendance?.tag?.datum) }} · {{ correction.attendance?.status?.status }}</p><p class="mt-1 text-sm text-gray-600">{{ correction.message }}</p><div v-if="correction.status==='open'" class="mt-2 flex flex-wrap gap-2"><input v-model="correction.resolution_note" placeholder="Antwort / Begründung" class="min-w-64 flex-1 rounded border-gray-300 text-sm"/><button class="rounded bg-green-600 px-3 py-2 text-xs text-white" @click="resolveAttendanceCorrection(correction,'accepted')">Annehmen</button><button class="rounded bg-red-600 px-3 py-2 text-xs text-white" @click="resolveAttendanceCorrection(correction,'rejected')">Ablehnen</button></div><p v-else class="mt-2 text-xs" :class="correction.status==='accepted'?'text-green-700':'text-red-700'">{{ correction.status==='accepted'?'Angenommen':'Abgelehnt' }} · {{ correction.resolution_note }}</p></article></div>
+                    </div>
                     <!-- Anwesenheit hinzufügen -->
                     <div class="flex gap-4 text-center justify-center">
-                        <button @click="showModalAnwesenheit = true" class="bg-zbb w-4/6 text-white px-4 mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition" >
+                        <button v-if="can('anwesenheit.manage')" @click="showModalAnwesenheit = true" class="bg-zbb w-4/6 text-white px-4 mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition" >
                             <span v-if="!loadingProjekt">➕ Anwesenheit</span>
                                 <span v-else>...</span>
                         </button>
@@ -295,11 +483,53 @@
                                 v-model="selectedMonth"
                                 class="border-zbb rounded-md text-sm focus:ring-zbb focus:border-zbb"
                             >
-                                <option value="">Alle Monate</option>
+                                <option value="">Gesamtlaufzeit des Projekts</option>
                                 <option v-for="monat in verfuegbareMonate" :key="monat" :value="monat">
                                     {{ monat }}
                                 </option>
                             </select>
+                        </div>
+                    </div>
+
+                    <div v-if="teilnehmer.anwesenheiten.length" class="w-5/6 mx-auto mt-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <div>
+                                <p class="text-sm text-gray-500">Auswertung</p>
+                                <h3 class="text-lg font-semibold text-zbb">{{ selectedMonth || 'Gesamtlaufzeit des aktiven Projekts' }}</h3>
+                            </div>
+                            <span class="text-sm text-gray-500">{{ anwesenheitsAuswertung.tage }} erfasste Tage</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                            <div class="rounded-xl border bg-white p-4 shadow-sm">
+                                <p class="text-xs uppercase tracking-wide text-gray-500">Sollzeit</p>
+                                <p class="mt-1 text-xl font-semibold font-mono">{{ formatMinutes(anwesenheitsAuswertung.soll) }}</p>
+                            </div>
+                            <div class="rounded-xl border bg-white p-4 shadow-sm">
+                                <p class="text-xs uppercase tracking-wide text-gray-500">Istzeit</p>
+                                <p class="mt-1 text-xl font-semibold font-mono">{{ formatMinutes(anwesenheitsAuswertung.ist) }}</p>
+                            </div>
+                            <div class="rounded-xl border bg-white p-4 shadow-sm">
+                                <p class="text-xs uppercase tracking-wide text-gray-500">Saldo</p>
+                                <p class="mt-1 text-xl font-semibold font-mono" :class="abweichungsClass(anwesenheitsAuswertung.saldo)">
+                                    {{ formatMinutes(anwesenheitsAuswertung.saldo) }}
+                                </p>
+                            </div>
+                            <div class="rounded-xl border bg-white p-4 shadow-sm">
+                                <p class="text-xs uppercase tracking-wide text-gray-500">Anwesenheit</p>
+                                <p class="mt-1 text-xl font-semibold">{{ anwesenheitsAuswertung.anwesenheitsquote }} %</p>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap gap-2 mt-3">
+                            <span
+                                v-for="status in anwesenheitsAuswertung.statusSummen"
+                                :key="status.status"
+                                class="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-sm"
+                            >
+                                <span class="h-2.5 w-2.5 rounded-full" :style="{ backgroundColor: status.farben }"></span>
+                                {{ status.status }}: <strong>{{ status.anzahl }}</strong>
+                            </span>
                         </div>
                     </div>
 
@@ -342,10 +572,11 @@
                                         <!-- Ist -->
                                         <div class="w-1/4 font-semibold ">
                                         <p class="ml-8 mr-8">💼 Tatsächliche Arbeitszeit</p>
-                                        <p><span class="text-lg ml-8">⌛</span>
+                                        <p v-if="istAnwesend(anwesenheit)"><span class="text-lg ml-8">⌛</span>
                                             {{ formatTime(anwesenheit.zeittatsaechlich?.startzeit) }} -
                                             {{ formatTime(anwesenheit.zeittatsaechlich?.endzeit) }}
                                         </p>
+                                        <p v-else class="ml-8 text-gray-500">— (abwesend)</p>
                                         </div>
 
                                         <!-- Abweichung -->
@@ -378,12 +609,12 @@
                                         </div>
 
                                         <div class="flex gap-2">
-                                        <button @click="openModalEdit(anwesenheit)"
+                                        <button v-if="can('anwesenheit.manage')" @click="openModalEdit(anwesenheit)"
                                                 class="px-4 py-2 text-sm font-medium rounded-md bg-zbb text-white shadow-sm hover:bg-zbb/90">
                                             Verwalten
                                         </button>
 
-                                        <button @click="confirmDelete(anwesenheit, 'gruppeHasPersonen')"
+                                        <button v-if="can('anwesenheit.destroy')" @click="confirmDelete(anwesenheit, 'anwesenheit')"
                                                 class="px-4 py-2 text-sm font-medium rounded-md bg-red-600 text-white shadow-sm hover:bg-red-700">
                                             Löschen
                                         </button>
@@ -735,13 +966,14 @@
                                     <p v-if="praktikum.bemerkung" class="text-gray-600 text-sm mt-2 italic">
                                         💬 {{ praktikum.bemerkung }}
                                     </p>
+                                    <p v-if="praktikum.contact_name" class="mt-2 text-xs text-gray-600">Kontakt: {{ praktikum.contact_name }}<span v-if="praktikum.contact_email"> · {{ praktikum.contact_email }}</span><span v-if="praktikum.contact_phone"> · {{ praktikum.contact_phone }}</span></p>
+                                    <p v-if="praktikum.next_follow_up_at" class="mt-1 text-xs font-medium" :class="new Date(praktikum.next_follow_up_at) < new Date() && ['geplant','laufend'].includes(praktikum.status) ? 'text-red-600' : 'text-gray-500'">Nachverfolgung: {{ formatDate(praktikum.next_follow_up_at) }}</p>
+                                    <p v-if="praktikum.objective" class="mt-2 text-sm"><span class="font-semibold">Ziel:</span> {{ praktikum.objective }}</p>
+                                    <p v-if="praktikum.result" class="mt-2 text-sm"><span class="font-semibold">Ergebnis:</span> {{ praktikum.result }}</p>
+                                    <div v-if="praktikum.editing" class="mt-4 grid gap-3 rounded border bg-white p-4 md:grid-cols-2"><input v-model="praktikum.traeger" maxlength="255" placeholder="Träger" class="rounded border-gray-300 text-sm"/><input v-model="praktikum.contact_name" maxlength="255" placeholder="Ansprechpartner" class="rounded border-gray-300 text-sm"/><input v-model="praktikum.contact_email" type="email" maxlength="255" placeholder="E-Mail" class="rounded border-gray-300 text-sm"/><input v-model="praktikum.contact_phone" maxlength="50" placeholder="Telefon" class="rounded border-gray-300 text-sm"/><input v-model="praktikum.start" type="date" class="rounded border-gray-300 text-sm"/><input v-model="praktikum.end" type="date" class="rounded border-gray-300 text-sm"/><input v-model="praktikum.next_follow_up_at" type="date" class="rounded border-gray-300 text-sm"/><input v-model.number="praktikum.weekly_hours" type="number" min="1" max="168" placeholder="Wochenstunden" class="rounded border-gray-300 text-sm"/><select v-model="praktikum.status" class="rounded border-gray-300 text-sm"><option value="geplant">Geplant</option><option value="laufend">Laufend</option><option value="abgeschlossen">Abgeschlossen</option><option value="abgebrochen">Abgebrochen</option></select><input v-model="praktikum.status_note" maxlength="3000" placeholder="Vermerk zum Statuswechsel" class="rounded border-gray-300 text-sm"/><textarea v-model="praktikum.objective" maxlength="10000" rows="2" placeholder="Ziel" class="rounded border-gray-300 text-sm md:col-span-2"></textarea><textarea v-model="praktikum.result" maxlength="10000" rows="2" placeholder="Ergebnis (bei Abschluss/Abbruch erforderlich)" class="rounded border-gray-300 text-sm md:col-span-2"></textarea><textarea v-model="praktikum.bemerkung" maxlength="10000" rows="2" placeholder="Bemerkung" class="rounded border-gray-300 text-sm md:col-span-2"></textarea><div class="flex gap-2 md:col-span-2"><button type="button" class="rounded bg-zbb px-3 py-2 text-xs text-white" @click="savePraktikum(praktikum)">Verlauf speichern</button><button type="button" class="rounded border px-3 py-2 text-xs" @click="praktikum.editing=false">Abbrechen</button></div></div>
+                                    <details v-if="praktikum.status_history?.length" class="mt-3 text-xs text-gray-500"><summary class="cursor-pointer">Statusverlauf ({{ praktikum.status_history.length }})</summary><p v-for="history in praktikum.status_history" :key="history.id" class="mt-1">{{ history.from_status || 'Neu' }} → {{ history.to_status }} · {{ formatDateTime(history.created_at) }}<span v-if="history.note"> · {{ history.note }}</span></p></details>
                                 </div>
-                                <button
-                                    @click="confirmDelete(praktikum, 'praktika')"
-                                    class="text-red-500 hover:text-red-700 text-sm ml-4"
-                                >
-                                    Entfernen
-                                </button>
+                                <div class="ml-4 flex flex-col gap-2"><button type="button" class="text-sm text-zbb" @click="praktikum.editing=!praktikum.editing">Bearbeiten</button><button type="button" class="text-sm text-red-600" @click="archivePraktikum(praktikum)">Archivieren</button></div>
                             </div>
                         </div>
                         <p v-else class="text-gray-400 italic mb-6">
@@ -1324,6 +1556,12 @@
                 </div>
                 <div class="mb-4 w-full mx-1">
                     <FloatLabel variant="on">
+                        <Select v-model="editForm.status" :options="participationStatuses" optionValue="value" optionLabel="label" class="w-full"/>
+                        <label>Teilnahmestatus</label>
+                    </FloatLabel>
+                </div>
+                <div class="mb-4 w-full mx-1">
+                    <FloatLabel variant="on">
                         <Select v-model="editForm.standort_id" :options="props.standorte" optionValue="id" optionLabel="name" class="w-full"/>
 
                         <label>Standort</label>
@@ -1788,6 +2026,7 @@
     import {formatDateTime} from '@/utils/dateFormat';
     import Select from 'primevue/select';
     import Swal from 'sweetalert2'
+    import axios from 'axios';
     import Toggle from '@/Components/Toggle.vue';
     import Alert from '@/Components/Utils/SweetalertSuccessError.vue'
     import Stammdaten from '@/Pages/Teilnehmer/Tabs/StammdatenSection.vue';
@@ -1797,9 +2036,11 @@
     import Modal from '@/Components/ModalForm.vue';
     import ModalLuvCreate from '@/Pages/Teilnehmer/Tabs/LuV/LuVModalCreate.vue';
     import ModalPraktikumCreate from '@/Pages/Teilnehmer/Tabs/Praktikum/PraktikumModalCreate.vue';
-    import { timeToMinutes, berechneAbweichungMinuten, formatMinutes, abweichungsIcon, abweichungsClass} from "@/utils/arbeitszeit.js";
+    import { timeToMinutes, istAnwesend, berechneAbweichungMinuten, formatMinutes, abweichungsIcon, abweichungsClass} from "@/utils/arbeitszeit.js";
+    import { usePermissions } from '@/utils/permissions';
 
     const { flash } = usePage().props;
+    const { can, canAny } = usePermissions();
 
     const props = defineProps({
         teilnehmer: Object,
@@ -1821,6 +2062,20 @@
         zeitraum: Object,
         bereiche: Array,
         arbeitsvermittler: Array,
+        activeParticipationId: Number,
+        intakeChecklist: { type: Array, default: () => [] },
+        participationTasks: { type: Array, default: () => [] },
+        completionChecklist: { type: Array, default: () => [] },
+        completionReports: { type: Array, default: () => [] },
+        portalAccess: { type: Object, default: () => ({ account: null, latest_invitation: null }) },
+        participationApplications: { type: Array, default: () => [] },
+        attendanceCorrections: { type: Array, default: () => [] },
+        portalDocuments: { type: Array, default: () => [] },
+        portalMessages: { type: Array, default: () => [] },
+        participantConsents: { type: Object, default: () => ({ definitions: [], events: [] }) },
+        participantDataRequests: { type: Array, default: () => [] },
+        jobRecommendations: { type: Array, default: () => [] },
+        participantCv: { type: Object, default: () => ({ visible: false, profile: null, entries: [], versions: [] }) },
     });
 
 
@@ -1836,29 +2091,251 @@ watchEffect(() => {
 });
 
     // Tabs
-    const tabs = [
+    const featurePage = usePage();
+    const projectFeatures = computed(() => featurePage.props.currentProjekt?.features || {});
+    const portalFeatures = computed(() => featurePage.props.currentProjekt?.portal_features || {});
+    const portalEnabled = computed(() => Boolean(featurePage.props.enabledModules?.participant_portal));
+    const projectFeatureEnabled = (key) => projectFeatures.value[key] !== false;
+    const portalFeatureEnabled = (key) => portalEnabled.value && portalFeatures.value[key] === true;
+    const tabs = computed(() => [
         "Stammdaten",
         "Sozialdaten",
         "Adresse",
         "Kontaktdaten",
         "Projektverlauf",
-        "Anwesenheit",
+        "Aufnahme",
+        ...(portalFeatureEnabled('tasks_and_appointments') ? ["Aufgaben"] : []),
+        ...(projectFeatureEnabled('completion_management') ? ["Teilnahmeabschluss"] : []),
+        ...(portalFeatureEnabled('job_search') || portalFeatureEnabled('application_management') ? ["Bewerbungen"] : []),
+        ...(portalFeatureEnabled('messaging') ? ["Nachrichten"] : []),
+        ...(portalFeatureEnabled('consents_and_approvals') ? ["Einwilligungen"] : []),
+        ...(portalFeatureEnabled('profile') ? ["Datenauskunft", "Lebenslauf", "Portal-Dokumente"] : []),
+        ...(projectFeatureEnabled('attendance_management') && canAny([
+            'anwesenheit.index',
+            'anwesenheit.manage',
+            'anwesenheit.destroy',
+            'anwesenheit.export',
+        ]) ? ["Anwesenheit"] : []),
         "Bank",
-        "Schule/Beruf",
+        ...(projectFeatureEnabled('completion_management') ? ["Schule/Beruf"] : []),
         "Briefe",
         "Notizen",
         "Kinder",
         "Netzwerke",
         "Vermittlung",
-        "Praktika",
+        ...(projectFeatureEnabled('internship_management') ? ["Praktika"] : []),
         "Fahrtkosten",
-        "LuV",
+        ...(projectFeatureEnabled('potential_analysis') ? ["LuV"] : []),
         "Exportieren"
-
-    ];
+    ]);
 
     // Lokale Kopie der Teilnehmerdaten
     const teilnehmer = ref(JSON.parse(JSON.stringify(props.teilnehmer)));
+    teilnehmer.value.praktika = (teilnehmer.value.praktika || []).map((item) => ({ ...item, start: item.start?.slice(0, 10) || '', end: item.end?.slice(0, 10) || '', next_follow_up_at: item.next_follow_up_at?.slice(0, 10) || '', status_note: '', editing: false }));
+    const intakeChecklistItems = ref(JSON.parse(JSON.stringify(props.intakeChecklist || [])));
+    const intakeSavingItemId = ref(null);
+    const participationTaskItems = ref(JSON.parse(JSON.stringify(props.participationTasks || [])));
+    const completionChecklistItems = ref((props.completionChecklist || []).map((item) => ({ ...item, local_note: item.completions?.[0]?.note || '' })));
+    const completionReportItems = ref(JSON.parse(JSON.stringify(props.completionReports || [])));
+    const completionReportSaving = ref(false);
+    const completionReportForm = ref({ completion_type: 'completed', exit_date: '', outcome: '', summary: '', recommendations: '' });
+    const applicationStatuses = ['draft', 'preparing', 'sent', 'response', 'interview', 'accepted', 'rejected', 'withdrawn'];
+    const applicationStatusLabels = { draft: 'Entwurf', preparing: 'Vorbereitung', sent: 'Versendet', response: 'Rückmeldung', interview: 'Vorstellungsgespräch', accepted: 'Zusage', rejected: 'Absage', withdrawn: 'Zurückgezogen' };
+    const participationApplicationItems = ref((props.participationApplications || []).map((item) => ({
+        ...item,
+        applied_at: item.applied_at?.slice(0, 10) || '',
+        next_action_at: item.next_action_at?.slice(0, 10) || '',
+        selected_document_ids: (item.documents || []).map((document) => document.id),
+    })));
+    const jobRecommendationItems = ref(JSON.parse(JSON.stringify(props.jobRecommendations || [])));
+    const recommendationForm = ref({ external_ref: null, title: '', employer: '', location: '', source_url: '', note: '' });
+    const recommendationSaving = ref(false);
+    const createRecommendation = async () => { if (!props.activeParticipationId || !recommendationForm.value.title.trim()) return; recommendationSaving.value = true; try { const response = await axios.post(route('teilnehmer.recommendations.store', props.activeParticipationId), { ...recommendationForm.value, employer: recommendationForm.value.employer || null, location: recommendationForm.value.location || null, source_url: recommendationForm.value.source_url || null, note: recommendationForm.value.note || null }); jobRecommendationItems.value.unshift(response.data.recommendation); recommendationForm.value = { external_ref: null, title: '', employer: '', location: '', source_url: '', note: '' }; } catch (error) { Swal.fire('Fehler', error.response?.data?.message || 'Empfehlung konnte nicht gespeichert werden.', 'error'); } finally { recommendationSaving.value = false; } };
+    const attendanceCorrectionItems = ref(JSON.parse(JSON.stringify(props.attendanceCorrections || [])));
+    const portalDocumentItems = ref(JSON.parse(JSON.stringify(props.portalDocuments || [])));
+    const staffApplicationDocuments = computed(() => portalDocumentItems.value.filter((document) => document.status === 'approved'));
+    const saveStaffApplicationPackage = async (application) => { try { const response = await axios.put(route('teilnehmer.applications.documents.sync', application.id), { document_ids: application.selected_document_ids || [] }); Object.assign(application, response.data.application, { selected_document_ids: (response.data.application.documents || []).map((document) => document.id) }); } catch (error) { Swal.fire('Fehler', error.response?.data?.message || 'Bewerbungspaket konnte nicht gespeichert werden.', 'error'); } };
+    const approveStaffApplicationPackage = async (application) => { try { const response = await axios.post(route('teilnehmer.applications.package.approve', application.id)); Object.assign(application, response.data.application, { selected_document_ids: (response.data.application.documents || []).map((document) => document.id) }); } catch (error) { Swal.fire('Fehler', error.response?.data?.message || 'Bewerbungspaket konnte nicht freigegeben werden.', 'error'); } };
+    const portalMessageItems = ref(JSON.parse(JSON.stringify(props.portalMessages || [])));
+    const consentDefinitionItems = ref(JSON.parse(JSON.stringify(props.participantConsents?.definitions || [])));
+    const consentEventItems = ref(JSON.parse(JSON.stringify(props.participantConsents?.events || [])));
+    const consentHistory = (definition) => consentEventItems.value.filter((event) => event.definition_key === definition.key).sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at));
+    const latestConsentEvent = (definition) => consentHistory(definition)[0];
+    const participantDataRequestItems = ref(JSON.parse(JSON.stringify(props.participantDataRequests || [])));
+    const dataRequestLabels = { access_export: 'Datenauskunft / Export', correction: 'Berichtigung', deletion: 'Löschanfrage' };
+    const dataRequestStatuses = { submitted: 'Eingereicht', approved: 'Freigegeben', rejected: 'Abgelehnt', completed: 'Abgeschlossen' };
+    const resolveDataRequest = async (item, status) => { try { const response = await axios.put(route('teilnehmer.data-requests.resolve', item.id), { status, resolution_note: item.resolution_note || '', identity_verification_method: item.identity_verification_method || '' }); Object.assign(item, response.data.request); } catch (error) { Swal.fire('Fehler', error.response?.data?.message || 'Anfrage konnte nicht bearbeitet werden.', 'error'); } };
+    const staffMessageBody = ref('');
+    const staffMessageSending = ref(false);
+    const staffMessageSender = (message) => `${message.sender?.person?.vorname || ''} ${message.sender?.person?.nachname || ''}`.trim() || message.sender?.username || 'Projektteam';
+    const sendStaffMessage = async () => {
+        if (!staffMessageBody.value.trim() || !props.activeParticipationId) return;
+        staffMessageSending.value = true;
+        try { const response = await axios.post(route('teilnehmer.messages.store', props.activeParticipationId), { body: staffMessageBody.value }); portalMessageItems.value.push(response.data.item); staffMessageBody.value = ''; }
+        catch (error) { Swal.fire('Fehler', error.response?.data?.message || 'Nachricht konnte nicht gesendet werden.', 'error'); }
+        finally { staffMessageSending.value = false; }
+    };
+    const staffDocumentFile = ref(null);const staffDocumentCategory=ref('other');const staffDocumentVisible=ref(true);
+    const uploadStaffDocument=async()=>{if(!staffDocumentFile.value||!props.activeParticipationId)return;const data=new FormData();data.append('file',staffDocumentFile.value);data.append('category',staffDocumentCategory.value);data.append('visible_to_participant',staffDocumentVisible.value?'1':'0');try{const r=await axios.post(route('teilnehmer.portal-documents.store',props.activeParticipationId),data,{headers:{'Content-Type':'multipart/form-data'}});portalDocumentItems.value.unshift(r.data.document);staffDocumentFile.value=null;}catch(error){Swal.fire('Fehler',error.response?.data?.message||'Dokument konnte nicht gespeichert werden.','error');}};
+    const reviewPortalDocument=async(doc,status)=>{try{const r=await axios.put(route('teilnehmer.portal-documents.review',doc.id),{status,review_note:doc.review_note||null,visible_to_participant:Boolean(doc.visible_to_participant)});Object.assign(doc,r.data.document);}catch(error){Swal.fire('Fehler',error.response?.data?.message||'Dokument konnte nicht geprüft werden.','error');}};
+    const resolveAttendanceCorrection = async (correction, status) => {
+        try { const response=await axios.put(route('teilnehmer.attendance.corrections.resolve',correction.id),{status,resolution_note:correction.resolution_note||null});Object.assign(correction,response.data.correction); }
+        catch(error){Swal.fire('Fehler',error.response?.data?.message||'Die Anfrage konnte nicht bearbeitet werden.','error');}
+    };
+    const taskSaving = ref(false);
+    const taskForm = ref({ title: '', description: '', assignee_person_id: '', status: 'open', priority: 'normal', due_at: '', visible_to_participant: false });
+    const openParticipationTasks = computed(() => participationTaskItems.value.filter((task) => task.status !== 'done').length);
+    const isTaskOverdue = (task) => task.status !== 'done' && task.due_at && task.due_at.slice(0, 10) < toLocalDateString(new Date());
+    const overdueParticipationTasks = computed(() => participationTaskItems.value.filter(isTaskOverdue).length);
+
+    const taskPayload = (task) => ({
+        title: task.title,
+        description: task.description || null,
+        assignee_person_id: task.assignee_person_id || task.assignee?.id || null,
+        status: task.status || 'open',
+        priority: task.priority || 'normal',
+        due_at: task.due_at ? task.due_at.slice(0, 10) : null,
+        visible_to_participant: Boolean(task.visible_to_participant),
+    });
+
+    const createParticipationTask = async () => {
+        taskSaving.value = true;
+        try {
+            const response = await axios.post(route('teilnehmer.tasks.store', props.activeParticipationId), taskPayload(taskForm.value));
+            participationTaskItems.value.unshift(response.data.task);
+            taskForm.value = { title: '', description: '', assignee_person_id: '', status: 'open', priority: 'normal', due_at: '', visible_to_participant: false };
+        } catch (error) {
+            Swal.fire('Fehler', error.response?.data?.message || 'Die Aufgabe konnte nicht angelegt werden.', 'error');
+        } finally {
+            taskSaving.value = false;
+        }
+    };
+
+    const saveParticipationTask = async (task) => {
+        try {
+            const response = await axios.put(route('teilnehmer.tasks.update', task.id), taskPayload(task));
+            Object.assign(task, response.data.task);
+        } catch (error) {
+            Swal.fire('Fehler', error.response?.data?.message || 'Die Aufgabe konnte nicht gespeichert werden.', 'error');
+            router.reload({ only: ['participationTasks'] });
+        }
+    };
+
+    const deleteParticipationTask = async (task) => {
+        const result = await Swal.fire({ title: 'Aufgabe löschen?', icon: 'warning', showCancelButton: true, confirmButtonText: 'Löschen', cancelButtonText: 'Abbrechen' });
+        if (!result.isConfirmed) return;
+        try {
+            await axios.delete(route('teilnehmer.tasks.destroy', task.id));
+            participationTaskItems.value = participationTaskItems.value.filter((item) => item.id !== task.id);
+        } catch (error) {
+            Swal.fire('Fehler', error.response?.data?.message || 'Die Aufgabe konnte nicht gelöscht werden.', 'error');
+        }
+    };
+
+    const saveStaffApplication = async (application) => {
+        try {
+            const response = await axios.put(route('teilnehmer.applications.update', application.id), {
+                status: application.status,
+                applied_at: application.applied_at || null,
+                next_action_at: application.next_action_at || null,
+                notes: application.notes || null,
+            });
+            Object.assign(application, response.data.application, {
+                applied_at: response.data.application.applied_at?.slice(0, 10) || '',
+                next_action_at: response.data.application.next_action_at?.slice(0, 10) || '',
+            });
+            Swal.fire('Gespeichert', response.data.message, 'success');
+        } catch (error) {
+            Swal.fire('Fehler', error.response?.data?.message || 'Die Bewerbung konnte nicht gespeichert werden.', 'error');
+        }
+    };
+    const intakeProgress = computed(() => {
+        const total = intakeChecklistItems.value.length;
+        const completed = intakeChecklistItems.value.filter((item) => item.completions?.[0]?.completed).length;
+        return { total, completed, percent: total ? Math.round((completed / total) * 100) : 0 };
+    });
+
+    const updateIntakeCompletion = async (item, completed) => {
+        if (!props.activeParticipationId) return;
+        const previous = JSON.parse(JSON.stringify(item.completions || []));
+        item.completions = [{ ...(item.completions?.[0] || {}), completed }];
+        intakeSavingItemId.value = item.id;
+        try {
+            const response = await axios.put(route('teilnehmer.intake-checklist.update', {
+                participation: props.activeParticipationId,
+                item: item.id,
+            }), { completed });
+            item.completions = [response.data.completion];
+        } catch (error) {
+            item.completions = previous;
+            Swal.fire('Fehler', error.response?.data?.message || 'Der Checklistenpunkt konnte nicht gespeichert werden.', 'error');
+        } finally {
+            intakeSavingItemId.value = null;
+        }
+    };
+
+    const updateCompletionCheck = async (item, completed) => {
+        const previous = JSON.parse(JSON.stringify(item.completions || []));
+        item.completions = [{ ...(item.completions?.[0] || {}), completed, note: item.local_note || null }];
+        try {
+            const response = await axios.put(route('teilnehmer.completion-checklist.update', { participation: props.activeParticipationId, item: item.id }), { completed, note: item.local_note || null });
+            item.completions = [response.data.completion];
+            item.local_note = response.data.completion.note || '';
+        } catch (error) {
+            item.completions = previous;
+            Swal.fire('Fehler', error.response?.data?.message || 'Der Abschlussprüfpunkt konnte nicht gespeichert werden.', 'error');
+        }
+    };
+
+    const submitCompletionReport = async () => {
+        completionReportSaving.value = true;
+        try {
+            const response = await axios.post(route('teilnehmer.completion-reports.submit', props.activeParticipationId), completionReportForm.value);
+            completionReportItems.value.unshift(response.data.report);
+            completionReportForm.value = { completion_type: 'completed', exit_date: '', outcome: '', summary: '', recommendations: '' };
+            Swal.fire('Eingereicht', response.data.message, 'success');
+        } catch (error) {
+            Swal.fire('Fehler', error.response?.data?.message || 'Der Abschlussbericht konnte nicht eingereicht werden.', 'error');
+        } finally { completionReportSaving.value = false; }
+    };
+
+    const decideCompletionReport = async (report, decision) => {
+        const prompt = await Swal.fire({ title: decision === 'approved' ? 'Abschluss freigeben?' : 'Bericht ablehnen?', input: 'textarea', inputLabel: decision === 'approved' ? 'Optionaler Freigabevermerk' : 'Begründung', inputValidator: (value) => decision === 'rejected' && !value?.trim() ? 'Bitte eine Begründung angeben.' : undefined, showCancelButton: true, confirmButtonText: decision === 'approved' ? 'Freigeben' : 'Ablehnen', cancelButtonText: 'Abbrechen' });
+        if (!prompt.isConfirmed) return;
+        try {
+            const response = await axios.put(route('teilnehmer.completion-reports.decide', report.id), { decision, decision_note: prompt.value || null });
+            Object.assign(report, response.data.report);
+            Swal.fire('Gespeichert', response.data.message, 'success');
+        } catch (error) {
+            Swal.fire('Fehler', error.response?.data?.message || 'Die Entscheidung konnte nicht gespeichert werden.', 'error');
+        }
+    };
+
+    const createPortalInvitation = async () => {
+        const result = await Swal.fire({
+            title: 'Portalzugang einladen',
+            input: 'email',
+            inputLabel: 'E-Mail-Adresse des Teilnehmers',
+            inputValue: props.portalAccess?.latest_invitation?.email || '',
+            showCancelButton: true,
+            confirmButtonText: 'Einladung erstellen',
+            cancelButtonText: 'Abbrechen',
+            inputValidator: (value) => !value ? 'Bitte eine E-Mail-Adresse angeben.' : undefined,
+        });
+        if (!result.isConfirmed) return;
+        try {
+            const response = await axios.post(route('teilnehmer.portal.invite', props.activeParticipationId), { email: result.value });
+            await Swal.fire({
+                icon: 'success',
+                title: 'Einladung erstellt',
+                html: `<p class="mb-3">Der Link ist sieben Tage gültig.</p><input id="portal-invitation-url" class="swal2-input" value="${response.data.invitation_url}" readonly>`,
+                confirmButtonText: 'Link kopieren',
+                preConfirm: () => navigator.clipboard?.writeText(response.data.invitation_url),
+            });
+        } catch (error) {
+            Swal.fire('Fehler', error.response?.data?.message || 'Die Einladung konnte nicht erstellt werden.', 'error');
+        }
+    };
     const neuesProjektId = ref('');
     const loadingProjekt = ref(false);
     const neuesBriefFreigeben = ref([]);
@@ -1906,6 +2383,18 @@ const neueAnwesenheit = ref({
 
 
 const activeTab = ref("");
+watch(tabs, (visibleTabs) => {
+    if (activeTab.value && !visibleTabs.includes(activeTab.value)) activeTab.value = '';
+});
+watch(activeTab, async (tab) => {
+  if (tab !== 'Nachrichten' || !props.activeParticipationId) return;
+  try {
+    await axios.put(route('teilnehmer.messages.read', props.activeParticipationId));
+    portalMessageItems.value.filter((message) => message.sender_kind === 'participant').forEach((message) => { message.staff_read_at ||= new Date().toISOString(); });
+  } catch (_) {
+    // Der Verlauf bleibt lesbar; ein erneuter Aufruf setzt den Lesestatus später.
+  }
+});
 
 // Formulare & Variablen
 const showModalAdresse = ref(false);
@@ -2463,6 +2952,11 @@ const addAdresse = () => {
 
     // =======  ANWESENHEIT =======
         const selectedMonth = ref("");
+        const minutenZwischen = (start, ende) => {
+            const startMinuten = timeToMinutes(start);
+            const endMinuten = timeToMinutes(ende);
+            return startMinuten === null || endMinuten === null ? 0 : Math.max(0, endMinuten - startMinuten);
+        };
         // 🧠 Gruppiere Anwesenheiten (bzw. Gruppen) nach Monat
            const gruppenNachMonat = computed(() => {
                 if (!teilnehmer.value?.anwesenheiten) return {};
@@ -2487,6 +2981,57 @@ const addAdresse = () => {
 
         // 🧮 Liste aller verfügbaren Monate für Filter
         const verfuegbareMonate = computed(() => Object.keys(gruppenNachMonat.value))
+
+        const gefilterteAnwesenheiten = computed(() => {
+            const alle = teilnehmer.value?.anwesenheiten || [];
+            if (!selectedMonth.value) return alle;
+
+            return alle.filter((anwesenheit) => {
+                const datum = new Date(anwesenheit.tag.datum);
+                return datum.toLocaleString("de-DE", { month: "long", year: "numeric" }) === selectedMonth.value;
+            });
+        });
+
+        const anwesenheitsAuswertung = computed(() => {
+            const eintraege = gefilterteAnwesenheiten.value;
+            let soll = 0;
+            let ist = 0;
+            const statusSummen = new Map();
+
+            eintraege.forEach((anwesenheit) => {
+                soll += minutenZwischen(
+                    anwesenheit.zeitgeplant?.startzeit,
+                    anwesenheit.zeitgeplant?.endzeit
+                );
+
+                if (istAnwesend(anwesenheit)) {
+                    ist += minutenZwischen(
+                        anwesenheit.zeittatsaechlich?.startzeit,
+                        anwesenheit.zeittatsaechlich?.endzeit
+                    );
+                }
+
+                const status = anwesenheit.status?.status || "Ohne Status";
+                const bisher = statusSummen.get(status) || {
+                    status,
+                    farben: anwesenheit.status?.farben || "#9ca3af",
+                    anzahl: 0,
+                };
+                bisher.anzahl += 1;
+                statusSummen.set(status, bisher);
+            });
+
+            const anwesend = eintraege.filter(istAnwesend).length;
+
+            return {
+                tage: eintraege.length,
+                soll,
+                ist,
+                saldo: ist - soll,
+                anwesenheitsquote: eintraege.length ? Math.round((anwesend / eintraege.length) * 100) : 0,
+                statusSummen: Array.from(statusSummen.values()),
+            };
+        });
 
         const editMode = ref(false);
             const aktuelleAnwesenheit = ref(null);
@@ -2703,6 +3248,7 @@ const addProjekt = () => {
           ...projekt,
           pivot_model: {
             standort_id: neuesProjekt.value.standort_id || null,
+            status: page.props.currentProjekt?.rules?.participation_initial_status || 'aktiv',
             standort: selectedStandort || null,
             zeitraume: [
               {
@@ -2749,6 +3295,16 @@ const addProjekt = () => {
 };
 
 const showEditZuwseisungModal = ref(false);
+const participationStatuses = [
+    { value: 'angefragt', label: 'Angefragt' },
+    { value: 'angemeldet', label: 'Angemeldet (Bestand)' },
+    { value: 'aufgenommen', label: 'Aufgenommen' },
+    { value: 'aktiv', label: 'Aktiv' },
+    { value: 'pausiert', label: 'Pausiert' },
+    { value: 'abgeschlossen', label: 'Abgeschlossen' },
+    { value: 'abgebrochen', label: 'Abgebrochen' },
+];
+const participationStatusLabel = (status) => participationStatuses.find((item) => item.value === status)?.label || status || '-';
 
 const editForm = ref({
     id: null,
@@ -2762,6 +3318,7 @@ const editForm = ref({
     endtermin: "",
     enddatum: "",
     standort_id: "",
+    status: "aktiv",
 });
 const openProjektEdit = (zeit, projekt) =>  {
     showEditZuwseisungModal.value = true;
@@ -2771,6 +3328,7 @@ const openProjektEdit = (zeit, projekt) =>  {
         massnahmebegleiter: projekt.pivot_model.meta?.projektbegleiter_id ?? "",
         projektname: projekt.id,
         standort_id: projekt.pivot_model.standort_id ?? "",
+        status: projekt.pivot_model.status ?? "aktiv",
         antragsdatum: formatDate(zeit?.antragsdatum),
         starttermin: formatDate(zeit?.starttermin),
         anfangsdatum: formatDate(zeit?.anfangsdatum),
@@ -2786,6 +3344,7 @@ function saveEdit() {
         projektbegleiter_id: editForm.value.massnahmebegleiter,
         betreuer_id: editForm.value.betreuer,
         standort_id: editForm.value.standort_id,
+        status: editForm.value.status,
         antragsdatum: toLocalDateString(editForm.value.antragsdatum),
         starttermin: toLocalDateString(editForm.value.starttermin),
         endtermin: toLocalDateString(editForm.value.endtermin),
@@ -2805,6 +3364,7 @@ function saveEdit() {
             );
 
             if (projekt) {
+                projekt.pivot_model.status = response.data.status;
                 if (newData) {
                     const zeitraume = projekt.pivot_model.zeitraume || [];
                     const index = zeitraume.findIndex(
@@ -2905,6 +3465,24 @@ const praktikumAdded = (daten) => {
     teilnehmer.value.praktika.push(daten);  // ← "value" hinzufügen
 };
 
+const savePraktikum = async (praktikum) => {
+    try {
+        const response = await axios.put(route('teilnehmer.praktikum.update', praktikum.id), praktikum);
+        Object.assign(praktikum, response.data.data, { editing: false });
+        Swal.fire('Gespeichert', response.data.message, 'success');
+    } catch (error) { Swal.fire('Fehler', error.response?.data?.message || 'Der Verlauf konnte nicht gespeichert werden.', 'error'); }
+};
+
+const archivePraktikum = async (praktikum) => {
+    const result = await Swal.fire({ title: 'Eintrag archivieren?', text: 'Die Historie bleibt erhalten.', icon: 'warning', showCancelButton: true, confirmButtonText: 'Archivieren', cancelButtonText: 'Abbrechen' });
+    if (!result.isConfirmed) return;
+    try {
+        const response = await axios.delete(route('teilnehmer.praktikum.destroy', praktikum.id));
+        teilnehmer.value.praktika = teilnehmer.value.praktika.filter((item) => item.id !== praktikum.id);
+        Swal.fire('Archiviert', response.data.message, 'success');
+    } catch (error) { Swal.fire('Fehler', error.response?.data?.message || 'Der Eintrag konnte nicht archiviert werden.', 'error'); }
+};
+
 
 // ====================== LÖSCHEN ======================
 // Lokale Kopien der Brief-Arrays (reaktiv)
@@ -2932,9 +3510,9 @@ const handleDelete = (id) => {
   if (seite.value === 'projekt') {
     teilnehmer.value.projekte = teilnehmer.value.projekte.filter((p) => p.id !== id);
   }
-  if (seite.value === 'gruppeHasPersonen') {
-   teilnehmer.value.gruppen = teilnehmer.value.gruppen.filter(
-        (g) => g.pivot.id !== id
+if (seite.value === 'anwesenheit') {
+   teilnehmer.value.anwesenheiten = teilnehmer.value.anwesenheiten.filter(
+        (anwesenheit) => anwesenheit.id !== id
       );
 }
 if (seite.value === 'projekthasteilnehmer.luv') {

@@ -19,6 +19,11 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class GeraetausgabeController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('module:it_management');
+    }
+
     public function index()
     {
         return Inertia::render('Geraet/Ausgabe/Index', [

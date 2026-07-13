@@ -72,5 +72,8 @@ class Kernel extends HttpKernel
         'canAnyPermission' => \App\Http\Middleware\AuthorizeAnyPermission::class,
         'routePermission' => \App\Http\Middleware\AuthorizeRoutePermission::class,
         'configuredNotifications' => \App\Http\Middleware\DispatchConfiguredRouteNotification::class,
+        'module' => \App\Http\Middleware\EnsureModuleEnabled::class,
+        'projectFeature' => \App\Http\Middleware\EnsureProjectFeatureEnabled::class,
+        'participantPortalUser' => \App\Http\Middleware\EnsureParticipantPortalUser::class,
     ];
 }

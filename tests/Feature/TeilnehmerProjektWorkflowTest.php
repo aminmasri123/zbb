@@ -26,6 +26,13 @@ class TeilnehmerProjektWorkflowTest extends TestCase
         $this->givePermission($user, 'teilnehmer.store');
         $projekt = Projekt::factory()->create();
         $standort = Standort::factory()->create();
+        ProjektHasPersonen::query()->create([
+            'projekt_id' => $projekt->id,
+            'personen_id' => $user->person_id,
+            'standort_id' => $standort->id,
+            'status' => 'aktiv',
+        ]);
+        $user->update(['current_team_id' => $projekt->id]);
 
         $response = $this->actingAs($user)->postJson(route('teilnehmer.store'), [
             'vorname' => 'Max',
@@ -50,12 +57,13 @@ class TeilnehmerProjektWorkflowTest extends TestCase
         ]);
     }
 
-    public function test_specific_project_assignment_permission_can_assign_participant_without_general_update_permission(): void
+    public function test_specific_project_assignment_permission_can_add_period_without_general_update_permission(): void
     {
         $user = User::factory()->create();
         $this->givePermission($user, 'projekthasteilnehmer.store');
 
         [$teilnehmer, $projekt, $standort] = $this->assignmentData();
+        $this->activateContext($user, $teilnehmer, $projekt, $standort);
 
         $response = $this->actingAs($user)->post(route('projekthasteilnehmer.store'), [
             'teilnehmer_id' => $teilnehmer->id,
@@ -89,7 +97,14 @@ class TeilnehmerProjektWorkflowTest extends TestCase
         $this->givePermission($user, 'projekthasteilnehmer.store');
 
         [$teilnehmer, $projekt, $standort] = $this->assignmentData();
+        $this->activateContext($user, $teilnehmer, $projekt, $standort);
         $betreuer = Personen::factory()->create(['typ' => 'mitarbeiter']);
+        ProjektHasPersonen::query()->create([
+            'projekt_id' => $projekt->id,
+            'personen_id' => $betreuer->id,
+            'standort_id' => $standort->id,
+            'status' => 'aktiv',
+        ]);
 
         $payload = [
             'teilnehmer_id' => $teilnehmer->id,
@@ -130,6 +145,23 @@ class TeilnehmerProjektWorkflowTest extends TestCase
             Projekt::factory()->create(),
             Standort::factory()->create(),
         ];
+    }
+
+    private function activateContext(User $user, Personen $participant, Projekt $project, Standort $location): void
+    {
+        ProjektHasPersonen::query()->create([
+            'projekt_id' => $project->id,
+            'personen_id' => $user->person_id,
+            'standort_id' => $location->id,
+            'status' => 'aktiv',
+        ]);
+        ProjektHasPersonen::query()->create([
+            'projekt_id' => $project->id,
+            'personen_id' => $participant->id,
+            'standort_id' => $location->id,
+            'status' => 'aktiv',
+        ]);
+        $user->update(['current_team_id' => $project->id]);
     }
 
     private function givePermission(User $user, string $permissionName): void

@@ -3,10 +3,9 @@
 namespace App\Http\Middleware;
 
 use Closure;
-use App\Models\User;
+use App\Services\Projects\ActiveProjectContext;
 use Inertia\Inertia;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 
 class InjectUserProjekte
 {
@@ -20,12 +19,14 @@ class InjectUserProjekte
     public function handle(Request $request, Closure $next)
     {
 
-        $user = User::find(Auth::user()->id);
+        $user = $request->user();
 
         if ($user) {
+            app(ActiveProjectContext::class)->currentFor($user);
+
             // Setze Rollen und Berechtigungen in die Shared Data von Inertia
             Inertia::share([
-                'user' => $request->user()->load('projekte'),  // Projekte des Users laden
+                'user' => $user->load('projekte'),
             ]);
         }
         return $next($request);

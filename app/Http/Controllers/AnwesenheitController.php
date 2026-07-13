@@ -2,272 +2,175 @@
 
 namespace App\Http\Controllers;
 
-use Exception;
+use App\Models\Gruppe;
+use App\Models\GruppeHasPersonen;
+use App\Models\Personen;
 use App\Models\Tage;
 use App\Models\Zeiten;
+use App\Services\Projects\ActiveProjectContext;
 use Illuminate\Http\Request;
-use App\Models\GruppeHasPersonen;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Auth;
-use App\Models\PersonenHasAnwesenheiten;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class AnwesenheitController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
+    public function __construct(private readonly ActiveProjectContext $activeProjectContext)
     {
-        //
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
-    }
-
-    /**
-     * Store a newly created resource in storage.
-     */
-    /* public function store(Request $request)
-    {
-
-        dd($request->all());
-        $validated = $request->validate([
-            'anwesenheiten' => 'required|array',
-            'anwesenheiten.*.personen_id' => 'required|integer|exists:personen,id',
-            'anwesenheiten.*.tage_id' => 'required|integer|exists:tage,id',
-            'anwesenheiten.*.zeiten_id' => 'required|integer|exists:zeiten,id',
-            'anwesenheiten.*.anwesenheitsstatuten_id' => 'required|integer|exists:anwesenheitsstatuten,id',
-            'anwesenheiten.*.bemerkung' => 'nullable|string|max:255',
-        ]);
-
-        DB::beginTransaction();
-
-        try {
-            foreach ($validated['anwesenheiten'] as $eintrag) {
-                PersonenHasAnwesenheit::updateOrCreate(
-                    [
-                        'personen_id' => $eintrag['personen_id'],
-                        'tage_id' => $eintrag['tage_id'],
-                        'zeiten_id' => $eintrag['zeiten_id'],
-                    ],
-                    [
-                        'anwesenheitsstatuten_id' => $eintrag['anwesenheitsstatuten_id'],
-                        'user_id' => Auth::id(),
-                        'bemerkung' => $eintrag['bemerkung'] ?? null,
-                    ]
-                );
-            }
-
-            DB::commit();
-
-            return response()->json(['success' => true, 'message' => 'Anwesenheiten gespeichert.']);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
-        }
-    } */
     public function store(Request $request)
     {
-
         $validated = $request->validate([
-            'anwesenheitsstatuten_id' => 'required|integer|exists:anwesenheitsstatutens,id',
-            'tag' => 'required|date|exists:tages,datum',
-            'startzeit'   => 'required|date_format:H:i',
-            'endzeit'     => 'required|date_format:H:i|after:startzeit',
-            'tatstartTime'=> 'nullable|date_format:H:i',
-            'tatendTime'  => 'nullable|date_format:H:i|after:tatstartTime',
-            'personen_id' => 'required|integer|exists:personens,id',
-            'bemerkung' => 'nullable|string|max:255',
-            'bereich_id' => 'nullable|integer|exists:bereiches,id',
+            'anwesenheitsstatuten_id' => ['required', 'integer', 'exists:anwesenheitsstatutens,id'],
+            'tag' => ['required', 'date', 'exists:tages,datum'],
+            'startzeit' => ['required', 'date_format:H:i'],
+            'endzeit' => ['required', 'date_format:H:i', 'after:startzeit'],
+            'tatstartTime' => ['nullable', 'date_format:H:i'],
+            'tatendTime' => ['nullable', 'date_format:H:i', 'after:tatstartTime'],
+            'personen_id' => ['required', 'integer', 'exists:personens,id'],
+            'bemerkung' => ['nullable', 'string', 'max:255'],
+            'gruppe_id' => ['nullable', 'required_without:bereich_id', 'integer', 'exists:gruppes,id'],
+            'bereich_id' => ['nullable', 'required_without:gruppe_id', 'integer', 'exists:gruppes,id'],
         ]);
 
-        DB::beginTransaction();
+        $groupId = (int) ($validated['gruppe_id'] ?? $validated['bereich_id']);
+        $this->authorizeParticipant((int) $validated['personen_id']);
+        $this->authorizedGroup($groupId);
 
-        try {
+        DB::transaction(function () use ($validated, $groupId): void {
+            $tagId = (int) Tage::where('datum', $validated['tag'])->value('id');
+            $plannedTimeId = $this->timeId($validated['startzeit'], $validated['endzeit']);
+            $actualTimeId = $this->timeId($validated['tatstartTime'] ?? null, $validated['tatendTime'] ?? null);
 
-                $tagId = Tage::where('datum', $validated['tag'])->value('id');
-
-                if(!$tagId || $tagId == Null) {
-                    throw new Exception('Ungültiger Tag.');
-                    return redirect()->back()->with('error', 'Ungültiger Tag');
-                }
-
-                $tatzeitenId = null;
-                $zeitenId = Zeiten::firstOrCreate(
-                    [
-                        'startzeit' => $validated['startzeit'],
-                        'endzeit' => $validated['endzeit']
-                    ]
-                )->id;
-
-                if (!empty($validated['tatstartTime']) && !empty($validated['tatendTime'])) {
-                    $tatzeitenId = Zeiten::firstOrCreate(
-                        [
-                            'startzeit' => $validated['tatstartTime'],
-                            'endzeit'   => $validated['tatendTime']
-                        ]
-                    )->id;
-                }
-
-                GruppeHasPersonen::updateOrCreate(
+            GruppeHasPersonen::updateOrCreate(
                 [
                     'personen_id' => $validated['personen_id'],
+                    'gruppe_id' => $groupId,
                     'tage_id' => $tagId,
-                    'zeitgeplant_id' => $zeitenId,
-                    'zeittatsaechlich_id' =>  $tatzeitenId,
                 ],
                 [
-
+                    'zeitgeplant_id' => $plannedTimeId,
+                    'zeittatsaechlich_id' => $actualTimeId,
                     'anwesenheitsstatuten_id' => $validated['anwesenheitsstatuten_id'],
-                    'user_id' => Auth::id(),
-                    'bemerkung' => $validated['bemerkungen'] ?? null,
-                    'gruppe_id' => $validated['gruppe_id'] ?? null,
+                    'user_id' => request()->user()?->person_id,
+                    'bemerkung' => $validated['bemerkung'] ?? null,
                 ]
-                );
+            );
+        });
 
-
-            DB::commit();
-
-
-                return redirect()->back()->with('success', 'Anwesenheiten gespeichert.');
-        } catch (Exception $e) {
-            DB::rollBack();
-        return redirect()->back()->with('error', 'Fehler beim Speichern: ' . $e->getMessage());
-        }
-    }
-
-    public function show(string $id)
-    {
-        //
-    }
-
-    public function edit(string $id)
-    {
-        //
+        return redirect()->back()->with('success', 'Anwesenheit gespeichert.');
     }
 
     public function update(Request $request)
     {
         $validated = $request->validate([
-            'personen_id' => 'required|integer|exists:personens,id',
-            'anwesenheitsstatuten_id' => 'required|integer|exists:anwesenheitsstatutens,id',
-            'tag'   => 'required|date|exists:tages,datum',
-
-            'startzeit'   => 'nullable|date_format:H:i',
-            'endzeit'     => 'nullable|date_format:H:i|after:startzeit',
-
-            'tatstartTime'=> 'nullable|date_format:H:i',
-            'tatendTime'  => 'nullable|date_format:H:i|after:tatstartTime',
-
-            'bemerkung' => 'nullable|string|max:255',
+            'id' => ['nullable', 'integer', 'exists:gruppe_has_personens,id'],
+            'personen_id' => ['required', 'integer', 'exists:personens,id'],
+            'anwesenheitsstatuten_id' => ['required', 'integer', 'exists:anwesenheitsstatutens,id'],
+            'tag' => ['required', 'date', 'exists:tages,datum'],
+            'startzeit' => ['nullable', 'date_format:H:i'],
+            'endzeit' => ['nullable', 'date_format:H:i', 'after:startzeit'],
+            'tatstartTime' => ['nullable', 'date_format:H:i'],
+            'tatendTime' => ['nullable', 'date_format:H:i', 'after:tatstartTime'],
+            'bemerkung' => ['nullable', 'string', 'max:255'],
+            'gruppe_id' => ['nullable', 'integer', 'exists:gruppes,id'],
+            'bereich_id' => ['nullable', 'integer', 'exists:gruppes,id'],
         ]);
 
-        // Tag-ID abrufen
-        $tagId = Tage::where('datum', $validated['tag'])->value('id');
+        $this->authorizeParticipant((int) $validated['personen_id']);
+        $tagId = (int) Tage::where('datum', $validated['tag'])->value('id');
+        $requestedGroupId = $validated['gruppe_id'] ?? $validated['bereich_id'] ?? null;
 
-        // Bestehende Anwesenheit suchen (ohne Gruppe!)
-        $anwesenheit = GruppeHasPersonen::where('personen_id', $validated['personen_id'])
-            ->where('tage_id', $tagId)
-            ->first();
+        $attendance = ! empty($validated['id'])
+            ? GruppeHasPersonen::query()->findOrFail($validated['id'])
+            : GruppeHasPersonen::query()
+                ->where('personen_id', $validated['personen_id'])
+                ->where('tage_id', $tagId)
+                ->when($requestedGroupId, fn ($query) => $query->where('gruppe_id', $requestedGroupId))
+                ->first();
 
-        // ==========================
-        // Geplante Zeit setzen
-        // ==========================
-        $zeitgeplantId = $anwesenheit->zeitgeplant_id ?? null;
-
-        if (!empty($validated['startzeit']) && !empty($validated['endzeit'])) {
-
-            // Nur neue Zeit anlegen, wenn Werte sich geändert haben
-            if (
-                !$anwesenheit ||
-                $anwesenheit->zeitgeplant?->startzeit !== $validated['startzeit'] ||
-                $anwesenheit->zeitgeplant?->endzeit   !== $validated['endzeit']
-            ) {
-                $zeitgeplantId = Zeiten::firstOrCreate([
-                    'startzeit' => $validated['startzeit'],
-                    'endzeit'   => $validated['endzeit']
-                ])->id;
-            }
+        if ($attendance) {
+            abort_unless((int) $attendance->personen_id === (int) $validated['personen_id'], 403);
         }
 
-        // ==========================
-        // Tatsächliche Zeit setzen
-        // ==========================
-        $zeittatsaechlichId = $anwesenheit->zeittatsaechlich_id ?? null;
+        $groupId = $requestedGroupId ?: $attendance?->gruppe_id;
+        abort_unless($groupId, 422, 'Bitte waehlen Sie eine Gruppe aus.');
+        $this->authorizedGroup((int) $groupId);
 
-        if (!empty($validated['tatstartTime']) && !empty($validated['tatendTime'])) {
-
-            if (
-                !$anwesenheit ||
-                $anwesenheit->zeittatsaechlich?->startzeit !== $validated['tatstartTime'] ||
-                $anwesenheit->zeittatsaechlich?->endzeit   !== $validated['tatendTime']
-            ) {
-                $zeittatsaechlichId = Zeiten::firstOrCreate([
-                    'startzeit' => $validated['tatstartTime'],
-                    'endzeit'   => $validated['tatendTime']
-                ])->id;
-            }
+        $plannedTimeId = $attendance?->zeitgeplant_id;
+        if (! empty($validated['startzeit']) && ! empty($validated['endzeit'])) {
+            $plannedTimeId = $this->timeId($validated['startzeit'], $validated['endzeit']);
         }
 
-        // ==========================
-        // UPDATE
-        // ==========================
-        if ($anwesenheit) {
+        $actualTimeId = $attendance?->zeittatsaechlich_id;
+        if (! empty($validated['tatstartTime']) && ! empty($validated['tatendTime'])) {
+            $actualTimeId = $this->timeId($validated['tatstartTime'], $validated['tatendTime']);
+        }
 
-            $anwesenheit->update([
+        GruppeHasPersonen::updateOrCreate(
+            ['id' => $attendance?->id],
+            [
+                'personen_id' => $validated['personen_id'],
+                'gruppe_id' => $groupId,
+                'tage_id' => $tagId,
+                'zeitgeplant_id' => $plannedTimeId,
+                'zeittatsaechlich_id' => $actualTimeId,
                 'anwesenheitsstatuten_id' => $validated['anwesenheitsstatuten_id'],
-                'zeitgeplant_id'          => $zeitgeplantId,
-                'zeittatsaechlich_id'     => $zeittatsaechlichId,
-                'bemerkung'               => $validated['bemerkung'] ?? null,
-                'user_id'                 => Auth::id(),
-            ]);
+                'bemerkung' => $validated['bemerkung'] ?? null,
+                'user_id' => request()->user()?->person_id,
+            ]
+        );
 
-            return redirect()->back()->with('success', 'Anwesenheit aktualisiert.');
-        }
-
-        // ==========================
-        // NEU ANLEGEN
-        // ==========================
-        GruppeHasPersonen::create([
-            'personen_id'             => $validated['personen_id'],
-            'tage_id'                 => $tagId,
-            'zeitgeplant_id'          => $zeitgeplantId,
-            'zeittatsaechlich_id'     => $zeittatsaechlichId,
-            'anwesenheitsstatuten_id' => $validated['anwesenheitsstatuten_id'],
-            'bemerkung'               => $validated['bemerkung'] ?? null,
-            'user_id'                 => Auth::id(),
-        ]);
-
-        return redirect()->back()->with('success', 'Anwesenheit hinzugefügt.');
+        return redirect()->back()->with('success', $attendance ? 'Anwesenheit aktualisiert.' : 'Anwesenheit hinzugefuegt.');
     }
 
-
-
-
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy($id)
+    public function destroy(int $id)
     {
+        $attendance = GruppeHasPersonen::query()->findOrFail($id);
+        $this->authorizeParticipant((int) $attendance->personen_id);
 
-        try {
-
-            GruppeHasPersonen::findOrFail($id)->delete();
-            return response()->json(['message' => 'Kontakt erfolgreich entfernt.'], 200);
-
-
-        } catch (ModelNotFoundException $e) {
-            return response()->json(['message' => 'Die Anwesenheit konnte nicht gefunden werden.'], 404);
-        } catch (Exception $e) {
-            return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
+        if ($attendance->gruppe_id) {
+            $this->authorizedGroup((int) $attendance->gruppe_id);
         }
 
+        $attendance->delete();
+
+        return response()->json(['message' => 'Anwesenheit erfolgreich geloescht.']);
+    }
+
+    private function authorizeParticipant(int $participantId): void
+    {
+        $user = request()->user();
+        $project = $user ? $this->activeProjectContext->currentAvailableFor($user) : null;
+        abort_unless($user && $project, 409, 'Bitte waehlen Sie zuerst ein aktives Projekt aus.');
+
+        $isVisible = Personen::query()
+            ->teilnehmer()
+            ->visibleForUser($user)
+            ->whereKey($participantId)
+            ->whereHas('projekte', fn ($query) => $query->where('projekts.id', $project->id))
+            ->exists();
+
+        abort_unless($isVisible, 403);
+    }
+
+    private function authorizedGroup(int $groupId): Gruppe
+    {
+        $user = request()->user();
+        $project = $user ? $this->activeProjectContext->currentAvailableFor($user) : null;
+        abort_unless($project, 409, 'Bitte waehlen Sie zuerst ein aktives Projekt aus.');
+
+        return Gruppe::query()
+            ->whereKey($groupId)
+            ->where('projekt_id', $project->id)
+            ->firstOrFail();
+    }
+
+    private function timeId(?string $start, ?string $end): ?int
+    {
+        if (! $start || ! $end) {
+            return null;
+        }
+
+        return Zeiten::firstOrCreate(['startzeit' => $start, 'endzeit' => $end])->id;
     }
 }

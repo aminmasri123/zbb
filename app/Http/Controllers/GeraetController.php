@@ -19,6 +19,11 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class GeraetController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('module:it_management');
+    }
+
     /**
      * Display a listing of the resource.
      */

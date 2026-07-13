@@ -12,6 +12,11 @@ use Inertia\Inertia;
 
 class DienstwagenMeldungController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('module:vehicle_management');
+    }
+
     public function index(Request $request)
     {
         $user = $request->user()?->loadMissing('person');

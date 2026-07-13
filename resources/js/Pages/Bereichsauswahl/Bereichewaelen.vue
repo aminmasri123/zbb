@@ -8,6 +8,8 @@ const props = defineProps({
     alle_bereiche: Array,
     selectionCount: Number,
     search: String,
+    canCreate: { type: Boolean, default: false },
+    canUpdate: { type: Boolean, default: false },
 });
 // Reactive Variablen für Radios
 const wahl = ref({});
@@ -95,6 +97,10 @@ const filteredRows = computed(() => {
 const isOptionDisabled = (row, bereichId, choiceIndex) => (
     activeChoices(row).some((choice, index) => index !== choiceIndex && Number(choice) === Number(bereichId))
 );
+const hasSavedChoices = (row) => [1, 2, 3, 4].some(
+    (field) => row.bereichsauswahl?.[`bereich_id${field}`] != null
+);
+const canEditRow = (row) => hasSavedChoices(row) ? props.canUpdate : props.canCreate;
 
 const saveRow = async (row, showSuccess = true) => {
     if (!isComplete(row)) {
@@ -149,7 +155,7 @@ const saveRow = async (row, showSuccess = true) => {
 };
 
 const setChoice = (row, choiceIndex, bereichId) => {
-    if (isOptionDisabled(row, bereichId, choiceIndex) || row.saving) return;
+    if (!canEditRow(row) || isOptionDisabled(row, bereichId, choiceIndex) || row.saving) return;
 
     row.choices[choiceIndex] = Number(bereichId);
     row.saved = false;
@@ -270,7 +276,7 @@ const copyCode = async (code) => {
                                     Number(row.choices[index]) === Number(bereich.id)
                                         ? 'border-zbb bg-zbb text-white'
                                         : 'border-gray-300 bg-white text-gray-700 hover:border-zbb hover:text-zbb',
-                                    isOptionDisabled(row, bereich.id, index) || row.saving
+                                    !canEditRow(row) || isOptionDisabled(row, bereich.id, index) || row.saving
                                         ? 'cursor-not-allowed opacity-40 hover:border-gray-300 hover:text-gray-700'
                                         : ''
                                 ]"
@@ -281,7 +287,7 @@ const copyCode = async (code) => {
                                     :name="`bereich-${row.id}-${index}`"
                                     :value="bereich.id"
                                     :checked="Number(row.choices[index]) === Number(bereich.id)"
-                                    :disabled="isOptionDisabled(row, bereich.id, index) || row.saving"
+                                    :disabled="!canEditRow(row) || isOptionDisabled(row, bereich.id, index) || row.saving"
                                     @change="setChoice(row, index, bereich.id)"
                                 />
                                 <span>{{ bereich.code || bereich.name }}</span>

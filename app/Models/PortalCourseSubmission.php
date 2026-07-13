@@ -1,0 +1,3 @@
+<?php
+namespace App\Models;use Illuminate\Database\Eloquent\Factories\HasFactory;use Illuminate\Database\Eloquent\Model;
+class PortalCourseSubmission extends Model{use HasFactory;protected $fillable=['assignment_id','enrollment_id','text_answer','original_name','path','mime_type','size','status','submitted_at','score','feedback','reviewed_by_user_id','reviewed_at'];protected $casts=['submitted_at'=>'datetime','reviewed_at'=>'datetime','score'=>'decimal:2','size'=>'integer'];public function assignment(){return $this->belongsTo(PortalCourseAssignment::class,'assignment_id');}public function enrollment(){return $this->belongsTo(PortalCourseEnrollment::class,'enrollment_id');}public function reviewer(){return $this->belongsTo(User::class,'reviewed_by_user_id');}}

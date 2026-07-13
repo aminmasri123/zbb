@@ -54,7 +54,6 @@ class EinteilungParameterController extends Controller
             'schuljahr' => ['required', 'string'],
             'teil' => ['required', 'string'],
             'runden_anzahl' => ['required', 'integer', 'min:' . self::MIN_RUNDEN, 'max:' . self::MAX_RUNDEN],
-            'auswahl_anzahl' => ['required', 'integer', 'min:' . self::MIN_AUSWAHL, 'max:' . self::MAX_AUSWAHL],
             'standard_kapazitaet' => ['required', 'integer', 'min:0', 'max:999'],
             'kapazitaeten' => ['nullable', 'array'],
             'kapazitaeten.*' => ['nullable', 'integer', 'min:0', 'max:999'],
@@ -66,7 +65,6 @@ class EinteilungParameterController extends Controller
         $projekt = $this->currentProjekt();
         $bereiche = $this->projektBereiche($projekt);
         $rundenAnzahl = $this->normalizeRundenAnzahl((int) $validated['runden_anzahl']);
-        $auswahlAnzahl = $this->normalizeAuswahlAnzahl((int) $validated['auswahl_anzahl']);
         $standardKapazitaet = (int) $validated['standard_kapazitaet'];
         $kapazitaeten = collect($validated['kapazitaeten'] ?? [])
             ->mapWithKeys(fn ($value, $key) => [(int) $key => (int) $value]);
@@ -78,7 +76,6 @@ class EinteilungParameterController extends Controller
             $schuljahr,
             $teil,
             $rundenAnzahl,
-            $auswahlAnzahl,
             $standardKapazitaet,
             $kapazitaeten
         ) {
@@ -96,13 +93,6 @@ class EinteilungParameterController extends Controller
                 );
             }
 
-            $wahlSetting = $this->bereichsauswahlSettingFor($projekt->id, $partnerId, $schuljahr, $teil, $projekt);
-            $wahlSetting->update([
-                'auswahl_anzahl' => $auswahlAnzahl,
-                'user_update' => Auth::id(),
-            ]);
-
-            $this->clearBereichsauswahlFields($partnerId, $schuljahr, $teil, $auswahlAnzahl);
             $this->removeEinteilungenAboveRound($partnerId, $schuljahr, $teil, $rundenAnzahl);
         });
 
@@ -426,22 +416,19 @@ class EinteilungParameterController extends Controller
         $base = $request->validate([
             'schueler_id' => ['required', 'integer', 'exists:personen_ist_schuelers,id'],
             'seite' => ['nullable', 'string'],
-            'partner_id' => ['nullable', 'integer', 'exists:partners,id'],
-            'schuljahr' => ['nullable', 'string'],
-            'teil' => ['nullable', 'string'],
+            'partner_id' => ['required', 'integer', 'exists:partners,id'],
+            'schuljahr' => ['required', 'string'],
+            'teil' => ['required', 'string'],
         ]);
 
-        $hasContext = !empty($base['partner_id']) && !empty($base['schuljahr']) && !empty($base['teil']);
         $projekt = $this->currentProjekt();
-        $runden = $hasContext
-            ? $this->rundenArray($this->einteilungSettingFor(
-                $projekt->id,
-                (int) $base['partner_id'],
-                (string) $base['schuljahr'],
-                (string) $base['teil'],
-                $projekt
-            )->runden_anzahl)
-            : $this->rundenArray(self::MAX_RUNDEN);
+        $runden = $this->rundenArray($this->einteilungSettingFor(
+            $projekt->id,
+            (int) $base['partner_id'],
+            (string) $base['schuljahr'],
+            (string) $base['teil'],
+            $projekt
+        )->runden_anzahl);
 
         $roundData = $this->validateRoundFields($request, $runden, false);
         $validated = array_merge($base, $roundData);
@@ -449,25 +436,21 @@ class EinteilungParameterController extends Controller
         $this->validateDistinctBereiche($validated, false, $runden);
         $this->assertBereicheInProjekt($this->rundeValues($validated, $runden));
 
-        $schueler = $hasContext
-            ? $this->schuelerInContext(
-                (int) $validated['schueler_id'],
-                (int) $validated['partner_id'],
-                (string) $validated['schuljahr'],
-                (string) $validated['teil']
-            )
-            : PersonenIstSchueler::findOrFail($validated['schueler_id']);
+        $schueler = $this->schuelerInContext(
+            (int) $validated['schueler_id'],
+            (int) $validated['partner_id'],
+            (string) $validated['schuljahr'],
+            (string) $validated['teil']
+        );
 
         $rundeValues = $this->rundeValues($validated, $runden);
-        if ($hasContext) {
-            $this->assertKapazitaetenFuerEingabe(
-                (int) $validated['partner_id'],
-                (string) $validated['schuljahr'],
-                (string) $validated['teil'],
-                $rundeValues,
-                $schueler->id
-            );
-        }
+        $this->assertKapazitaetenFuerEingabe(
+            (int) $validated['partner_id'],
+            (string) $validated['schuljahr'],
+            (string) $validated['teil'],
+            $rundeValues,
+            $schueler->id
+        );
 
         $alteEinteilungen = $schueler->einteilungen()
             ->whereIn('runde', $runden)
@@ -475,12 +458,12 @@ class EinteilungParameterController extends Controller
             ->map(fn ($id) => (int) $id)
             ->all();
 
-        DB::transaction(function () use ($schueler, $validated, $runden, $rundeValues, $alteEinteilungen, $hasContext) {
+        DB::transaction(function () use ($schueler, $validated, $runden, $rundeValues, $alteEinteilungen) {
             foreach ($runden as $runde) {
                 $bereichId = $rundeValues[$runde] ?? null;
                 $alterBereichId = $alteEinteilungen[$runde] ?? null;
 
-                if ($hasContext && (int) $alterBereichId !== (int) $bereichId) {
+                if ((int) $alterBereichId !== (int) $bereichId) {
                     $this->syncGeneratedGroupMembership(
                         $schueler,
                         (int) $validated['partner_id'],
@@ -512,9 +495,11 @@ class EinteilungParameterController extends Controller
             'message' => 'Einteilung erfolgreich aktualisiert.',
             'schueler_id' => $schueler->id,
             'einteilung_ids' => $schueler->einteilungen()->pluck('bereich_id', 'runde')->toArray(),
-            'payload' => $hasContext
-                ? $this->pagePayload((int) $validated['partner_id'], (string) $validated['schuljahr'], (string) $validated['teil'])
-                : null,
+            'payload' => $this->pagePayload(
+                (int) $validated['partner_id'],
+                (string) $validated['schuljahr'],
+                (string) $validated['teil']
+            ),
         ]);
     }
 
@@ -529,6 +514,8 @@ class EinteilungParameterController extends Controller
         $partnerId = (int) $validated['partner_id'];
         $schuljahr = (string) $validated['schuljahr'];
         $teil = (string) $validated['teil'];
+        $projekt = $this->currentProjekt();
+        $this->einteilungSettingFor($projekt->id, $partnerId, $schuljahr, $teil, $projekt);
         $schueler = $this->schuelerQuery($partnerId, $schuljahr, $teil)
             ->with(['person', 'einteilungen'])
             ->get();
@@ -948,6 +935,12 @@ class EinteilungParameterController extends Controller
 
     private function einteilungSettingFor(int $projektId, int $partnerId, string $schuljahr, string $teil, ?Projekt $projekt = null): EinteilungSetting
     {
+        $projekt = $projekt ?: $this->currentProjekt();
+        abort_unless(
+            (int) $projekt->id === $projektId && $projekt->partners->contains('id', $partnerId),
+            404
+        );
+
         $setting = EinteilungSetting::firstOrCreate(
             [
                 'projekt_id' => $projektId,
@@ -1203,19 +1196,6 @@ class EinteilungParameterController extends Controller
                 return $a['random'] <=> $b['random'];
             })
             ->first()['id'];
-    }
-
-    private function clearBereichsauswahlFields(int $partnerId, string $schuljahr, string $teil, int $auswahlAnzahl): void
-    {
-        $teilnehmerIds = $this->schuelerQuery($partnerId, $schuljahr, $teil)->pluck('id');
-        $clearFields = collect([3, 4])
-            ->filter(fn ($field) => $field > $auswahlAnzahl)
-            ->mapWithKeys(fn ($field) => ['bereich_id' . $field => null])
-            ->all();
-
-        if ($clearFields) {
-            Bereichsauswahl::whereIn('teilnehmer_id', $teilnehmerIds)->update($clearFields);
-        }
     }
 
     private function removeEinteilungenAboveRound(int $partnerId, string $schuljahr, string $teil, int $rundenAnzahl): void

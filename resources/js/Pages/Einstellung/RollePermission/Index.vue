@@ -376,14 +376,14 @@
                     </li>
                 </ul>
                 <div class="flex flex-col sm:flex-row">
-                    <div class="mb-5 sm:relative sm:w-1/4 ">
-                        <div class=" hidden sm:block sm:w-1/5 sm:fixed">
+                    <div class="mb-5 sm:w-1/4 sm:pr-4">
+                        <div class="hidden sm:sticky sm:top-6 sm:block">
                             <div v-if="canCreateRole" @click="openModalCreate" class="w-full bg-orange-500 py-2 rounded-md text-center">
                                 <a href="#" class="text-white">
                                     <i class="fa fa-plus"></i> {{ $t('rolle_anlegen') }}
                                 </a>
                             </div>
-                            <div class="bg-white mt-5 border">
+                            <div class="mt-5 max-h-[calc(100vh-9rem)] overflow-y-auto overscroll-contain border bg-white">
                                 <ul>
                                     <li v-for="rolle in localRollen" :key="rolle.id" class="flex justify-between pr-3  hover:font-bold text-gray-600 ">
                                         <Link class=" hover:bg-gray-200 w-full pl-8  py-2"

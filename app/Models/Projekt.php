@@ -12,6 +12,7 @@ use App\Models\Personen;
 use App\Models\PotenzialanalyseUebung;
 use App\Models\ProjektHasAnsprechpartner;
 use App\Models\ProjektHasPartner;
+use App\Models\ProjektHasPersonen;
 use App\Models\Raeume;
 use App\Models\Standort;
 use App\Models\User;
@@ -25,6 +26,7 @@ class Projekt extends Model
     use HasFactory;
     protected $fillable = [
         'id',
+        'project_type_id',
         'name',
         'abteilung_id',
         'beschreibung',
@@ -32,6 +34,9 @@ class Projekt extends Model
         'klassenbuch_aktiv',
         'potenzialanalyse_aktiv',
         'potenzialanalyse_tage',
+        'feature_settings',
+        'rule_settings',
+        'portal_feature_settings',
     ];
 
     protected $casts = [
@@ -39,12 +44,120 @@ class Projekt extends Model
         'klassenbuch_aktiv' => 'boolean',
         'potenzialanalyse_aktiv' => 'boolean',
         'potenzialanalyse_tage' => 'integer',
+        'feature_settings' => 'array',
+        'rule_settings' => 'array',
+        'portal_feature_settings' => 'array',
     ];
+
+    public const FEATURE_DEFAULTS = [
+        'participant_management' => true,
+        'group_management' => true,
+        'attendance_management' => true,
+        'internship_management' => true,
+        'completion_management' => true,
+    ];
+
+    public const FEATURE_DEPENDENCIES = [
+        'group_management' => ['participant_management'],
+        'attendance_management' => ['participant_management'],
+        'internship_management' => ['participant_management'],
+        'completion_management' => ['participant_management'],
+        'classbook_management' => ['group_management'],
+        'potential_analysis' => ['participant_management', 'group_management'],
+    ];
+
+    public const RULE_DEFAULTS = [
+        'max_group_participants' => null,
+        'attendance_skip_weekends' => false,
+        'attendance_default_status' => 'unentschuldigt',
+        'participant_birthdate_required' => false,
+        'participant_min_age' => null,
+        'participant_max_age' => null,
+        'participation_initial_status' => 'aktiv',
+    ];
+
+    public const PARTICIPATION_STATUSES = [
+        'angefragt',
+        'angemeldet',
+        'aufgenommen',
+        'aktiv',
+        'pausiert',
+        'abgeschlossen',
+        'abgebrochen',
+    ];
+
+    public const PORTAL_FEATURE_DEFAULTS = [
+        'profile' => true,
+        'attendance_self_service' => false,
+        'tasks_and_appointments' => true,
+        'job_search' => false,
+        'application_management' => false,
+        'learning' => false,
+        'messaging' => false,
+        'consents_and_approvals' => false,
+    ];
+
+    public function portalFeatureSettings(): array
+    {
+        return array_replace(self::PORTAL_FEATURE_DEFAULTS, $this->portal_feature_settings ?? []);
+    }
+
+    public function portalFeatureEnabled(string $key): bool
+    {
+        return (bool) ($this->portalFeatureSettings()[$key] ?? false);
+    }
+
+    public function ruleSettings(): array
+    {
+        return array_replace(self::RULE_DEFAULTS, $this->rule_settings ?? []);
+    }
+
+    public function rule(string $key, mixed $default = null): mixed
+    {
+        return $this->ruleSettings()[$key] ?? $default;
+    }
+
+    public function featureSettings(): array
+    {
+        return collect($this->configuredFeatureSettings())
+            ->mapWithKeys(fn ($enabled, $key) => [$key => $this->featureEnabled($key)])
+            ->all();
+    }
+
+    public function configuredFeatureSettings(): array
+    {
+        return array_replace(self::FEATURE_DEFAULTS, $this->feature_settings ?? [], [
+            'classbook_management' => (bool) $this->klassenbuch_aktiv,
+            'potential_analysis' => (bool) $this->potenzialanalyse_aktiv,
+        ]);
+    }
+
+    public function featureEnabled(string $key): bool
+    {
+        $settings = $this->configuredFeatureSettings();
+
+        if (!(bool) ($settings[$key] ?? false)) {
+            return false;
+        }
+
+        foreach (self::FEATURE_DEPENDENCIES[$key] ?? [] as $dependency) {
+            if (!$this->featureEnabled($dependency)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
 
     public function scopeAktiv($query)
     {
         return $query->where('aktiv', 1);
+    }
+
+    public function projectType()
+    {
+        return $this->belongsTo(ProjectType::class, 'project_type_id');
     }
 
 
@@ -105,6 +218,11 @@ class Projekt extends Model
         return $this->belongsToMany(Personen::class, 'projekt_has_personens', 'projekt_id', 'personen_id');
     }
 
+    public function participations()
+    {
+        return $this->hasMany(ProjektHasPersonen::class, 'projekt_id');
+    }
+
     public function mitarbeiter()
     {
         return $this->belongsToMany(Personen::class, 'projekt_has_personens', 'projekt_id', 'personen_id')
@@ -150,6 +268,20 @@ class Projekt extends Model
             ->orderBy('sort_order')
             ->orderBy('tag')
             ->orderBy('name');
+    }
+
+    public function intakeChecklistItems()
+    {
+        return $this->hasMany(ProjectIntakeChecklistItem::class, 'project_id')
+            ->orderBy('sort_order')
+            ->orderBy('id');
+    }
+
+    public function completionChecklistItems()
+    {
+        return $this->hasMany(ProjectCompletionChecklistItem::class, 'project_id')
+            ->orderBy('sort_order')
+            ->orderBy('id');
     }
 
     public function zeitraume()

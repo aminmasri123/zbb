@@ -23,6 +23,11 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class DienstwagenfahrtenbuchController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('module:vehicle_management');
+    }
+
     /**
      * Display a listing of the resource.
      */

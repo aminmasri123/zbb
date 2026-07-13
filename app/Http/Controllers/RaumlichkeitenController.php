@@ -12,6 +12,7 @@ use App\Models\RaumMeldung;
 use App\Notifications\ConfiguredEventNotification;
 use App\Services\NotificationRecipientService;
 use App\Services\RaumBelegungService;
+use App\Services\Modules\ModuleStateResolver;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Notification;
@@ -21,7 +22,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class RaumlichkeitenController extends Controller
 {
-    public function index()
+    public function index(ModuleStateResolver $modules)
     {
         $this->authorizeRoomPermission('index');
 
@@ -51,7 +52,9 @@ class RaumlichkeitenController extends Controller
                         ->orderBy('startzeit'),
                 ])
                 ->orderBy('name'),
-        ])->orderBy('name')->get();
+        ])->orderBy('name')->get()
+            ->filter(fn (Standort $standort) => $modules->enabled('room_management', $standort->id))
+            ->values();
 
         $personal = Personen::mitarbeiter()
             ->aktiv()

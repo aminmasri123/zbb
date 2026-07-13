@@ -1,16 +1,192 @@
 <script setup>
-import { computed, reactive, ref } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import MultiSelect from 'primevue/multiselect';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { usePermissions } from '@/utils/permissions';
 
 const props = defineProps({
     projekt: Object,
     fehlendeMitarbeiter: Array,
     alleStandorte: Array,
+    anwesenheitsstatuten: Array,
 });
+
+const { can } = usePermissions();
+const projectFeatures = reactive({ ...(props.projekt.features || {}) });
+const featureSaving = ref(false);
+const featureErrors = ref({});
+const paTage = ref(props.projekt.potenzialanalyse_tage || null);
+const projectRules = reactive({ ...(props.projekt.rules || {}) });
+const ruleSaving = ref(false);
+const ruleErrors = ref({});
+const intakeChecklistItems = ref(JSON.parse(JSON.stringify(props.projekt.intake_checklist_items || [])));
+const intakeChecklistSaving = ref(false);
+const completionChecklistItems = ref(JSON.parse(JSON.stringify(props.projekt.completion_checklist_items || [])));
+const completionChecklistSaving = ref(false);
+const portalFeatures = reactive({ ...(props.projekt.portal_features || {}) });
+const portalFeaturesSaving = ref(false);
+const portalFeatureDefinitions = [
+    { key: 'profile', label: 'Profil', description: 'Berufliches Profil selbst vervollständigen' },
+    { key: 'attendance_self_service', label: 'Eigene Anwesenheit', description: 'Freigegebene Anwesenheitsdaten einsehen' },
+    { key: 'tasks_and_appointments', label: 'Aufgaben und Termine', description: 'Ausdrücklich freigegebene Aufgaben anzeigen' },
+    { key: 'job_search', label: 'Jobsuche', description: 'Stellen der BA-Suche finden und merken' },
+    { key: 'application_management', label: 'Bewerbungen', description: 'Bewerbungsstatus und nächste Schritte verwalten' },
+    { key: 'learning', label: 'Kurse und Lernen', description: 'Kurse, Lektionen und Fortschritt' },
+    { key: 'messaging', label: 'Nachrichten', description: 'Kommunikation mit zuständigen Mitarbeitenden' },
+    { key: 'consents_and_approvals', label: 'Einwilligungen', description: 'Versionierte Zustimmungen und Widerrufe verwalten' },
+];
+const featureDefinitions = [
+    { key: 'participant_management', label: 'Teilnehmerverwaltung', description: 'Teilnehmerlisten, Stammdaten und Projektteilnahmen' },
+    { key: 'group_management', label: 'Gruppen und Bereiche', description: 'Gruppenbildung und Zuordnung von Teilnehmern' },
+    { key: 'attendance_management', label: 'Anwesenheit', description: 'Anwesenheiten innerhalb dieses Projekts erfassen' },
+    { key: 'internship_management', label: 'Praktika', description: 'Praktikums- und Bildungsmaßnahmen verwalten' },
+    { key: 'completion_management', label: 'Abschlüsse', description: 'Abschlüsse der Projektteilnehmer verwalten' },
+    { key: 'classbook_management', label: 'Klassenbuch', description: 'Projektbezogene Klassenbücher und Wochenberichte' },
+    { key: 'potential_analysis', label: 'Potenzialanalyse', description: 'PA-Übungen, Kriterien und Bewertungen' },
+];
+const participationStatuses = [
+    { value: 'angefragt', label: 'Angefragt' },
+    { value: 'angemeldet', label: 'Angemeldet (Bestand)' },
+    { value: 'aufgenommen', label: 'Aufgenommen' },
+    { value: 'aktiv', label: 'Aktiv' },
+    { value: 'pausiert', label: 'Pausiert' },
+    { value: 'abgeschlossen', label: 'Abgeschlossen' },
+    { value: 'abgebrochen', label: 'Abgebrochen' },
+];
+
+watch(() => projectFeatures.participant_management, (enabled) => {
+    if (!enabled) {
+        projectFeatures.group_management = false;
+        projectFeatures.attendance_management = false;
+        projectFeatures.internship_management = false;
+        projectFeatures.completion_management = false;
+        projectFeatures.classbook_management = false;
+        projectFeatures.potential_analysis = false;
+    }
+});
+
+watch(() => projectFeatures.group_management, (enabled) => {
+    if (!enabled) {
+        projectFeatures.classbook_management = false;
+        projectFeatures.potential_analysis = false;
+    }
+});
+
+const saveFeatures = async () => {
+    featureSaving.value = true;
+    featureErrors.value = {};
+
+    try {
+        const response = await axios.put(route('projekt.features.update', props.projekt.id), {
+            features: projectFeatures,
+            potenzialanalyse_tage: paTage.value,
+        });
+        Object.assign(projectFeatures, response.data.features);
+        props.projekt.features = response.data.features;
+        props.projekt.klassenbuch_aktiv = response.data.features.classbook_management;
+        props.projekt.potenzialanalyse_aktiv = response.data.features.potential_analysis;
+        props.projekt.potenzialanalyse_tage = response.data.potenzialanalyse_tage;
+        Swal.fire('Gespeichert!', 'Die Projektfunktionen wurden aktualisiert.', 'success');
+    } catch (error) {
+        featureErrors.value = error.response?.data?.errors || {};
+        Swal.fire('Fehler', 'Die Projektfunktionen konnten nicht gespeichert werden.', 'error');
+    } finally {
+        featureSaving.value = false;
+    }
+};
+
+const saveRules = async () => {
+    ruleSaving.value = true;
+    ruleErrors.value = {};
+
+    try {
+        const response = await axios.put(route('projekt.rules.update', props.projekt.id), {
+            rules: projectRules,
+        });
+        Object.assign(projectRules, response.data.rules);
+        props.projekt.rules = response.data.rules;
+        Swal.fire('Gespeichert!', 'Die Projektregeln wurden aktualisiert.', 'success');
+    } catch (error) {
+        ruleErrors.value = error.response?.data?.errors || {};
+        Swal.fire('Fehler', 'Die Projektregeln konnten nicht gespeichert werden.', 'error');
+    } finally {
+        ruleSaving.value = false;
+    }
+};
+
+const addIntakeChecklistItem = () => {
+    intakeChecklistItems.value.push({
+        id: null,
+        label: '',
+        description: '',
+        required: false,
+        sort_order: intakeChecklistItems.value.length,
+    });
+};
+
+const removeIntakeChecklistItem = (index) => {
+    intakeChecklistItems.value.splice(index, 1);
+    intakeChecklistItems.value.forEach((item, itemIndex) => { item.sort_order = itemIndex; });
+};
+
+const saveIntakeChecklist = async () => {
+    if (intakeChecklistItems.value.some((item) => !item.label?.trim())) {
+        Swal.fire('Fehler', 'Jeder Checklistenpunkt benötigt eine Bezeichnung.', 'error');
+        return;
+    }
+
+    intakeChecklistSaving.value = true;
+    try {
+        const response = await axios.put(route('projekt.intake-checklist.update', props.projekt.id), {
+            items: intakeChecklistItems.value.map((item, index) => ({
+                id: item.id || null,
+                label: item.label.trim(),
+                description: item.description?.trim() || null,
+                required: Boolean(item.required),
+                sort_order: index,
+            })),
+        });
+        intakeChecklistItems.value = JSON.parse(JSON.stringify(response.data.items || []));
+        Swal.fire('Gespeichert!', response.data.message, 'success');
+    } catch (error) {
+        Swal.fire('Fehler', error.response?.data?.message || 'Die Aufnahmecheckliste konnte nicht gespeichert werden.', 'error');
+    } finally {
+        intakeChecklistSaving.value = false;
+    }
+};
+
+const addCompletionChecklistItem = () => completionChecklistItems.value.push({ id: null, label: '', description: '', required: false, sort_order: completionChecklistItems.value.length });
+const removeCompletionChecklistItem = (index) => {
+    completionChecklistItems.value.splice(index, 1);
+    completionChecklistItems.value.forEach((item, itemIndex) => { item.sort_order = itemIndex; });
+};
+const saveCompletionChecklist = async () => {
+    if (completionChecklistItems.value.some((item) => !item.label?.trim())) return Swal.fire('Fehler', 'Jeder Checklistenpunkt benötigt eine Bezeichnung.', 'error');
+    completionChecklistSaving.value = true;
+    try {
+        const response = await axios.put(route('projekt.completion-checklist.update', props.projekt.id), { items: completionChecklistItems.value.map((item, index) => ({ id: item.id || null, label: item.label.trim(), description: item.description?.trim() || null, required: Boolean(item.required), sort_order: index })) });
+        completionChecklistItems.value = JSON.parse(JSON.stringify(response.data.items || []));
+        Swal.fire('Gespeichert!', response.data.message, 'success');
+    } catch (error) {
+        Swal.fire('Fehler', error.response?.data?.message || 'Die Abschlusscheckliste konnte nicht gespeichert werden.', 'error');
+    } finally { completionChecklistSaving.value = false; }
+};
+
+const savePortalFeatures = async () => {
+    portalFeaturesSaving.value = true;
+    try {
+        const response = await axios.put(route('projekt.portal-features.update', props.projekt.id), { features: portalFeatures });
+        Object.assign(portalFeatures, response.data.features);
+        Swal.fire('Gespeichert!', response.data.message, 'success');
+    } catch (error) {
+        Swal.fire('Fehler', error.response?.data?.message || 'Die Portal-Funktionen konnten nicht gespeichert werden.', 'error');
+    } finally {
+        portalFeaturesSaving.value = false;
+    }
+};
 
 const selectedStandorte = reactive({});
 const projektMitarbeiter = ref([...(props.projekt.mitarbeiter || [])]);
@@ -324,7 +500,7 @@ const addMitarbeiter = (person) => {
 
         <div class="space-y-6">
             <section class="bg-white p-5 shadow-sm">
-                <div class="grid gap-4 md:grid-cols-5">
+                <div class="grid gap-4 md:grid-cols-6">
                     <div>
                         <p class="text-xs uppercase text-gray-500">Projekt</p>
                         <p class="font-semibold">{{ projekt.name }}</p>
@@ -347,6 +523,223 @@ const addMitarbeiter = (person) => {
                             {{ projekt.potenzialanalyse_aktiv ? `Ja (${projekt.potenzialanalyse_tage || '?'} Tage)` : 'Nein' }}
                         </p>
                     </div>
+                </div>
+            </section>
+
+            <section v-if="projectFeatures.participant_management" class="bg-white p-5 shadow-sm">
+                <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 class="text-lg font-semibold">Teilnehmerportal-Funktionen</h2>
+                        <p class="mt-1 text-sm text-gray-500">Diese Freigaben gelten nur für Teilnehmer dieses Projekts. Zusätzlich muss das globale Modul „Teilnehmerportal“ aktiv sein.</p>
+                    </div>
+                    <button v-if="can('projekt.update')" type="button" class="rounded bg-zbb px-4 py-2 text-sm text-white disabled:opacity-50" :disabled="portalFeaturesSaving" @click="savePortalFeatures">
+                        {{ portalFeaturesSaving ? 'Speichert …' : 'Portal-Funktionen speichern' }}
+                    </button>
+                    <Link v-if="portalFeatures.learning && can('projekt.update')" :href="route('projekt.courses.index', projekt.id)" class="rounded border border-zbb px-4 py-2 text-sm text-zbb">Kurse verwalten</Link>
+                    <Link v-if="portalFeatures.consents_and_approvals && can('projekt.update')" :href="route('projekt.consents.index', projekt.id)" class="rounded border border-zbb px-4 py-2 text-sm text-zbb">Einwilligungen verwalten</Link>
+                </div>
+                <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    <label v-for="feature in portalFeatureDefinitions" :key="feature.key" class="flex items-start gap-3 rounded border p-4" :class="portalFeatures[feature.key] ? 'border-blue-200 bg-blue-50' : 'border-gray-200 bg-gray-50'">
+                        <input v-model="portalFeatures[feature.key]" type="checkbox" class="mt-1 rounded border-gray-300 text-zbb focus:ring-zbb" :disabled="!can('projekt.update')" />
+                        <span><span class="block font-semibold text-gray-800">{{ feature.label }}</span><span class="mt-1 block text-xs text-gray-500">{{ feature.description }}</span></span>
+                    </label>
+                </div>
+            </section>
+
+            <section v-if="projectFeatures.completion_management" class="bg-white p-5 shadow-sm">
+                <div class="mb-4 flex flex-wrap items-start justify-between gap-3"><div><h2 class="text-lg font-semibold">Abschlusscheckliste</h2><p class="mt-1 text-sm text-gray-500">Pflichtpunkte müssen erledigt sein, bevor ein Teilnahmeabschluss freigegeben werden kann. Entfernte Punkte werden historienerhaltend deaktiviert.</p></div><div v-if="can('projekt.update')" class="flex gap-2"><button type="button" class="rounded border border-zbb px-4 py-2 text-sm text-zbb" @click="addCompletionChecklistItem">Punkt hinzufügen</button><button type="button" class="rounded bg-zbb px-4 py-2 text-sm text-white disabled:opacity-50" :disabled="completionChecklistSaving" @click="saveCompletionChecklist">{{ completionChecklistSaving ? 'Speichert …' : 'Checkliste speichern' }}</button></div></div>
+                <div class="space-y-3"><div v-for="(item, index) in completionChecklistItems" :key="item.id || `completion-new-${index}`" class="grid gap-3 rounded border border-gray-200 p-4 md:grid-cols-[60px_1fr_1fr_130px_auto]"><input v-model.number="item.sort_order" type="number" min="0" class="rounded border-gray-300 text-sm" disabled /><input v-model="item.label" maxlength="150" placeholder="Bezeichnung, z. B. Abschlussgespräch geführt" class="rounded border-gray-300 text-sm" :disabled="!can('projekt.update')" /><input v-model="item.description" maxlength="500" placeholder="Optionale Erläuterung" class="rounded border-gray-300 text-sm" :disabled="!can('projekt.update')" /><label class="flex items-center gap-2 text-sm text-gray-600"><input v-model="item.required" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" :disabled="!can('projekt.update')" />Pflichtpunkt</label><button v-if="can('projekt.update')" type="button" class="text-sm text-red-600" @click="removeCompletionChecklistItem(index)">Entfernen</button></div><p v-if="!completionChecklistItems.length" class="rounded border border-dashed p-5 text-center text-sm text-gray-500">Noch keine Abschlussprüfpunkte konfiguriert.</p></div>
+            </section>
+
+            <section v-if="projectFeatures.participant_management" class="bg-white p-5 shadow-sm">
+                <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 class="text-lg font-semibold">Aufnahmecheckliste</h2>
+                        <p class="mt-1 text-sm text-gray-500">
+                            Diese neutralen Prüfpunkte gelten für jede neue Teilnahme in {{ projekt.name }}. Entfernte Punkte werden nur deaktiviert; vorhandene Bearbeitungsstände bleiben erhalten.
+                        </p>
+                    </div>
+                    <div v-if="can('projekt.update')" class="flex gap-2">
+                        <button type="button" class="rounded border border-zbb px-4 py-2 text-sm text-zbb" @click="addIntakeChecklistItem">
+                            Punkt hinzufügen
+                        </button>
+                        <button type="button" class="rounded bg-zbb px-4 py-2 text-sm text-white disabled:opacity-50" :disabled="intakeChecklistSaving" @click="saveIntakeChecklist">
+                            {{ intakeChecklistSaving ? 'Speichert …' : 'Checkliste speichern' }}
+                        </button>
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <div v-for="(item, index) in intakeChecklistItems" :key="item.id || `new-${index}`" class="grid gap-3 rounded border border-gray-200 p-4 md:grid-cols-[60px_1fr_1fr_130px_auto]">
+                        <input v-model.number="item.sort_order" type="number" min="0" class="rounded border-gray-300 text-sm" disabled />
+                        <input v-model="item.label" maxlength="150" placeholder="Bezeichnung, z. B. Stammdaten geprüft" class="rounded border-gray-300 text-sm" :disabled="!can('projekt.update')" />
+                        <input v-model="item.description" maxlength="500" placeholder="Optionale sachliche Erläuterung" class="rounded border-gray-300 text-sm" :disabled="!can('projekt.update')" />
+                        <label class="flex items-center gap-2 text-sm text-gray-600">
+                            <input v-model="item.required" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" :disabled="!can('projekt.update')" />
+                            Pflichtpunkt
+                        </label>
+                        <button v-if="can('projekt.update')" type="button" class="text-sm text-red-600" @click="removeIntakeChecklistItem(index)">Entfernen</button>
+                    </div>
+                    <p v-if="!intakeChecklistItems.length" class="rounded border border-dashed p-5 text-center text-sm text-gray-500">Noch keine Aufnahmeprüfpunkte konfiguriert.</p>
+                </div>
+            </section>
+
+            <section class="bg-white p-5 shadow-sm">
+                <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 class="text-lg font-semibold">Funktionen und Regeln</h2>
+                        <p class="mt-1 text-sm text-gray-500">
+                            Diese Einstellungen gelten nur für {{ projekt.name }}. Projektzuweisung, Rolle und Berechtigungen werden zusätzlich geprüft.
+                        </p>
+                    </div>
+                    <button
+                        v-if="can('projekt.update')"
+                        type="button"
+                        class="rounded bg-zbb px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                        :disabled="featureSaving"
+                        @click="saveFeatures"
+                    >
+                        {{ featureSaving ? 'Speichert …' : 'Funktionen speichern' }}
+                    </button>
+                </div>
+
+                <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    <label
+                        v-for="feature in featureDefinitions"
+                        :key="feature.key"
+                        class="flex items-start gap-3 rounded border border-gray-200 p-4"
+                        :class="projectFeatures[feature.key] ? 'bg-green-50' : 'bg-gray-50'"
+                    >
+                        <input
+                            v-model="projectFeatures[feature.key]"
+                            type="checkbox"
+                            class="mt-1 rounded border-gray-300 text-zbb focus:ring-zbb"
+                            :disabled="!can('projekt.update')"
+                        />
+                        <span>
+                            <span class="block font-semibold text-gray-800">{{ feature.label }}</span>
+                            <span class="mt-1 block text-xs text-gray-500">{{ feature.description }}</span>
+                        </span>
+                    </label>
+                </div>
+
+                <label v-if="projectFeatures.potential_analysis" class="mt-4 block max-w-xs text-sm text-gray-600">
+                    Anzahl der PA-Tage
+                    <input v-model.number="paTage" type="number" min="1" max="60" class="mt-1 w-full rounded border-gray-300" />
+                    <span v-if="featureErrors.potenzialanalyse_tage" class="mt-1 block text-xs text-red-600">
+                        {{ featureErrors.potenzialanalyse_tage[0] }}
+                    </span>
+                </label>
+
+                <div class="mt-6 border-t border-gray-200 pt-5">
+                    <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <h3 class="font-semibold text-gray-800">Projektregeln</h3>
+                            <p class="mt-1 text-sm text-gray-500">Diese Werte werden bei Gruppenzuordnung und Anwesenheitsanlage serverseitig geprüft.</p>
+                        </div>
+                        <button
+                            v-if="can('projekt.update')"
+                            type="button"
+                            class="rounded bg-zbb px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                            :disabled="ruleSaving"
+                            @click="saveRules"
+                        >
+                            {{ ruleSaving ? 'Speichert …' : 'Regeln speichern' }}
+                        </button>
+                    </div>
+
+                    <div class="grid gap-4 md:grid-cols-3">
+                        <label class="text-sm text-gray-600">
+                            Maximale Teilnehmer pro Gruppe
+                            <input
+                                v-model.number="projectRules.max_group_participants"
+                                type="number"
+                                min="1"
+                                max="999"
+                                placeholder="Unbegrenzt"
+                                class="mt-1 w-full rounded border-gray-300"
+                                :disabled="!projectFeatures.group_management || !can('projekt.update')"
+                            />
+                            <span class="mt-1 block text-xs text-gray-400">Leer bedeutet keine zusätzliche Begrenzung.</span>
+                        </label>
+
+                        <label class="text-sm text-gray-600">
+                            Standard-Anwesenheitsstatus
+                            <select
+                                v-model="projectRules.attendance_default_status"
+                                class="mt-1 w-full rounded border-gray-300"
+                                :disabled="!projectFeatures.attendance_management || !can('projekt.update')"
+                            >
+                                <option v-for="status in anwesenheitsstatuten" :key="status.id" :value="status.status">
+                                    {{ status.status }}{{ status.abkuerzung ? ` (${status.abkuerzung})` : '' }}
+                                </option>
+                            </select>
+                        </label>
+
+                        <label class="flex items-start gap-3 rounded border border-gray-200 p-4 text-sm text-gray-600">
+                            <input
+                                v-model="projectRules.attendance_skip_weekends"
+                                type="checkbox"
+                                class="mt-1 rounded border-gray-300 text-zbb focus:ring-zbb"
+                                :disabled="!projectFeatures.attendance_management || !can('projekt.update')"
+                            />
+                            <span>
+                                <span class="block font-semibold text-gray-800">Wochenenden überspringen</span>
+                                <span class="mt-1 block text-xs text-gray-500">Samstag und Sonntag erzeugen keine Anwesenheitstage.</span>
+                            </span>
+                        </label>
+                    </div>
+                    <div class="mt-4 grid gap-4 border-t border-gray-100 pt-4 md:grid-cols-3">
+                        <label class="flex items-start gap-3 rounded border border-gray-200 p-4 text-sm text-gray-600">
+                            <input
+                                v-model="projectRules.participant_birthdate_required"
+                                type="checkbox"
+                                class="mt-1 rounded border-gray-300 text-zbb focus:ring-zbb"
+                                :disabled="!projectFeatures.participant_management || !can('projekt.update')"
+                            />
+                            <span>
+                                <span class="block font-semibold text-gray-800">Geburtsdatum verpflichtend</span>
+                                <span class="mt-1 block text-xs text-gray-500">Gilt bei manueller Anlage, Bearbeitung und Excel-Import.</span>
+                            </span>
+                        </label>
+                        <label class="text-sm text-gray-600">
+                            Mindestalter
+                            <input
+                                v-model.number="projectRules.participant_min_age"
+                                type="number"
+                                min="0"
+                                max="120"
+                                placeholder="Keine Vorgabe"
+                                class="mt-1 w-full rounded border-gray-300"
+                                :disabled="!projectFeatures.participant_management || !can('projekt.update')"
+                            />
+                        </label>
+                        <label class="text-sm text-gray-600">
+                            Höchstalter
+                            <input
+                                v-model.number="projectRules.participant_max_age"
+                                type="number"
+                                min="0"
+                                max="120"
+                                placeholder="Keine Vorgabe"
+                                class="mt-1 w-full rounded border-gray-300"
+                                :disabled="!projectFeatures.participant_management || !can('projekt.update')"
+                            />
+                        </label>
+                        <label class="text-sm text-gray-600">
+                            Status bei neuer Projektteilnahme
+                            <select
+                                v-model="projectRules.participation_initial_status"
+                                class="mt-1 w-full rounded border-gray-300"
+                                :disabled="!projectFeatures.participant_management || !can('projekt.update')"
+                            >
+                                <option v-for="status in participationStatuses" :key="status.value" :value="status.value">
+                                    {{ status.label }}
+                                </option>
+                            </select>
+                        </label>
+                    </div>
+                    <p v-if="Object.keys(ruleErrors).length" class="mt-3 text-sm text-red-600">Bitte die markierten Regelwerte prüfen.</p>
                 </div>
             </section>
 

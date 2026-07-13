@@ -31,6 +31,8 @@ let selectedStandort = ref(filters?.standort ?? null);
 let isModalOpen = ref(false); // Modal-Zustand
 let sortColumn = ref(filters?.sort ?? 'id');  // Spalte zum Sortieren
 let sortDirection = ref(filters?.direction ?? 'desc'); // Sortierrichtung ('asc' oder 'desc')
+let selectedPeriod = ref(filters?.period ?? new Date().toISOString().slice(0, 7));
+let attentionFilter = ref('all');
 
 const selected = ref([]);
 const groupModal = ref(null);
@@ -38,7 +40,7 @@ const groupModal = ref(null);
 let teilnehmerToDelete = ref(null); // Speichert den Namen der Teilnehmer, die gelöscht werden sollen
 let showModalLöschen = ref(false); // Modal für die Löschung
 
-const { teilnehmers, authProjekte, rollen, gruppen, projekte, standorte, defaultProjekt, filters  } = defineProps({
+const { teilnehmers, authProjekte, rollen, gruppen, projekte, standorte, defaultProjekt, filters, overviewPeriods, overviewStats  } = defineProps({
     pagination: {
         type: Object,
     },
@@ -64,6 +66,8 @@ const { teilnehmers, authProjekte, rollen, gruppen, projekte, standorte, default
         default: () => []
     },
      defaultProjekt: { type: Number, default: null },
+     overviewPeriods: { type: Array, default: () => [] },
+     overviewStats: { type: Object, default: () => ({}) },
      filters: {
         type: Object,
         default: () => ({})
@@ -183,13 +187,14 @@ const deleteTeilnehmer = (id) => {
 };
 
 // Watch fuer Aenderungen in Suche, Standort und Sortierung
-watch([search, selectedStandort, sortColumn, sortDirection], () => {
+watch([search, selectedStandort, sortColumn, sortDirection, selectedPeriod], () => {
     router.get(route('teilnehmer.index'),
         {
             search: search.value,
             standort: selectedStandort.value,
             sort: sortColumn.value,
             direction: sortDirection.value
+            ,period: selectedPeriod.value
         },
         { preserveState: true, replace: true }
     );
@@ -202,7 +207,43 @@ const filteredStandorte = computed(() => {
     );
 });
 
-const filteredTeilnehmerByProject = computed(() => teilnehmerList.value);
+const filteredTeilnehmerByProject = computed(() => teilnehmerList.value.filter((participant) => {
+    if (attentionFilter.value === 'overdue') return (participant.overview?.overdue_tasks || 0) > 0;
+    if (attentionFilter.value === 'unexcused') return (participant.overview?.period?.unexcused_days || 0) > 0;
+    if (attentionFilter.value === 'negative_balance') return (participant.overview?.period?.balance_minutes || 0) < 0;
+    if (attentionFilter.value === 'measure_follow_up') return (participant.overview?.overdue_measure_follow_ups || 0) > 0;
+    return true;
+}));
+
+const formatPeriod = (period) => {
+    if (!period) return 'Monat';
+    const [year, month] = period.split('-').map(Number);
+    return new Intl.DateTimeFormat('de-DE', { month: 'long', year: 'numeric' })
+        .format(new Date(year, month - 1, 1));
+};
+
+const formatOverviewMinutes = (minutes) => {
+    if (minutes === null || minutes === undefined) return '–';
+    const sign = minutes < 0 ? '-' : minutes > 0 ? '+' : '';
+    const absolute = Math.abs(minutes);
+    return `${sign}${String(Math.floor(absolute / 60)).padStart(2, '0')}:${String(absolute % 60).padStart(2, '0')}`;
+};
+
+const balanceClass = (minutes) => {
+    if (minutes < 0) return 'text-red-600';
+    if (minutes > 0) return 'text-green-600';
+    return 'text-gray-700';
+};
+
+const participationStatusLabel = (status) => ({
+    angefragt: 'Angefragt',
+    angemeldet: 'Angemeldet',
+    aufgenommen: 'Aufgenommen',
+    aktiv: 'Aktiv',
+    pausiert: 'Pausiert',
+    abgeschlossen: 'Abgeschlossen',
+    abgebrochen: 'Abgebrochen',
+}[status] || status || '–');
 
 
 // Projekt auswählen
@@ -369,6 +410,15 @@ const sortByColumn = (column) => {
     <app-layout>
         <template #header>{{$t('Teilnehmerübersicht')}}</template>
 
+        <section class="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6" aria-label="Kennzahlen der gefilterten Projektteilnehmer">
+            <button type="button" class="rounded-xl border bg-white p-4 text-left shadow-sm" :class="attentionFilter === 'all' ? 'border-zbb ring-1 ring-zbb' : 'border-gray-200'" @click="attentionFilter = 'all'"><p class="text-xs font-semibold uppercase text-gray-500">Teilnehmer</p><p class="mt-1 text-2xl font-bold text-gray-900">{{ overviewStats.participants ?? 0 }}</p><p class="text-xs text-gray-500">im aktuellen Projektfilter</p></button>
+            <button type="button" class="rounded-xl border bg-white p-4 text-left shadow-sm" :class="attentionFilter === 'overdue' ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-200'" @click="attentionFilter = attentionFilter === 'overdue' ? 'all' : 'overdue'"><p class="text-xs font-semibold uppercase text-red-600">Überfällige Aufgaben</p><p class="mt-1 text-2xl font-bold text-red-700">{{ overviewStats.with_overdue_tasks ?? 0 }}</p><p class="text-xs text-gray-500">{{ overviewStats.overdue_tasks ?? 0 }} Aufgaben betroffen</p></button>
+            <button type="button" class="rounded-xl border bg-white p-4 text-left shadow-sm" :class="attentionFilter === 'unexcused' ? 'border-orange-500 ring-1 ring-orange-500' : 'border-gray-200'" @click="attentionFilter = attentionFilter === 'unexcused' ? 'all' : 'unexcused'"><p class="text-xs font-semibold uppercase text-orange-600">Unentschuldigte Fehlzeit</p><p class="mt-1 text-2xl font-bold text-orange-700">{{ overviewStats.with_unexcused_absence ?? 0 }}</p><p class="text-xs text-gray-500">im gewählten Monat</p></button>
+            <button type="button" class="rounded-xl border bg-white p-4 text-left shadow-sm" :class="attentionFilter === 'negative_balance' ? 'border-rose-500 ring-1 ring-rose-500' : 'border-gray-200'" @click="attentionFilter = attentionFilter === 'negative_balance' ? 'all' : 'negative_balance'"><p class="text-xs font-semibold uppercase text-rose-600">Negativer Saldo</p><p class="mt-1 text-2xl font-bold text-rose-700">{{ overviewStats.with_negative_balance ?? 0 }}</p><p class="text-xs text-gray-500">im gewählten Monat</p></button>
+            <button type="button" class="rounded-xl border bg-white p-4 text-left shadow-sm" :class="attentionFilter === 'measure_follow_up' ? 'border-violet-500 ring-1 ring-violet-500' : 'border-gray-200'" @click="attentionFilter = attentionFilter === 'measure_follow_up' ? 'all' : 'measure_follow_up'"><p class="text-xs font-semibold uppercase text-violet-600">Praktikum nachfassen</p><p class="mt-1 text-2xl font-bold text-violet-700">{{ overviewStats.with_overdue_measure_follow_up ?? 0 }}</p><p class="text-xs text-gray-500">{{ overviewStats.active_measures ?? 0 }} aktive Maßnahmen</p></button>
+            <div class="rounded-xl border border-gray-200 bg-slate-900 p-4 text-white shadow-sm"><p class="text-xs font-semibold uppercase text-slate-300">Monatssaldo gesamt</p><p class="mt-1 text-2xl font-bold">{{ formatOverviewMinutes(overviewStats.period_balance_minutes) }}</p><p class="text-xs text-slate-300">{{ overviewStats.open_tasks ?? 0 }} offene Aufgaben</p></div>
+        </section>
+
 
         <!-- Suchfeld -->
         <div class="flex justify-around items-center mb-3">
@@ -411,7 +461,20 @@ const sortByColumn = (column) => {
             <label for="simple-search" class="sr-only">Search</label>
             <input v-model="search" type="text" class="border border-gray-300 text-gray-900 text-sm  focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" placeholder="Suchen ..." />
 
-            <!-- Dropdown für Projekte -->
+            <select
+                v-model="selectedPeriod"
+                class="border border-gray-300 text-gray-700 text-sm focus:ring-zbb focus:border-zbb p-2.5"
+                aria-label="Auswertungsmonat"
+            >
+                <option v-if="!overviewPeriods.includes(selectedPeriod)" :value="selectedPeriod">
+                    {{ formatPeriod(selectedPeriod) }}
+                </option>
+                <option v-for="period in overviewPeriods" :key="period" :value="period">
+                    {{ formatPeriod(period) }}
+                </option>
+            </select>
+
+            <!-- Standortfilter innerhalb des aktiven Projekts -->
             <Dropdown align="right">
                 <template #trigger>
                     <button class="inline-flex items-center px-3 py-3 border border-gray-300 text-sm leading-4 font-medium text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
@@ -421,12 +484,12 @@ const sortByColumn = (column) => {
                 </template>
 
                 <template #content>
-                    <!-- Projektsuche -->
+                    <!-- Standortsuche -->
                     <div class="px-4 py-2" @click.stop>
                         <input v-model="searchStandort" type="text" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg w-full p-2" placeholder="Standorte suchen..." />
                     </div>
 
-                    <!-- Gefilterte Projektauswahl -->
+                    <!-- Gefilterte Standortauswahl -->
                     <DropdownLink @click="selectStandort(null)" href="#">
                         Alle Standorte
                     </DropdownLink>
@@ -474,6 +537,15 @@ const sortByColumn = (column) => {
                                 {{$t('nachname')}}
                                 <i :class="sortColumn === 'nachname' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
                             </th>
+                            <th scope="col" class="border border-solid border-gray-300 px-4 py-3">Teilnahme</th>
+                            <th scope="col" class="border border-solid border-gray-300 px-4 py-3">Gruppe / Betreuung</th>
+                            <th scope="col" class="border border-solid border-gray-300 px-4 py-3">
+                                {{ formatPeriod(selectedPeriod) }}
+                            </th>
+                            <th scope="col" class="border border-solid border-gray-300 px-4 py-3">Gesamtlaufzeit</th>
+                            <th scope="col" class="border border-solid border-gray-300 px-4 py-3">Fehlzeiten</th>
+                            <th scope="col" class="border border-solid border-gray-300 px-4 py-3">Aufgaben</th>
+                            <th scope="col" class="border border-solid border-gray-300 px-4 py-3">Praktika / Maßnahmen</th>
                         <th @click="sortByColumn('geschlecht')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
                                 {{ $t('geschlecht') }}
                                 <i :class="sortColumn === 'geschlecht' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
@@ -489,6 +561,50 @@ const sortByColumn = (column) => {
                             <td class="px-6 py-4 border border-solid border-gray-300"><Link :href="route('teilnehmer.edit', teilnehmer.id)">{{ teilnehmer.id }}</Link> </td>
                             <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.vorname }}</td>
                             <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.nachname }}</td>
+                            <td class="px-4 py-4 border border-solid border-gray-300">
+                                <span class="inline-flex rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
+                                    {{ participationStatusLabel(teilnehmer.overview?.participation_status) }}
+                                </span>
+                                <p class="mt-1 text-xs text-gray-500">{{ teilnehmer.overview?.location || 'Kein Standort' }}</p>
+                            </td>
+                            <td class="px-4 py-4 border border-solid border-gray-300 min-w-44">
+                                <p class="font-medium text-gray-700">{{ teilnehmer.overview?.groups?.join(', ') || 'Keine Gruppe' }}</p>
+                                <p class="mt-1 text-xs text-gray-500">{{ teilnehmer.overview?.supervisor || 'Keine Betreuung' }}</p>
+                            </td>
+                            <td class="px-4 py-4 border border-solid border-gray-300 min-w-36">
+                                <p class="font-mono font-semibold" :class="balanceClass(teilnehmer.overview?.period?.balance_minutes)">
+                                    {{ formatOverviewMinutes(teilnehmer.overview?.period?.balance_minutes) }}
+                                </p>
+                                <p class="text-xs text-gray-500">
+                                    Quote: {{ teilnehmer.overview?.period?.attendance_rate ?? '–' }} %
+                                </p>
+                            </td>
+                            <td class="px-4 py-4 border border-solid border-gray-300 min-w-36">
+                                <p class="font-mono font-semibold" :class="balanceClass(teilnehmer.overview?.total?.balance_minutes)">
+                                    {{ formatOverviewMinutes(teilnehmer.overview?.total?.balance_minutes) }}
+                                </p>
+                                <p class="text-xs text-gray-500">
+                                    Quote: {{ teilnehmer.overview?.total?.attendance_rate ?? '–' }} %
+                                </p>
+                            </td>
+                            <td class="px-4 py-4 border border-solid border-gray-300 min-w-36">
+                                <p class="font-semibold text-gray-700">{{ teilnehmer.overview?.period?.absence_days ?? 0 }} Tage</p>
+                                <p class="text-xs text-red-600">
+                                    davon {{ teilnehmer.overview?.period?.unexcused_days ?? 0 }} unentschuldigt
+                                </p>
+                            </td>
+                            <td class="px-4 py-4 border border-solid border-gray-300 min-w-32">
+                                <p class="font-semibold" :class="teilnehmer.overview?.overdue_tasks ? 'text-red-600' : 'text-gray-700'">
+                                    {{ teilnehmer.overview?.open_tasks ?? 0 }} offen
+                                </p>
+                                <p v-if="teilnehmer.overview?.overdue_tasks" class="text-xs font-medium text-red-600">
+                                    {{ teilnehmer.overview.overdue_tasks }} überfällig
+                                </p>
+                                <p v-else-if="teilnehmer.overview?.next_due_at" class="text-xs text-gray-500">
+                                    Nächste: {{ new Date(teilnehmer.overview.next_due_at).toLocaleDateString('de-DE') }}
+                                </p>
+                            </td>
+                            <td class="px-4 py-4 border border-solid border-gray-300 min-w-36"><p class="font-semibold" :class="teilnehmer.overview?.overdue_measure_follow_ups ? 'text-red-600' : 'text-gray-700'">{{ teilnehmer.overview?.active_measures ?? 0 }} aktiv</p><p v-if="teilnehmer.overview?.overdue_measure_follow_ups" class="text-xs text-red-600">{{ teilnehmer.overview.overdue_measure_follow_ups }} Nachverfolgung überfällig</p><p v-else-if="teilnehmer.overview?.next_measure_follow_up_at" class="text-xs text-gray-500">Nächste: {{ new Date(teilnehmer.overview.next_measure_follow_up_at).toLocaleDateString('de-DE') }}</p></td>
                             <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.geschlecht }}</td>
 
                             <td class="border px-6 py-4 text-center">
@@ -523,7 +639,14 @@ const sortByColumn = (column) => {
         </div>
 
 
-            <ModalCreateTeilnehmer :visible="isModalOpen" :projekte="projekte" :standorte="standorte" :defaultProjekt="defaultProjekt"  @close="closeModal" @add-teilnehmer="addTeilnehmer" />
+            <ModalCreateTeilnehmer
+                :visible="isModalOpen"
+                :active-project="$page.props.currentProjekt"
+                :standorte="standorte"
+                :defaultProjekt="defaultProjekt"
+                @close="closeModal"
+                @add-teilnehmer="addTeilnehmer"
+            />
 
         <!-- Modal für die Löschung der Abteilung-->
 

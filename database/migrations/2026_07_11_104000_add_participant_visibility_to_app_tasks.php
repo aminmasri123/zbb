@@ -1,0 +1,20 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('app_tasks', function (Blueprint $table) {
+            $table->boolean('visible_to_participant')->default(false)->after('visibility');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('app_tasks', fn (Blueprint $table) => $table->dropColumn('visible_to_participant'));
+    }
+};

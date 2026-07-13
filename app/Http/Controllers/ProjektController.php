@@ -12,12 +12,14 @@ use App\Models\Personen;
 use App\Models\Standort;
 use App\Models\Abteilung;
 use App\Models\Kostenstelle;
+use App\Models\Anwesenheitsstatuten;
 use App\Notifications\ConfiguredEventNotification;
 use App\Services\NotificationRecipientService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Validation\Rule;
 
 class ProjektController extends Controller
 {
@@ -91,7 +93,7 @@ class ProjektController extends Controller
         if ($request->ajax()) {
             return response()->json([
                 'projekte' => $projekte,
-                'abteilungen' => $abteilungen
+                'abteilungen' => $abteilungen,
             ]);
         };
     }
@@ -220,6 +222,8 @@ class ProjektController extends Controller
                 'dokumentKategorien',
                 'potenzialanalyseUebungen.kriterien',
                 'mitarbeiter.user.roles',
+                'intakeChecklistItems' => fn ($query) => $query->where('active', true),
+                'completionChecklistItems' => fn ($query) => $query->where('active', true),
             ])
             ->findOrFail($id);
 
@@ -241,9 +245,14 @@ class ProjektController extends Controller
             ->get();
 
         return Inertia::render('Projekt/Show', [
-            'projekt' => $projekt,
+            'projekt' => array_merge($projekt->toArray(), [
+                'features' => $projekt->featureSettings(),
+                'rules' => $projekt->ruleSettings(),
+                'portal_features' => $projekt->portalFeatureSettings(),
+            ]),
             'fehlendeMitarbeiter' => $fehlendeMitarbeiter,
             'alleStandorte' => Standort::orderBy('name')->get(['id', 'name']),
+            'anwesenheitsstatuten' => Anwesenheitsstatuten::query()->orderBy('status')->get(['id', 'status', 'abkuerzung']),
         ]);
     }
 
@@ -456,6 +465,130 @@ class ProjektController extends Controller
                 'gueltig_bis' => null,
             ],
         ];
+    }
+
+    public function updateFeatures(Request $request, Projekt $projekt)
+    {
+        $validated = $request->validate([
+            'features' => ['required', 'array'],
+            'features.participant_management' => ['required', 'boolean'],
+            'features.group_management' => ['required', 'boolean'],
+            'features.attendance_management' => ['required', 'boolean'],
+            'features.internship_management' => ['required', 'boolean'],
+            'features.completion_management' => ['required', 'boolean'],
+            'features.classbook_management' => ['required', 'boolean'],
+            'features.potential_analysis' => ['required', 'boolean'],
+            'potenzialanalyse_tage' => ['nullable', 'integer', 'min:1', 'max:60'],
+        ]);
+
+        if ($validated['features']['potential_analysis'] && empty($validated['potenzialanalyse_tage'])) {
+            throw ValidationException::withMessages([
+                'potenzialanalyse_tage' => 'Bitte die Anzahl der PA-Tage angeben.',
+            ]);
+        }
+
+        $featureLabels = [
+            'participant_management' => 'Teilnehmerverwaltung',
+            'group_management' => 'Gruppen und Bereiche',
+        ];
+
+        foreach (Projekt::FEATURE_DEPENDENCIES as $feature => $dependencies) {
+            if (!$validated['features'][$feature]) {
+                continue;
+            }
+
+            foreach ($dependencies as $dependency) {
+                if (!$validated['features'][$dependency]) {
+                    throw ValidationException::withMessages([
+                        "features.{$feature}" => 'Diese Funktion benötigt „' . ($featureLabels[$dependency] ?? $dependency) . '“.',
+                    ]);
+                }
+            }
+        }
+
+        $directFeatures = collect($validated['features'])
+            ->only(array_keys(Projekt::FEATURE_DEFAULTS))
+            ->map(fn ($enabled) => (bool) $enabled)
+            ->all();
+
+        $projekt->update([
+            'feature_settings' => $directFeatures,
+            'klassenbuch_aktiv' => (bool) $validated['features']['classbook_management'],
+            'potenzialanalyse_aktiv' => (bool) $validated['features']['potential_analysis'],
+            'potenzialanalyse_tage' => $validated['features']['potential_analysis']
+                ? (int) $validated['potenzialanalyse_tage']
+                : null,
+        ]);
+
+        return response()->json([
+            'message' => 'Projektfunktionen wurden gespeichert.',
+            'features' => $projekt->fresh()->featureSettings(),
+            'potenzialanalyse_tage' => $projekt->fresh()->potenzialanalyse_tage,
+        ]);
+    }
+
+    public function updateRules(Request $request, Projekt $projekt)
+    {
+        $validated = $request->validate([
+            'rules' => ['required', 'array'],
+            'rules.max_group_participants' => ['nullable', 'integer', 'min:1', 'max:999'],
+            'rules.attendance_skip_weekends' => ['required', 'boolean'],
+            'rules.attendance_default_status' => ['required', 'string', 'exists:anwesenheitsstatutens,status'],
+            'rules.participant_birthdate_required' => ['required', 'boolean'],
+            'rules.participant_min_age' => ['nullable', 'integer', 'min:0', 'max:120'],
+            'rules.participant_max_age' => ['nullable', 'integer', 'min:0', 'max:120', 'gte:rules.participant_min_age'],
+            'rules.participation_initial_status' => ['required', 'string', Rule::in(Projekt::PARTICIPATION_STATUSES)],
+        ]);
+
+        $projekt->update([
+            'rule_settings' => [
+                'max_group_participants' => isset($validated['rules']['max_group_participants'])
+                    ? (int) $validated['rules']['max_group_participants']
+                    : null,
+                'attendance_skip_weekends' => (bool) $validated['rules']['attendance_skip_weekends'],
+                'attendance_default_status' => $validated['rules']['attendance_default_status'],
+                'participant_birthdate_required' => (bool) $validated['rules']['participant_birthdate_required'],
+                'participant_min_age' => isset($validated['rules']['participant_min_age'])
+                    ? (int) $validated['rules']['participant_min_age']
+                    : null,
+                'participant_max_age' => isset($validated['rules']['participant_max_age'])
+                    ? (int) $validated['rules']['participant_max_age']
+                    : null,
+                'participation_initial_status' => $validated['rules']['participation_initial_status'],
+            ],
+        ]);
+
+        return response()->json([
+            'message' => 'Projektregeln wurden gespeichert.',
+            'rules' => $projekt->fresh()->ruleSettings(),
+        ]);
+    }
+
+    public function updatePortalFeatures(Request $request, Projekt $projekt)
+    {
+        $validated = $request->validate([
+            'features' => ['required', 'array'],
+            'features.profile' => ['required', 'boolean'],
+            'features.attendance_self_service' => ['required', 'boolean'],
+            'features.tasks_and_appointments' => ['required', 'boolean'],
+            'features.job_search' => ['required', 'boolean'],
+            'features.application_management' => ['required', 'boolean'],
+            'features.learning' => ['required', 'boolean'],
+            'features.messaging' => ['required', 'boolean'],
+            'features.consents_and_approvals' => ['required', 'boolean'],
+        ]);
+
+        $projekt->update([
+            'portal_feature_settings' => collect($validated['features'])
+                ->only(array_keys(Projekt::PORTAL_FEATURE_DEFAULTS))
+                ->map(fn ($enabled) => (bool) $enabled)
+                ->all(),
+        ]);
+
+        return response()->json([
+            'message' => 'Portal-Funktionen wurden gespeichert.',
+            'features' => $projekt->fresh()->portalFeatureSettings(),
+        ]);
     }
 
     private function resolvePotenzialanalyseConfig(array $validatedData): array

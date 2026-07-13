@@ -31,4 +31,10 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'ba_jobsuche' => [
+        'base_url' => env('BA_JOBSEARCH_BASE_URL', 'https://rest.arbeitsagentur.de/jobboerse/jobsuche-service'),
+        'api_key' => env('BA_JOBSEARCH_API_KEY', 'jobboerse-jobsuche'),
+        'timeout' => (int) env('BA_JOBSEARCH_TIMEOUT', 12),
+    ],
+
 ];

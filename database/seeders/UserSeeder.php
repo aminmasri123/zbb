@@ -14,6 +14,8 @@ use Illuminate\Support\Facades\Hash;
 
 class UserSeeder extends Seeder
 {
+    private array $permissionCategoryIds = [];
+
     public function run()
     {
         DB::table('partnerschaftstypens')->insert([
@@ -462,7 +464,10 @@ class UserSeeder extends Seeder
             ],
         ]);
 
-        DB::table('berechtigungskategories')->insert([
+        $permissionCategories = $this->permissionCategoryCatalog();
+
+        if (! DB::table('berechtigungskategories')->exists()) {
+            DB::table('berechtigungskategories')->insert([
 
             [ // id = 1
                 'name' => 'Dashboard',
@@ -584,7 +589,17 @@ class UserSeeder extends Seeder
                 'beschreibung' => 'Helpdesk, IT-Tickets und IT-Geraeteverwaltung.',
             ],
 
-        ]);
+            ]);
+        }
+
+        foreach ($permissionCategories as $category) {
+            DB::table('berechtigungskategories')->updateOrInsert(
+                ['name' => $category['name']],
+                ['beschreibung' => $category['beschreibung']]
+            );
+        }
+
+        $this->permissionCategoryIds = $this->loadPermissionCategoryIds($permissionCategories);
 
         $roles = [
             [ // id = 1
@@ -886,6 +901,63 @@ class UserSeeder extends Seeder
 
     }
 
+    private function permissionCategoryCatalog(): array
+    {
+        return [
+            1 => ['name' => 'Dashboard', 'beschreibung' => 'Zentrale Uebersichten, Navigation und globale Einstiegspunkte.'],
+            2 => ['name' => 'Kooperationspartner', 'beschreibung' => 'Schulen, Betriebe und weitere externe Partner.'],
+            3 => ['name' => 'Gruppe', 'beschreibung' => 'Gruppen, Klassenbuch und gruppenbezogene Exporte.'],
+            4 => ['name' => 'Bereich', 'beschreibung' => 'Bereiche und fachliche Bereichszuordnungen.'],
+            5 => ['name' => 'Teilnehmer', 'beschreibung' => 'Teilnehmerdaten, Teilnehmerprofile und personenbezogene Teilnehmerfunktionen.'],
+            6 => ['name' => 'TLN-GRP', 'beschreibung' => 'Zuordnung von Teilnehmern und Personen zu Gruppen.'],
+            7 => ['name' => 'Rolle', 'beschreibung' => 'Rollenanlage und Rollenverwaltung.'],
+            8 => ['name' => 'Permission', 'beschreibung' => 'Berechtigungsverwaltung, Rollenzuweisungen und Datenzugriff.'],
+            9 => ['name' => 'Benutzer', 'beschreibung' => 'Benutzerkonten, Benutzerprofile und Sitzungsfunktionen.'],
+            10 => ['name' => 'Auswertung', 'beschreibung' => 'Auswertungen, Berichte und finanzbezogene Einstiege.'],
+            11 => ['name' => 'Anwesenheitsliste', 'beschreibung' => 'Anwesenheitserfassung, Exporte, Archivierung und abrechnungsbezogene BOP-Anwesenheitsunterlagen.'],
+            12 => ['name' => 'Einteilung', 'beschreibung' => 'Einteilungen, Gruppengenerierung und Rundenzuordnung.'],
+            13 => ['name' => 'Bereichauswahl', 'beschreibung' => 'Bereichsauswahl und BOP-bezogene Bereichsentscheidungen.'],
+            14 => ['name' => 'Dateimanager', 'beschreibung' => 'Dateien, Ordner, Downloads, Uploads und Freigaben.'],
+            15 => ['name' => 'Kalender', 'beschreibung' => 'Kalender, Termine, Kalenderimporte und Kalenderexporte.'],
+            16 => ['name' => 'Kontakte', 'beschreibung' => 'Kontakte und Kontaktverwaltung im Apps-Bereich.'],
+            17 => ['name' => 'Taskmanager', 'beschreibung' => 'Aufgaben, Workflows und taskbezogene App-Funktionen.'],
+            18 => ['name' => 'Abteilung', 'beschreibung' => 'Abteilungen, Leitungen und Abteilungszuordnungen.'],
+            19 => ['name' => 'Projekt', 'beschreibung' => 'Projekte, Kostenstellen, Dokumentvorlagen und Projektkonfiguration.'],
+            20 => ['name' => 'Geraet', 'beschreibung' => 'Geraete, Geraeteausgaben und Geraeterueckgaben.'],
+            21 => ['name' => 'Standort', 'beschreibung' => 'Standorte und standortbezogene Stammdaten.'],
+            22 => ['name' => 'Fahrkarten', 'beschreibung' => 'Fahrtarten, Fahrtkosten und Fahrtkostenabrechnung.'],
+            23 => ['name' => 'Printing', 'beschreibung' => 'Druckauftraege und Printing-Funktionen.'],
+            24 => ['name' => 'Räumlichkeiten', 'beschreibung' => 'Raeume, Raummeldungen und Raumbuchungen.'],
+            25 => ['name' => 'Dienstwagen', 'beschreibung' => 'Dienstwagen, Buchungen, Meldungen, Kosten und Fahrtenbuch.'],
+            26 => ['name' => 'Personal', 'beschreibung' => 'Mitarbeiter, Personalstammdaten und Personalverwaltung.'],
+            27 => ['name' => 'Bestellungen', 'beschreibung' => 'Materialanforderungen, Freigaben und Bestellwesen.'],
+            28 => ['name' => 'Lager', 'beschreibung' => 'Interne Lagerverwaltung fuer Verbrauchsmaterial und Betriebsmittel.'],
+            29 => ['name' => 'IT-Service', 'beschreibung' => 'Helpdesk, IT-Tickets und IT-Geraeteverwaltung.'],
+        ];
+    }
+
+    private function loadPermissionCategoryIds(array $categories): array
+    {
+        $names = array_column($categories, 'name');
+        $idsByName = DB::table('berechtigungskategories')
+            ->select('name', DB::raw('MAX(id) as id'))
+            ->whereIn('name', $names)
+            ->groupBy('name')
+            ->pluck('id', 'name');
+
+        $ids = [];
+
+        foreach ($categories as $legacyId => $category) {
+            if (! isset($idsByName[$category['name']])) {
+                throw new \RuntimeException("Berechtigungskategorie [{$category['name']}] wurde nicht gefunden.");
+            }
+
+            $ids[(int) $legacyId] = (int) $idsByName[$category['name']];
+        }
+
+        return $ids;
+    }
+
     private function permissionCatalog(): array
     {
         return [
@@ -952,6 +1024,8 @@ class UserSeeder extends Seeder
             $this->permission('projekt.destroy', 19, 'Erlaubt das Loeschen von Projekten. Diese Berechtigung ist kritisch, weil Teilnehmer-, Gruppen-, Dokument- und Abrechnungsdaten betroffen sein koennen.'),
             $this->permission('projekt.dokumente.update', 19, 'Erlaubt das Bearbeiten der Dokument- und Exportvorlagen, die einem Projekt fuer Gruppenexporte oder Serienbriefe zugeordnet sind.'),
             $this->permission('projekt.mitarbeiter.view.all', 19, 'Erlaubt das Einsehen aller Mitarbeiter eines Projekts und wird auch genutzt, um projektweite Gruppen- oder Betreuerdaten sichtbar zu machen.'),
+            $this->permission('bvb_reha.workspace.index', 19, 'Erlaubt den lesenden Zugriff auf den BvB-Reha-Arbeitsbereich und explizit typisierte BvB-Reha-Projekte.'),
+            $this->permission('bvb_reha.participants.index', 19, 'Erlaubt das Einsehen der vorhandenen Projektteilnahmen in explizit typisierten BvB-Reha-Projekten.'),
             $this->permission('kostenstelle.index', 19, 'Erlaubt das Einsehen der Kostenstellenuebersicht.'),
             $this->permission('kostenstelle.store', 19, 'Erlaubt das Anlegen neuer Kostenstellen fuer Projekte, Bestellungen oder finanzbezogene Zuordnungen.'),
 
@@ -969,6 +1043,7 @@ class UserSeeder extends Seeder
             $this->permission('teilnehmer.store', 5, 'Erlaubt das Anlegen neuer Teilnehmer inklusive Stammdaten und erster Zuordnungen.'),
             $this->permission('teilnehmer.import', 5, 'Erlaubt den Import von Teilnehmerdaten aus Dateien oder Sammelquellen.'),
             $this->permission('teilnehmer.update', 5, 'Erlaubt das Bearbeiten von Teilnehmerdaten inklusive Stammdaten, Sozialdaten, Projektzuordnungen, Kontakten, Adressen, Bankdaten und Zusatzinformationen.'),
+            $this->permission('teilnehmer.data-request.manage', 5, 'Erlaubt das Pruefen, Bearbeiten und Abschliessen von Datenauskunftsanfragen eines Teilnehmers innerhalb des rollenbezogen erlaubten Projekt- und Teilnehmerbereichs.'),
             $this->permission('teilnehmer.destroy', 5, 'Erlaubt das Loeschen einzelner Teilnehmer. Diese Berechtigung ist wegen personenbezogener Daten besonders kritisch.'),
             $this->permission('teilnehmer.bulkDestroy', 5, 'Erlaubt das Loeschen mehrerer Teilnehmer in einer Sammelaktion. Diese Berechtigung sollte nur sehr eingeschraenkt vergeben werden.'),
             $this->permission('teilnehmer.view.all', 5, 'Erlaubt das Einsehen aller Teilnehmer unabhaengig von Projekt, Standort oder Abteilung, sofern keine zusaetzliche Fachlogik einschraenkt.'),
@@ -1008,7 +1083,6 @@ class UserSeeder extends Seeder
             $this->permission('gruppeHasTeilnehmer.show', 6, 'Erlaubt das Einsehen der Teilnehmerzuordnung einer Gruppe.'),
             $this->permission('gruppeHasTeilnehmer.store', 6, 'Erlaubt das Hinzufuegen von Teilnehmern zu einer Gruppe.'),
             $this->permission('gruppeHasTeilnehmer.destroyTeilnehmer', 6, 'Erlaubt das Entfernen eines bestimmten Teilnehmers aus einer Gruppe.'),
-            $this->permission('gruppeHasPersonen.destroy', 6, 'Erlaubt das Entfernen einer Gruppen-Personen-Zuordnung.'),
             $this->permission('klassenbuch.index', 3, 'Erlaubt das Einsehen der Klassenbuchuebersicht fuer Gruppen im aktiven Projekt.'),
             $this->permission('klassenbuch.store', 3, 'Erlaubt das Anlegen eines Klassenbuchs fuer eine berechtigte Gruppe.'),
             $this->permission('klassenbuch.show', 3, 'Erlaubt das Einsehen eines Klassenbuchs inklusive Wochen, Teilnehmerliste und Statusinformationen.'),
@@ -1023,7 +1097,6 @@ class UserSeeder extends Seeder
             // Gruppen- und BOP-Exporte
             $this->permission('gruppe.export.serienbrief', 3, 'Erlaubt das Erzeugen eines Serienbriefs fuer eine Gruppe anhand einer freigegebenen Dokumentvorlage.'),
             $this->permission('gruppe.bop.export.namensschilder', 3, 'Erlaubt den BOP-Export von Namensschildern fuer eine Gruppe.'),
-            $this->permission('gruppe.bop.export.anwesenheitsliste', 3, 'Erlaubt den BOP-Export einer Anwesenheitsliste fuer eine Gruppe.'),
             $this->permission('gruppe.bop.export.hausordnung', 3, 'Erlaubt den BOP-Export der Hausordnung fuer eine Gruppe.'),
             $this->permission('gruppe.bop.export.berufsfelderprobung', 3, 'Erlaubt den BOP-Export von Unterlagen zur Berufsfelderprobung fuer eine Gruppe.'),
             $this->permission('gruppe.bop.export.auswertungsbogen-bop', 3, 'Erlaubt den BOP-Export von Auswertungsboegen fuer eine Gruppe.'),
@@ -1034,45 +1107,27 @@ class UserSeeder extends Seeder
             $this->permission('gruppe.bop.export.teilnahme-pa', 3, 'Erlaubt den BOP-Export von PA-Teilnahmebescheinigungen fuer eine Gruppe.'),
             $this->permission('gruppe.bop.export.auswertungsbogen-pa', 3, 'Erlaubt den BOP-Export von PA-Auswertungsboegen fuer eine Gruppe.'),
 
-            // Anwesenheit / BOP / Einteilung
-            $this->permission('anwesenheit.store', 11, 'Erlaubt das Erfassen neuer Anwesenheitsdaten fuer Teilnehmer.'),
-            $this->permission('anwesenheit.update', 11, 'Erlaubt das Bearbeiten bestehender Anwesenheitsdaten.'),
-            $this->permission('anwesenheit.destroy', 11, 'Erlaubt das Loeschen von Anwesenheitseintraegen.'),
-            $this->permission('index-anpassung-anwesenheitsdaten', 11, 'Erlaubt das Oeffnen der BOP-Anwesenheitsdatenansicht fuer Schule, Schuljahr und Teilabschnitt.'),
-            $this->permission('export.anwesenheitsdaten.schule.excel', 11, 'Erlaubt den Excel-Export der BOP-Anwesenheitsdaten einer Schule fuer Schuljahr und Teilabschnitt.'),
-            $this->permission('export.teilnehmerliste.schule.excel', 11, 'Erlaubt den Excel-Export einer schulbezogenen Teilnehmerliste.'),
-            $this->permission('teilnehmer.liste.schule', 11, 'Erlaubt das Oeffnen oder Erzeugen einer schulbezogenen Teilnehmerlistenansicht im BOP-Kontext.'),
-            $this->permission('alleTeilnehmer.folder.create', 11, 'Erlaubt das Erstellen eines Ordners oder Dateiablagebereichs fuer alle Teilnehmer einer Schule im BOP-Kontext.'),
-            $this->permission('anwesenheitslisteVorBOTage', 11, 'Erlaubt das Vorbereiten einer Anwesenheitsliste fuer BO-Tage einer Schule.'),
-            $this->permission('export.anwesenheitsliste.rechnung', 11, 'Erlaubt den Export einer Anwesenheitsliste fuer Abrechnungs- oder Rechnungszwecke.'),
-            $this->permission('anwesenheitsliste.POBO.bibb.preview', 11, 'Erlaubt die Vorschau einer digitalen BIBB-Anwesenheitsliste fuer POBO.'),
-            $this->permission('anwesenheitsliste.POBO.bibb.draft.show', 11, 'Erlaubt das Laden eines gespeicherten Entwurfs einer digitalen BIBB-Anwesenheitsliste fuer POBO.'),
-            $this->permission('anwesenheitsliste.POBO.bibb.draft.store', 11, 'Erlaubt das Speichern oder Aktualisieren eines Entwurfs einer digitalen BIBB-Anwesenheitsliste fuer POBO.'),
-            $this->permission('anwesenheitsliste.POBO.bibb.draft.destroy', 11, 'Erlaubt das Loeschen eines Entwurfs einer digitalen BIBB-Anwesenheitsliste fuer POBO.'),
-            $this->permission('anwesenheitsliste.POBO.bibb.archive.folder', 11, 'Erlaubt das Erzeugen oder Oeffnen eines Archivordners fuer digitale BIBB-Anwesenheitslisten.'),
-            $this->permission('anwesenheitsliste.POBO.bibb.pdf.store', 11, 'Erlaubt das Ablegen einer signierten PDF-Anwesenheitsliste im vorgesehenen Dateiordner.'),
-            $this->permission('anwesenheitsliste.POBO.bibb.export.word', 11, 'Erlaubt den Word-Export einer POBO-BIBB-Anwesenheitsliste.'),
-            $this->permission('anwesenheitsliste.PA.digital.preview', 11, 'Erlaubt die Vorschau einer digitalen PA-Anwesenheitsliste.'),
-            $this->permission('anwesenheitsliste.PA.digital.draft.show', 11, 'Erlaubt das Laden eines gespeicherten Entwurfs einer digitalen PA-Anwesenheitsliste.'),
-            $this->permission('anwesenheitsliste.PA.digital.draft.store', 11, 'Erlaubt das Speichern oder Aktualisieren eines Entwurfs einer digitalen PA-Anwesenheitsliste.'),
-            $this->permission('anwesenheitsliste.PA.digital.draft.destroy', 11, 'Erlaubt das Loeschen eines Entwurfs einer digitalen PA-Anwesenheitsliste.'),
-            $this->permission('anwesenheitsliste.PA.digital.archive.folder', 11, 'Erlaubt das Erzeugen oder Oeffnen eines Archivordners fuer digitale PA-Anwesenheitslisten.'),
-            $this->permission('anwesenheitsliste.PA.digital.pdf.store', 11, 'Erlaubt das Ablegen einer signierten PA-PDF-Anwesenheitsliste im vorgesehenen Dateiordner.'),
-            $this->permission('anwesenheitsliste.PA.export.word', 11, 'Erlaubt den Word-Export einer PA-Anwesenheitsliste.'),
-            $this->permission('anwesenheitsliste.BoTag1.export', 11, 'Erlaubt den Export der Anwesenheitsliste fuer den ersten BO-Tag.'),
-            $this->permission('hausordnung.export.schule.pdf', 11, 'Erlaubt den schulbezogenen PDF-Export der Hausordnung im BOP-Kontext.'),
-            $this->permission('bereichsauswahl.index', 13, 'Erlaubt das Einsehen der Bereichsauswahl fuer Partner, Schuljahr und Teilabschnitt.'),
-            $this->permission('bereichsauswahl.setting.update', 13, 'Erlaubt das Bearbeiten der Einstellungen fuer die Bereichsauswahl.'),
-            $this->permission('bereichsauswahl.bop.radio.update', 13, 'Erlaubt das Aktualisieren einzelner Bereichswahlen im BOP-Auswahlprozess.'),
-            $this->permission('einteilung.show', 12, 'Erlaubt das Oeffnen der Einteilungsansicht fuer Partner, Schuljahr und Teilabschnitt.'),
-            $this->permission('einteilung.create', 12, 'Erlaubt das manuelle Erstellen einer Einteilung.'),
-            $this->permission('einteilung.update', 12, 'Erlaubt das Bearbeiten bestehender Einteilungsdaten.'),
-            $this->permission('einteilung.parameter.update', 12, 'Erlaubt das Bearbeiten der Parameter, Kapazitaeten und Regeln fuer die Einteilung.'),
-            $this->permission('einteilung.runden.switch', 12, 'Erlaubt das Tauschen oder Umorganisieren von Einteilungsrunden.'),
-            $this->permission('einteilung.store', 12, 'Erlaubt das Ausfuehren und Speichern einer Einteilung.'),
-            $this->permission('einteilung.destroy', 12, 'Erlaubt das Loeschen eines Einteilungskontexts oder einer erzeugten Einteilung.'),
-            $this->permission('gruppen.generieren', 12, 'Erlaubt das automatische Generieren von Gruppen aus einer Einteilung.'),
-            $this->permission('einteilung.export.excel', 12, 'Erlaubt den Excel-Export einer Einteilung.'),
+            // Anwesenheit: fachliche Rechte statt technischer Einzelrouten
+            $this->permission('anwesenheit.index', 11, 'Erlaubt das Einsehen von Anwesenheitseintraegen, Statuswerten, Soll- und Ist-Zeiten sowie Anwesenheitsauswertungen der Teilnehmer, die gemaess aktivem Projekt und rollenbezogenem Datenzugriff sichtbar sind.'),
+            $this->permission('anwesenheit.manage', 11, 'Erlaubt das Erfassen und Bearbeiten von Anwesenheitseintraegen im aktiven Projekt. Dazu gehoeren Anwesenheitsstatus, geplante und tatsaechliche Zeiten sowie Bemerkungen; das endgueltige Loeschen ist nicht enthalten.'),
+            $this->permission('anwesenheit.destroy', 11, 'Erlaubt das endgueltige Loeschen einzelner Anwesenheitseintraege innerhalb des aktiven Projekts und des fuer die Rolle erlaubten Teilnehmerbereichs.'),
+            $this->permission('anwesenheit.export', 11, 'Erlaubt normale, nicht abrechnungsbezogene Anwesenheitslisten und Anwesenheitsauswertungen fuer erlaubte Gruppen, Teilnehmer und Projekte zu exportieren.'),
+            $this->permission('anwesenheit.archiv', 11, 'Erlaubt das Verwalten der verbindlichen Anwesenheitsablage, insbesondere das Erzeugen von Archivordnern und das Ablegen signierter PA- oder BIBB-PDF-Anwesenheitslisten im aktiven Projekt.'),
+            $this->permission('anwesenheit.abrechnung', 11, 'Erlaubt die fuer die BOP-Abrechnung bestimmten Anwesenheitsunterlagen zu oeffnen, vorzubereiten, als Entwurf zu bearbeiten und zu exportieren. Enthalten sind Vorbereitung PA, PA-Anwesenheitsliste, BIBB-Anwesenheitsliste, Rolltag, Anwesenheitsdaten und Anwesenheitsliste Rechnung; die Archivablage benoetigt zusaetzlich anwesenheit.archiv.'),
+            $this->permission('teilnehmer.liste.export', 5, 'Erlaubt den Export einer schulweiten Teilnehmerliste mit personenbezogenen Stammdaten wie Vorname, Nachname, Geschlecht, Geburtsdatum und Klasse. Das Recht gilt allgemein und ist nicht an einen Projektnamen gebunden; exportiert werden dennoch ausschliesslich Teilnehmer der ausgewaehlten Schule innerhalb des aktiven Projekts, Schuljahrs und Teilabschnitts. Andere Teilnehmerdokumente, Auswertungen oder dauerhafte Dateiablagen sind nicht enthalten.'),
+            $this->permission('teilnehmer.liste.schule', 5, 'Erlaubt das Oeffnen oder Erzeugen einer schulbezogenen Teilnehmerlistenansicht im BOP-Kontext des aktiven Projekts.'),
+            $this->permission('dokumente.ansprechpartner.manage', 14, 'Erlaubt das Erzeugen und dauerhafte Ablegen der fuer schulische Ansprechpartner bestimmten Unterlagen. Enthalten sind die Liste fehlender Elterneinverstaendniserklaerungen, das Anlegen der vorgesehenen Ordnerstruktur sowie das Generieren von BO-Auswertungen und PA-Berichten in diese Ordner. Das Recht erlaubt damit Schreibzugriffe auf die serverseitige Dokumentablage, jedoch keine anderen Datei- oder Teilnehmeraenderungen. Verarbeitet werden nur Daten der ausgewaehlten Schule im aktiven Projekt, Schuljahr und Teilabschnitt.'),
+            $this->permission('bereichsauswahl.index', 13, 'Erlaubt das Einsehen der Bereichswahlen, Zugangscodes und des Bearbeitungsstands der Teilnehmer fuer einen Partner, ein Schuljahr und einen Teilabschnitt.'),
+            $this->permission('bereichsauswahl.store', 13, 'Erlaubt das erstmalige Erfassen einer Bereichsauswahl fuer einen Teilnehmer im erlaubten Datenbereich. Bereits vorhandene Wahlen duerfen damit nicht geaendert werden.'),
+            $this->permission('bereichsauswahl.update', 13, 'Erlaubt das Bearbeiten und Korrigieren der einzelnen Bereichswahlen eines Teilnehmers. Die zentrale Zugangssteuerung und Anzahl der Wahlfelder sind nicht enthalten.'),
+            $this->permission('bereichsauswahl.destroy', 13, 'Erlaubt das Zuruecksetzen oder endgueltige Loeschen einer bestehenden Bereichsauswahl eines Teilnehmers. Die Stammdaten des Teilnehmers bleiben davon unberuehrt.'),
+            $this->permission('bereichsauswahl.planning', 13, 'Erlaubt die zentrale Planung der Bereichsauswahl: Teilnehmerzugang aktivieren oder deaktivieren und die Anzahl der sichtbaren Wahlfelder festlegen. Einzelne Teilnehmerwahlen werden weiterhin ueber bereichsauswahl.store oder bereichsauswahl.update gesteuert.'),
+            $this->permission('einteilung.index', 12, 'Erlaubt das Einsehen vorhandener Einteilungen, Runden, Kapazitaeten und Zuordnungen fuer einen Partner, ein Schuljahr und einen Teilabschnitt.'),
+            $this->permission('einteilung.store', 12, 'Erlaubt das manuelle Anlegen einer Einteilung sowie das automatische Berechnen und Speichern einer neuen Einteilung anhand vorhandener Bereichswahlen.'),
+            $this->permission('einteilung.update', 12, 'Erlaubt das Bearbeiten bestehender Einteilungen und das manuelle Verschieben oder Neuzuordnen einzelner Teilnehmer zwischen Bereichen.'),
+            $this->permission('einteilung.destroy', 12, 'Erlaubt das Zuruecksetzen oder Loeschen der Einteilungen eines Partner-, Schuljahr- und Teilabschnittskontexts. Bereits erzeugte Teilnehmerzuordnungen werden dabei synchron bereinigt.'),
+            $this->permission('einteilung.export', 12, 'Erlaubt den Excel-Export einer Einteilung einschliesslich Runden, Bereiche und Teilnehmerzuordnungen. Das Recht erlaubt keine Aenderung der Einteilungsdaten.'),
+            $this->permission('einteilung.planning', 12, 'Erlaubt die administrative Einteilungsplanung: Rundenzahl und Kapazitaetsparameter festlegen, komplette Runden tauschen und aus einer fertigen Einteilung automatisch echte Gruppen mit Zeit-, Raum- und Betreuerzuordnung generieren.'),
 
             // Auswertungen / Dokumentexporte
             $this->permission('export.info_teilnehmende', 10, 'Erlaubt den Word-Export der Teilnehmerinformation fuer einen Teilnehmer.'),
@@ -1084,17 +1139,7 @@ class UserSeeder extends Seeder
             $this->permission('export.einverstaendnis_elternarbeit', 10, 'Erlaubt den Word-Export der Einverstaendniserklaerung zur Elternarbeit.'),
             $this->permission('export.edv_nutzungsvereinbarung', 10, 'Erlaubt den Word-Export der EDV-Nutzungsvereinbarung.'),
             $this->permission('export.hausordnung_v1', 10, 'Erlaubt den Word-Export der Hausordnungsvorlage fuer einen Teilnehmer.'),
-            $this->permission('export.anwesenheitslite_V1', 10, 'Erlaubt den Excel-Export einer Anwesenheitsliste aus einer Dokumentvorlage.'),
-            $this->permission('export.projekt.anwesenheit.periode', 10, 'Erlaubt den Excel-Export einer projekt- und gruppenbezogenen Anwesenheitsliste fuer einen Zeitraum.'),
-            $this->permission('export.auswertungsbogenPA.schule.pdf', 10, 'Erlaubt den PDF-Export eines PA-Auswertungsbogens fuer eine Schule.'),
-            $this->permission('export.auswertungsbogenPA.roland.schule.pdf', 10, 'Erlaubt den PDF-Export des Roland-PA-Auswertungsbogens fuer eine Schule.'),
-            $this->permission('export.elterneinverstaendniserklaerung.schule', 10, 'Erlaubt den Export der Eltern-Einverstaendniserklaerung fuer eine Schule.'),
-            $this->permission('export.zertifikat.schule.pobo', 10, 'Erlaubt den Export von POBO-Zertifikaten fuer eine Schule.'),
-            $this->permission('export.zertifikat.schule.pobo.pdf', 10, 'Erlaubt den PDF-Export von POBO-Zertifikaten fuer eine Schule.'),
-            $this->permission('export.auswertungBO.schule.pdf', 10, 'Erlaubt den PDF-Export der BO-Auswertung fuer eine Schule.'),
-            $this->permission('export.auswertungBO.schule.pdf.tofolder', 10, 'Erlaubt das Erzeugen und Ablegen der BO-Auswertung als PDF in einem Ordner.'),
-            $this->permission('export.auswertungPA.schule.pdf.tofolder', 10, 'Erlaubt das Erzeugen und Ablegen der PA-Auswertung als PDF in einem Ordner.'),
-            $this->permission('auswertungPoboModal', 10, 'Erlaubt das Oeffnen oder Erzeugen der POBO-Auswertung nach Runde.'),
+            $this->permission('dokumente.schule.export', 10, 'Erlaubt den Export schulweiter Dokumente fuer alle zur ausgewaehlten Schule, zum Schuljahr und zum Teilabschnitt gehoerenden Teilnehmer. Enthalten sind Hausordnung, beide Varianten des PA-Auswertungsbogens, POBO-Zertifikate als Word und PDF sowie die POBO-Auswertung insgesamt oder nach Runde. Das Recht gilt projektartenuebergreifend und erlaubt nur das Erzeugen oder Herunterladen dieser Dokumente; eine dauerhafte Ablage auf dem Server und der Export der Teilnehmerliste sind nicht enthalten. Der Datenumfang bleibt durch das aktive Projekt und den rollenbezogenen Datenzugriff begrenzt.'),
 
             // Finanzen
             $this->permission('fahrtarten.index', 22, 'Erlaubt das Einsehen der Fahrtartenuebersicht.'),
@@ -1266,7 +1311,7 @@ class UserSeeder extends Seeder
         return [
             'name' => $name,
             'guard_name' => 'web',
-            'berechtigungskategorie_id' => $categoryId,
+            'berechtigungskategorie_id' => $this->permissionCategoryIds[$categoryId] ?? $categoryId,
             'beschreibung' => $description,
         ];
     }

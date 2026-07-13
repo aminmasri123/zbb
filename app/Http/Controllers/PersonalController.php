@@ -8,11 +8,16 @@ use App\Models\Projekt;
 use App\Models\Personen;
 use App\Models\Role;
 use App\Models\Standort;
+use App\Services\Projects\StaffProjectAssignmentSynchronizer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class PersonalController extends Controller
 {
+    public function __construct(private readonly StaffProjectAssignmentSynchronizer $projectAssignments)
+    {
+    }
+
     /**
      * Display a listing of the resource.
      */
@@ -185,7 +190,7 @@ class PersonalController extends Controller
 
     $person = Personen::with('user')->findOrFail($id);
 
-    DB::transaction(function () use ($validated, $person, $request, $id) {
+    DB::transaction(function () use ($validated, $person) {
 
         // ► PERSON aktualisieren
         $person->vorname   = $validated['first_name'];
@@ -211,34 +216,7 @@ class PersonalController extends Controller
         //    P R O J E K T E   &   S T A N D O R T E
         // -----------------------------------------
 
-        $zuweisungen = $request->input('projekt_zuweisungen', []);
-
-        // Vorherige Einträge löschen
-        DB::table('projekt_has_personens')
-            ->where('personen_id', $person->id)
-            ->delete();
-
-        // Neue Einträge anlegen
-        foreach ($zuweisungen as $item) {
-
-            $projektId   = $item['projekt_id'] ?? null;
-            $standortIds = $item['standort_ids'] ?? [];
-
-            if (!$projektId || empty($standortIds)) {
-                continue;
-            }
-
-            foreach ($standortIds as $sid) {
-                DB::table('projekt_has_personens')->insert([
-                    'personen_id' => $person->id,
-                    'projekt_id'  => $projektId,
-                    'standort_id' => $sid,
-                    'status'      => 'aktiv',
-                    'created_at'  => now(),
-                    'updated_at'  => now(),
-                ]);
-            }
-        }
+        $this->projectAssignments->sync($person, $validated['projekt_zuweisungen'] ?? []);
     });
 
     return redirect()

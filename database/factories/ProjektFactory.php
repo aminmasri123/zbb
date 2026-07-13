@@ -14,6 +14,7 @@ class ProjektFactory extends Factory
     {
         return [
             'name' => substr($this->faker->unique()->word(), 0, 30),
+            'project_type_id' => null,
             'abteilung_id' => Abteilung::factory(),
             'beschreibung' => null,
             'aktiv' => true,

@@ -1,0 +1,20 @@
+<?php
+namespace Tests\Feature;
+use App\Models\ParticipantCvEntry;use App\Models\ParticipantCvVersion;use App\Models\Personen;use App\Models\SystemModule;use App\Models\User;use App\Services\Modules\ModuleStateResolver;use Illuminate\Foundation\Testing\RefreshDatabase;use Tests\TestCase;
+class ParticipantCvTest extends TestCase
+{
+ use RefreshDatabase;
+ public function test_structured_entries_create_immutable_version_and_export():void
+ {
+  $person=Personen::factory()->create(['typ'=>'teilnehmer','vorname'=>'Mina','nachname'=>'Muster']);$portal=User::factory()->create(['person_id'=>$person->id]);app(ModuleStateResolver::class)->set(SystemModule::where('key','participant_portal')->firstOrFail(),true,null,$portal->id);
+  $created=$this->actingAs($portal)->postJson(route('participant-portal.resume.entries.store'),['type'=>'experience','title'=>'Verkäuferin','organization'=>'Muster GmbH','location'=>'Saarbrücken','starts_at'=>'2024-01-01','ends_at'=>null,'current'=>true,'description'=>'Kundenberatung','proficiency'=>null,'sort_order'=>0])->assertCreated();$entry=ParticipantCvEntry::findOrFail($created->json('entry.id'));
+  $versionResponse=$this->actingAs($portal)->postJson(route('participant-portal.resume.versions.store'),['label'=>'Bewerbung Juli'])->assertCreated()->assertJsonPath('version.version',1);$version=ParticipantCvVersion::findOrFail($versionResponse->json('version.id'));$originalHash=$version->snapshot_sha256;$this->assertSame('Verkäuferin',$version->snapshot['entries'][0]['title']);
+  $this->actingAs($portal)->putJson(route('participant-portal.resume.entries.update',$entry),['type'=>'experience','title'=>'Teamleiterin','organization'=>'Muster GmbH','location'=>'Saarbrücken','starts_at'=>'2024-01-01','ends_at'=>null,'current'=>true,'description'=>'Teamleitung','proficiency'=>null,'sort_order'=>0])->assertOk();$this->assertSame('Verkäuferin',$version->fresh()->snapshot['entries'][0]['title']);$this->assertSame($originalHash,$version->fresh()->snapshot_sha256);
+  $download=$this->actingAs($portal)->get(route('participant-portal.resume.versions.download',$version))->assertOk()->assertHeader('content-type','application/json; charset=UTF-8');$payload=json_decode($download->streamedContent(),true,512,JSON_THROW_ON_ERROR);$this->assertSame('Verkäuferin',$payload['resume']['entries'][0]['title']);$this->assertSame($originalHash,$payload['sha256']);
+  $second=$this->actingAs($portal)->postJson(route('participant-portal.resume.versions.store'),['label'=>'Aktuell'])->assertCreated();$this->assertSame(2,$second->json('version.version'));$this->assertSame('Teamleiterin',$second->json('version.snapshot.entries.0.title'));
+ }
+ public function test_foreign_entries_and_versions_are_hidden():void
+ {
+  $ownerPerson=Personen::factory()->create(['typ'=>'teilnehmer']);$owner=User::factory()->create(['person_id'=>$ownerPerson->id]);app(ModuleStateResolver::class)->set(SystemModule::where('key','participant_portal')->firstOrFail(),true,null,$owner->id);$entry=ParticipantCvEntry::query()->create(['person_id'=>$ownerPerson->id,'type'=>'skill','title'=>'Excel','current'=>false,'sort_order'=>0]);$version=ParticipantCvVersion::query()->create(['person_id'=>$ownerPerson->id,'version'=>1,'snapshot'=>['entries'=>[]],'snapshot_sha256'=>hash('sha256','x'),'created_by_user_id'=>$owner->id,'created_at'=>now()]);$otherPerson=Personen::factory()->create(['typ'=>'teilnehmer']);$other=User::factory()->create(['person_id'=>$otherPerson->id]);$payload=['type'=>'skill','title'=>'Manipuliert','organization'=>null,'location'=>null,'starts_at'=>null,'ends_at'=>null,'current'=>false,'description'=>null,'proficiency'=>null,'sort_order'=>0];$this->actingAs($other)->putJson(route('participant-portal.resume.entries.update',$entry),$payload)->assertNotFound();$this->actingAs($other)->deleteJson(route('participant-portal.resume.entries.destroy',$entry))->assertNotFound();$this->actingAs($other)->get(route('participant-portal.resume.versions.download',$version))->assertNotFound();$this->assertSame('Excel',$entry->fresh()->title);
+ }
+}

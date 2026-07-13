@@ -22,6 +22,10 @@ class Kernel extends ConsoleKernel
         $schedule->command('pa:purge-expired-attendance-drafts')
             ->dailyAt('02:35')
             ->withoutOverlapping();
+
+        $schedule->command('participant-portal:send-reminder-digests')
+            ->dailyAt('07:00')
+            ->withoutOverlapping();
     }
 
     /**

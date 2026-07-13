@@ -1,0 +1,3 @@
+<?php
+namespace App\Models;use Illuminate\Database\Eloquent\Factories\HasFactory;use Illuminate\Database\Eloquent\Model;
+class PortalQuizAttempt extends Model{use HasFactory;protected $fillable=['quiz_id','enrollment_id','attempt_number','earned_points','max_points','percentage','passed','submitted_at'];protected $casts=['earned_points'=>'decimal:2','max_points'=>'decimal:2','percentage'=>'decimal:2','passed'=>'boolean','submitted_at'=>'datetime'];public function answers(){return $this->hasMany(PortalQuizAnswer::class,'attempt_id');}public function enrollment(){return $this->belongsTo(PortalCourseEnrollment::class,'enrollment_id');}}

@@ -13,6 +13,11 @@ use Inertia\Inertia;
 
 class LagerController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('module:warehouse_management');
+    }
+
     public function index(Request $request)
     {
         $this->authorizeLager($request, 'lager.index');

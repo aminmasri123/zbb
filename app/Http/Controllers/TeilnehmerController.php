@@ -3,6 +3,18 @@
 namespace App\Http\Controllers;
 
 use App\Models\Abschluesse;
+use App\Models\AppTask;
+use App\Models\ParticipantApplication;
+use App\Models\AttendanceCorrectionRequest;
+use App\Models\ParticipantPortalDocument;
+use App\Models\ParticipantPortalMessage;
+use App\Models\ParticipantConsentEvent;
+use App\Models\ProjectConsentDefinition;
+use App\Models\ParticipantDataRequest;
+use App\Models\ParticipantJobRecommendation;
+use App\Models\ParticipantPortalProfile;
+use App\Models\ParticipantCvEntry;
+use App\Models\ParticipantCvVersion;
 use App\Models\Anwesenheitsstatuten;
 use App\Models\Bereich;
 use App\Models\BereichHasPersonen;
@@ -18,6 +30,9 @@ use App\Models\PersonenHasSozialedaten;
 use App\Models\PersonenIstSchueler;
 use App\Models\Projekt;
 use App\Models\ProjektHasPersonen;
+use App\Models\ProjectIntakeChecklistItem;
+use App\Models\ProjectCompletionChecklistItem;
+use App\Models\ParticipationCompletionReport;
 use App\Models\SozialeDaten;
 use App\Models\Standort;
 use App\Models\Teilnehmer;
@@ -25,6 +40,8 @@ use App\Models\User;
 use App\Models\RoleDataAccessSetting;
 use App\Notifications\ConfiguredEventNotification;
 use App\Services\NotificationRecipientService;
+use App\Services\Projects\ActiveProjectContext;
+use App\Services\Participants\ParticipantOverviewService;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -36,19 +53,38 @@ use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
+use Carbon\Carbon;
 
 class TeilnehmerController extends Controller
 {
+    public function __construct(
+        private readonly ActiveProjectContext $activeProjectContext,
+        private readonly ParticipantOverviewService $participantOverviewService,
+    )
+    {
+    }
+
     public function index(Request $request)
     {
         $suchbegriff = $request->input('search');
         $sortierung  = $request->input('sort', 'id');
         $richtung    = strtolower($request->input('direction', 'desc'));
+        $overviewPeriod = $request->input('period', now()->format('Y-m'));
+
+        if (!is_string($overviewPeriod) || !preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $overviewPeriod)) {
+            $overviewPeriod = now()->format('Y-m');
+        }
 
 
         $benutzer = auth()->user();
+        $projekt = $this->activeProjectContext->currentAvailableFor($benutzer);
+        $defaultProjekt = $projekt?->id;
+
+        if ($request->filled('projekt_id') && $request->integer('projekt_id') !== $defaultProjekt) {
+            abort(403, 'Der Projektfilter muss dem aktiven Projekt entsprechen.');
+        }
+
         $projekte = $benutzer->projekte;
-        $defaultProjekt = $request->integer('projekt_id') ?: $benutzer->current_team_id;
         $standortId = $request->integer('standort') ?: null;
         $standorte = $defaultProjekt
             ? Standort::whereIn('id', ProjektHasPersonen::query()
@@ -59,7 +95,7 @@ class TeilnehmerController extends Controller
             : collect();
         $gruppen = Gruppe::query()
             ->with('bereich')
-            ->where('projekt_id', $benutzer->current_team_id)
+            ->where('projekt_id', $defaultProjekt)
             ->when(
                 !$benutzer->can('gruppe.view.all') && !$benutzer->can('projekt.mitarbeiter.view.all'),
                 fn ($query) => $query->where('personen_id', $this->userPersonId($benutzer))
@@ -108,19 +144,34 @@ class TeilnehmerController extends Controller
         }
 
 
+        $overviewParticipantIds = (clone $abfrage)->pluck('personens.id');
+
         // Sortieren
         $abfrage->orderBy($sortierspalte, $richtung);
+        $teilnehmers = $abfrage->paginate(50)->withQueryString();
+
+        if ($defaultProjekt) {
+            $this->participantOverviewService->enrich($teilnehmers->getCollection(), $defaultProjekt, $overviewPeriod);
+        }
+
         return Inertia::render('Teilnehmer/Index', [
-            'teilnehmers' => $abfrage->paginate(50)->withQueryString(),
+            'teilnehmers' => $teilnehmers,
             'projekte' => $projekte,
             'standorte' => $standorte,
             'gruppen' => $gruppen,
             'defaultProjekt' => $defaultProjekt,
+            'overviewPeriods' => $defaultProjekt
+                ? $this->participantOverviewService->availablePeriods($defaultProjekt)
+                : [],
+            'overviewStats' => $defaultProjekt
+                ? $this->participantOverviewService->summaryForParticipantIds($overviewParticipantIds, $defaultProjekt, $overviewPeriod)
+                : [],
             'filters' => [
                 'search'    => $suchbegriff,
                 'standort'  => $standortId,
                 'sort'      => $sortierung,
                 'direction' => $richtung,
+                'period' => $overviewPeriod,
             ],
         ]);
     }
@@ -133,7 +184,9 @@ class TeilnehmerController extends Controller
 
     public function indexNachProjekt(Request $request, $id)
     {
-        $request->merge(['projekt_id' => (int) $id]);
+        if ((int) $id !== (int) $request->user()->current_team_id) {
+            abort(403, 'Bitte wechseln Sie das aktive Projekt über den Projektwechsler im Header.');
+        }
 
         return $this->index($request);
     }
@@ -141,21 +194,22 @@ class TeilnehmerController extends Controller
     public function store(Request $request)
     {
         try {
+            $activeProject = $this->activeProjectContext->currentAvailableFor($request->user());
+            abort_unless($activeProject, 409, 'Bitte wählen Sie zuerst ein aktives Projekt aus.');
+            $request->merge(['projekt' => $activeProject->id]);
 
             // Daten validieren
-            $validatedData = $request->validate([
-                'vorname'   => ['required', 'max:50'],
-                'nachname'  => ['required', 'max:50'],
-                'geschlecht'=> ['required', 'in:m,w,d'],
+            $validatedData = $request->validate(array_merge($this->participantCoreRules($activeProject), [
                 'projekt'   => ['required', 'integer', 'exists:projekts,id'],
                 'standort'  => ['required', 'integer', 'exists:standorts,id'],
-            ]);
+            ]));
 
             // Teilnehmer erstellen
             $teilnehmer = Personen::create([
                 'vorname'   => $validatedData['vorname'],
                 'nachname'  => $validatedData['nachname'],
                 'geschlecht'=> $validatedData['geschlecht'],
+                'geburtsdatum' => $validatedData['geburtsdatum'] ?? null,
                 'typ'       => 'teilnehmer',
                 'aktiv'=> 1,
             ]);
@@ -172,7 +226,8 @@ class TeilnehmerController extends Controller
            $teilnehmer->projekte()->attach(
                 $validatedData['projekt'], // projekt_id
                 [
-                    'standort_id' => $validatedData['standort']
+                    'standort_id' => $validatedData['standort'],
+                    'status' => $activeProject->rule('participation_initial_status', 'aktiv'),
                 ]
             );
 
@@ -217,6 +272,12 @@ class TeilnehmerController extends Controller
     public function show($id)
     {
         $user = auth()->user();
+        $canViewAttendance = collect([
+            'anwesenheit.index',
+            'anwesenheit.manage',
+            'anwesenheit.destroy',
+            'anwesenheit.export',
+        ])->contains(fn (string $permission) => $user->can($permission));
 
         $berechtigt = Personen::query()
             ->teilnehmer()
@@ -228,13 +289,19 @@ class TeilnehmerController extends Controller
 
         $personen = personen::Teilnehmer()->with([
             'adresses',
-            'anwesenheiten',
+            'anwesenheiten' => fn ($query) => $query->whereHas(
+                'gruppe',
+                fn ($gruppe) => $gruppe->where('projekt_id', $user->current_team_id)
+            ),
             'standorte',
             'gruppen',
             'gruppen.bereich',
             'kontaktes.kontakttyp',
-            'praktika',
-            'projekte',
+            'praktika' => fn ($query) => $query->whereHas(
+                'projektTeilnahme',
+                fn ($participation) => $participation->where('projekt_id', $user->current_team_id)
+            )->whereNull('archived_at')->with('statusHistory.changer:id,name'),
+            'projekte' => fn ($query) => $query->where('projekts.id', $user->current_team_id),
             'baenke',
             'fahrtabrechnungen.fahrtarten',
             'fahrtabrechnungen.personal',
@@ -245,7 +312,24 @@ class TeilnehmerController extends Controller
             'notizen.notizprioritaet',
             'notizen.user',
         ])->findOrFail($id);
-        $personen->gruppen->each(function ($t) {
+
+        if (! $canViewAttendance) {
+            $personen->unsetRelation('anwesenheiten');
+        }
+        $personen->gruppen->each(function ($t) use ($canViewAttendance) {
+            if (! $canViewAttendance) {
+                $t->pivot->makeHidden([
+                    'anwesenheitsstatuten_id',
+                    'bemerkung',
+                    'tage_id',
+                    'zeitgeplant_id',
+                    'zeittatsaechlich_id',
+                ]);
+                $t->pivot->unsetRelations();
+
+                return;
+            }
+
             $t->zeitgeplant = $t->pivot->zeitgeplant;
             $t->zeittatsaechlich = $t->pivot->zeittatsaechlich;
             $t->person = $t->pivot->person;
@@ -260,7 +344,7 @@ class TeilnehmerController extends Controller
 
         $arbeitsvermittler = Personen::arbeitsvermittler()->get();
         $bereiche = Bereich::all();
-        $anwesenheitsstatuten =Anwesenheitsstatuten::all();
+        $anwesenheitsstatuten = $canViewAttendance ? Anwesenheitsstatuten::all() : collect();
         $abschluesse = Abschluesse::all();
 
 
@@ -289,7 +373,9 @@ class TeilnehmerController extends Controller
             ->select('nachname', 'vorname', 'id') // id hinzugefügt für Referenz
             ->get();
 
-        $projekte = Projekt::orderBy('name')->get();
+        $projekte = Projekt::query()
+            ->whereKey($user->current_team_id)
+            ->get();
         $gruppen = Gruppe::where('projekt_id', Auth()->user()->current_team_id)->with('bereich', 'betreuer')->get();
 
         $aktuelleStandortIds = $personen->projekte
@@ -312,6 +398,100 @@ class TeilnehmerController extends Controller
 
         $thisProjekt = Projekt::where('id', auth()->user()->current_team_id)->first();
         $dokumente = $thisProjekt?->dokumente;
+        $activeParticipation = ProjektHasPersonen::query()
+            ->where('projekt_id', $user->current_team_id)
+            ->where('personen_id', $personen->id)
+            ->first();
+        $activeParticipation?->loadMissing('projekt');
+        $portalProject = $activeParticipation?->projekt;
+        $portalProfileEnabled = (bool) $portalProject?->portalFeatureEnabled('profile');
+        $portalTasksEnabled = (bool) $portalProject?->portalFeatureEnabled('tasks_and_appointments');
+        $portalApplicationsEnabled = (bool) ($portalProject?->portalFeatureEnabled('job_search') || $portalProject?->portalFeatureEnabled('application_management'));
+        $portalAttendanceEnabled = (bool) $portalProject?->portalFeatureEnabled('attendance_self_service');
+        $intakeChecklist = $activeParticipation
+            ? ProjectIntakeChecklistItem::query()
+                ->where('project_id', $user->current_team_id)
+                ->where('active', true)
+                ->with(['completions' => fn ($query) => $query
+                    ->where('project_person_id', $activeParticipation->id)
+                    ->with('completedBy:id,name')])
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->get()
+            : collect();
+        $participationTasks = $activeParticipation && $portalTasksEnabled
+            ? AppTask::query()
+                ->where('project_person_id', $activeParticipation->id)
+                ->with(['owner:id,username,email', 'assignee:id,vorname,nachname'])
+                ->orderByRaw("status = 'done' asc")
+                ->orderByRaw("priority = 'high' desc")
+                ->orderBy('due_at')
+                ->get()
+            : collect();
+        $completionChecklist = $activeParticipation && $portalProject?->featureEnabled('completion_management')
+            ? ProjectCompletionChecklistItem::query()
+                ->where('project_id', $user->current_team_id)->where('active', true)
+                ->with(['completions' => fn ($query) => $query->where('project_person_id', $activeParticipation->id)->with('completedBy:id,name')])
+                ->orderBy('sort_order')->orderBy('id')->get()
+            : collect();
+        $completionReports = $activeParticipation && $portalProject?->featureEnabled('completion_management')
+            ? ParticipationCompletionReport::query()->where('project_person_id', $activeParticipation->id)
+                ->with(['creator:id,name', 'approver:id,name'])->orderByDesc('version')->get()
+            : collect();
+        $portalUser = User::query()->where('person_id', $personen->id)->first(['id', 'email', 'created_at']);
+        $portalInvitation = $activeParticipation
+            ? $activeParticipation->portalInvitations()->latest()->first(['id', 'email', 'expires_at', 'accepted_at', 'created_at'])
+            : null;
+        $participationApplications = $activeParticipation && $portalApplicationsEnabled
+            ? ParticipantApplication::query()
+                ->where('project_person_id', $activeParticipation->id)
+                ->with(['statusHistory', 'documents'])
+                ->orderByRaw('next_action_at is null')
+                ->orderBy('next_action_at')
+                ->latest()
+                ->get()
+            : collect();
+        $attendanceCorrections = $portalAttendanceEnabled ? AttendanceCorrectionRequest::query()
+            ->where('person_id', $personen->id)
+            ->whereHas('attendance.gruppe', fn ($query) => $query->where('projekt_id', $user->current_team_id))
+            ->with(['attendance.tag:id,datum','attendance.status:id,status','resolver:id,username'])
+            ->latest()->get() : collect();
+        $portalDocuments = $activeParticipation && $portalProfileEnabled
+            ? ParticipantPortalDocument::query()->where('project_person_id',$activeParticipation->id)
+                ->with(['uploader:id,username','reviewer:id,username'])->latest()->get()
+            : collect();
+        $portalMessages = $activeParticipation && $activeParticipation->projekt->portalFeatureEnabled('messaging')
+            ? ParticipantPortalMessage::query()
+                ->where('project_person_id', $activeParticipation->id)
+                ->with(['sender:id,username,person_id', 'sender.person:id,vorname,nachname'])
+                ->oldest()
+                ->get()
+            : collect();
+        $consentDefinitions = $activeParticipation && $activeParticipation->projekt->portalFeatureEnabled('consents_and_approvals')
+            ? ProjectConsentDefinition::query()->where('project_id', $activeParticipation->projekt_id)
+                ->orderByDesc('version')->get()->groupBy('key')->map->first()->values()
+            : collect();
+        $consentEvents = $activeParticipation && $portalProject?->portalFeatureEnabled('consents_and_approvals')
+            ? ParticipantConsentEvent::query()->where('project_person_id', $activeParticipation->id)
+                ->with(['actor:id,username,person_id', 'actor.person:id,vorname,nachname'])->latest('occurred_at')->get()
+            : collect();
+        $participantDataRequests = $activeParticipation && $portalProfileEnabled
+            ? ParticipantDataRequest::query()->where('person_id', $personen->id)
+                ->where('project_person_id', $activeParticipation->id)
+                ->with('resolver:id,username')->latest()->get()
+            : collect();
+        $jobRecommendations = $activeParticipation && $portalApplicationsEnabled
+            ? ParticipantJobRecommendation::query()->where('project_person_id', $activeParticipation->id)
+                ->with(['recommender:id,username,person_id', 'recommender.person:id,vorname,nachname', 'application:id,status'])
+                ->latest('recommended_at')->get()
+            : collect();
+        $cvProfile = $portalProfileEnabled ? ParticipantPortalProfile::query()->where('person_id', $personen->id)->first() : null;
+        $participantCv = [
+            'visible' => (bool) $cvProfile?->profile_visible_to_project_staff,
+            'profile' => $cvProfile?->only(['professional_headline', 'career_goal', 'skills', 'interests']),
+            'entries' => $cvProfile?->profile_visible_to_project_staff ? ParticipantCvEntry::query()->where('person_id', $personen->id)->orderBy('type')->orderBy('sort_order')->get() : collect(),
+            'versions' => $cvProfile?->profile_visible_to_project_staff ? ParticipantCvVersion::query()->where('person_id', $personen->id)->latest('version')->get(['id','version','label','snapshot_sha256','created_at']) : collect(),
+        ];
         $kontakttypen = Kontakttypen::all();
 
         return Inertia::render('Teilnehmer/Edit', [
@@ -333,6 +513,23 @@ class TeilnehmerController extends Controller
             'dokumente' => $dokumente,
             'bereiche' => $bereiche,
             'arbeitsvermittler' => $arbeitsvermittler,
+            'activeParticipationId' => $activeParticipation?->id,
+            'intakeChecklist' => $intakeChecklist,
+            'participationTasks' => $participationTasks,
+            'completionChecklist' => $completionChecklist,
+            'completionReports' => $completionReports,
+            'portalAccess' => [
+                'account' => $portalUser,
+                'latest_invitation' => $portalInvitation,
+            ],
+            'participationApplications' => $participationApplications,
+            'attendanceCorrections' => $attendanceCorrections,
+            'portalDocuments' => $portalDocuments,
+            'portalMessages' => $portalMessages,
+            'participantConsents' => ['definitions' => $consentDefinitions, 'events' => $consentEvents],
+            'participantDataRequests' => $participantDataRequests,
+            'jobRecommendations' => $jobRecommendations,
+            'participantCv' => $participantCv,
             ],
         );
     }
@@ -345,15 +542,17 @@ class TeilnehmerController extends Controller
     public function update(Request $request, $id)
     {
         try {
+            $activeProject = $this->activeProjectContext->currentAvailableFor($request->user());
+            abort_unless($activeProject, 409, 'Bitte wählen Sie zuerst ein aktives Projekt aus.');
 
-            $validatedData = $request->validate([
-                'vorname' => ['required', 'max:50'],
-                'nachname' => ['required', 'max:50'],
-                'geschlecht' => ['required', 'in:m,w,d'],
-                'geburtsdatum' => ['nullable', 'date'],
+            $teilnehmer = Personen::query()
+                ->teilnehmer()
+                ->whereHas('projekte', fn ($query) => $query->where('projekts.id', $activeProject->id))
+                ->findOrFail($id);
+
+            $validatedData = $request->validate(array_merge($this->participantCoreRules($activeProject), [
                 'bemerkungen' => ['nullable', 'string'],
-            ]);
-            $teilnehmer = Personen::findOrFail($id);
+            ]));
             $teilnehmer->update($validatedData);
 
             return back()->with('success', 'Teilnehmer wurde erfolgreich aktualisiert.');
@@ -443,6 +642,8 @@ class TeilnehmerController extends Controller
     {
 
         try {
+            $activeProject = $this->activeProjectContext->currentAvailableFor($request->user());
+            abort_unless($activeProject, 409, 'Bitte wählen Sie zuerst ein aktives Projekt aus.');
 
             // Überprüfen, ob eine Datei hochgeladen wurde
             if (!$request->hasFile('file')) {
@@ -527,7 +728,8 @@ class TeilnehmerController extends Controller
                     $schuljahr = $this->cleanImportValue($row[7] ?? null);
                     $teil = $this->cleanImportValue($row[8] ?? null);
                     $klasse = $this->cleanImportValue($row[9] ?? null);
-                    $projektId = $this->cleanImportValue($row[4] ?? null);
+                    $spreadsheetProjectId = $this->cleanImportValue($row[4] ?? null);
+                    $projektId = $activeProject->id;
                     $standortId = $this->cleanImportValue($row[5] ?? null);
 
                     if (!$isBopImport) {
@@ -542,8 +744,8 @@ class TeilnehmerController extends Controller
                         continue;
                     }
 
-                    if ($projektId && !Projekt::whereKey($projektId)->exists()) {
-                        $errors[] = "Zeile " . $rowNumber . ": Projekt_ID " . $projektId . " existiert nicht.";
+                    if ($spreadsheetProjectId && (int) $spreadsheetProjectId !== (int) $activeProject->id) {
+                        $errors[] = "Zeile " . $rowNumber . ": Projekt_ID muss dem aktiven Header-Projekt entsprechen.";
                         continue;
                     }
 
@@ -570,6 +772,16 @@ class TeilnehmerController extends Controller
                         'aktiv' => 1,
                         'typ' => 'teilnehmer',
                     ];
+
+                    $participantValidator = Validator::make(
+                        $teilnehmerData,
+                        $this->participantCoreRules($activeProject)
+                    );
+
+                    if ($participantValidator->fails()) {
+                        $errors[] = 'Zeile ' . $rowNumber . ': ' . implode(' ', $participantValidator->errors()->all());
+                        continue;
+                    }
 
                     if (empty($teilnehmerData['vorname']) || empty($teilnehmerData['nachname'])) {
                         $errors[] = "Zeile " . $rowNumber . " fehlt Vorname oder Nachname.";
@@ -666,7 +878,7 @@ class TeilnehmerController extends Controller
                 ], 422);
             }
 
-            $createdCount = DB::transaction(function () use ($validRows) {
+            $createdCount = DB::transaction(function () use ($validRows, $activeProject) {
                 $createdCount = 0;
 
                 foreach ($validRows as $validRow) {
@@ -676,7 +888,8 @@ class TeilnehmerController extends Controller
                         $teilnehmer->projekte()->attach(
                             $validRow['projektId'],
                             [
-                                'standort_id' => $validRow['standortId']
+                                'standort_id' => $validRow['standortId'],
+                                'status' => $activeProject->rule('participation_initial_status', 'aktiv'),
                             ]
                         );
                     }
@@ -725,6 +938,37 @@ class TeilnehmerController extends Controller
             Log::error("Allgemeiner Importfehler: " . $e->getMessage());
             return response()->json(['error' => true, 'message' => 'Ein unerwarteter Fehler ist aufgetreten.']);
         }
+    }
+
+    private function participantCoreRules(Projekt $project): array
+    {
+        $birthdateRules = [
+            $project->rule('participant_birthdate_required', false) ? 'required' : 'nullable',
+            'date',
+            'before_or_equal:today',
+        ];
+        $minimumAge = $project->rule('participant_min_age');
+        $maximumAge = $project->rule('participant_max_age');
+
+        if ($minimumAge !== null) {
+            $birthdateRules[] = 'before_or_equal:' . Carbon::today()
+                ->subYears((int) $minimumAge)
+                ->format('Y-m-d');
+        }
+
+        if ($maximumAge !== null) {
+            $birthdateRules[] = 'after_or_equal:' . Carbon::today()
+                ->subYears((int) $maximumAge + 1)
+                ->addDay()
+                ->format('Y-m-d');
+        }
+
+        return [
+            'vorname' => ['required', 'string', 'max:50'],
+            'nachname' => ['required', 'string', 'max:50'],
+            'geschlecht' => ['required', 'in:m,w,d'],
+            'geburtsdatum' => $birthdateRules,
+        ];
     }
 
     private function cleanImportValue($value)

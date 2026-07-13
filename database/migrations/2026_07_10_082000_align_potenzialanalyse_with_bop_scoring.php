@@ -2,15 +2,16 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
-        DB::statement('ALTER TABLE potenzialanalyse_uebungen ADD hoechstwert INT UNSIGNED NULL AFTER beschreibung');
-        DB::statement('ALTER TABLE potenzialanalyse_uebungen ADD auswertbar TINYINT(1) NOT NULL DEFAULT 0 AFTER hoechstwert');
+        Schema::table('potenzialanalyse_uebungen', function (Blueprint $table) {
+            $table->unsignedInteger('hoechstwert')->nullable()->after('beschreibung');
+            $table->boolean('auswertbar')->default(false)->after('hoechstwert');
+        });
 
         if (! Schema::hasTable('potenzialanalyse_uebung_ergebnisse')) {
             Schema::create('potenzialanalyse_uebung_ergebnisse', function (Blueprint $table) {

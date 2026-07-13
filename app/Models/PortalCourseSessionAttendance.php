@@ -1,0 +1,3 @@
+<?php
+namespace App\Models;use Illuminate\Database\Eloquent\Factories\HasFactory;use Illuminate\Database\Eloquent\Model;
+class PortalCourseSessionAttendance extends Model{use HasFactory;protected $table='portal_course_session_attendance';protected $fillable=['session_id','enrollment_id','status','attended_minutes','note','recorded_by_user_id','recorded_at'];protected $casts=['attended_minutes'=>'integer','recorded_at'=>'datetime'];public function session(){return $this->belongsTo(PortalCourseSession::class,'session_id');}public function enrollment(){return $this->belongsTo(PortalCourseEnrollment::class,'enrollment_id');}}

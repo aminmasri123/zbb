@@ -1,0 +1,23 @@
+<?php
+namespace Tests\Feature;
+use App\Models\Berechtigungskategorie;use App\Models\ParticipantDataRequest;use App\Models\Personen;use App\Models\Projekt;use App\Models\ProjektHasPersonen;use App\Models\Role;use App\Models\RoleDataAccessSetting;use App\Models\Standort;use App\Models\SystemModule;use App\Models\User;use App\Services\Modules\ModuleStateResolver;use Illuminate\Foundation\Testing\RefreshDatabase;use Spatie\Permission\Models\Permission;use Spatie\Permission\PermissionRegistrar;use Tests\TestCase;
+class ParticipantDataRequestTest extends TestCase
+{
+ use RefreshDatabase;
+ public function test_verified_access_request_unlocks_only_the_own_data_export():void
+ {
+  $staff=User::factory()->create();$this->grant($staff);app(ModuleStateResolver::class)->set(SystemModule::where('key','participant_portal')->firstOrFail(),true,null,$staff->id);$location=Standort::factory()->create();$project=Projekt::factory()->create();$this->assign($project,$staff->person,$location);$staff->update(['current_team_id'=>$project->id]);$participant=Personen::factory()->create(['typ'=>'teilnehmer','vorname'=>'Erika','nachname'=>'Beispiel']);$participation=$this->assign($project,$participant,$location);$portal=User::factory()->create(['person_id'=>$participant->id]);
+  $created=$this->actingAs($portal)->postJson(route('participant-portal.data-requests.store'),['project_person_id'=>$participation->id,'type'=>'access_export','request_details'=>'Bitte vollständige Auskunft.'])->assertCreated();$item=ParticipantDataRequest::findOrFail($created->json('request.id'));
+  $this->actingAs($portal)->get(route('participant-portal.data-requests.download',$item))->assertForbidden();
+  $this->actingAs($staff)->putJson(route('teilnehmer.data-requests.resolve',$item),['status'=>'approved','resolution_note'=>'Identität wurde persönlich bestätigt.','identity_verification_method'=>'Lichtbildausweis vor Ort'])->assertOk()->assertJsonPath('request.status','approved');
+  $response=$this->actingAs($portal)->get(route('participant-portal.data-requests.download',$item))->assertOk()->assertHeader('content-type','application/json; charset=UTF-8');$payload=json_decode($response->streamedContent(),true,512,JSON_THROW_ON_ERROR);$this->assertSame($participant->id,$payload['export']['subject_person_id']);$this->assertSame('Erika',$payload['person']['vorname']);$this->assertCount(1,$payload['participations']);$this->assertSame('completed',$item->fresh()->status);$this->assertNotNull($item->fresh()->last_downloaded_at);
+  $other=Personen::factory()->create(['typ'=>'teilnehmer']);$otherPortal=User::factory()->create(['person_id'=>$other->id]);$this->actingAs($otherPortal)->get(route('participant-portal.data-requests.download',$item))->assertNotFound();
+ }
+ public function test_correction_and_deletion_requests_do_not_mutate_person_data():void
+ {
+  $staff=User::factory()->create();$this->grant($staff);app(ModuleStateResolver::class)->set(SystemModule::where('key','participant_portal')->firstOrFail(),true,null,$staff->id);$location=Standort::factory()->create();$project=Projekt::factory()->create();$this->assign($project,$staff->person,$location);$staff->update(['current_team_id'=>$project->id]);$participant=Personen::factory()->create(['typ'=>'teilnehmer','nachname'=>'Unverändert']);$participation=$this->assign($project,$participant,$location);$portal=User::factory()->create(['person_id'=>$participant->id]);
+  foreach(['correction','deletion'] as $type){$this->actingAs($portal)->postJson(route('participant-portal.data-requests.store'),['project_person_id'=>$participation->id,'type'=>$type,'request_details'=>'Bitte fachlich prüfen.'])->assertCreated();}$this->assertSame('Unverändert',$participant->fresh()->nachname);$this->assertDatabaseHas('personens',['id'=>$participant->id]);$this->assertDatabaseCount('participant_data_requests',2);
+ }
+ private function assign(Projekt $p,Personen $person,Standort $s):ProjektHasPersonen{return ProjektHasPersonen::query()->create(['projekt_id'=>$p->id,'personen_id'=>$person->id,'standort_id'=>$s->id,'status'=>'aktiv']);}
+ private function grant(User $u):void{$c=Berechtigungskategorie::query()->firstOrCreate(['name'=>'Datenauskunft'],['beschreibung'=>'']);Permission::query()->updateOrCreate(['name'=>'teilnehmer.update','guard_name'=>'web'],['berechtigungskategorie_id'=>$c->id,'beschreibung'=>null]);app(PermissionRegistrar::class)->forgetCachedPermissions();$r=Role::query()->create(['name'=>'Data-'.uniqid(),'guard_name'=>'web','color'=>'#123456']);RoleDataAccessSetting::query()->create(['role_id'=>$r->id,'team_scope'=>'own_projects','participant_scope'=>'all']);$u->assignRole($r);$u->givePermissionTo('teilnehmer.update');}
+}

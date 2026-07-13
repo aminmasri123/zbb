@@ -35,11 +35,16 @@
                             {{$t('Benachrichtigungsregeln')}}
                         </Link>
                     </li>
+                    <li v-if="can('berechtigung.update') || $page.component.startsWith('Einstellung/Modules')">
+                        <Link class="text-gray-400 hover:text-white transition duration-200" :href="route('module-settings.index')">
+                            Module
+                        </Link>
+                    </li>
                 </ul>
             </li>
 
             <!-- Team Apps Submenu -->
-            <li v-if="canAny(['apps.index', 'apps.calendar', 'apps.contacts', 'apps.files', 'apps.tasks', 'apps.popups', 'teilnehmer.index'])" class="submenu">
+            <li v-if="canAny(['apps.index', 'apps.calendar', 'apps.contacts', 'apps.files', 'apps.tasks', 'apps.popups']) || (moduleEnabled('participant_management') && projectFeatureEnabled('participant_management') && can('teilnehmer.index'))" class="submenu">
                 <a href="#" @click.prevent="toggleMenu('teamApps')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                     <i class="la la-th-large la-lg mr-2"></i>
                     <span v-if="!displayHideTextSidebar">Apps</span>
@@ -50,7 +55,7 @@
                     <li v-if="can('apps.calendar')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('apps.calendar')">Kalender</Link></li>
                     <li v-if="can('apps.contacts')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('apps.contacts')">Kontakte</Link></li>
                     <li v-if="can('apps.files')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('apps.files')">Dateimanager</Link></li>
-                    <li v-if="can('teilnehmer.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('teilnehmer.index')">Teilnehmer</Link></li>
+                    <li v-if="moduleEnabled('participant_management') && projectFeatureEnabled('participant_management') && can('teilnehmer.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('teilnehmer.index')">Teilnehmer</Link></li>
                     <li v-if="can('apps.tasks')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('apps.tasks')">Taskmanager</Link></li>
                     <li v-if="can('apps.popups')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('apps.popups')">Popups</Link></li>
                 </ul>
@@ -137,7 +142,7 @@
             </li>
 
             <!-- Gruppe Submenu -->
-            <li v-if="canAny(['gruppe.index', 'gruppe.store'])" class="submenu" >
+            <li v-if="projectFeatureEnabled('group_management') && canAny(['gruppe.index', 'gruppe.store'])" class="submenu" >
                 <a href="#" @click.prevent="toggleMenu('gruppe')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                     <i class="las la-cookie la-lg mr-2"></i>
                     <span v-if="!displayHideTextSidebar" class="pr-16">{{$t('Gruppe')}}</span>
@@ -152,7 +157,7 @@
             </li>
 
             <!-- Klassenbuch Submenu -->
-            <li v-if="$page.props.currentProjekt?.klassenbuch_aktiv && canAny(['klassenbuch.index', 'gruppe.index', 'gruppe.view.all'])" class="submenu" >
+            <li v-if="projectFeatureEnabled('classbook_management') && can('klassenbuch.index')" class="submenu" >
                 <a href="#" @click.prevent="toggleMenu('klassenbuch')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                     <i class="las la-book-open la-lg mr-2"></i>
                     <span v-if="!displayHideTextSidebar" class="pr-16">Klassenbuch</span>
@@ -168,7 +173,7 @@
 
 
             <!-- Teilnehmer Submenu -->
-            <li v-if="canAny(['teilnehmer.index', 'teilnehmer.store'])" class="submenu" >
+            <li v-if="moduleEnabled('participant_management') && projectFeatureEnabled('participant_management') && canAny(['teilnehmer.index', 'teilnehmer.store'])" class="submenu" >
                 <a href="#" @click.prevent="toggleMenu('teilnehmer')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                     <i class="las la-user-graduate la-lg mr-2"></i>
                     <span v-if="!displayHideTextSidebar" class="pr-16">{{$t('Teilnehmer')}}</span>
@@ -206,11 +211,15 @@
 
 
 <script setup>
-    import { Head, Link, router } from '@inertiajs/vue3';
+    import { Head, Link, router, usePage } from '@inertiajs/vue3';
     import SidebarLayout from '../Sidebar/SidebarLayout.vue';
     import { usePermissions } from '@/utils/permissions';
+    import { useModules } from '@/utils/modules';
 
     const { can, canAny } = usePermissions();
+    const { moduleEnabled } = useModules();
+    const page = usePage();
+    const projectFeatureEnabled = (key) => Boolean(page.props.currentProjekt) && page.props.currentProjekt?.features?.[key] === true;
     const permissionAdminPermissions = ['berechtigung.index', 'berechtigung.store', 'berechtigung.update'];
     const notificationAdminPermissions = ['notification-rules.index', 'notification-rules.update', 'berechtigung.update'];
     const adminPermissions = [...permissionAdminPermissions, ...notificationAdminPermissions];

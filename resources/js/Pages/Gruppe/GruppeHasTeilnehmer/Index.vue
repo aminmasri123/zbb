@@ -11,6 +11,7 @@
     import Swal from 'sweetalert2'
     import axios from 'axios' // ✅ FEHLTE
     import { formatTime } from '@/utils/timeFormat'
+    import { usePermissions } from '@/utils/permissions'
 
     // --- Props ---
     const props = defineProps({
@@ -38,7 +39,20 @@
     const paSaveInFlight = new Set()
     const paSavePending = new Set()
     const paDirtyTeilnehmerIds = new Set()
-    const klassenbuchErlaubt = computed(() => Boolean(props.gruppe?.projekt?.klassenbuch_aktiv))
+    const { can, canAny } = usePermissions()
+    const canReadAttendance = computed(() => canAny([
+      'anwesenheit.index',
+      'anwesenheit.manage',
+      'anwesenheit.destroy',
+    ]))
+    const canUseAttendanceExports = computed(() => canAny([
+      'anwesenheit.export',
+      'anwesenheit.abrechnung',
+    ]))
+    const canViewAttendance = computed(() => canReadAttendance.value || canUseAttendanceExports.value)
+    const canManageAttendance = computed(() => can('anwesenheit.manage'))
+    const canExportAttendance = canUseAttendanceExports
+    const klassenbuchErlaubt = computed(() => Boolean(props.gruppe?.projekt?.klassenbuch_aktiv) && can('klassenbuch.index'))
     const erstesKlassenbuch = computed(() => props.gruppe?.klassenbuecher?.[0] || null)
     const klassenbuchHref = computed(() =>
       erstesKlassenbuch.value
@@ -1577,10 +1591,11 @@ const exportMitTag = async () => {
       </div>
 
       <!-- Anwesenheit -->
-      <div class="space-y-4">
+      <div v-if="canViewAttendance" class="space-y-4">
         <div class="flex flex-wrap items-center justify-between gap-3">
             <h3 class="font-semibold text-gray-700">Anwesenheit verwalten</h3>
             <Button
+              v-if="canExportAttendance"
               label="Exportieren"
               icon="pi pi-download"
               class="!bg-zbb hover:!bg-zbb/80 border-none"
@@ -1683,6 +1698,7 @@ const exportMitTag = async () => {
           </div>
         </Dialog>
 
+        <div v-if="canReadAttendance" class="space-y-4">
         <!-- Anwesenheitsstatuten Agenda-->
         <div class="flex items-center gap-6 bg-zbbTrp border p-3 rounded">
           <div
@@ -1801,6 +1817,7 @@ const exportMitTag = async () => {
 
                         <Select
                         v-model="gruppenTeilnehmer[tIndex].anwesenheit[tttag.index]"
+                        :disabled="!canManageAttendance"
                         :options="props.anwesenheitsstatuten"
                         optionLabel="status"
                         optionValue="status"
@@ -1835,6 +1852,7 @@ const exportMitTag = async () => {
                         <InputText
                             type="time"
                             v-model="t.zeiten[tttag.index].start"
+                            :disabled="!canManageAttendance"
                             class="min-w-0 !w-full px-1 text-xs"
                             @blur="speichernSofort(
                                 t.id,
@@ -1848,6 +1866,7 @@ const exportMitTag = async () => {
                         <InputText
                             type="time"
                             v-model="t.zeiten[tttag.index].ende"
+                            :disabled="!canManageAttendance"
                             class="min-w-0 !w-full px-1 text-xs"
                             @blur="speichernSofort(
                                 t.id,
@@ -1865,6 +1884,7 @@ const exportMitTag = async () => {
               </tr>
             </tbody>
           </table>
+        </div>
         </div>
       </div>
 

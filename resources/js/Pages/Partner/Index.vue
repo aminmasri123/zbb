@@ -12,6 +12,7 @@ import ModalAnwesenheitslisteBIBB from './BOP/ModalAnwesenheitslisteBIBBDigital.
 import ModalAnwesenheitslistePA from './BOP/ModalAnwesenheitslistePADigital.vue';
 import ModalBoTag1 from './BOP/ModalBoTag1.vue'
 import ModalHausordnung from './BOP/ModalHausordnung.vue';
+import { usePermissions } from '@/utils/permissions';
 
 // Props
 const props = defineProps({
@@ -21,6 +22,21 @@ const props = defineProps({
     kontaktypens: Array,
     anzahlBereiche: Number,
 });
+const { can, canAny } = usePermissions();
+const canAnySelectionPermission = computed(() => canAny([
+    'bereichsauswahl.index',
+    'bereichsauswahl.store',
+    'bereichsauswahl.update',
+    'bereichsauswahl.planning',
+]));
+const canAnyAssignmentPermission = computed(() => canAny([
+    'einteilung.index',
+    'einteilung.store',
+    'einteilung.update',
+    'einteilung.destroy',
+    'einteilung.export',
+    'einteilung.planning',
+]));
 
 // States
 let seite = 'partner';
@@ -380,6 +396,7 @@ const updatePartnerAPI = async (form) => {
                                                         <!-- Bearbeitet -->
 
                                                          <button
+                                                            v-if="can('anwesenheit.abrechnung')"
                                                             type="button"
                                                             @click="openModal('anwesenheitslisteVorbereitungPA', { jahr, teil, klassen: getKlassen(jahr, teil, partner), partnerId: partner.id })"
                                                             class="block w-full px-4 py-1 text-left hover:bg-gray-200"
@@ -388,8 +405,9 @@ const updatePartnerAPI = async (form) => {
                                                          </button>
 
                                                         <!-- 🔽 Anwesenheitsliste BO Bibb -->
-                                                        <a @click.prevent="openModal('anwesenheitslisteBoTagbibb', { jahr, teil, partnerId: partner.id })" class="block px-4 py-1 hover:bg-gray-200"> Anwesenheitsliste BO Bibb</a>
+                                                        <a v-if="can('anwesenheit.abrechnung')" @click.prevent="openModal('anwesenheitslisteBoTagbibb', { jahr, teil, partnerId: partner.id })" class="block px-4 py-1 hover:bg-gray-200"> Anwesenheitsliste BO Bibb</a>
                                                         <a
+                                                            v-if="can('anwesenheit.abrechnung')"
                                                             @click.prevent="openModal('anwesenheitslistePATage', { jahr, teil, klassen: getKlassen(jahr, teil, partner), partnerId: partner.id })"
                                                             class="block px-4 py-1 hover:bg-gray-200"
                                                         >
@@ -397,12 +415,13 @@ const updatePartnerAPI = async (form) => {
                                                         </a>
 
                                                         <!-- Rolltag -->
-                                                        <a @click.prevent="openModal('boTag1Config', { jahr, teil, klassen: getKlassen(jahr, teil, partner), partnerId: partner.id, teilnehmerCount: getSchuelerCount(jahr, teil, partner) })" class="block px-4 py-1 hover:bg-gray-200"> Rolltag </a>
+                                                        <a v-if="can('anwesenheit.abrechnung')" @click.prevent="openModal('boTag1Config', { jahr, teil, klassen: getKlassen(jahr, teil, partner), partnerId: partner.id, teilnehmerCount: getSchuelerCount(jahr, teil, partner) })" class="block px-4 py-1 hover:bg-gray-200"> Rolltag </a>
 
                                                         <!-- 🔽 Hausordnung -->
 
                                                         <div class="relative">
                                                             <button
+                                                                v-if="can('dokumente.schule.export')"
                                                                 @click="openModal('hausordnungConfig', { jahr, teil, partnerId: partner.id })"
                                                                 class="w-full text-left px-4 py-1 hover:bg-gray-200">
                                                                 Hausordnung
@@ -410,12 +429,12 @@ const updatePartnerAPI = async (form) => {
                                                         </div>
 
                                                         <!--  Bereichsauswahl -->
-                                                        <a :href="route('bereichsauswahl.index', { partnerId: partner.id, schuljahr: jahr, teil: teil })" class="block px-4 py-1  hover:bg-gray-200">Bereichsauswahl</a>
-                                                        <a :href="route('export.auswertungsbogenPA.schule.pdf', { partnerId: partner.id, schuljahr: jahr, teil })" class="block px-4 py-1 hover:bg-gray-200">Auswertungsbogen PA</a>
-                                                        <a :href="route('export.auswertungsbogenPA.roland.schule.pdf', { partnerId: partner.id, schuljahr: jahr, teil })" class="block px-4 py-1 hover:bg-gray-200">Auswertungsbogen PA neu Roland</a>
-                                                        <a :href="route('export.elterneinverstaendniserklaerung.schule', { partnerId: partner.id, schuljahr: jahr, teil })" class="block px-4 py-1 hover:bg-gray-200">X Elterneinverständniserklärung</a>
+                                                        <a v-if="canAnySelectionPermission" :href="route('bereichsauswahl.index', { partnerId: partner.id, schuljahr: jahr, teil: teil })" class="block px-4 py-1  hover:bg-gray-200">Bereichsauswahl</a>
+                                                        <a v-if="can('dokumente.schule.export')" :href="route('export.auswertungsbogenPA.schule.pdf', { partnerId: partner.id, schuljahr: jahr, teil })" class="block px-4 py-1 hover:bg-gray-200">Auswertungsbogen PA</a>
+                                                        <a v-if="can('dokumente.schule.export')" :href="route('export.auswertungsbogenPA.roland.schule.pdf', { partnerId: partner.id, schuljahr: jahr, teil })" class="block px-4 py-1 hover:bg-gray-200">Auswertungsbogen PA neu Roland</a>
+                                                        <a v-if="can('dokumente.ansprechpartner.manage')" :href="route('export.elterneinverstaendniserklaerung.schule', { partnerId: partner.id, schuljahr: jahr, teil })" class="block px-4 py-1 hover:bg-gray-200">X Elterneinverständniserklärung</a>
 
-                                                        <Link :href="route('einteilung.show', { partnerId: partner.id, schuljahr: jahr, teil })" class="block px-4 py-1 hover:bg-gray-200">Einteilung</Link>
+                                                        <Link v-if="canAnyAssignmentPermission" :href="route('einteilung.show', { partnerId: partner.id, schuljahr: jahr, teil })" class="block px-4 py-1 hover:bg-gray-200">Einteilung</Link>
 
 
                                                        <!--  <div class="relative">
@@ -435,17 +454,17 @@ const updatePartnerAPI = async (form) => {
 
 
                                                         <a href="#">________________________________________</a>
-                                                        <a :href="route('index-anpassung-anwesenheitsdaten', { schulId: partner.id, schuljahr: jahr, teil: teil })"
+                                                        <a v-if="can('anwesenheit.abrechnung')" :href="route('index-anpassung-anwesenheitsdaten', { schulId: partner.id, schuljahr: jahr, teil: teil })"
                                                             class="block px-4 py-1 hover:bg-gray-200">Anwesenheitsdaten</a>
 
-                                                         <a :href="route('export.teilnehmerliste.schule.excel', { schuleId: partner.id, schuljahr: jahr, teil: teil })"
+                                                         <a v-if="can('teilnehmer.liste.export')" :href="route('export.teilnehmerliste.schule.excel', { schuleId: partner.id, schuljahr: jahr, teil: teil })"
                                                             class="block px-4 py-1 hover:bg-gray-200">Teilnehmerliste</a>
 
 
 
 
 
-                                                        <a :href="route('alleTeilnehmer.folder.create', { idSchule: partner.id, schuljahr: jahr, teil })"
+                                                        <a v-if="can('dokumente.ansprechpartner.manage')" :href="route('alleTeilnehmer.folder.create', { idSchule: partner.id, schuljahr: jahr, teil })"
                                                             class="block px-4 py-1 hover:bg-gray-200">Ordner  anlegen</a>
 
                                                        
@@ -453,31 +472,31 @@ const updatePartnerAPI = async (form) => {
 
 
 
-                                                        <a :href="route('export.anwesenheitsliste.rechnung', { idSchule: partner.id, schuljahr: jahr, teil })"
+                                                        <a v-if="can('anwesenheit.abrechnung')" :href="route('export.anwesenheitsliste.rechnung', { idSchule: partner.id, schuljahr: jahr, teil })"
                                                             class="block px-4 py-1 hover:bg-gray-200">Anwesenheitsliste
                                                             Rechnung</a>
 
-                                                        <a :href="route('export.zertifikat.schule.pobo', { idSchule: partner.id, schuljahr: jahr, teil })"
+                                                        <a v-if="can('dokumente.schule.export')" :href="route('export.zertifikat.schule.pobo', { idSchule: partner.id, schuljahr: jahr, teil })"
                                                             class="block px-4 py-1 hover:bg-gray-200">Zertifikat
                                                             POBO</a>
 
-                                                        <a :href="route('export.zertifikat.schule.pobo.pdf', { schuleId: partner.id, schuljahr: jahr, teil })"
+                                                        <a v-if="can('dokumente.schule.export')" :href="route('export.zertifikat.schule.pobo.pdf', { schuleId: partner.id, schuljahr: jahr, teil })"
                                                             class="block px-4 py-1 hover:bg-gray-200">Zertifikat
                                                             POBO PDF</a>
 
-                                                        <a :href="route('export.auswertungBO.schule.pdf', { schulId: partner.id, schuljahr: jahr, teil })"
+                                                        <a v-if="can('dokumente.schule.export')" :href="route('export.auswertungBO.schule.pdf', { schulId: partner.id, schuljahr: jahr, teil })"
                                                             class="block px-4 py-1 hover:bg-gray-200">Auswertung
                                                             POBO</a>
 
-                                                        <a :href="route('export.auswertungBO.schule.pdf.tofolder', { schulId: partner.id, schuljahr: jahr, teil })"
+                                                        <a v-if="can('dokumente.ansprechpartner.manage')" :href="route('export.auswertungBO.schule.pdf.tofolder', { schulId: partner.id, schuljahr: jahr, teil })"
                                                             class="block px-4 py-1 hover:bg-gray-200">BO
                                                             Auswertungen in Ordner generieren</a>
 
-                                                        <a :href="route('export.auswertungPA.schule.pdf.tofolder', { schulId: partner.id, schuljahr: jahr, teil })"
+                                                        <a v-if="can('dokumente.ansprechpartner.manage')" :href="route('export.auswertungPA.schule.pdf.tofolder', { schulId: partner.id, schuljahr: jahr, teil })"
                                                             class="block px-4 py-1 hover:bg-gray-200">PA
                                                             Berichte in Ordner generieren</a>
 
-                                                        <a :href="route('auswertungPoboModal', { schuleId: partner.id, schuljahr: jahr, teil })"
+                                                        <a v-if="can('dokumente.schule.export')" :href="route('auswertungPoboModal', { schuleId: partner.id, schuljahr: jahr, teil })"
                                                             class="block px-4 py-1 hover:bg-gray-200">Auswertung POBO Runde</a>
 
                                                     </div>

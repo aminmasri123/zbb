@@ -14,6 +14,7 @@ use App\Models\Partner;
 use App\Models\Personen;
 use App\Models\PersonenIstSchueler;
 use App\Models\Projekt;
+use App\Services\Bop\PublicAreaSelectionAccess;
 use App\Services\MyDatum;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
 use BaconQrCode\Renderer\ImageRenderer;
@@ -58,6 +59,25 @@ class ProjektBopController extends Controller
         'SA', 'SE', 'SI', 'SO',
         'TA', 'TE', 'TI', 'TO',
     ];
+
+    public function __construct(private readonly PublicAreaSelectionAccess $publicAreaSelection)
+    {
+    }
+
+    private function ensurePartnerInActiveProject(int $partnerId): int
+    {
+        $projectId = auth()->user()?->current_team_id;
+        abort_unless($projectId, 409, 'Bitte waehlen Sie zuerst ein aktives Projekt aus.');
+        abort_unless(
+            DB::table('projekt_has_partners')
+                ->where('projekt_id', $projectId)
+                ->where('partner_id', $partnerId)
+                ->exists(),
+            404
+        );
+
+        return (int) $projectId;
+    }
 
     private function normalizeAuswahlAnzahl(int $value): int
     {
@@ -255,6 +275,8 @@ class ProjektBopController extends Controller
             'manualDays.*.type' => ['nullable', 'string'],
             'manualDays.*.note' => ['nullable', 'string', 'max:255'],
         ]);
+
+        $this->ensurePartnerInActiveProject((int) $validated['schuleIdInputBibb']);
 
         return response()->json($this->bibbPreviewPayload(
             (int) $validated['schuleIdInputBibb'],
@@ -574,8 +596,8 @@ class ProjektBopController extends Controller
             'teilInputBibb' => ['required', 'string'],
         ]);
 
-        $projektId = auth()->user()?->current_team_id;
         $partnerId = (int) $validated['schuleIdInputBibb'];
+        $projektId = $this->ensurePartnerInActiveProject($partnerId);
         $schuljahr = (string) $validated['schuljahrInputBibb'];
         $teil = (string) $validated['teilInputBibb'];
 
@@ -947,6 +969,7 @@ class ProjektBopController extends Controller
             $schulId = $request->schuleIdInputBibb;
             $teil = $request->teilInputBibb;
             $format = $request->exportFormat;
+            $this->ensurePartnerInActiveProject((int) $schulId);
 
             if($format == "A4")
             {
@@ -1049,6 +1072,8 @@ class ProjektBopController extends Controller
             'days.*.selected' => ['nullable', 'boolean'],
             'days.*.note' => ['nullable', 'string', 'max:255'],
         ]);
+
+        $this->ensurePartnerInActiveProject((int) $validated['schuleId']);
 
         $exportMode = $validated['exportMode'] ?? (empty($validated['klasse']) ? 'alle' : 'klasse');
 
@@ -1353,8 +1378,8 @@ class ProjektBopController extends Controller
             ]);
         }
 
-        $projektId = auth()->user()?->current_team_id;
         $partnerId = (int) $validated['schuleId'];
+        $projektId = $this->ensurePartnerInActiveProject($partnerId);
         $schuljahr = (string) $validated['schuljahr'];
         $teil = (string) $validated['teil'];
 
@@ -1658,6 +1683,7 @@ class ProjektBopController extends Controller
         ]);
 
         $validated['exportMode'] = $validated['exportMode'] ?? (empty($validated['klasse']) ? 'alle' : 'klasse');
+        $this->ensurePartnerInActiveProject((int) $validated['schuleId']);
 
         $templateFile = storage_path('vorlage/projekte/bop/word/pa/Anwesenheitsliste-PA.docx');
 
@@ -1783,6 +1809,8 @@ class ProjektBopController extends Controller
 
     public function anwesenheitslistePOBOTag1(Request $request, $partnerID, $schuljahr, $teil, $klasse = 'exportAlleKlassen')
     {
+        $this->ensurePartnerInActiveProject((int) $partnerID);
+
         // Query Parameter
         $anzahlBereiche = request()->query('anzahlBereiche', 6);
         $anzahlRaeumlichkeiten = request()->query('anzahlRaeumlichkeiten', $anzahlBereiche);
@@ -2119,6 +2147,7 @@ class ProjektBopController extends Controller
 
     public function hausordnungExportPdf($partnerID, $schuljahr, $teil, $sortBy, $termin)
     {
+        $this->ensurePartnerInActiveProject((int) $partnerID);
         $schule = Partner::findOrFail($partnerID);
             if (!$schule)
             {
@@ -2170,7 +2199,8 @@ class ProjektBopController extends Controller
 
     public function bereichsauswahl($partnerId, $schuljahr, $teil)
     {
-        $projekt = Projekt::with('bereiche', 'partners')->where('id', Auth()->user()->current_team_id)->firstOrFail();
+        $projektId = $this->ensurePartnerInActiveProject((int) $partnerId);
+        $projekt = Projekt::with('bereiche', 'partners')->findOrFail($projektId);
         $partner = Partner::findOrFail($partnerId);
         $setting = $this->settingFor($projekt->id, (int) $partnerId, $schuljahr, $teil, $projekt);
 
@@ -2219,7 +2249,8 @@ class ProjektBopController extends Controller
             'zugang_aktiv' => ['nullable', 'boolean'],
         ]);
 
-        $projekt = Projekt::with('bereiche')->findOrFail(auth()->user()->current_team_id);
+        $projektId = $this->ensurePartnerInActiveProject((int) $validated['partner_id']);
+        $projekt = Projekt::with('bereiche')->findOrFail($projektId);
         $setting = $this->settingFor(
             $projekt->id,
             (int) $validated['partner_id'],
@@ -2271,7 +2302,8 @@ class ProjektBopController extends Controller
             ->with(['bereichsauswahl', 'person'])
             ->firstOrFail();
 
-        $projekt = Projekt::with('bereiche')->findOrFail(auth()->user()->current_team_id);
+        $projektId = $this->ensurePartnerInActiveProject((int) $teilnehmer->schule_id);
+        $projekt = Projekt::with('bereiche')->findOrFail($projektId);
         $setting = $this->settingFor(
             $projekt->id,
             (int) $teilnehmer->schule_id,
@@ -2282,6 +2314,11 @@ class ProjektBopController extends Controller
         $choices = $this->validatedChoices($request, $setting, $this->allowedBereichIds($projekt));
 
         $wahl = $teilnehmer->bereichsauswahl;
+        $hasSavedChoices = collect([1, 2, 3, 4])->contains(
+            fn (int $field) => $wahl?->{'bereich_id' . $field} !== null
+        );
+        $requiredPermission = $hasSavedChoices ? 'bereichsauswahl.update' : 'bereichsauswahl.store';
+        abort_unless(auth()->user()?->can($requiredPermission), 403);
 
         if (!$wahl) {
             $wahl = Bereichsauswahl::create([
@@ -2303,10 +2340,7 @@ class ProjektBopController extends Controller
 
     public function bereichsauswahlSelfShow(string $token)
     {
-        $setting = BereichsauswahlSetting::with(['partner', 'projekt.bereiche'])
-            ->where('public_token', $token)
-            ->where('zugang_aktiv', true)
-            ->firstOrFail();
+        $setting = $this->publicAreaSelection->activeSetting($token, ['partner', 'projekt.bereiche']);
 
         return Inertia::render('Bereichsauswahl/Selbstwahl', [
             'context' => [
@@ -2322,9 +2356,7 @@ class ProjektBopController extends Controller
 
     public function bereichsauswahlSelfThanks(string $token)
     {
-        $setting = BereichsauswahlSetting::with('partner')
-            ->where('public_token', $token)
-            ->firstOrFail();
+        $setting = $this->publicAreaSelection->activeSetting($token, ['partner']);
 
         return Inertia::render('Bereichsauswahl/Danke', [
             'context' => [
@@ -2341,9 +2373,7 @@ class ProjektBopController extends Controller
             'access_code' => ['required', 'string', 'max:20'],
         ]);
 
-        $setting = BereichsauswahlSetting::where('public_token', $token)
-            ->where('zugang_aktiv', true)
-            ->firstOrFail();
+        $setting = $this->publicAreaSelection->activeSetting($token);
 
         $code = $this->normalizeAccessCodeInput($request->input('access_code'));
         $teilnehmer = $this->teilnehmerForCode($setting, $code);
@@ -2366,10 +2396,7 @@ class ProjektBopController extends Controller
             'access_code' => ['required', 'string', 'max:20'],
         ]);
 
-        $setting = BereichsauswahlSetting::with('projekt.bereiche')
-            ->where('public_token', $token)
-            ->where('zugang_aktiv', true)
-            ->firstOrFail();
+        $setting = $this->publicAreaSelection->activeSetting($token, ['projekt.bereiche']);
 
         $code = $this->normalizeAccessCodeInput($request->input('access_code'));
         $teilnehmer = $this->teilnehmerForCode($setting, $code);
@@ -2400,6 +2427,7 @@ class ProjektBopController extends Controller
 
     public function generatePdfauswertungsbogenPASchule($partnerId, $schuljahr, $teil)
     {
+            $this->ensurePartnerInActiveProject((int) $partnerId);
             $schule = Partner::findOrFail($partnerId);
             if (!$schule)
             {
@@ -2436,6 +2464,7 @@ class ProjektBopController extends Controller
 
     public function generatePdfAuswertungsbogenPaRolandSchule($partnerId, $schuljahr, $teil)
     {
+        $this->ensurePartnerInActiveProject((int) $partnerId);
         $schule = Partner::findOrFail($partnerId);
 
         $schueler = PersonenIstSchueler::with('person')
@@ -2496,6 +2525,7 @@ class ProjektBopController extends Controller
 
     public function exportElterneinverstaendniserklaerungSchule($partnerId, $schuljahr, $teil)
     {
+        $this->ensurePartnerInActiveProject((int) $partnerId);
         $alle_teilnehmer = PersonenIstSchueler::with('person')
             ->filterSchueler($partnerId, $schuljahr, $teil)
             ->where('eee', '0')
