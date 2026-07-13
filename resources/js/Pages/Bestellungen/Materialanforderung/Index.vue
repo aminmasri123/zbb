@@ -5,7 +5,6 @@ import { router, Link, Head } from '@inertiajs/vue3'
 import Dropdown from '@/Components/Dropdown.vue'
 import ModalDestroy from '@/Components/ModalDestroyForm.vue'
 import ModalCreate from './ModalCreate.vue'
-import ModalEdit from './ModalEdit.vue'
 import { formatDateTime } from '@/utils/dateFormat.js';
 
 const props = defineProps({
@@ -17,16 +16,14 @@ const props = defineProps({
 let localAnforderungen = ref([...props.anforderungen])
 let filteredAnforderungen = ref([...localAnforderungen.value])
 let search = ref('')
-let selectedToEdit = ref(null)
 let showModalCreate = ref(false)
-let showModalEdit = ref(false)
 let selectedToDelete = ref(null)
 let showModalDelete = ref(false)
 
 const openModalCreate = () => showModalCreate.value = true
-const closeModalCreate = () => showModalCreate.value = false
-const openModalEdit = (item) => { selectedToEdit.value = item; showModalEdit.value = true }
-const closeModalEdit = () => showModalEdit.value = false
+const openModalEdit = (item) => {
+    router.get(route('materialanforderung.show', item.id), { edit: 1 })
+}
 const confirmDelete = (item) => { selectedToDelete.value = item; showModalDelete.value = true }
 const handleDelete = (id) => {
     localAnforderungen.value = localAnforderungen.value.filter(a => a.id !== id)
@@ -92,7 +89,7 @@ watch(search, () => {
                     <tr v-for="item in filteredAnforderungen" :key="item.id" class="hover:bg-gray-50">
                         <td class="px-4 py-2"> <Link :href="route('materialanforderung.show', item.id)" target="_blank"> {{ item.id }}</Link></td>
                         <td class="px-4 py-2 font-semibold">{{ item.projekt.name }}</td>
-                        <td class="px-4 py-2 font-semibold">{{ item.besteller.vorname }} {{item.besteller.nachname}}</td>
+                        <td class="px-4 py-2 font-semibold">{{ item.besteller?.first_name }} {{ item.besteller?.last_name }}</td>
                         <td class="px-4 py-2 font-semibold">{{ item.status }}</td>
                         <td class="px-4 py-2">{{ item.kostenstelle }}</td>
                         <td class="px-4 py-2">{{ item.gesamtpreis }}</td>
@@ -104,10 +101,22 @@ watch(search, () => {
                                     <i class="la la-ellipsis-v cursor-pointer"></i>
                                 </template>
                                 <template #content>
-                                    <span class="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                                        @click="openModalEdit(item)">Bearbeiten</span>
-                                    <span class="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                                        @click="confirmDelete(item)">Löschen</span>
+                                    <div class="flex flex-col py-1 text-left">
+                                        <button
+                                            type="button"
+                                            class="w-full px-4 py-2 text-left hover:bg-gray-100"
+                                            @click="openModalEdit(item)"
+                                        >
+                                            Bearbeiten
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="w-full px-4 py-2 text-left hover:bg-gray-100"
+                                            @click="confirmDelete(item)"
+                                        >
+                                            Löschen
+                                        </button>
+                                    </div>
                                 </template>
                             </Dropdown>
                         </td>
@@ -118,8 +127,7 @@ watch(search, () => {
 
         <!-- Modals -->
         <ModalCreate v-model:visible="showModalCreate" :user="user" :projekt="projekt" />
-<!--         <ModalEdit v-model:visible="showModalEdit" :item="selectedToEdit" />
- -->        <ModalDestroy v-if="showModalDelete" :toDelete="selectedToDelete" @delete="handleDelete"
+        <ModalDestroy v-if="showModalDelete" :toDelete="selectedToDelete" @delete="handleDelete"
             @close="showModalDelete = false" />
     </AppLayout>
 </template>

@@ -5,16 +5,19 @@ import { router, Head } from '@inertiajs/vue3'
 import InputText from 'primevue/inputtext'
 import Button from 'primevue/button'
 import FloatLabel from 'primevue/floatlabel';
+import Select from 'primevue/select';
 
 const props = defineProps({
     user: Object,
     projekt: Object,
+    kostenstellen: {
+        type: Array,
+        default: () => [],
+    },
 })
 
 const form = ref({
-    projekt: props.projekt.name,
-    kostenstelle: '',
-    ersteller_id: props.user.id,
+    kostenstelle: props.kostenstellen[0]?.kostenstelle ?? '',
     bemerkungen: '',
     positionen: []
 })
@@ -70,7 +73,12 @@ const endsumme = computed(() => {
 Speichern
 */
 const submit = () => {
-    router.post(route('materialanforderung.store'), form.value)
+    router.post(route('materialanforderung.store'), form.value, {
+        onError: (errors) => {
+            const message = Object.values(errors)[0]
+            if (message) window.alert(message)
+        }
+    })
 }
 </script>
 
@@ -97,7 +105,14 @@ const submit = () => {
                 </FloatLabel>
 
                 <FloatLabel variant="on" class="w-full">
-                    <InputText v-model="form.kostenstelle" class="w-full" placeholder="" />
+                    <Select
+                        v-model="form.kostenstelle"
+                        :options="props.kostenstellen"
+                        optionLabel="kostenstelle"
+                        optionValue="kostenstelle"
+                        placeholder="Bitte auswählen"
+                        class="w-full"
+                    />
                     <label>Kostenstelle</label>
                 </FloatLabel>
 
@@ -133,7 +148,7 @@ const submit = () => {
                     <tr v-for="(p, index) in form.positionen" :key="index">
                         <td>{{ p.pos }}</td>
                         <td><InputText v-model="p.link" /></td>
-                        <td><InputText v-model="p.artikel" /></td>
+                        <td><InputText v-model="p.artikel" required /></td>
                         <td><InputText type="number" v-model.number="p.stueck" @input="updateGesamtpreis(p)" /></td>
                         <td><InputText v-model="p.art_nr" /></td>
                         <td><InputText type="number" v-model.number="p.einzelpreis" @input="updateGesamtpreis(p)" /></td>

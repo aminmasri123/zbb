@@ -1,10 +1,14 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
 import { ref, reactive, computed } from 'vue'
-import { Head, router } from '@inertiajs/vue3'
+import { Head, router, usePage } from '@inertiajs/vue3'
 import Modal from '@/Components/ModalForm.vue'
 import Swal from 'sweetalert2';
 import Dropdown from 'primevue/dropdown';
+import InputText from 'primevue/inputtext';
+import Button from 'primevue/button';
+import FloatLabel from 'primevue/floatlabel';
+import Select from 'primevue/select';
 
 const props = defineProps({
     anforderung: Object,
@@ -13,7 +17,11 @@ const props = defineProps({
     canConfirmKaufmaenisch: Boolean,
     canConfirmSachlich: Boolean,
     canBestellen: Boolean,
-    verlauf: Array
+    verlauf: Array,
+    kostenstellen: {
+        type: Array,
+        default: () => [],
+    },
 })
 const anmerkung = ref('')
 const selectedStatus = ref(null)
@@ -26,6 +34,14 @@ const statusOptions = [
 ]
 // Bearbeitungsmodus
 const editing = ref(false)
+const editableStatuses = ['entwurf', 'eingereicht', 'zur_ueberarbeitung']
+const canStillEdit = computed(() =>
+    props.canEditMaterialanforderung && editableStatuses.includes(props.anforderung.status)
+)
+
+if (usePage().url.includes('edit=1') && canStillEdit.value) {
+    editing.value = true
+}
 
 // Modal für Genehmigungen
 const visibleBestellen = ref(false)
@@ -176,7 +192,8 @@ const senden = () => {
 
 <AppLayout>
     <template #header>
-        <div class="flex justify-between items-center">
+        <template v-if="editing">Materialanforderungen bearbeiten</template>
+        <div v-else class="flex justify-between items-center">
             <div>
                 <h2 class="text-2xl font-bold text-gray-800">Materialanforderung #{{ anforderung.id }}</h2>
                 <p class="text-sm text-gray-500">Übersicht der Bestellung</p>
@@ -188,15 +205,12 @@ const senden = () => {
 
             <div class="flex gap-2">
                 <!-- Bearbeiten Button -->
-                  <button v-if="anforderung.status === 'entwurf' || anforderung.status === 'zur_ueberarbeitung'  && !editing"
+                  <button v-if="['entwurf', 'zur_ueberarbeitung'].includes(anforderung.status) && !editing"
                         @click="senden"
                         class="bg-zbb text-white px-4 py-2 rounded">
                     Senden
                 </button>
-                <button v-if="editing" @click="save" class="bg-zbb text-white px-4 py-2 rounded">
-                    Speichern
-                </button>
-                <button v-if="canEditMaterialanforderung && anforderung.status === 'entwurf' || anforderung.status === 'zur_ueberarbeitung'"
+                <button v-if="canStillEdit"
                         @click="editing = !editing"
                         class="bg-green-500 text-white px-4 py-2 rounded">
                         {{ editing ? 'Abbrechen' : 'Bearbeiten' }}
@@ -233,7 +247,86 @@ const senden = () => {
         </div>
     </template>
 
-    <div class="space-y-8 mt-4">
+    <div v-if="editing" class="flex flex-col gap-3 max-w-8xl bg-white shadow-lg p-8 rounded-lg">
+        <div class="grid grid-cols-3 gap-4">
+            <FloatLabel variant="on" class="w-full">
+                <InputText :value="anforderung.projekt.name" disabled class="w-full" placeholder="" />
+                <label>Projekt</label>
+            </FloatLabel>
+
+            <FloatLabel variant="on" class="w-full">
+                <InputText :value="`${anforderung.besteller?.first_name || ''} ${anforderung.besteller?.last_name || ''}`.trim()" disabled class="w-full" placeholder="" />
+                <label>Besteller</label>
+            </FloatLabel>
+
+            <FloatLabel variant="on" class="w-full">
+                <Select
+                    v-model="form.kostenstelle"
+                    :options="kostenstellen"
+                    optionLabel="kostenstelle"
+                    optionValue="kostenstelle"
+                    placeholder="Bitte auswählen"
+                    class="w-full"
+                />
+                <label>Kostenstelle</label>
+            </FloatLabel>
+        </div>
+
+        <div class="grid grid-cols-1 mt-2">
+            <FloatLabel variant="on" class="w-full">
+                <InputText v-model="form.bemerkungen" class="w-full" placeholder="" />
+                <label>Bemerkungen</label>
+            </FloatLabel>
+        </div>
+
+        <hr class="my-2" />
+        <h3 class="font-semibold">Artikel</h3>
+        <table class="min-w-full border divide-y divide-gray-200">
+            <thead class="bg-gray-200">
+                <tr>
+                    <th>Pos</th>
+                    <th>Link</th>
+                    <th>Artikel</th>
+                    <th>Stück</th>
+                    <th>Art.Nr</th>
+                    <th>Einzelpreis</th>
+                    <th>MwSt %</th>
+                    <th>Gesamtpreis</th>
+                    <th>*</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="(p, index) in form.artikeln" :key="p.id ?? `new-${index}`">
+                    <td>{{ p.pos }}</td>
+                    <td><InputText v-model="p.link" /></td>
+                    <td><InputText v-model="p.artikel" required /></td>
+                    <td><InputText type="number" v-model.number="p.stueck" @input="updateGesamtpreis(p)" /></td>
+                    <td><InputText v-model="p.art_nr" /></td>
+                    <td><InputText type="number" v-model.number="p.einzelpreis" @input="updateGesamtpreis(p)" /></td>
+                    <td><InputText type="number" v-model.number="p.mwst" /></td>
+                    <td>{{ (Number(p.gesamtpreis) || 0).toFixed(2) }}</td>
+                    <td>
+                        <Button severity="danger" @click="removeArtikel(index)">
+                            <i class="las la-trash"></i>
+                        </Button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <Button class="p-button-sm p-button-secondary mt-3" @click="addArtikel">+ Artikel hinzufügen</Button>
+
+        <div class="mt-4 font-semibold text-right text-lg">
+            Endsumme inkl. MwSt: {{ endsumme }} €
+        </div>
+
+        <div class="flex gap-2 mt-4">
+            <button @click="save" class="bg-zbb text-white px-4 py-2 rounded">Speichern</button>
+            <button @click="editing = false" class="border px-4 py-2 rounded">Abbrechen</button>
+        </div>
+    </div>
+
+    <div v-else class="space-y-8 mt-4">
 
         <!-- Projekt / Besteller / Kostenstelle -->
         <div class="grid grid-cols-3 gap-6">
@@ -245,7 +338,7 @@ const senden = () => {
             <div class="bg-white p-6 rounded-2xl shadow-sm border hover:shadow-md transition">
                 <p class="text-gray-500 text-sm">Besteller</p>
                 <p class="text-lg font-semibold mt-1">
-                    {{ anforderung.besteller.vorname }} {{ anforderung.besteller.nachname }}
+                    {{ anforderung.besteller?.first_name }} {{ anforderung.besteller?.last_name }}
                 </p>
             </div>
 
