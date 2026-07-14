@@ -23,6 +23,7 @@ class RoutePermissionMap
         'partner.store' => 'kooperationspartner.store',
         'partner.update' => 'kooperationspartner.update',
         'partner.destroy' => 'kooperationspartner.destroy',
+        'partner.bop-usb-stick-letter.export' => 'dokumente.schule.export',
         'geraet.edit' => 'geraet.update',
         'getGeraeteID' => 'geraet.index',
         'it-service.index' => [

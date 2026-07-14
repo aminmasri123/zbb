@@ -38,7 +38,7 @@ class PortalJobController extends Controller
             'bookmarks' => ParticipantJobBookmark::query()->where('person_id', $person->id)->latest()->get(),
             'applications' => ParticipantApplication::query()
                 ->whereHas('participation', fn ($query) => $query->where('personen_id', $person->id))
-                ->with(['participation.projekt:id,name', 'statusHistory', 'documents'])
+                ->with(['participation.projekt:id,name', 'statusHistory', 'documents', 'careerDocuments', 'activities'])
                 ->orderByRaw('next_action_at is null')
                 ->orderBy('next_action_at')
                 ->latest()
@@ -47,6 +47,7 @@ class PortalJobController extends Controller
             'applicationDocuments' => \App\Models\ParticipantPortalDocument::query()
                 ->whereIn('project_person_id', $participations->pluck('id'))->where('status', 'approved')->where('visible_to_participant', true)
                 ->orderBy('original_name')->get(),
+            'careerDocuments' => \App\Models\ParticipantCareerDocument::query()->where('person_id', $person->id)->orderBy('type')->orderBy('title')->get(),
             'recommendations' => ParticipantJobRecommendation::query()
                 ->whereIn('project_person_id', $participations->pluck('id'))
                 ->whereNull('dismissed_at')

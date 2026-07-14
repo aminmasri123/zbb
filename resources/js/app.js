@@ -20,6 +20,7 @@ import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import Aura from '@primeuix/themes/aura';
 import { setThemeOnLoad } from './theme';
+import ParticipantPortalLayout from './Layouts/ParticipantPortalLayout.vue';
 
 
 const appName = window.document.getElementsByTagName('title')[0]?.innerText || 'ERP ZBB';
@@ -38,7 +39,15 @@ window.addEventListener("storage", (event) => {
 
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,
-    resolve: (name) => resolvePageComponent(`./Pages/${name}.vue`, import.meta.glob('./Pages/**/*.vue')),
+    resolve: async (name) => {
+        const page = await resolvePageComponent(`./Pages/${name}.vue`, import.meta.glob('./Pages/**/*.vue'));
+        const ownLayout = ['ParticipantPortal/Dashboard','ParticipantPortal/Documents','ParticipantPortal/Jobs','ParticipantPortal/Messages'];
+        const publicOrPrint = ['ParticipantPortal/Welcome','ParticipantPortal/Login','ParticipantPortal/AcceptInvitation','ParticipantPortal/ResumePrint'];
+        if (name.startsWith('ParticipantPortal/') && !ownLayout.includes(name) && !publicOrPrint.includes(name)) {
+            page.default.layout = page.default.layout || ((h, child) => h(ParticipantPortalLayout, { showHeader: false }, () => child));
+        }
+        return page;
+    },
 
     setup({ el, App, props, plugin }) {
     const app = createApp({ render: () => h(App, props) })

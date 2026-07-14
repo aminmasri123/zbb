@@ -12,6 +12,7 @@ import ModalAnwesenheitslisteBIBB from './BOP/ModalAnwesenheitslisteBIBBDigital.
 import ModalAnwesenheitslistePA from './BOP/ModalAnwesenheitslistePADigital.vue';
 import ModalBoTag1 from './BOP/ModalBoTag1.vue'
 import ModalHausordnung from './BOP/ModalHausordnung.vue';
+import ModalUsbStickBrief from './BOP/ModalUsbStickBrief.vue';
 import { usePermissions } from '@/utils/permissions';
 
 // Props
@@ -37,6 +38,7 @@ const canAnyAssignmentPermission = computed(() => canAny([
     'einteilung.export',
     'einteilung.planning',
 ]));
+const isBopProject = computed(() => String(props.projektName ?? '').toUpperCase().includes('BOP'));
 
 // States
 let seite = 'partner';
@@ -47,7 +49,7 @@ let isModalCreateOpen = ref(false);
 let isModalEditOpen = ref(false);
 let partnerToEdit = ref(null);
 let activeModal = ref(null);
-let modalData = ref({ jahr: null, teil: null, klasse: null, partnerId: null, klassen: [], teilnehmerCount: 0 });
+let modalData = ref({ jahr: null, teil: null, klasse: null, partnerId: null, schoolName: null, klassen: [], teilnehmerCount: 0 });
 const normalizePartner = (partner) => {
     const ansprechpartners = Object.values(
         (partner.ansprechpartners ?? []).reduce((persons, person) => {
@@ -152,14 +154,14 @@ function getSchuljahre(partner) {
 // -----------------------------
 // Modal-Funktionen
 // -----------------------------
-function openModal(modalName, { jahr = null, teil = null, klasse = null, partnerId = null, klassen = null, teilnehmerCount = 0 } = {}) {
+function openModal(modalName, { jahr = null, teil = null, klasse = null, partnerId = null, schoolName = null, klassen = null, teilnehmerCount = 0 } = {}) {
     activeModal.value = modalName;
-    modalData.value = { jahr, teil, klasse, partnerId, klassen, teilnehmerCount };
+    modalData.value = { jahr, teil, klasse, partnerId, schoolName, klassen, teilnehmerCount };
 }
 
 function closeModal() {
     activeModal.value = null;
-    modalData.value = { jahr: null, teil: null, klasse: null, partnerId: null, partner: null, teilnehmerCount: 0 };
+    modalData.value = { jahr: null, teil: null, klasse: null, partnerId: null, schoolName: null, klassen: [], teilnehmerCount: 0 };
 }
 
 const openModalCreate = () => isModalCreateOpen.value = true;
@@ -464,6 +466,15 @@ const updatePartnerAPI = async (form) => {
                                                             </button>
                                                         </div>
 
+                                                        <button
+                                                            v-if="isBopProject && can('dokumente.schule.export')"
+                                                            type="button"
+                                                            class="block w-full px-4 py-1 text-left hover:bg-gray-200"
+                                                            @click="openModal('usbStickBrief', { jahr, teil, partnerId: partner.id, schoolName: partner.name })"
+                                                        >
+                                                            USB-Stick-Brief
+                                                        </button>
+
                                                         <!--  Bereichsauswahl -->
                                                         <a v-if="canAnySelectionPermission" :href="route('bereichsauswahl.index', { partnerId: partner.id, schuljahr: jahr, teil: teil })" class="block px-4 py-1  hover:bg-gray-200">Bereichsauswahl</a>
                                                         <a v-if="can('dokumente.schule.export')" :href="route('export.auswertungsbogenPA.schule.pdf', { partnerId: partner.id, schuljahr: jahr, teil })" class="block px-4 py-1 hover:bg-gray-200">Auswertungsbogen PA</a>
@@ -636,6 +647,7 @@ const updatePartnerAPI = async (form) => {
         <ModalAnwesenheitslistePA v-if="activeModal === 'anwesenheitslisteVorbereitungPA'" :visible="true" :partnerId="modalData.partnerId" :schuljahr="modalData.jahr" :klasse="modalData.klasse" :klassen="modalData.klassen" :teil="modalData.teil" list-type="pa_preparation" @update:visible="closeModal" @close="closeModal"/>
         <ModalBoTag1 v-if="activeModal === 'boTag1Config'" :visible="true" :anzahlBereiche="props.anzahlBereiche" :jahr="modalData.jahr" :teil="modalData.teil" :klassen="modalData.klassen" :teilnehmerCount="modalData.teilnehmerCount" :partnerId="modalData.partnerId" @close="closeModal" @submit="handleBoTag1" />
         <ModalHausordnung v-if="activeModal === 'hausordnungConfig'" :visible="true" :partnerId="modalData.partnerId" :jahr="modalData.jahr" :teil="modalData.teil" @close="closeModal"/>
+        <ModalUsbStickBrief v-if="activeModal === 'usbStickBrief'" :partner-id="modalData.partnerId" :schuljahr="modalData.jahr" :school-name="modalData.schoolName" @close="closeModal" />
 
 
 

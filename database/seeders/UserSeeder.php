@@ -901,7 +901,7 @@ class UserSeeder extends Seeder
 
     }
 
-    private function permissionCategoryCatalog(): array
+    public function permissionCategoryCatalog(): array
     {
         return [
             1 => ['name' => 'Dashboard', 'beschreibung' => 'Zentrale Uebersichten, Navigation und globale Einstiegspunkte.'],
@@ -958,7 +958,7 @@ class UserSeeder extends Seeder
         return $ids;
     }
 
-    private function permissionCatalog(): array
+    public function permissionCatalog(): array
     {
         return [
             // Dashboard / Navigation

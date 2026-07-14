@@ -65,6 +65,8 @@ use App\Http\Controllers\ProjectCourseQuizController;
 use App\Http\Controllers\PortalCourseQuizController;
 use App\Http\Controllers\ParticipantContactController;
 use App\Http\Controllers\ParticipantCvController;
+use App\Http\Controllers\ParticipantCareerStudioController;
+use App\Http\Controllers\ParticipantApplicationDispatchController;
 use App\Http\Controllers\ProjectCourseSessionController;
 use App\Http\Controllers\ParticipationCompletionController;
 use App\Http\Controllers\ParticipantNotificationPreferenceController;
@@ -120,6 +122,12 @@ Route::middleware(['module:participant_portal', 'throttle:10,1'])->group(functio
 });
 Route::middleware(['module:participant_portal', 'auth', 'participantPortalUser'])->group(function () {
     Route::get('/portal/dashboard', [ParticipantPortalController::class, 'dashboard'])->name('participant-portal.dashboard');
+    Route::post('/portal/farbpalette', function () {
+        $data = request()->validate(['theme' => ['required', 'string', 'in:air,dark,womanly,champion,sprint,arena,pulse,trail,bazaar,vital']]);
+        request()->user()->forceFill(['theme' => $data['theme']])->save();
+
+        return response()->json(['success' => true, 'theme' => $data['theme']]);
+    })->name('participant-portal.theme.update');
     Route::get('/portal/benachrichtigungen/einstellungen', [ParticipantNotificationPreferenceController::class, 'index'])->name('participant-portal.notification-preferences.index');
     Route::put('/portal/benachrichtigungen/einstellungen', [ParticipantNotificationPreferenceController::class, 'update'])->name('participant-portal.notification-preferences.update');
     Route::put('/portal/profil', [ParticipantPortalController::class, 'updateProfile'])->name('participant-portal.profile.update');
@@ -163,6 +171,16 @@ Route::middleware(['module:participant_portal', 'auth', 'participantPortalUser']
     Route::get('/portal/kontakt/e-mail/bestaetigen/{token}', [ParticipantContactController::class, 'confirm'])->name('participant-portal.contact.email.confirm')->middleware('throttle:10,1');
     Route::delete('/portal/kontakt/anfragen/{change}', [ParticipantContactController::class, 'cancel'])->name('participant-portal.contact.cancel');
     Route::get('/portal/lebenslauf', [ParticipantCvController::class, 'index'])->name('participant-portal.resume.index');
+    Route::get('/portal/bewerbungsstudio', [ParticipantCareerStudioController::class, 'index'])->name('participant-portal.career-studio.index');
+    Route::post('/portal/bewerbungsstudio/dokumente', [ParticipantCareerStudioController::class, 'store'])->name('participant-portal.career-studio.store');
+    Route::put('/portal/bewerbungsstudio/dokumente/{document}', [ParticipantCareerStudioController::class, 'update'])->name('participant-portal.career-studio.update');
+    Route::post('/portal/bewerbungsstudio/dokumente/{document}/kopieren', [ParticipantCareerStudioController::class, 'duplicate'])->name('participant-portal.career-studio.duplicate');
+    Route::delete('/portal/bewerbungsstudio/dokumente/{document}', [ParticipantCareerStudioController::class, 'destroy'])->name('participant-portal.career-studio.destroy');
+    Route::get('/portal/bewerbungsstudio/dokumente/{document}/vorschau', [ParticipantCareerStudioController::class, 'preview'])->name('participant-portal.career-studio.preview');
+    Route::get('/portal/bewerbungsstudio/dokumente/{document}/download', [ParticipantCareerStudioController::class, 'download'])->name('participant-portal.career-studio.download');
+    Route::put('/portal/bewerbungen/{application}/studio-dokumente', [ParticipantApplicationDispatchController::class, 'sync'])->name('participant-portal.applications.career-documents.sync');
+    Route::post('/portal/bewerbungen/{application}/notizen', [ParticipantApplicationDispatchController::class, 'note'])->name('participant-portal.applications.notes.store');
+    Route::post('/portal/bewerbungen/{application}/versenden', [ParticipantApplicationDispatchController::class, 'send'])->name('participant-portal.applications.send');
     Route::post('/portal/lebenslauf/eintraege', [ParticipantCvController::class, 'store'])->name('participant-portal.resume.entries.store');
     Route::put('/portal/lebenslauf/eintraege/{entry}', [ParticipantCvController::class, 'update'])->name('participant-portal.resume.entries.update');
     Route::delete('/portal/lebenslauf/eintraege/{entry}', [ParticipantCvController::class, 'destroy'])->name('participant-portal.resume.entries.destroy');
@@ -435,6 +453,13 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::delete('/teilnehmer/entfernen/{id}', [TeilnehmerController::class, 'destroy'])->name('teilnehmer.destroy')->can('teilnehmer.destroy');
     Route::get('/teilnehmer/bearbeiten/{id}', [TeilnehmerController::class, 'show'])->name('teilnehmer.edit')->can('teilnehmer.update');
     Route::patch('/teilnehmer/update/{id}', [TeilnehmerController::class, 'update'])->name('teilnehmer.update')->can('teilnehmer.update');
+    Route::get('/teilnehmer/{person}/lebenslauf', [ParticipantCvController::class, 'staffIndex'])->name('teilnehmer.resume.index')->middleware('module:participant_portal')->can('teilnehmer.update');
+    Route::post('/teilnehmer/{person}/lebenslauf/eintraege', [ParticipantCvController::class, 'store'])->name('teilnehmer.resume.entries.store')->middleware('module:participant_portal')->can('teilnehmer.update');
+    Route::post('/teilnehmer/{person}/lebenslauf/versionen', [ParticipantCvController::class, 'createVersion'])->name('teilnehmer.resume.versions.store')->middleware('module:participant_portal')->can('teilnehmer.update');
+    Route::put('/teilnehmer/lebenslauf/eintraege/{entry}', [ParticipantCvController::class, 'update'])->name('teilnehmer.resume.entries.update')->middleware('module:participant_portal')->can('teilnehmer.update');
+    Route::delete('/teilnehmer/lebenslauf/eintraege/{entry}', [ParticipantCvController::class, 'destroy'])->name('teilnehmer.resume.entries.destroy')->middleware('module:participant_portal')->can('teilnehmer.update');
+    Route::get('/teilnehmer/lebenslauf/versionen/{version}/download', [ParticipantCvController::class, 'download'])->name('teilnehmer.resume.versions.download')->middleware('module:participant_portal')->can('teilnehmer.update');
+    Route::get('/teilnehmer/lebenslauf/versionen/{version}/vorschau', [ParticipantCvController::class, 'print'])->name('teilnehmer.resume.versions.print')->middleware('module:participant_portal')->can('teilnehmer.update');
     Route::put('/teilnehmer/teilnahme/{participation}/aufnahmecheckliste/{item}', [IntakeChecklistController::class, 'updateCompletion'])->name('teilnehmer.intake-checklist.update')->can('teilnehmer.update');
     Route::put('/teilnehmer/teilnahme/{participation}/abschlusscheckliste/{item}', [ParticipationCompletionController::class, 'updateCompletion'])->name('teilnehmer.completion-checklist.update')->middleware('projectFeature:completion_management')->can('teilnehmer.update');
     Route::post('/teilnehmer/teilnahme/{participation}/abschlussbericht', [ParticipationCompletionController::class, 'submit'])->name('teilnehmer.completion-reports.submit')->middleware('projectFeature:completion_management')->can('teilnehmer.update');
@@ -525,6 +550,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::delete('/organisation/partner/entfernen/{id}', [PartnerController::class, 'destroy'])->name('partner.destroy');
     Route::put('/organisation/partner/edit/{id}', [PartnerController::class, 'update'])->name('partner.update');
     Route::get('/organisation/partner/ajax/fresh', [PartnerController::class, 'indexAjaxFresh'])->name('partner.indexAjaxFresh');
+    Route::post('/organisation/partner/{partner}/bop-usb-stick-brief', [PartnerController::class, 'exportBopUsbStickLetter'])->name('partner.bop-usb-stick-letter.export');
 
     //Kostenstelle
     Route::get('/kostenstelle', [KostenstelleController::class, 'index'])->name('kostenstelle.index');
