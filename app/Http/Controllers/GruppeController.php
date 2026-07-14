@@ -43,8 +43,8 @@ class GruppeController extends Controller
             ])
             ->where('projekt_id', $activeProject->id)
             ->when(!$canSeeAllGroups, fn ($query) => $query->where('personen_id', $this->userPersonId($user)))
-            ->orderBy('anfangsdatum')
-            ->orderBy('startzeit')
+            ->latest('created_at')
+            ->latest('id')
             ->get();
 
         $betreuer = $this->canAny($user, ['projekt.mitarbeiter.view.all', 'gruppe.view.all'])

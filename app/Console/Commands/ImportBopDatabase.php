@@ -66,6 +66,7 @@ class ImportBopDatabase extends Command
 
         $this->info("Importlauf {$summary['run_id']} erfolgreich abgeschlossen.");
         $this->line("Schulen verarbeitet: {$summary['schools_imported']}");
+        $this->line("Schul-Ansprechpartner verarbeitet: {$summary['school_contacts_imported']}");
         $this->line("Teilnehmer verarbeitet: {$summary['participants_imported']}");
         $this->line("Bereiche verarbeitet: {$summary['areas_imported']}");
         $this->line("Gruppen verarbeitet: {$summary['groups_imported']}");

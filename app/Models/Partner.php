@@ -67,6 +67,16 @@ class Partner extends Model
         return $this->hasMany( PersonenIstSchueler::class, 'schule_id', 'id');
     }
 
+    public function adresses()
+    {
+        return $this->morphMany(Adresse::class, 'model');
+    }
+
+    public function kontaktes()
+    {
+        return $this->morphMany(Kontakte::class, 'model');
+    }
+
 
 
 

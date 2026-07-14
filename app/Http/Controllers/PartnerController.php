@@ -46,9 +46,10 @@ class PartnerController extends Controller
         $pivotIds = $this->projektPartnerPivotIds($projektId);
 
         return [
-            'partnerschaftstypens' => function ($query) use ($pivotIds) {
-                $query->whereIn('partner_has_partnerschaftstypens.id', $pivotIds);
-            },
+            'partnerschaftstypens',
+            'adresses',
+            'kontaktes',
+            'kontaktes.kontakttyp',
             'ansprechpartners' => function ($query) use ($pivotIds) {
                 $query->whereIn('partner_has_partnerschaftstypens.id', $pivotIds);
             },
@@ -147,7 +148,7 @@ class PartnerController extends Controller
             ->where('projekt_has_partners.projekt_id', $userProjektAktiv)
             ->select('partners.*')
              ->distinct()
-            ->orderBy('id')
+            ->orderBy('partners.id')
             ->paginate(20);
 
         return response()->json([

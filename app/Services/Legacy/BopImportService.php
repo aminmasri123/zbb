@@ -102,6 +102,7 @@ class BopImportService
         $summary = array_merge($inspection, [
             'run_id' => $runId,
             'schools_imported' => 0,
+            'school_contacts_imported' => 0,
             'participants_imported' => 0,
             'areas_imported' => 0,
             'groups_imported' => 0,
@@ -149,7 +150,7 @@ class BopImportService
             DB::table('legacy_import_runs')->where('id', $runId)->update([
                 'status' => 'completed',
                 'read_count' => $readCount,
-                'imported_count' => $summary['schools_imported'] + $summary['participants_imported'] + $summary['areas_imported'] + $summary['groups_imported'] + $summary['attendance_rows_imported'] + $summary['selections_imported'] + $summary['assignments_imported'] + $summary['pa_ratings_imported'] + $summary['pa_exercise_results_imported'] + $summary['bo_ratings_imported'],
+                'imported_count' => $summary['schools_imported'] + $summary['school_contacts_imported'] + $summary['participants_imported'] + $summary['areas_imported'] + $summary['groups_imported'] + $summary['attendance_rows_imported'] + $summary['selections_imported'] + $summary['assignments_imported'] + $summary['pa_ratings_imported'] + $summary['pa_exercise_results_imported'] + $summary['bo_ratings_imported'],
                 'failed_count' => $summary['failed'],
                 'summary' => json_encode($summary, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
                 'finished_at' => now(),
@@ -185,12 +186,21 @@ class BopImportService
                     'updated_at' => now(),
                 ]);
             } else {
-                $partnerId = DB::table('partners')->insertGetId([
-                    'name' => $school->schule,
-                    'beschreibung' => 'Aus BOP migrierte Kooperationsschule',
-                    'created_at' => $school->created_at ?? now(),
-                    'updated_at' => $school->updated_at ?? now(),
-                ]);
+                $partnerId = DB::table('partners')->whereRaw('LOWER(name) = ?', [Str::lower($school->schule)])->value('id');
+                if ($partnerId) {
+                    DB::table('partners')->where('id', $partnerId)->update([
+                        'name' => $school->schule,
+                        'beschreibung' => 'Aus BOP migrierte Kooperationsschule',
+                        'updated_at' => $school->updated_at ?? now(),
+                    ]);
+                } else {
+                    $partnerId = DB::table('partners')->insertGetId([
+                        'name' => $school->schule,
+                        'beschreibung' => 'Aus BOP migrierte Kooperationsschule',
+                        'created_at' => $school->created_at ?? now(),
+                        'updated_at' => $school->updated_at ?? now(),
+                    ]);
+                }
             }
 
             DB::table('partner_has_partnerschaftstypens')->updateOrInsert(
@@ -212,6 +222,15 @@ class BopImportService
                 ]
             );
 
+            $this->importSchoolContactPerson(
+                $runId,
+                $school,
+                (int) $partnerId,
+                $partnershipTypeId,
+                $projectId
+            );
+            $summary['school_contacts_imported']++;
+
             $this->storeMapping($runId, 'schules', (string) $school->id, 'partners', $partnerId, $checksum);
             $this->storeSnapshot($runId, 'schules', (string) $school->id, $payload, 'partially_imported', 'BOP-spezifische Zeit- und Statusfelder bleiben im Snapshot erhalten.');
             $map[(int) $school->id] = $partnerId;
@@ -219,6 +238,98 @@ class BopImportService
         }
 
         return $map;
+    }
+
+    private function importSchoolContactPerson(int $runId, object $school, int $partnerId, int $partnershipTypeId, int $projectId): void
+    {
+        $payload = [
+            'schule_id' => $school->id,
+            'anrede' => $school->anrede,
+            'ansprechpartner' => $school->ansprechpartner,
+            'tel' => $school->tel,
+            'handy' => $school->handy,
+            'email' => $school->email,
+        ];
+        $personId = $this->mappedTargetId('schules_ansprechpartner', (string) $school->id, 'personens');
+        [$firstName, $lastName] = $this->splitName((string) $school->ansprechpartner);
+        $gender = match (Str::lower(trim((string) $school->anrede))) {
+            'frau' => 'w',
+            'herr' => 'm',
+            default => 'd',
+        };
+        $values = [
+            'vorname' => $firstName,
+            'nachname' => $lastName,
+            'geschlecht' => $gender,
+            'geburtsdatum' => null,
+            'aktiv' => true,
+            'typ' => 'ansprechpartner',
+            'updated_at' => $school->updated_at ?? now(),
+        ];
+
+        if ($personId) {
+            DB::table('personens')->where('id', $personId)->update($values);
+        } else {
+            $personId = DB::table('personens')->insertGetId($values + [
+                'created_at' => $school->created_at ?? now(),
+            ]);
+        }
+
+        $contactTypes = DB::table('kontakttypens')->pluck('id', 'name');
+        foreach ([
+            'Telefon' => $school->tel,
+            'Mobile' => $school->handy,
+            'Email' => $school->email,
+        ] as $type => $value) {
+            $value = trim((string) $value);
+            if ($value === '') {
+                continue;
+            }
+            $contactTypeId = $contactTypes[$type] ?? null;
+            if (! $contactTypeId) {
+                throw new RuntimeException("Kontakttyp {$type} fehlt in ZBB.");
+            }
+            DB::table('kontaktes')->updateOrInsert(
+                [
+                    'model_type' => 'App\\Models\\Personen',
+                    'model_id' => $personId,
+                    'kontakttyp_id' => $contactTypeId,
+                ],
+                [
+                    'wert' => Str::limit($value, 100, ''),
+                    'bemerkung' => 'Aus BOP-Schule migriert',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]
+            );
+        }
+
+        DB::table('partner_has_partnerschaftstypens')->updateOrInsert(
+            ['partner_id' => $partnerId, 'partnerschaftstypen_id' => $partnershipTypeId],
+            [
+                'ansprechpartner_id' => $personId,
+                'rolle' => 'Ansprechpartner',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
+        );
+        $partnerTypePivotId = DB::table('partner_has_partnerschaftstypens')
+            ->where('partner_id', $partnerId)
+            ->where('partnerschaftstypen_id', $partnershipTypeId)
+            ->where('ansprechpartner_id', $personId)
+            ->value('id');
+
+        DB::table('projekt_has_ansprechpartners')->updateOrInsert(
+            ['projekt_id' => $projectId, 'ansprechpartner_id' => $partnerTypePivotId],
+            [
+                'partnerschaftstypen_id' => $partnershipTypeId,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
+        );
+
+        $this->storeMapping($runId, 'schules_ansprechpartner', (string) $school->id, 'personens', (int) $personId, $this->checksum($payload));
+        $this->storeSnapshot($runId, 'schules_ansprechpartner', (string) $school->id, $payload, 'imported', null);
     }
 
     private function importParticipants(int $runId, int $projectId, int $locationId, array $schoolMap, array &$summary): array
@@ -330,7 +441,7 @@ class BopImportService
 
             DB::table('projekt_has_bereiches')->updateOrInsert(
                 ['projekt_id' => $projectId, 'bereich_id' => $areaId],
-                ['created_at' => now(), 'updated_at' => now()]
+                []
             );
             $this->storeMapping($runId, 'bereiches', (string) $area->id, 'bereiches', (int) $areaId, $this->checksum($payload));
             $this->storeSnapshot($runId, 'bereiches', (string) $area->id, $payload, 'imported', null);
@@ -425,6 +536,10 @@ class BopImportService
         if (! $presentStatusId || ! $absentStatusId || ! $plannedTimeId) {
             throw new RuntimeException('Anwesenheitsstatus oder Standardzeit 08:00-17:00 fehlt in ZBB.');
         }
+        $fallbackActorUserId = DB::table('users')->orderBy('id')->value('id');
+        if (! $fallbackActorUserId) {
+            throw new RuntimeException('ZBB enthaelt keinen Benutzer, der als technischer Akteur der Anwesenheitsmigration verwendet werden kann.');
+        }
 
         $query = $this->source()->table('gruppe_has_teilnehmer as membership')
             ->join('gruppes as legacy_group', 'legacy_group.id', '=', 'membership.gruppe_id')
@@ -442,6 +557,7 @@ class BopImportService
             if (! $personId || ! $groupId || ! $staffId) {
                 throw new RuntimeException("Unvollstaendiges Mapping fuer BOP-Gruppenzuordnung {$membership->id}.");
             }
+            $actorUserId = $this->legacyUserTargetUserId($membership->user_id) ?? (int) $fallbackActorUserId;
 
             $dates = $this->workdays($membership->anfangsdatum, $membership->enddatum, 3);
             foreach (['tag1', 'tag2', 'tag3'] as $index => $field) {
@@ -455,7 +571,7 @@ class BopImportService
                 DB::table('gruppe_has_personens')->updateOrInsert(
                     ['personen_id' => $personId, 'gruppe_id' => $groupId, 'tage_id' => $dayId],
                     [
-                        'user_id' => $staffId,
+                        'user_id' => $actorUserId,
                         'zeitgeplant_id' => $plannedTimeId,
                         'zeittatsaechlich_id' => (bool) $membership->{$field} ? $plannedTimeId : null,
                         'anwesenheitsstatuten_id' => $statusId,
@@ -602,7 +718,7 @@ class BopImportService
                 throw new RuntimeException("PA-Gruppe fehlt fuer BOP-Teilnehmer {$participant->id}.");
             }
 
-            foreach ([['auswertung_pas', $participant->auswertung_pa_id, 'fremd'], ['selbsteinschaetzungs', $participant->selbsteinschaetzung_id, 'selbst']] as [$table, $sourceId, $type]) {
+            foreach ([['auswertung_pas', $participant->auswertung_pa_id, 'anleiter'], ['selbsteinschaetzungs', $participant->selbsteinschaetzung_id, 'selbst']] as [$table, $sourceId, $type]) {
                 if (! $sourceId) {
                     continue;
                 }

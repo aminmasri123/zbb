@@ -14,6 +14,7 @@ const props = defineProps({
     bookings: Array,
     vehicles: Array,
     drivers: Array,
+    kostenstellen: Array,
 });
 
 const localBookings = ref([...props.bookings]);
@@ -27,6 +28,7 @@ const editId = ref(null);
 const emptyForm = () => ({
     dienstwagen_id: '',
     person_id: '',
+    kostenstelle_id: '',
     start_at: '',
     end_at: '',
     ziel: '',
@@ -68,6 +70,7 @@ function openEdit(record) {
     form.value = {
         dienstwagen_id: record.dienstwagen_id,
         person_id: record.person_id || '',
+        kostenstelle_id: record.kostenstelle_id || '',
         start_at: asDateTimeLocal(record.start_at),
         end_at: asDateTimeLocal(record.end_at),
         ziel: record.ziel || '',
@@ -142,6 +145,7 @@ function destroy(record) {
                             <th class="table-head">Zeitraum</th>
                             <th class="table-head">Fahrzeug</th>
                             <th class="table-head">Fahrer</th>
+                            <th class="table-head">Kostenstelle</th>
                             <th class="table-head">Ziel</th>
                             <th class="table-head">Zweck</th>
                             <th class="table-head">Status</th>
@@ -154,6 +158,7 @@ function destroy(record) {
                             <td class="table-cell">{{ formatDateTime(record.start_at) }}<br>{{ formatDateTime(record.end_at) }}</td>
                             <td class="table-cell font-semibold">{{ record.dienstwagen?.kennzeichen }}</td>
                             <td class="table-cell">{{ record.person?.nachname || '-' }} {{ record.person?.vorname || '' }}</td>
+                            <td class="table-cell">{{ record.kostenstelle?.kostenstelle || '-' }}</td>
                             <td class="table-cell">{{ record.ziel || '-' }}</td>
                             <td class="table-cell">{{ record.zweck }}</td>
                             <td class="table-cell">{{ record.status }}</td>
@@ -164,7 +169,7 @@ function destroy(record) {
                             </td>
                         </tr>
                         <tr v-if="localBookings.length === 0">
-                            <td colspan="8" class="table-cell text-center text-gray-500">Keine Buchungen vorhanden.</td>
+                            <td colspan="9" class="table-cell text-center text-gray-500">Keine Buchungen vorhanden.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -181,6 +186,11 @@ function destroy(record) {
                 <FloatLabel variant="on">
                     <Select v-model="form.person_id" :options="drivers.map(d => ({ label: `${d.nachname} ${d.vorname}`, value: d.id }))" optionLabel="label" optionValue="value" class="w-full" />
                     <label>Fahrer</label>
+                </FloatLabel>
+
+                <FloatLabel variant="on">
+                    <Select v-model="form.kostenstelle_id" :options="kostenstellen.map(k => ({ label: k.kostenstelle, value: k.id }))" optionLabel="label" optionValue="value" showClear filter class="w-full" />
+                    <label>Kostenstelle</label>
                 </FloatLabel>
 
                 <div>

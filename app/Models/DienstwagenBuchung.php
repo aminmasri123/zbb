@@ -14,6 +14,7 @@ class DienstwagenBuchung extends Model
     protected $fillable = [
         'dienstwagen_id',
         'person_id',
+        'kostenstelle_id',
         'user_id',
         'start_at',
         'end_at',
@@ -38,6 +39,11 @@ class DienstwagenBuchung extends Model
     public function person()
     {
         return $this->belongsTo(Personen::class, 'person_id');
+    }
+
+    public function kostenstelle()
+    {
+        return $this->belongsTo(Kostenstelle::class);
     }
 
     public function user()

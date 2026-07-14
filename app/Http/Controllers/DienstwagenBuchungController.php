@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Dienstwagen;
 use App\Models\DienstwagenBuchung;
+use App\Models\Kostenstelle;
 use App\Models\Personen;
 use App\Services\DienstwagenVerlaufService;
 use Carbon\Carbon;
@@ -22,11 +23,12 @@ class DienstwagenBuchungController extends Controller
     public function index()
     {
         return Inertia::render('Dienstwagen/Buchungen/Index', [
-            'bookings' => DienstwagenBuchung::with(['dienstwagen', 'person', 'user'])
+            'bookings' => DienstwagenBuchung::with(['dienstwagen', 'person', 'kostenstelle', 'user'])
                 ->orderBy('start_at')
                 ->get(),
             'vehicles' => Dienstwagen::with('standort')->orderBy('kennzeichen')->get(),
             'drivers' => Personen::orderBy('nachname')->orderBy('vorname')->get(),
+            'kostenstellen' => Kostenstelle::orderBy('kostenstelle')->get(['id', 'kostenstelle']),
         ]);
     }
 
@@ -36,7 +38,7 @@ class DienstwagenBuchungController extends Controller
         $this->ensureNoCollision($data);
 
         $data['user_id'] = $request->user()?->id;
-        $booking = DienstwagenBuchung::create($data)->load(['dienstwagen', 'person', 'user']);
+        $booking = DienstwagenBuchung::create($data)->load(['dienstwagen', 'person', 'kostenstelle', 'user']);
 
         app(DienstwagenVerlaufService::class)->record(
             $booking->dienstwagen,
@@ -60,7 +62,7 @@ class DienstwagenBuchungController extends Controller
         $booking->fill($data);
         $dirty = $booking->getDirty();
         $booking->save();
-        $booking->load(['dienstwagen', 'person', 'user']);
+        $booking->load(['dienstwagen', 'person', 'kostenstelle', 'user']);
 
         if ($booking->end_km && $booking->dienstwagen && $booking->end_km > $booking->dienstwagen->kilometerstand) {
             $booking->dienstwagen->update(['kilometerstand' => $booking->end_km]);
@@ -102,6 +104,7 @@ class DienstwagenBuchungController extends Controller
         $data = $request->validate([
             'dienstwagen_id' => ['required', 'integer', 'exists:dienstwagens,id'],
             'person_id' => ['nullable', 'integer', 'exists:personens,id'],
+            'kostenstelle_id' => ['nullable', 'integer', 'exists:kostenstelles,id'],
             'start_at' => ['required', 'date'],
             'end_at' => ['required', 'date', 'after:start_at'],
             'ziel' => ['nullable', 'string', 'max:255'],

@@ -30,7 +30,7 @@
             </li>
 
             <!-- Dienstwagen Submenu -->
-            <li v-if="moduleEnabled('vehicle_management') && canAny(['dienstwagen.index', 'dienstwagen.store', 'dienstwagen.fahrtenbuch.index', 'dienstwagen.wartung.index', 'dienstwagen.buchungen.index', 'dienstwagen.meldungen.index', 'dienstwagen.reports.index'])" class="submenu">
+            <li v-if="moduleEnabled('vehicle_management') && canAny(['dienstwagen.index', 'dienstwagen.store', 'dienstwagen.fahrtenbuch.index', 'dienstwagen.wartung.index', 'dienstwagen.kosten.index', 'dienstwagen.kosten.store', 'dienstwagen.buchungen.index', 'dienstwagen.meldungen.index', 'dienstwagen.reports.index'])" class="submenu">
                 <a href="#" @click.prevent="toggleMenu('dienstwagen')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                     <i class="la la-car la-lg mr-2"></i>
                     <span v-if="!displayHideTextSidebar">{{$t('Dienstwagen')}}</span>
@@ -43,6 +43,7 @@
                     <li v-if="can('dienstwagen.meldungen.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dienstwagen.meldungen.index')">Meldungen</Link></li>
                     <li v-if="can('dienstwagen.fahrtenbuch.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dienstwagen.fahrtenbuch.index')">{{$t('Fahrtenbuch')}}</Link></li>
                     <li v-if="can('dienstwagen.wartung.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dienstwagen.wartung.index')">{{$t('Wartungen')}}</Link></li>
+                    <li v-if="can('dienstwagen.kosten.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dienstwagen.kosten.index')">{{$t('Kosten')}}</Link></li>
                     <li v-if="can('dienstwagen.reports.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dienstwagen.reports.index')">{{$t('Reports')}}</Link></li>
                 </ul>
             </li>

@@ -1,6 +1,6 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { computed, ref, defineProps, watch } from 'vue';
+import { computed, ref, defineProps, watch, onMounted, onBeforeUnmount } from 'vue';
 import Swal from 'sweetalert2';
 import { Link, Head } from '@inertiajs/vue3';
 import axios from 'axios';
@@ -48,9 +48,8 @@ let isModalEditOpen = ref(false);
 let partnerToEdit = ref(null);
 let activeModal = ref(null);
 let modalData = ref({ jahr: null, teil: null, klasse: null, partnerId: null, klassen: [], teilnehmerCount: 0 });
-const normalizePartner = (partner) => ({
-    ...partner,
-    ansprechpartners: Object.values(
+const normalizePartner = (partner) => {
+    const ansprechpartners = Object.values(
         (partner.ansprechpartners ?? []).reduce((persons, person) => {
             if (!persons[person.id]) {
                 persons[person.id] = { ...person };
@@ -58,10 +57,29 @@ const normalizePartner = (partner) => ({
 
             return persons;
         }, {})
-    ),
-});
+    );
+
+    if (ansprechpartners.length === 0) {
+        ansprechpartners.push({
+            id: `partner-${partner.id}`,
+            vorname: '',
+            nachname: '',
+            adresses: partner.adresses ?? [],
+            kontaktes: partner.kontaktes ?? [],
+            partner_typ: partner.partnerschaftstypens ?? [],
+        });
+    }
+
+    return { ...partner, ansprechpartners };
+};
 
 let localPartners = ref([...props.partners.data].map(normalizePartner));
+watch(
+    () => props.partners.data,
+    (partners) => {
+        localPartners.value = [...(partners ?? [])].map(normalizePartner);
+    }
+);
 const selectedNode = ref(null);
 // Dropdowns
 const openDropdowns = ref({});
@@ -72,14 +90,25 @@ let hausordnungForm = ref({
 // -----------------------------
 // Dropdown-Funktionen
 // -----------------------------
-function toggleDropdown(jahr, teil) {
-    const key = `${jahr}-${teil}`;
-    openDropdowns.value[key] = !openDropdowns.value[key];
+function dropdownKey(partnerId, jahr, teil) {
+    return `${partnerId}-${jahr}-${teil}`;
 }
 
-function isDropdownOpen(jahr, teil) {
-    return openDropdowns.value[`${jahr}-${teil}`] || false;
+function toggleDropdown(partnerId, jahr, teil) {
+    const key = dropdownKey(partnerId, jahr, teil);
+    openDropdowns.value = openDropdowns.value[key] ? {} : { [key]: true };
 }
+
+function isDropdownOpen(partnerId, jahr, teil) {
+    return openDropdowns.value[dropdownKey(partnerId, jahr, teil)] || false;
+}
+
+function closeDropdowns() {
+    openDropdowns.value = {};
+}
+
+onMounted(() => document.addEventListener('click', closeDropdowns));
+onBeforeUnmount(() => document.removeEventListener('click', closeDropdowns));
 
 const openMenus = ref({});
 
@@ -110,6 +139,14 @@ function getSchuelerCount(jahr, teil, partner) {
             .map(s => s.personen_id ?? s.person_id ?? s.id)
             .filter(Boolean)
     ).size;
+}
+
+function getSchuljahre(partner) {
+    return [...new Set(
+        (partner.schueler ?? [])
+            .map(schueler => schueler.schuljahr)
+            .filter(jahr => jahr !== null && jahr !== undefined && jahr !== '')
+    )].sort((jahrA, jahrB) => String(jahrB).localeCompare(String(jahrA), 'de', { numeric: true }));
 }
 
 // -----------------------------
@@ -371,8 +408,7 @@ const updatePartnerAPI = async (form) => {
                                     p.partner_typ?.some(t => t.bezeichnung === 'Kooperationsschule')
                                 )">
 
-                                    <div v-for="jahr in [...new Set(partner.schueler.map(s => s.schuljahr))]"
-                                        :key="jahr">
+                                    <div v-for="jahr in getSchuljahre(partner)" :key="jahr">
                                         <div class="font-bold text-xs">{{ jahr }}</div>
 
                                         <div class="flex gap-1">
@@ -383,12 +419,12 @@ const updatePartnerAPI = async (form) => {
                                             )]" :key="teil" class="text-xs">
 
                                                 <!-- Dropdown -->
-                                                <div class="dropdown dropdown-action inline-block relative ">
-                                                    <button @click="toggleDropdown(jahr, teil)"
+                                                <div class="dropdown dropdown-action inline-block relative" @click.stop>
+                                                    <button @click="toggleDropdown(partner.id, jahr, teil)"
                                                         class="dropdown-toggle py-1 rounded text-xs w-full">
                                                         {{ teil }}
                                                     </button>
-                                                    <div v-show="isDropdownOpen(jahr, teil)"
+                                                    <div v-show="isDropdownOpen(partner.id, jahr, teil)"
                                                         class="dropdown-menu absolute mt-1  bg-white border rounded text-xs shadow-lg z-50">
 
                                                         <!-- Links analog Blade -->
