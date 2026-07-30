@@ -55,9 +55,11 @@ class UserController extends Controller
         $authUser = auth()->user();
         $teamScope = RoleDataAccessSetting::scopeForUser($authUser, 'team');
 
-        $query = User::query()
-            ->select('users.*') // wichtig für Pagination!
-            ->leftJoin('personens', 'users.person_id', '=', 'personens.id')
+        $query = Personen::query()
+            ->select('personens.*')
+            ->leftJoin('users', 'users.person_id', '=', 'personens.id')
+            ->mitarbeiter()
+            ->aktiv()
             ->when($search, function ($query, $search) {
                 $query->where(function ($query) use ($search) {
                     $query
@@ -67,7 +69,7 @@ class UserController extends Controller
                         ->orWhere('users.email', 'like', "%{$search}%");
                 });
             })
-            ->with(['projekte', 'person', 'roles:name,color']);
+            ->with(['projekte', 'user.roles:id,name,color']);
 
         // Zugriffsbeschränkung
         $this->applyTeamVisibility($query, $authUser, $teamScope);
@@ -82,13 +84,34 @@ class UserController extends Controller
         // Sortierung (JOIN beachten!)
         if (in_array($sort, ['vorname', 'nachname'])) {
             $query->orderBy("personens.$sort", $direction);
-        } else {
+        } elseif (in_array($sort, ['username', 'email'])) {
             $query->orderBy("users.$sort", $direction);
+        } else {
+            $query->orderBy('personens.id', $direction);
         }
         $assignableProjects = $this->assignableProjectsFor($authUser);
+        $users = $query->paginate(30)->withQueryString()->through(function (Personen $person): array {
+            $account = $person->user;
+
+            return [
+                'id' => $account?->id,
+                'display_id' => $person->id,
+                'person_id' => $person->id,
+                'username' => $account?->username,
+                'email' => $account?->email,
+                'has_login' => $account !== null,
+                'person' => [
+                    'id' => $person->id,
+                    'vorname' => $person->vorname,
+                    'nachname' => $person->nachname,
+                ],
+                'roles' => $account?->roles?->values() ?? [],
+                'projekte' => $person->projekte->values(),
+            ];
+        });
 
         return Inertia::render('User/Index', [
-            'users'        => $query->paginate(30)->withQueryString(),
+            'users'        => $users,
             'authProjekte' => $assignableProjects,
             'alleProjekte' => $assignableProjects,
             'standorte'    => Standort::orderBy('name')->get(['id', 'name']),

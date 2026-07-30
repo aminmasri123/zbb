@@ -278,11 +278,13 @@ const handleProjektZuweisungRemoved = ({ user_id, projekt_id }) => {
                 </thead>
 
                 <tbody>
-                    <tr v-for="user in filteredUsers" :key="user.id" class="bg-white border-b">
-                        <td class="px-6 py-3">{{ user.id }}</td>
+                    <tr v-for="user in filteredUsers" :key="user.person_id" class="bg-white border-b">
+                        <td class="px-6 py-3">{{ user.display_id || user.person_id }}</td>
                         <td class="px-6 py-3">{{ user.person?.vorname}}</td>
                         <td class="px-6 py-3">{{ user.person?.nachname }}</td>
-                        <td class="px-6 py-3">{{ user.email }}</td>
+                        <td class="px-6 py-3">
+                            {{ user.email || 'Kein Login-Konto' }}
+                        </td>
 
                         <td class="px-6 py-3">
                             <span
@@ -309,7 +311,7 @@ const handleProjektZuweisungRemoved = ({ user_id, projekt_id }) => {
                                     </button>
                                 </template>
                                 <template #content>
-                                    <span v-if="can('benutzer.destroy')"
+                                    <span v-if="user.has_login && can('benutzer.destroy')"
                                           class="block px-4 py-2 hover:bg-gray-100 cursor-pointer"
                                           @click="confirmDelete(user)">
                                         Löschen
@@ -321,7 +323,7 @@ const handleProjektZuweisungRemoved = ({ user_id, projekt_id }) => {
                                     >
                                         Projekte zuweisen
                                     </span>
-                                    <Link v-if="can('benutzer.update')" :href="route('user.edit', user.id)" class="block px-4 py-2 hover:bg-gray-100">
+                                    <Link v-if="user.has_login && can('benutzer.update')" :href="route('user.edit', user.id)" class="block px-4 py-2 hover:bg-gray-100">
                                         Bearbeiten
                                     </Link>
                                 </template>

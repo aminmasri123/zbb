@@ -5,6 +5,7 @@ namespace App\Services\Legacy;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
@@ -14,7 +15,7 @@ class BopImportService
 {
     public const SOURCE = 'bop';
 
-    public const MAPPING_VERSION = '2026-07-30.1';
+    public const MAPPING_VERSION = '2026-07-30.3';
 
     public const LOCATION_NAME = 'Ernst-Abbe-9';
 
@@ -106,6 +107,7 @@ class BopImportService
             'participants_imported' => 0,
             'areas_imported' => 0,
             'staff_imported' => 0,
+            'staff_accounts_imported' => 0,
             'groups_imported' => 0,
             'attendance_rows_imported' => 0,
             'attendance_conflicts' => 0,
@@ -156,7 +158,7 @@ class BopImportService
             DB::table('legacy_import_runs')->where('id', $runId)->update([
                 'status' => 'completed',
                 'read_count' => $readCount,
-                'imported_count' => $summary['schools_imported'] + $summary['school_contacts_imported'] + $summary['participants_imported'] + $summary['areas_imported'] + $summary['staff_imported'] + $summary['groups_imported'] + $summary['attendance_rows_imported'] + $summary['selections_imported'] + $summary['assignments_imported'] + $summary['pa_ratings_imported'] + $summary['pa_exercise_results_imported'] + $summary['bo_ratings_imported'],
+                'imported_count' => $summary['schools_imported'] + $summary['school_contacts_imported'] + $summary['participants_imported'] + $summary['areas_imported'] + $summary['staff_imported'] + $summary['staff_accounts_imported'] + $summary['groups_imported'] + $summary['attendance_rows_imported'] + $summary['selections_imported'] + $summary['assignments_imported'] + $summary['pa_ratings_imported'] + $summary['pa_exercise_results_imported'] + $summary['bo_ratings_imported'],
                 'failed_count' => $summary['failed'],
                 'summary' => json_encode($summary, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
                 'finished_at' => now(),
@@ -468,11 +470,19 @@ class BopImportService
 
         foreach ($this->source()->table('users')->orderBy('id')->cursor() as $legacyUser) {
             $payload = (array) $legacyUser;
+            [$firstName, $lastName] = $this->splitName($legacyUser->name);
+            $previousMappedPersonId = $this->mappedTargetId('users', (string) $legacyUser->id, 'personens');
             $personId = DB::table('users')->whereRaw('LOWER(email) = ?', [Str::lower($legacyUser->email)])->value('person_id');
-            $personId ??= $this->mappedTargetId('users', (string) $legacyUser->id, 'personens');
+            $personId ??= DB::table('personens')
+                ->where('typ', 'mitarbeiter')
+                ->whereRaw('LOWER(TRIM(vorname)) = ?', [Str::lower(trim($firstName))])
+                ->whereRaw('LOWER(TRIM(nachname)) = ?', [Str::lower(trim($lastName))])
+                ->orderByRaw('EXISTS (SELECT 1 FROM users WHERE users.person_id = personens.id) DESC')
+                ->orderBy('id')
+                ->value('id');
+            $personId ??= $previousMappedPersonId;
 
             if (! $personId) {
-                [$firstName, $lastName] = $this->splitName($legacyUser->name);
                 $personId = DB::table('personens')->insertGetId([
                     'vorname' => $firstName,
                     'nachname' => $lastName,
@@ -482,6 +492,15 @@ class BopImportService
                     'typ' => 'mitarbeiter',
                     'created_at' => $legacyUser->created_at ?? now(),
                     'updated_at' => $legacyUser->updated_at ?? now(),
+                ]);
+            }
+
+            if ($previousMappedPersonId
+                && (int) $previousMappedPersonId !== (int) $personId
+                && ! DB::table('users')->where('person_id', $previousMappedPersonId)->exists()) {
+                DB::table('personens')->where('id', $previousMappedPersonId)->update([
+                    'aktiv' => false,
+                    'updated_at' => now(),
                 ]);
             }
 
@@ -515,8 +534,59 @@ class BopImportService
                 ]
             );
 
+            $targetUserId = DB::table('users')->where('person_id', $personId)->value('id');
+            $targetUserId ??= DB::table('users')
+                ->whereRaw('LOWER(email) = ?', [Str::lower((string) $legacyUser->email)])
+                ->value('id');
+
+            if (! $targetUserId && filter_var($legacyUser->email, FILTER_VALIDATE_EMAIL)) {
+                $legacyPassword = (string) ($legacyUser->password ?? '');
+                $password = preg_match('/^\$2[ayb]\$.{56}$/', $legacyPassword)
+                    ? $legacyPassword
+                    : Hash::make(Str::random(40));
+
+                $targetUserId = DB::table('users')->insertGetId([
+                    'person_id' => $personId,
+                    'username' => mb_substr(
+                        (string) ($legacyUser->name ?: Str::before($legacyUser->email, '@')),
+                        0,
+                        50
+                    ),
+                    'email' => Str::lower($legacyUser->email),
+                    'email_verified_at' => now(),
+                    'password' => $password,
+                    'lang' => 'de',
+                    'current_team_id' => $projectId,
+                    'default_projekt_id' => $projectId,
+                    'created_at' => $legacyUser->created_at ?? now(),
+                    'updated_at' => now(),
+                ]);
+
+                $defaultRoleId = DB::table('roles')
+                    ->where('name', 'Anleiter')
+                    ->where('guard_name', 'web')
+                    ->value('id');
+
+                if ($defaultRoleId) {
+                    DB::table('model_has_roles')->insertOrIgnore([
+                        'role_id' => $defaultRoleId,
+                        'model_type' => 'App\\Models\\User',
+                        'model_id' => $targetUserId,
+                    ]);
+                }
+
+                $summary['staff_accounts_imported']++;
+            } elseif ($targetUserId) {
+                DB::table('users')->where('id', $targetUserId)->update([
+                    'person_id' => $personId,
+                    'current_team_id' => $projectId,
+                    'default_projekt_id' => $projectId,
+                    'updated_at' => now(),
+                ]);
+            }
+
             $this->storeMapping($runId, 'users', (string) $legacyUser->id, 'personens', (int) $personId, $this->checksum($payload));
-            $this->storeSnapshot($runId, 'users', (string) $legacyUser->id, $payload, 'partially_imported', 'Als aktiver BOP-Mitarbeiter mit Projekt- und Standortzuordnung importiert; ein Login wird nur mit einem bereits vorhandenen ZBB-Benutzerkonto verknuepft.');
+            $this->storeSnapshot($runId, 'users', (string) $legacyUser->id, $payload, 'imported', 'Als aktiver BOP-Mitarbeiter mit ZBB-Konto sowie Projekt- und Standortzuordnung importiert. Nicht kompatible Legacy-Passwoerter muessen zurueckgesetzt werden.');
             $map[(int) $legacyUser->id] = (int) $personId;
             $summary['staff_imported']++;
         }

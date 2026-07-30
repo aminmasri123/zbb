@@ -70,6 +70,7 @@ class ImportBopDatabase extends Command
         $this->line("Teilnehmer verarbeitet: {$summary['participants_imported']}");
         $this->line("Bereiche verarbeitet: {$summary['areas_imported']}");
         $this->line("BOP-Mitarbeiter verarbeitet: {$summary['staff_imported']}");
+        $this->line("Neue BOP-Benutzerkonten: {$summary['staff_accounts_imported']}");
         $this->line("Gruppen verarbeitet: {$summary['groups_imported']}");
         $this->line("Anwesenheitszeilen verarbeitet: {$summary['attendance_rows_imported']}");
         $this->line("Anwesenheitskonflikte: {$summary['attendance_conflicts']}");
