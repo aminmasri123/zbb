@@ -135,7 +135,12 @@ class BopImportService
                     ->whereRaw('LOWER(name) = ?', [Str::lower(self::PROJECT_NAME)])
                     ->value('id');
 
-                $schoolMap = $this->importSchools($runId, (int) $partnershipTypeId, $summary);
+                $schoolMap = $this->importSchools(
+                    $runId,
+                    (int) $partnershipTypeId,
+                    (int) $projectId,
+                    $summary
+                );
                 $participantMaps = $this->importParticipants($runId, (int) $projectId, (int) $locationId, $schoolMap, $summary);
                 $areaMap = $this->importAreas($runId, (int) $projectId, $summary);
                 $staffMap = $this->importLegacyStaff($runId);
@@ -171,7 +176,7 @@ class BopImportService
         return $summary;
     }
 
-    private function importSchools(int $runId, int $partnershipTypeId, array &$summary): array
+    private function importSchools(int $runId, int $partnershipTypeId, int $projectId, array &$summary): array
     {
         $map = [];
 
@@ -205,6 +210,10 @@ class BopImportService
 
             DB::table('partner_has_partnerschaftstypens')->updateOrInsert(
                 ['partner_id' => $partnerId, 'partnerschaftstypen_id' => $partnershipTypeId],
+                ['updated_at' => now(), 'created_at' => now()]
+            );
+            DB::table('projekt_has_partners')->updateOrInsert(
+                ['projekt_id' => $projectId, 'partner_id' => $partnerId],
                 ['updated_at' => now(), 'created_at' => now()]
             );
 
