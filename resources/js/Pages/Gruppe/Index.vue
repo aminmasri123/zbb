@@ -176,9 +176,14 @@ watch(search, () => {
                     <div class="flex items-center gap-4">
                     <Link
                         :href="route('gruppeHasTeilnehmer.show', gruppe.id)"
-                        class="font-semibold text-gray-800 hover:text-zbb transition-colors"
+                        class="flex items-center gap-2 font-semibold text-gray-800 hover:text-zbb transition-colors"
                     >
-                        {{ gruppe.bereich.name || '– ohne Namen –' }}
+                        <i class="la la-user text-lg text-zbb"></i>
+                        <span>
+                            {{ gruppe.betreuer?.vorname }} {{ gruppe.betreuer?.nachname }}
+                            <span class="mx-1 text-gray-400">—</span>
+                            {{ gruppe.bereich?.name || '– ohne Bereich –' }}
+                        </span>
                     </Link>
 
                     <!-- Gruppentyp-Badge -->
@@ -216,10 +221,6 @@ watch(search, () => {
                     <div v-if="gruppe.partner" class="flex items-center gap-1">
                         <i class="la la-school la-2x text-zbb/70"></i>
                         <span>Bezug: {{ gruppe.partner.name }}</span>
-                    </div>
-                    <div class="flex items-center gap-1">
-                        <i class="la la-user la-2x text-zbb/70"></i>
-                        <span>{{ gruppe.betreuer?.vorname }} {{ gruppe.betreuer?.nachname }}</span>
                     </div>
                     </div>
                 </div>
