@@ -2,12 +2,8 @@
 
 namespace Database\Seeders;
 
-use App\Models\Personen;
 use App\Models\Projekt;
-use App\Models\ProjektHasPersonen;
 use App\Models\Standort;
-use App\Models\StandortHasPersonen;
-use Faker\Factory as Faker;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -872,32 +868,6 @@ class UserSeeder extends Seeder
             ],
 
         ]);
-
-        // Teilnehmer erstellen und mit Projekten verknüpfen
-        $faker = Faker::create();
-        // Anzahl der Benutzer, die erstellt werden sollen
-        $numberOfUsers = 50;
-        for ($i = 0; $i < $numberOfUsers; $i++) {
-            $teilnehmer = Personen::create([
-                'vorname' => $faker->firstName,
-                'nachname' => $faker->lastName(),
-                'geschlecht' => $faker->randomElement(['m', 'd', 'w']),
-                'geburtsdatum' => '2000-10-10',
-                'typ' => 'teilnehmer',
-            ]);
-
-            // Projekt-IDs und Teilnehmer-IDs müssen aus DB kommen
-            ProjektHasPersonen::create([
-                'projekt_id' => $faker->randomElement(Projekt::pluck('id')->toArray()),
-                'personen_id' => $teilnehmer->id, // gerade erstellter Teilnehmer
-                'standort_id' => '1',
-            ]);
-            StandortHasPersonen::create([
-                'standort_id' => $faker->randomElement(Standort::pluck('id')->toArray()),
-                'personen_id' => $teilnehmer->id, // gerade erstellter Teilnehmer
-
-            ]);
-        }
 
     }
 
