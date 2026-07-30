@@ -163,10 +163,12 @@ const groupProjects = (projekte, standorte) => {
                         <td class="px-6 py-3">{{ user.id }}</td>
                         <td class="px-6 py-3">{{ user?.nachname }}</td>
                         <td class="px-6 py-3">{{ user?.vorname}}</td>
-                        <td class="px-6 py-3">{{ user?.user.email }} </td>
+                        <td class="px-6 py-3">
+                            {{ user?.user?.email || 'Kein Login-Konto' }}
+                        </td>
 
                         <td class="px-6 py-3">
-                            <span v-for="rolle in user?.user.roles">
+                            <span v-for="rolle in (user?.user?.roles || [])" :key="rolle.id">
                                 {{ rolle?.name}}
                             </span>
 
