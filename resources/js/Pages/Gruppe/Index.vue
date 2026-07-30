@@ -114,6 +114,7 @@ const applySearchFilter = () => {
       g.betreuer?.vorname?.toLowerCase().includes(q) ||
       g.betreuer?.nachname?.toLowerCase().includes(q) ||
       g.raum?.name?.toLowerCase().includes(q) ||
+      g.partner?.name?.toLowerCase().includes(q) ||
       g.standort?.name?.toLowerCase().includes(q) ||
       g.externer_ort?.toLowerCase().includes(q)
     );
@@ -212,6 +213,10 @@ watch(search, () => {
                         <i class="la la-map-marker la-2x text-zbb/70"></i>
                         <span>{{ gruppe.standort?.name || gruppe.raum?.standort?.name || 'Kein Standort' }}</span>
                     </div>
+                    <div v-if="gruppe.partner" class="flex items-center gap-1">
+                        <i class="la la-school la-2x text-zbb/70"></i>
+                        <span>Bezug: {{ gruppe.partner.name }}</span>
+                    </div>
                     <div class="flex items-center gap-1">
                         <i class="la la-user la-2x text-zbb/70"></i>
                         <span>{{ gruppe.betreuer?.vorname }} {{ gruppe.betreuer?.nachname }}</span>
@@ -262,6 +267,7 @@ watch(search, () => {
         <ModalEdit :visible="isModalEditOpen"
                             :bereiche="props.projekt.bereiche"
                             :personal="props.betreuer"
+                            :partners="props.projekt.partners || []"
                             :raeume="props.projekt.raeume"
                             :standorte="props.projekt.standorte"
                             :toEdit="gruppeToEdit"

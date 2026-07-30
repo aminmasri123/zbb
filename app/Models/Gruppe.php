@@ -8,6 +8,7 @@ use App\Models\Projekt;
 use App\Models\Personen;
 use App\Models\Zeitraum;
 use App\Models\Standort;
+use App\Models\Partner;
 use App\Models\RaumMeldung;
 use App\Models\GruppeHasPersonen;
 use App\Models\Klassenbuch;
@@ -25,6 +26,7 @@ class Gruppe extends Model
         'raum_id',
         'bereich_id',
         'projekt_id',
+        'partner_id',
         'standort_id',
         'ort_typ',
         'anfangsdatum',
@@ -67,6 +69,11 @@ class Gruppe extends Model
     public function standort()
     {
         return $this->belongsTo(Standort::class);
+    }
+
+    public function partner()
+    {
+        return $this->belongsTo(Partner::class);
     }
 
     public function raumMeldungen()

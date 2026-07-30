@@ -597,8 +597,6 @@ class BopImportService
     private function importGroups(int $runId, int $projectId, int $locationId, array $areaMap, array $staffMap, array $schoolMap, array &$summary): array
     {
         $map = [];
-        $schools = $this->source()->table('schules')->pluck('schule', 'id');
-
         foreach ($this->source()->table('gruppes')->orderBy('id')->cursor() as $group) {
             $payload = (array) $group;
             $groupId = $this->mappedTargetId('gruppes', (string) $group->id, 'gruppes');
@@ -612,10 +610,11 @@ class BopImportService
                 'personen_id' => $staffId,
                 'bereich_id' => $areaId,
                 'projekt_id' => $projectId,
+                'partner_id' => $schoolMap[(int) $group->schule_id],
                 'standort_id' => $locationId,
                 'ort_typ' => 'extern',
                 'raum_id' => null,
-                'externer_ort' => Str::limit((string) ($schools[(int) $group->schule_id] ?? self::LOCATION_NAME), 255, ''),
+                'externer_ort' => self::LOCATION_NAME,
                 'anfangsdatum' => $group->anfangsdatum,
                 'enddatum' => $group->enddatum,
                 'startzeit' => '08:00:00',
@@ -631,7 +630,7 @@ class BopImportService
             }
 
             $this->storeMapping($runId, 'gruppes', (string) $group->id, 'gruppes', (int) $groupId, $this->checksum($payload));
-            $this->storeSnapshot($runId, 'gruppes', (string) $group->id, $payload, 'imported', 'Schulbezug ist als externer Ort und ueber Teilnehmer-Schulhistorie erhalten.');
+            $this->storeSnapshot($runId, 'gruppes', (string) $group->id, $payload, 'imported', 'Schulbezug ist direkt als Partner der Gruppe gespeichert.');
             $map[(int) $group->id] = (int) $groupId;
             $summary['groups_imported']++;
         }

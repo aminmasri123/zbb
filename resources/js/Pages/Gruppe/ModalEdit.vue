@@ -12,6 +12,10 @@ const props = defineProps({
   toEdit: Object,
   bereiche: Array,
   personal: Array,
+  partners: {
+    type: Array,
+    default: () => [],
+  },
   raeume: {
     type: Array,
     default: () => [],
@@ -27,6 +31,7 @@ let form = ref({
   id: null,
   bereich: '',
   betreuer: '',
+  partner_id: null,
   ort_typ: 'raum',
   raum_id: null,
   standort_id: null,
@@ -62,6 +67,7 @@ watch(
         id: val.id,
         bereich: val.bereich?.id || val.bereich,
         betreuer: val.betreuer?.id || val.betreuer,
+        partner_id: val.partner_id || val.partner?.id || null,
         ort_typ: val.ort_typ || (val.raum_id ? 'raum' : 'extern'),
         raum_id: val.raum_id || val.raum?.id || null,
         standort_id: val.standort_id || val.standort?.id || val.raum?.standort_id || null,
@@ -159,6 +165,19 @@ const save = async () => {
           <label>Betreuer</label>
         </FloatLabel>
 
+        <FloatLabel variant="on" class="col-span-2">
+          <Select
+            v-model="form.partner_id"
+            :options="partners"
+            optionValue="id"
+            optionLabel="name"
+            showClear
+            filter
+            class="w-full"
+          />
+          <label>Bezug / Schule</label>
+        </FloatLabel>
+
         <div class="col-span-2 grid grid-cols-2 gap-3">
           <label class="cursor-pointer">
             <input type="radio" value="raum" v-model="form.ort_typ" class="sr-only" />
@@ -185,10 +204,18 @@ const save = async () => {
           <label>Raum</label>
         </FloatLabel>
 
-        <FloatLabel v-else variant="on" class="col-span-2">
-          <input v-model="form.externer_ort" type="text" class="w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb" />
-          <label>Externer Ort / Ausflug</label>
-        </FloatLabel>
+        <div v-else class="col-span-2">
+          <label for="gruppe-externer-ort" class="mb-1 block text-sm text-gray-600">
+            Externer Ort / Ausflug
+          </label>
+          <input
+            id="gruppe-externer-ort"
+            v-model="form.externer_ort"
+            type="text"
+            placeholder="Ort oder Ausflugsziel eingeben"
+            class="w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb"
+          />
+        </div>
 
         <p v-if="form.ort_typ === 'raum' && selectedStandortName" class="col-span-2 text-xs text-gray-500">
           Standort: {{ selectedStandortName }}
@@ -205,35 +232,37 @@ const save = async () => {
           <label>Standort</label>
         </FloatLabel>
 
-        <FloatLabel variant="on">
+        <div>
+          <label for="gruppe-anfangsdatum" class="mb-1 block text-sm text-gray-600">Anfangsdatum</label>
           <DatePicker
+            inputId="gruppe-anfangsdatum"
             v-model="form.anfangsdatum"
             dateFormat="dd.mm.yy"
             showIcon
             class="w-full"
           />
-          <label>Anfangsdatum</label>
-        </FloatLabel>
+        </div>
 
-        <FloatLabel variant="on">
+        <div>
+          <label for="gruppe-enddatum" class="mb-1 block text-sm text-gray-600">Enddatum</label>
           <DatePicker
+            inputId="gruppe-enddatum"
             v-model="form.enddatum"
             dateFormat="dd.mm.yy"
             showIcon
             class="w-full"
           />
-          <label>Enddatum</label>
-        </FloatLabel>
+        </div>
 
-        <FloatLabel variant="on">
-          <input v-model="form.startzeit" type="time" class="w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb" />
-          <label>Startzeit</label>
-        </FloatLabel>
+        <div>
+          <label for="gruppe-startzeit" class="mb-1 block text-sm text-gray-600">Startzeit</label>
+          <input id="gruppe-startzeit" v-model="form.startzeit" type="time" class="w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb" />
+        </div>
 
-        <FloatLabel variant="on">
-          <input v-model="form.endzeit" type="time" class="w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb" />
-          <label>Endzeit</label>
-        </FloatLabel>
+        <div>
+          <label for="gruppe-endzeit" class="mb-1 block text-sm text-gray-600">Endzeit</label>
+          <input id="gruppe-endzeit" v-model="form.endzeit" type="time" class="w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb" />
+        </div>
 
         <div class="col-span-2">
           <label class="mb-1 block text-sm text-gray-600">Bemerkung</label>

@@ -11,12 +11,17 @@
                 <label>Bereiche</label>
             </FloatLabel>
 
-           <FloatLabel variant="on">
+            <FloatLabel variant="on">
                 <Select v-model="form.betreuer" :options="props.betreuer" optionValue="id" :optionLabel="(t) => `${t.vorname} ${t.nachname}`" class="w-full"/>
                 <label>Betreuer</label>
             </FloatLabel>
 
         </div>
+
+        <FloatLabel variant="on" class="mb-5">
+            <Select v-model="form.partner_id" :options="props.projekt.partners || []" optionValue="id" optionLabel="name" showClear filter class="w-full"/>
+            <label>Bezug / Schule</label>
+        </FloatLabel>
 
         <!-- Gruppentyp -->
         <div class="mb-5">
@@ -165,6 +170,7 @@ const close = () => emit('close')
 const form = useForm({
   bereich: '',
   betreuer: '',
+  partner_id: null,
   groupType: '',
   startDate: '',
   endDate: '',
