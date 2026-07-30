@@ -14,7 +14,7 @@ class BopImportService
 {
     public const SOURCE = 'bop';
 
-    public const MAPPING_VERSION = '2026-07-13.1';
+    public const MAPPING_VERSION = '2026-07-30.1';
 
     public const LOCATION_NAME = 'Ernst-Abbe-9';
 
@@ -105,6 +105,7 @@ class BopImportService
             'school_contacts_imported' => 0,
             'participants_imported' => 0,
             'areas_imported' => 0,
+            'staff_imported' => 0,
             'groups_imported' => 0,
             'attendance_rows_imported' => 0,
             'attendance_conflicts' => 0,
@@ -143,7 +144,7 @@ class BopImportService
                 );
                 $participantMaps = $this->importParticipants($runId, (int) $projectId, (int) $locationId, $schoolMap, $summary);
                 $areaMap = $this->importAreas($runId, (int) $projectId, $summary);
-                $staffMap = $this->importLegacyStaff($runId);
+                $staffMap = $this->importLegacyStaff($runId, (int) $projectId, (int) $locationId, $summary);
                 $groupMap = $this->importGroups($runId, (int) $projectId, (int) $locationId, $areaMap, $staffMap, $schoolMap, $summary);
                 $this->importGroupAttendance($runId, $participantMaps['persons'], $groupMap, $staffMap, $summary);
                 $this->importSelectionsAndAssignments($runId, $participantMaps['students'], $areaMap, $summary);
@@ -155,7 +156,7 @@ class BopImportService
             DB::table('legacy_import_runs')->where('id', $runId)->update([
                 'status' => 'completed',
                 'read_count' => $readCount,
-                'imported_count' => $summary['schools_imported'] + $summary['school_contacts_imported'] + $summary['participants_imported'] + $summary['areas_imported'] + $summary['groups_imported'] + $summary['attendance_rows_imported'] + $summary['selections_imported'] + $summary['assignments_imported'] + $summary['pa_ratings_imported'] + $summary['pa_exercise_results_imported'] + $summary['bo_ratings_imported'],
+                'imported_count' => $summary['schools_imported'] + $summary['school_contacts_imported'] + $summary['participants_imported'] + $summary['areas_imported'] + $summary['staff_imported'] + $summary['groups_imported'] + $summary['attendance_rows_imported'] + $summary['selections_imported'] + $summary['assignments_imported'] + $summary['pa_ratings_imported'] + $summary['pa_exercise_results_imported'] + $summary['bo_ratings_imported'],
                 'failed_count' => $summary['failed'],
                 'summary' => json_encode($summary, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
                 'finished_at' => now(),
@@ -461,7 +462,7 @@ class BopImportService
         return $map;
     }
 
-    private function importLegacyStaff(int $runId): array
+    private function importLegacyStaff(int $runId, int $projectId, int $locationId, array &$summary): array
     {
         $map = [];
 
@@ -477,16 +478,47 @@ class BopImportService
                     'nachname' => $lastName,
                     'geschlecht' => 'd',
                     'geburtsdatum' => null,
-                    'aktiv' => false,
+                    'aktiv' => true,
                     'typ' => 'mitarbeiter',
                     'created_at' => $legacyUser->created_at ?? now(),
                     'updated_at' => $legacyUser->updated_at ?? now(),
                 ]);
             }
 
+            DB::table('personens')->where('id', $personId)->update([
+                'aktiv' => true,
+                'typ' => 'mitarbeiter',
+                'updated_at' => now(),
+            ]);
+
+            DB::table('standort_has_personens')->updateOrInsert(
+                [
+                    'personen_id' => $personId,
+                    'standort_id' => $locationId,
+                ],
+                [
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]
+            );
+
+            DB::table('projekt_has_personens')->updateOrInsert(
+                [
+                    'personen_id' => $personId,
+                    'projekt_id' => $projectId,
+                ],
+                [
+                    'status' => 'aktiv',
+                    'standort_id' => $locationId,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]
+            );
+
             $this->storeMapping($runId, 'users', (string) $legacyUser->id, 'personens', (int) $personId, $this->checksum($payload));
-            $this->storeSnapshot($runId, 'users', (string) $legacyUser->id, $payload, 'partially_imported', 'Nicht gematchte Legacy-Benutzer werden als inaktive Mitarbeiter ohne Login erhalten.');
+            $this->storeSnapshot($runId, 'users', (string) $legacyUser->id, $payload, 'partially_imported', 'Als aktiver BOP-Mitarbeiter mit Projekt- und Standortzuordnung importiert; ein Login wird nur mit einem bereits vorhandenen ZBB-Benutzerkonto verknuepft.');
             $map[(int) $legacyUser->id] = (int) $personId;
+            $summary['staff_imported']++;
         }
 
         return $map;
