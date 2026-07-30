@@ -284,7 +284,9 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
 
         Route::post('/teilen/{type}/{id}', [AppsController::class, 'share'])->name('share');
     });
-    Route::get('/organisation', function () {return Inertia::render('Dashboards/Organisation');})->name('organisation.index');
+    Route::get('/organisation', function () {
+        return Inertia::render('Dashboards/Organisation');
+    })->name('organisation.index')->can('organisation.index');
     Route::get('/ressourcen', function () {return Inertia::render('Dashboards/Ressourcen');})->name('ressourcen.index');
     Route::get('/finanzen', function () { return Inertia::render('Dashboards/Finanzen');})->name('finanzen.index');
 

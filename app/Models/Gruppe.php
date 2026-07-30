@@ -76,6 +76,16 @@ class Gruppe extends Model
         return $this->belongsTo(Partner::class);
     }
 
+    public function partners()
+    {
+        return $this->belongsToMany(
+            Partner::class,
+            'gruppe_has_partners',
+            'gruppe_id',
+            'partner_id'
+        )->withTimestamps();
+    }
+
     public function raumMeldungen()
     {
         return $this->hasMany(RaumMeldung::class, 'gruppe_id')->latest();

@@ -432,8 +432,6 @@ const dashboardNavPermissions = [
 ];
 const organisationNavPermissions = [
     'organisation.index',
-    'kooperationspartner.index',
-    'benutzer.index',
 ];
 const ressourcenNavPermissions = [
     'ressourcen.index',

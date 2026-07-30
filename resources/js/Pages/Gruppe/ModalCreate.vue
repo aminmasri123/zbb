@@ -19,8 +19,8 @@
         </div>
 
         <FloatLabel variant="on" class="mb-5">
-            <Select v-model="form.partner_id" :options="props.projekt.partners || []" optionValue="id" optionLabel="name" showClear filter class="w-full"/>
-            <label>Bezug / Schule</label>
+            <MultiSelect v-model="form.partner_ids" :options="props.projekt.partners || []" optionValue="id" optionLabel="name" filter display="chip" placeholder="Eine oder mehrere Schulen auswählen" class="w-full"/>
+            <label>Bezug / Schulen</label>
         </FloatLabel>
 
         <!-- Gruppentyp -->
@@ -147,6 +147,7 @@ import { computed, watch } from 'vue'
 import { useForm } from '@inertiajs/vue3'
 import Modal from '@/Components/ModalForm.vue'
 import Select from 'primevue/select'
+import MultiSelect from 'primevue/multiselect'
 import FloatLabel from 'primevue/floatlabel';
 import Swal from 'sweetalert2';
 
@@ -170,7 +171,7 @@ const close = () => emit('close')
 const form = useForm({
   bereich: '',
   betreuer: '',
-  partner_id: null,
+  partner_ids: [],
   groupType: '',
   startDate: '',
   endDate: '',

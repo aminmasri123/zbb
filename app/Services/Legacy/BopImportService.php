@@ -629,8 +629,15 @@ class BopImportService
                 $groupId = DB::table('gruppes')->insertGetId($values + ['created_at' => $group->created_at ?? now()]);
             }
 
+            DB::table('gruppe_has_partners')->insertOrIgnore([
+                'gruppe_id' => $groupId,
+                'partner_id' => $schoolMap[(int) $group->schule_id],
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
             $this->storeMapping($runId, 'gruppes', (string) $group->id, 'gruppes', (int) $groupId, $this->checksum($payload));
-            $this->storeSnapshot($runId, 'gruppes', (string) $group->id, $payload, 'imported', 'Schulbezug ist direkt als Partner der Gruppe gespeichert.');
+            $this->storeSnapshot($runId, 'gruppes', (string) $group->id, $payload, 'imported', 'Schulbezug ist in der Mehrfachzuordnung der Gruppe gespeichert.');
             $map[(int) $group->id] = (int) $groupId;
             $summary['groups_imported']++;
         }

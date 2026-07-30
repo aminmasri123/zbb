@@ -37,7 +37,7 @@ class GruppeController extends Controller
         $canSeeAllGroups = $this->canSeeAllGroups($user);
 
         $gruppen = Gruppe::query()
-            ->with(['bereich', 'betreuer', 'partner', 'raum.parent', 'raum.standort', 'standort'])
+            ->with(['bereich', 'betreuer.user', 'partners', 'raum.parent', 'raum.standort', 'standort'])
             ->withCount([
                 'teilnehmer as teilnehmer_count' => fn ($query) => $query->select(DB::raw('count(distinct personens.id)')),
             ])
@@ -77,7 +77,8 @@ class GruppeController extends Controller
             'endZeit' => 'required|date_format:H:i|after:startZeit',
             'bereich' => 'required|integer|exists:bereiches,id',
             'betreuer' => 'required|integer|exists:personens,id',
-            'partner_id' => [
+            'partner_ids' => ['nullable', 'array'],
+            'partner_ids.*' => [
                 'nullable',
                 'integer',
                 Rule::exists('projekt_has_partners', 'partner_id')
@@ -100,7 +101,6 @@ class GruppeController extends Controller
             'personen_id' => $validated['betreuer'],
             'bereich_id' => $validated['bereich'],
             'projekt_id' => $activeProject->id,
-            'partner_id' => $validated['partner_id'] ?? null,
             'standort_id' => $standortId,
             'ort_typ' => $validated['ort_typ'],
             'raum_id' => $validated['ort_typ'] === 'raum' ? $validated['raum_id'] : null,
@@ -111,11 +111,12 @@ class GruppeController extends Controller
             'endzeit' => $validated['endZeit'],
             'bemerkung' => $validated['bemerkung'] ?? null,
         ]);
+        $gruppe->partners()->sync($validated['partner_ids'] ?? []);
 
         return response()->json([
             'success' => true,
             'message' => 'Gruppe erfolgreich erstellt.',
-            'gruppe' => $gruppe->load(['bereich', 'betreuer', 'partner', 'raum.parent', 'raum.standort', 'standort'])->loadCount([
+            'gruppe' => $gruppe->load(['bereich', 'betreuer.user', 'partners', 'raum.parent', 'raum.standort', 'standort'])->loadCount([
                 'teilnehmer as teilnehmer_count' => fn ($query) => $query->select(DB::raw('count(distinct personens.id)')),
             ]),
         ], 201);
@@ -137,7 +138,8 @@ class GruppeController extends Controller
             $validated = $request->validate([
                 'bereich' => 'required|integer|exists:bereiches,id',
                 'betreuer' => 'required|integer|exists:personens,id',
-                'partner_id' => [
+                'partner_ids' => ['nullable', 'array'],
+                'partner_ids.*' => [
                     'nullable',
                     'integer',
                     Rule::exists('projekt_has_partners', 'partner_id')
@@ -163,7 +165,6 @@ class GruppeController extends Controller
             $gruppe->update([
                 'bereich_id' => $validated['bereich'],
                 'personen_id' => $validated['betreuer'],
-                'partner_id' => $validated['partner_id'] ?? null,
                 'standort_id' => $standortId,
                 'ort_typ' => $validated['ort_typ'],
                 'raum_id' => $validated['ort_typ'] === 'raum' ? $validated['raum_id'] : null,
@@ -174,11 +175,12 @@ class GruppeController extends Controller
                 'endzeit' => $validated['endzeit'],
                 'bemerkung' => $validated['bemerkung'] ?? null,
             ]);
+            $gruppe->partners()->sync($validated['partner_ids'] ?? []);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Gruppe erfolgreich aktualisiert.',
-                'projekt' => $gruppe->load(['bereich', 'betreuer', 'partner', 'raum.parent', 'raum.standort', 'standort'])->loadCount([
+                'projekt' => $gruppe->load(['bereich', 'betreuer.user', 'partners', 'raum.parent', 'raum.standort', 'standort'])->loadCount([
                     'teilnehmer as teilnehmer_count' => fn ($query) => $query->select(DB::raw('count(distinct personens.id)')),
                 ]),
             ], 200);

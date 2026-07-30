@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue';
 import Swal from 'sweetalert2';
 import FloatLabel from 'primevue/floatlabel';
 import Select from 'primevue/select';
+import MultiSelect from 'primevue/multiselect';
 import DatePicker from 'primevue/datepicker';
 import axios from 'axios';
 
@@ -31,7 +32,7 @@ let form = ref({
   id: null,
   bereich: '',
   betreuer: '',
-  partner_id: null,
+  partner_ids: [],
   ort_typ: 'raum',
   raum_id: null,
   standort_id: null,
@@ -67,7 +68,7 @@ watch(
         id: val.id,
         bereich: val.bereich?.id || val.bereich,
         betreuer: val.betreuer?.id || val.betreuer,
-        partner_id: val.partner_id || val.partner?.id || null,
+        partner_ids: (val.partners || []).map((partner) => partner.id),
         ort_typ: val.ort_typ || (val.raum_id ? 'raum' : 'extern'),
         raum_id: val.raum_id || val.raum?.id || null,
         standort_id: val.standort_id || val.standort?.id || val.raum?.standort_id || null,
@@ -166,16 +167,17 @@ const save = async () => {
         </FloatLabel>
 
         <FloatLabel variant="on" class="col-span-2">
-          <Select
-            v-model="form.partner_id"
+          <MultiSelect
+            v-model="form.partner_ids"
             :options="partners"
             optionValue="id"
             optionLabel="name"
-            showClear
             filter
+            display="chip"
+            placeholder="Eine oder mehrere Schulen auswählen"
             class="w-full"
           />
-          <label>Bezug / Schule</label>
+          <label>Bezug / Schulen</label>
         </FloatLabel>
 
         <div class="col-span-2 grid grid-cols-2 gap-3">

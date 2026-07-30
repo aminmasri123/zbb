@@ -22,6 +22,16 @@ let gruppeForMeldung = ref(null);
 let raumForMeldung = ref(null);
 const { can } = usePermissions();
 
+const betreuerInitialen = (betreuer) => {
+  const vorname = betreuer?.vorname?.trim()?.charAt(0) || '';
+  const nachname = betreuer?.nachname?.trim()?.charAt(0) || '';
+
+  return `${vorname}${nachname}`.toUpperCase() || '?';
+};
+
+const hatProfilbild = (betreuer) =>
+  Boolean(betreuer?.user?.profile_photo_path && betreuer?.user?.profile_photo_url);
+
 // Props
 const props = defineProps({
     gruppen: {
@@ -114,7 +124,7 @@ const applySearchFilter = () => {
       g.betreuer?.vorname?.toLowerCase().includes(q) ||
       g.betreuer?.nachname?.toLowerCase().includes(q) ||
       g.raum?.name?.toLowerCase().includes(q) ||
-      g.partner?.name?.toLowerCase().includes(q) ||
+      g.partners?.some((partner) => partner.name?.toLowerCase().includes(q)) ||
       g.standort?.name?.toLowerCase().includes(q) ||
       g.externer_ort?.toLowerCase().includes(q)
     );
@@ -178,7 +188,19 @@ watch(search, () => {
                         :href="route('gruppeHasTeilnehmer.show', gruppe.id)"
                         class="flex items-center gap-2 font-semibold text-gray-800 hover:text-zbb transition-colors"
                     >
-                        <i class="la la-user text-lg text-zbb"></i>
+                        <img
+                            v-if="hatProfilbild(gruppe.betreuer)"
+                            :src="gruppe.betreuer.user.profile_photo_url"
+                            :alt="`${gruppe.betreuer?.vorname || ''} ${gruppe.betreuer?.nachname || ''}`.trim()"
+                            class="h-8 w-8 shrink-0 rounded-full object-cover ring-2 ring-white shadow"
+                        />
+                        <span
+                            v-else
+                            class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zbb text-xs font-bold text-white shadow"
+                            aria-hidden="true"
+                        >
+                            {{ betreuerInitialen(gruppe.betreuer) }}
+                        </span>
                         <span>
                             {{ gruppe.betreuer?.vorname }} {{ gruppe.betreuer?.nachname }}
                             <span class="mx-1 text-gray-400">—</span>
@@ -218,9 +240,9 @@ watch(search, () => {
                         <i class="la la-map-marker la-2x text-zbb/70"></i>
                         <span>{{ gruppe.standort?.name || gruppe.raum?.standort?.name || 'Kein Standort' }}</span>
                     </div>
-                    <div v-if="gruppe.partner" class="flex items-center gap-1">
+                    <div v-if="gruppe.partners?.length" class="flex items-center gap-1">
                         <i class="la la-school la-2x text-zbb/70"></i>
-                        <span>Bezug: {{ gruppe.partner.name }}</span>
+                        <span>Bezug: {{ gruppe.partners.map((partner) => partner.name).join(', ') }}</span>
                     </div>
                     </div>
                 </div>
