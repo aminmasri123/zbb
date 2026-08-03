@@ -291,7 +291,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::get('/finanzen', function () { return Inertia::render('Dashboards/Finanzen');})->name('finanzen.index');
 
     //Schuld
-    Route::get('/schule', [SchuleController::class, 'index'])->name('schule.index')->can('schule.index');;
+    Route::get('/schule', [SchuleController::class, 'index'])->name('schule.index');
 
     //Standort
     Route::get('/standort', [StandortController::class, 'index'])->name('standort.index');
@@ -455,6 +455,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::delete('/teilnehmer/entfernen/{id}', [TeilnehmerController::class, 'destroy'])->name('teilnehmer.destroy')->can('teilnehmer.destroy');
     Route::get('/teilnehmer/bearbeiten/{id}', [TeilnehmerController::class, 'show'])->name('teilnehmer.edit')->can('teilnehmer.update');
     Route::patch('/teilnehmer/update/{id}', [TeilnehmerController::class, 'update'])->name('teilnehmer.update')->can('teilnehmer.update');
+    Route::patch('/teilnehmer/{person}/elterneinverstaendnis', [TeilnehmerController::class, 'updateParentalConsent'])->name('teilnehmer.elterneinverstaendnis.update')->middleware(['module:participant_management', 'projectFeature:participant_management'])->can('teilnehmer.elterneinverstaendnis.update');
     Route::get('/teilnehmer/{person}/lebenslauf', [ParticipantCvController::class, 'staffIndex'])->name('teilnehmer.resume.index')->middleware('module:participant_portal')->can('teilnehmer.update');
     Route::post('/teilnehmer/{person}/lebenslauf/eintraege', [ParticipantCvController::class, 'store'])->name('teilnehmer.resume.entries.store')->middleware('module:participant_portal')->can('teilnehmer.update');
     Route::post('/teilnehmer/{person}/lebenslauf/versionen', [ParticipantCvController::class, 'createVersion'])->name('teilnehmer.resume.versions.store')->middleware('module:participant_portal')->can('teilnehmer.update');

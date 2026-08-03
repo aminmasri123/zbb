@@ -4,117 +4,194 @@
   <app-layout>
     <template #header>Einteilung</template>
 
-    <div class="px-4 pt-4">
-      <div class="flex flex-col gap-4 rounded border border-gray-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
-        <div>
-          <p class="text-xs font-semibold uppercase text-gray-500">BOP Programm</p>
-          <h1 class="text-lg font-bold text-gray-900">{{ partner.name }}</h1>
-          <p class="text-sm text-gray-600">Schuljahr {{ schuljahr }} / Teil {{ teil }}</p>
-        </div>
-
-        <div class="flex flex-wrap items-center justify-end gap-2">
-          <button v-if="can('einteilung.store')" type="button" @click="openCreateModal" class="rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600">
-            <i class="la la-plus mr-1"></i>Anlegen
-          </button>
-          <button v-if="can('einteilung.planning')" type="button" @click="openGruppenModal" class="rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600">
-            <i class="la la-refresh mr-1"></i>Gruppen generieren
-          </button>
-          <button v-if="can('einteilung.planning')" type="button" @click="openParameterModal" class="rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600">
-            <i class="la la-sliders-h mr-1"></i>Parameter
-          </button>
-          <button v-if="can('einteilung.planning')" type="button" @click="openSwitchModal" class="rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600">
-            <i class="la la-exchange-alt mr-1"></i>Runden tauschen
-          </button>
-          <button v-if="can('einteilung.store')" type="button" :disabled="isBusy" @click="submitEinteilen" class="rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600 disabled:opacity-50">
-            <i class="la la-arrows-alt mr-1"></i>Einteilen
-          </button>
-          <button v-if="can('einteilung.destroy')" type="button" :disabled="isBusy" @click="submitDestroy" class="rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600 disabled:opacity-50">
-            <i class="la la-trash mr-1"></i>Löschen
-          </button>
-          <button v-if="can('einteilung.export')" type="button" @click="openExportModal" class="rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600">
-            <i class="la la-download mr-1"></i>Exportieren
-          </button>
-        </div>
-
-      </div>
-    </div>
-
-    <div class="grid grid-cols-1 gap-4 px-4 pt-4 sm:grid-cols-2 xl:grid-cols-4">
-      <div v-for="card in statCards" :key="card.label" class="rounded border border-gray-200 bg-white px-4 py-3 text-center shadow-sm">
-        <div class="text-sm text-gray-600">{{ card.label }}</div>
-        <div class="text-xl font-bold text-gray-900">{{ card.value }}</div>
-      </div>
-    </div>
-
-    <div v-if="statusMessage" class="mx-4 mt-4 rounded border px-4 py-3 text-sm" :class="statusType === 'error' ? 'border-red-200 bg-red-50 text-red-800' : 'border-green-200 bg-green-50 text-green-800'">
-      {{ statusMessage }}
-    </div>
-
-    <div class="p-4 space-y-6 overflow-y-auto h-[80vh]">
-        <div v-for="runde in runden" :key="runde">
-            <h2 class="mb-2 text-sm font-bold uppercase text-gray-700">Runde {{ runde }}</h2>
-
-            <div class="overflow-x-auto w-full">
-            <table class="min-w-full border-collapse border border-gray-200 shadow-sm">
-                <thead>
-                <tr class="bg-gray-50">
-                    <th
-                    v-for="bereich in headerBereiche"
-                    :key="normalizeKey(bereich)"
-                    class="px-2 py-3 border border-gray-200 text-center uppercase font-bold text-xs tracking-wider whitespace-nowrap"
-                    >
-                    {{ bereich }}
-                    </th>
-                </tr>
-                </thead>
-
-                <tbody>
-                <tr>
-                    <td
-                    v-for="bereich in bereiche"
-                    :key="normalizeKey(bereich) + runde"
-                    class="py-4 border border-gray-200 align-top "
-                    >
-                    <ul class="space-y-1 text-sm min-h-[300px] w-[200px]">
-                        <li
-                        v-for="schueler in results[bereich]?.[runde]"
-                        :key="schueler.id"
-                        @click="can('einteilung.update') && openEditModal(schueler)"
-                        class="rounded transition group"
-                        :class="can('einteilung.update') ? 'cursor-pointer hover:bg-gray-200' : 'cursor-default'"
-                        >
-                        <span class="group-hover:text-zbb font-medium text-xs">
-                            {{ schueler.nachname }}, {{ schueler.vorname }}
-                        </span>
-                        <span class="text-gray-500 text-xs ml-1">
-                            ({{ schueler.klasse }})
-                        </span>
-                        <span
-                            :class="schueler.geschlecht === 'w' ? 'text-pink-500' : 'text-green-500'"
-                            class="ml-1 text-[10px] font-bold"
-                        >
-                            ({{ schueler.geschlecht }})
-                        </span>
-                        </li>
-                    </ul>
-
-                    <div class="mt-4 pt-2 border-t border-orange-200 text-orange-600 font-bold italic text-xs">
-                        Summe: {{ results[bereich]?.[runde]?.length || 0 }} / {{ capacityForBereich(bereich) }}
-                    </div>
-                    </td>
-                </tr>
-                </tbody>
-
-            </table>
+    <main class="space-y-5 p-4 lg:p-6">
+      <section class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div class="flex flex-col gap-5 p-5 xl:flex-row xl:items-center xl:justify-between">
+          <div class="min-w-0">
+            <div class="mb-2 flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <span class="rounded-full bg-orange-50 px-2.5 py-1 text-orange-700">BOP-Programm</span>
+              <span>Schuljahr {{ schuljahr }}</span><span aria-hidden="true">·</span><span>Teil {{ teil }}</span>
             </div>
+            <h1 class="truncate text-2xl font-bold text-gray-900">{{ partner.name }}</h1>
+            <p v-if="updatedAt" class="mt-1 text-sm text-gray-500">
+              <i class="la la-clock mr-1" aria-hidden="true"></i>Zuletzt geändert: {{ formatDate(updatedAt) }}
+            </p>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <button v-if="can('einteilung.store')" type="button" class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2" @click="openCreateModal">
+              <i class="la la-user-plus mr-1.5 text-base" aria-hidden="true"></i>Teilnehmer hinzufügen
+            </button>
+            <button v-if="can('einteilung.export')" type="button" class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2" @click="openExportModal">
+              <i class="la la-download mr-1.5 text-base" aria-hidden="true"></i>Exportieren
+            </button>
+            <button v-if="can('einteilung.store')" type="button" :disabled="isBusy" class="inline-flex items-center rounded-lg bg-orange-500 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" @click="submitEinteilen">
+              <i class="la la-magic mr-1.5 text-base" aria-hidden="true"></i>{{ isBusy ? 'Bitte warten …' : 'Automatisch einteilen' }}
+            </button>
+          </div>
         </div>
 
-        <div v-if="updatedAt" class="mt-4 p-2 bg-blue-50 text-blue-800 rounded text-sm inline-block">
-            Zuletzt geändert: {{ formatDate(updated_at) }}
+        <div v-if="can('einteilung.planning') || can('einteilung.destroy')" class="flex flex-col gap-3 border-t border-gray-100 bg-gray-50 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div v-if="can('einteilung.planning')" class="flex flex-wrap items-center gap-1">
+            <span class="mr-2 text-xs font-bold uppercase tracking-wide text-gray-500">Planung</span>
+            <button type="button" class="rounded-md px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-white hover:text-orange-700 hover:shadow-sm" @click="openParameterModal"><i class="la la-sliders-h mr-1" aria-hidden="true"></i>Parameter</button>
+            <button type="button" class="rounded-md px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-white hover:text-orange-700 hover:shadow-sm" @click="openSwitchModal"><i class="la la-exchange-alt mr-1" aria-hidden="true"></i>Runden tauschen</button>
+            <button type="button" class="rounded-md px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-white hover:text-orange-700 hover:shadow-sm" @click="openGruppenModal"><i class="la la-users mr-1" aria-hidden="true"></i>Gruppen generieren</button>
+          </div>
+          <button v-if="can('einteilung.destroy')" type="button" :disabled="isBusy" class="self-start rounded-md px-3 py-1.5 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto" @click="submitDestroy">
+            <i class="la la-trash mr-1" aria-hidden="true"></i>Einteilung löschen
+          </button>
         </div>
-    </div>
+      </section>
 
-    <Modal v-if="showModal" :show="showModal" @close="showModal = false">
+      <section class="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <div v-for="card in statCards" :key="card.label" class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">{{ card.label }}</p>
+              <p class="mt-1 text-2xl font-bold text-gray-900">{{ card.value }}</p>
+              <p class="mt-0.5 text-xs text-gray-500">{{ card.hint }}</p>
+            </div>
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-lg text-orange-600"><i :class="card.icon" aria-hidden="true"></i></span>
+          </div>
+        </div>
+      </section>
+
+      <div v-if="statusMessage" role="status" class="flex items-start justify-between gap-3 rounded-lg border px-4 py-3 text-sm shadow-sm" :class="statusType === 'error' ? 'border-red-200 bg-red-50 text-red-800' : 'border-green-200 bg-green-50 text-green-800'">
+        <div class="flex items-start gap-2">
+          <i :class="statusType === 'error' ? 'la la-exclamation-circle' : 'la la-check-circle'" class="mt-0.5 text-base" aria-hidden="true"></i>
+          <span>{{ statusMessage }}</span>
+        </div>
+        <button type="button" class="rounded p-0.5 opacity-60 hover:opacity-100" aria-label="Meldung schließen" @click="statusMessage = ''"><i class="la la-times" aria-hidden="true"></i></button>
+      </div>
+
+      <section
+        class="border border-gray-200 bg-white shadow-sm"
+        :class="isFullscreen ? 'fixed inset-0 z-[9999] flex flex-col overflow-hidden rounded-none border-0 bg-gray-100 p-4' : 'rounded-xl'"
+      >
+        <div class="flex flex-col gap-4 border-b border-gray-200 bg-white p-4 lg:flex-row lg:items-center lg:justify-between" :class="isFullscreen ? 'z-10 shrink-0 rounded-xl shadow-sm' : ''">
+          <div>
+            <h2 class="text-base font-bold text-gray-900">{{ isFullscreen ? 'Alle Einteilungen' : 'Einteilung nach Runde' }}</h2>
+            <p class="mt-0.5 text-sm text-gray-500">Teilnehmer anklicken, um ihre Zuordnung zu bearbeiten.</p>
+          </div>
+          <div class="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+            <label class="relative block w-full lg:w-80">
+              <span class="sr-only">Teilnehmer suchen</span>
+              <i class="la la-search pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true"></i>
+              <input v-model.trim="searchQuery" type="search" placeholder="Name oder Klasse suchen …" class="block w-full rounded-lg border-gray-300 py-2 pl-9 pr-3 text-sm shadow-sm focus:border-orange-400 focus:ring-orange-400" />
+            </label>
+            <button v-if="!isFullscreen" type="button" class="inline-flex shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2" aria-label="Alle Einteilungen im Vollbild anzeigen" @click="toggleFullscreen">
+              <i class="la la-expand mr-1.5 text-base" aria-hidden="true"></i>Vollbild
+            </button>
+            <button v-else type="button" class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-white text-xl text-gray-600 shadow-sm transition hover:border-red-300 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2" aria-label="Vollbild schließen" title="Vollbild schließen (Esc)" @click="toggleFullscreen">
+              <i class="la la-times" aria-hidden="true"></i>
+            </button>
+          </div>
+        </div>
+
+        <div v-if="!isFullscreen" class="flex gap-1 overflow-x-auto border-b border-gray-200 px-4 pt-3" role="tablist" aria-label="Runde auswählen">
+          <button v-for="runde in runden" :key="`tab-${runde}`" type="button" role="tab" :aria-selected="selectedRound === runde" class="relative shrink-0 rounded-t-lg px-4 py-2.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-orange-400" :class="selectedRound === runde ? 'bg-orange-50 text-orange-700' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'" @click="selectedRound = runde">
+            Runde {{ runde }}
+            <span class="ml-1.5 rounded-full px-1.5 py-0.5 text-xs" :class="selectedRound === runde ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'">{{ assignedCountForRound(runde) }}</span>
+            <span v-if="selectedRound === runde" class="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-orange-500"></span>
+          </button>
+        </div>
+
+        <div v-if="isFullscreen && allBereiche.length" class="grid min-h-0 flex-1 gap-px overflow-hidden rounded-xl bg-gray-200 p-px" :style="fullscreenGridStyle">
+          <div class="flex items-center justify-center bg-gray-50 px-1 text-[10px] font-bold uppercase tracking-wide text-gray-500">Runde</div>
+          <div v-for="bereich in allBereiche" :key="`fullscreen-header-${bereich.id}`" class="flex min-w-0 flex-col items-center justify-center bg-gray-50 px-1.5 py-1.5 text-center">
+            <span class="w-full truncate text-[10px] font-bold uppercase leading-tight text-gray-800" :title="bereich.name">{{ bereich.name }}</span>
+            <span class="mt-0.5 text-[9px] text-gray-500">Kapazität {{ capacityForBereich(bereich.name) }}</span>
+          </div>
+
+          <template v-for="runde in runden" :key="`fullscreen-row-${runde}`">
+            <div class="flex flex-col items-center justify-center bg-orange-50 px-1 text-center text-orange-700">
+              <span class="text-sm font-bold">{{ runde }}</span>
+              <span class="text-[9px] font-medium">{{ assignedCountForRound(runde) }} TN</span>
+            </div>
+            <div v-for="bereich in allBereiche" :key="`fullscreen-cell-${runde}-${bereich.id}`" class="flex min-h-0 min-w-0 flex-col bg-white p-1">
+              <div class="mb-0.5 flex items-center justify-between gap-1 border-b border-gray-100 pb-0.5 text-[9px]">
+                <span class="font-semibold text-gray-500">{{ roundParticipants(bereich.name, runde).length }} / {{ capacityForBereich(bereich.name) }}</span>
+                <span :class="capacityState(bereich.name, runde).barClass" class="h-1.5 w-1.5 rounded-full" :title="capacityState(bereich.name, runde).label"></span>
+              </div>
+              <div class="min-h-0 flex-1 overflow-hidden">
+                <button
+                  v-for="schueler in filteredParticipants(bereich.name, runde)"
+                  :key="`fullscreen-student-${runde}-${bereich.id}-${schueler.id}`"
+                  type="button"
+                  class="group flex w-full min-w-0 items-center gap-1 rounded px-1 py-px text-left text-[10px] leading-[1.25] transition"
+                  :class="can('einteilung.update') ? 'hover:bg-orange-50 focus:bg-orange-50 focus:outline-none focus:ring-1 focus:ring-orange-300' : 'cursor-default'"
+                  :disabled="!can('einteilung.update')"
+                  :title="`${schueler.nachname}, ${schueler.vorname} · Klasse ${schueler.klasse || '–'}`"
+                  @click="openEditModal(schueler)"
+                >
+                  <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="schueler.geschlecht === 'w' ? 'bg-pink-400' : 'bg-emerald-400'"></span>
+                  <span class="min-w-0 flex-1 truncate font-medium text-gray-800 group-hover:text-orange-700">{{ schueler.nachname }}, {{ schueler.vorname }}</span>
+                  <span class="shrink-0 text-[9px] text-gray-400">{{ schueler.klasse || '–' }}</span>
+                </button>
+                <div v-if="filteredParticipants(bereich.name, runde).length === 0" class="flex h-full items-center justify-center px-1 text-center text-[9px] text-gray-300">
+                  {{ searchQuery ? 'Keine Treffer' : 'Nicht belegt' }}
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <div
+          v-else-if="allBereiche.length"
+          :class="isFullscreen ? 'grid min-h-0 flex-1 gap-4 overflow-hidden pt-4' : ''"
+          :style="isFullscreen ? { gridTemplateColumns: `repeat(${displayedRounds.length}, minmax(0, 1fr))` } : undefined"
+        >
+          <div v-for="displayRound in displayedRounds" :key="`board-round-${displayRound}`" class="p-4" :class="isFullscreen ? 'min-h-0 overflow-y-auto rounded-xl bg-white shadow-sm' : ''">
+            <div v-if="isFullscreen" class="sticky top-0 z-[1] mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 bg-white pb-3">
+              <h3 class="text-lg font-bold text-gray-900">Runde {{ displayRound }}</h3>
+              <span class="rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">{{ utilizationTextForRound(displayRound) }}</span>
+            </div>
+            <div class="grid gap-4" :class="isFullscreen ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'">
+            <article v-for="bereich in allBereiche" :key="`${bereich.id}-${displayRound}`" class="flex min-w-0 flex-col overflow-hidden rounded-xl border bg-gray-50/60" :class="capacityState(bereich.name, displayRound).borderClass">
+              <header class="border-b border-gray-200 bg-white p-3.5">
+                <div class="flex items-start justify-between gap-3">
+                  <h3 class="min-w-0 text-sm font-bold leading-5 text-gray-900">{{ bereich.name }}</h3>
+                  <span class="shrink-0 rounded-full px-2 py-0.5 text-xs font-bold" :class="capacityState(bereich.name, displayRound).badgeClass">{{ roundParticipants(bereich.name, displayRound).length }} / {{ capacityForBereich(bereich.name) }}</span>
+                </div>
+                <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100" role="progressbar" :aria-label="`Auslastung ${bereich.name} in Runde ${displayRound}`" :aria-valuenow="capacityState(bereich.name, displayRound).percentage" aria-valuemin="0" aria-valuemax="100">
+                  <div class="h-full rounded-full transition-all" :class="capacityState(bereich.name, displayRound).barClass" :style="{ width: `${capacityState(bereich.name, displayRound).percentage}%` }"></div>
+                </div>
+                <p class="mt-1.5 text-xs text-gray-500">{{ capacityState(bereich.name, displayRound).label }}</p>
+              </header>
+
+              <ul class="min-h-[18rem] flex-1 space-y-1.5 overflow-y-auto p-2.5">
+                <li v-for="schueler in filteredParticipants(bereich.name, displayRound)" :key="schueler.id">
+                  <button type="button" class="group flex w-full items-center gap-2.5 rounded-lg border border-transparent bg-white px-2.5 py-2 text-left shadow-sm transition" :class="can('einteilung.update') ? 'hover:border-orange-200 hover:bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-300' : 'cursor-default'" :disabled="!can('einteilung.update')" @click="openEditModal(schueler)">
+                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold" :class="schueler.geschlecht === 'w' ? 'bg-pink-50 text-pink-700' : 'bg-emerald-50 text-emerald-700'">{{ initialsFor(schueler) }}</span>
+                    <span class="min-w-0 flex-1">
+                      <span class="block truncate text-xs font-semibold text-gray-900 group-hover:text-orange-700">{{ schueler.nachname }}, {{ schueler.vorname }}</span>
+                      <span class="mt-0.5 block text-[11px] text-gray-500">Klasse {{ schueler.klasse || '–' }}</span>
+                    </span>
+                    <i v-if="can('einteilung.update')" class="la la-pen text-gray-300 group-hover:text-orange-500" aria-hidden="true"></i>
+                  </button>
+                </li>
+                <li v-if="filteredParticipants(bereich.name, displayRound).length === 0" class="flex min-h-[15rem] items-center justify-center px-4 text-center text-xs text-gray-400">{{ searchQuery ? 'Keine passenden Teilnehmer' : 'Noch keine Teilnehmer eingeteilt' }}</li>
+              </ul>
+            </article>
+            </div>
+          </div>
+        </div>
+
+        <div v-else class="px-6 py-16 text-center">
+          <i class="la la-layer-group text-4xl text-gray-300" aria-hidden="true"></i>
+          <h3 class="mt-3 text-sm font-bold text-gray-800">Keine Bereiche vorhanden</h3>
+          <p class="mt-1 text-sm text-gray-500">Lege zunächst Bereiche im Projekt an.</p>
+        </div>
+
+        <div v-if="!isFullscreen" class="flex justify-end border-t border-gray-100 bg-gray-50 px-4 py-3 text-xs text-gray-500">
+          <span><i class="la la-chart-pie mr-1" aria-hidden="true"></i>{{ roundUtilizationText }}</span>
+        </div>
+      </section>
+    </main>
+
+    <div v-if="showModal" :class="isFullscreen ? 'fixed inset-0 z-[10000]' : ''">
+    <Modal :show="showModal" @close="showModal = false">
     <template #header>Einteilung anpassen</template>
 
       <template #body>
@@ -154,6 +231,7 @@
 
       </template>
     </Modal>
+    </div>
 
     <Modal v-if="showCreateModal" :show="showCreateModal" @close="showCreateModal = false">
       <template #header>Einteilung anlegen</template>
@@ -368,7 +446,7 @@
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Modal from '@/Components/ModalForm.vue';
 import { Head } from '@inertiajs/vue3'
-import { ref, computed, reactive } from 'vue'
+import { ref, computed, reactive, onMounted, onBeforeUnmount } from 'vue'
 import InputText from 'primevue/inputtext';
 import axios from 'axios'
 import { usePermissions } from '@/utils/permissions'
@@ -402,16 +480,51 @@ const selectedSchueler = ref(null)
 const results = ref(JSON.parse(JSON.stringify(props.results)));
 const allBereiche = ref([...(props.alle_bereiche ?? [])])
 const updatedAt = ref(props.updated_at)
-const updated_at = computed(() => updatedAt.value)
 const teilnehmerOptions = ref([...(props.teilnehmerOptions ?? [])])
 const raeume = ref([...(props.raeume ?? [])])
 const betreuer = ref([...(props.betreuer ?? [])])
-const stats = ref({ ...(props.stats ?? {}) })
 const statusMessage = ref('')
 const statusType = ref('success')
 const isBusy = ref(false)
 const maxRoundNumbers = [1, 2, 3, 4, 5]
 const runden = ref([...(props.runden?.length ? props.runden : [1, 2, 3])])
+const selectedRound = ref(runden.value[0] ?? 1)
+const searchQuery = ref('')
+const isFullscreen = ref(false)
+const displayedRounds = computed(() => isFullscreen.value ? runden.value : [selectedRound.value])
+const fullscreenGridStyle = computed(() => ({
+  gridTemplateColumns: `5rem repeat(${allBereiche.value.length}, minmax(0, 1fr))`,
+  gridTemplateRows: `2.5rem repeat(${runden.value.length}, minmax(0, 1fr))`,
+}))
+let previousBodyOverflow = ''
+
+const toggleFullscreen = () => {
+  isFullscreen.value = !isFullscreen.value
+
+  if (isFullscreen.value) {
+    previousBodyOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+  } else {
+    document.body.style.overflow = previousBodyOverflow
+  }
+}
+
+const handleEscape = (event) => {
+  if (event.key !== 'Escape' || !isFullscreen.value) return
+
+  if (showModal.value) {
+    showModal.value = false
+    return
+  }
+
+  toggleFullscreen()
+}
+
+onMounted(() => window.addEventListener('keydown', handleEscape))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleEscape)
+  if (isFullscreen.value) document.body.style.overflow = previousBodyOverflow
+})
 
 const normalizeParameter = (parameter = {}) => ({
   runden_anzahl: Number(parameter.runden_anzahl ?? 3),
@@ -421,11 +534,31 @@ const normalizeParameter = (parameter = {}) => ({
 
 const parameter = ref(normalizeParameter(props.parameter))
 
+const participantAssignments = computed(() => {
+  const assignments = new Map()
+
+  Object.values(results.value ?? {}).forEach((rounds) => {
+    runden.value.forEach((runde) => {
+      const participants = rounds?.[runde] ?? []
+      participants.forEach((schueler) => {
+        if (!assignments.has(schueler.id)) assignments.set(schueler.id, new Set())
+        assignments.get(schueler.id).add(runde)
+      })
+    })
+  })
+
+  return assignments
+})
+
+const fullyAssignedCount = computed(() => {
+  return [...participantAssignments.value.values()].filter(rounds => rounds.size === runden.value.length).length
+})
+
 const statCards = computed(() => [
-  { label: 'Schulen', value: stats.value.schulen ?? 0 },
-  { label: 'Gruppen', value: stats.value.gruppen ?? 0 },
-  { label: 'Teilnehmer', value: stats.value.teilnehmer ?? 0 },
-  { label: 'Bereiche', value: stats.value.bereiche ?? 0 },
+  { label: 'Teilnehmer', value: teilnehmerOptions.value.length, hint: 'in dieser Schule', icon: 'la la-user-graduate' },
+  { label: 'Vollständig eingeteilt', value: `${fullyAssignedCount.value} / ${teilnehmerOptions.value.length}`, hint: `für alle ${runden.value.length} Runden`, icon: 'la la-check-circle' },
+  { label: 'Runden', value: runden.value.length, hint: 'aktuell geplant', icon: 'la la-sync' },
+  { label: 'Bereiche', value: allBereiche.value.length, hint: 'verfügbare Angebote', icon: 'la la-layer-group' },
 ])
 
 const contextPayload = () => ({
@@ -442,8 +575,10 @@ const replacePayload = (payload) => {
   teilnehmerOptions.value = [...(payload.teilnehmerOptions ?? [])]
   raeume.value = [...(payload.raeume ?? [])]
   betreuer.value = [...(payload.betreuer ?? [])]
-  stats.value = { ...(payload.stats ?? {}) }
   runden.value = [...(payload.runden?.length ? payload.runden : [1, 2, 3])]
+  if (!runden.value.includes(selectedRound.value)) {
+    selectedRound.value = runden.value[0] ?? 1
+  }
   parameter.value = normalizeParameter(payload.parameter)
 }
 
@@ -465,12 +600,6 @@ const readError = async (error) => {
   const firstFieldError = data?.errors ? Object.values(data.errors)?.[0]?.[0] : null
   return firstFieldError || data?.message || 'Die Aktion konnte nicht ausgeführt werden.'
 }
-// Bereichsnamen für Tabellen-Header nur für die Anzeige
-const headerBereiche = computed(() => {
-  // Holen wir uns die Originalnamen aus alle_bereiche
-  return allBereiche.value.map(b => b.name);
-});
-
 const form = reactive({
   schueler_id: null,
   runde_1: null,
@@ -523,10 +652,6 @@ const switchForm = reactive({
   ziel_runde: runden.value[1] ?? null,
   processing: false,
 })
-const bereiche = computed(() => Object.keys(results.value || {}))
-
-// === Bereichsnamen für Anzeige ===
-
 // normalizeKey nur für Keys & interne Logik
 function normalizeKey(str) {
   return str
@@ -564,6 +689,75 @@ const capacityForBereich = (bereichName) => {
   if (!bereich) return parameter.value.standard_kapazitaet ?? 0
   return parameter.value.kapazitaeten?.[bereich.id] ?? parameter.value.standard_kapazitaet ?? 0
 }
+
+const roundParticipants = (bereichName, runde) => results.value?.[bereichName]?.[runde] ?? []
+
+const assignedCountForRound = (runde) => {
+  return allBereiche.value.reduce((sum, bereich) => sum + roundParticipants(bereich.name, runde).length, 0)
+}
+
+const filteredParticipants = (bereichName, runde) => {
+  const query = searchQuery.value.toLocaleLowerCase('de-DE')
+  const participants = roundParticipants(bereichName, runde)
+
+  if (!query) return participants
+
+  return participants.filter((schueler) => {
+    const searchable = [schueler.nachname, schueler.vorname, schueler.klasse]
+      .filter(Boolean)
+      .join(' ')
+      .toLocaleLowerCase('de-DE')
+
+    return searchable.includes(query)
+  })
+}
+
+const initialsFor = (schueler) => {
+  return `${schueler.vorname?.[0] ?? ''}${schueler.nachname?.[0] ?? ''}`.toUpperCase() || '–'
+}
+
+const capacityState = (bereichName, runde) => {
+  const assigned = roundParticipants(bereichName, runde).length
+  const capacity = Number(capacityForBereich(bereichName))
+  const remaining = Math.max(0, capacity - assigned)
+  const percentage = capacity > 0 ? Math.min(100, Math.round((assigned / capacity) * 100)) : 0
+
+  if (capacity <= 0 || assigned >= capacity) {
+    return {
+      percentage,
+      label: capacity <= 0 ? 'Keine Kapazität festgelegt' : 'Voll belegt',
+      borderClass: 'border-red-200',
+      badgeClass: 'bg-red-50 text-red-700',
+      barClass: 'bg-red-500',
+    }
+  }
+
+  if (percentage >= 80) {
+    return {
+      percentage,
+      label: `${remaining} ${remaining === 1 ? 'Platz' : 'Plätze'} frei`,
+      borderClass: 'border-amber-200',
+      badgeClass: 'bg-amber-50 text-amber-700',
+      barClass: 'bg-amber-500',
+    }
+  }
+
+  return {
+    percentage,
+    label: `${remaining} ${remaining === 1 ? 'Platz' : 'Plätze'} frei`,
+    borderClass: 'border-gray-200',
+    badgeClass: 'bg-emerald-50 text-emerald-700',
+    barClass: 'bg-emerald-500',
+  }
+}
+
+const utilizationTextForRound = (runde) => {
+  const assigned = assignedCountForRound(runde)
+  const capacity = allBereiche.value.reduce((sum, bereich) => sum + Number(capacityForBereich(bereich.name)), 0)
+  return `${assigned} von ${capacity} Plätzen belegt`
+}
+
+const roundUtilizationText = computed(() => `Runde ${selectedRound.value}: ${utilizationTextForRound(selectedRound.value)}`)
 
 const openParameterModal = () => {
   const current = normalizeParameter(parameter.value)

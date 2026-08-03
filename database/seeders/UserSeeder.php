@@ -968,7 +968,6 @@ class UserSeeder extends Seeder
             $this->permission('personal.destroy', 26, 'Erlaubt das Entfernen von Personaldatensaetzen, sofern eine Loeschfunktion im Personalbereich bereitgestellt ist.'),
 
             // Partner / Schulen
-            $this->permission('schule.index', 2, 'Erlaubt den Zugriff auf die Schuluebersicht bzw. schulbezogene Organisationsdaten.'),
             $this->permission('kooperationspartner.index', 2, 'Erlaubt das Einsehen der Partner- und Kooperationspartneruebersicht inklusive Schulen, Betrieben und weiteren externen Stellen.'),
             $this->permission('kooperationspartner.store', 2, 'Erlaubt das Anlegen neuer Kooperationspartner mit Stammdaten, Ansprechpartnern und BOP-relevanten Zusatzdaten.'),
             $this->permission('kooperationspartner.update', 2, 'Erlaubt das Bearbeiten bestehender Kooperationspartner, Schul- oder Partnerdaten sowie deren Zusatzinformationen.'),
@@ -1013,6 +1012,7 @@ class UserSeeder extends Seeder
             $this->permission('teilnehmer.store', 5, 'Erlaubt das Anlegen neuer Teilnehmer inklusive Stammdaten und erster Zuordnungen.'),
             $this->permission('teilnehmer.import', 5, 'Erlaubt den Import von Teilnehmerdaten aus Dateien oder Sammelquellen.'),
             $this->permission('teilnehmer.update', 5, 'Erlaubt das Bearbeiten von Teilnehmerdaten inklusive Stammdaten, Sozialdaten, Projektzuordnungen, Kontakten, Adressen, Bankdaten und Zusatzinformationen.'),
+            $this->permission('teilnehmer.elterneinverstaendnis.update', 5, 'Erlaubt das Umschalten der Elterneinverstaendniserklaerung fuer schulbezogene Teilnehmer im aktiven Projekt.'),
             $this->permission('teilnehmer.data-request.manage', 5, 'Erlaubt das Pruefen, Bearbeiten und Abschliessen von Datenauskunftsanfragen eines Teilnehmers innerhalb des rollenbezogen erlaubten Projekt- und Teilnehmerbereichs.'),
             $this->permission('teilnehmer.destroy', 5, 'Erlaubt das Loeschen einzelner Teilnehmer. Diese Berechtigung ist wegen personenbezogener Daten besonders kritisch.'),
             $this->permission('teilnehmer.bulkDestroy', 5, 'Erlaubt das Loeschen mehrerer Teilnehmer in einer Sammelaktion. Diese Berechtigung sollte nur sehr eingeschraenkt vergeben werden.'),

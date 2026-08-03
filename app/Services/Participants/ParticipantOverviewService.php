@@ -5,6 +5,8 @@ namespace App\Services\Participants;
 use App\Models\GruppeHasPersonen;
 use App\Models\AppTask;
 use App\Models\Personen;
+use App\Models\PersonenIstSchueler;
+use App\Models\Projekt;
 use App\Models\ProjektHasPersonen;
 use App\Models\PersonenHasBildungsmassnahmen;
 use Carbon\Carbon;
@@ -47,8 +49,9 @@ class ParticipantOverviewService
 
         $attendanceByParticipant = GruppeHasPersonen::query()
             ->with([
-                'gruppe:id,projekt_id,bereich_id',
+                'gruppe:id,projekt_id,bereich_id,personen_id,anfangsdatum,enddatum',
                 'gruppe.bereich:id,name',
+                'gruppe.betreuer:id,vorname,nachname',
                 'tag:id,datum',
                 'status:id,status,abkuerzung,farben',
                 'zeitgeplant:id,startzeit,endzeit',
@@ -72,9 +75,20 @@ class ParticipantOverviewService
             ->get(['id', 'projekt_person_id', 'typ', 'traeger', 'status', 'end', 'next_follow_up_at'])
             ->groupBy('projekt_person_id');
 
-        $participants->each(function (Personen $participant) use ($participations, $attendanceByParticipant, $tasksByParticipation, $measuresByParticipation, $period): void {
+        $project = Projekt::query()->with('partners:id,name')->find($projectId);
+        $partnerIds = $project?->partners?->pluck('id')->filter()->values() ?? collect();
+        $schoolRowsByParticipant = PersonenIstSchueler::query()
+            ->with(['schule:id,name', 'bereichsauswahl', 'einteilungen.bereich:id,name'])
+            ->whereIn('person_id', $participantIds)
+            ->when($partnerIds->isNotEmpty(), fn ($query) => $query->whereIn('schule_id', $partnerIds))
+            ->get()
+            ->sortByDesc(fn ($row) => sprintf('%s|%s', $row->schuljahr ?? '', $row->teil ?? ''))
+            ->groupBy('person_id');
+
+        $participants->each(function (Personen $participant) use ($participations, $attendanceByParticipant, $tasksByParticipation, $measuresByParticipation, $schoolRowsByParticipant, $period): void {
             $participation = $participations->get($participant->id);
             $attendance = $attendanceByParticipant->get($participant->id, collect());
+            $schoolRows = $schoolRowsByParticipant->get($participant->id, collect());
             $tasks = $participation ? $tasksByParticipation->get($participation->id, collect()) : collect();
             $measures = $participation ? $measuresByParticipation->get($participation->id, collect()) : collect();
             $groups = $attendance
@@ -99,6 +113,7 @@ class ParticipantOverviewService
                     $attendance->filter(fn ($entry) => $entry->tag?->datum && Carbon::parse($entry->tag->datum)->format('Y-m') === $period)
                 ),
                 'total' => $this->summarizeAttendance($attendance),
+                'school' => $this->summarizeSchool($schoolRows, $attendance),
             ]);
         });
     }
@@ -161,6 +176,89 @@ class ParticipantOverviewService
         $endTime = Carbon::parse($end);
 
         return max(0, $startTime->diffInMinutes($endTime, false));
+    }
+
+    private function summarizeSchool(Collection $schoolRows, Collection $attendance): array
+    {
+        $hasSchoolRows = $schoolRows->isNotEmpty();
+
+        return [
+            'has_school_data' => $hasSchoolRows,
+            'classes' => $schoolRows->pluck('klasse')->filter()->unique()->values(),
+            'schools' => $schoolRows->pluck('schule.name')->filter()->unique()->values(),
+            'contexts' => $schoolRows
+                ->map(fn ($row) => trim(($row->schuljahr ?? '') . ' Teil ' . ($row->teil ?? '')))
+                ->filter()
+                ->unique()
+                ->values(),
+            'parental_consent_received' => $hasSchoolRows
+                ? $schoolRows->every(fn ($row) => (bool) $row->eee)
+                : null,
+            'selection_submitted' => $schoolRows->contains(fn ($row) => filled($row->bereichsauswahl?->submitted_at)),
+            'visited_areas' => $this->visitedAreas($schoolRows, $attendance),
+        ];
+    }
+
+    private function visitedAreas(Collection $schoolRows, Collection $attendance): Collection
+    {
+        $fromGroups = $attendance
+            ->filter(fn ($entry) => $entry->gruppe?->bereich?->name)
+            ->groupBy('gruppe_id')
+            ->map(function (Collection $entries) {
+                $group = $entries->first()?->gruppe;
+                if (!$group?->bereich?->name) {
+                    return null;
+                }
+
+                $parts = [$group->bereich->name];
+                $dateRange = $this->dateRangeLabel($group->anfangsdatum, $group->enddatum);
+                if ($dateRange) {
+                    $parts[] = $dateRange;
+                }
+
+                $supervisor = $this->personName($group->betreuer);
+                if ($supervisor) {
+                    $parts[] = $supervisor;
+                }
+
+                return implode(' ', $parts);
+            })
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($fromGroups->isNotEmpty()) {
+            return $fromGroups;
+        }
+
+        return $schoolRows
+            ->flatMap(fn ($row) => $row->einteilungen ?? collect())
+            ->sortBy('runde')
+            ->map(function ($einteilung) {
+                $name = $einteilung->bereich?->name;
+                if (!$name) {
+                    return null;
+                }
+
+                return $einteilung->runde
+                    ? $name . ' (Runde ' . $einteilung->runde . ')'
+                    : $name;
+            })
+            ->filter()
+            ->unique()
+            ->values();
+    }
+
+    private function dateRangeLabel(?string $start, ?string $end): ?string
+    {
+        if (!$start && !$end) {
+            return null;
+        }
+
+        $startLabel = $start ? Carbon::parse($start)->format('d.m.') : '?';
+        $endLabel = $end ? Carbon::parse($end)->format('d.m.') : '?';
+
+        return $startLabel === $endLabel ? $startLabel : $startLabel . ' - ' . $endLabel;
     }
 
     private function personName($person): ?string

@@ -249,6 +249,7 @@ class ProjektController extends Controller
                 'features' => $projekt->featureSettings(),
                 'rules' => $projekt->ruleSettings(),
                 'portal_features' => $projekt->portalFeatureSettings(),
+                'participant_overview_column_definitions' => Projekt::participantOverviewColumnDefinitions(),
             ]),
             'fehlendeMitarbeiter' => $fehlendeMitarbeiter,
             'alleStandorte' => Standort::orderBy('name')->get(['id', 'name']),
@@ -538,6 +539,9 @@ class ProjektController extends Controller
             'rules.participant_min_age' => ['nullable', 'integer', 'min:0', 'max:120'],
             'rules.participant_max_age' => ['nullable', 'integer', 'min:0', 'max:120', 'gte:rules.participant_min_age'],
             'rules.participation_initial_status' => ['required', 'string', Rule::in(Projekt::PARTICIPATION_STATUSES)],
+            'rules.participant_overview_columns' => ['nullable', 'array', 'min:1'],
+            'rules.participant_overview_columns.*' => ['string', Rule::in(Projekt::participantOverviewColumnKeys())],
+            'rules.participant_overview_show_metrics' => ['required', 'boolean'],
         ]);
 
         $projekt->update([
@@ -555,6 +559,10 @@ class ProjektController extends Controller
                     ? (int) $validated['rules']['participant_max_age']
                     : null,
                 'participation_initial_status' => $validated['rules']['participation_initial_status'],
+                'participant_overview_columns' => Projekt::normalizeParticipantOverviewColumns(
+                    $validated['rules']['participant_overview_columns'] ?? $projekt->participantOverviewColumns()
+                ),
+                'participant_overview_show_metrics' => (bool) $validated['rules']['participant_overview_show_metrics'],
             ],
         ]);
 

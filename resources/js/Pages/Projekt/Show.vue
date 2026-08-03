@@ -56,6 +56,66 @@ const participationStatuses = [
     { value: 'abgeschlossen', label: 'Abgeschlossen' },
     { value: 'abgebrochen', label: 'Abgebrochen' },
 ];
+const participantOverviewColumnDefinitions = props.projekt.participant_overview_column_definitions || [];
+const defaultParticipantOverviewColumns = [
+    'id',
+    'first_name',
+    'last_name',
+    'participation',
+    'group_supervisor',
+    'period_balance',
+    'total_balance',
+    'absences',
+    'tasks',
+    'measures',
+    'gender',
+];
+const bopParticipantOverviewColumns = [
+    'id',
+    'parental_consent',
+    'first_name',
+    'last_name',
+    'gender',
+    'school_class',
+    'school',
+    'visited_areas',
+];
+
+if (!Array.isArray(projectRules.participant_overview_columns) || !projectRules.participant_overview_columns.length) {
+    projectRules.participant_overview_columns = [...defaultParticipantOverviewColumns];
+}
+
+if (projectRules.participant_overview_show_metrics === undefined) {
+    projectRules.participant_overview_show_metrics = true;
+}
+
+const orderedParticipantOverviewColumns = (selectedKeys) => {
+    const selected = new Set(selectedKeys);
+    return participantOverviewColumnDefinitions
+        .map((column) => column.key)
+        .filter((key) => selected.has(key));
+};
+
+const isParticipantOverviewColumnActive = (key) => {
+    return projectRules.participant_overview_columns?.includes(key);
+};
+
+const toggleParticipantOverviewColumn = (key, enabled) => {
+    const selected = new Set(projectRules.participant_overview_columns || []);
+
+    if (enabled) {
+        selected.add(key);
+    } else if (selected.size > 1) {
+        selected.delete(key);
+    }
+
+    projectRules.participant_overview_columns = orderedParticipantOverviewColumns([...selected]);
+};
+
+const applyParticipantOverviewPreset = (columns, showMetrics) => {
+    projectRules.participant_overview_columns = orderedParticipantOverviewColumns(columns);
+    projectRules.participant_overview_show_metrics = showMetrics;
+};
 
 watch(() => projectFeatures.participant_management, (enabled) => {
     if (!enabled) {
@@ -582,6 +642,76 @@ const addMitarbeiter = (person) => {
                     </div>
                     <p v-if="!intakeChecklistItems.length" class="rounded border border-dashed p-5 text-center text-sm text-gray-500">Noch keine Aufnahmeprüfpunkte konfiguriert.</p>
                 </div>
+            </section>
+
+            <section v-if="projectFeatures.participant_management" class="bg-white p-5 shadow-sm">
+                <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 class="text-lg font-semibold">Teilnehmeruebersicht</h2>
+                        <p class="mt-1 text-sm text-gray-500">
+                            Legt fest, welche Kennzahlen und Spalten in der Teilnehmeruebersicht dieses Projekts sichtbar sind.
+                        </p>
+                    </div>
+                    <div v-if="can('projekt.update')" class="flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            class="rounded border border-zbb px-4 py-2 text-sm text-zbb"
+                            @click="applyParticipantOverviewPreset(bopParticipantOverviewColumns, false)"
+                        >
+                            BOP-Ansicht
+                        </button>
+                        <button
+                            type="button"
+                            class="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700"
+                            @click="applyParticipantOverviewPreset(defaultParticipantOverviewColumns, true)"
+                        >
+                            Standardansicht
+                        </button>
+                        <button
+                            type="button"
+                            class="rounded bg-zbb px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                            :disabled="ruleSaving"
+                            @click="saveRules"
+                        >
+                            {{ ruleSaving ? 'Speichert ...' : 'Ansicht speichern' }}
+                        </button>
+                    </div>
+                </div>
+
+                <label class="mb-4 flex items-start gap-3 rounded border border-gray-200 p-4 text-sm text-gray-600">
+                    <input
+                        v-model="projectRules.participant_overview_show_metrics"
+                        type="checkbox"
+                        class="mt-1 rounded border-gray-300 text-zbb focus:ring-zbb"
+                        :disabled="!can('projekt.update')"
+                    />
+                    <span>
+                        <span class="block font-semibold text-gray-800">Kennzahlen oben anzeigen</span>
+                        <span class="mt-1 block text-xs text-gray-500">Teilnehmer, Aufgaben, Fehlzeiten, Saldo und Massnahmen als Karten einblenden.</span>
+                    </span>
+                </label>
+
+                <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    <label
+                        v-for="column in participantOverviewColumnDefinitions"
+                        :key="column.key"
+                        class="flex items-start gap-3 rounded border p-4"
+                        :class="isParticipantOverviewColumnActive(column.key) ? 'border-blue-200 bg-blue-50' : 'border-gray-200 bg-gray-50'"
+                    >
+                        <input
+                            type="checkbox"
+                            class="mt-1 rounded border-gray-300 text-zbb focus:ring-zbb"
+                            :checked="isParticipantOverviewColumnActive(column.key)"
+                            :disabled="!can('projekt.update')"
+                            @change="toggleParticipantOverviewColumn(column.key, $event.target.checked)"
+                        />
+                        <span>
+                            <span class="block font-semibold text-gray-800">{{ column.label }}</span>
+                            <span class="mt-1 block text-xs text-gray-500">{{ column.description }}</span>
+                        </span>
+                    </label>
+                </div>
+                <p class="mt-3 text-xs text-gray-500">Mindestens eine Spalte bleibt aktiv.</p>
             </section>
 
             <section class="bg-white p-5 shadow-sm">

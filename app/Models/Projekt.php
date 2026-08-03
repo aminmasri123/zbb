@@ -74,6 +74,100 @@ class Projekt extends Model
         'participant_min_age' => null,
         'participant_max_age' => null,
         'participation_initial_status' => 'aktiv',
+        'participant_overview_columns' => [],
+        'participant_overview_show_metrics' => true,
+    ];
+
+    public const PARTICIPANT_OVERVIEW_COLUMN_DEFINITIONS = [
+        'id' => [
+            'label' => 'ID',
+            'description' => 'Interne Teilnehmernummer.',
+            'sortable' => 'id',
+        ],
+        'parental_consent' => [
+            'label' => 'Elterneinverstaendnis',
+            'description' => 'Status der Elterneinverstaendniserklaerung bei BOP-Schuelern.',
+        ],
+        'first_name' => [
+            'label' => 'Vorname',
+            'description' => 'Vorname des Teilnehmers.',
+            'sortable' => 'vorname',
+        ],
+        'last_name' => [
+            'label' => 'Nachname',
+            'description' => 'Nachname des Teilnehmers.',
+            'sortable' => 'nachname',
+        ],
+        'gender' => [
+            'label' => 'Geschlecht',
+            'description' => 'Geschlecht aus den Stammdaten.',
+            'sortable' => 'geschlecht',
+        ],
+        'school_class' => [
+            'label' => 'Klasse',
+            'description' => 'Klasse aus der Schulzuordnung.',
+        ],
+        'school' => [
+            'label' => 'Schule',
+            'description' => 'Schule, Schuljahr und Teilabschnitt.',
+        ],
+        'visited_areas' => [
+            'label' => 'Besuchte Bereiche',
+            'description' => 'Bereiche aus Einteilung oder Gruppenteilnahme.',
+        ],
+        'participation' => [
+            'label' => 'Teilnahme',
+            'description' => 'Teilnahmestatus und Standort.',
+        ],
+        'group_supervisor' => [
+            'label' => 'Gruppe / Betreuung',
+            'description' => 'Gruppen, Bereiche und verantwortliche Betreuung.',
+        ],
+        'period_balance' => [
+            'label' => 'Monat',
+            'description' => 'Saldo und Quote im gewaehlten Monat.',
+        ],
+        'total_balance' => [
+            'label' => 'Gesamtlaufzeit',
+            'description' => 'Saldo und Quote ueber die gesamte Projektlaufzeit.',
+        ],
+        'absences' => [
+            'label' => 'Fehlzeiten',
+            'description' => 'Fehltage und unentschuldigte Fehltage im gewaehlten Monat.',
+        ],
+        'tasks' => [
+            'label' => 'Aufgaben',
+            'description' => 'Offene und ueberfaellige Aufgaben.',
+        ],
+        'measures' => [
+            'label' => 'Praktika / Massnahmen',
+            'description' => 'Aktive Praktika oder Bildungsmassnahmen.',
+        ],
+    ];
+
+    public const DEFAULT_PARTICIPANT_OVERVIEW_COLUMNS = [
+        'id',
+        'first_name',
+        'last_name',
+        'participation',
+        'group_supervisor',
+        'period_balance',
+        'total_balance',
+        'absences',
+        'tasks',
+        'measures',
+        'gender',
+    ];
+
+    public const BOP_PARTICIPANT_OVERVIEW_COLUMNS = [
+        'id',
+        'parental_consent',
+        'first_name',
+        'last_name',
+        'gender',
+        'school_class',
+        'school',
+        'visited_areas',
     ];
 
     public const PARTICIPATION_STATUSES = [
@@ -109,7 +203,11 @@ class Projekt extends Model
 
     public function ruleSettings(): array
     {
-        return array_replace(self::RULE_DEFAULTS, $this->rule_settings ?? []);
+        $settings = array_replace(self::RULE_DEFAULTS, $this->rule_settings ?? []);
+        $settings['participant_overview_columns'] = $this->participantOverviewColumns();
+        $settings['participant_overview_show_metrics'] = $this->participantOverviewShowsMetrics();
+
+        return $settings;
     }
 
     public function rule(string $key, mixed $default = null): mixed
@@ -147,6 +245,64 @@ class Projekt extends Model
         }
 
         return true;
+    }
+
+    public static function participantOverviewColumnDefinitions(): array
+    {
+        return collect(self::PARTICIPANT_OVERVIEW_COLUMN_DEFINITIONS)
+            ->map(fn (array $definition, string $key) => array_merge(['key' => $key], $definition))
+            ->values()
+            ->all();
+    }
+
+    public static function participantOverviewColumnKeys(): array
+    {
+        return array_keys(self::PARTICIPANT_OVERVIEW_COLUMN_DEFINITIONS);
+    }
+
+    public static function normalizeParticipantOverviewColumns(?array $columns): array
+    {
+        $validColumns = collect($columns ?? [])
+            ->filter(fn ($column) => is_string($column))
+            ->unique()
+            ->intersect(self::participantOverviewColumnKeys())
+            ->values()
+            ->all();
+
+        return $validColumns;
+    }
+
+    public function participantOverviewColumns(): array
+    {
+        $settings = $this->rule_settings ?? [];
+        $configured = self::normalizeParticipantOverviewColumns($settings['participant_overview_columns'] ?? null);
+
+        if (!empty($configured)) {
+            return $configured;
+        }
+
+        return $this->usesBopParticipantOverviewPreset()
+            ? self::BOP_PARTICIPANT_OVERVIEW_COLUMNS
+            : self::DEFAULT_PARTICIPANT_OVERVIEW_COLUMNS;
+    }
+
+    public function participantOverviewShowsMetrics(): bool
+    {
+        $settings = $this->rule_settings ?? [];
+
+        if (array_key_exists('participant_overview_show_metrics', $settings)) {
+            return (bool) $settings['participant_overview_show_metrics'];
+        }
+
+        return !$this->usesBopParticipantOverviewPreset();
+    }
+
+    public function usesBopParticipantOverviewPreset(): bool
+    {
+        $name = mb_strtoupper((string) $this->name);
+
+        return str_contains($name, 'BOP')
+            || str_contains($name, 'BERUFSORIENTIERUNG');
     }
 
 

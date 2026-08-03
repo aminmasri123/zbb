@@ -386,7 +386,7 @@ class BopImportService
                 ],
                 [
                     'foerderschueler' => false,
-                    'eee' => false,
+                    'eee' => $this->legacyBoolean($participant->eee ?? $participant->eltereklaerung ?? false),
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]
@@ -961,6 +961,21 @@ class BopImportService
         $parts = preg_split('/\s+/', trim($name), 2) ?: [];
 
         return [$parts[0] ?? 'BOP', $parts[1] ?? 'Legacy-Benutzer'];
+    }
+
+    private function legacyBoolean(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_numeric($value)) {
+            return (int) $value === 1;
+        }
+
+        $normalized = mb_strtolower(trim((string) $value));
+
+        return in_array($normalized, ['1', 'true', 'ja', 'yes', 'y', 'j'], true);
     }
 
     private function mappedTargetId(string $sourceTable, string $sourceId, string $targetTable): ?int

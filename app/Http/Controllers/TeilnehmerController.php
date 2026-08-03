@@ -166,12 +166,82 @@ class TeilnehmerController extends Controller
             'overviewStats' => $defaultProjekt
                 ? $this->participantOverviewService->summaryForParticipantIds($overviewParticipantIds, $defaultProjekt, $overviewPeriod)
                 : [],
+            'participantOverviewColumns' => $projekt
+                ? $projekt->participantOverviewColumns()
+                : Projekt::DEFAULT_PARTICIPANT_OVERVIEW_COLUMNS,
+            'participantOverviewColumnDefinitions' => Projekt::participantOverviewColumnDefinitions(),
+            'participantOverviewShowMetrics' => $projekt?->participantOverviewShowsMetrics() ?? true,
             'filters' => [
                 'search'    => $suchbegriff,
                 'standort'  => $standortId,
                 'sort'      => $sortierung,
                 'direction' => $richtung,
                 'period' => $overviewPeriod,
+            ],
+        ]);
+    }
+
+    public function updateParentalConsent(Request $request, Personen $person)
+    {
+        $validated = $request->validate([
+            'received' => ['required', 'boolean'],
+        ]);
+
+        $user = $request->user();
+        $projekt = $this->activeProjectContext->currentAvailableFor($user);
+
+        abort_unless($projekt, 409, 'Bitte waehlen Sie zuerst ein aktives Projekt aus.');
+        abort_unless(
+            in_array('parental_consent', $projekt->participantOverviewColumns(), true),
+            403,
+            'Die Elterneinverstaendniserklaerung ist fuer dieses Projekt nicht aktiviert.'
+        );
+
+        $visibleInProject = Personen::query()
+            ->teilnehmer()
+            ->visibleForUser($user)
+            ->whereKey($person->id)
+            ->whereHas('projekte', fn ($query) => $query->where('projekts.id', $projekt->id))
+            ->exists();
+
+        abort_unless($visibleInProject, 403, 'Sie sind nicht berechtigt, diesen Teilnehmer zu bearbeiten.');
+
+        $partnerIds = $projekt->partners()->pluck('partners.id')->filter()->values();
+
+        abort_unless($partnerIds->isNotEmpty(), 422, 'Dieses Projekt hat keine Schulzuordnung fuer Elterneinverstaendnisse.');
+
+        $schoolRowIds = PersonenIstSchueler::query()
+            ->where('person_id', $person->id)
+            ->whereIn('schule_id', $partnerIds)
+            ->pluck('id');
+
+        abort_unless($schoolRowIds->isNotEmpty(), 404, 'Fuer diesen Teilnehmer wurde keine passende Schulzuordnung gefunden.');
+
+        PersonenIstSchueler::query()
+            ->whereIn('id', $schoolRowIds)
+            ->update([
+                'eee' => (bool) $validated['received'],
+                'updated_at' => now(),
+            ]);
+
+        $schoolRows = PersonenIstSchueler::query()
+            ->with('schule:id,name')
+            ->whereIn('id', $schoolRowIds)
+            ->get();
+
+        return response()->json([
+            'message' => (bool) $validated['received']
+                ? 'Elterneinverstaendniserklaerung wurde als eingegangen markiert.'
+                : 'Elterneinverstaendniserklaerung wurde als fehlend markiert.',
+            'school' => [
+                'parental_consent_received' => $schoolRows->every(fn ($row) => (bool) $row->eee),
+                'classes' => $schoolRows->pluck('klasse')->filter()->unique()->values(),
+                'schools' => $schoolRows->pluck('schule.name')->filter()->unique()->values(),
+                'contexts' => $schoolRows
+                    ->map(fn ($row) => trim(($row->schuljahr ?? '') . ' Teil ' . ($row->teil ?? '')))
+                    ->filter()
+                    ->unique()
+                    ->values(),
             ],
         ]);
     }

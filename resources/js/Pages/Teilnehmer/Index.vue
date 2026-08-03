@@ -10,6 +10,7 @@ import Swal from 'sweetalert2';
 import axios from 'axios';
 import ModalCreateTeilnehmer from '@/Pages/Teilnehmer/ModalCreateTeilnehmer.vue';
 import ZurGruppeHinzufügen from '@/Components/ZurGruppeHinzufuegen.vue';
+import { usePermissions } from '@/utils/permissions';
 
 import Dropzone from "dropzone";
 import "dropzone/dist/dropzone.css";
@@ -40,7 +41,7 @@ const groupModal = ref(null);
 let teilnehmerToDelete = ref(null); // Speichert den Namen der Teilnehmer, die gelöscht werden sollen
 let showModalLöschen = ref(false); // Modal für die Löschung
 
-const { teilnehmers, authProjekte, rollen, gruppen, projekte, standorte, defaultProjekt, filters, overviewPeriods, overviewStats  } = defineProps({
+const { teilnehmers, authProjekte, rollen, gruppen, projekte, standorte, defaultProjekt, filters, overviewPeriods, overviewStats, participantOverviewColumns, participantOverviewColumnDefinitions, participantOverviewShowMetrics  } = defineProps({
     pagination: {
         type: Object,
     },
@@ -68,13 +69,18 @@ const { teilnehmers, authProjekte, rollen, gruppen, projekte, standorte, default
      defaultProjekt: { type: Number, default: null },
      overviewPeriods: { type: Array, default: () => [] },
      overviewStats: { type: Object, default: () => ({}) },
+     participantOverviewColumns: { type: Array, default: () => [] },
+     participantOverviewColumnDefinitions: { type: Array, default: () => [] },
+     participantOverviewShowMetrics: { type: Boolean, default: true },
      filters: {
         type: Object,
         default: () => ({})
      },
 
 });
+const { can } = usePermissions();
 const showImportModal = ref(false);
+const parentalConsentSaving = ref(new Set());
 
 const importTeilnehmer = () => {
 
@@ -215,6 +221,42 @@ const filteredTeilnehmerByProject = computed(() => teilnehmerList.value.filter((
     return true;
 }));
 
+const fallbackOverviewColumns = [
+    'id',
+    'first_name',
+    'last_name',
+    'participation',
+    'group_supervisor',
+    'period_balance',
+    'total_balance',
+    'absences',
+    'tasks',
+    'measures',
+    'gender',
+];
+
+const overviewColumnDefinitionMap = computed(() => new Map(
+    participantOverviewColumnDefinitions.map((column) => [column.key, column])
+));
+
+const visibleOverviewColumns = computed(() => {
+    const configured = participantOverviewColumns?.length
+        ? participantOverviewColumns
+        : fallbackOverviewColumns;
+
+    return configured
+        .map((key) => overviewColumnDefinitionMap.value.get(key))
+        .filter(Boolean);
+});
+
+const hasOverviewColumn = (key) => visibleOverviewColumns.value.some((column) => column.key === key);
+const showOverviewMetrics = computed(() => Boolean(participantOverviewShowMetrics));
+const usesPeriodFilter = computed(() => (
+    showOverviewMetrics.value
+    || hasOverviewColumn('period_balance')
+    || hasOverviewColumn('absences')
+));
+
 const formatPeriod = (period) => {
     if (!period) return 'Monat';
     const [year, month] = period.split('-').map(Number);
@@ -245,6 +287,145 @@ const participationStatusLabel = (status) => ({
     abgebrochen: 'Abgebrochen',
 }[status] || status || '–');
 
+
+const overviewColumnLabel = (column) => {
+    return column.key === 'period_balance' ? formatPeriod(selectedPeriod.value) : column.label;
+};
+
+const sortKeyForOverviewColumn = (column) => column.sortable || null;
+
+const sortByOverviewColumn = (column) => {
+    const sortKey = sortKeyForOverviewColumn(column);
+
+    if (sortKey) {
+        sortByColumn(sortKey);
+    }
+};
+
+const overviewSortIconClass = (column) => {
+    const sortKey = sortKeyForOverviewColumn(column);
+
+    if (!sortKey) {
+        return '';
+    }
+
+    const sortType = sortKey === 'id' ? 'numeric' : 'alpha';
+    const direction = sortColumn.value === sortKey && sortDirection.value === 'asc' ? 'down' : 'up';
+
+    if (sortType === 'numeric') {
+        return direction === 'down' ? 'las la-lg la-sort-numeric-down-alt' : 'las la-lg la-sort-numeric-up-alt';
+    }
+
+    return direction === 'down' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up';
+};
+
+const overviewHeaderClass = (column) => [
+    'border border-solid border-gray-300 px-4 py-3',
+    sortKeyForOverviewColumn(column) ? 'cursor-pointer select-none' : '',
+];
+
+const overviewCellClass = (column) => {
+    const base = 'border border-solid border-gray-300 px-4 py-4';
+    const widths = {
+        id: 'px-6',
+        first_name: 'px-6 min-w-32',
+        last_name: 'px-6 min-w-32',
+        participation: 'min-w-36',
+        group_supervisor: 'min-w-44',
+        period_balance: 'min-w-36',
+        total_balance: 'min-w-36',
+        absences: 'min-w-36',
+        tasks: 'min-w-32',
+        measures: 'min-w-36',
+        school: 'min-w-52',
+        visited_areas: 'min-w-80',
+        parental_consent: 'min-w-28 text-center',
+    };
+
+    return `${base} ${widths[column.key] || ''}`;
+};
+
+const joinOrDash = (values) => {
+    return Array.isArray(values) && values.length ? values.join(', ') : '-';
+};
+
+const schoolContextLabel = (school) => joinOrDash(school?.contexts || []);
+
+const parentalConsentLabel = (value) => {
+    if (value === null || value === undefined) {
+        return '-';
+    }
+
+    return value ? 'Eingegangen' : 'Fehlt';
+};
+
+const parentalConsentClass = (value) => {
+    if (value === null || value === undefined) {
+        return 'text-gray-400';
+    }
+
+    return value ? 'text-green-600' : 'text-red-600';
+};
+
+const canUpdateParentalConsent = () => can('teilnehmer.elterneinverstaendnis.update');
+const isParentalConsentSaving = (participantId) => parentalConsentSaving.value.has(participantId);
+const setParentalConsentSaving = (participantId, saving) => {
+    const next = new Set(parentalConsentSaving.value);
+
+    if (saving) {
+        next.add(participantId);
+    } else {
+        next.delete(participantId);
+    }
+
+    parentalConsentSaving.value = next;
+};
+
+const canToggleParentalConsent = (participant) => {
+    const value = participant.overview?.school?.parental_consent_received;
+
+    return canUpdateParentalConsent()
+        && value !== null
+        && value !== undefined
+        && !isParentalConsentSaving(participant.id);
+};
+
+const toggleParentalConsent = async (participant) => {
+    if (!canToggleParentalConsent(participant)) {
+        return;
+    }
+
+    const received = participant.overview?.school?.parental_consent_received !== true;
+    setParentalConsentSaving(participant.id, true);
+
+    try {
+        const response = await axios.patch(route('teilnehmer.elterneinverstaendnis.update', participant.id), {
+            received,
+        });
+
+        participant.overview = participant.overview || {};
+        participant.overview.school = {
+            ...(participant.overview.school || {}),
+            ...(response.data.school || {}),
+        };
+
+        Swal.fire({
+            title: 'Gespeichert',
+            text: response.data.message || 'Elterneinverstaendnis wurde aktualisiert.',
+            icon: 'success',
+            timer: 1200,
+            showConfirmButton: false,
+        });
+    } catch (error) {
+        Swal.fire({
+            title: 'Fehler',
+            text: error.response?.data?.message || 'Elterneinverstaendnis konnte nicht aktualisiert werden.',
+            icon: 'error',
+        });
+    } finally {
+        setParentalConsentSaving(participant.id, false);
+    }
+};
 
 // Projekt auswählen
 const selectedCount = computed(() => selected.value.length);
@@ -410,7 +591,7 @@ const sortByColumn = (column) => {
     <app-layout>
         <template #header>{{$t('Teilnehmerübersicht')}}</template>
 
-        <section class="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6" aria-label="Kennzahlen der gefilterten Projektteilnehmer">
+        <section v-if="showOverviewMetrics" class="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6" aria-label="Kennzahlen der gefilterten Projektteilnehmer">
             <button type="button" class="rounded-xl border bg-white p-4 text-left shadow-sm" :class="attentionFilter === 'all' ? 'border-zbb ring-1 ring-zbb' : 'border-gray-200'" @click="attentionFilter = 'all'"><p class="text-xs font-semibold uppercase text-gray-500">Teilnehmer</p><p class="mt-1 text-2xl font-bold text-gray-900">{{ overviewStats.participants ?? 0 }}</p><p class="text-xs text-gray-500">im aktuellen Projektfilter</p></button>
             <button type="button" class="rounded-xl border bg-white p-4 text-left shadow-sm" :class="attentionFilter === 'overdue' ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-200'" @click="attentionFilter = attentionFilter === 'overdue' ? 'all' : 'overdue'"><p class="text-xs font-semibold uppercase text-red-600">Überfällige Aufgaben</p><p class="mt-1 text-2xl font-bold text-red-700">{{ overviewStats.with_overdue_tasks ?? 0 }}</p><p class="text-xs text-gray-500">{{ overviewStats.overdue_tasks ?? 0 }} Aufgaben betroffen</p></button>
             <button type="button" class="rounded-xl border bg-white p-4 text-left shadow-sm" :class="attentionFilter === 'unexcused' ? 'border-orange-500 ring-1 ring-orange-500' : 'border-gray-200'" @click="attentionFilter = attentionFilter === 'unexcused' ? 'all' : 'unexcused'"><p class="text-xs font-semibold uppercase text-orange-600">Unentschuldigte Fehlzeit</p><p class="mt-1 text-2xl font-bold text-orange-700">{{ overviewStats.with_unexcused_absence ?? 0 }}</p><p class="text-xs text-gray-500">im gewählten Monat</p></button>
@@ -462,6 +643,7 @@ const sortByColumn = (column) => {
             <input v-model="search" type="text" class="border border-gray-300 text-gray-900 text-sm  focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" placeholder="Suchen ..." />
 
             <select
+                v-if="usesPeriodFilter"
                 v-model="selectedPeriod"
                 class="border border-gray-300 text-gray-700 text-sm focus:ring-zbb focus:border-zbb p-2.5"
                 aria-label="Auswertungsmonat"
@@ -519,38 +701,23 @@ const sortByColumn = (column) => {
                 </p>
             </div>
 
-                <table class="w-full text-sm text-left text-gray-500 ">
-                    <thead class=" text-gray-600 uppercase bg-gray-200">
-                        <tr >
+                <table class="w-full text-sm text-left text-gray-500">
+                    <thead class="text-gray-600 uppercase bg-gray-200">
+                        <tr>
                             <th v-if="checkBoxListeTeilnehmer" class="border border-solid border-gray-300 text-center py-3">
                                 <input type="checkbox" :checked="allVisibleSelected" @change="toggleSelectAllVisible">
                             </th>
-                            <th @click="sortByColumn('id')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
-                                {{$t('id')}}
-                                <i :class="sortColumn === 'id' && sortDirection === 'asc' ? 'las la-lg la-sort-numeric-down-alt' : 'las la-lg la-sort-numeric-up-alt'"></i>
+                            <th
+                                v-for="column in visibleOverviewColumns"
+                                :key="column.key"
+                                scope="col"
+                                :class="overviewHeaderClass(column)"
+                                @click="sortByOverviewColumn(column)"
+                            >
+                                {{ overviewColumnLabel(column) }}
+                                <i v-if="sortKeyForOverviewColumn(column)" :class="overviewSortIconClass(column)"></i>
                             </th>
-                            <th @click="sortByColumn('vorname')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
-                                {{$t('vorname')}}
-                                <i :class="sortColumn === 'vorname' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
-                            </th>
-                            <th @click="sortByColumn('nachname')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
-                                {{$t('nachname')}}
-                                <i :class="sortColumn === 'nachname' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
-                            </th>
-                            <th scope="col" class="border border-solid border-gray-300 px-4 py-3">Teilnahme</th>
-                            <th scope="col" class="border border-solid border-gray-300 px-4 py-3">Gruppe / Betreuung</th>
-                            <th scope="col" class="border border-solid border-gray-300 px-4 py-3">
-                                {{ formatPeriod(selectedPeriod) }}
-                            </th>
-                            <th scope="col" class="border border-solid border-gray-300 px-4 py-3">Gesamtlaufzeit</th>
-                            <th scope="col" class="border border-solid border-gray-300 px-4 py-3">Fehlzeiten</th>
-                            <th scope="col" class="border border-solid border-gray-300 px-4 py-3">Aufgaben</th>
-                            <th scope="col" class="border border-solid border-gray-300 px-4 py-3">Praktika / Maßnahmen</th>
-                        <th @click="sortByColumn('geschlecht')" scope="col" class="border border-solid border-gray-300 px-6 py-3">
-                                {{ $t('geschlecht') }}
-                                <i :class="sortColumn === 'geschlecht' && sortDirection === 'asc' ? 'las la-lg la-sort-alpha-down' : 'las la-lg la-sort-alpha-up'"></i>
-                            </th>
-                            <th scope="col" class="border w-10 border-solid border-gray-300 text-center px-6 py-3 ">*</th> <!-- Aktionen hinzufügen -->
+                            <th scope="col" class="border w-10 border-solid border-gray-300 text-center px-6 py-3">*</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -558,73 +725,123 @@ const sortByColumn = (column) => {
                             <td v-if="checkBoxListeTeilnehmer" class="text-center py-4 border border-solid border-gray-300">
                                 <input v-model="selected" :value="teilnehmer.id" type="checkbox">
                             </td>
-                            <td class="px-6 py-4 border border-solid border-gray-300"><Link :href="route('teilnehmer.edit', teilnehmer.id)">{{ teilnehmer.id }}</Link> </td>
-                            <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.vorname }}</td>
-                            <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.nachname }}</td>
-                            <td class="px-4 py-4 border border-solid border-gray-300">
-                                <span class="inline-flex rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
-                                    {{ participationStatusLabel(teilnehmer.overview?.participation_status) }}
-                                </span>
-                                <p class="mt-1 text-xs text-gray-500">{{ teilnehmer.overview?.location || 'Kein Standort' }}</p>
+                            <td
+                                v-for="column in visibleOverviewColumns"
+                                :key="`${teilnehmer.id}-${column.key}`"
+                                :class="overviewCellClass(column)"
+                            >
+                                <template v-if="column.key === 'id'">
+                                    <Link :href="route('teilnehmer.edit', teilnehmer.id)">{{ teilnehmer.id }}</Link>
+                                </template>
+                                <template v-else-if="column.key === 'first_name'">
+                                    {{ teilnehmer.vorname }}
+                                </template>
+                                <template v-else-if="column.key === 'last_name'">
+                                    {{ teilnehmer.nachname }}
+                                </template>
+                                <template v-else-if="column.key === 'gender'">
+                                    {{ teilnehmer.geschlecht || '-' }}
+                                </template>
+                                <template v-else-if="column.key === 'parental_consent'">
+                                    <button
+                                        type="button"
+                                        class="inline-flex items-center justify-center gap-1 font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                                        :class="[parentalConsentClass(teilnehmer.overview?.school?.parental_consent_received), canToggleParentalConsent(teilnehmer) ? 'hover:underline' : '']"
+                                        :disabled="!canToggleParentalConsent(teilnehmer)"
+                                        @click="toggleParentalConsent(teilnehmer)"
+                                    >
+                                        <i v-if="isParentalConsentSaving(teilnehmer.id)" class="las la-spinner la-spin"></i>
+                                        <i v-else :class="teilnehmer.overview?.school?.parental_consent_received ? 'las la-check' : 'las la-times'"></i>
+                                        {{ parentalConsentLabel(teilnehmer.overview?.school?.parental_consent_received) }}
+                                    </button>
+                                </template>
+                                <template v-else-if="column.key === 'school_class'">
+                                    {{ joinOrDash(teilnehmer.overview?.school?.classes || []) }}
+                                </template>
+                                <template v-else-if="column.key === 'school'">
+                                    <p class="font-medium text-gray-700">{{ joinOrDash(teilnehmer.overview?.school?.schools || []) }}</p>
+                                    <p class="mt-1 text-xs text-zbb">{{ schoolContextLabel(teilnehmer.overview?.school) }}</p>
+                                </template>
+                                <template v-else-if="column.key === 'visited_areas'">
+                                    <ul v-if="teilnehmer.overview?.school?.visited_areas?.length" class="list-disc space-y-1 pl-4 text-gray-700">
+                                        <li v-for="area in teilnehmer.overview.school.visited_areas" :key="area">{{ area }}</li>
+                                    </ul>
+                                    <span v-else>-</span>
+                                </template>
+                                <template v-else-if="column.key === 'participation'">
+                                    <span class="inline-flex rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
+                                        {{ participationStatusLabel(teilnehmer.overview?.participation_status) }}
+                                    </span>
+                                    <p class="mt-1 text-xs text-gray-500">{{ teilnehmer.overview?.location || 'Kein Standort' }}</p>
+                                </template>
+                                <template v-else-if="column.key === 'group_supervisor'">
+                                    <p class="font-medium text-gray-700">{{ teilnehmer.overview?.groups?.join(', ') || 'Keine Gruppe' }}</p>
+                                    <p class="mt-1 text-xs text-gray-500">{{ teilnehmer.overview?.supervisor || 'Keine Betreuung' }}</p>
+                                </template>
+                                <template v-else-if="column.key === 'period_balance'">
+                                    <p class="font-mono font-semibold" :class="balanceClass(teilnehmer.overview?.period?.balance_minutes)">
+                                        {{ formatOverviewMinutes(teilnehmer.overview?.period?.balance_minutes) }}
+                                    </p>
+                                    <p class="text-xs text-gray-500">
+                                        Quote: {{ teilnehmer.overview?.period?.attendance_rate ?? '-' }} %
+                                    </p>
+                                </template>
+                                <template v-else-if="column.key === 'total_balance'">
+                                    <p class="font-mono font-semibold" :class="balanceClass(teilnehmer.overview?.total?.balance_minutes)">
+                                        {{ formatOverviewMinutes(teilnehmer.overview?.total?.balance_minutes) }}
+                                    </p>
+                                    <p class="text-xs text-gray-500">
+                                        Quote: {{ teilnehmer.overview?.total?.attendance_rate ?? '-' }} %
+                                    </p>
+                                </template>
+                                <template v-else-if="column.key === 'absences'">
+                                    <p class="font-semibold text-gray-700">{{ teilnehmer.overview?.period?.absence_days ?? 0 }} Tage</p>
+                                    <p class="text-xs text-red-600">
+                                        davon {{ teilnehmer.overview?.period?.unexcused_days ?? 0 }} unentschuldigt
+                                    </p>
+                                </template>
+                                <template v-else-if="column.key === 'tasks'">
+                                    <p class="font-semibold" :class="teilnehmer.overview?.overdue_tasks ? 'text-red-600' : 'text-gray-700'">
+                                        {{ teilnehmer.overview?.open_tasks ?? 0 }} offen
+                                    </p>
+                                    <p v-if="teilnehmer.overview?.overdue_tasks" class="text-xs font-medium text-red-600">
+                                        {{ teilnehmer.overview.overdue_tasks }} ueberfaellig
+                                    </p>
+                                    <p v-else-if="teilnehmer.overview?.next_due_at" class="text-xs text-gray-500">
+                                        Naechste: {{ new Date(teilnehmer.overview.next_due_at).toLocaleDateString('de-DE') }}
+                                    </p>
+                                </template>
+                                <template v-else-if="column.key === 'measures'">
+                                    <p class="font-semibold" :class="teilnehmer.overview?.overdue_measure_follow_ups ? 'text-red-600' : 'text-gray-700'">
+                                        {{ teilnehmer.overview?.active_measures ?? 0 }} aktiv
+                                    </p>
+                                    <p v-if="teilnehmer.overview?.overdue_measure_follow_ups" class="text-xs text-red-600">
+                                        {{ teilnehmer.overview.overdue_measure_follow_ups }} Nachverfolgung ueberfaellig
+                                    </p>
+                                    <p v-else-if="teilnehmer.overview?.next_measure_follow_up_at" class="text-xs text-gray-500">
+                                        Naechste: {{ new Date(teilnehmer.overview.next_measure_follow_up_at).toLocaleDateString('de-DE') }}
+                                    </p>
+                                </template>
+                                <template v-else>
+                                    -
+                                </template>
                             </td>
-                            <td class="px-4 py-4 border border-solid border-gray-300 min-w-44">
-                                <p class="font-medium text-gray-700">{{ teilnehmer.overview?.groups?.join(', ') || 'Keine Gruppe' }}</p>
-                                <p class="mt-1 text-xs text-gray-500">{{ teilnehmer.overview?.supervisor || 'Keine Betreuung' }}</p>
-                            </td>
-                            <td class="px-4 py-4 border border-solid border-gray-300 min-w-36">
-                                <p class="font-mono font-semibold" :class="balanceClass(teilnehmer.overview?.period?.balance_minutes)">
-                                    {{ formatOverviewMinutes(teilnehmer.overview?.period?.balance_minutes) }}
-                                </p>
-                                <p class="text-xs text-gray-500">
-                                    Quote: {{ teilnehmer.overview?.period?.attendance_rate ?? '–' }} %
-                                </p>
-                            </td>
-                            <td class="px-4 py-4 border border-solid border-gray-300 min-w-36">
-                                <p class="font-mono font-semibold" :class="balanceClass(teilnehmer.overview?.total?.balance_minutes)">
-                                    {{ formatOverviewMinutes(teilnehmer.overview?.total?.balance_minutes) }}
-                                </p>
-                                <p class="text-xs text-gray-500">
-                                    Quote: {{ teilnehmer.overview?.total?.attendance_rate ?? '–' }} %
-                                </p>
-                            </td>
-                            <td class="px-4 py-4 border border-solid border-gray-300 min-w-36">
-                                <p class="font-semibold text-gray-700">{{ teilnehmer.overview?.period?.absence_days ?? 0 }} Tage</p>
-                                <p class="text-xs text-red-600">
-                                    davon {{ teilnehmer.overview?.period?.unexcused_days ?? 0 }} unentschuldigt
-                                </p>
-                            </td>
-                            <td class="px-4 py-4 border border-solid border-gray-300 min-w-32">
-                                <p class="font-semibold" :class="teilnehmer.overview?.overdue_tasks ? 'text-red-600' : 'text-gray-700'">
-                                    {{ teilnehmer.overview?.open_tasks ?? 0 }} offen
-                                </p>
-                                <p v-if="teilnehmer.overview?.overdue_tasks" class="text-xs font-medium text-red-600">
-                                    {{ teilnehmer.overview.overdue_tasks }} überfällig
-                                </p>
-                                <p v-else-if="teilnehmer.overview?.next_due_at" class="text-xs text-gray-500">
-                                    Nächste: {{ new Date(teilnehmer.overview.next_due_at).toLocaleDateString('de-DE') }}
-                                </p>
-                            </td>
-                            <td class="px-4 py-4 border border-solid border-gray-300 min-w-36"><p class="font-semibold" :class="teilnehmer.overview?.overdue_measure_follow_ups ? 'text-red-600' : 'text-gray-700'">{{ teilnehmer.overview?.active_measures ?? 0 }} aktiv</p><p v-if="teilnehmer.overview?.overdue_measure_follow_ups" class="text-xs text-red-600">{{ teilnehmer.overview.overdue_measure_follow_ups }} Nachverfolgung überfällig</p><p v-else-if="teilnehmer.overview?.next_measure_follow_up_at" class="text-xs text-gray-500">Nächste: {{ new Date(teilnehmer.overview.next_measure_follow_up_at).toLocaleDateString('de-DE') }}</p></td>
-                            <td class="px-6 py-4 border border-solid border-gray-300">{{ teilnehmer.geschlecht }}</td>
-
                             <td class="border px-6 py-4 text-center">
-                                <!-- Dropdown für Aktion -->
                                 <Dropdown>
                                     <template #trigger>
-                                        <button class=" items-center  text-sm leading-4 font-medium text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
+                                        <button class="items-center text-sm leading-4 font-medium text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
                                             <span class="cursor-pointer">
-                                                <i class="transform transition-transform duration-300  la la-ellipsis-v la-lg"></i>
+                                                <i class="transform transition-transform duration-300 la la-ellipsis-v la-lg"></i>
                                             </span>
                                         </button>
                                     </template>
 
-                                    <template #content >
-                                        <!-- Gefilterte Projektauswahl -->
-                                        <span class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100 " @click="confirmDelete(teilnehmer)">
-                                            {{ $t('Löschen') }} <i class="las la-trash-alt"></i>
+                                    <template #content>
+                                        <span class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100" @click="confirmDelete(teilnehmer)">
+                                            {{ $t('Loeschen') }} <i class="las la-trash-alt"></i>
                                         </span>
                                         <Link class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100" :href="route('teilnehmer.edit', teilnehmer.id)">
-                                        {{ $t('Bearbeiten') }}  <i class="las la-edit"></i>
+                                            {{ $t('Bearbeiten') }} <i class="las la-edit"></i>
                                         </Link>
                                     </template>
                                 </Dropdown>

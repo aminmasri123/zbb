@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Bereichsauswahl;
 use App\Models\EinteilungBereiche;
+use App\Models\Partner;
 use App\Models\Personen;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -11,6 +12,12 @@ use Illuminate\Database\Eloquent\Model;
 class PersonenIstSchueler extends Model
 {
     use HasFactory;
+
+    protected $casts = [
+        'eee' => 'boolean',
+        'foerderschueler' => 'boolean',
+        'foederschueler' => 'boolean',
+    ];
 
      protected $fillable = [
         'id',
@@ -57,6 +64,11 @@ class PersonenIstSchueler extends Model
     public function person()
     {
         return $this->belongsTo(Personen::class);
+    }
+
+    public function schule()
+    {
+        return $this->belongsTo(Partner::class, 'schule_id');
     }
 
     public function bereichsauswahl()
