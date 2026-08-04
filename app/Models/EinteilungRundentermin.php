@@ -9,6 +9,8 @@ class EinteilungRundentermin extends Model
 {
     use HasFactory;
 
+    protected $table = 'einteilung_rundentermine';
+
     protected $fillable = [
         'einteilung_setting_id',
         'runde',
