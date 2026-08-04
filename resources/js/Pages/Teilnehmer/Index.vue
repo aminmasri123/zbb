@@ -289,7 +289,18 @@ const participationStatusLabel = (status) => ({
 
 
 const overviewColumnLabel = (column) => {
-    return column.key === 'period_balance' ? formatPeriod(selectedPeriod.value) : column.label;
+    if (column.key === 'period_balance') return formatPeriod(selectedPeriod.value);
+    if (column.key === 'parental_consent') return 'EEE';
+
+    return column.label;
+};
+
+const overviewColumnTitle = (column) => {
+    if (column.key === 'parental_consent') {
+        return 'Elterneinverständniserklärung';
+    }
+
+    return column.label;
 };
 
 const sortKeyForOverviewColumn = (column) => column.sortable || null;
@@ -339,7 +350,7 @@ const overviewCellClass = (column) => {
         measures: 'min-w-36',
         school: 'min-w-52',
         visited_areas: 'min-w-80',
-        parental_consent: 'min-w-28 text-center',
+        parental_consent: 'min-w-20 text-center',
     };
 
     return `${base} ${widths[column.key] || ''}`;
@@ -351,12 +362,14 @@ const joinOrDash = (values) => {
 
 const schoolContextLabel = (school) => joinOrDash(school?.contexts || []);
 
-const parentalConsentLabel = (value) => {
+const parentalConsentStatusText = (value) => {
     if (value === null || value === undefined) {
-        return '-';
+        return 'Elterneinverständniserklärung nicht verfügbar';
     }
 
-    return value ? 'Eingegangen' : 'Fehlt';
+    return value
+        ? 'Elterneinverständniserklärung eingegangen'
+        : 'Elterneinverständniserklärung fehlt';
 };
 
 const parentalConsentClass = (value) => {
@@ -365,6 +378,14 @@ const parentalConsentClass = (value) => {
     }
 
     return value ? 'text-green-600' : 'text-red-600';
+};
+
+const parentalConsentIconClass = (value) => {
+    if (value === null || value === undefined) {
+        return 'las la-minus';
+    }
+
+    return value ? 'las la-check' : 'las la-times';
 };
 
 const canUpdateParentalConsent = () => can('teilnehmer.elterneinverstaendnis.update');
@@ -712,6 +733,7 @@ const sortByColumn = (column) => {
                                 :key="column.key"
                                 scope="col"
                                 :class="overviewHeaderClass(column)"
+                                :title="overviewColumnTitle(column)"
                                 @click="sortByOverviewColumn(column)"
                             >
                                 {{ overviewColumnLabel(column) }}
@@ -745,14 +767,15 @@ const sortByColumn = (column) => {
                                 <template v-else-if="column.key === 'parental_consent'">
                                     <button
                                         type="button"
-                                        class="inline-flex items-center justify-center gap-1 font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-                                        :class="[parentalConsentClass(teilnehmer.overview?.school?.parental_consent_received), canToggleParentalConsent(teilnehmer) ? 'hover:underline' : '']"
+                                        class="inline-flex h-8 w-8 items-center justify-center rounded-full text-lg font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
+                                        :class="[parentalConsentClass(teilnehmer.overview?.school?.parental_consent_received), canToggleParentalConsent(teilnehmer) ? 'hover:bg-gray-100' : '']"
                                         :disabled="!canToggleParentalConsent(teilnehmer)"
+                                        :title="parentalConsentStatusText(teilnehmer.overview?.school?.parental_consent_received)"
+                                        :aria-label="parentalConsentStatusText(teilnehmer.overview?.school?.parental_consent_received)"
                                         @click="toggleParentalConsent(teilnehmer)"
                                     >
                                         <i v-if="isParentalConsentSaving(teilnehmer.id)" class="las la-spinner la-spin"></i>
-                                        <i v-else :class="teilnehmer.overview?.school?.parental_consent_received ? 'las la-check' : 'las la-times'"></i>
-                                        {{ parentalConsentLabel(teilnehmer.overview?.school?.parental_consent_received) }}
+                                        <i v-else :class="parentalConsentIconClass(teilnehmer.overview?.school?.parental_consent_received)"></i>
                                     </button>
                                 </template>
                                 <template v-else-if="column.key === 'school_class'">

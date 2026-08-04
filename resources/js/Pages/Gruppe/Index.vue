@@ -124,18 +124,58 @@ const handleDelete = (gruppeId) => {
 };
 
 // 🔹 Suche
+const normalizeSearchValue = (value) => String(value ?? '').toLowerCase().trim();
+
+const toDateParts = (value) => {
+  if (!value) return [];
+
+  const formatted = formatDate(value);
+  const raw = String(value);
+  const rawDate = raw.split('T')[0];
+  const parts = [raw, rawDate, formatted];
+
+  if (formatted) {
+    const [day, month, year] = formatted.split('.');
+    if (day && month && year) {
+      parts.push(`${day}.${month}.${year.slice(-2)}`, `${day}.${month}`, `${month}.${year}`);
+
+      const shortDay = String(Number(day));
+      const shortMonth = String(Number(month));
+      parts.push(
+        `${shortDay}.${shortMonth}.${year}`,
+        `${shortDay}.${shortMonth}.${year.slice(-2)}`,
+        `${shortDay}.${shortMonth}`,
+      );
+    }
+  }
+
+  return parts.filter(Boolean);
+};
+
+const gruppeSearchText = (gruppe) => [
+  gruppe.bereich?.name,
+  gruppe.betreuer?.vorname,
+  gruppe.betreuer?.nachname,
+  `${gruppe.betreuer?.vorname ?? ''} ${gruppe.betreuer?.nachname ?? ''}`,
+  gruppe.raum?.name,
+  gruppe.raum?.standort?.name,
+  gruppe.standort?.name,
+  gruppe.externer_ort,
+  gruppe.typ,
+  gruppe.partners?.map((partner) => partner.name).join(' '),
+  ...toDateParts(gruppe.anfangsdatum),
+  ...toDateParts(gruppe.enddatum),
+  `${formatDate(gruppe.anfangsdatum) ?? ''} ${formatDate(gruppe.enddatum) ?? ''}`,
+  `${formatTime(gruppe.startzeit)}-${formatTime(gruppe.endzeit)}`,
+  formatTime(gruppe.startzeit),
+  formatTime(gruppe.endzeit),
+].map(normalizeSearchValue).filter(Boolean).join(' ');
+
 const applySearchFilter = () => {
-  if (search.value) {
-    const q = search.value.toLowerCase();
-    filteredGruppen.value = localGruppen.value.filter(g =>
-      g.bereich?.name?.toLowerCase().includes(q) ||
-      g.betreuer?.vorname?.toLowerCase().includes(q) ||
-      g.betreuer?.nachname?.toLowerCase().includes(q) ||
-      g.raum?.name?.toLowerCase().includes(q) ||
-      g.partners?.some((partner) => partner.name?.toLowerCase().includes(q)) ||
-      g.standort?.name?.toLowerCase().includes(q) ||
-      g.externer_ort?.toLowerCase().includes(q)
-    );
+  const q = normalizeSearchValue(search.value);
+
+  if (q) {
+    filteredGruppen.value = localGruppen.value.filter(g => gruppeSearchText(g).includes(q));
   } else {
     filteredGruppen.value = [...localGruppen.value];
   }
