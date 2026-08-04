@@ -427,8 +427,8 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::get('/gruppehasteilnehmer/{id}', [GruppeHasTeilnehmerController::class, 'show'])->name('gruppeHasTeilnehmer.show')->middleware(['module:participant_management', 'projectFeature:participant_management']);
     Route::post('/gruppehasteilnehmer/anlegen', [GruppeHasTeilnehmerController::class, 'store'])->name('gruppeHasTeilnehmer.store')->middleware(['module:participant_management', 'projectFeature:participant_management', 'can:gruppeHasTeilnehmer.store']);
 
-    Route::delete('/gruppehasteilnehmer/gruppe/{gruppe}/teilnehmer/{personen}', [GruppeHasTeilnehmerController::class, 'destroyTeilnehmer'])->name('gruppeHasTeilnehmer.destroyTeilnehmer')->middleware(['module:participant_management', 'projectFeature:participant_management']);
-    Route::delete('/gruppehasteilnehmer/entfernen/{id}', [GruppeHasTeilnehmerController::class, 'destroy'])->name('gruppeHasPersonen.destroy')->middleware(['module:participant_management', 'projectFeature:participant_management']);
+    Route::delete('/gruppehasteilnehmer/gruppe/{gruppe}/teilnehmer/{personen}', [GruppeHasTeilnehmerController::class, 'destroyTeilnehmer'])->name('gruppeHasTeilnehmer.destroyTeilnehmer')->middleware(['module:participant_management', 'projectFeature:participant_management', 'can:gruppeHasTeilnehmer.destroyTeilnehmer']);
+    Route::delete('/gruppehasteilnehmer/entfernen/{id}', [GruppeHasTeilnehmerController::class, 'destroy'])->name('gruppeHasPersonen.destroy')->middleware(['module:participant_management', 'projectFeature:participant_management', 'can:gruppeHasTeilnehmer.destroyTeilnehmer']);
     });
 
     //Klassenbuch
@@ -511,9 +511,9 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
 
     //Anwesenheiten
     Route::middleware('projectFeature:attendance_management')->group(function () {
-    Route::post('/anwesenheit/speichern', [AnwesenheitController::class, 'store'])->name('anwesenheit.store');
-    Route::delete('/anwesenheit/entfernen/{id}', [AnwesenheitController::class, 'destroy'])->name('anwesenheit.destroy');
-    Route::post('/anwesenheit/update', [AnwesenheitController::class, 'update'])->name('anwesenheit.update');
+    Route::post('/anwesenheit/speichern', [AnwesenheitController::class, 'store'])->name('anwesenheit.store')->can('anwesenheit.manage');
+    Route::delete('/anwesenheit/entfernen/{id}', [AnwesenheitController::class, 'destroy'])->name('anwesenheit.destroy')->can('anwesenheit.destroy');
+    Route::post('/anwesenheit/update', [AnwesenheitController::class, 'update'])->name('anwesenheit.update')->can('anwesenheit.manage');
     });
 
     //Kontakte

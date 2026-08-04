@@ -52,6 +52,8 @@
     const canViewAttendance = computed(() => canReadAttendance.value || canUseAttendanceExports.value)
     const canManageAttendance = computed(() => can('anwesenheit.manage'))
     const canExportAttendance = canUseAttendanceExports
+    const canAddTeilnehmerToGroup = computed(() => can('gruppeHasTeilnehmer.store'))
+    const canRemoveTeilnehmerFromGroup = computed(() => can('gruppeHasTeilnehmer.destroyTeilnehmer'))
     const klassenbuchErlaubt = computed(() => Boolean(props.gruppe?.projekt?.klassenbuch_aktiv) && can('klassenbuch.index'))
     const erstesKlassenbuch = computed(() => props.gruppe?.klassenbuecher?.[0] || null)
     const klassenbuchHref = computed(() =>
@@ -91,6 +93,10 @@ datumgeplantEnd.value =props.gruppe.enddatum;
 
 // Funktion, um nach Klick auf „Übernehmen“ die ausgewählten Teilnehmer hinzuzufügen
 const confirmTeilnehmer = async () => {
+  if (!canAddTeilnehmerToGroup.value) {
+    return;
+  }
+
   if (isSubmittingTeilnehmer.value) {
     return;
   }
@@ -1417,6 +1423,10 @@ const speichernSofort = async (tID, ttag, statusName, tatstartTime, tatendTime) 
 }
 
 const entferneTeilnehmer = async (teilnehmer) => {
+  if (!canRemoveTeilnehmerFromGroup.value) {
+    return
+  }
+
   const name = `${teilnehmer.vorname} ${teilnehmer.nachname}`.trim()
 
   const result = await Swal.fire({
@@ -1500,7 +1510,7 @@ const exportMitTag = async () => {
 
     <div class="p-6 space-y-8 bg-white rounded-lg shadow-sm ">
       <!-- Teilnehmer hinzufügen -->
-      <div class="bg-gray-50 rounded-lg p-4 border shadow-sm">
+      <div v-if="canAddTeilnehmerToGroup || klassenbuchErlaubt" class="bg-gray-50 rounded-lg p-4 border shadow-sm">
         <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h3 class="font-semibold text-gray-700">Teilnehmer hinzufügen</h3>
           <Link
@@ -1515,12 +1525,14 @@ const exportMitTag = async () => {
 
         <Button
           label="➕ Teilnehmer hinzufügen"
+          v-if="canAddTeilnehmerToGroup"
           icon="pi pi-users"
           class="w-full !bg-orange-500 hover:!bg-orange-600 border-none"
           @click="showTeilnehmerModal = true"
         />
 
         <Dialog
+          v-if="canAddTeilnehmerToGroup"
           v-model:visible="showTeilnehmerModal"
           modal
           header="➕ Teilnehmer hinzufügen"
@@ -1801,6 +1813,7 @@ const exportMitTag = async () => {
                       <span class="text-sm text-zbb">{{ formatTime(t.pivot?.zeitgeplant?.startzeit) }} - {{formatTime(t.pivot?.zeitgeplant?.endzeit)}}</span>
                     </div>
                     <button
+                      v-if="canRemoveTeilnehmerFromGroup"
                       type="button"
                       class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded border border-red-200 text-red-600 hover:bg-red-50"
                       title="Teilnehmer aus Gruppe entfernen"

@@ -55,7 +55,7 @@ class RoutePermissionMap
         'notifications.destroy' => 'notifications.readAll',
         'anwesenheit.store' => 'anwesenheit.manage',
         'anwesenheit.update' => 'anwesenheit.manage',
-        'gruppeHasPersonen.destroy' => 'anwesenheit.destroy',
+        'gruppeHasPersonen.destroy' => 'gruppeHasTeilnehmer.destroyTeilnehmer',
         'gruppe.bop.export.anwesenheitsliste' => 'anwesenheit.export',
         'export.anwesenheitslite_V1' => 'anwesenheit.export',
         'export.projekt.anwesenheit.periode' => 'anwesenheit.export',
