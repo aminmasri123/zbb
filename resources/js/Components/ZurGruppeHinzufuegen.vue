@@ -16,6 +16,19 @@ const selectedGroup = ref('')
 const showModal = ref(false)
 const isSubmitting = ref(false)
 
+const sortedGruppen = computed(() => {
+  return [...props.gruppen].sort((a, b) => {
+    const dateA = new Date(a.anfangsdatum || a.created_at || 0).getTime()
+    const dateB = new Date(b.anfangsdatum || b.created_at || 0).getTime()
+
+    if (dateA !== dateB) {
+      return dateB - dateA
+    }
+
+    return Number(b.id || 0) - Number(a.id || 0)
+  })
+})
+
 const selectedGroupData = computed(() =>
   props.gruppen.find(gruppe => String(gruppe.id) === String(selectedGroup.value))
 )
@@ -115,7 +128,7 @@ defineExpose({ open })
             {{ $t('Gruppe wählen') }}
           </option>
           <option
-            v-for="gruppe in gruppen"
+            v-for="gruppe in sortedGruppen"
             :key="gruppe.id"
             :value="gruppe.id"
           >
