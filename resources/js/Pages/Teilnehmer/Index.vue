@@ -81,8 +81,17 @@ const { teilnehmers, authProjekte, rollen, gruppen, projekte, standorte, default
 const { can } = usePermissions();
 const showImportModal = ref(false);
 const parentalConsentSaving = ref(new Set());
+const canCreateParticipant = computed(() => can('teilnehmer.store'));
+const canImportParticipant = computed(() => can('teilnehmer.import') || can('teilnehmer.store'));
+const canUpdateParticipant = computed(() => can('teilnehmer.update'));
+const canDeleteParticipant = computed(() => can('teilnehmer.destroy'));
+const canBulkDeleteParticipant = computed(() => can('teilnehmer.bulkDestroy') || can('teilnehmer.destroy'));
+const canAssignParticipantToGroup = computed(() => can('gruppeHasTeilnehmer.store'));
+const canUseSelectionActions = computed(() => canAssignParticipantToGroup.value || canBulkDeleteParticipant.value);
+const canManageParticipantRows = computed(() => canUpdateParticipant.value || canDeleteParticipant.value);
 
 const importTeilnehmer = () => {
+    if (!canImportParticipant.value) return;
 
     showImportModal.value = true;
 
@@ -167,6 +176,8 @@ const formatImportMessage = (response) => {
 };
 // Löschbestätigung anzeigen und Abteilungsnamen speichern
 const confirmDelete = (teilnehmer) => {
+    if (!canDeleteParticipant.value) return;
+
     teilnehmerToDelete.value = {
         name: teilnehmer.vorname, // Speichere den Namen der Abteilung
         id: teilnehmer.id      // Speichere die ID der Abteilung
@@ -456,6 +467,8 @@ const allVisibleSelected = computed(() =>
 );
 
 const toggleSelectionMode = () => {
+    if (!canUseSelectionActions.value) return;
+
     checkBoxListeTeilnehmer.value = !checkBoxListeTeilnehmer.value;
 
     if (!checkBoxListeTeilnehmer.value) {
@@ -475,6 +488,8 @@ const toggleSelectAllVisible = () => {
 };
 
 const openGroupModal = () => {
+    if (!canAssignParticipantToGroup.value) return;
+
     if (selected.value.length === 0) {
         Swal.fire({
             title: 'Keine Auswahl',
@@ -489,6 +504,8 @@ const openGroupModal = () => {
 };
 
 const deleteSelectedTeilnehmer = async () => {
+    if (!canBulkDeleteParticipant.value) return;
+
     if (selected.value.length === 0) {
         Swal.fire({
             title: 'Keine Auswahl',
@@ -542,6 +559,8 @@ const selectStandort = (standortId) => {
 
 // Modal öffnen und schließen
 const openModal = () => {
+    if (!canCreateParticipant.value) return;
+
     isModalOpen.value = true;
 };
 
@@ -550,6 +569,8 @@ const closeModal = () => {
 };
 // Teilnehmer hinzufügen
 const addTeilnehmer = async (formData) => {
+        if (!canCreateParticipant.value) return;
+
         // Überprüfe, ob alle erforderlichen Felder ausgefüllt sind
         if (!formData.vorname || !formData.nachname || !formData.geschlecht) {
             Swal.fire({
@@ -624,7 +645,7 @@ const sortByColumn = (column) => {
 
         <!-- Suchfeld -->
         <div class="flex justify-around items-center mb-3">
-            <Dropdown align="left">
+            <Dropdown v-if="canUseSelectionActions" align="left">
                 <template #trigger>
                     <button class="bg-white border border-gray-300 rounded-l-md px-5 py-2 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500">
                         <i class="la la-ellipsis-v la-lg"></i>
@@ -640,28 +661,40 @@ const sortByColumn = (column) => {
                         {{ allVisibleSelected ? 'Sichtbare abwählen' : 'Sichtbare markieren' }}
                         <i class="las la-tasks"></i>
                     </button>
-                    <button type="button" class="flex w-full justify-between cursor-pointer py-2 px-6 items-center hover:bg-gray-100 text-left" @click="openGroupModal">
+                    <button v-if="canAssignParticipantToGroup" type="button" class="flex w-full justify-between cursor-pointer py-2 px-6 items-center hover:bg-gray-100 text-left" @click="openGroupModal">
                         In Gruppe hinzufügen
                         <span class="ml-4 text-xs text-gray-500">{{ selectedCount }}</span>
                     </button>
-                    <button type="button" class="flex w-full justify-between cursor-pointer py-2 px-6 items-center hover:bg-red-50 text-left text-red-600" @click="deleteSelectedTeilnehmer">
+                    <button v-if="canBulkDeleteParticipant" type="button" class="flex w-full justify-between cursor-pointer py-2 px-6 items-center hover:bg-red-50 text-left text-red-600" @click="deleteSelectedTeilnehmer">
                         Markierte löschen
                         <span class="ml-4 text-xs">{{ selectedCount }}</span>
                     </button>
                 </template>
             </Dropdown>
-            <div @click="openModal" class="flex items-center">
-                <i class="la la-plus bg-white border border-gray-300  px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
+            <div v-if="canCreateParticipant" @click="openModal" class="flex items-center">
+                <i
+                    class="la la-plus bg-white border border-gray-300 px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"
+                    :class="!canUseSelectionActions ? 'rounded-l-md' : ''"
+                ></i>
             </div>
 
 
-            <div @click="importTeilnehmer" class="flex items-center">
-                <i class="las la-upload bg-white border border-gray-300  px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
+            <div v-if="canImportParticipant" @click="importTeilnehmer" class="flex items-center">
+                <i
+                    class="las la-upload bg-white border border-gray-300 px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"
+                    :class="!canUseSelectionActions && !canCreateParticipant ? 'rounded-l-md' : ''"
+                ></i>
             </div>
 
 
             <label for="simple-search" class="sr-only">Search</label>
-            <input v-model="search" type="text" class="border border-gray-300 text-gray-900 text-sm  focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" placeholder="Suchen ..." />
+            <input
+                v-model="search"
+                type="text"
+                class="border border-gray-300 text-gray-900 text-sm focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                :class="!canUseSelectionActions && !canCreateParticipant && !canImportParticipant ? 'rounded-l-md' : ''"
+                placeholder="Suchen ..."
+            />
 
             <select
                 v-if="usesPeriodFilter"
@@ -707,6 +740,7 @@ const sortByColumn = (column) => {
         </div>
 
          <ZurGruppeHinzufügen
+            v-if="canAssignParticipantToGroup"
             ref="groupModal"
             :show-button="false"
             :selected="selected"
@@ -725,7 +759,7 @@ const sortByColumn = (column) => {
                 <table class="w-full text-sm text-left text-gray-500">
                     <thead class="text-gray-600 uppercase bg-gray-200">
                         <tr>
-                            <th v-if="checkBoxListeTeilnehmer" class="border border-solid border-gray-300 text-center py-3">
+                            <th v-if="checkBoxListeTeilnehmer && canUseSelectionActions" class="border border-solid border-gray-300 text-center py-3">
                                 <input type="checkbox" :checked="allVisibleSelected" @change="toggleSelectAllVisible">
                             </th>
                             <th
@@ -739,12 +773,12 @@ const sortByColumn = (column) => {
                                 {{ overviewColumnLabel(column) }}
                                 <i v-if="sortKeyForOverviewColumn(column)" :class="overviewSortIconClass(column)"></i>
                             </th>
-                            <th scope="col" class="border w-10 border-solid border-gray-300 text-center px-6 py-3">*</th>
+                            <th v-if="canManageParticipantRows" scope="col" class="border w-10 border-solid border-gray-300 text-center px-6 py-3">*</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr v-for="teilnehmer in filteredTeilnehmerByProject" :key="teilnehmer.id" class="bg-white border-b">
-                            <td v-if="checkBoxListeTeilnehmer" class="text-center py-4 border border-solid border-gray-300">
+                            <td v-if="checkBoxListeTeilnehmer && canUseSelectionActions" class="text-center py-4 border border-solid border-gray-300">
                                 <input v-model="selected" :value="teilnehmer.id" type="checkbox">
                             </td>
                             <td
@@ -753,7 +787,8 @@ const sortByColumn = (column) => {
                                 :class="overviewCellClass(column)"
                             >
                                 <template v-if="column.key === 'id'">
-                                    <Link :href="route('teilnehmer.edit', teilnehmer.id)">{{ teilnehmer.id }}</Link>
+                                    <Link v-if="canUpdateParticipant" :href="route('teilnehmer.edit', teilnehmer.id)">{{ teilnehmer.id }}</Link>
+                                    <span v-else>{{ teilnehmer.id }}</span>
                                 </template>
                                 <template v-else-if="column.key === 'first_name'">
                                     {{ teilnehmer.vorname }}
@@ -849,7 +884,7 @@ const sortByColumn = (column) => {
                                     -
                                 </template>
                             </td>
-                            <td class="border px-6 py-4 text-center">
+                            <td v-if="canManageParticipantRows" class="border px-6 py-4 text-center">
                                 <Dropdown>
                                     <template #trigger>
                                         <button class="items-center text-sm leading-4 font-medium text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
@@ -860,10 +895,10 @@ const sortByColumn = (column) => {
                                     </template>
 
                                     <template #content>
-                                        <span class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100" @click="confirmDelete(teilnehmer)">
+                                        <span v-if="canDeleteParticipant" class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100" @click="confirmDelete(teilnehmer)">
                                             {{ $t('Loeschen') }} <i class="las la-trash-alt"></i>
                                         </span>
-                                        <Link class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100" :href="route('teilnehmer.edit', teilnehmer.id)">
+                                        <Link v-if="canUpdateParticipant" class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100" :href="route('teilnehmer.edit', teilnehmer.id)">
                                             {{ $t('Bearbeiten') }} <i class="las la-edit"></i>
                                         </Link>
                                     </template>
@@ -880,6 +915,7 @@ const sortByColumn = (column) => {
 
 
             <ModalCreateTeilnehmer
+                v-if="canCreateParticipant"
                 :visible="isModalOpen"
                 :active-project="$page.props.currentProjekt"
                 :standorte="standorte"
@@ -890,10 +926,10 @@ const sortByColumn = (column) => {
 
         <!-- Modal für die Löschung der Abteilung-->
 
-            <ModalDestroy v-if="showModalLöschen"@close="showModalLöschen = false"@delete="deleteTeilnehmer":seite="seite":toDelete="teilnehmerToDelete"/>
+            <ModalDestroy v-if="canDeleteParticipant && showModalLöschen"@close="showModalLöschen = false"@delete="deleteTeilnehmer":seite="seite":toDelete="teilnehmerToDelete"/>
 
 
-            <div v-if="showImportModal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+            <div v-if="canImportParticipant && showImportModal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
                 <div class="bg-white p-6 rounded-lg w-1/2">
 
                     <div class="flex justify-between mb-4">

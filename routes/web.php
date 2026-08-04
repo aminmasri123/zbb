@@ -425,7 +425,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
 
     //GruppeHasTeilnehmer
     Route::get('/gruppehasteilnehmer/{id}', [GruppeHasTeilnehmerController::class, 'show'])->name('gruppeHasTeilnehmer.show')->middleware(['module:participant_management', 'projectFeature:participant_management']);
-    Route::post('/gruppehasteilnehmer/anlegen', [GruppeHasTeilnehmerController::class, 'store'])->name('gruppeHasTeilnehmer.store')->middleware(['module:participant_management', 'projectFeature:participant_management']);
+    Route::post('/gruppehasteilnehmer/anlegen', [GruppeHasTeilnehmerController::class, 'store'])->name('gruppeHasTeilnehmer.store')->middleware(['module:participant_management', 'projectFeature:participant_management', 'can:gruppeHasTeilnehmer.store']);
 
     Route::delete('/gruppehasteilnehmer/gruppe/{gruppe}/teilnehmer/{personen}', [GruppeHasTeilnehmerController::class, 'destroyTeilnehmer'])->name('gruppeHasTeilnehmer.destroyTeilnehmer')->middleware(['module:participant_management', 'projectFeature:participant_management']);
     Route::delete('/gruppehasteilnehmer/entfernen/{id}', [GruppeHasTeilnehmerController::class, 'destroy'])->name('gruppeHasPersonen.destroy')->middleware(['module:participant_management', 'projectFeature:participant_management']);
