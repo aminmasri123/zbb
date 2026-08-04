@@ -300,7 +300,7 @@ class GruppeHasTeilnehmerController extends Controller
             'teilnehmer' => $teilnehmer,
             'anwesenheitsstatuten' => $anwesenheitsstatuten,
             'bopLegacyExporte' => $this->bopLegacyExporte($gruppe),
-            'potenzialanalyse' => $this->potenzialanalysePayload($gruppe),
+            'potenzialanalyse' => $this->potenzialanalysePayload($gruppe, $user),
         ]);
 
     }
@@ -368,6 +368,10 @@ class GruppeHasTeilnehmerController extends Controller
             return false;
         }
 
+        if ($this->istPotenzialanalyseGruppe($gruppe) && ! $this->canViewPotenzialanalyse($user)) {
+            return false;
+        }
+
         if ($user->can('gruppe.view.all') || $user->can('projekt.mitarbeiter.view.all')) {
             return true;
         }
@@ -393,6 +397,21 @@ class GruppeHasTeilnehmerController extends Controller
     private function userPersonId($user): ?int
     {
         return $user?->person_id ?? $user?->person?->id;
+    }
+
+    private function canViewPotenzialanalyse($user): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        foreach (['potenzialanalyse.index', 'potenzialanalyse.update', 'potenzialanalyse.manage'] as $permission) {
+            if ($user->can($permission)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function parentalConsentReceived(Personen $person): ?bool
@@ -432,17 +451,25 @@ class GruppeHasTeilnehmerController extends Controller
         return $user->can('gruppe.export.serienbrief');
     }
 
-    private function potenzialanalysePayload(Gruppe $gruppe): array
+    private function potenzialanalysePayload(Gruppe $gruppe, $user = null): array
     {
         $projekt = $gruppe->projekt;
+        $canView = $this->canViewPotenzialanalyse($user);
+        $canUpdate = $user?->can('potenzialanalyse.update') ?? false;
+        $emptyPayload = [
+            'aktiv' => false,
+            'erlaubt' => $canView,
+            'can' => [
+                'view' => $canView,
+                'update' => $canUpdate,
+            ],
+            'tage' => null,
+            'uebungen' => [],
+            'teilnehmer' => [],
+        ];
 
-        if (! $projekt?->potenzialanalyse_aktiv) {
-            return [
-                'aktiv' => false,
-                'tage' => null,
-                'uebungen' => [],
-                'teilnehmer' => [],
-            ];
+        if (! $this->istPotenzialanalyseGruppe($gruppe) || ! $projekt?->potenzialanalyse_aktiv || ! $canView) {
+            return $emptyPayload;
         }
 
         $uebungen = $projekt->potenzialanalyseUebungen
@@ -480,6 +507,11 @@ class GruppeHasTeilnehmerController extends Controller
         if ($personenIds->isEmpty()) {
             return [
                 'aktiv' => true,
+                'erlaubt' => true,
+                'can' => [
+                    'view' => true,
+                    'update' => $canUpdate,
+                ],
                 'tage' => $projekt->potenzialanalyse_tage,
                 'uebungen' => $uebungen,
                 'teilnehmer' => [],
@@ -572,6 +604,11 @@ class GruppeHasTeilnehmerController extends Controller
 
         return [
             'aktiv' => true,
+            'erlaubt' => true,
+            'can' => [
+                'view' => true,
+                'update' => $canUpdate,
+            ],
             'tage' => $projekt->potenzialanalyse_tage,
             'uebungen' => $uebungen,
             'teilnehmer' => $teilnehmer,
@@ -702,6 +739,10 @@ class GruppeHasTeilnehmerController extends Controller
 
     private function potenzialanalyseExporte(Gruppe $gruppe, array $context): array
     {
+        if (! $this->canViewPotenzialanalyse(auth()->user())) {
+            return [];
+        }
+
         $items = [
             [
                 'id' => 'bop-pa-zertifikat-gruppe',

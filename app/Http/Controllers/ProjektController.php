@@ -142,6 +142,11 @@ class ProjektController extends Controller
                 ->mapWithKeys(fn ($id) => [$id => ['aktiv' => 1]])
                 ->all();
             $kostenstelleSyncData = $this->resolveKostenstelleSyncData($validatedData);
+
+            if (! $request->user()?->can('potenzialanalyse.manage')) {
+                unset($validatedData['potenzialanalyse_aktiv'], $validatedData['potenzialanalyse_tage']);
+            }
+
             $potenzialanalyseConfig = $this->resolvePotenzialanalyseConfig($validatedData);
 
             $projekt = DB::transaction(function () use ($validatedData, $bereichSyncData, $kostenstelleSyncData, $potenzialanalyseConfig) {
@@ -315,7 +320,7 @@ class ProjektController extends Controller
                 ->mapWithKeys(fn ($id) => [$id => ['aktiv' => 1]])
                 ->all();
             $kostenstelleSyncData = $this->resolveKostenstelleSyncData($validatedData);
-            $potenzialanalyseConfig = ($request->has('potenzialanalyse_aktiv') || $request->has('potenzialanalyse_tage'))
+            $potenzialanalyseConfig = ($request->user()?->can('potenzialanalyse.manage') && ($request->has('potenzialanalyse_aktiv') || $request->has('potenzialanalyse_tage')))
                 ? $this->resolvePotenzialanalyseConfig($validatedData)
                 : null;
 
@@ -482,7 +487,16 @@ class ProjektController extends Controller
             'potenzialanalyse_tage' => ['nullable', 'integer', 'min:1', 'max:60'],
         ]);
 
-        if ($validated['features']['potential_analysis'] && empty($validated['potenzialanalyse_tage'])) {
+        $canManagePotenzialanalyse = $request->user()?->can('potenzialanalyse.manage') ?? false;
+
+        if (! $canManagePotenzialanalyse) {
+            $validated['features']['potential_analysis'] = (bool) $projekt->potenzialanalyse_aktiv;
+            $validated['potenzialanalyse_tage'] = $projekt->potenzialanalyse_aktiv && $projekt->potenzialanalyse_tage
+                ? (int) $projekt->potenzialanalyse_tage
+                : null;
+        }
+
+        if ($canManagePotenzialanalyse && $validated['features']['potential_analysis'] && empty($validated['potenzialanalyse_tage'])) {
             throw ValidationException::withMessages([
                 'potenzialanalyse_tage' => 'Bitte die Anzahl der PA-Tage angeben.',
             ]);

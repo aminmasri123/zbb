@@ -19,26 +19,26 @@
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
-            <button v-if="can('einteilung.store')" type="button" class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2" @click="openCreateModal">
+            <button v-if="canEinteilungStore" type="button" class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2" @click="openCreateModal">
               <i class="la la-user-plus mr-1.5 text-base" aria-hidden="true"></i>Teilnehmer hinzufügen
             </button>
-            <button v-if="can('einteilung.export')" type="button" class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2" @click="openExportModal">
+            <button v-if="canEinteilungExport" type="button" class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2" @click="openExportModal">
               <i class="la la-download mr-1.5 text-base" aria-hidden="true"></i>Exportieren
             </button>
-            <button v-if="can('einteilung.store')" type="button" :disabled="isBusy" class="inline-flex items-center rounded-lg bg-orange-500 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" @click="submitEinteilen">
+            <button v-if="canEinteilungStore" type="button" :disabled="isBusy" class="inline-flex items-center rounded-lg bg-orange-500 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" @click="submitEinteilen">
               <i class="la la-magic mr-1.5 text-base" aria-hidden="true"></i>{{ isBusy ? 'Bitte warten …' : 'Automatisch einteilen' }}
             </button>
           </div>
         </div>
 
-        <div v-if="can('einteilung.planning') || can('einteilung.destroy')" class="flex flex-col gap-3 border-t border-gray-100 bg-gray-50 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div v-if="can('einteilung.planning')" class="flex flex-wrap items-center gap-1">
+        <div v-if="canEinteilungPlanning || canEinteilungDestroy" class="flex flex-col gap-3 border-t border-gray-100 bg-gray-50 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div v-if="canEinteilungPlanning" class="flex flex-wrap items-center gap-1">
             <span class="mr-2 text-xs font-bold uppercase tracking-wide text-gray-500">Planung</span>
             <button type="button" class="rounded-md px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-white hover:text-orange-700 hover:shadow-sm" @click="openParameterModal"><i class="la la-sliders-h mr-1" aria-hidden="true"></i>Parameter</button>
             <button type="button" class="rounded-md px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-white hover:text-orange-700 hover:shadow-sm" @click="openSwitchModal"><i class="la la-exchange-alt mr-1" aria-hidden="true"></i>Runden tauschen</button>
             <button type="button" class="rounded-md px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-white hover:text-orange-700 hover:shadow-sm" @click="openGruppenModal"><i class="la la-users mr-1" aria-hidden="true"></i>Gruppen generieren</button>
           </div>
-          <button v-if="can('einteilung.destroy')" type="button" :disabled="isBusy" class="self-start rounded-md px-3 py-1.5 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto" @click="submitDestroy">
+          <button v-if="canEinteilungDestroy" type="button" :disabled="isBusy" class="self-start rounded-md px-3 py-1.5 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto" @click="submitDestroy">
             <i class="la la-trash mr-1" aria-hidden="true"></i>Einteilung löschen
           </button>
         </div>
@@ -124,8 +124,8 @@
                   :key="`fullscreen-student-${runde}-${bereich.id}-${schueler.id}`"
                   type="button"
                   class="group flex w-full min-w-0 items-center gap-1 rounded px-1 py-px text-left text-[10px] leading-[1.25] transition"
-                  :class="can('einteilung.update') ? 'hover:bg-orange-50 focus:bg-orange-50 focus:outline-none focus:ring-1 focus:ring-orange-300' : 'cursor-default'"
-                  :disabled="!can('einteilung.update')"
+                  :class="canEinteilungUpdate ? 'hover:bg-orange-50 focus:bg-orange-50 focus:outline-none focus:ring-1 focus:ring-orange-300' : 'cursor-default'"
+                  :disabled="!canEinteilungUpdate"
                   :title="`${schueler.nachname}, ${schueler.vorname} · Klasse ${schueler.klasse || '–'}`"
                   @click="openEditModal(schueler)"
                 >
@@ -154,29 +154,32 @@
             <div class="grid gap-4" :class="isFullscreen ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'">
             <article v-for="bereich in allBereiche" :key="`${bereich.id}-${displayRound}`" class="flex min-w-0 flex-col overflow-hidden rounded-xl border bg-gray-50/60" :class="capacityState(bereich.name, displayRound).borderClass">
               <header class="border-b border-gray-200 bg-white p-3.5">
-                <div class="flex items-start justify-between gap-3">
-                  <h3 class="min-w-0 text-sm font-bold leading-5 text-gray-900">{{ bereich.name }}</h3>
-                  <span class="shrink-0 rounded-full px-2 py-0.5 text-xs font-bold" :class="capacityState(bereich.name, displayRound).badgeClass">{{ roundParticipants(bereich.name, displayRound).length }} / {{ capacityForBereich(bereich.name) }}</span>
-                </div>
-                <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100" role="progressbar" :aria-label="`Auslastung ${bereich.name} in Runde ${displayRound}`" :aria-valuenow="capacityState(bereich.name, displayRound).percentage" aria-valuemin="0" aria-valuemax="100">
-                  <div class="h-full rounded-full transition-all" :class="capacityState(bereich.name, displayRound).barClass" :style="{ width: `${capacityState(bereich.name, displayRound).percentage}%` }"></div>
-                </div>
-                <p class="mt-1.5 text-xs text-gray-500">{{ capacityState(bereich.name, displayRound).label }}</p>
+                <h3 class="min-w-0 text-sm font-bold leading-5 text-gray-900">{{ bereich.name }}</h3>
               </header>
 
               <ul class="min-h-[18rem] flex-1 space-y-1.5 overflow-y-auto p-2.5">
                 <li v-for="schueler in filteredParticipants(bereich.name, displayRound)" :key="schueler.id">
-                  <button type="button" class="group flex w-full items-center gap-2.5 rounded-lg border border-transparent bg-white px-2.5 py-2 text-left shadow-sm transition" :class="can('einteilung.update') ? 'hover:border-orange-200 hover:bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-300' : 'cursor-default'" :disabled="!can('einteilung.update')" @click="openEditModal(schueler)">
+                  <button type="button" class="group flex w-full items-center gap-2.5 rounded-lg border border-transparent bg-white px-2.5 py-2 text-left shadow-sm transition" :class="canEinteilungUpdate ? 'hover:border-orange-200 hover:bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-300' : 'cursor-default'" :disabled="!canEinteilungUpdate" @click="openEditModal(schueler)">
                     <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold" :class="schueler.geschlecht === 'w' ? 'bg-pink-50 text-pink-700' : 'bg-emerald-50 text-emerald-700'">{{ initialsFor(schueler) }}</span>
                     <span class="min-w-0 flex-1">
                       <span class="block truncate text-xs font-semibold text-gray-900 group-hover:text-orange-700">{{ schueler.nachname }}, {{ schueler.vorname }}</span>
                       <span class="mt-0.5 block text-[11px] text-gray-500">Klasse {{ schueler.klasse || '–' }}</span>
                     </span>
-                    <i v-if="can('einteilung.update')" class="la la-pen text-gray-300 group-hover:text-orange-500" aria-hidden="true"></i>
+                    <i v-if="canEinteilungUpdate" class="la la-pen text-gray-300 group-hover:text-orange-500" aria-hidden="true"></i>
                   </button>
                 </li>
                 <li v-if="filteredParticipants(bereich.name, displayRound).length === 0" class="flex min-h-[15rem] items-center justify-center px-4 text-center text-xs text-gray-400">{{ searchQuery ? 'Keine passenden Teilnehmer' : 'Noch keine Teilnehmer eingeteilt' }}</li>
               </ul>
+              <footer class="border-t border-gray-200 bg-white p-3">
+                <div class="flex items-center justify-between gap-3">
+                  <span class="text-xs font-semibold text-gray-500">Belegung</span>
+                  <span class="shrink-0 rounded-full px-2 py-0.5 text-xs font-bold" :class="capacityState(bereich.name, displayRound).badgeClass">{{ roundParticipants(bereich.name, displayRound).length }} / {{ capacityForBereich(bereich.name) }}</span>
+                </div>
+                <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100" role="progressbar" :aria-label="`Auslastung ${bereich.name} in Runde ${displayRound}`" :aria-valuenow="capacityState(bereich.name, displayRound).percentage" aria-valuemin="0" aria-valuemax="100">
+                  <div class="h-full rounded-full transition-all" :class="capacityState(bereich.name, displayRound).barClass" :style="{ width: `${capacityState(bereich.name, displayRound).percentage}%` }"></div>
+                </div>
+                <p class="mt-1.5 text-xs text-gray-500">{{ capacityState(bereich.name, displayRound).label }}</p>
+              </footer>
             </article>
             </div>
           </div>
@@ -472,9 +475,9 @@ import { Head } from '@inertiajs/vue3'
 import { ref, computed, reactive, onMounted, onBeforeUnmount } from 'vue'
 import InputText from 'primevue/inputtext';
 import axios from 'axios'
-import { usePermissions } from '@/utils/permissions'
 
 const props = defineProps({
+  abilities: Object,
   results: Object,
   alle_bereiche: Array, // vom Controller
   updated_at: String,
@@ -490,7 +493,11 @@ const props = defineProps({
   runden: Array,
   parameter: Object,
 })
-const { can } = usePermissions()
+const canEinteilungStore = computed(() => Boolean(props.abilities?.store))
+const canEinteilungUpdate = computed(() => Boolean(props.abilities?.update))
+const canEinteilungDestroy = computed(() => Boolean(props.abilities?.destroy))
+const canEinteilungExport = computed(() => Boolean(props.abilities?.export))
+const canEinteilungPlanning = computed(() => Boolean(props.abilities?.planning))
 
 const teilnehmername = ref('');
 const showModal = ref(false)
@@ -837,12 +844,14 @@ const openSwitchModal = () => {
 }
 
 const openCreateModal = () => {
+  if (!canEinteilungStore.value) return
   createForm.schueler_id = null
   resetRoundFields(createForm)
   showCreateModal.value = true
 }
 
 const openGruppenModal = () => {
+  if (!canEinteilungPlanning.value) return
   const fehlendeRunde = runden.value.find((runde) => {
     const termin = roundSchedule(runde)
     return !termin.anfangsdatum || !termin.enddatum || !termin.startzeit || !termin.endzeit
@@ -862,6 +871,7 @@ const openGruppenModal = () => {
 }
 
 const openExportModal = () => {
+  if (!canEinteilungExport.value) return
   const termine = runden.value.map(roundSchedule)
   if (!exportForm.eintritt) {
     exportForm.eintritt = termine.map(termin => termin.anfangsdatum).filter(Boolean).sort()[0] ?? ''
@@ -873,6 +883,7 @@ const openExportModal = () => {
 }
 
 const submitParameter = async () => {
+  if (!canEinteilungPlanning.value) return
   parameterForm.processing = true
   try {
     const response = await axios.post(route('einteilung.parameter.update'), {
@@ -893,6 +904,7 @@ const submitParameter = async () => {
 }
 
 const submitSwitchRunden = async () => {
+  if (!canEinteilungPlanning.value) return
   if (!switchForm.quelle_runde || !switchForm.ziel_runde || switchForm.quelle_runde === switchForm.ziel_runde) {
     setStatus('Bitte zwei unterschiedliche Runden auswählen.', 'error')
     return
@@ -918,6 +930,7 @@ const submitSwitchRunden = async () => {
 }
 
 const submitCreate = async () => {
+  if (!canEinteilungStore.value) return
   createForm.processing = true
   try {
     const response = await axios.post(route('einteilung.create'), {
@@ -936,6 +949,7 @@ const submitCreate = async () => {
 }
 
 const submitEinteilen = async () => {
+  if (!canEinteilungStore.value) return
   if (!confirm('Alle bestehenden Einteilungen für diese Schule neu generieren?')) return
   isBusy.value = true
   try {
@@ -950,6 +964,7 @@ const submitEinteilen = async () => {
 }
 
 const submitDestroy = async () => {
+  if (!canEinteilungDestroy.value) return
   if (!confirm('Alle Einteilungen für diese Schule löschen?')) return
   isBusy.value = true
   try {
@@ -964,6 +979,7 @@ const submitDestroy = async () => {
 }
 
 const submitGruppen = async () => {
+  if (!canEinteilungPlanning.value) return
   gruppenForm.processing = true
   try {
     const response = await axios.post(route('gruppen.generieren'), {
@@ -983,6 +999,7 @@ const submitGruppen = async () => {
 }
 
 const submitExport = async () => {
+  if (!canEinteilungExport.value) return
   exportForm.processing = true
   try {
     const response = await axios.post(route('einteilung.export.excel'), {
@@ -1013,6 +1030,7 @@ const submitExport = async () => {
 
 // Modal öffnen
 const openEditModal = (schueler) => {
+  if (!canEinteilungUpdate.value) return
   selectedSchueler.value = schueler
   teilnehmername.value = `${schueler.vorname} ${schueler.nachname}`
   form.schueler_id = schueler.id
@@ -1026,6 +1044,7 @@ const openEditModal = (schueler) => {
 
 // Update via Axios
 const submitUpdate = async () => {
+  if (!canEinteilungUpdate.value) return
   try {
     const response = await axios.post(route('einteilung.update'), {
       schueler_id: form.schueler_id,

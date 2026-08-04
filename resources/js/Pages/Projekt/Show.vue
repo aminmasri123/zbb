@@ -15,6 +15,13 @@ const props = defineProps({
 });
 
 const { can } = usePermissions();
+const canUpdateProjekt = computed(() => can('projekt.update'));
+const canManagePotenzialanalyse = computed(() => can('potenzialanalyse.manage'));
+const canConfigurePotenzialanalyse = computed(() => canUpdateProjekt.value && canManagePotenzialanalyse.value);
+const canConfigureProjectFeature = (featureKey) =>
+    featureKey === 'potential_analysis'
+        ? canConfigurePotenzialanalyse.value
+        : canUpdateProjekt.value;
 const projectFeatures = reactive({ ...(props.projekt.features || {}) });
 const featureSaving = ref(false);
 const featureErrors = ref({});
@@ -136,6 +143,11 @@ watch(() => projectFeatures.group_management, (enabled) => {
 });
 
 const saveFeatures = async () => {
+    if (!canManagePotenzialanalyse.value) {
+        projectFeatures.potential_analysis = Boolean(props.projekt.potenzialanalyse_aktiv);
+        paTage.value = props.projekt.potenzialanalyse_tage || null;
+    }
+
     featureSaving.value = true;
     featureErrors.value = {};
 
@@ -366,6 +378,8 @@ const kriteriumPayload = (item) => ({
 });
 
 const storeUebung = async () => {
+    if (!canManagePotenzialanalyse.value) return;
+
     if (!paUebungForm.name) {
         Swal.fire('Fehler', 'Bitte einen Namen fuer die Uebung eintragen.', 'error');
         return;
@@ -390,6 +404,8 @@ const storeUebung = async () => {
 };
 
 const updateUebung = async (uebung) => {
+    if (!canManagePotenzialanalyse.value) return;
+
     savingPa.value = true;
 
     try {
@@ -408,6 +424,8 @@ const updateUebung = async (uebung) => {
 };
 
 const destroyUebung = async (uebung) => {
+    if (!canManagePotenzialanalyse.value) return;
+
     const result = await Swal.fire({
         icon: 'warning',
         title: 'Uebung loeschen?',
@@ -436,6 +454,8 @@ const destroyUebung = async (uebung) => {
 };
 
 const storeKriterium = async (uebung) => {
+    if (!canManagePotenzialanalyse.value) return;
+
     const form = kriteriumForm(uebung.id);
     if (!form.name) {
         Swal.fire('Fehler', 'Bitte einen Namen fuer das Kriterium eintragen.', 'error');
@@ -461,6 +481,8 @@ const storeKriterium = async (uebung) => {
 };
 
 const updateKriterium = async (kriterium) => {
+    if (!canManagePotenzialanalyse.value) return;
+
     savingPa.value = true;
 
     try {
@@ -479,6 +501,8 @@ const updateKriterium = async (kriterium) => {
 };
 
 const destroyKriterium = async (kriterium) => {
+    if (!canManagePotenzialanalyse.value) return;
+
     const result = await Swal.fire({
         icon: 'warning',
         title: 'Kriterium loeschen?',
@@ -744,7 +768,7 @@ const addMitarbeiter = (person) => {
                             v-model="projectFeatures[feature.key]"
                             type="checkbox"
                             class="mt-1 rounded border-gray-300 text-zbb focus:ring-zbb"
-                            :disabled="!can('projekt.update')"
+                            :disabled="!canConfigureProjectFeature(feature.key)"
                         />
                         <span>
                             <span class="block font-semibold text-gray-800">{{ feature.label }}</span>
@@ -755,7 +779,7 @@ const addMitarbeiter = (person) => {
 
                 <label v-if="projectFeatures.potential_analysis" class="mt-4 block max-w-xs text-sm text-gray-600">
                     Anzahl der PA-Tage
-                    <input v-model.number="paTage" type="number" min="1" max="60" class="mt-1 w-full rounded border-gray-300" />
+                    <input v-model.number="paTage" type="number" min="1" max="60" class="mt-1 w-full rounded border-gray-300" :disabled="!canConfigurePotenzialanalyse" />
                     <span v-if="featureErrors.potenzialanalyse_tage" class="mt-1 block text-xs text-red-600">
                         {{ featureErrors.potenzialanalyse_tage[0] }}
                     </span>
@@ -873,7 +897,7 @@ const addMitarbeiter = (person) => {
                 </div>
             </section>
 
-            <section class="bg-white p-5 shadow-sm">
+            <section v-if="canManagePotenzialanalyse" class="bg-white p-5 shadow-sm">
                 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h2 class="text-lg font-semibold">Potenzialanalyse</h2>

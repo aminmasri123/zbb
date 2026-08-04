@@ -386,7 +386,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
         Route::put('/projekt/kurse/termine/{session}/teilnahme', [ProjectCourseSessionController::class, 'record'])->name('projekt.courses.sessions.attendance')->can('projekt.update');
     });
     Route::delete('/projekt/{id}', [ProjektController::class, 'destroy'])->name('projekt.destroy');
-    Route::middleware('projectFeature:potential_analysis')->group(function () {
+    Route::middleware(['projectFeature:potential_analysis', 'can:potenzialanalyse.manage'])->group(function () {
         Route::post('/projekt/{projekt}/potenzialanalyse/uebungen', [PotenzialanalyseController::class, 'storeUebung'])->name('potenzialanalyse.projekt.uebungen.store');
         Route::put('/potenzialanalyse/uebungen/{uebung}', [PotenzialanalyseController::class, 'updateUebung'])->name('potenzialanalyse.projekt.uebungen.update');
         Route::delete('/potenzialanalyse/uebungen/{uebung}', [PotenzialanalyseController::class, 'destroyUebung'])->name('potenzialanalyse.projekt.uebungen.destroy');
@@ -418,10 +418,10 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::get('/gruppe/{gruppe}/bop-export/toilettennutzungsliste', [BopGruppeExportController::class, 'toilettennutzungsliste'])->name('gruppe.bop.export.toilettennutzungsliste')->can('gruppe.bop.export.toilettennutzungsliste');
     Route::get('/gruppe/{gruppe}/bop-export/zertifikat-pobo', [BopGruppeExportController::class, 'zertifikatPobo'])->name('gruppe.bop.export.zertifikat-pobo')->can('gruppe.bop.export.zertifikat-pobo');
     Route::get('/gruppe/{gruppe}/bop-export/teilnahme-pobo', [BopGruppeExportController::class, 'teilnahmePobo'])->name('gruppe.bop.export.teilnahme-pobo')->can('gruppe.bop.export.teilnahme-pobo');
-    Route::get('/gruppe/{gruppe}/bop-export/zertifikat-pa', [BopGruppeExportController::class, 'zertifikatPa'])->name('gruppe.bop.export.zertifikat-pa')->can('gruppe.bop.export.zertifikat-pa');
-    Route::get('/gruppe/{gruppe}/bop-export/teilnahme-pa', [BopGruppeExportController::class, 'teilnahmePa'])->name('gruppe.bop.export.teilnahme-pa')->can('gruppe.bop.export.teilnahme-pa');
-    Route::get('/gruppe/{gruppe}/bop-export/auswertungsbogen-pa', [BopGruppeExportController::class, 'auswertungsbogenPa'])->name('gruppe.bop.export.auswertungsbogen-pa')->can('gruppe.bop.export.auswertungsbogen-pa');
-    Route::put('/gruppe/{gruppe}/potenzialanalyse/teilnehmer/{personen}', [PotenzialanalyseController::class, 'updateTeilnehmer'])->name('potenzialanalyse.gruppe.teilnehmer.update')->middleware(['module:participant_management', 'projectFeature:participant_management', 'projectFeature:potential_analysis']);
+    Route::get('/gruppe/{gruppe}/bop-export/zertifikat-pa', [BopGruppeExportController::class, 'zertifikatPa'])->name('gruppe.bop.export.zertifikat-pa')->can('gruppe.bop.export.zertifikat-pa')->middleware('canAnyPermission:potenzialanalyse.index,potenzialanalyse.update,potenzialanalyse.manage');
+    Route::get('/gruppe/{gruppe}/bop-export/teilnahme-pa', [BopGruppeExportController::class, 'teilnahmePa'])->name('gruppe.bop.export.teilnahme-pa')->can('gruppe.bop.export.teilnahme-pa')->middleware('canAnyPermission:potenzialanalyse.index,potenzialanalyse.update,potenzialanalyse.manage');
+    Route::get('/gruppe/{gruppe}/bop-export/auswertungsbogen-pa', [BopGruppeExportController::class, 'auswertungsbogenPa'])->name('gruppe.bop.export.auswertungsbogen-pa')->can('gruppe.bop.export.auswertungsbogen-pa')->middleware('canAnyPermission:potenzialanalyse.index,potenzialanalyse.update,potenzialanalyse.manage');
+    Route::put('/gruppe/{gruppe}/potenzialanalyse/teilnehmer/{personen}', [PotenzialanalyseController::class, 'updateTeilnehmer'])->name('potenzialanalyse.gruppe.teilnehmer.update')->middleware(['module:participant_management', 'projectFeature:participant_management', 'projectFeature:potential_analysis', 'can:potenzialanalyse.update']);
 
     //GruppeHasTeilnehmer
     Route::get('/gruppehasteilnehmer/{id}', [GruppeHasTeilnehmerController::class, 'show'])->name('gruppeHasTeilnehmer.show')->middleware(['module:participant_management', 'projectFeature:participant_management']);
@@ -751,8 +751,8 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::post('/bereichsauswahl/einstellung', [ProjektBopController::class, 'bereichsauswahlSettingUpdate'])->name('bereichsauswahl.setting.update');
     Route::post('/bereichwahl-update', [ProjektBopController::class, 'waehlen'])->name('bereichsauswahl.bop.radio.update');
 
-    Route::get('/export/auswertungsbogen/pa/pdf/{partnerId}/{schuljahr}/{teil}', [ProjektBopController::class, 'generatePdfauswertungsbogenPASchule'])->name('export.auswertungsbogenPA.schule.pdf');
-    Route::get('/export/auswertungsbogen/pa/roland/pdf/{partnerId}/{schuljahr}/{teil}', [ProjektBopController::class, 'generatePdfAuswertungsbogenPaRolandSchule'])->name('export.auswertungsbogenPA.roland.schule.pdf');
+    Route::get('/export/auswertungsbogen/pa/pdf/{partnerId}/{schuljahr}/{teil}', [ProjektBopController::class, 'generatePdfauswertungsbogenPASchule'])->name('export.auswertungsbogenPA.schule.pdf')->middleware(['can:dokumente.schule.export', 'canAnyPermission:potenzialanalyse.index,potenzialanalyse.update,potenzialanalyse.manage']);
+    Route::get('/export/auswertungsbogen/pa/roland/pdf/{partnerId}/{schuljahr}/{teil}', [ProjektBopController::class, 'generatePdfAuswertungsbogenPaRolandSchule'])->name('export.auswertungsbogenPA.roland.schule.pdf')->middleware(['can:dokumente.schule.export', 'canAnyPermission:potenzialanalyse.index,potenzialanalyse.update,potenzialanalyse.manage']);
     Route::get('/export/elterneinverstaendniserklaerung/{partnerId}/{schuljahr}/{teil}', [ProjektBopController::class, 'exportElterneinverstaendniserklaerungSchule'])->name('export.elterneinverstaendniserklaerung.schule');
 
 
@@ -765,7 +765,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::post('/einteilung/einteilen', [EinteilungParameterController::class, 'einteilen'])->name('einteilung.store');
     Route::post('/einteilung/destroy-context', [EinteilungParameterController::class, 'destroyContext'])->name('einteilung.destroy');
     Route::post('/einteilung/gruppen-generieren', [EinteilungParameterController::class, 'gruppenGenerieren'])->name('gruppen.generieren');
-    Route::post('/einteilung/export-excel', [EinteilungParameterController::class, 'exportExcel'])->name('einteilung.export.excel');
+    Route::post('/einteilung/export-excel', [EinteilungParameterController::class, 'exportExcel'])->name('einteilung.export.excel')->middleware('can:einteilung.export');
 
 
     //zu bearbeiten
@@ -780,7 +780,7 @@ Route::get('/export/zertifikat/pobo/{idSchule}/{schuljahr}/{teil}', [BopLegacyFu
 Route::get('/export/zertifikat/pobo/pdf/{schuleId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'zertifikatPoboPdf'])->name('export.zertifikat.schule.pobo.pdf');
 Route::get('/export/auswertung/pobo/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'auswertungPobo'])->name('export.auswertungBO.schule.pdf');
 Route::get('/export/auswertung/pobo/tofolder/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'auswertungPoboToFolder'])->name('export.auswertungBO.schule.pdf.tofolder');
-Route::get('/export/auswertung/pa/tofolder/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'auswertungPaToFolder'])->name('export.auswertungPA.schule.pdf.tofolder');
+Route::get('/export/auswertung/pa/tofolder/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'auswertungPaToFolder'])->name('export.auswertungPA.schule.pdf.tofolder')->middleware(['can:dokumente.ansprechpartner.manage', 'canAnyPermission:potenzialanalyse.index,potenzialanalyse.update,potenzialanalyse.manage']);
 Route::get('/export/auswertung/pobo/runde/{schuleId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'auswertungPoboRunde'])->name('auswertungPoboModal');
 
 

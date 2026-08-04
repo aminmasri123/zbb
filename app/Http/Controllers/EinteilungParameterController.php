@@ -813,6 +813,7 @@ class EinteilungParameterController extends Controller
 
     private function pagePayload(int $partnerId, string $schuljahr, string $teil): array
     {
+        $user = Auth::user();
         $projekt = $this->currentProjekt();
         $partner = Partner::findOrFail($partnerId);
         $alleBereiche = $this->projektBereiche($projekt);
@@ -853,11 +854,18 @@ class EinteilungParameterController extends Controller
             ->max('updated_at');
 
         $projektPartnerIds = $projekt->partners->pluck('id')->filter()->values();
-        $betreuer = Auth::user()->can('projekt.mitarbeiter.view.all')
+        $betreuer = $user?->can('projekt.mitarbeiter.view.all')
             ? $projekt->mitarbeiter
-            : collect([Auth::user()->person])->filter();
+            : collect([$user?->person])->filter();
 
         return [
+            'abilities' => [
+                'store' => $user?->can('einteilung.store') ?? false,
+                'update' => $user?->can('einteilung.update') ?? false,
+                'destroy' => $user?->can('einteilung.destroy') ?? false,
+                'export' => $user?->can('einteilung.export') ?? false,
+                'planning' => $user?->can('einteilung.planning') ?? false,
+            ],
             'results' => $results,
             'alle_bereiche' => $alleBereiche->values(),
             'updated_at' => $updatedAt?->toIso8601String(),

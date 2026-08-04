@@ -19,7 +19,7 @@
     teilnehmer: { type: Array, required: true },
     anwesenheitsstatuten: { type: Array, required: true },
     bopLegacyExporte: { type: Array, default: () => [] },
-    potenzialanalyse: { type: Object, default: () => ({ aktiv: false, tage: null, uebungen: [], teilnehmer: {} }) },
+    potenzialanalyse: { type: Object, default: () => ({ aktiv: false, erlaubt: false, can: { view: false, update: false }, tage: null, uebungen: [], teilnehmer: {} }) },
     })
     console.log('Props:', props.gruppe    )
     // Modal-Steuerung + Auswahl
@@ -54,6 +54,9 @@
     const canExportAttendance = canUseAttendanceExports
     const canAddTeilnehmerToGroup = computed(() => can('gruppeHasTeilnehmer.store'))
     const canRemoveTeilnehmerFromGroup = computed(() => can('gruppeHasTeilnehmer.destroyTeilnehmer'))
+    const paAbilities = computed(() => props.potenzialanalyse?.can || {})
+    const canViewPotenzialanalyse = computed(() => Boolean(paAbilities.value.view))
+    const canEditPotenzialanalyse = computed(() => Boolean(paAbilities.value.update))
     const klassenbuchErlaubt = computed(() => Boolean(props.gruppe?.projekt?.klassenbuch_aktiv) && can('klassenbuch.index'))
     const erstesKlassenbuch = computed(() => props.gruppe?.klassenbuecher?.[0] || null)
     const klassenbuchHref = computed(() =>
@@ -358,7 +361,7 @@ const gefilterteExportVorlagen = computed(() => {
 })
 
 const bopLegacyExporte = computed(() => props.bopLegacyExporte || [])
-const paAktiv = computed(() => Boolean(props.potenzialanalyse?.aktiv))
+const paAktiv = computed(() => Boolean(props.potenzialanalyse?.aktiv) && canViewPotenzialanalyse.value)
 const paUebungen = computed(() => props.potenzialanalyse?.uebungen || [])
 const paBerichtStatusOptionen = [
   { label: 'Entwurf', value: 'entwurf' },
@@ -532,6 +535,7 @@ const paKompetenzBemerkungText = (merkmalKey, wert) =>
   paKompetenzBemerkungTexte[merkmalKey]?.[Number(wert) - 1] || ''
 
 const setzePaBewertung = (personenId, feld, merkmalKey, wert, autoSave = true) => {
+  if (!canEditPotenzialanalyse.value) return
   const eintrag = ensurePaEintrag(personenId)
   eintrag[feld][merkmalKey].bewertung = wert
 
@@ -545,6 +549,7 @@ const setzePaBewertung = (personenId, feld, merkmalKey, wert, autoSave = true) =
 }
 
 const setzePaBewertungSpalte = (feld, wert) => {
+  if (!canEditPotenzialanalyse.value) return
   const teilnehmer = selectedPaTeilnehmer.value
 
   if (!teilnehmer) {
@@ -594,6 +599,7 @@ const normalisierePaUebungswerte = (personenId) => {
 }
 
 const clampUebungPunkte = (personenId, uebung) => {
+  if (!canEditPotenzialanalyse.value) return
   const ergebnis = paUebungErgebnis(personenId, uebung.id)
   if (ergebnis.punkte === '' || ergebnis.punkte === undefined) {
     ergebnis.punkte = null
@@ -692,6 +698,8 @@ const csrfToken = () =>
   document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
 
 const speicherePotenzialanalyse = async ({ personenId = null, silent = false, version = null } = {}) => {
+  if (!canEditPotenzialanalyse.value) return false
+
   const teilnehmerId = resolvePaTeilnehmerId(personenId)
 
   if (!teilnehmerId) {
@@ -776,6 +784,8 @@ const speicherePotenzialanalyse = async ({ personenId = null, silent = false, ve
 }
 
 const planePotenzialanalyseSpeichern = ({ personenId = null, sofort = false } = {}) => {
+  if (!canEditPotenzialanalyse.value) return
+
   const teilnehmerId = resolvePaTeilnehmerId(personenId)
 
   if (!teilnehmerId) {
@@ -811,6 +821,8 @@ const planePotenzialanalyseSpeichern = ({ personenId = null, sofort = false } = 
 }
 
 const speichereOffenePaAenderungen = () => {
+  if (!canEditPotenzialanalyse.value) return
+
   const offeneIds = new Set([
     ...paDirtyTeilnehmerIds,
     ...paAutoSaveTimers.keys(),
@@ -1240,6 +1252,8 @@ const bauePaBerichtstext = (teilnehmer, eintrag, variante = 0) => {
 }
 
 const generierePaBerichtstext = async () => {
+  if (!canEditPotenzialanalyse.value) return
+
   const teilnehmer = selectedPaTeilnehmer.value
 
   if (!teilnehmer) {
@@ -1986,7 +2000,7 @@ const exportMitTag = async () => {
               label="Jetzt speichern"
               icon="pi pi-save"
               class="!bg-zbb hover:!bg-zbb/80 border-none"
-              :disabled="paSaving || !selectedPaTeilnehmer"
+              :disabled="paSaving || !selectedPaTeilnehmer || !canEditPotenzialanalyse"
               @click="speicherePotenzialanalyse()"
             />
           </div>
@@ -2017,6 +2031,7 @@ const exportMitTag = async () => {
                 {{ selectedPaTeilnehmer.vorname }} {{ selectedPaTeilnehmer.nachname }}
               </h4>
               <p class="text-xs text-gray-500">Selbsteinschaetzung, Uebungsergebnisse, Kompetenzbewertung und Bericht</p>
+              <p v-if="!canEditPotenzialanalyse" class="mt-1 text-xs font-semibold text-amber-700">Nur Leserechte fuer Potenzialanalyse.</p>
             </div>
 
             <div class="rounded border border-gray-200 bg-white px-2 pt-2">
@@ -2055,6 +2070,7 @@ const exportMitTag = async () => {
                           type="button"
                           class="inline-flex h-6 w-6 items-center justify-center rounded text-xs font-semibold text-gray-600 hover:bg-zbb hover:text-white"
                           :title="`Alle Merkmale mit ${wert} bewerten`"
+                          :disabled="!canEditPotenzialanalyse"
                           @click="setzePaBewertungSpalte('selbsteinschaetzung', wert)"
                         >
                           {{ wert }}
@@ -2074,6 +2090,7 @@ const exportMitTag = async () => {
                           :name="`pa-selbst-${selectedPaTeilnehmer.id}-${merkmal.key}`"
                           :value="wert"
                           class="h-3.5 w-3.5 text-zbb focus:ring-zbb"
+                          :disabled="!canEditPotenzialanalyse"
                           @change="setzePaBewertung(selectedPaTeilnehmer.id, 'selbsteinschaetzung', merkmal.key, wert)"
                         />
                       </td>
@@ -2082,6 +2099,7 @@ const exportMitTag = async () => {
                           v-model="paEintrag(selectedPaTeilnehmer.id).selbsteinschaetzung[merkmal.key].bemerkung"
                           rows="1"
                           class="h-8 min-h-0 w-full resize-none rounded border-gray-300 py-1 text-xs leading-tight"
+                          :disabled="!canEditPotenzialanalyse"
                           @input="planePotenzialanalyseSpeichern({ personenId: selectedPaTeilnehmer.id })"
                         ></textarea>
                       </td>
@@ -2123,6 +2141,7 @@ const exportMitTag = async () => {
                             min="0"
                             :max="uebung.hoechstwert ?? undefined"
                             class="w-28"
+                            :disabled="!canEditPotenzialanalyse"
                             @update:modelValue="planePotenzialanalyseSpeichern({ personenId: selectedPaTeilnehmer.id })"
                             @blur="clampUebungPunkte(selectedPaTeilnehmer.id, uebung)"
                           />
@@ -2136,6 +2155,7 @@ const exportMitTag = async () => {
                             type="number"
                             min="0"
                             class="w-24"
+                            :disabled="!canEditPotenzialanalyse"
                             @update:modelValue="planePotenzialanalyseSpeichern({ personenId: selectedPaTeilnehmer.id })"
                           />
                           <span class="text-xs text-gray-500">Min.</span>
@@ -2145,6 +2165,7 @@ const exportMitTag = async () => {
                             min="0"
                             max="59"
                             class="w-20"
+                            :disabled="!canEditPotenzialanalyse"
                             @update:modelValue="planePotenzialanalyseSpeichern({ personenId: selectedPaTeilnehmer.id })"
                           />
                           <span class="text-xs text-gray-500">Sek.</span>
@@ -2171,6 +2192,7 @@ const exportMitTag = async () => {
                           type="button"
                           class="inline-flex h-6 w-6 items-center justify-center rounded text-xs font-semibold text-gray-600 hover:bg-zbb hover:text-white"
                           :title="`Alle Kompetenzen mit ${wert} bewerten`"
+                          :disabled="!canEditPotenzialanalyse"
                           @click="setzePaBewertungSpalte('kompetenzen', wert)"
                         >
                           {{ wert }}
@@ -2190,6 +2212,7 @@ const exportMitTag = async () => {
                           :name="`pa-kompetenz-${selectedPaTeilnehmer.id}-${merkmal.key}`"
                           :value="wert"
                           class="h-3.5 w-3.5 text-zbb focus:ring-zbb"
+                          :disabled="!canEditPotenzialanalyse"
                           @change="setzePaBewertung(selectedPaTeilnehmer.id, 'kompetenzen', merkmal.key, wert)"
                         />
                       </td>
@@ -2198,6 +2221,7 @@ const exportMitTag = async () => {
                           v-model="paEintrag(selectedPaTeilnehmer.id).kompetenzen[merkmal.key].bemerkung"
                           rows="1"
                           class="h-8 min-h-0 w-full resize-none rounded border-gray-300 py-1 text-xs leading-tight"
+                          :disabled="!canEditPotenzialanalyse"
                           @input="planePotenzialanalyseSpeichern({ personenId: selectedPaTeilnehmer.id })"
                         ></textarea>
                       </td>
@@ -2216,6 +2240,7 @@ const exportMitTag = async () => {
                     icon="pi pi-pencil"
                     severity="secondary"
                     outlined
+                    :disabled="!canEditPotenzialanalyse"
                     @click="generierePaBerichtstext"
                   />
                   <Select
@@ -2224,6 +2249,7 @@ const exportMitTag = async () => {
                     optionLabel="label"
                     optionValue="value"
                     class="w-56 max-w-full"
+                    :disabled="!canEditPotenzialanalyse"
                     @update:modelValue="planePotenzialanalyseSpeichern({ personenId: selectedPaTeilnehmer.id, sofort: true })"
                   />
                 </div>
@@ -2236,6 +2262,7 @@ const exportMitTag = async () => {
                     v-model="paEintrag(selectedPaTeilnehmer.id).bericht.staerken"
                     rows="4"
                     class="mt-1 w-full rounded border-gray-300 text-sm"
+                    :disabled="!canEditPotenzialanalyse"
                     @input="planePotenzialanalyseSpeichern({ personenId: selectedPaTeilnehmer.id })"
                   ></textarea>
                 </label>
@@ -2245,6 +2272,7 @@ const exportMitTag = async () => {
                     v-model="paEintrag(selectedPaTeilnehmer.id).bericht.entwicklungsfelder"
                     rows="4"
                     class="mt-1 w-full rounded border-gray-300 text-sm"
+                    :disabled="!canEditPotenzialanalyse"
                     @input="planePotenzialanalyseSpeichern({ personenId: selectedPaTeilnehmer.id })"
                   ></textarea>
                 </label>
@@ -2254,6 +2282,7 @@ const exportMitTag = async () => {
                     v-model="paEintrag(selectedPaTeilnehmer.id).bericht.empfehlung"
                     rows="3"
                     class="mt-1 w-full rounded border-gray-300 text-sm"
+                    :disabled="!canEditPotenzialanalyse"
                     @input="planePotenzialanalyseSpeichern({ personenId: selectedPaTeilnehmer.id })"
                   ></textarea>
                 </label>
@@ -2263,6 +2292,7 @@ const exportMitTag = async () => {
                     v-model="paEintrag(selectedPaTeilnehmer.id).bericht.bericht_text"
                     rows="6"
                     class="mt-1 w-full rounded border-gray-300 text-sm"
+                    :disabled="!canEditPotenzialanalyse"
                     @input="planePotenzialanalyseSpeichern({ personenId: selectedPaTeilnehmer.id })"
                   ></textarea>
                 </label>

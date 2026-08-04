@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import Swal from 'sweetalert2';
 import axios from 'axios';
 import Modal from '@/Components/ModalForm.vue';
@@ -8,6 +8,7 @@ import InputText from 'primevue/inputtext';
 import Select from 'primevue/select';
 import BereichSelector from '@/Pages/Projekt/BereichSelector.vue';
 import KostenstelleSelector from '@/Pages/Projekt/KostenstelleSelector.vue';
+import { usePermissions } from '@/utils/permissions';
 
 const props = defineProps({
   visible: Boolean,
@@ -31,6 +32,8 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'updated', 'bereich-created', 'kostenstelle-created']);
 
+const { can } = usePermissions();
+const canManagePotenzialanalyse = computed(() => can('potenzialanalyse.manage'));
 const saving = ref(false);
 const form = ref({
   id: null,
@@ -161,7 +164,12 @@ const save = async () => {
     return;
   }
 
-  if (form.value.potenzialanalyse_aktiv && !form.value.potenzialanalyse_tage) {
+  if (!canManagePotenzialanalyse.value) {
+    form.value.potenzialanalyse_aktiv = toBoolean(props.toEdit?.potenzialanalyse_aktiv);
+    form.value.potenzialanalyse_tage = props.toEdit?.potenzialanalyse_tage ?? null;
+  }
+
+  if (canManagePotenzialanalyse.value && form.value.potenzialanalyse_aktiv && !form.value.potenzialanalyse_tage) {
     Swal.fire('Fehler', 'Bitte geben Sie an, wie viele Tage die Potenzialanalyse dauert.', 'error');
     return;
   }
@@ -248,7 +256,7 @@ const handleKostenstelleCreated = (kostenstelle) => {
           <span class="font-medium">Klassenbuch aktiv</span>
         </label>
 
-        <div class="mb-4 rounded border border-gray-200 bg-gray-50 px-3 py-3">
+        <div v-if="canManagePotenzialanalyse" class="mb-4 rounded border border-gray-200 bg-gray-50 px-3 py-3">
           <label class="flex items-center gap-3 text-sm text-gray-700">
             <input v-model="form.potenzialanalyse_aktiv" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
             <span class="font-medium">Projekt macht Potenzialanalyse</span>

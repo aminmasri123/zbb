@@ -904,6 +904,7 @@ class UserSeeder extends Seeder
             28 => ['name' => 'Lager', 'beschreibung' => 'Interne Lagerverwaltung fuer Verbrauchsmaterial und Betriebsmittel.'],
             29 => ['name' => 'IT-Service', 'beschreibung' => 'Helpdesk, IT-Tickets und IT-Geraeteverwaltung.'],
             30 => ['name' => 'Dokumentenexporte', 'beschreibung' => 'Einzelberechtigungen fuer den Export bestimmter Dokumentvorlagen.'],
+            31 => ['name' => 'Potenzialanalyse', 'beschreibung' => 'Potenzialanalyse, PA-Uebungen, Bewertungen und PA-Berichte.'],
         ];
     }
 
@@ -1054,6 +1055,9 @@ class UserSeeder extends Seeder
             $this->permission('gruppeHasTeilnehmer.show', 6, 'Erlaubt das Einsehen der Teilnehmerzuordnung einer Gruppe.'),
             $this->permission('gruppeHasTeilnehmer.store', 6, 'Erlaubt das Hinzufuegen von Teilnehmern zu einer Gruppe.'),
             $this->permission('gruppeHasTeilnehmer.destroyTeilnehmer', 6, 'Erlaubt das Entfernen eines bestimmten Teilnehmers aus einer Gruppe.'),
+            $this->permission('potenzialanalyse.index', 31, 'Erlaubt das Einsehen von Potenzialanalyse-Daten in berechtigten Gruppen, einschliesslich Uebungsergebnissen, Kompetenzbewertungen und Berichtsentwuerfen.'),
+            $this->permission('potenzialanalyse.update', 31, 'Erlaubt das Bearbeiten und Speichern von Potenzialanalyse-Daten fuer Teilnehmer in berechtigten Gruppen, einschliesslich Berichtstexten und Status.'),
+            $this->permission('potenzialanalyse.manage', 31, 'Erlaubt die Konfiguration der Potenzialanalyse im Projekt, insbesondere Aktivierung, PA-Tage, Uebungen und Kriterien.'),
             $this->permission('klassenbuch.index', 3, 'Erlaubt das Einsehen der Klassenbuchuebersicht fuer Gruppen im aktiven Projekt.'),
             $this->permission('klassenbuch.store', 3, 'Erlaubt das Anlegen eines Klassenbuchs fuer eine berechtigte Gruppe.'),
             $this->permission('klassenbuch.show', 3, 'Erlaubt das Einsehen eines Klassenbuchs inklusive Wochen, Teilnehmerliste und Statusinformationen.'),

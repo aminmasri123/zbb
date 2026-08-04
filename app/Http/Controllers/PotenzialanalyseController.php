@@ -601,7 +601,7 @@ class PotenzialanalyseController extends Controller
         abort_unless($projekt, 404);
 
         $user = auth()->user();
-        abort_unless($user?->can('projekt.update') || $user?->can('projekt.store') || $user?->can('projekt.index'), 403);
+        abort_unless($user?->can('potenzialanalyse.manage'), 403);
     }
 
     private function ensureProjektUsesPotenzialanalyse(?Projekt $projekt): void
