@@ -1288,6 +1288,98 @@ const generierePaBerichtstext = async () => {
   planePotenzialanalyseSpeichern({ personenId: teilnehmer.id, sofort: true })
 }
 
+const paBerichtHatInhalt = (personenId) => {
+  if (!personenId) return false
+
+  const bericht = paEintrag(personenId).bericht || defaultPaBericht()
+
+  return (
+    ['staerken', 'entwicklungsfelder', 'empfehlung', 'bericht_text'].some((feld) => bereinigeText(bericht[feld])) ||
+    Boolean(bericht.fertiggestellt_at) ||
+    (bericht.status && bericht.status !== 'entwurf')
+  )
+}
+
+const loeschePaBericht = async () => {
+  if (!canEditPotenzialanalyse.value) return
+
+  const teilnehmer = selectedPaTeilnehmer.value
+
+  if (!teilnehmer) {
+    return
+  }
+
+  const key = String(teilnehmer.id)
+
+  if (paSaveInFlight.has(key)) {
+    await Swal.fire({
+      icon: 'info',
+      title: 'Bitte kurz warten',
+      text: 'Der Bericht wird gerade gespeichert. Danach kann er geloescht werden.',
+    })
+    return
+  }
+
+  const bestaetigung = await Swal.fire({
+    icon: 'warning',
+    title: 'Bericht loeschen?',
+    text: `Der Potenzialanalysebericht von ${teilnehmer.vorname} ${teilnehmer.nachname} wird geloescht.`,
+    showCancelButton: true,
+    confirmButtonText: 'Ja, loeschen',
+    cancelButtonText: 'Abbrechen',
+    confirmButtonColor: '#dc2626',
+  })
+
+  if (!bestaetigung.isConfirmed) {
+    return
+  }
+
+  const timer = paAutoSaveTimers.get(key)
+  if (timer) {
+    clearTimeout(timer)
+    paAutoSaveTimers.delete(key)
+  }
+
+  paDirtyTeilnehmerIds.delete(key)
+  paSavePending.delete(key)
+  paSaveVersions.set(key, (paSaveVersions.get(key) || 0) + 1)
+  paSaving.value = true
+  paAutoSaveStatus.value = 'saving'
+
+  try {
+    const response = await axios.delete(route('potenzialanalyse.gruppe.teilnehmer.bericht.destroy', {
+      gruppe: props.gruppe.id,
+      personen: teilnehmer.id,
+    }))
+
+    paTeilnehmerDaten.value[key] = {
+      ...(paTeilnehmerDaten.value[key] || {}),
+      ...(response.data?.teilnehmer || {}),
+      bericht: response.data?.teilnehmer?.bericht || defaultPaBericht(),
+    }
+    ensurePaEintrag(teilnehmer.id)
+    paAutoSaveStatus.value = 'saved'
+
+    await Swal.fire({
+      icon: 'success',
+      title: 'Geloescht',
+      text: response.data?.message || 'Potenzialanalysebericht wurde geloescht.',
+      timer: 1600,
+      showConfirmButton: false,
+    })
+  } catch (error) {
+    paAutoSaveStatus.value = 'error'
+
+    await Swal.fire({
+      icon: 'error',
+      title: 'Fehler',
+      text: error.response?.data?.message || 'Potenzialanalysebericht konnte nicht geloescht werden.',
+    })
+  } finally {
+    paSaving.value = paSaveInFlight.size > 0
+  }
+}
+
 const gefilterteBopLegacyExporte = computed(() => {
   const suche = exportSuche.value.trim().toLowerCase()
   if (!suche) return bopLegacyExporte.value
@@ -2242,6 +2334,14 @@ const exportMitTag = async () => {
                     outlined
                     :disabled="!canEditPotenzialanalyse"
                     @click="generierePaBerichtstext"
+                  />
+                  <Button
+                    label="Bericht loeschen"
+                    icon="pi pi-trash"
+                    severity="danger"
+                    outlined
+                    :disabled="!canEditPotenzialanalyse || paSaving || !paBerichtHatInhalt(selectedPaTeilnehmer.id)"
+                    @click="loeschePaBericht"
                   />
                   <Select
                     v-model="paEintrag(selectedPaTeilnehmer.id).bericht.status"

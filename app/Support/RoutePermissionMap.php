@@ -123,6 +123,7 @@ class RoutePermissionMap
         'potenzialanalyse.projekt.kriterien.update' => 'potenzialanalyse.manage',
         'potenzialanalyse.projekt.kriterien.destroy' => 'potenzialanalyse.manage',
         'potenzialanalyse.gruppe.teilnehmer.update' => 'potenzialanalyse.update',
+        'potenzialanalyse.gruppe.teilnehmer.bericht.destroy' => 'potenzialanalyse.update',
         'projekt.intake-checklist.update' => 'projekt.update',
         'teilnehmer.intake-checklist.update' => 'teilnehmer.update',
         'projekt.completion-checklist.update' => 'projekt.update',

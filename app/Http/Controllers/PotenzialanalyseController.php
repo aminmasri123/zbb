@@ -223,6 +223,26 @@ class PotenzialanalyseController extends Controller
         ]);
     }
 
+    public function destroyTeilnehmerBericht(Gruppe $gruppe, Personen $personen)
+    {
+        $gruppe->loadMissing('projekt');
+        abort_unless($this->canUseGroup(auth()->user(), $gruppe), 403);
+        $this->ensureProjektUsesPotenzialanalyse($gruppe->projekt);
+        $this->ensureTeilnehmerInGroup($gruppe, $personen);
+
+        $deleted = PotenzialanalyseBericht::query()
+            ->where('gruppe_id', $gruppe->id)
+            ->where('personen_id', $personen->id)
+            ->delete();
+
+        return response()->json([
+            'message' => $deleted > 0
+                ? 'Potenzialanalysebericht wurde geloescht.'
+                : 'Es war kein Potenzialanalysebericht vorhanden.',
+            'teilnehmer' => $this->teilnehmerPayload($gruppe, $personen->id),
+        ]);
+    }
+
     private function validateUebung(Request $request, Projekt $projekt): array
     {
         $maxTag = max(1, (int) ($projekt->potenzialanalyse_tage ?: 60));
