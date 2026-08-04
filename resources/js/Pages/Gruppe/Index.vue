@@ -1,6 +1,6 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { ref, defineProps, watch } from 'vue';
+import { computed, ref, defineProps, watch } from 'vue';
 import { router, Link, Head } from '@inertiajs/vue3';
 import Dropdown from '@/Components/Dropdown.vue';
 import ModalDestroy from '@/Components/ModalDestroyForm.vue';
@@ -21,6 +21,9 @@ let isMeldungModalOpen = ref(false);
 let gruppeForMeldung = ref(null);
 let raumForMeldung = ref(null);
 const { can } = usePermissions();
+const canCreateGroup = computed(() => can('gruppe.store'));
+const canUpdateGroup = computed(() => can('gruppe.update'));
+const canDeleteGroup = computed(() => can('gruppe.destroy'));
 
 const betreuerInitialen = (betreuer) => {
   const vorname = betreuer?.vorname?.trim()?.charAt(0) || '';
@@ -67,10 +70,14 @@ let localGruppen = ref(
 let filteredGruppen = ref([...localGruppen.value]);
 
 // 🔹 Modals
-const openModalCreate = () => { isModalCreateOpen.value = true; };
+const openModalCreate = () => {
+  if (!canCreateGroup.value) return;
+  isModalCreateOpen.value = true;
+};
 const closeModalCreate = () => { isModalCreateOpen.value = false; };
 
 const openModalEdit = (gruppe) => {
+  if (!canUpdateGroup.value) return;
   gruppeToEdit.value = gruppe;
   isModalEditOpen.value = true;
 };
@@ -105,6 +112,7 @@ const updateGruppe = (updatedGruppe) => {
 
 // 🔹 Delete
 const confirmDelete = (gruppe) => {
+  if (!canDeleteGroup.value) return;
   gruppeToDelete.value = { id: gruppe.id, name: gruppe.bereich?.name || gruppe.raum?.name || `Gruppe ${gruppe.id}` };
   showModalLöschen.value = true;
 };
@@ -147,7 +155,7 @@ watch(search, () => {
 
         <!-- Toolbar -->
         <div class="flex justify-around shadow-md items-center w-3/4 mx-auto mb-3">
-            <div @click="openModalCreate" class="flex items-center">
+            <div v-if="canCreateGroup" @click="openModalCreate" class="flex items-center">
                 <i class="la la-plus bg-white border border-gray-300 rounded-l-md px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
             </div>
             <input v-model="search" type="text"
@@ -170,7 +178,7 @@ watch(search, () => {
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
                     </svg>
                     <p class="text-lg font-medium">Noch keine Gruppen erstellt</p>
-                    <p class="text-sm">Klicken Sie auf "Neue Gruppe" um zu beginnen</p>
+                    <p v-if="canCreateGroup" class="text-sm">Klicken Sie auf "Neue Gruppe" um zu beginnen</p>
                 </div>
             </div>
 
@@ -264,12 +272,14 @@ watch(search, () => {
                     Melden
                     </button>
                     <button
+                    v-if="canUpdateGroup"
                     @click="openModalEdit(gruppe)"
                     class="px-4 py-2 text-sm font-medium rounded-md bg-zbb text-white shadow-sm hover:bg-zbb/90 transition"
                     >
                     Verwalten
                     </button>
                     <button
+                    v-if="canDeleteGroup"
                     @click="confirmDelete(gruppe)"
                     class="px-4 py-2 text-sm font-medium rounded-md bg-red-600 text-white shadow-sm hover:bg-red-700 transition"
                     >
@@ -283,11 +293,11 @@ watch(search, () => {
 
 
         <!-- Modals -->
-        <ModalCreate :visible="isModalCreateOpen" :projekt="props.projekt" :betreuer="props.betreuer"
+        <ModalCreate v-if="canCreateGroup" :visible="isModalCreateOpen" :projekt="props.projekt" :betreuer="props.betreuer"
                                  @close="isModalCreateOpen = false"
                                  @added="(gruppe) => { localGruppen.unshift(gruppe); applySearchFilter(); }"
         />
-        <ModalEdit :visible="isModalEditOpen"
+        <ModalEdit v-if="canUpdateGroup" :visible="isModalEditOpen"
                             :bereiche="props.projekt.bereiche"
                             :personal="props.betreuer"
                             :partners="props.projekt.partners || []"
@@ -303,11 +313,13 @@ watch(search, () => {
                             :gruppe-id="gruppeForMeldung?.id"
                             @close="closeMeldungModal"
                             @added="closeMeldungModal"/>
+        <template v-if="canDeleteGroup">
         <ModalDestroy v-if="showModalLöschen"
                                     @delete="handleDelete"
                                     @close="showModalLöschen = false"
                                     :seite="seite"
                                     :toDelete="gruppeToDelete"/>
+        </template>
     </app-layout>
 
 </template>
