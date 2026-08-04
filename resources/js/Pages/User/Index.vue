@@ -44,6 +44,12 @@ const emptyUser = () => ({
         {
             projekt_id: null,
             standort_ids: [],
+            bereich_ids: [],
+            default_bereich_id: null,
+            buero_raum_ids: [],
+            default_buero_raum_id: null,
+            arbeitsbereich_raum_ids: [],
+            default_arbeitsbereich_raum_id: null,
         },
     ],
 });

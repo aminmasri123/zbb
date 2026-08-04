@@ -6,12 +6,18 @@ use Throwable;
 use App\Models\User;
 use App\Models\Projekt;
 use App\Models\Personen;
+use App\Models\RaumHasPersonen;
 use Illuminate\Http\Request;
 use App\Models\ProjektHasPersonen;
+use App\Services\Projects\StaffProjectAssignmentSynchronizer;
 use Illuminate\Support\Facades\DB;
 
 class ProjektHasPersonenController extends Controller
 {
+    public function __construct(private readonly StaffProjectAssignmentSynchronizer $projectAssignments)
+    {
+    }
+
     /**
      * Display a listing of the resource.
      */
@@ -40,6 +46,15 @@ class ProjektHasPersonenController extends Controller
             'zuweisungen.*.projekt_id' => ['required', 'exists:projekts,id'],
             'zuweisungen.*.standort_id' => ['required', 'array'],
             'zuweisungen.*.standort_id.*' => ['exists:standorts,id'],
+            'zuweisungen.*.bereich_ids' => ['array'],
+            'zuweisungen.*.bereich_ids.*' => ['integer', 'exists:bereiches,id'],
+            'zuweisungen.*.default_bereich_id' => ['nullable', 'integer', 'exists:bereiches,id'],
+            'zuweisungen.*.buero_raum_ids' => ['array'],
+            'zuweisungen.*.buero_raum_ids.*' => ['integer', 'exists:raeumes,id'],
+            'zuweisungen.*.default_buero_raum_id' => ['nullable', 'integer', 'exists:raeumes,id'],
+            'zuweisungen.*.arbeitsbereich_raum_ids' => ['array'],
+            'zuweisungen.*.arbeitsbereich_raum_ids.*' => ['integer', 'exists:raeumes,id'],
+            'zuweisungen.*.default_arbeitsbereich_raum_id' => ['nullable', 'integer', 'exists:raeumes,id'],
         ]);
 
         DB::beginTransaction();
@@ -52,7 +67,7 @@ class ProjektHasPersonenController extends Controller
 
                 foreach ($zw['standort_id'] as $standortId) {
 
-                    ProjektHasPersonen::updateOrCreate(
+                    $assignment = ProjektHasPersonen::updateOrCreate(
                         [
                             'personen_id' => $person->id,
                             'projekt_id'  => $zw['projekt_id'],
@@ -61,6 +76,26 @@ class ProjektHasPersonenController extends Controller
                         [
                             'status' => 'aktiv',
                         ]
+                    );
+
+                    $this->projectAssignments->syncBereicheForAssignment(
+                        $assignment,
+                        $zw['bereich_ids'] ?? [],
+                        isset($zw['default_bereich_id']) ? (int) $zw['default_bereich_id'] : null,
+                    );
+
+                    $this->projectAssignments->syncRaeumeForAssignment(
+                        $assignment,
+                        RaumHasPersonen::TYPE_BUERO,
+                        $zw['buero_raum_ids'] ?? [],
+                        isset($zw['default_buero_raum_id']) ? (int) $zw['default_buero_raum_id'] : null,
+                    );
+
+                    $this->projectAssignments->syncRaeumeForAssignment(
+                        $assignment,
+                        RaumHasPersonen::TYPE_ARBEITSBEREICH,
+                        $zw['arbeitsbereich_raum_ids'] ?? [],
+                        isset($zw['default_arbeitsbereich_raum_id']) ? (int) $zw['default_arbeitsbereich_raum_id'] : null,
                     );
                 }
             }

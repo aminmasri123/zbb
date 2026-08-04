@@ -27,6 +27,7 @@ const props = defineProps({
   },
 });
 const emit = defineEmits(['close', 'updated']);
+const showVertretung = ref(false);
 
 let form = ref({
   id: null,
@@ -45,6 +46,7 @@ let form = ref({
 });
 
 const selectedRoom = computed(() =>
+  roomOptions.value.find((raum) => Number(raum.id) === Number(form.value.raum_id)) ||
   (props.raeume || []).find((raum) => Number(raum.id) === Number(form.value.raum_id))
 );
 
@@ -57,6 +59,97 @@ const selectedStandortName = computed(() =>
 const roomLabel = (raum) => {
   const standortName = raum?.standort?.name || props.standorte.find((standort) => Number(standort.id) === Number(raum?.standort_id))?.name;
   return standortName ? `${raum.name} (${standortName})` : raum.name;
+};
+
+const allPersonal = computed(() => Array.isArray(props.personal) ? props.personal : Object.values(props.personal || {}));
+const projectPersonal = computed(() => allPersonal.value.filter((person) => person.is_project_member !== false));
+const canUseVertretung = computed(() => allPersonal.value.some((person) => person.is_project_member === false));
+const visiblePersonal = computed(() => {
+  if (showVertretung.value || projectPersonal.value.length === 0) {
+    return allPersonal.value;
+  }
+
+  return projectPersonal.value;
+});
+const selectedBetreuer = computed(() =>
+  allPersonal.value.find((person) => Number(person.id) === Number(form.value.betreuer))
+);
+const selectedBetreuerBereiche = computed(() => selectedBetreuer.value?.bereiche || []);
+const bereichOptions = computed(() =>
+  selectedBetreuerBereiche.value.length
+    ? selectedBetreuerBereiche.value
+    : (props.bereiche || [])
+);
+const selectedBetreuerArbeitsraeume = computed(() => selectedBetreuer.value?.raeume?.arbeitsbereich || []);
+const roomOptions = computed(() =>
+  selectedBetreuerArbeitsraeume.value.length
+    ? selectedBetreuerArbeitsraeume.value
+    : (props.raeume || [])
+);
+
+const applyBetreuerBereich = () => {
+  const optionIds = bereichOptions.value.map((bereich) => Number(bereich.id));
+
+  if (!selectedBetreuer.value || selectedBetreuerBereiche.value.length === 0) {
+    if (form.value.bereich !== '' && !optionIds.includes(Number(form.value.bereich))) {
+      form.value.bereich = '';
+    }
+
+    return;
+  }
+
+  const defaultBereichId = Number(selectedBetreuer.value.default_bereich_id || 0);
+
+  if (defaultBereichId && optionIds.includes(defaultBereichId)) {
+    form.value.bereich = defaultBereichId;
+    return;
+  }
+
+  if (selectedBetreuerBereiche.value.length === 1) {
+    form.value.bereich = selectedBetreuerBereiche.value[0].id;
+    return;
+  }
+
+  if (!optionIds.includes(Number(form.value.bereich))) {
+    form.value.bereich = '';
+  }
+};
+
+const applyBetreuerRaum = () => {
+  if (form.value.ort_typ !== 'raum') {
+    return;
+  }
+
+  const optionIds = roomOptions.value.map((raum) => Number(raum.id));
+
+  if (!selectedBetreuer.value || selectedBetreuerArbeitsraeume.value.length === 0) {
+    if (form.value.raum_id !== null && !optionIds.includes(Number(form.value.raum_id))) {
+      form.value.raum_id = null;
+    }
+
+    return;
+  }
+
+  const defaultRaumId = Number(selectedBetreuer.value.default_arbeitsbereich_raum_id || 0);
+
+  if (defaultRaumId && optionIds.includes(defaultRaumId)) {
+    form.value.raum_id = defaultRaumId;
+    return;
+  }
+
+  if (selectedBetreuerArbeitsraeume.value.length === 1) {
+    form.value.raum_id = selectedBetreuerArbeitsraeume.value[0].id;
+    return;
+  }
+
+  if (!optionIds.includes(Number(form.value.raum_id))) {
+    form.value.raum_id = null;
+  }
+};
+
+const applyBetreuerDefaults = () => {
+  applyBetreuerBereich();
+  applyBetreuerRaum();
 };
 
 // 🔹 synchronisieren & konvertieren von String -> Date
@@ -79,10 +172,26 @@ watch(
         endzeit: normalizeTime(val.endzeit),
         bemerkung: val.bemerkung || '',
       };
+
+      showVertretung.value = selectedBetreuer.value?.is_project_member === false;
+      applyBetreuerDefaults();
     }
   },
   { immediate: true }
 );
+
+watch(
+  () => form.value.betreuer,
+  () => applyBetreuerDefaults()
+);
+
+watch(showVertretung, (enabled) => {
+  if (!enabled && selectedBetreuer.value?.is_project_member === false) {
+    form.value.betreuer = '';
+    form.value.bereich = '';
+    form.value.raum_id = null;
+  }
+});
 
 watch(
   () => form.value.ort_typ,
@@ -93,6 +202,7 @@ watch(
     } else {
       form.value.externer_ort = '';
       form.value.standort_id = selectedRoom.value?.standort_id || null;
+      applyBetreuerRaum();
     }
   }
 );
@@ -146,25 +256,32 @@ const save = async () => {
       <div class="grid grid-cols-2 gap-4">
         <FloatLabel variant="on">
           <Select
+            v-model="form.betreuer"
+            :options="visiblePersonal"
+            optionValue="id"
+            :optionLabel="(p) => `${p.vorname} ${p.nachname}`"
+            filter
+            class="w-full"
+          />
+          <label>Betreuer / Anleiter</label>
+        </FloatLabel>
+
+        <FloatLabel variant="on">
+          <Select
             v-model="form.bereich"
-            :options="bereiche"
+            :options="bereichOptions"
             optionValue="id"
             optionLabel="name"
+            :disabled="!form.betreuer"
             class="w-full"
           />
           <label>Bereich</label>
         </FloatLabel>
 
-        <FloatLabel variant="on">
-          <Select
-            v-model="form.betreuer"
-            :options="personal"
-            optionValue="id"
-            :optionLabel="(p) => `${p.vorname} ${p.nachname}`"
-            class="w-full"
-          />
-          <label>Betreuer</label>
-        </FloatLabel>
+        <label v-if="canUseVertretung" class="col-span-2 -mt-2 flex items-center gap-2 text-sm text-gray-600">
+          <input v-model="showVertretung" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
+          <span>Vertretung: alle aktiven Mitarbeiter auswÃ¤hlen</span>
+        </label>
 
         <FloatLabel variant="on" class="col-span-2">
           <MultiSelect
@@ -198,9 +315,10 @@ const save = async () => {
         <FloatLabel v-if="form.ort_typ === 'raum'" variant="on" class="col-span-2">
           <Select
             v-model="form.raum_id"
-            :options="raeume"
+            :options="roomOptions"
             optionValue="id"
             :optionLabel="roomLabel"
+            :disabled="!form.betreuer"
             class="w-full"
           />
           <label>Raum</label>

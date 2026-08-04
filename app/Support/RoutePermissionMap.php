@@ -18,6 +18,7 @@ class RoutePermissionMap
         'abteilung.indexAjaxFresh' => 'abteilung.index',
         'projekt.indexAjaxFresh' => 'projekt.index',
         'dashboard.partner.index' => 'kooperationspartner.index',
+        'schule.index' => 'kooperationspartner.index',
         'partner.index' => 'kooperationspartner.index',
         'partner.indexAjaxFresh' => 'kooperationspartner.index',
         'partner.store' => 'kooperationspartner.store',

@@ -6,6 +6,7 @@ use App\Models\User;
 use Inertia\Inertia;
 use App\Models\Projekt;
 use App\Models\Personen;
+use App\Models\RaumHasPersonen;
 use App\Models\Role;
 use App\Models\Standort;
 use App\Services\Projects\StaffProjectAssignmentSynchronizer;
@@ -91,7 +92,13 @@ class PersonalController extends Controller
 
         return Inertia::render('Personal/Index', [
             'users'        => $query->paginate(30)->withQueryString(),
-            'authProjekte' => $authUser->projekte,
+            'authProjekte' => $authUser->projekte()
+                ->with([
+                    'bereiche' => fn ($query) => $query->orderBy('name'),
+                    'raeume' => fn ($query) => $query->with('standort:id,name')->orderBy('name'),
+                ])
+                ->orderBy('name')
+                ->get(),
             'rollen'       => $rollen,
             'standorte'    => $standorte,
         ]);
@@ -135,28 +142,13 @@ class PersonalController extends Controller
         $rollen = Role::orderBy('name')->get();
 
         // Alle Projekte & Standorte
-        $alleProjekte = Projekt::orderBy('name')->get();
+        $alleProjekte = Projekt::with([
+            'bereiche' => fn ($query) => $query->orderBy('name'),
+            'raeume' => fn ($query) => $query->with('standort:id,name')->orderBy('name'),
+        ])->orderBy('name')->get();
         $alleStandorte = Standort::orderBy('name')->get();
         // Projekt-Zuweisungen des Users (gruppiert pro Projekt, mit mehreren Standorten)
-        $zuweisungen = DB::table('projekt_has_personens')
-            ->join('projekts', 'projekts.id', '=', 'projekt_has_personens.projekt_id')
-            ->where('personen_id', $id)
-            ->select(
-                'projekt_has_personens.projekt_id',
-                'projekts.name as projekt_name',
-                'projekt_has_personens.standort_id'
-            )
-            ->get()
-            ->groupBy('projekt_id')
-            ->map(function ($rows) {
-                return [
-                    'projekt_id'   => $rows->first()->projekt_id,
-                    'projekt_name' => $rows->first()->projekt_name,
-                    'standort_ids' => $rows->pluck('standort_id')->unique()->values()->all(),
-                ];
-            })
-            ->values()
-            ->all();
+        $zuweisungen = $this->buildProjektZuweisungen((int) $id);
 
         return Inertia::render('Personal/Edit', [
             'person'          => $person,
@@ -186,6 +178,15 @@ class PersonalController extends Controller
         'projekt_zuweisungen.*.projekt_id'             => ['nullable', 'integer', 'exists:projekts,id'],
         'projekt_zuweisungen.*.standort_ids'           => ['array'],
         'projekt_zuweisungen.*.standort_ids.*'         => ['integer', 'exists:standorts,id'],
+        'projekt_zuweisungen.*.bereich_ids'            => ['array'],
+        'projekt_zuweisungen.*.bereich_ids.*'          => ['integer', 'exists:bereiches,id'],
+        'projekt_zuweisungen.*.default_bereich_id'     => ['nullable', 'integer', 'exists:bereiches,id'],
+        'projekt_zuweisungen.*.buero_raum_ids'         => ['array'],
+        'projekt_zuweisungen.*.buero_raum_ids.*'       => ['integer', 'exists:raeumes,id'],
+        'projekt_zuweisungen.*.default_buero_raum_id'  => ['nullable', 'integer', 'exists:raeumes,id'],
+        'projekt_zuweisungen.*.arbeitsbereich_raum_ids' => ['array'],
+        'projekt_zuweisungen.*.arbeitsbereich_raum_ids.*' => ['integer', 'exists:raeumes,id'],
+        'projekt_zuweisungen.*.default_arbeitsbereich_raum_id' => ['nullable', 'integer', 'exists:raeumes,id'],
     ]);
 
     $person = Personen::with('user')->findOrFail($id);
@@ -231,5 +232,78 @@ class PersonalController extends Controller
     public function destroy(string $id)
     {
         //
+    }
+
+    private function buildProjektZuweisungen(int $personId): array
+    {
+        $assignments = DB::table('projekt_has_personens')
+            ->join('projekts', 'projekts.id', '=', 'projekt_has_personens.projekt_id')
+            ->where('personen_id', $personId)
+            ->select(
+                'projekt_has_personens.id as projekt_has_personen_id',
+                'projekt_has_personens.projekt_id',
+                'projekts.name as projekt_name',
+                'projekt_has_personens.standort_id'
+            )
+            ->get();
+
+        if ($assignments->isEmpty()) {
+            return [];
+        }
+
+        $assignmentIds = $assignments
+            ->pluck('projekt_has_personen_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $bereichRows = DB::table('bereich_has_personens')
+            ->whereIn('projekt_has_personen_id', $assignmentIds)
+            ->get()
+            ->groupBy('projekt_has_personen_id');
+
+        $raumRows = DB::table('raum_has_personens')
+            ->whereIn('projekt_has_personen_id', $assignmentIds)
+            ->get()
+            ->groupBy('projekt_has_personen_id');
+
+        return $assignments
+            ->groupBy('projekt_id')
+            ->map(function ($rows) use ($bereichRows, $raumRows) {
+                $rowAssignmentIds = $rows->pluck('projekt_has_personen_id')->filter()->unique()->values();
+                $bereiche = $rowAssignmentIds
+                    ->flatMap(fn ($assignmentId) => $bereichRows->get($assignmentId, collect()));
+                $raeume = $rowAssignmentIds
+                    ->flatMap(fn ($assignmentId) => $raumRows->get($assignmentId, collect()));
+
+                $bereichIds = $bereiche->pluck('bereich_id')->filter()->map(fn ($id) => (int) $id)->unique()->values();
+                $defaultBereichId = $bereiche->first(fn ($row) => (bool) $row->is_default)?->bereich_id;
+                $buero = $raeume->where('assignment_type', RaumHasPersonen::TYPE_BUERO);
+                $arbeitsbereiche = $raeume->where('assignment_type', RaumHasPersonen::TYPE_ARBEITSBEREICH);
+                $bueroIds = $buero->pluck('raum_id')->filter()->map(fn ($id) => (int) $id)->unique()->values();
+                $arbeitsbereichIds = $arbeitsbereiche->pluck('raum_id')->filter()->map(fn ($id) => (int) $id)->unique()->values();
+                $defaultBueroId = $buero->first(fn ($row) => (bool) $row->is_default)?->raum_id;
+                $defaultArbeitsbereichId = $arbeitsbereiche->first(fn ($row) => (bool) $row->is_default)?->raum_id;
+
+                return [
+                    'projekt_id'   => $rows->first()->projekt_id,
+                    'projekt_name' => $rows->first()->projekt_name,
+                    'standort_ids' => $rows->pluck('standort_id')->filter()->map(fn ($id) => (int) $id)->unique()->values()->all(),
+                    'bereich_ids' => $bereichIds->all(),
+                    'default_bereich_id' => $defaultBereichId && $bereichIds->contains($defaultBereichId)
+                        ? (int) $defaultBereichId
+                        : null,
+                    'buero_raum_ids' => $bueroIds->all(),
+                    'default_buero_raum_id' => $defaultBueroId && $bueroIds->contains((int) $defaultBueroId)
+                        ? (int) $defaultBueroId
+                        : null,
+                    'arbeitsbereich_raum_ids' => $arbeitsbereichIds->all(),
+                    'default_arbeitsbereich_raum_id' => $defaultArbeitsbereichId && $arbeitsbereichIds->contains((int) $defaultArbeitsbereichId)
+                        ? (int) $defaultArbeitsbereichId
+                        : null,
+                ];
+            })
+            ->values()
+            ->all();
     }
 }

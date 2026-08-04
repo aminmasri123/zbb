@@ -7,6 +7,16 @@ import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
 import MultiSelect from 'primevue/multiselect';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import {
+    arbeitsbereichRoomsForProject,
+    bueroRoomsForProject,
+    emptyRoomAssignmentFields,
+    ensureProjectRoomAssignmentFields,
+    normalizeDefaultRoom,
+    resetRoomAssignments,
+    roomLabel,
+    selectedRoomsForRow,
+} from '@/utils/projectRoomAssignments';
 
 const props = defineProps({
     person: Object,
@@ -34,16 +44,68 @@ const projektList = ref(
     (props.zuweisungen || []).map(z => ({
         projekt_id: z.projekt_id,
         standort_ids: Array.isArray(z.standort_ids) ? z.standort_ids : [],
+        bereich_ids: Array.isArray(z.bereich_ids) ? z.bereich_ids : [],
+        default_bereich_id: z.default_bereich_id ?? null,
+        buero_raum_ids: Array.isArray(z.buero_raum_ids) ? z.buero_raum_ids : [],
+        default_buero_raum_id: z.default_buero_raum_id ?? null,
+        arbeitsbereich_raum_ids: Array.isArray(z.arbeitsbereich_raum_ids) ? z.arbeitsbereich_raum_ids : [],
+        default_arbeitsbereich_raum_id: z.default_arbeitsbereich_raum_id ?? null,
     }))
 );
+
+projektList.value.forEach(ensureProjectRoomAssignmentFields);
+
+const errorFor = (field) => form.errors[field] || '';
+
+const bereicheForProjekt = (projektId) => {
+    return props.alleProjekte.find((projekt) => Number(projekt.id) === Number(projektId))?.bereiche || [];
+};
+
+const selectedBereicheForRow = (row) => {
+    const selectedIds = (row.bereich_ids || []).map((id) => Number(id));
+
+    return bereicheForProjekt(row.projekt_id).filter((bereich) => selectedIds.includes(Number(bereich.id)));
+};
+
+const resetProjektBereiche = (row) => {
+    row.bereich_ids = [];
+    row.default_bereich_id = null;
+};
+
+const resetProjektAssignments = (row) => {
+    resetProjektBereiche(row);
+    resetRoomAssignments(row);
+};
+
+const normalizeDefaultBereich = (row) => {
+    const selectedIds = (row.bereich_ids || []).map((id) => Number(id));
+
+    if (selectedIds.length === 1) {
+        row.default_bereich_id = selectedIds[0];
+        return;
+    }
+
+    if (!selectedIds.includes(Number(row.default_bereich_id))) {
+        row.default_bereich_id = null;
+    }
+};
 
 // Hilfsfunktion: neues leeres Projekt
 const addProjekt = () => {
     projektList.value.push({
         projekt_id: null,
         standort_ids: [],
+        bereich_ids: [],
+        default_bereich_id: null,
+        ...emptyRoomAssignmentFields(),
     });
 };
+
+const selectedBueroRaeumeForRow = (row) =>
+    selectedRoomsForRow(props.alleProjekte, row, 'buero_raum_ids', bueroRoomsForProject);
+
+const selectedArbeitsbereichRaeumeForRow = (row) =>
+    selectedRoomsForRow(props.alleProjekte, row, 'arbeitsbereich_raum_ids', arbeitsbereichRoomsForProject);
 
 // Projekt entfernen (nur aus Frontend-Liste – DB wird im Controller neu geschrieben)
 const removeProjekt = (index) => {
@@ -200,6 +262,7 @@ const submit = () => {
                             <select
                                 :id="`projekt_${index}`"
                                 v-model="p.projekt_id"
+                                @change="resetProjektAssignments(p)"
                                 class="mt-1 block w-full border p-2 rounded"
                             >
                                 <option value="">-- Projekt auswählen --</option>
@@ -227,6 +290,120 @@ const submit = () => {
                                 placeholder="Standorte auswählen..."
                             />
 
+                        </div>
+
+                        <div>
+                            <InputLabel :for="`bereiche_${index}`" value="Bereiche" />
+                            <MultiSelect
+                                :id="`bereiche_${index}`"
+                                v-model="p.bereich_ids"
+                                :options="bereicheForProjekt(p.projekt_id)"
+                                optionLabel="name"
+                                optionValue="id"
+                                display="chip"
+                                filter
+                                class="w-full mt-1"
+                                placeholder="Bereiche auswÃ¤hlen..."
+                                :disabled="!p.projekt_id"
+                                @change="normalizeDefaultBereich(p)"
+                            />
+                            <InputError :message="errorFor(`projekt_zuweisungen.${index}.bereich_ids`)" class="mt-2" />
+                        </div>
+
+                        <div>
+                            <InputLabel :for="`standard_bereich_${index}`" value="Standardbereich" />
+                            <select
+                                :id="`standard_bereich_${index}`"
+                                v-model="p.default_bereich_id"
+                                class="mt-1 block w-full border p-2 rounded disabled:bg-gray-100"
+                                :disabled="selectedBereicheForRow(p).length === 0"
+                            >
+                                <option :value="null">Kein Standard</option>
+                                <option
+                                    v-for="bereich in selectedBereicheForRow(p)"
+                                    :key="bereich.id"
+                                    :value="bereich.id"
+                                >
+                                    {{ bereich.name }}
+                                </option>
+                            </select>
+                            <InputError :message="errorFor(`projekt_zuweisungen.${index}.default_bereich_id`)" class="mt-2" />
+                        </div>
+
+                        <div>
+                            <InputLabel :for="`buero_raeume_${index}`" value="Büros" />
+                            <MultiSelect
+                                :id="`buero_raeume_${index}`"
+                                v-model="p.buero_raum_ids"
+                                :options="bueroRoomsForProject(props.alleProjekte, p.projekt_id)"
+                                :optionLabel="roomLabel"
+                                optionValue="id"
+                                display="chip"
+                                filter
+                                class="w-full mt-1"
+                                placeholder="Büros auswählen..."
+                                :disabled="!p.projekt_id"
+                                @change="normalizeDefaultRoom(p, 'buero_raum_ids', 'default_buero_raum_id')"
+                            />
+                            <InputError :message="errorFor(`projekt_zuweisungen.${index}.buero_raum_ids`)" class="mt-2" />
+                        </div>
+
+                        <div>
+                            <InputLabel :for="`standard_buero_${index}`" value="Standardbüro" />
+                            <select
+                                :id="`standard_buero_${index}`"
+                                v-model="p.default_buero_raum_id"
+                                class="mt-1 block w-full border p-2 rounded disabled:bg-gray-100"
+                                :disabled="selectedBueroRaeumeForRow(p).length === 0"
+                            >
+                                <option :value="null">Kein Standard</option>
+                                <option
+                                    v-for="raum in selectedBueroRaeumeForRow(p)"
+                                    :key="raum.id"
+                                    :value="raum.id"
+                                >
+                                    {{ roomLabel(raum) }}
+                                </option>
+                            </select>
+                            <InputError :message="errorFor(`projekt_zuweisungen.${index}.default_buero_raum_id`)" class="mt-2" />
+                        </div>
+
+                        <div>
+                            <InputLabel :for="`arbeitsbereich_raeume_${index}`" value="Arbeitsbereiche" />
+                            <MultiSelect
+                                :id="`arbeitsbereich_raeume_${index}`"
+                                v-model="p.arbeitsbereich_raum_ids"
+                                :options="arbeitsbereichRoomsForProject(props.alleProjekte, p.projekt_id)"
+                                :optionLabel="roomLabel"
+                                optionValue="id"
+                                display="chip"
+                                filter
+                                class="w-full mt-1"
+                                placeholder="Arbeitsbereiche auswählen..."
+                                :disabled="!p.projekt_id"
+                                @change="normalizeDefaultRoom(p, 'arbeitsbereich_raum_ids', 'default_arbeitsbereich_raum_id')"
+                            />
+                            <InputError :message="errorFor(`projekt_zuweisungen.${index}.arbeitsbereich_raum_ids`)" class="mt-2" />
+                        </div>
+
+                        <div>
+                            <InputLabel :for="`standard_arbeitsbereich_${index}`" value="Standard-Arbeitsbereich" />
+                            <select
+                                :id="`standard_arbeitsbereich_${index}`"
+                                v-model="p.default_arbeitsbereich_raum_id"
+                                class="mt-1 block w-full border p-2 rounded disabled:bg-gray-100"
+                                :disabled="selectedArbeitsbereichRaeumeForRow(p).length === 0"
+                            >
+                                <option :value="null">Kein Standard</option>
+                                <option
+                                    v-for="raum in selectedArbeitsbereichRaeumeForRow(p)"
+                                    :key="raum.id"
+                                    :value="raum.id"
+                                >
+                                    {{ roomLabel(raum) }}
+                                </option>
+                            </select>
+                            <InputError :message="errorFor(`projekt_zuweisungen.${index}.default_arbeitsbereich_raum_id`)" class="mt-2" />
                         </div>
                     </div>
 
@@ -256,4 +433,3 @@ const submit = () => {
         </form>
     </AppLayout>
 </template>
-

@@ -6,6 +6,16 @@ import Password from 'primevue/password';
 import MultiSelect from 'primevue/multiselect';
 import Divider from 'primevue/divider';
 import Modal from '@/Components/ModalForm.vue';   // <---- das fehlte
+import {
+  arbeitsbereichRoomsForProject,
+  bueroRoomsForProject,
+  emptyRoomAssignmentFields,
+  ensureProjectRoomAssignmentFields,
+  normalizeDefaultRoom,
+  resetRoomAssignments,
+  roomLabel,
+  selectedRoomsForRow,
+} from '@/utils/projectRoomAssignments';
 
 // Props (Daten von außen übergeben)
 const props = defineProps({
@@ -28,8 +38,17 @@ const ensureProjektZuweisungen = () => {
     props.newUser.projekt_zuweisungen.push({
       projekt_id: null,
       standort_ids: [],
+      bereich_ids: [],
+      default_bereich_id: null,
+      ...emptyRoomAssignmentFields(),
     });
   }
+
+  props.newUser.projekt_zuweisungen.forEach((row) => {
+    row.bereich_ids = Array.isArray(row.bereich_ids) ? row.bereich_ids : [];
+    row.default_bereich_id = row.default_bereich_id ?? null;
+    ensureProjectRoomAssignmentFields(row);
+  });
 };
 
 const addProjektRow = () => {
@@ -37,12 +56,54 @@ const addProjektRow = () => {
   props.newUser.projekt_zuweisungen.push({
     projekt_id: null,
     standort_ids: [],
+    bereich_ids: [],
+    default_bereich_id: null,
+    ...emptyRoomAssignmentFields(),
   });
 };
 
 const removeProjektRow = (index) => {
   props.newUser.projekt_zuweisungen.splice(index, 1);
 };
+
+const bereicheForProjekt = (projektId) => {
+  return props.projekte.find((projekt) => Number(projekt.id) === Number(projektId))?.bereiche || [];
+};
+
+const selectedBereicheForRow = (row) => {
+  const selectedIds = (row.bereich_ids || []).map((id) => Number(id));
+
+  return bereicheForProjekt(row.projekt_id).filter((bereich) => selectedIds.includes(Number(bereich.id)));
+};
+
+const resetProjektBereiche = (row) => {
+  row.bereich_ids = [];
+  row.default_bereich_id = null;
+};
+
+const resetProjektAssignments = (row) => {
+  resetProjektBereiche(row);
+  resetRoomAssignments(row);
+};
+
+const normalizeDefaultBereich = (row) => {
+  const selectedIds = (row.bereich_ids || []).map((id) => Number(id));
+
+  if (selectedIds.length === 1) {
+    row.default_bereich_id = selectedIds[0];
+    return;
+  }
+
+  if (!selectedIds.includes(Number(row.default_bereich_id))) {
+    row.default_bereich_id = null;
+  }
+};
+
+const selectedBueroRaeumeForRow = (row) =>
+  selectedRoomsForRow(props.projekte, row, 'buero_raum_ids', bueroRoomsForProject);
+
+const selectedArbeitsbereichRaeumeForRow = (row) =>
+  selectedRoomsForRow(props.projekte, row, 'arbeitsbereich_raum_ids', arbeitsbereichRoomsForProject);
 
 watch(() => props.visible, (visible) => {
   if (visible) {
@@ -143,7 +204,7 @@ watch(() => props.visible, (visible) => {
             <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
                 <label class="mb-1 block text-xs font-semibold text-gray-600">Projekt</label>
-                <select v-model="row.projekt_id" class="w-full rounded border p-2 text-sm">
+                <select v-model="row.projekt_id" @change="resetProjektAssignments(row)" class="w-full rounded border p-2 text-sm">
                   <option :value="null">Projekt auswahlen</option>
                   <option v-for="projekt in projekte" :key="projekt.id" :value="projekt.id">
                     {{ projekt.name }}
@@ -163,6 +224,108 @@ watch(() => props.visible, (visible) => {
                   placeholder="Standorte auswahlen"
                   class="w-full"
                 />
+              </div>
+
+              <div>
+                <label class="mb-1 block text-xs font-semibold text-gray-600">Bereiche</label>
+                <MultiSelect
+                  v-model="row.bereich_ids"
+                  :options="bereicheForProjekt(row.projekt_id)"
+                  optionLabel="name"
+                  optionValue="id"
+                  display="chip"
+                  filter
+                  placeholder="Bereiche auswahlen"
+                  class="w-full"
+                  :disabled="!row.projekt_id"
+                  @change="normalizeDefaultBereich(row)"
+                />
+              </div>
+
+              <div>
+                <label class="mb-1 block text-xs font-semibold text-gray-600">Standardbereich</label>
+                <select
+                  v-model="row.default_bereich_id"
+                  class="w-full rounded border p-2 text-sm disabled:bg-gray-100"
+                  :disabled="selectedBereicheForRow(row).length === 0"
+                >
+                  <option :value="null">Kein Standard</option>
+                  <option
+                    v-for="bereich in selectedBereicheForRow(row)"
+                    :key="bereich.id"
+                    :value="bereich.id"
+                  >
+                    {{ bereich.name }}
+                  </option>
+                </select>
+              </div>
+
+              <div>
+                <label class="mb-1 block text-xs font-semibold text-gray-600">Büros</label>
+                <MultiSelect
+                  v-model="row.buero_raum_ids"
+                  :options="bueroRoomsForProject(props.projekte, row.projekt_id)"
+                  :optionLabel="roomLabel"
+                  optionValue="id"
+                  display="chip"
+                  filter
+                  placeholder="Büros auswählen"
+                  class="w-full"
+                  :disabled="!row.projekt_id"
+                  @change="normalizeDefaultRoom(row, 'buero_raum_ids', 'default_buero_raum_id')"
+                />
+              </div>
+
+              <div>
+                <label class="mb-1 block text-xs font-semibold text-gray-600">Standardbüro</label>
+                <select
+                  v-model="row.default_buero_raum_id"
+                  class="w-full rounded border p-2 text-sm disabled:bg-gray-100"
+                  :disabled="selectedBueroRaeumeForRow(row).length === 0"
+                >
+                  <option :value="null">Kein Standard</option>
+                  <option
+                    v-for="raum in selectedBueroRaeumeForRow(row)"
+                    :key="raum.id"
+                    :value="raum.id"
+                  >
+                    {{ roomLabel(raum) }}
+                  </option>
+                </select>
+              </div>
+
+              <div>
+                <label class="mb-1 block text-xs font-semibold text-gray-600">Arbeitsbereiche</label>
+                <MultiSelect
+                  v-model="row.arbeitsbereich_raum_ids"
+                  :options="arbeitsbereichRoomsForProject(props.projekte, row.projekt_id)"
+                  :optionLabel="roomLabel"
+                  optionValue="id"
+                  display="chip"
+                  filter
+                  placeholder="Arbeitsbereiche auswählen"
+                  class="w-full"
+                  :disabled="!row.projekt_id"
+                  @change="normalizeDefaultRoom(row, 'arbeitsbereich_raum_ids', 'default_arbeitsbereich_raum_id')"
+                />
+              </div>
+
+              <div>
+                <label class="mb-1 block text-xs font-semibold text-gray-600">Standard-Arbeitsbereich</label>
+                <select
+                  v-model="row.default_arbeitsbereich_raum_id"
+                  class="w-full rounded border p-2 text-sm disabled:bg-gray-100"
+                  :disabled="selectedArbeitsbereichRaeumeForRow(row).length === 0"
+                >
+                  <option :value="null">Kein Standard</option>
+                  <option
+                    v-for="raum in selectedArbeitsbereichRaeumeForRow(row)"
+                    :key="raum.id"
+                    :value="raum.id"
+                  >
+                    {{ roomLabel(raum) }}
+                  </option>
+                </select>
               </div>
             </div>
 

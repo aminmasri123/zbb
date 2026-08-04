@@ -6,6 +6,7 @@ use App\Models\Anwesenheitsstatuten;
 use App\Models\Bereichsauswahl;
 use App\Models\BereichsauswahlSetting;
 use App\Models\EinteilungBereiche;
+use App\Models\EinteilungRundentermin;
 use App\Models\EinteilungSetting;
 use App\Models\Gruppe;
 use App\Models\GruppeHasPersonen;
@@ -49,7 +50,8 @@ class EinteilungParameterController extends Controller
 
     public function updateParameter(Request $request)
     {
-        $validated = $request->validate([
+        $requestedRundenAnzahl = $this->normalizeRundenAnzahl((int) $request->input('runden_anzahl', self::DEFAULT_RUNDEN_ANZAHL));
+        $rules = [
             'partner_id' => ['required', 'integer', 'exists:partners,id'],
             'schuljahr' => ['required', 'string'],
             'teil' => ['required', 'string'],
@@ -57,7 +59,17 @@ class EinteilungParameterController extends Controller
             'standard_kapazitaet' => ['required', 'integer', 'min:0', 'max:999'],
             'kapazitaeten' => ['nullable', 'array'],
             'kapazitaeten.*' => ['nullable', 'integer', 'min:0', 'max:999'],
-        ]);
+            'rundentermine' => ['required', 'array'],
+        ];
+
+        foreach ($this->rundenArray($requestedRundenAnzahl) as $runde) {
+            $rules["rundentermine.{$runde}.anfangsdatum"] = ['required', 'date'];
+            $rules["rundentermine.{$runde}.enddatum"] = ['required', 'date', "after_or_equal:rundentermine.{$runde}.anfangsdatum"];
+            $rules["rundentermine.{$runde}.startzeit"] = ['required', 'date_format:H:i'];
+            $rules["rundentermine.{$runde}.endzeit"] = ['required', 'date_format:H:i', "after:rundentermine.{$runde}.startzeit"];
+        }
+
+        $validated = $request->validate($rules);
 
         $partnerId = (int) $validated['partner_id'];
         $schuljahr = (string) $validated['schuljahr'];
@@ -65,9 +77,15 @@ class EinteilungParameterController extends Controller
         $projekt = $this->currentProjekt();
         $bereiche = $this->projektBereiche($projekt);
         $rundenAnzahl = $this->normalizeRundenAnzahl((int) $validated['runden_anzahl']);
+        $runden = $this->rundenArray($rundenAnzahl);
         $standardKapazitaet = (int) $validated['standard_kapazitaet'];
         $kapazitaeten = collect($validated['kapazitaeten'] ?? [])
             ->mapWithKeys(fn ($value, $key) => [(int) $key => (int) $value]);
+        $rundentermine = collect($runden)->mapWithKeys(fn ($runde) => [
+            $runde => $validated['rundentermine'][$runde],
+        ]);
+
+        $this->assertChronologischeRundentermine($rundentermine);
 
         DB::transaction(function () use (
             $projekt,
@@ -77,7 +95,8 @@ class EinteilungParameterController extends Controller
             $teil,
             $rundenAnzahl,
             $standardKapazitaet,
-            $kapazitaeten
+            $kapazitaeten,
+            $rundentermine
         ) {
             $setting = $this->einteilungSettingFor($projekt->id, $partnerId, $schuljahr, $teil, $projekt);
             $setting->update([
@@ -92,6 +111,20 @@ class EinteilungParameterController extends Controller
                     ['plaetze' => $kapazitaeten->get((int) $bereich->id, $standardKapazitaet)]
                 );
             }
+
+            foreach ($rundentermine as $runde => $termin) {
+                $setting->rundentermine()->updateOrCreate(
+                    ['runde' => $runde],
+                    [
+                        'anfangsdatum' => $termin['anfangsdatum'],
+                        'enddatum' => $termin['enddatum'],
+                        'startzeit' => $termin['startzeit'],
+                        'endzeit' => $termin['endzeit'],
+                    ]
+                );
+            }
+
+            $setting->rundentermine()->where('runde', '>', $rundenAnzahl)->delete();
 
             $this->removeEinteilungenAboveRound($partnerId, $schuljahr, $teil, $rundenAnzahl);
         });
@@ -220,6 +253,7 @@ class EinteilungParameterController extends Controller
             $projekt
         );
         $runden = $this->rundenArray($setting->runden_anzahl);
+        $this->assertRundentermineConfigured($setting, $runden);
         $roundData = $this->validateRoundFields($request, $runden, true);
         $validated = array_merge($base, $roundData);
 
@@ -291,6 +325,7 @@ class EinteilungParameterController extends Controller
         $bereiche = $this->projektBereiche($projekt);
         $bereichIds = $bereiche->pluck('id')->map(fn ($id) => (int) $id)->values();
         $runden = $this->rundenArray($setting->runden_anzahl);
+        $this->assertRundentermineConfigured($setting, $runden);
         $kapazitaeten = $this->kapazitaetenFor($setting, $bereiche);
 
         $positiveBereiche = collect($kapazitaeten)->filter(fn ($plaetze) => (int) $plaetze > 0);
@@ -422,13 +457,15 @@ class EinteilungParameterController extends Controller
         ]);
 
         $projekt = $this->currentProjekt();
-        $runden = $this->rundenArray($this->einteilungSettingFor(
+        $setting = $this->einteilungSettingFor(
             $projekt->id,
             (int) $base['partner_id'],
             (string) $base['schuljahr'],
             (string) $base['teil'],
             $projekt
-        )->runden_anzahl);
+        );
+        $runden = $this->rundenArray($setting->runden_anzahl);
+        $this->assertRundentermineConfigured($setting, $runden);
 
         $roundData = $this->validateRoundFields($request, $runden, false);
         $validated = array_merge($base, $roundData);
@@ -561,23 +598,18 @@ class EinteilungParameterController extends Controller
         $projekt = $this->currentProjekt();
         $setting = $this->einteilungSettingFor($projekt->id, $partnerId, $schuljahr, $teil, $projekt);
         $runden = $this->rundenArray($setting->runden_anzahl);
+        $this->assertRundentermineConfigured($setting, $runden);
+        $rundentermine = $setting->rundentermine->keyBy('runde');
 
         $rules = [
             'partner_id' => ['required', 'integer', 'exists:partners,id'],
             'schuljahr' => ['required', 'string'],
             'teil' => ['required', 'string'],
-            'startzeit' => ['required', 'date_format:H:i'],
-            'endzeit' => ['required', 'date_format:H:i', 'after:startzeit'],
             'raum_id' => ['nullable', 'integer', 'exists:raeumes,id'],
             'betreuer_id' => ['nullable', 'integer', 'exists:personens,id'],
             'bereiche' => ['nullable', 'array'],
             'bereiche.*' => ['integer', 'exists:bereiches,id'],
         ];
-
-        foreach ($runden as $runde) {
-            $rules['runde' . $runde . 'von'] = ['required', 'date'];
-            $rules['runde' . $runde . 'bis'] = ['required', 'date', 'after_or_equal:runde' . $runde . 'von'];
-        }
 
         $validated = $request->validate($rules);
         $projektBereiche = $this->projektBereiche($projekt);
@@ -607,14 +639,6 @@ class EinteilungParameterController extends Controller
         $schueler = $this->schuelerQuery($partnerId, $schuljahr, $teil)->get();
         $schuelerIds = $schueler->pluck('id');
         $schuelerNachId = $schueler->keyBy('id');
-        $zeitGeplant = Zeiten::firstOrCreate([
-            'startzeit' => $validated['startzeit'],
-            'endzeit' => $validated['endzeit'],
-        ]);
-        $zeitTatsaechlich = Zeiten::firstOrCreate([
-            'startzeit' => $validated['startzeit'],
-            'endzeit' => $validated['endzeit'],
-        ]);
 
         $gruppenAnzahl = 0;
         $pivotAnzahl = 0;
@@ -627,32 +651,41 @@ class EinteilungParameterController extends Controller
             $schuelerNachId,
             $raumId,
             $betreuerId,
-            $zeitGeplant,
-            $zeitTatsaechlich,
             $status,
             $runden,
+            $rundentermine,
             &$gruppenAnzahl,
             &$pivotAnzahl
         ) {
             foreach ($runden as $runde) {
-                $start = Carbon::parse($validated['runde' . $runde . 'von'])->startOfDay();
-                $end = Carbon::parse($validated['runde' . $runde . 'bis'])->startOfDay();
+                $termin = $rundentermine->get($runde);
+                $start = Carbon::parse($termin->anfangsdatum)->startOfDay();
+                $end = Carbon::parse($termin->enddatum)->startOfDay();
                 $tageIds = $this->tageIds($start, $end);
+                $zeitGeplant = Zeiten::firstOrCreate([
+                    'startzeit' => $termin->startzeit,
+                    'endzeit' => $termin->endzeit,
+                ]);
+                $zeitTatsaechlich = Zeiten::firstOrCreate([
+                    'startzeit' => $termin->startzeit,
+                    'endzeit' => $termin->endzeit,
+                ]);
 
                 foreach ($bereiche as $bereich) {
                     $gruppe = Gruppe::updateOrCreate(
                         [
                             'projekt_id' => $projekt->id,
                             'bereich_id' => $bereich->id,
-                            'anfangsdatum' => $start->toDateString(),
-                            'enddatum' => $end->toDateString(),
                             'bemerkung' => $this->gruppenBemerkung((int) $validated['partner_id'], (string) $validated['schuljahr'], (string) $validated['teil'], $runde),
                         ],
                         [
                             'personen_id' => $betreuerId,
                             'raum_id' => $raumId,
-                            'startzeit' => $validated['startzeit'],
-                            'endzeit' => $validated['endzeit'],
+                            'partner_id' => (int) $validated['partner_id'],
+                            'anfangsdatum' => $start->toDateString(),
+                            'enddatum' => $end->toDateString(),
+                            'startzeit' => $termin->startzeit,
+                            'endzeit' => $termin->endzeit,
                         ]
                     );
                     $gruppenAnzahl++;
@@ -874,6 +907,15 @@ class EinteilungParameterController extends Controller
             'auswahl_anzahl' => (int) $wahlSetting->auswahl_anzahl,
             'standard_kapazitaet' => (int) $setting->standard_kapazitaet,
             'kapazitaeten' => $this->kapazitaetenFor($setting, $bereiche),
+            'rundentermine' => $setting->rundentermine
+                ->keyBy('runde')
+                ->map(fn (EinteilungRundentermin $termin) => [
+                    'anfangsdatum' => $termin->anfangsdatum?->toDateString(),
+                    'enddatum' => $termin->enddatum?->toDateString(),
+                    'startzeit' => substr((string) $termin->startzeit, 0, 5),
+                    'endzeit' => substr((string) $termin->endzeit, 0, 5),
+                ])
+                ->all(),
         ];
     }
 
@@ -957,7 +999,7 @@ class EinteilungParameterController extends Controller
 
         $this->ensureKapazitaeten($setting, $this->projektBereiche($projekt));
 
-        return $setting->fresh('kapazitaeten');
+        return $setting->fresh(['kapazitaeten', 'rundentermine']);
     }
 
     private function bereichsauswahlSettingFor(int $projektId, int $partnerId, string $schuljahr, string $teil, ?Projekt $projekt = null): BereichsauswahlSetting
@@ -1017,6 +1059,37 @@ class EinteilungParameterController extends Controller
     private function normalizeRundenAnzahl(int $value): int
     {
         return min(self::MAX_RUNDEN, max(self::MIN_RUNDEN, $value));
+    }
+
+    private function assertChronologischeRundentermine(Collection $rundentermine): void
+    {
+        $vorherigesEnde = null;
+
+        foreach ($rundentermine->sortKeys() as $runde => $termin) {
+            $start = Carbon::parse($termin['anfangsdatum'])->startOfDay();
+            $ende = Carbon::parse($termin['enddatum'])->startOfDay();
+
+            if ($vorherigesEnde && $start->lte($vorherigesEnde)) {
+                throw ValidationException::withMessages([
+                    "rundentermine.{$runde}.anfangsdatum" => "Runde {$runde} muss nach dem Ende der vorherigen Runde beginnen.",
+                ]);
+            }
+
+            $vorherigesEnde = $ende;
+        }
+    }
+
+    private function assertRundentermineConfigured(EinteilungSetting $setting, array $runden): void
+    {
+        $setting->loadMissing('rundentermine');
+        $vorhandeneRunden = $setting->rundentermine->pluck('runde')->map(fn ($runde) => (int) $runde);
+        $fehlendeRunden = collect($runden)->reject(fn ($runde) => $vorhandeneRunden->contains($runde))->values();
+
+        if ($fehlendeRunden->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'rundentermine' => 'Bitte zuerst unter Parameter die Termine fuer Runde ' . $fehlendeRunden->implode(', ') . ' festlegen.',
+            ]);
+        }
     }
 
     private function normalizeAuswahlAnzahl(int $value): int

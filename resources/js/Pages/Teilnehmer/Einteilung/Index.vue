@@ -91,8 +91,11 @@
 
         <div v-if="!isFullscreen" class="flex gap-1 overflow-x-auto border-b border-gray-200 px-4 pt-3" role="tablist" aria-label="Runde auswählen">
           <button v-for="runde in runden" :key="`tab-${runde}`" type="button" role="tab" :aria-selected="selectedRound === runde" class="relative shrink-0 rounded-t-lg px-4 py-2.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-orange-400" :class="selectedRound === runde ? 'bg-orange-50 text-orange-700' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'" @click="selectedRound = runde">
-            Runde {{ runde }}
-            <span class="ml-1.5 rounded-full px-1.5 py-0.5 text-xs" :class="selectedRound === runde ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'">{{ assignedCountForRound(runde) }}</span>
+            <span class="flex items-center justify-center">
+              Runde {{ runde }}
+              <span class="ml-1.5 rounded-full px-1.5 py-0.5 text-xs" :class="selectedRound === runde ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'">{{ assignedCountForRound(runde) }}</span>
+            </span>
+            <span class="mt-0.5 block text-[10px] font-medium opacity-75">{{ roundDateLabel(runde) }}</span>
             <span v-if="selectedRound === runde" class="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-orange-500"></span>
           </button>
         </div>
@@ -108,6 +111,7 @@
             <div class="flex flex-col items-center justify-center bg-orange-50 px-1 text-center text-orange-700">
               <span class="text-sm font-bold">{{ runde }}</span>
               <span class="text-[9px] font-medium">{{ assignedCountForRound(runde) }} TN</span>
+              <span class="mt-0.5 text-[8px] leading-tight text-orange-600">{{ roundDateLabel(runde, true) }}</span>
             </div>
             <div v-for="bereich in allBereiche" :key="`fullscreen-cell-${runde}-${bereich.id}`" class="flex min-h-0 min-w-0 flex-col bg-white p-1">
               <div class="mb-0.5 flex items-center justify-between gap-1 border-b border-gray-100 pb-0.5 text-[9px]">
@@ -282,6 +286,36 @@
             </div>
           </div>
 
+          <div>
+            <div class="mb-2">
+              <h3 class="text-sm font-bold text-gray-800">Rundentermine</h3>
+              <p class="text-xs text-gray-500">Diese Termine gelten für die Einteilung und werden beim Generieren der Gruppen übernommen.</p>
+            </div>
+            <div class="space-y-3">
+              <div v-for="runde in parameterRounds" :key="`parameter-termin-${runde}`" class="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <p class="mb-2 text-sm font-bold text-orange-700">Runde {{ runde }}</p>
+                <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  <div>
+                    <label class="mb-1 block text-xs font-semibold text-gray-600">Von</label>
+                    <input v-model="parameterForm.rundentermine[runde].anfangsdatum" required type="date" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb sm:text-sm" />
+                  </div>
+                  <div>
+                    <label class="mb-1 block text-xs font-semibold text-gray-600">Bis</label>
+                    <input v-model="parameterForm.rundentermine[runde].enddatum" required type="date" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb sm:text-sm" />
+                  </div>
+                  <div>
+                    <label class="mb-1 block text-xs font-semibold text-gray-600">Startzeit</label>
+                    <input v-model="parameterForm.rundentermine[runde].startzeit" required type="time" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb sm:text-sm" />
+                  </div>
+                  <div>
+                    <label class="mb-1 block text-xs font-semibold text-gray-600">Endzeit</label>
+                    <input v-model="parameterForm.rundentermine[runde].endzeit" required type="time" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb sm:text-sm" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="overflow-x-auto border border-gray-200">
             <table class="min-w-full divide-y divide-gray-200 text-sm">
               <thead class="bg-gray-50">
@@ -367,27 +401,16 @@
               <span>{{ bereich.name }}</span>
             </label>
           </div>
-          <div class="grid grid-cols-2 gap-3">
-            <template v-for="r in runden" :key="`runde-date-${r}`">
-              <div>
-                <label class="mb-1 block text-sm font-semibold text-gray-700">Runde {{ r }} von</label>
-                <input v-model="gruppenForm['runde' + r + 'von']" type="date" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb sm:text-sm" />
+          <div class="rounded-lg border border-orange-200 bg-orange-50 p-3">
+            <p class="mb-2 text-sm font-bold text-orange-800">Gespeicherte Rundentermine</p>
+            <div class="grid gap-2 sm:grid-cols-2">
+              <div v-for="r in runden" :key="`gruppen-termin-${r}`" class="rounded-md bg-white px-3 py-2 text-sm text-gray-700 shadow-sm">
+                <span class="font-bold">Runde {{ r }}:</span>
+                {{ roundDateLabel(r) }} · {{ roundTimeLabel(r) }}
               </div>
-              <div>
-                <label class="mb-1 block text-sm font-semibold text-gray-700">Runde {{ r }} bis</label>
-                <input v-model="gruppenForm['runde' + r + 'bis']" type="date" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb sm:text-sm" />
-              </div>
-            </template>
+            </div>
           </div>
           <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="mb-1 block text-sm font-semibold text-gray-700">Startzeit</label>
-              <input v-model="gruppenForm.startzeit" type="time" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb sm:text-sm" />
-            </div>
-            <div>
-              <label class="mb-1 block text-sm font-semibold text-gray-700">Endzeit</label>
-              <input v-model="gruppenForm.endzeit" type="time" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb sm:text-sm" />
-            </div>
             <div>
               <label class="mb-1 block text-sm font-semibold text-gray-700">Raum</label>
               <select v-model="gruppenForm.raum_id" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb sm:text-sm">
@@ -526,11 +549,29 @@ onBeforeUnmount(() => {
   if (isFullscreen.value) document.body.style.overflow = previousBodyOverflow
 })
 
-const normalizeParameter = (parameter = {}) => ({
-  runden_anzahl: Number(parameter.runden_anzahl ?? 3),
-  standard_kapazitaet: Number(parameter.standard_kapazitaet ?? 15),
-  kapazitaeten: { ...(parameter.kapazitaeten ?? {}) },
+const emptyRoundSchedule = () => ({
+  anfangsdatum: '',
+  enddatum: '',
+  startzeit: '08:00',
+  endzeit: '15:00',
 })
+
+const normalizeParameter = (parameter = {}) => {
+  const rundentermine = {}
+  maxRoundNumbers.forEach((runde) => {
+    rundentermine[runde] = {
+      ...emptyRoundSchedule(),
+      ...(parameter.rundentermine?.[runde] ?? {}),
+    }
+  })
+
+  return {
+    runden_anzahl: Number(parameter.runden_anzahl ?? 3),
+    standard_kapazitaet: Number(parameter.standard_kapazitaet ?? 15),
+    kapazitaeten: { ...(parameter.kapazitaeten ?? {}) },
+    rundentermine,
+  }
+}
 
 const parameter = ref(normalizeParameter(props.parameter))
 
@@ -619,18 +660,6 @@ const createForm = reactive({
   processing: false,
 })
 const gruppenForm = reactive({
-  runde1von: '',
-  runde1bis: '',
-  runde2von: '',
-  runde2bis: '',
-  runde3von: '',
-  runde3bis: '',
-  runde4von: '',
-  runde4bis: '',
-  runde5von: '',
-  runde5bis: '',
-  startzeit: '08:00',
-  endzeit: '15:00',
   raum_id: props.raeume?.[0]?.id ?? null,
   betreuer_id: props.betreuer?.[0]?.id ?? null,
   bereiche: (props.alle_bereiche ?? []).map(b => b.id),
@@ -645,8 +674,13 @@ const parameterForm = reactive({
   runden_anzahl: parameter.value.runden_anzahl,
   standard_kapazitaet: parameter.value.standard_kapazitaet,
   kapazitaeten: { ...parameter.value.kapazitaeten },
+  rundentermine: JSON.parse(JSON.stringify(parameter.value.rundentermine)),
   processing: false,
 })
+const parameterRounds = computed(() => Array.from(
+  { length: Number(parameterForm.runden_anzahl) || 0 },
+  (_, index) => index + 1,
+))
 const switchForm = reactive({
   quelle_runde: runden.value[0] ?? null,
   ziel_runde: runden.value[1] ?? null,
@@ -675,15 +709,6 @@ const roundPayload = (target) => {
   return payload
 }
 
-const gruppenDatePayload = () => {
-  const payload = {}
-  runden.value.forEach((runde) => {
-    payload['runde' + runde + 'von'] = gruppenForm['runde' + runde + 'von']
-    payload['runde' + runde + 'bis'] = gruppenForm['runde' + runde + 'bis']
-  })
-  return payload
-}
-
 const capacityForBereich = (bereichName) => {
   const bereich = allBereiche.value.find(b => b.name === bereichName)
   if (!bereich) return parameter.value.standard_kapazitaet ?? 0
@@ -691,6 +716,33 @@ const capacityForBereich = (bereichName) => {
 }
 
 const roundParticipants = (bereichName, runde) => results.value?.[bereichName]?.[runde] ?? []
+
+const roundSchedule = (runde) => parameter.value.rundentermine?.[runde] ?? emptyRoundSchedule()
+
+const formatScheduleDate = (value, compact = false) => {
+  if (!value) return null
+  const date = new Date(`${value}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return value
+
+  return new Intl.DateTimeFormat('de-DE', compact
+    ? { day: '2-digit', month: '2-digit' }
+    : { day: '2-digit', month: '2-digit', year: 'numeric' }
+  ).format(date)
+}
+
+const roundDateLabel = (runde, compact = false) => {
+  const termin = roundSchedule(runde)
+  const von = formatScheduleDate(termin.anfangsdatum, compact)
+  const bis = formatScheduleDate(termin.enddatum, compact)
+  if (!von || !bis) return 'Termin offen'
+  return von === bis ? von : `${von}–${bis}`
+}
+
+const roundTimeLabel = (runde) => {
+  const termin = roundSchedule(runde)
+  if (!termin.startzeit || !termin.endzeit) return 'Uhrzeit offen'
+  return `${termin.startzeit}–${termin.endzeit} Uhr`
+}
 
 const assignedCountForRound = (runde) => {
   return allBereiche.value.reduce((sum, bereich) => sum + roundParticipants(bereich.name, runde).length, 0)
@@ -764,6 +816,7 @@ const openParameterModal = () => {
   parameterForm.runden_anzahl = current.runden_anzahl
   parameterForm.standard_kapazitaet = current.standard_kapazitaet
   parameterForm.kapazitaeten = { ...current.kapazitaeten }
+  parameterForm.rundentermine = JSON.parse(JSON.stringify(current.rundentermine))
   allBereiche.value.forEach((bereich) => {
     if (parameterForm.kapazitaeten[bereich.id] === undefined) {
       parameterForm.kapazitaeten[bereich.id] = current.standard_kapazitaet
@@ -790,6 +843,16 @@ const openCreateModal = () => {
 }
 
 const openGruppenModal = () => {
+  const fehlendeRunde = runden.value.find((runde) => {
+    const termin = roundSchedule(runde)
+    return !termin.anfangsdatum || !termin.enddatum || !termin.startzeit || !termin.endzeit
+  })
+  if (fehlendeRunde) {
+    setStatus(`Bitte zuerst unter Parameter den Termin für Runde ${fehlendeRunde} festlegen.`, 'error')
+    openParameterModal()
+    return
+  }
+
   if (!gruppenForm.bereiche.length) {
     gruppenForm.bereiche = allBereiche.value.map(b => b.id)
   }
@@ -799,6 +862,13 @@ const openGruppenModal = () => {
 }
 
 const openExportModal = () => {
+  const termine = runden.value.map(roundSchedule)
+  if (!exportForm.eintritt) {
+    exportForm.eintritt = termine.map(termin => termin.anfangsdatum).filter(Boolean).sort()[0] ?? ''
+  }
+  if (!exportForm.austritt) {
+    exportForm.austritt = termine.map(termin => termin.enddatum).filter(Boolean).sort().at(-1) ?? ''
+  }
   showExportModal.value = true
 }
 
@@ -810,6 +880,7 @@ const submitParameter = async () => {
       runden_anzahl: parameterForm.runden_anzahl,
       standard_kapazitaet: parameterForm.standard_kapazitaet,
       kapazitaeten: parameterForm.kapazitaeten,
+      rundentermine: parameterForm.rundentermine,
     })
     replacePayload(response.data.payload)
     showParameterModal.value = false
@@ -897,9 +968,6 @@ const submitGruppen = async () => {
   try {
     const response = await axios.post(route('gruppen.generieren'), {
       ...contextPayload(),
-      ...gruppenDatePayload(),
-      startzeit: gruppenForm.startzeit,
-      endzeit: gruppenForm.endzeit,
       raum_id: gruppenForm.raum_id,
       betreuer_id: gruppenForm.betreuer_id,
       bereiche: gruppenForm.bereiche,

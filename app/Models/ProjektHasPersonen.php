@@ -38,6 +38,16 @@ class ProjektHasPersonen extends Pivot //Model
             ->with('betreuer', 'projektbegleiter');
     }
 
+    public function bereichZuweisungen()
+    {
+        return $this->hasMany(BereichHasPersonen::class, 'projekt_has_personen_id');
+    }
+
+    public function raumZuweisungen()
+    {
+        return $this->hasMany(RaumHasPersonen::class, 'projekt_has_personen_id');
+    }
+
     public function teilnehmer()
     {
         return $this->belongsTo(Personen::class, 'personen_id')->where('typ', 'teilnehmer');

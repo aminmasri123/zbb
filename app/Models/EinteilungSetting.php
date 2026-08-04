@@ -39,4 +39,9 @@ class EinteilungSetting extends Model
     {
         return $this->hasMany(EinteilungBereichKapazitaet::class, 'einteilung_setting_id');
     }
+
+    public function rundentermine()
+    {
+        return $this->hasMany(EinteilungRundentermin::class, 'einteilung_setting_id')->orderBy('runde');
+    }
 }

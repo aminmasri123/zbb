@@ -8,6 +8,15 @@ import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
 import MultiSelect from 'primevue/multiselect';
+import {
+    arbeitsbereichRoomsForProject,
+    bueroRoomsForProject,
+    emptyRoomAssignmentFields,
+    normalizeDefaultRoom,
+    resetRoomAssignments,
+    roomLabel,
+    selectedRoomsForRow,
+} from '@/utils/projectRoomAssignments';
 
 const props = defineProps({
     rollen: { type: Array, default: () => [] },
@@ -30,18 +39,63 @@ const form = reactive({
         {
             projekt_id: null,
             standort_ids: [],
+            bereich_ids: [],
+            default_bereich_id: null,
+            ...emptyRoomAssignmentFields(),
         },
     ],
 });
 
 const errorFor = (field) => errors.value[field]?.[0] || '';
 
+const bereicheForProjekt = (projektId) => {
+    return props.alleProjekte.find((projekt) => Number(projekt.id) === Number(projektId))?.bereiche || [];
+};
+
+const selectedBereicheForRow = (row) => {
+    const selectedIds = (row.bereich_ids || []).map((id) => Number(id));
+
+    return bereicheForProjekt(row.projekt_id).filter((bereich) => selectedIds.includes(Number(bereich.id)));
+};
+
+const resetProjektBereiche = (row) => {
+    row.bereich_ids = [];
+    row.default_bereich_id = null;
+};
+
+const resetProjektAssignments = (row) => {
+    resetProjektBereiche(row);
+    resetRoomAssignments(row);
+};
+
+const normalizeDefaultBereich = (row) => {
+    const selectedIds = (row.bereich_ids || []).map((id) => Number(id));
+
+    if (selectedIds.length === 1) {
+        row.default_bereich_id = selectedIds[0];
+        return;
+    }
+
+    if (!selectedIds.includes(Number(row.default_bereich_id))) {
+        row.default_bereich_id = null;
+    }
+};
+
 const addProjekt = () => {
     form.projekt_zuweisungen.push({
         projekt_id: null,
         standort_ids: [],
+        bereich_ids: [],
+        default_bereich_id: null,
+        ...emptyRoomAssignmentFields(),
     });
 };
+
+const selectedBueroRaeumeForRow = (row) =>
+    selectedRoomsForRow(props.alleProjekte, row, 'buero_raum_ids', bueroRoomsForProject);
+
+const selectedArbeitsbereichRaeumeForRow = (row) =>
+    selectedRoomsForRow(props.alleProjekte, row, 'arbeitsbereich_raum_ids', arbeitsbereichRoomsForProject);
 
 const removeProjekt = (index) => {
     form.projekt_zuweisungen.splice(index, 1);
@@ -190,6 +244,7 @@ const submit = async () => {
                             <select
                                 :id="`projekt_${index}`"
                                 v-model="row.projekt_id"
+                                @change="resetProjektAssignments(row)"
                                 class="mt-1 block w-full rounded border p-2"
                             >
                                 <option :value="null">Projekt auswählen</option>
@@ -218,6 +273,120 @@ const submit = async () => {
                                 placeholder="Standorte auswählen"
                             />
                             <InputError class="mt-2" :message="errorFor(`projekt_zuweisungen.${index}.standort_ids`)" />
+                        </div>
+
+                        <div>
+                            <InputLabel :for="`bereiche_${index}`" value="Bereiche" />
+                            <MultiSelect
+                                :id="`bereiche_${index}`"
+                                v-model="row.bereich_ids"
+                                :options="bereicheForProjekt(row.projekt_id)"
+                                optionLabel="name"
+                                optionValue="id"
+                                display="chip"
+                                filter
+                                class="mt-1 w-full"
+                                placeholder="Bereiche auswÃ¤hlen"
+                                :disabled="!row.projekt_id"
+                                @change="normalizeDefaultBereich(row)"
+                            />
+                            <InputError class="mt-2" :message="errorFor(`projekt_zuweisungen.${index}.bereich_ids`)" />
+                        </div>
+
+                        <div>
+                            <InputLabel :for="`standard_bereich_${index}`" value="Standardbereich" />
+                            <select
+                                :id="`standard_bereich_${index}`"
+                                v-model="row.default_bereich_id"
+                                class="mt-1 block w-full rounded border p-2 disabled:bg-gray-100"
+                                :disabled="selectedBereicheForRow(row).length === 0"
+                            >
+                                <option :value="null">Kein Standard</option>
+                                <option
+                                    v-for="bereich in selectedBereicheForRow(row)"
+                                    :key="bereich.id"
+                                    :value="bereich.id"
+                                >
+                                    {{ bereich.name }}
+                                </option>
+                            </select>
+                            <InputError class="mt-2" :message="errorFor(`projekt_zuweisungen.${index}.default_bereich_id`)" />
+                        </div>
+
+                        <div>
+                            <InputLabel :for="`buero_raeume_${index}`" value="Büros" />
+                            <MultiSelect
+                                :id="`buero_raeume_${index}`"
+                                v-model="row.buero_raum_ids"
+                                :options="bueroRoomsForProject(props.alleProjekte, row.projekt_id)"
+                                :optionLabel="roomLabel"
+                                optionValue="id"
+                                display="chip"
+                                filter
+                                class="mt-1 w-full"
+                                placeholder="Büros auswählen"
+                                :disabled="!row.projekt_id"
+                                @change="normalizeDefaultRoom(row, 'buero_raum_ids', 'default_buero_raum_id')"
+                            />
+                            <InputError class="mt-2" :message="errorFor(`projekt_zuweisungen.${index}.buero_raum_ids`)" />
+                        </div>
+
+                        <div>
+                            <InputLabel :for="`standard_buero_${index}`" value="Standardbüro" />
+                            <select
+                                :id="`standard_buero_${index}`"
+                                v-model="row.default_buero_raum_id"
+                                class="mt-1 block w-full rounded border p-2 disabled:bg-gray-100"
+                                :disabled="selectedBueroRaeumeForRow(row).length === 0"
+                            >
+                                <option :value="null">Kein Standard</option>
+                                <option
+                                    v-for="raum in selectedBueroRaeumeForRow(row)"
+                                    :key="raum.id"
+                                    :value="raum.id"
+                                >
+                                    {{ roomLabel(raum) }}
+                                </option>
+                            </select>
+                            <InputError class="mt-2" :message="errorFor(`projekt_zuweisungen.${index}.default_buero_raum_id`)" />
+                        </div>
+
+                        <div>
+                            <InputLabel :for="`arbeitsbereich_raeume_${index}`" value="Arbeitsbereiche" />
+                            <MultiSelect
+                                :id="`arbeitsbereich_raeume_${index}`"
+                                v-model="row.arbeitsbereich_raum_ids"
+                                :options="arbeitsbereichRoomsForProject(props.alleProjekte, row.projekt_id)"
+                                :optionLabel="roomLabel"
+                                optionValue="id"
+                                display="chip"
+                                filter
+                                class="mt-1 w-full"
+                                placeholder="Arbeitsbereiche auswählen"
+                                :disabled="!row.projekt_id"
+                                @change="normalizeDefaultRoom(row, 'arbeitsbereich_raum_ids', 'default_arbeitsbereich_raum_id')"
+                            />
+                            <InputError class="mt-2" :message="errorFor(`projekt_zuweisungen.${index}.arbeitsbereich_raum_ids`)" />
+                        </div>
+
+                        <div>
+                            <InputLabel :for="`standard_arbeitsbereich_${index}`" value="Standard-Arbeitsbereich" />
+                            <select
+                                :id="`standard_arbeitsbereich_${index}`"
+                                v-model="row.default_arbeitsbereich_raum_id"
+                                class="mt-1 block w-full rounded border p-2 disabled:bg-gray-100"
+                                :disabled="selectedArbeitsbereichRaeumeForRow(row).length === 0"
+                            >
+                                <option :value="null">Kein Standard</option>
+                                <option
+                                    v-for="raum in selectedArbeitsbereichRaeumeForRow(row)"
+                                    :key="raum.id"
+                                    :value="raum.id"
+                                >
+                                    {{ roomLabel(raum) }}
+                                </option>
+                            </select>
+                            <InputError class="mt-2" :message="errorFor(`projekt_zuweisungen.${index}.default_arbeitsbereich_raum_id`)" />
                         </div>
                     </div>
 

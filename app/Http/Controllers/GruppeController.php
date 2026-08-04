@@ -4,7 +4,10 @@ namespace App\Http\Controllers;
 
 use Inertia\Inertia;
 use App\Models\Gruppe;
+use App\Models\Personen;
+use App\Models\ProjektHasPersonen;
 use App\Models\Raeume;
+use App\Models\RaumHasPersonen;
 use App\Models\Projekt;
 use App\Services\RaumBelegungService;
 use App\Services\Projects\ActiveProjectContext;
@@ -47,14 +50,10 @@ class GruppeController extends Controller
             ->latest('id')
             ->get();
 
-        $betreuer = $this->canAny($user, ['projekt.mitarbeiter.view.all', 'gruppe.view.all'])
-            ? $projekt->mitarbeiter
-            : $this->uniquePersonen(collect([$user->person])->filter());
-
         return Inertia::render('Gruppe/Index', [
             'gruppen' => $gruppen,
             'projekt' => $projekt,
-            'betreuer' => $betreuer,
+            'betreuer' => $this->betreuerOptions($projekt, $user, $canSeeAllGroups),
             'canSeeAllGroups' => $canSeeAllGroups,
         ]);
     }
@@ -308,6 +307,106 @@ class GruppeController extends Controller
             ->values();
     }
 
+    private function betreuerOptions(Projekt $projekt, $user, bool $includeVertretungen)
+    {
+        $projectMemberIds = $projekt->mitarbeiter
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        $personen = $includeVertretungen
+            ? Personen::query()
+                ->mitarbeiter()
+                ->aktiv()
+                ->with('user:id,person_id,profile_photo_path')
+                ->orderBy('nachname')
+                ->orderBy('vorname')
+                ->get(['id', 'vorname', 'nachname', 'typ', 'aktiv'])
+            : $this->uniquePersonen(collect([$user->person])->filter());
+
+        $personIds = $personen
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique()
+            ->values();
+
+        $bereichZuweisungen = ProjektHasPersonen::query()
+            ->where('projekt_id', $projekt->id)
+            ->whereIn('personen_id', $personIds)
+            ->with(['bereichZuweisungen.bereich:id,name', 'raumZuweisungen.raum.standort:id,name'])
+            ->get()
+            ->groupBy(fn (ProjektHasPersonen $assignment) => (int) $assignment->personen_id);
+
+        return $this->uniquePersonen($personen)
+            ->map(function (Personen $person) use ($projectMemberIds, $bereichZuweisungen) {
+                $assignments = $bereichZuweisungen->get((int) $person->id, collect());
+                $bereiche = $assignments
+                    ->flatMap(fn (ProjektHasPersonen $assignment) => $assignment->bereichZuweisungen)
+                    ->filter(fn ($zuweisung) => $zuweisung->bereich)
+                    ->unique('bereich_id')
+                    ->map(fn ($zuweisung) => [
+                        'id' => (int) $zuweisung->bereich_id,
+                        'name' => $zuweisung->bereich->name,
+                    ])
+                    ->values();
+
+                $defaultBereich = $assignments
+                    ->flatMap(fn (ProjektHasPersonen $assignment) => $assignment->bereichZuweisungen)
+                    ->first(fn ($zuweisung) => (bool) $zuweisung->is_default);
+                $raumZuweisungen = $assignments
+                    ->flatMap(fn (ProjektHasPersonen $assignment) => $assignment->raumZuweisungen)
+                    ->filter(fn ($zuweisung) => $zuweisung->raum);
+                $bueroRaeume = $this->raumOptionsForAssignmentType($raumZuweisungen, RaumHasPersonen::TYPE_BUERO);
+                $arbeitsbereichRaeume = $this->raumOptionsForAssignmentType($raumZuweisungen, RaumHasPersonen::TYPE_ARBEITSBEREICH);
+                $defaultBueroRaum = $raumZuweisungen
+                    ->where('assignment_type', RaumHasPersonen::TYPE_BUERO)
+                    ->first(fn ($zuweisung) => (bool) $zuweisung->is_default);
+                $defaultArbeitsbereichRaum = $raumZuweisungen
+                    ->where('assignment_type', RaumHasPersonen::TYPE_ARBEITSBEREICH)
+                    ->first(fn ($zuweisung) => (bool) $zuweisung->is_default);
+
+                return [
+                    'id' => (int) $person->id,
+                    'vorname' => $person->vorname,
+                    'nachname' => $person->nachname,
+                    'is_project_member' => $projectMemberIds->contains((int) $person->id),
+                    'bereiche' => $bereiche,
+                    'default_bereich_id' => $defaultBereich ? (int) $defaultBereich->bereich_id : null,
+                    'raeume' => [
+                        RaumHasPersonen::TYPE_BUERO => $bueroRaeume,
+                        RaumHasPersonen::TYPE_ARBEITSBEREICH => $arbeitsbereichRaeume,
+                    ],
+                    'default_buero_raum_id' => $defaultBueroRaum ? (int) $defaultBueroRaum->raum_id : null,
+                    'default_arbeitsbereich_raum_id' => $defaultArbeitsbereichRaum ? (int) $defaultArbeitsbereichRaum->raum_id : null,
+                ];
+            })
+            ->values();
+    }
+
+    private function raumOptionsForAssignmentType($raumZuweisungen, string $assignmentType)
+    {
+        return $raumZuweisungen
+            ->where('assignment_type', $assignmentType)
+            ->unique('raum_id')
+            ->map(function ($zuweisung) {
+                $raum = $zuweisung->raum;
+
+                return [
+                    'id' => (int) $raum->id,
+                    'name' => $raum->name,
+                    'typ' => $raum->typ,
+                    'standort_id' => $raum->standort_id ? (int) $raum->standort_id : null,
+                    'standort' => $raum->standort ? [
+                        'id' => (int) $raum->standort->id,
+                        'name' => $raum->standort->name,
+                    ] : null,
+                ];
+            })
+            ->values();
+    }
+
     private function validateProjektZuordnung(Projekt $projekt, int $bereichId, ?int $raumId): void
     {
         if (!$projekt->bereiche->contains('id', $bereichId)) {
@@ -370,15 +469,25 @@ class GruppeController extends Controller
 
     private function validateBetreuer($user, Projekt $projekt, int $betreuerId): void
     {
-        if (!$projekt->mitarbeiter->contains('id', $betreuerId)) {
-            throw ValidationException::withMessages([
-                'betreuer' => 'Der Betreuer gehoert nicht zum ausgewaehlten Projekt.',
-            ]);
+        $isProjectMember = $projekt->mitarbeiter->contains('id', $betreuerId);
+
+        if ($isProjectMember) {
+            if (!$this->canAny($user, ['projekt.mitarbeiter.view.all', 'gruppe.view.all']) && $betreuerId !== (int) $this->userPersonId($user)) {
+                throw ValidationException::withMessages([
+                    'betreuer' => 'Sie duerfen nur eigene Gruppen anlegen oder bearbeiten.',
+                ]);
+            }
+
+            return;
         }
 
-        if (!$this->canAny($user, ['projekt.mitarbeiter.view.all', 'gruppe.view.all']) && $betreuerId !== (int) $this->userPersonId($user)) {
+        if ($this->canSeeAllGroups($user) && Personen::query()->mitarbeiter()->aktiv()->whereKey($betreuerId)->exists()) {
+            return;
+        }
+
+        if (!$isProjectMember) {
             throw ValidationException::withMessages([
-                'betreuer' => 'Sie duerfen nur eigene Gruppen anlegen oder bearbeiten.',
+                'betreuer' => 'Der Betreuer gehoert nicht zum ausgewaehlten Projekt oder ist nicht als Vertretung verfuegbar.',
             ]);
         }
     }

@@ -7,15 +7,19 @@
         <!-- Gruppenname -->
         <div class="grid grid-cols-2 gap-4 mt-6 mb-4">
             <FloatLabel variant="on">
-                <Select v-model="form.bereich" :options="props.projekt.bereiche" optionValue="id" optionLabel="name" class="w-full"/>
-                <label>Bereiche</label>
+                <Select v-model="form.betreuer" :options="visibleBetreuer" optionValue="id" :optionLabel="(t) => `${t.vorname} ${t.nachname}`" filter class="w-full"/>
+                <label>Betreuer / Anleiter</label>
             </FloatLabel>
 
             <FloatLabel variant="on">
-                <Select v-model="form.betreuer" :options="props.betreuer" optionValue="id" :optionLabel="(t) => `${t.vorname} ${t.nachname}`" class="w-full"/>
-                <label>Betreuer</label>
+                <Select v-model="form.bereich" :options="bereichOptions" optionValue="id" optionLabel="name" :disabled="!form.betreuer" class="w-full"/>
+                <label>Bereiche</label>
             </FloatLabel>
 
+            <label v-if="canUseVertretung" class="col-span-2 -mt-2 flex items-center gap-2 text-sm text-gray-600">
+                <input v-model="showVertretung" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
+                <span>Vertretung: alle aktiven Mitarbeiter auswÃ¤hlen</span>
+            </label>
         </div>
 
         <FloatLabel variant="on" class="mb-5">
@@ -41,14 +45,22 @@
             </div>
 
             <FloatLabel v-if="form.ort_typ === 'raum'" variant="on">
-                <Select v-model="form.raum_id" :options="props.projekt.raeume" optionValue="id" :optionLabel="roomLabel" class="w-full"/>
+                <Select v-model="form.raum_id" :options="roomOptions" optionValue="id" :optionLabel="roomLabel" :disabled="!form.betreuer" class="w-full"/>
                 <label>Raum</label>
             </FloatLabel>
 
-            <FloatLabel v-else variant="on">
-                <input v-model="form.externer_ort" type="text" class="w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb" />
-                <label>Externer Ort / Ausflug</label>
-            </FloatLabel>
+            <div v-else>
+                <label for="gruppe-create-externer-ort" class="mb-1 block text-sm text-gray-600">
+                    Externer Ort / Ausflug
+                </label>
+                <input
+                    id="gruppe-create-externer-ort"
+                    v-model="form.externer_ort"
+                    type="text"
+                    placeholder="Ort oder Ausflugsziel eingeben"
+                    class="w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb"
+                />
+            </div>
             <p v-if="form.ort_typ === 'raum' && selectedStandortName" class="mt-2 text-xs text-gray-500">
                 Standort: {{ selectedStandortName }}
             </p>
@@ -143,7 +155,7 @@
 
 
 <script setup>
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useForm } from '@inertiajs/vue3'
 import Modal from '@/Components/ModalForm.vue'
 import Select from 'primevue/select'
@@ -166,6 +178,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'added'])
 
 const close = () => emit('close')
+const showVertretung = ref(false)
 
 // Formularlogik
 const form = useForm({
@@ -193,8 +206,34 @@ const groupTypes = [
 ]
 
 const standorte = computed(() => props.projekt?.standorte || [])
+const allBetreuer = computed(() => Array.isArray(props.betreuer) ? props.betreuer : Object.values(props.betreuer || {}))
+const projectBetreuer = computed(() => allBetreuer.value.filter((person) => person.is_project_member !== false))
+const canUseVertretung = computed(() => allBetreuer.value.some((person) => person.is_project_member === false))
+const visibleBetreuer = computed(() => {
+  if (showVertretung.value || projectBetreuer.value.length === 0) {
+    return allBetreuer.value
+  }
+
+  return projectBetreuer.value
+})
+const selectedBetreuer = computed(() =>
+  allBetreuer.value.find((person) => Number(person.id) === Number(form.betreuer))
+)
+const selectedBetreuerBereiche = computed(() => selectedBetreuer.value?.bereiche || [])
+const bereichOptions = computed(() =>
+  selectedBetreuerBereiche.value.length
+    ? selectedBetreuerBereiche.value
+    : (props.projekt?.bereiche || [])
+)
+const selectedBetreuerArbeitsraeume = computed(() => selectedBetreuer.value?.raeume?.arbeitsbereich || [])
+const roomOptions = computed(() =>
+  selectedBetreuerArbeitsraeume.value.length
+    ? selectedBetreuerArbeitsraeume.value
+    : (props.projekt?.raeume || [])
+)
 
 const selectedRoom = computed(() =>
+  roomOptions.value.find((raum) => Number(raum.id) === Number(form.raum_id)) ||
   (props.projekt?.raeume || []).find((raum) => Number(raum.id) === Number(form.raum_id))
 )
 
@@ -208,6 +247,84 @@ const roomLabel = (raum) => {
   const standortName = raum?.standort?.name || standorte.value.find((standort) => Number(standort.id) === Number(raum?.standort_id))?.name
   return standortName ? `${raum.name} (${standortName})` : raum.name
 }
+
+const applyBetreuerBereich = () => {
+  const optionIds = bereichOptions.value.map((bereich) => Number(bereich.id))
+
+  if (!selectedBetreuer.value || selectedBetreuerBereiche.value.length === 0) {
+    if (form.bereich !== '' && !optionIds.includes(Number(form.bereich))) {
+      form.bereich = ''
+    }
+
+    return
+  }
+
+  const defaultBereichId = Number(selectedBetreuer.value.default_bereich_id || 0)
+
+  if (defaultBereichId && optionIds.includes(defaultBereichId)) {
+    form.bereich = defaultBereichId
+    return
+  }
+
+  if (selectedBetreuerBereiche.value.length === 1) {
+    form.bereich = selectedBetreuerBereiche.value[0].id
+    return
+  }
+
+  if (!optionIds.includes(Number(form.bereich))) {
+    form.bereich = ''
+  }
+}
+
+const applyBetreuerRaum = () => {
+  if (form.ort_typ !== 'raum') {
+    return
+  }
+
+  const optionIds = roomOptions.value.map((raum) => Number(raum.id))
+
+  if (!selectedBetreuer.value || selectedBetreuerArbeitsraeume.value.length === 0) {
+    if (form.raum_id !== '' && !optionIds.includes(Number(form.raum_id))) {
+      form.raum_id = ''
+    }
+
+    return
+  }
+
+  const defaultRaumId = Number(selectedBetreuer.value.default_arbeitsbereich_raum_id || 0)
+
+  if (defaultRaumId && optionIds.includes(defaultRaumId)) {
+    form.raum_id = defaultRaumId
+    return
+  }
+
+  if (selectedBetreuerArbeitsraeume.value.length === 1) {
+    form.raum_id = selectedBetreuerArbeitsraeume.value[0].id
+    return
+  }
+
+  if (!optionIds.includes(Number(form.raum_id))) {
+    form.raum_id = ''
+  }
+}
+
+const applyBetreuerDefaults = () => {
+  applyBetreuerBereich()
+  applyBetreuerRaum()
+}
+
+watch(
+  () => form.betreuer,
+  () => applyBetreuerDefaults()
+)
+
+watch(showVertretung, (enabled) => {
+  if (!enabled && selectedBetreuer.value?.is_project_member === false) {
+    form.betreuer = ''
+    form.bereich = ''
+    form.raum_id = ''
+  }
+})
 
 // 🔹 Validierung
 const isValid = computed(() => {
@@ -234,6 +351,7 @@ watch(
     } else {
       form.externer_ort = ''
       form.standort_id = selectedRoom.value?.standort_id || ''
+      applyBetreuerRaum()
     }
   }
 )
