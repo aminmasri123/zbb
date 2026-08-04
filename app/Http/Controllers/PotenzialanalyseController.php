@@ -48,7 +48,7 @@ class PotenzialanalyseController extends Controller
         ]);
 
         return response()->json([
-            'message' => 'Uebung wurde angelegt.',
+            'message' => 'Übung wurde angelegt.',
             'uebungen' => $this->projektUebungen($projekt),
         ], 201);
     }
@@ -61,7 +61,7 @@ class PotenzialanalyseController extends Controller
         $uebung->update($this->validateUebung($request, $uebung->projekt));
 
         return response()->json([
-            'message' => 'Uebung wurde aktualisiert.',
+            'message' => 'Übung wurde aktualisiert.',
             'uebungen' => $this->projektUebungen($uebung->projekt),
         ]);
     }
@@ -75,7 +75,7 @@ class PotenzialanalyseController extends Controller
         $uebung->delete();
 
         return response()->json([
-            'message' => 'Uebung wurde geloescht.',
+            'message' => 'Übung wurde gelöscht.',
             'uebungen' => $this->projektUebungen($projekt),
         ]);
     }
@@ -118,7 +118,7 @@ class PotenzialanalyseController extends Controller
         $kriterium->delete();
 
         return response()->json([
-            'message' => 'Kriterium wurde geloescht.',
+            'message' => 'Kriterium wurde gelöscht.',
             'uebungen' => $this->projektUebungen($projekt),
         ]);
     }
@@ -245,7 +245,7 @@ class PotenzialanalyseController extends Controller
 
         return response()->json([
             'message' => $deleted > 0
-                ? 'Potenzialanalyse-Daten wurden geloescht.'
+                ? 'Potenzialanalyse-Daten wurden gelöscht.'
                 : 'Es waren keine Potenzialanalyse-Daten vorhanden.',
             'teilnehmer' => $this->teilnehmerPayload($gruppe, $personen->id),
         ]);
@@ -318,7 +318,7 @@ class PotenzialanalyseController extends Controller
 
                 if ($uebung->hoechstwert !== null && $punkte > (int) $uebung->hoechstwert) {
                     throw ValidationException::withMessages([
-                        "uebungen.$uebungId.punkte" => "Die Punkte fuer {$uebung->name} duerfen maximal {$uebung->hoechstwert} betragen.",
+                        "uebungen.$uebungId.punkte" => "Die Punkte für {$uebung->name} dürfen maximal {$uebung->hoechstwert} betragen.",
                     ]);
                 }
             }

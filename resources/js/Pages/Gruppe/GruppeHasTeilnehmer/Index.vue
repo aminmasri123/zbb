@@ -367,11 +367,11 @@ const paBerichtStatusOptionen = [
   { label: 'Entwurf', value: 'entwurf' },
   { label: 'In Bearbeitung', value: 'in_bearbeitung' },
   { label: 'Fertig', value: 'fertig' },
-  { label: 'Geprueft', value: 'geprueft' },
+  { label: 'Geprüft', value: 'geprueft' },
 ]
 const paTabs = [
-  { key: 'selbst', label: 'Selbsteinschaetzung' },
-  { key: 'uebungen', label: 'Uebungen' },
+  { key: 'selbst', label: 'Selbsteinschätzung' },
+  { key: 'uebungen', label: 'Übungen' },
   { key: 'kompetenzen', label: 'Kompetenzen' },
   { key: 'bericht', label: 'Bericht' },
 ]
@@ -625,7 +625,7 @@ const selectedPaTeilnehmer = computed(() =>
 )
 
 const paAutoSaveStatusText = computed(() => {
-  if (paAutoSaveStatus.value === 'pending') return 'Aenderungen werden gespeichert ...'
+  if (paAutoSaveStatus.value === 'pending') return 'Änderungen werden gespeichert ...'
   if (paAutoSaveStatus.value === 'saving') return 'Speichert automatisch ...'
   if (paAutoSaveStatus.value === 'saved') return 'Automatisch gespeichert'
   if (paAutoSaveStatus.value === 'error') return 'Auto-Speichern fehlgeschlagen'
@@ -1359,17 +1359,17 @@ const loeschePaTeilnehmerDaten = async () => {
     await Swal.fire({
       icon: 'info',
       title: 'Bitte kurz warten',
-      text: 'Die PA-Daten werden gerade gespeichert. Danach koennen sie geloescht werden.',
+      text: 'Die PA-Daten werden gerade gespeichert. Danach können sie gelöscht werden.',
     })
     return
   }
 
   const bestaetigung = await Swal.fire({
     icon: 'warning',
-    title: 'PA-Daten loeschen?',
-    text: `Bericht, Kompetenzen, Uebungen und Selbsteinschaetzung von ${teilnehmer.vorname} ${teilnehmer.nachname} werden geloescht.`,
+    title: 'PA-Daten löschen?',
+    text: `Bericht, Kompetenzen, Übungen und Selbsteinschätzung von ${teilnehmer.vorname} ${teilnehmer.nachname} werden gelöscht.`,
     showCancelButton: true,
-    confirmButtonText: 'Ja, loeschen',
+    confirmButtonText: 'Ja, löschen',
     cancelButtonText: 'Abbrechen',
     confirmButtonColor: '#dc2626',
   })
@@ -1410,7 +1410,7 @@ const loeschePaTeilnehmerDaten = async () => {
     await Swal.fire({
       icon: 'success',
       title: 'Geloescht',
-      text: response.data?.message || 'Potenzialanalyse-Daten wurden geloescht.',
+      text: response.data?.message || 'Potenzialanalyse-Daten wurden gelöscht.',
       timer: 1600,
       showConfirmButton: false,
     })
@@ -1420,7 +1420,7 @@ const loeschePaTeilnehmerDaten = async () => {
     await Swal.fire({
       icon: 'error',
       title: 'Fehler',
-      text: error.response?.data?.message || 'Potenzialanalyse-Daten konnten nicht geloescht werden.',
+      text: error.response?.data?.message || 'Potenzialanalyse-Daten konnten nicht gelöscht werden.',
     })
   } finally {
     paSaving.value = paSaveInFlight.size > 0
@@ -2171,12 +2171,12 @@ const exportMitTag = async () => {
                   <h4 class="truncate text-sm font-semibold text-gray-800">
                     {{ selectedPaTeilnehmer.vorname }} {{ selectedPaTeilnehmer.nachname }}
                   </h4>
-                  <p class="text-xs text-gray-500">Selbsteinschaetzung, Uebungsergebnisse, Kompetenzbewertung und Bericht</p>
-                  <p v-if="!canEditPotenzialanalyse" class="mt-1 text-xs font-semibold text-amber-700">Nur Leserechte fuer Potenzialanalyse.</p>
+                  <p class="text-xs text-gray-500">Selbsteinschätzung, Übungsergebnisse, Kompetenzbewertung und Bericht</p>
+                  <p v-if="!canEditPotenzialanalyse" class="mt-1 text-xs font-semibold text-amber-700">Nur Leserechte für Potenzialanalyse.</p>
                 </div>
                 <Button
                   v-if="canEditPotenzialanalyse"
-                  label="PA-Daten loeschen"
+                  label="PA-Daten löschen"
                   icon="pi pi-trash"
                   severity="danger"
                   outlined
@@ -2210,7 +2210,7 @@ const exportMitTag = async () => {
 
             <div v-show="activePaTab === 'selbst'" class="rounded border border-gray-200 bg-white">
               <div class="border-b border-gray-100 bg-gray-50 px-3 py-2">
-                <h5 class="text-sm font-semibold text-gray-800">Schritt 1: Selbsteinschaetzung</h5>
+                <h5 class="text-sm font-semibold text-gray-800">Schritt 1: Selbsteinschätzung</h5>
               </div>
               <div class="overflow-x-auto">
                 <table class="w-full min-w-[720px] text-xs">
@@ -2264,13 +2264,13 @@ const exportMitTag = async () => {
 
             <div v-show="activePaTab === 'uebungen'" class="rounded border border-gray-200 bg-white">
               <div class="border-b border-gray-100 bg-gray-50 px-3 py-2">
-                <h5 class="text-sm font-semibold text-gray-800">Schritt 2: Uebungen</h5>
+                <h5 class="text-sm font-semibold text-gray-800">Schritt 2: Übungen</h5>
               </div>
               <div class="overflow-x-auto">
                 <table class="w-full min-w-[820px] text-sm">
                   <thead class="bg-white text-xs uppercase text-gray-500">
                     <tr>
-                      <th class="border-b px-3 py-2 text-left">Uebung</th>
+                      <th class="border-b px-3 py-2 text-left">Übung</th>
                       <th class="border-b px-3 py-2 text-left">Punkte</th>
                       <th class="border-b px-3 py-2 text-left">Zeit</th>
                     </tr>
@@ -2332,7 +2332,7 @@ const exportMitTag = async () => {
 
             <div v-show="activePaTab === 'kompetenzen'" class="rounded border border-gray-200 bg-white">
               <div class="border-b border-gray-100 bg-gray-50 px-3 py-2">
-                <h5 class="text-sm font-semibold text-gray-800">Schritt 3: Einschaetzung der Kompetenzen</h5>
+                <h5 class="text-sm font-semibold text-gray-800">Schritt 3: Einschätzung der Kompetenzen</h5>
               </div>
               <div class="overflow-x-auto">
                 <table class="w-full min-w-[720px] text-xs">
@@ -2410,7 +2410,7 @@ const exportMitTag = async () => {
 
               <div class="grid gap-3 md:grid-cols-2">
                 <label class="text-sm text-gray-600">
-                  Staerken
+                  Stärken
                   <textarea
                     v-model="paEintrag(selectedPaTeilnehmer.id).bericht.staerken"
                     rows="4"
@@ -2454,7 +2454,7 @@ const exportMitTag = async () => {
 
             <div class="flex flex-wrap items-center justify-between gap-3 rounded border border-gray-200 bg-white px-3 py-2">
               <Button
-                label="Zurueck"
+                label="Zurück"
                 icon="pi pi-arrow-left"
                 severity="secondary"
                 outlined
