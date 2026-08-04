@@ -7,6 +7,7 @@ use App\Models\Gruppe;
 use App\Models\Zeiten;
 use App\Models\Personen;
 use App\Models\Zeitraum;
+use App\Models\User;
 use App\Models\Anwesenheitsstatuten;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Pivot;
@@ -77,7 +78,7 @@ class GruppeHasPersonen extends Pivot
 
     public function user()
     {
-        return $this->belongsTo(Personen::class,'user_id', 'id' )->where('typ', 'mitarbeiter');
+        return $this->belongsTo(User::class, 'user_id');
     }
 
     public function status()

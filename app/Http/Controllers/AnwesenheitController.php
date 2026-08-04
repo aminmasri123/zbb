@@ -51,7 +51,7 @@ class AnwesenheitController extends Controller
                     'zeitgeplant_id' => $plannedTimeId,
                     'zeittatsaechlich_id' => $actualTimeId,
                     'anwesenheitsstatuten_id' => $validated['anwesenheitsstatuten_id'],
-                    'user_id' => request()->user()?->person_id,
+                    'user_id' => request()->user()?->id,
                     'bemerkung' => $validated['bemerkung'] ?? null,
                 ]
             );
@@ -116,7 +116,7 @@ class AnwesenheitController extends Controller
                 'zeittatsaechlich_id' => $actualTimeId,
                 'anwesenheitsstatuten_id' => $validated['anwesenheitsstatuten_id'],
                 'bemerkung' => $validated['bemerkung'] ?? null,
-                'user_id' => request()->user()?->person_id,
+                'user_id' => request()->user()?->id,
             ]
         );
 

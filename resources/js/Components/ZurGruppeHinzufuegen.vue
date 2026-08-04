@@ -16,6 +16,31 @@ const selectedGroup = ref('')
 const showModal = ref(false)
 const isSubmitting = ref(false)
 
+const formatDate = (value) => {
+  if (!value) {
+    return '-'
+  }
+
+  const [datePart] = String(value).split('T')
+  const parts = datePart.split('-')
+
+  if (parts.length === 3) {
+    return `${parts[2]}.${parts[1]}.${parts[0]}`
+  }
+
+  return value
+}
+
+const formatGroupOption = (gruppe) => {
+  const bereich = gruppe.bereich?.name || '-'
+  const startdatum = formatDate(gruppe.anfangsdatum)
+  const enddatum = formatDate(gruppe.enddatum)
+  const startzeit = formatTime(gruppe.startzeit)
+  const endzeit = formatTime(gruppe.endzeit)
+
+  return `${bereich} ${startdatum} bis ${enddatum} von ${startzeit} bis ${endzeit}`
+}
+
 const sortedGruppen = computed(() => {
   return [...props.gruppen].sort((a, b) => {
     const dateA = new Date(a.anfangsdatum || a.created_at || 0).getTime()
@@ -132,7 +157,7 @@ defineExpose({ open })
             :key="gruppe.id"
             :value="gruppe.id"
           >
-            {{ gruppe.bereich.name }} - {{ gruppe.anfangsdatum }} -> {{ gruppe.enddatum }} {{$t('von') }} {{ gruppe.startzeit }} {{$t('bis') }} {{ gruppe.endzeit }}
+            {{ formatGroupOption(gruppe) }}
           </option>
         </select>
       </div>

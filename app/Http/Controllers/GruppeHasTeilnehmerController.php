@@ -151,7 +151,7 @@ class GruppeHasTeilnehmerController extends Controller
                         'tage_id' => $tagId,
                     ],
                     [
-                        'user_id' => $gruppe->personen_id,
+                        'user_id' => $request->user()->id,
                         'zeitgeplant_id' => $zeitGeplant->id,
                         'zeittatsaechlich_id' => $zeitTatsaechlich->id,
                         'anwesenheitsstatuten_id' => $anwesenheitsstatuten->id,
