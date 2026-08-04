@@ -154,15 +154,25 @@ watch(search, () => {
         <template #header>{{$t('Gruppen')}}</template>
 
         <!-- Toolbar -->
-        <div class="flex justify-around shadow-md items-center w-3/4 mx-auto mb-3">
-            <div v-if="canCreateGroup" @click="openModalCreate" class="flex items-center">
-                <i class="la la-plus bg-white border border-gray-300 rounded-l-md px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
-            </div>
+        <div class="flex items-stretch w-3/4 mx-auto mb-3 overflow-hidden rounded-md border border-gray-300 bg-white shadow-md">
+            <button
+                v-if="canCreateGroup"
+                type="button"
+                @click="openModalCreate"
+                class="flex w-14 items-center justify-center border-r border-gray-300 text-zbb transition hover:bg-zbb hover:text-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-inset"
+                title="Gruppe anlegen"
+            >
+                <i class="la la-plus"></i>
+            </button>
             <input v-model="search" type="text"
-                         class="border border-gray-300 text-sm p-2.5 w-full"
+                         class="min-w-0 flex-1 border-0 text-sm px-3 py-2.5 focus:ring-2 focus:ring-orange-400 focus:ring-inset"
                          placeholder="Suchen ..." />
-            <Link :href="route('gruppe.index')" class="flex items-center">
-                <i class="la la-refresh bg-white border border-gray-300 rounded-r-md px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
+            <Link
+                :href="route('gruppe.index')"
+                class="flex w-14 items-center justify-center border-l border-gray-300 text-zbb transition hover:bg-zbb hover:text-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-inset"
+                title="Aktualisieren"
+            >
+                <i class="la la-refresh"></i>
             </Link>
         </div>
 

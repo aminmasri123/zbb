@@ -1,6 +1,6 @@
 <script setup>
     import AppLayout from '@/Layouts/AppLayout.vue';
-    import { ref, watch } from 'vue';
+    import { computed, ref, watch } from 'vue';
     import Swal from 'sweetalert2';
     import { router, Link, Head, usePage } from '@inertiajs/vue3';
 
@@ -11,6 +11,7 @@
     import ModalEdit from '@/Pages/Projekt/ModalEdit.vue';
     import ModalDokumente from '@/Pages/Projekt/ModalDokumente.vue';
     import ModalExportAnwesenheitlisteZeitraum from '@/Pages/Projekt/ModalExportAnwesenheitlisteZeitraum.vue';
+    import { usePermissions } from '@/utils/permissions';
     let seite = 'projekt';
     let search = ref('');
     let projektToDelete = ref(null);
@@ -21,6 +22,20 @@
     let projektToEdit = ref(null);
     let projektForDokumente = ref(null);
     const page = usePage();
+    const { can } = usePermissions();
+    const canShowProjekt = computed(() => can('projekt.show'));
+    const canCreateProjekt = computed(() => can('projekt.store'));
+    const canUpdateProjekt = computed(() => can('projekt.update'));
+    const canDeleteProjekt = computed(() => can('projekt.destroy'));
+    const canManageProjektDokumente = computed(() => can('projekt.dokumente.update'));
+    const canExportAnwesenheit = computed(() => can('anwesenheit.export'));
+    const canOpenDokumente = computed(() => can('dokumente.index'));
+    const canManageProjekt = computed(() =>
+        canUpdateProjekt.value
+        || canDeleteProjekt.value
+        || canManageProjektDokumente.value
+        || canExportAnwesenheit.value
+    );
 
     // Props
     const props = defineProps({
@@ -46,10 +61,14 @@
     };
 
     // Modals
-    const openModalCreate = () => { isModalCreateOpen.value = true; };
+    const openModalCreate = () => {
+    if (!canCreateProjekt.value) return;
+    isModalCreateOpen.value = true;
+    };
     const closeModalCreate = () => { isModalCreateOpen.value = false; };
 
     const openModalEdit = (projekt) => {
+    if (!canUpdateProjekt.value) return;
     projektToEdit.value = projekt;
     isModalEditOpen.value = true;
     };
@@ -57,6 +76,7 @@
     const closeModalEdit = () => { isModalEditOpen.value = false; };
 
     const openModalDokumente = (projekt) => {
+    if (!canManageProjektDokumente.value) return;
     projektForDokumente.value = projekt;
     isModalDokumenteOpen.value = true;
     };
@@ -67,6 +87,7 @@
     let isModalExportAnwesenheitlisteOpen = ref(false);
     let projektForExport = ref(null);
     const openModalExportAnwesenheitliste = (projekt) => {
+        if (!canExportAnwesenheit.value) return;
         projektForExport.value = projekt;
         isModalExportAnwesenheitlisteOpen.value = true;
     };
@@ -111,6 +132,7 @@
 
     // Delete
     const confirmDelete = (projekt) => {
+    if (!canDeleteProjekt.value) return;
     projektToDelete.value = { id: projekt.id, name: projekt.name };
     showModalLöschen.value = true;
     };
@@ -143,17 +165,27 @@
     <template  #header>{{$t('Projekte')}}</template>
 
     <!-- Toolbar -->
-    <div class="flex justify-around items-center mb-3">
-      <div @click="openModalCreate" class="flex items-center">
-        <i class="la la-plus bg-white border border-gray-300 rounded-l-md px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
-      </div>
+    <div class="flex items-stretch mb-3 overflow-hidden rounded-md border border-gray-300 bg-white shadow-sm">
+      <button
+        v-if="canCreateProjekt"
+        type="button"
+        @click="openModalCreate"
+        class="flex w-14 items-center justify-center border-r border-gray-300 text-zbb transition hover:bg-zbb hover:text-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-inset"
+        title="Projekt anlegen"
+      >
+        <i class="la la-plus"></i>
+      </button>
             <input v-model="search" type="text"
-             class="border border-gray-300 text-sm p-2.5 w-full"
+             class="min-w-0 flex-1 border-0 text-sm px-3 py-2.5 focus:ring-2 focus:ring-orange-400 focus:ring-inset"
              placeholder="Suchen ..." />
-            <Link :href="route('projekt.index')" class="flex items-center">
-                <i class="la la-refresh bg-white border border-gray-300 rounded-r-md px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
+            <Link
+                :href="route('projekt.index')"
+                class="flex w-14 items-center justify-center border-l border-gray-300 text-zbb transition hover:bg-zbb hover:text-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-inset"
+                title="Aktualisieren"
+            >
+                <i class="la la-refresh"></i>
             </Link>
-            <Link :href="route('dokumente.index')" class="ml-2 flex items-center rounded border border-gray-300 bg-white px-4 py-2 text-sm text-zbb hover:border-orange-500 hover:bg-zbb hover:text-white">
+            <Link v-if="canOpenDokumente" :href="route('dokumente.index')" class="ml-2 flex items-center rounded border border-gray-300 bg-white px-4 py-2 text-sm text-zbb hover:border-orange-500 hover:bg-zbb hover:text-white">
                 <i class="las la-file-export mr-2"></i> Dokumentenmanager
             </Link>
     </div>
@@ -175,7 +207,7 @@
             <th class="border px-3 py-3 text-left">Anfangsdatum</th>
             <th class="border px-3 py-3 text-left">Endtermin</th>
             <th class="border px-3 py-3 text-left">Enddatum</th>
-            <th class="border px-3 py-3 text-center">*</th>
+            <th v-if="canManageProjekt" class="border px-3 py-3 text-center">*</th>
             </tr>
         </thead>
 
@@ -191,9 +223,10 @@
                 {{ projekt.id }}
                 </td>
                 <td class="border px-6 py-4" v-if="index === 0" :rowspan="projekt.zeitraume?.length || 1">
-                <Link :href="route('projekt.show', projekt.id)" class="font-semibold text-zbb hover:underline">
+                <Link v-if="canShowProjekt" :href="route('projekt.show', projekt.id)" class="font-semibold text-zbb hover:underline">
                     {{ projekt.name }}
                 </Link>
+                <span v-else class="font-semibold text-slate-800">{{ projekt.name }}</span>
                 </td>
                 <td class="border px-6 py-4" v-if="index === 0" :rowspan="projekt.zeitraume?.length || 1">
                 <template v-if="projekt.kostenstellen?.length">
@@ -260,31 +293,35 @@
                 </td>
 
                 <!-- Dropdown-Menü nur in der ersten Zeile -->
-                <td class="border px-6 py-4 text-center" v-if="index === 0" :rowspan="projekt.zeitraume?.length || 1">
+                <td class="border px-6 py-4 text-center" v-if="index === 0 && canManageProjekt" :rowspan="projekt.zeitraume?.length || 1">
                 <Dropdown>
                     <template #trigger>
                     <i class="la la-ellipsis-v cursor-pointer"></i>
                     </template>
                     <template #content>
                     <span
+                        v-if="canUpdateProjekt"
                         class="flex justify-between cursor-pointer px-6 items-center hover:bg-gray-100"
                         @click="openModalEdit(projekt)"
                     >
                         Bearbeiten <i class="las la-edit"></i>
                     </span>
                      <span
+                        v-if="canExportAnwesenheit"
                         class="flex justify-between cursor-pointer px-6 items-center hover:bg-gray-100"
                         @click="openModalExportAnwesenheitliste(projekt)"
                     >
                         Anwesenheitsliste <i class="las la-edit"></i>
                     </span>
                     <span
+                        v-if="canManageProjektDokumente"
                         class="flex justify-between cursor-pointer px-6 items-center hover:bg-gray-100"
                         @click="openModalDokumente(projekt)"
                     >
                         Export-Vorlagen <i class="las la-file-alt"></i>
                     </span>
                     <span
+                        v-if="canDeleteProjekt"
                         class="flex justify-between cursor-pointer px-6 items-center hover:bg-gray-100"
                         @click="confirmDelete(projekt)"
                     >
@@ -301,7 +338,7 @@
     </div>
 
     <!-- Modals -->
-    <ModalCreate :visible="isModalCreateOpen"
+    <ModalCreate v-if="canCreateProjekt" :visible="isModalCreateOpen"
                  :abteilungen="props.abteilungen"
                  :bereiche="localBereiche"
                  :kostenstellen="localKostenstellen"
@@ -310,7 +347,7 @@
                  @kostenstelle-created="addKostenstelleOption"
                  @added="addProjekt"
                  />
-    <ModalEdit :visible="isModalEditOpen"
+    <ModalEdit v-if="canUpdateProjekt" :visible="isModalEditOpen"
                :toEdit="projektToEdit"
                :abteilungen="props.abteilungen"
                :bereiche="localBereiche"
@@ -321,6 +358,7 @@
                @updated="updateProjekt"/>
 
     <ModalDokumente
+               v-if="canManageProjektDokumente"
                :visible="isModalDokumenteOpen"
                :projekt="projektForDokumente"
                :dokumente="props.dokumente"
@@ -330,16 +368,19 @@
 
 
     <ModalExportAnwesenheitlisteZeitraum
+        v-if="canExportAnwesenheit"
         :visible="isModalExportAnwesenheitlisteOpen"
         :projekt="projektForExport"
         @close="isModalExportAnwesenheitlisteOpen = false"
     />
 
 
+    <template v-if="canDeleteProjekt">
     <ModalDestroy v-if="showModalLöschen"
                   @delete="handleDelete"
                   @close="showModalLöschen = false"
                   :seite="seite"
                   :toDelete="projektToDelete"/>
+    </template>
   </app-layout>
 </template>

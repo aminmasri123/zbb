@@ -1,6 +1,6 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { ref, defineProps, watch, nextTick } from 'vue';
+import { computed, ref, defineProps, watch, nextTick } from 'vue';
 import { router, Link, Head } from '@inertiajs/vue3';
 import Dropdown from '@/Components/Dropdown.vue';
 import ModalDestroy from '@/Components/ModalDestroyForm.vue';
@@ -9,6 +9,7 @@ import ModalEdit from '@/Pages/Geraet/ModalEdit.vue';
 import Dropzone from "dropzone";
 import "dropzone/dist/dropzone.css";
 import ModalImport from '@/Components/ModalImport.vue'
+import { usePermissions } from '@/utils/permissions';
 
 Dropzone.autoDiscover = false;
 let dropzoneInstance = null;
@@ -22,6 +23,12 @@ let showModalLöschen = ref(false);
 let isModalCreateOpen = ref(false);
 let isModalEditOpen = ref(false);
 let geraetToEdit = ref(null);
+const { can } = usePermissions();
+const canCreateGeraet = computed(() => can('geraet.store'));
+const canUpdateGeraet = computed(() => can('geraet.update'));
+const canDeleteGeraet = computed(() => can('geraet.destroy') || can('geraet.delete'));
+const canImportGeraet = computed(() => can('geraet.import'));
+const canManageGeraet = computed(() => canUpdateGeraet.value || canDeleteGeraet.value);
 
 const props = defineProps({
     geraete: Array,
@@ -39,6 +46,8 @@ let filteredGeraete = ref([...localGeraete.value]);
 /* Dropzone */
 const showImportModal = ref(false);
 const importGeraet = async () => {
+    if (!canImportGeraet.value) return;
+
     showImportModal.value = true;
     await nextTick(); // wartet bis DOM gerendert
     initDropzone();
@@ -110,10 +119,14 @@ const formatDate = (date) => {
 };
 
 // Modals
-const openModalCreate = () => { isModalCreateOpen.value = true; };
+const openModalCreate = () => {
+    if (!canCreateGeraet.value) return;
+    isModalCreateOpen.value = true;
+};
 const closeModalCreate = () => { isModalCreateOpen.value = false; };
 
 const openModalEdit = (geraet) => {
+    if (!canUpdateGeraet.value) return;
     geraetToEdit.value = geraet;
     isModalEditOpen.value = true;
 };
@@ -133,6 +146,7 @@ const updateGeraet = (updatedGeraet) => {
 
 // Delete
 const confirmDelete = (geraet) => {
+    if (!canDeleteGeraet.value) return;
     geraetToDelete.value = { id: geraet.id, name: geraet.geraet };
     showModalLöschen.value = true;
 };
@@ -165,21 +179,37 @@ watch(search, () => {
   <AppLayout>
     <template #header>Geräte</template>
      <!-- Suchfeld -->
-        <div class="flex justify-around items-center mb-3">
-            <div @click="openModalCreate" class="flex items-center">
-                <i class="la la-plus bg-white border border-gray-300 rounded-l-md px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
-            </div>
+        <div class="flex items-stretch mb-3 overflow-hidden rounded-md border border-gray-300 bg-white shadow-sm">
+            <button
+                v-if="canCreateGeraet"
+                type="button"
+                @click="openModalCreate"
+                class="flex w-14 items-center justify-center border-r border-gray-300 text-zbb transition hover:bg-zbb hover:text-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-inset"
+                title="Gerät anlegen"
+            >
+                <i class="la la-plus"></i>
+            </button>
 
-             <div @click="importGeraet" class="flex items-center">
-                <i class="las la-upload bg-white border border-gray-300  px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
-            </div>
+             <button
+                v-if="canImportGeraet"
+                type="button"
+                @click="importGeraet"
+                class="flex w-14 items-center justify-center border-r border-gray-300 text-zbb transition hover:bg-zbb hover:text-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-inset"
+                title="Geräte importieren"
+            >
+                <i class="las la-upload"></i>
+            </button>
 
             <label for="search" class="sr-only">{{$t('Suchen')}}</label>
-            <input id="search"v-model="search" type="text" class="border border-gray-300 text-gray-900 text-sm  focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" placeholder="Suchen ..." />
+            <input id="search" v-model="search" type="text" class="min-w-0 flex-1 border-0 text-sm px-3 py-2.5 focus:ring-2 focus:ring-orange-400 focus:ring-inset" placeholder="Suchen ..." />
 
 
-            <Link :href="route('geraet.index')" class="flex items-center">
-                <i class="la la-refresh bg-white border border-gray-300 rounded-r-md px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
+            <Link
+                :href="route('geraet.index')"
+                class="flex w-14 items-center justify-center border-l border-gray-300 text-zbb transition hover:bg-zbb hover:text-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-inset"
+                title="Aktualisieren"
+            >
+                <i class="la la-refresh"></i>
             </Link>
         </div>
 
@@ -197,7 +227,7 @@ watch(search, () => {
                     <th class="px-4 py-3 text-left">Modell</th>
                     <th class="px-4 py-3 text-left">Baujahr</th>
                     <th class="px-4 py-3 text-left">Garantie</th>
-                    <th class="px-4 py-3 text-center">*</th>
+                    <th v-if="canManageGeraet" class="px-4 py-3 text-center">*</th>
                 </tr>
             </thead>
 
@@ -217,17 +247,17 @@ watch(search, () => {
                     <td class="px-4 py-3" :class="geraet.garantiefrist >= new Date() ? 'text-green-600' : 'text-red-600'">
                         {{ formatDate(geraet.garantiefrist) }}
                     </td>
-                    <td class="px-4 py-3 text-center">
+                    <td v-if="canManageGeraet" class="px-4 py-3 text-center">
                         <Dropdown>
                             <template #trigger>
                                 <i class="la la-ellipsis-v cursor-pointer"></i>
                             </template>
                             <template #content>
-                                <span class="flex justify-between items-center px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                                <span v-if="canUpdateGeraet" class="flex justify-between items-center px-4 py-2 hover:bg-gray-100 cursor-pointer"
                                       @click="openModalEdit(geraet)">
                                     Bearbeiten <i class="las la-edit"></i>
                                 </span>
-                                <span class="flex justify-between items-center px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                                <span v-if="canDeleteGeraet" class="flex justify-between items-center px-4 py-2 hover:bg-gray-100 cursor-pointer"
                                       @click="confirmDelete(geraet)">
                                     Löschen <i class="las la-trash-alt"></i>
                                 </span>
@@ -240,26 +270,28 @@ watch(search, () => {
     </div>
 
     <!-- Modals -->
-    <ModalCreate :visible="isModalCreateOpen"
+    <ModalCreate v-if="canCreateGeraet" :visible="isModalCreateOpen"
                  :hersteller="props.hersteller"
                  @close="closeModalCreate"
                  @added="addGeraet" />
 
-    <ModalEdit :visible="isModalEditOpen"
+    <ModalEdit v-if="canUpdateGeraet" :visible="isModalEditOpen"
                :toEdit="geraetToEdit"
                :hersteller="props.hersteller"
                @close="closeModalEdit"
                @updated="updateGeraet" />
 
+    <template v-if="canDeleteGeraet">
     <ModalDestroy v-if="showModalLöschen"
                 :seite="seite"
                   @delete="handleDelete"
                   @close="showModalLöschen = false"
                   :toDelete="geraetToDelete"/>
+    </template>
 
 
 
-    <ModalImport :show="showImportModal" :seite="seite" @close="showImportModal = false" />
+    <ModalImport v-if="canImportGeraet" :show="showImportModal" :seite="seite" @close="showImportModal = false" />
 
 
   </AppLayout>

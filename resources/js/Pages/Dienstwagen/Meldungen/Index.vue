@@ -9,6 +9,7 @@ import InputText from 'primevue/inputtext';
 import Textarea from 'primevue/textarea';
 import Swal from 'sweetalert2';
 import { formatDateTime } from '@/utils/dateFormat.js';
+import { usePermissions } from '@/utils/permissions';
 
 const props = defineProps({
     records: Array,
@@ -23,6 +24,11 @@ watch(() => props.records, (value) => {
 const showModal = ref(false);
 const isEditing = ref(false);
 const editId = ref(null);
+const { can } = usePermissions();
+const canCreateMeldung = computed(() => can('dienstwagen.meldungen.store'));
+const canUpdateMeldung = computed(() => can('dienstwagen.meldungen.update'));
+const canDeleteMeldung = computed(() => can('dienstwagen.meldungen.destroy'));
+const canManageMeldung = computed(() => canUpdateMeldung.value || canDeleteMeldung.value);
 const selectedResponsible = computed(() => {
     if (!isEditing.value) {
         return props.currentPerson;
@@ -75,6 +81,8 @@ function badgeClass(record) {
 }
 
 function openCreate() {
+    if (!canCreateMeldung.value) return;
+
     isEditing.value = false;
     editId.value = null;
     form.value = emptyForm();
@@ -82,6 +90,8 @@ function openCreate() {
 }
 
 function openEdit(record) {
+    if (!canUpdateMeldung.value) return;
+
     isEditing.value = true;
     editId.value = record.id;
     form.value = {
@@ -98,6 +108,9 @@ function openEdit(record) {
 }
 
 function submit() {
+    if (isEditing.value && !canUpdateMeldung.value) return;
+    if (!isEditing.value && !canCreateMeldung.value) return;
+
     const payload = { ...form.value };
 
     if (isEditing.value) {
@@ -132,6 +145,8 @@ function failed(errors) {
 }
 
 function destroy(record) {
+    if (!canDeleteMeldung.value) return;
+
     Swal.fire({
         title: 'Meldung löschen?',
         text: record.titel,
@@ -160,7 +175,7 @@ function destroy(record) {
         <div class="space-y-6">
             <div class="flex justify-between items-center">
                 <h2 class="text-xl font-semibold text-gray-900">Schäden, Reparaturen und Aufgaben</h2>
-                <button class="rounded bg-zbb px-4 py-2 font-semibold text-white hover:bg-orange-500" @click="openCreate">
+                <button v-if="canCreateMeldung" class="rounded bg-zbb px-4 py-2 font-semibold text-white hover:bg-orange-500" @click="openCreate">
                     Neue Meldung
                 </button>
             </div>
@@ -175,7 +190,7 @@ function destroy(record) {
                             <th class="table-head">Status</th>
                             <th class="table-head">Verantwortlich</th>
                             <th class="table-head">Gemeldet</th>
-                            <th class="table-head text-right">*</th>
+                            <th v-if="canManageMeldung" class="table-head text-right">*</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -194,9 +209,9 @@ function destroy(record) {
                             </td>
                             <td class="table-cell">{{ record.verantwortlich?.nachname || '-' }} {{ record.verantwortlich?.vorname || '' }}</td>
                             <td class="table-cell">{{ formatDateTime(record.created_at) }}</td>
-                            <td class="table-cell text-right">
-                                <button class="mr-3 text-blue-600 hover:text-blue-800" @click="openEdit(record)">Bearbeiten</button>
-                                <button class="text-red-600 hover:text-red-800" @click="destroy(record)">Löschen</button>
+                            <td v-if="canManageMeldung" class="table-cell text-right">
+                                <button v-if="canUpdateMeldung" class="mr-3 text-blue-600 hover:text-blue-800" @click="openEdit(record)">Bearbeiten</button>
+                                <button v-if="canDeleteMeldung" class="text-red-600 hover:text-red-800" @click="destroy(record)">Löschen</button>
                             </td>
                         </tr>
                         <tr v-if="localRecords.length === 0">
@@ -207,7 +222,7 @@ function destroy(record) {
             </div>
         </div>
 
-        <Dialog v-model:visible="showModal" modal :header="isEditing ? 'Meldung bearbeiten' : 'Neue Meldung'" :style="{ width: '48rem' }">
+        <Dialog v-if="canCreateMeldung || canUpdateMeldung" v-model:visible="showModal" modal :header="isEditing ? 'Meldung bearbeiten' : 'Neue Meldung'" :style="{ width: '48rem' }">
             <form class="grid grid-cols-2 gap-5 pt-2" @submit.prevent="submit">
                 <FloatLabel variant="on">
                     <Select v-model="form.dienstwagen_id" :options="vehicles.map(v => ({ label: `${v.kennzeichen} - ${v.marke} ${v.modell}`, value: v.id }))" optionLabel="label" optionValue="value" class="w-full" />

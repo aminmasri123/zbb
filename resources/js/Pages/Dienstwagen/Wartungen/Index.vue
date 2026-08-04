@@ -1,7 +1,7 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { router, Head } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import Swal from 'sweetalert2';
 import Select from 'primevue/select';
 import FloatLabel from 'primevue/floatlabel';
@@ -13,6 +13,7 @@ import { formatDate } from '@/utils/dateFormat.js';
 import ModalDestroy from '@/Components/ModalDestroyForm.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import axios from 'axios';
+import { usePermissions } from '@/utils/permissions';
 
 const props = defineProps({
     records: Array,
@@ -30,6 +31,11 @@ const seite = 'dienstwagen.wartung';
 const showModalLöschen = ref(false);
 const showModal = ref(false);
 const dienstwagenwartungToDelete = ref(null);
+const { can } = usePermissions();
+const canCreateWartung = computed(() => can('dienstwagen.wartung.store'));
+const canUpdateWartung = computed(() => can('dienstwagen.wartung.update'));
+const canDeleteWartung = computed(() => can('dienstwagen.wartung.destroy'));
+const canManageWartung = computed(() => canUpdateWartung.value || canDeleteWartung.value);
 
 // 🔹 Bearbeitungsstatus
 const isEditing = ref(false);
@@ -56,6 +62,8 @@ const servicetypen = ref([
 
 // 🔹 Öffnet Modal für Neuen Eintrag
 function openModalCreate() {
+    if (!canCreateWartung.value) return;
+
     isEditing.value = false;
     editId.value = null;
     form.value = {
@@ -72,6 +80,8 @@ function openModalCreate() {
 
 // 🔹 Öffnet Modal zum Bearbeiten
 function openModalEdit(record) {
+    if (!canUpdateWartung.value) return;
+
     isEditing.value = true;
     editId.value = record.id;
 
@@ -90,6 +100,9 @@ function openModalEdit(record) {
 
 // 🟢 Neuer Eintrag mit direktem Hinzufügen
 const submit = async () => {
+  if (isEditing.value && !canUpdateWartung.value) return;
+  if (!isEditing.value && !canCreateWartung.value) return;
+
   if (isEditing.value && editId.value) {
     router.put(route('dienstwagen.wartung.update', editId.value), form.value, {
       preserveScroll: true,
@@ -142,6 +155,8 @@ const submit = async () => {
 
 // 🔹 Lösch-Modal öffnen
 const confirmDelete = (record) => {
+    if (!canDeleteWartung.value) return;
+
     dienstwagenwartungToDelete.value = {
         name: `${record.art} (${record.dienstwagen.kennzeichen})`,
         id: record.id
@@ -178,6 +193,7 @@ const handleDelete = (id) => {
                         📋 Wartungshistorie
                     </h2>
                     <button
+                        v-if="canCreateWartung"
                         @click="openModalCreate"
                         class="bg-zbb hover:bg-orange-300 text-white px-4 py-2 rounded-lg font-semibold transition shadow-md"
                     >
@@ -195,7 +211,7 @@ const handleDelete = (id) => {
                                 <th class="table-head">km</th>
                                 <th class="table-head">Werkstatt</th>
                                 <th class="table-head">Kosten</th>
-                                <th class="table-head w-24 text-center">*</th>
+                                <th v-if="canManageWartung" class="table-head w-24 text-center">*</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -210,7 +226,7 @@ const handleDelete = (id) => {
                                 <td class="table-cell">{{ r.kilometerstand?.toLocaleString() }} km</td>
                                 <td class="table-cell">{{ r.werkstatt || '-' }}</td>
                                 <td class="table-cell">{{ r.kosten ? r.kosten + ' €' : '-' }}</td>
-                                <td class="border-gray-300 px-6 py-4 text-center m-auto">
+                                <td v-if="canManageWartung" class="border-gray-300 px-6 py-4 text-center m-auto">
                                     <Dropdown>
                                         <template #trigger>
                                             <button
@@ -222,12 +238,14 @@ const handleDelete = (id) => {
 
                                         <template #content>
                                             <span
+                                                v-if="canUpdateWartung"
                                                 class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"
                                                 @click="openModalEdit(r)"
                                             >
                                                 {{ $t('Bearbeiten') }} <i class="las la-edit"></i>
                                             </span>
                                             <span
+                                                v-if="canDeleteWartung"
                                                 class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"
                                                 @click="confirmDelete(r)"
                                             >
@@ -244,6 +262,7 @@ const handleDelete = (id) => {
 
             <!-- MODAL: ERSTELLEN / BEARBEITEN -->
             <Dialog
+                v-if="canCreateWartung || canUpdateWartung"
                 v-model:visible="showModal"
                 modal
                 :header="isEditing ? '📝 Wartungseintrag bearbeiten' : '🧰 Neuer Wartungseintrag'"
@@ -312,6 +331,7 @@ const handleDelete = (id) => {
         </div>
 
         <!-- MODAL: LÖSCHEN -->
+        <template v-if="canDeleteWartung">
         <ModalDestroy
             v-if="showModalLöschen"
             @delete="handleDelete"
@@ -319,6 +339,7 @@ const handleDelete = (id) => {
             :seite="seite"
             :toDelete="dienstwagenwartungToDelete"
         />
+        </template>
     </AppLayout>
 </template>
 

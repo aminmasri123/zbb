@@ -5,6 +5,7 @@ import { Head, router } from '@inertiajs/vue3';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import { computed, ref } from 'vue';
+import { usePermissions } from '@/utils/permissions';
 
 const props = defineProps({
   dokumente: { type: Array, default: () => [] },
@@ -23,6 +24,14 @@ const categorySaving = ref(false);
 const search = ref('');
 const editingDokument = ref(null);
 const fileInputKey = ref(0);
+const { can } = usePermissions();
+const canStoreDokument = computed(() => can('dokumente.store'));
+const canUpdateDokument = computed(() => can('dokumente.update'));
+const canDownloadDokument = computed(() => can('dokumente.download'));
+const canStoreKategorie = computed(() => can('dokumente.kategorien.store'));
+const canUpdateProjektKategorien = computed(() => can('dokumente.projekt-kategorien.update'));
+const canSubmitDokument = computed(() => editingDokument.value ? canUpdateDokument.value : canStoreDokument.value);
+const canUseDokumentActions = computed(() => canUpdateDokument.value || canDownloadDokument.value);
 
 const defaultForm = () => ({
   name: '',
@@ -109,6 +118,8 @@ const refreshFromPage = (page) => {
 };
 
 const editDokument = (dokument) => {
+  if (!canUpdateDokument.value) return;
+
   editingDokument.value = dokument;
   form.value = {
     name: dokument.name || '',
@@ -130,6 +141,8 @@ const editDokument = (dokument) => {
 };
 
 const submit = () => {
+  if (!canSubmitDokument.value) return;
+
   saving.value = true;
 
   const payload = {
@@ -160,6 +173,8 @@ const submit = () => {
 };
 
 const createKategorie = async () => {
+  if (!canStoreKategorie.value) return;
+
   categorySaving.value = true;
 
   try {
@@ -178,6 +193,8 @@ const createKategorie = async () => {
 const projektKategorieIds = (projekt) => (projekt.dokument_kategorien || []).map((kategorie) => Number(kategorie.id));
 
 const toggleProjektKategorie = (projekt, kategorieId) => {
+  if (!canUpdateProjektKategorien.value) return;
+
   const ids = projektKategorieIds(projekt);
   projekt.dokument_kategorien = ids.includes(Number(kategorieId))
     ? (projekt.dokument_kategorien || []).filter((kategorie) => Number(kategorie.id) !== Number(kategorieId))
@@ -185,6 +202,8 @@ const toggleProjektKategorie = (projekt, kategorieId) => {
 };
 
 const saveProjektKategorien = async (projekt) => {
+  if (!canUpdateProjektKategorien.value) return;
+
   try {
     const response = await axios.put(route('dokumente.projekt-kategorien.update', projekt.id), {
       kategorie_ids: projektKategorieIds(projekt),
@@ -208,7 +227,7 @@ const token = (key) => '${' + key + '}';
 
     <div class="space-y-6 p-4">
       <section class="grid gap-4 xl:grid-cols-[minmax(360px,430px)_1fr]">
-        <form class="rounded border bg-white p-4 shadow-sm" @submit.prevent="submit">
+        <form v-if="canStoreDokument || editingDokument" class="rounded border bg-white p-4 shadow-sm" @submit.prevent="submit">
           <div class="mb-4 flex items-start justify-between gap-3">
             <div>
               <h2 class="text-base font-semibold text-gray-700">
@@ -219,7 +238,7 @@ const token = (key) => '${' + key + '}';
               </p>
             </div>
             <button
-              v-if="editingDokument"
+              v-if="editingDokument && canStoreDokument"
               type="button"
               class="rounded border border-gray-300 px-3 py-1 text-xs text-gray-600 hover:border-zbb hover:text-zbb"
               @click="resetForm"
@@ -267,6 +286,7 @@ const token = (key) => '${' + key + '}';
               />
               <div v-if="editingDokument" class="mt-2 flex flex-wrap gap-2">
                 <a
+                  v-if="canDownloadDokument"
                   class="inline-flex rounded border border-zbb/30 px-3 py-1 text-xs font-semibold text-zbb hover:bg-zbb hover:text-white"
                   :href="route('dokumente.download', editingDokument.id)"
                 >
@@ -349,7 +369,7 @@ const token = (key) => '${' + key + '}';
             </div>
 
             <div class="flex gap-2">
-              <button type="submit" class="w-full rounded bg-zbb px-4 py-2 text-white disabled:opacity-60" :disabled="saving">
+              <button v-if="canSubmitDokument" type="submit" class="w-full rounded bg-zbb px-4 py-2 text-white disabled:opacity-60" :disabled="saving">
                 {{ saving ? 'Speichert...' : (editingDokument ? 'Aktualisieren' : 'Speichern') }}
               </button>
               <button
@@ -379,7 +399,7 @@ const token = (key) => '${' + key + '}';
                 <col class="w-[9%]" />
                 <col class="w-[10%]" />
                 <col class="w-[14%]" />
-                <col class="w-[5%]" />
+                <col v-if="canUseDokumentActions" class="w-[5%]" />
               </colgroup>
               <thead class="bg-gray-100 text-left text-gray-600">
                 <tr>
@@ -390,7 +410,7 @@ const token = (key) => '${' + key + '}';
                   <th class="px-3 py-2">Ausgabe</th>
                   <th class="px-3 py-2">Kategorien</th>
                   <th class="px-3 py-2">Projekte</th>
-                  <th class="px-3 py-2 text-center">
+                  <th v-if="canUseDokumentActions" class="px-3 py-2 text-center">
                     <span class="sr-only">Aktionen</span>
                   </th>
                 </tr>
@@ -428,10 +448,11 @@ const token = (key) => '${' + key + '}';
                       {{ projekt.name }}
                     </span>
                   </td>
-                  <td class="px-3 py-2 align-top text-center">
+                  <td v-if="canUseDokumentActions" class="px-3 py-2 align-top text-center">
                     <Dropdown align="right" width="48" :content-classes="['bg-white', 'py-1']">
                       <template #trigger>
                         <button
+                          v-if="canUpdateDokument"
                           type="button"
                           class="inline-flex h-8 w-8 items-center justify-center rounded border border-gray-200 text-gray-600 hover:border-zbb hover:bg-zbbTrp hover:text-zbb"
                           aria-label="Aktionen anzeigen"
@@ -449,6 +470,7 @@ const token = (key) => '${' + key + '}';
                           <i class="las la-edit"></i>
                         </button>
                         <a
+                          v-if="canDownloadDokument"
                           class="flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm text-gray-700 hover:bg-zbbTrp hover:text-zbb"
                           :href="route('dokumente.download', dokument.id)"
                         >
@@ -466,7 +488,7 @@ const token = (key) => '${' + key + '}';
       </section>
 
       <section class="grid gap-4 xl:grid-cols-[minmax(360px,430px)_1fr]">
-        <div class="rounded border bg-white p-4 shadow-sm">
+        <div v-if="canStoreKategorie" class="rounded border bg-white p-4 shadow-sm">
           <h2 class="mb-4 text-base font-semibold text-gray-700">Kategorie anlegen</h2>
           <div class="space-y-3">
             <input v-model="neueKategorie.name" class="w-full rounded border-gray-300 text-sm" placeholder="Name" />
@@ -477,7 +499,7 @@ const token = (key) => '${' + key + '}';
           </div>
         </div>
 
-        <div class="rounded border bg-white p-4 shadow-sm">
+        <div v-if="canUpdateProjektKategorien" class="rounded border bg-white p-4 shadow-sm">
           <h2 class="mb-4 text-base font-semibold text-gray-700">Projekt-Kategorien</h2>
           <div class="max-h-[420px] overflow-y-auto">
             <div v-for="projekt in projektListe" :key="projekt.id" class="mb-3 rounded border border-gray-200 p-3">

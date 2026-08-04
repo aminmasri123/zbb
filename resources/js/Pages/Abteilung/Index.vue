@@ -1,6 +1,6 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { ref, defineProps, watch } from 'vue';
+import { computed, ref, defineProps, watch } from 'vue';
 import Swal from 'sweetalert2';
 import { router, Link, Head } from '@inertiajs/vue3';
 import axios from 'axios';
@@ -8,6 +8,7 @@ import Dropdown from '@/Components/Dropdown.vue';
 import ModalDestroy from '@/Components/ModalDestroyForm.vue';
 import ModalCreate from '@/Pages/Abteilung/ModalCreate.vue';
 import ModalEdit from '@/Pages/Abteilung/ModalEdit.vue';
+import { usePermissions } from '@/utils/permissions';
 
 // Props definieren
 const props = defineProps({
@@ -23,6 +24,11 @@ let showModalLöschen = ref(false);
 let abteilungToEdit = ref(null);
 let isModalEditOpen = ref(false);
 let isModalOpen = ref(false);
+const { can } = usePermissions();
+const canCreateAbteilung = computed(() => can('abteilung.store'));
+const canUpdateAbteilung = computed(() => can('abteilung.update'));
+const canDeleteAbteilung = computed(() => can('abteilung.destroy'));
+const canManageAbteilung = computed(() => canUpdateAbteilung.value || canDeleteAbteilung.value);
 
 // Lokale Kopien erstellen
 let localAbteilungen = ref([...props.abteilungen.data]);
@@ -46,6 +52,7 @@ watch(search, (newVal) => {
 
 // --- 🗑️ Löschen ---
 const confirmDelete = (abteilung) => {
+    if (!canDeleteAbteilung.value) return;
     abteilungToDelete.value = { id: abteilung.id, name: abteilung.name };
     showModalLöschen.value = true;
 };
@@ -57,6 +64,7 @@ const handleDelete = (abteilungId) => {
 
 // --- ✏️ Bearbeiten ---
 const openModalEdit = (abteilung) => {
+    if (!canUpdateAbteilung.value) return;
     abteilungToEdit.value = abteilung;
     isModalEditOpen.value = true;
 };
@@ -76,10 +84,15 @@ const resetForm = () => {
     newAbteilung.value = { name: '', abteilungsleiter: '', assistenten: [] };
 };
 
-const openModal = () => { isModalOpen.value = true; };
+const openModal = () => {
+    if (!canCreateAbteilung.value) return;
+    isModalOpen.value = true;
+};
 const closeModal = () => { isModalOpen.value = false; resetForm(); };
 
 const addAbteilung = async () => {
+    if (!canCreateAbteilung.value) return;
+
     if (!newAbteilung.value.name || !newAbteilung.value.abteilungsleiter) {
         Swal.fire('Fehler!', 'Bitte füllen Sie alle Pflichtfelder aus.', 'error');
         return;
@@ -104,20 +117,30 @@ const addAbteilung = async () => {
         <template #header>{{ $t('abteilungen') }}</template>
 
         <!-- Suchfeld & Buttons -->
-        <div class="flex justify-around items-center mb-3">
-            <button @click="openModal" class="flex items-center">
-                <i class="la la-plus bg-white border border-gray-300 rounded-l-md px-5 py-3 hover:text-white hover:bg-zbb hover:border-orange-500"></i>
+        <div class="flex items-stretch mb-3 overflow-hidden rounded-md border border-gray-300 bg-white shadow-sm">
+            <button
+                v-if="canCreateAbteilung"
+                type="button"
+                @click="openModal"
+                class="flex w-14 items-center justify-center border-r border-gray-300 text-zbb transition hover:bg-zbb hover:text-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-inset"
+                title="Abteilung anlegen"
+            >
+                <i class="la la-plus"></i>
             </button>
 
             <input
                 v-model="search"
                 type="text"
-                class="border border-gray-300 text-gray-900 text-sm focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                class="min-w-0 flex-1 border-0 text-sm px-3 py-2.5 focus:ring-2 focus:ring-orange-400 focus:ring-inset"
                 placeholder="Suchen..."
             />
 
-            <Link :href="route('abteilung.index')" class="flex items-center">
-                <i class="la la-refresh bg-white border border-gray-300 rounded-r-md px-5 py-3 hover:text-white hover:bg-zbb hover:border-orange-500"></i>
+            <Link
+                :href="route('abteilung.index')"
+                class="flex w-14 items-center justify-center border-l border-gray-300 text-zbb transition hover:bg-zbb hover:text-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-inset"
+                title="Aktualisieren"
+            >
+                <i class="la la-refresh"></i>
             </Link>
         </div>
 
@@ -129,7 +152,7 @@ const addAbteilung = async () => {
                         <th class="border px-6 py-3 text-center">ID</th>
                         <th class="border px-6 py-3">Abteilung</th>
                         <th class="border px-6 py-3">Abteilungsleiter</th>
-                        <th class="border px-6 py-3 text-center">*</th>
+                        <th v-if="canManageAbteilung" class="border px-6 py-3 text-center">*</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -144,7 +167,7 @@ const addAbteilung = async () => {
                                 </span>
                             </span>
                         </td>
-                        <td class="border px-6 py-4 text-center">
+                        <td v-if="canManageAbteilung" class="border px-6 py-4 text-center">
                             <Dropdown>
                                 <template #trigger>
                                     <button>
@@ -152,10 +175,10 @@ const addAbteilung = async () => {
                                     </button>
                                 </template>
                                 <template #content>
-                                    <span class="flex justify-between px-6 cursor-pointer" @click="confirmDelete(abteilung)">
+                                    <span v-if="canDeleteAbteilung" class="flex justify-between px-6 cursor-pointer" @click="confirmDelete(abteilung)">
                                         {{ $t('Löschen') }} <i class="las la-trash-alt"></i>
                                     </span>
-                                    <span class="flex justify-between px-6 cursor-pointer" @click="openModalEdit(abteilung)">
+                                    <span v-if="canUpdateAbteilung" class="flex justify-between px-6 cursor-pointer" @click="openModalEdit(abteilung)">
                                         {{ $t('Bearbeiten') }} <i class="las la-edit"></i>
                                     </span>
                                 </template>
@@ -168,6 +191,7 @@ const addAbteilung = async () => {
 
         <!-- Modals -->
         <ModalCreate
+            v-if="canCreateAbteilung"
             :visible="isModalOpen"
             :users="users"
             @close="closeModal"
@@ -175,6 +199,7 @@ const addAbteilung = async () => {
         />
 
         <ModalEdit
+            v-if="canUpdateAbteilung"
             :visible="isModalEditOpen"
             :users="users"
             :toEdit="abteilungToEdit"
@@ -186,6 +211,7 @@ const addAbteilung = async () => {
             }"
         />
 
+        <template v-if="canDeleteAbteilung">
         <ModalDestroy
             v-if="showModalLöschen"
             @delete="handleDelete"
@@ -193,5 +219,6 @@ const addAbteilung = async () => {
             :seite="seite"
             :toDelete="abteilungToDelete"
         />
+        </template>
     </AppLayout>
 </template>

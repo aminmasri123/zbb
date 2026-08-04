@@ -1,13 +1,16 @@
 <script setup>
 import { Head, router } from '@inertiajs/vue3'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import { usePermissions } from '@/utils/permissions'
 
 const props = defineProps({
     modules: { type: Array, default: () => [] },
 })
 
 const saving = ref(null)
+const { can } = usePermissions()
+const canUpdateModules = computed(() => can('berechtigung.update'))
 
 function assignmentFor(module) {
     return (module.assignments || []).find((assignment) => assignment.scope_key === 'global')
@@ -19,6 +22,8 @@ function effectiveEnabled(module) {
 }
 
 function update(module, enabled) {
+    if (!canUpdateModules.value) return
+
     saving.value = module.id
 
     router.put(route('module-settings.update', module.id), {
@@ -64,7 +69,7 @@ function update(module, enabled) {
                                 type="button"
                                 class="rounded-full px-4 py-2 text-sm font-semibold transition"
                                 :class="effectiveEnabled(module) ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-700'"
-                                :disabled="saving === module.id || !module.is_enforced || (module.is_system_module && effectiveEnabled(module))"
+                                :disabled="!canUpdateModules || saving === module.id || !module.is_enforced || (module.is_system_module && effectiveEnabled(module))"
                                 @click="update(module, !effectiveEnabled(module))"
                             >
                                 {{ saving === module.id ? 'Speichert …' : (effectiveEnabled(module) ? 'Aktiv' : 'Inaktiv') }}

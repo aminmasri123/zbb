@@ -7,6 +7,7 @@ import ModalDestroy from '@/Components/ModalDestroyForm.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import Swal from 'sweetalert2';
 import ModalProjektZuweisen from "@/Pages/Personal/ModalProjektZuweisen.vue";
+import { usePermissions } from '@/utils/permissions';
 
 
 
@@ -26,7 +27,13 @@ let searchProject = ref('');
 const showProjektZuweisenModal = ref(false);
 const userForProjekt = ref(null);
 let userList = ref([...users.data]);
+const { can } = usePermissions();
+const canEditPersonal = computed(() => can('personal.edit'));
+const canAssignProjects = computed(() => can('benutzer.update'));
+const canDeleteUser = computed(() => can('benutzer.destroy'));
+const canManagePersonal = computed(() => canEditPersonal.value || canAssignProjects.value || canDeleteUser.value);
 const openProjektZuweisen = (user) => {
+    if (!canAssignProjects.value) return;
     userForProjekt.value = user;
     showProjektZuweisenModal.value = true;
 };
@@ -76,6 +83,7 @@ let showModalLöschen = ref(false);
 let userToDelete = ref(null);
 
 const confirmDelete = (user) => {
+    if (!canDeleteUser.value) return;
     userToDelete.value = {
         id: user.id,
         name: user.person?.vorname + ' ' + user.person?.nachname
@@ -154,7 +162,7 @@ const groupProjects = (projekte, standorte) => {
 
                         <th class="px-6 py-3">Titel</th>
                         <th class="px-6 py-3">Projekte</th>
-                        <th class="px-6 py-3 text-center">*</th>
+                        <th v-if="canManagePersonal" class="px-6 py-3 text-center">*</th>
                     </tr>
                 </thead>
 
@@ -163,7 +171,7 @@ const groupProjects = (projekte, standorte) => {
                         <td class="px-6 py-3">{{ user.id }}</td>
                         <td class="px-6 py-3">{{ user?.nachname }}</td>
                         <td class="px-6 py-3">{{ user?.vorname}}</td>
-                        <td class="px-6 py-3">
+                        <td v-if="canManagePersonal" class="px-6 py-3">
                             {{ user?.user?.email || 'Kein Login-Konto' }}
                         </td>
 
@@ -202,16 +210,16 @@ const groupProjects = (projekte, standorte) => {
                                     </button>
                                 </template>
                                 <template #content>
-                                    <span class="block px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                                    <span v-if="canDeleteUser" class="block px-4 py-2 hover:bg-gray-100 cursor-pointer"
                                           @click="confirmDelete(user)">
                                         {{ $t('Löschen') }} <i class="las la-trash-alt"></i>
                                     </span>
-                                    <span class="block px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                                    <span v-if="canAssignProjects" class="block px-4 py-2 hover:bg-gray-100 cursor-pointer"
                                         @click="openProjektZuweisen(user)">
                                         Projekte zuweisen <i class="las la-random"></i>
                                     </span>
 
-                                    <Link :href="route('personal.edit', user.id)" class="block px-4 py-2 hover:bg-gray-100">
+                                    <Link v-if="canEditPersonal" :href="route('personal.edit', user.id)" class="block px-4 py-2 hover:bg-gray-100">
                                            {{ $t('Bearbeiten') }} <i class="las la-edit"></i>
                                     </Link>
                                 </template>
@@ -224,6 +232,7 @@ const groupProjects = (projekte, standorte) => {
             <Pagination :pagination="users" />
         </div>
         <ModalProjektZuweisen
+            v-if="canAssignProjects"
             :visible="showProjektZuweisenModal"
             :userId="userForProjekt?.id"
             :projekte="authProjekte"
@@ -233,11 +242,13 @@ const groupProjects = (projekte, standorte) => {
         />
 
 
+        <template v-if="canDeleteUser">
         <ModalDestroy
             v-if="showModalLöschen"
             :toDelete="userToDelete"
             seite="user"
             @close="showModalLöschen = false"
         />
+        </template>
     </AppLayout>
 </template>

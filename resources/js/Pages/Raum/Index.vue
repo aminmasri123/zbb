@@ -14,6 +14,7 @@
 
           <div class="flex flex-wrap gap-2">
             <button
+              v-if="canCreateRoom"
               @click="openModalCreate"
               class="inline-flex items-center gap-2 rounded-md bg-zbb px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600"
             >
@@ -21,6 +22,7 @@
               Raum
             </button>
             <button
+              v-if="canCreateBooking"
               @click="openBookingModal()"
               class="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
             >
@@ -117,14 +119,16 @@
                     </div>
                   </div>
 
-                  <div class="flex gap-2">
+                  <div v-if="canManageRoom" class="flex gap-2">
                     <button
+                      v-if="canUpdateRoom"
                       @click="openEditModal(raum)"
                       class="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
                     >
                       <i class="la la-pen"></i>
                     </button>
                     <button
+                      v-if="canDeleteRoom"
                       @click="confirmDelete(raum)"
                       class="rounded-md border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
                     >
@@ -167,6 +171,7 @@
 
                 <div class="mt-5 flex flex-wrap gap-2 border-t border-slate-200 pt-4">
                   <button
+                    v-if="canCreateBooking"
                     @click="openBookingModal(raum)"
                     class="inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-700"
                   >
@@ -174,6 +179,7 @@
                     Buchen
                   </button>
                   <button
+                    v-if="canCreateMeldung"
                     @click="openMeldungModal(raum)"
                     class="inline-flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100"
                   >
@@ -196,6 +202,7 @@
                 class="rounded-md border-slate-300 text-sm focus:border-zbb focus:ring-zbb"
               />
               <button
+                v-if="canCreateBooking"
                 @click="openBookingModal()"
                 class="inline-flex items-center justify-center gap-2 rounded-md bg-zbb px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
               >
@@ -232,15 +239,16 @@
                   </div>
                 </div>
 
-                <div v-if="belegung.source !== 'gruppe'" class="flex gap-2">
+                <div v-if="belegung.source !== 'gruppe' && canManageBooking" class="flex gap-2">
                   <button
+                    v-if="canUpdateBooking"
                     @click="openBookingEdit(belegung)"
                     class="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
                   >
                     Bearbeiten
                   </button>
                   <button
-                    v-if="belegung.status !== 'storniert'"
+                    v-if="belegung.status !== 'storniert' && canDeleteBooking"
                     @click="cancelBooking(belegung)"
                     class="rounded-md border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
                   >
@@ -297,6 +305,7 @@
                   </div>
 
                   <button
+                    v-if="canUpdateMeldung"
                     @click="openMeldungEdit(meldung)"
                     class="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
                   >
@@ -331,6 +340,7 @@
     </div>
 
     <ModalCreate
+      v-if="canCreateRoom"
       :visible="isModalCreateOpen"
       :standorte="localStandorte"
       :personal="props.personal"
@@ -339,6 +349,7 @@
     />
 
     <ModalEdit
+      v-if="canUpdateRoom"
       :visible="isModalEditOpen"
       :standorte="localStandorte"
       :personal="props.personal"
@@ -348,6 +359,7 @@
     />
 
     <ModalMeldung
+      v-if="canCreateMeldung"
       :visible="isMeldungModalOpen"
       :raum="raumForMeldung"
       @close="isMeldungModalOpen = false"
@@ -355,6 +367,7 @@
     />
 
     <ModalMeldungStatus
+      v-if="canUpdateMeldung"
       :visible="isMeldungEditOpen"
       :meldung="meldungToEdit"
       :personal="props.personal"
@@ -363,6 +376,7 @@
     />
 
     <ModalBuchung
+      v-if="canCreateBooking || canUpdateBooking"
       :visible="isBookingModalOpen"
       :raeume="allRooms"
       :buchung="buchungToEdit"
@@ -371,6 +385,7 @@
       @saved="upsertBuchung"
     />
 
+    <template v-if="canDeleteRoom">
     <ModalDestroy
       v-if="showModalLoeschen"
       :seite="seite"
@@ -378,6 +393,7 @@
       @delete="removeRoom"
       @close="showModalLoeschen = false"
     />
+    </template>
   </AppLayout>
 </template>
 
@@ -393,6 +409,7 @@ import ModalEdit from '@/Pages/Raum/ModalEdit.vue';
 import ModalMeldung from '@/Pages/Raum/ModalMeldung.vue';
 import ModalMeldungStatus from '@/Pages/Raum/ModalMeldungStatus.vue';
 import ModalBuchung from '@/Pages/Raum/ModalBuchung.vue';
+import { usePermissions } from '@/utils/permissions';
 
 const props = defineProps({
   standorte: { type: Array, default: () => [] },
@@ -400,6 +417,17 @@ const props = defineProps({
 });
 
 const seite = 'raeumlichkeiten';
+const { can } = usePermissions();
+const canCreateRoom = computed(() => can('raeumlichkeiten.store'));
+const canUpdateRoom = computed(() => can('raeumlichkeiten.update'));
+const canDeleteRoom = computed(() => can('raeumlichkeiten.destroy'));
+const canManageRoom = computed(() => canUpdateRoom.value || canDeleteRoom.value);
+const canCreateMeldung = computed(() => can('raeumlichkeiten.meldung.store'));
+const canUpdateMeldung = computed(() => can('raeumlichkeiten.meldung.update'));
+const canCreateBooking = computed(() => can('raeumlichkeiten.buchung.store'));
+const canUpdateBooking = computed(() => can('raeumlichkeiten.buchung.update'));
+const canDeleteBooking = computed(() => can('raeumlichkeiten.buchung.destroy'));
+const canManageBooking = computed(() => canUpdateBooking.value || canDeleteBooking.value);
 const tabs = [
   { label: 'Räume', value: 'raeume' },
   { label: 'Buchungen', value: 'buchungen' },
@@ -542,31 +570,37 @@ const stats = computed(() => {
 });
 
 const openModalCreate = () => {
+  if (!canCreateRoom.value) return;
   isModalCreateOpen.value = true;
 };
 
 const openEditModal = (raum) => {
+  if (!canUpdateRoom.value) return;
   raumToEdit.value = JSON.parse(JSON.stringify(raum));
   isModalEditOpen.value = true;
 };
 
 const openMeldungModal = (raum) => {
+  if (!canCreateMeldung.value) return;
   raumForMeldung.value = raum;
   isMeldungModalOpen.value = true;
 };
 
 const openMeldungEdit = (meldung) => {
+  if (!canUpdateMeldung.value) return;
   meldungToEdit.value = JSON.parse(JSON.stringify(meldung));
   isMeldungEditOpen.value = true;
 };
 
 const openBookingModal = (raum = null) => {
+  if (!canCreateBooking.value) return;
   buchungToEdit.value = null;
   bookingInitialRaumId.value = raum?.id ?? null;
   isBookingModalOpen.value = true;
 };
 
 const openBookingEdit = (buchung) => {
+  if (!canUpdateBooking.value) return;
   buchungToEdit.value = JSON.parse(JSON.stringify(buchung));
   bookingInitialRaumId.value = buchung.raum_id;
   isBookingModalOpen.value = true;
@@ -579,6 +613,7 @@ const closeBookingModal = () => {
 };
 
 const confirmDelete = (raum) => {
+  if (!canDeleteRoom.value) return;
   raumToDelete.value = { id: raum.id, name: raum.name };
   showModalLoeschen.value = true;
 };
@@ -642,6 +677,8 @@ const upsertBuchung = (buchung) => {
 };
 
 const cancelBooking = async (buchung) => {
+  if (!canDeleteBooking.value) return;
+
   const result = await Swal.fire({
     title: 'Buchung stornieren?',
     text: buchung.titel,

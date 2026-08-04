@@ -1,7 +1,7 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { Head, router } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import Dialog from 'primevue/dialog';
 import FloatLabel from 'primevue/floatlabel';
 import Select from 'primevue/select';
@@ -9,6 +9,7 @@ import InputText from 'primevue/inputtext';
 import Textarea from 'primevue/textarea';
 import Swal from 'sweetalert2';
 import { formatDateTime } from '@/utils/dateFormat.js';
+import { usePermissions } from '@/utils/permissions';
 
 const props = defineProps({
     bookings: Array,
@@ -24,6 +25,11 @@ watch(() => props.bookings, (value) => {
 const showModal = ref(false);
 const isEditing = ref(false);
 const editId = ref(null);
+const { can } = usePermissions();
+const canCreateBooking = computed(() => can('dienstwagen.buchungen.store'));
+const canUpdateBooking = computed(() => can('dienstwagen.buchungen.update'));
+const canDeleteBooking = computed(() => can('dienstwagen.buchungen.destroy'));
+const canManageBooking = computed(() => canUpdateBooking.value || canDeleteBooking.value);
 
 const emptyForm = () => ({
     dienstwagen_id: '',
@@ -58,6 +64,8 @@ function asDateTimeLocal(value) {
 }
 
 function openCreate() {
+    if (!canCreateBooking.value) return;
+
     isEditing.value = false;
     editId.value = null;
     form.value = emptyForm();
@@ -65,6 +73,8 @@ function openCreate() {
 }
 
 function openEdit(record) {
+    if (!canUpdateBooking.value) return;
+
     isEditing.value = true;
     editId.value = record.id;
     form.value = {
@@ -84,6 +94,9 @@ function openEdit(record) {
 }
 
 function submit() {
+    if (isEditing.value && !canUpdateBooking.value) return;
+    if (!isEditing.value && !canCreateBooking.value) return;
+
     const options = {
         preserveScroll: true,
         onSuccess: () => {
@@ -105,6 +118,8 @@ function submit() {
 }
 
 function destroy(record) {
+    if (!canDeleteBooking.value) return;
+
     Swal.fire({
         title: 'Buchung löschen?',
         text: `${record.dienstwagen?.kennzeichen || ''} ${formatDateTime(record.start_at)}`,
@@ -133,7 +148,7 @@ function destroy(record) {
         <div class="space-y-6">
             <div class="flex justify-between items-center">
                 <h2 class="text-xl font-semibold text-gray-900">Reservierungen und Nutzungsplanung</h2>
-                <button class="rounded bg-zbb px-4 py-2 font-semibold text-white hover:bg-orange-500" @click="openCreate">
+                <button v-if="canCreateBooking" class="rounded bg-zbb px-4 py-2 font-semibold text-white hover:bg-orange-500" @click="openCreate">
                     Neue Buchung
                 </button>
             </div>
@@ -150,7 +165,7 @@ function destroy(record) {
                             <th class="table-head">Zweck</th>
                             <th class="table-head">Status</th>
                             <th class="table-head">KM</th>
-                            <th class="table-head text-right">*</th>
+                            <th v-if="canManageBooking" class="table-head text-right">*</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -163,9 +178,9 @@ function destroy(record) {
                             <td class="table-cell">{{ record.zweck }}</td>
                             <td class="table-cell">{{ record.status }}</td>
                             <td class="table-cell">{{ record.start_km || '-' }} / {{ record.end_km || '-' }}</td>
-                            <td class="table-cell text-right">
-                                <button class="mr-3 text-blue-600 hover:text-blue-800" @click="openEdit(record)">Bearbeiten</button>
-                                <button class="text-red-600 hover:text-red-800" @click="destroy(record)">Löschen</button>
+                            <td v-if="canManageBooking" class="table-cell text-right">
+                                <button v-if="canUpdateBooking" class="mr-3 text-blue-600 hover:text-blue-800" @click="openEdit(record)">Bearbeiten</button>
+                                <button v-if="canDeleteBooking" class="text-red-600 hover:text-red-800" @click="destroy(record)">Löschen</button>
                             </td>
                         </tr>
                         <tr v-if="localBookings.length === 0">
@@ -176,7 +191,7 @@ function destroy(record) {
             </div>
         </div>
 
-        <Dialog v-model:visible="showModal" modal :header="isEditing ? 'Buchung bearbeiten' : 'Neue Buchung'" :style="{ width: '48rem' }">
+        <Dialog v-if="canCreateBooking || canUpdateBooking" v-model:visible="showModal" modal :header="isEditing ? 'Buchung bearbeiten' : 'Neue Buchung'" :style="{ width: '48rem' }">
             <form class="grid grid-cols-2 gap-5 pt-2" @submit.prevent="submit">
                 <FloatLabel variant="on">
                     <Select v-model="form.dienstwagen_id" :options="vehicles.map(v => ({ label: `${v.kennzeichen} - ${v.marke} ${v.modell}`, value: v.id }))" optionLabel="label" optionValue="value" class="w-full" />

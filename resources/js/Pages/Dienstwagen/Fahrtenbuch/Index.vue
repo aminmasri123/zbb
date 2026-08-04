@@ -6,6 +6,7 @@ import Swal from 'sweetalert2';
 import { formatDate } from '@/utils/dateFormat.js';
 import Dropdown from '@/Components/Dropdown.vue';
 import ModalDestroy from '@/Components/ModalDestroyForm.vue';
+import { usePermissions } from '@/utils/permissions';
 
 import ModalCreate from './ModalCreate.vue';
 import ModalEdit from './ModalEdit.vue';
@@ -21,6 +22,13 @@ const props = defineProps({
 const localEntries = ref([...props.entries]);
 const selectedVehicleId = computed(() => props.selectedVehicleId ? Number(props.selectedVehicleId) : null);
 const reportQuery = computed(() => selectedVehicleId.value ? { dienstwagen_id: selectedVehicleId.value } : {});
+const { can } = usePermissions();
+const canCreateFahrtenbuch = computed(() => can('dienstwagen.fahrtenbuch.store'));
+const canUpdateFahrtenbuch = computed(() => can('dienstwagen.fahrtenbuch.update'));
+const canDeleteFahrtenbuch = computed(() => can('dienstwagen.fahrtenbuch.destroy'));
+const canExportFahrtenbuchPdf = computed(() => can('dienstwagen.fahrtenbuch.report.pdf'));
+const canExportFahrtenbuchExcel = computed(() => can('dienstwagen.fahrtenbuch.report.excel'));
+const canManageFahrtenbuch = computed(() => canUpdateFahrtenbuch.value || canDeleteFahrtenbuch.value);
 
 watch(() => props.entries, (newVal) => {
     localEntries.value = [...newVal];
@@ -31,6 +39,8 @@ watch(() => props.entries, (newVal) => {
 --------------------------------*/
 const showCreate = ref(false);
 function openModalCreate() {
+    if (!canCreateFahrtenbuch.value) return;
+
     showCreate.value = true;
 }
 
@@ -41,6 +51,8 @@ const showEdit = ref(false);
 const selectedEntry = ref(null);
 
 function openModalEdit(entry) {
+    if (!canUpdateFahrtenbuch.value) return;
+
     selectedEntry.value = entry;
     showEdit.value = true;
 }
@@ -57,6 +69,8 @@ const fahrtToDelete = ref({
 
 // Modal öffnen
 const confirmDelete = (entry) => {
+    if (!canDeleteFahrtenbuch.value) return;
+
     fahrtToDelete.value = {
         id: entry.id,
         name: entry.date, // wird im Modal angezeigt
@@ -87,6 +101,7 @@ const handleDelete = (id) => {
             <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                     <button
+                        v-if="canCreateFahrtenbuch"
                         @click="openModalCreate"
                         class="bg-zbb hover:bg-orange-300 text-white px-4 py-2 rounded-lg font-semibold shadow-md"
                     >
@@ -102,10 +117,10 @@ const handleDelete = (id) => {
                     </div>
                 </div>
                     <div class="flex gap-3">
-                        <a :href="route('dienstwagen.fahrtenbuch.report.pdf', reportQuery)" class="rounded border px-4 py-2 text-sm font-semibold hover:bg-gray-50">
+                        <a v-if="canExportFahrtenbuchPdf" :href="route('dienstwagen.fahrtenbuch.report.pdf', reportQuery)" class="rounded border px-4 py-2 text-sm font-semibold hover:bg-gray-50">
                             PDF Export
                         </a>
-                        <a :href="route('dienstwagen.fahrtenbuch.report.excel', reportQuery)" class="rounded border px-4 py-2 text-sm font-semibold hover:bg-gray-50">
+                        <a v-if="canExportFahrtenbuchExcel" :href="route('dienstwagen.fahrtenbuch.report.excel', reportQuery)" class="rounded border px-4 py-2 text-sm font-semibold hover:bg-gray-50">
                             Excel Export
                         </a>
                     </div>
@@ -126,7 +141,7 @@ const handleDelete = (id) => {
 	                            <th class="table-head">Ziel</th>
                                 <th class="table-head">Art</th>
 	                            <th class="table-head">Zweck</th>
-	                            <th class="table-head text-center">*</th>
+	                            <th v-if="canManageFahrtenbuch" class="table-head text-center">*</th>
                         </tr>
                     </thead>
 
@@ -158,9 +173,9 @@ const handleDelete = (id) => {
 	                            <td class="table-cell">{{ e.ziel }}</td>
                                 <td class="table-cell">{{ e.fahrtart || '-' }}</td>
 	                            <td class="table-cell">{{ e.zweck }}</td>
-                            <td class="w-10 px-6 py-4 text-center m-auto">
+                            <td v-if="canManageFahrtenbuch" class="w-10 px-6 py-4 text-center m-auto">
                                 <!-- Dropdown für Aktion -->
-                                <Dropdown >
+                                <Dropdown>
                                     <template #trigger>
                                         <button class=" items-center  text-sm leading-4 font-medium text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
                                             <span class="cursor-pointer">
@@ -171,10 +186,10 @@ const handleDelete = (id) => {
 
                                     <template #content >
                                         <!-- Gefilterte Projektauswahl -->
-                                        <span class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"  @click="confirmDelete(e)">
+                                        <span v-if="canDeleteFahrtenbuch" class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"  @click="confirmDelete(e)">
                                             {{ $t('Löschen') }} <i class="las la-trash-alt "></i>
                                         </span>
-                                        <span class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"  @click="openModalEdit(e)">
+                                        <span v-if="canUpdateFahrtenbuch" class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"  @click="openModalEdit(e)">
                                             {{ $t('Bearbeiten') }}  <i class="las la-edit  "></i>
                                         </span>
 
@@ -197,6 +212,7 @@ const handleDelete = (id) => {
 
     <!-- MODAL: CREATE -->
  <ModalCreate
+    v-if="canCreateFahrtenbuch"
     :visible="showCreate"
     :vehicles="vehicles"
     :drivers="drivers"
@@ -209,7 +225,7 @@ const handleDelete = (id) => {
 
     <!-- MODAL: EDIT -->
 <ModalEdit
-    v-if="selectedEntry"
+    v-if="canUpdateFahrtenbuch && selectedEntry"
     :visible="showEdit"
     :vehicles="vehicles"
     :drivers="drivers"
@@ -218,6 +234,7 @@ const handleDelete = (id) => {
     @close="showEdit = false"
 />
 
+<template v-if="canDeleteFahrtenbuch">
 <ModalDestroy
     v-if="showModalLöschen"
     :toDelete="fahrtToDelete"
@@ -225,6 +242,7 @@ const handleDelete = (id) => {
     @delete="handleDelete"
     @close="showModalLöschen = false"
 />
+</template>
 
 </template>
 

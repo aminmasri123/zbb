@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { Head, Link, router, useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import { usePermissions } from '@/utils/permissions'
 
 const props = defineProps({
   klassenbuch: { type: Object, required: true },
@@ -10,6 +11,13 @@ const props = defineProps({
   teilnehmer: { type: Array, default: () => [] },
   canReview: { type: Boolean, default: false },
 })
+const { can } = usePermissions()
+const canStoreEntry = computed(() => can('klassenbuch.eintrag.store'))
+const canDeleteEntry = computed(() => can('klassenbuch.eintrag.destroy'))
+const canSubmitWeek = computed(() => can('klassenbuch.woche.submit'))
+const canReviewWeek = computed(() => props.canReview && can('klassenbuch.woche.review'))
+const canStoreComment = computed(() => can('klassenbuch.kommentar.store'))
+const canUpdateComment = computed(() => can('klassenbuch.kommentar.update'))
 
 const entryForm = useForm({
   id: null,
@@ -39,7 +47,9 @@ const commentEditForm = useForm({
   text: '',
 })
 
-const canEditEntries = computed(() => ['offen', 'korrektur'].includes(props.woche.status))
+const canEditEntries = computed(() => canStoreEntry.value && ['offen', 'korrektur'].includes(props.woche.status))
+const canRemoveEntries = computed(() => canDeleteEntry.value && ['offen', 'korrektur'].includes(props.woche.status))
+const canManageEntries = computed(() => canEditEntries.value || canRemoveEntries.value)
 const isSubmitted = computed(() => props.woche.status === 'eingereicht')
 const isLocked = computed(() => props.woche.status === 'gesperrt')
 
@@ -84,6 +94,8 @@ function resetEntryForm() {
 }
 
 function editEintrag(eintrag) {
+  if (!canStoreEntry.value) return
+
   entryForm.id = eintrag.id
   entryForm.datum = dateInput(eintrag.datum)
   entryForm.stunde = eintrag.stunde || ''
@@ -95,6 +107,8 @@ function editEintrag(eintrag) {
 }
 
 function saveEintrag() {
+  if (!canStoreEntry.value) return
+
   entryForm.post(route('klassenbuch.eintrag.store', [props.klassenbuch.id, props.woche.id]), {
     preserveScroll: true,
     onSuccess: () => resetEntryForm(),
@@ -102,18 +116,24 @@ function saveEintrag() {
 }
 
 function deleteEintrag(eintrag) {
+  if (!canDeleteEntry.value) return
+
   router.delete(route('klassenbuch.eintrag.destroy', [props.klassenbuch.id, props.woche.id, eintrag.id]), {
     preserveScroll: true,
   })
 }
 
 function submitWoche() {
+  if (!canSubmitWeek.value) return
+
   router.post(route('klassenbuch.woche.submit', [props.klassenbuch.id, props.woche.id]), {}, {
     preserveScroll: true,
   })
 }
 
 function reviewWoche(decision) {
+  if (!canReviewWeek.value) return
+
   reviewForm.entscheidung = decision
   reviewForm.post(route('klassenbuch.woche.review', [props.klassenbuch.id, props.woche.id]), {
     preserveScroll: true,
@@ -126,6 +146,8 @@ function reviewWoche(decision) {
 }
 
 function saveKommentar() {
+  if (!canStoreComment.value) return
+
   commentForm.post(route('klassenbuch.kommentar.store', [props.klassenbuch.id, props.woche.id]), {
     preserveScroll: true,
     onSuccess: () => {
@@ -137,6 +159,8 @@ function saveKommentar() {
 }
 
 function editKommentar(kommentar) {
+  if (!canUpdateComment.value) return
+
   editingCommentId.value = kommentar.id
   commentEditForm.text = kommentar.text
   commentEditForm.clearErrors()
@@ -149,6 +173,8 @@ function cancelKommentarEdit() {
 }
 
 function updateKommentar(kommentar) {
+  if (!canUpdateComment.value) return
+
   commentEditForm.put(route('klassenbuch.kommentar.update', [props.klassenbuch.id, props.woche.id, kommentar.id]), {
     preserveScroll: true,
     onSuccess: () => cancelKommentarEdit(),
@@ -184,7 +210,7 @@ function updateKommentar(kommentar) {
 
           <div class="flex flex-wrap gap-2">
             <button
-              v-if="canEditEntries"
+              v-if="canEditEntries && canSubmitWeek"
               type="button"
               class="inline-flex h-10 items-center justify-center gap-2 rounded bg-zbb px-4 text-sm font-semibold text-white hover:bg-zbb/90"
               @click="submitWoche"
@@ -284,7 +310,7 @@ function updateKommentar(kommentar) {
                     <th class="px-4 py-3">Thema</th>
                     <th class="px-4 py-3">Azubis</th>
                     <th class="px-4 py-3">Signum</th>
-                    <th class="px-4 py-3 text-right">Aktion</th>
+                    <th v-if="canManageEntries" class="px-4 py-3 text-right">Aktion</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-zinc-100">
@@ -298,16 +324,15 @@ function updateKommentar(kommentar) {
                     </td>
                     <td class="px-4 py-3 text-zinc-700">{{ eintrag.azubi_nummern || '-' }}</td>
                     <td class="px-4 py-3 text-zinc-700">{{ eintrag.signum || '-' }}</td>
-                    <td class="px-4 py-3 text-right">
-                      <div v-if="canEditEntries" class="inline-flex gap-2">
-                        <button type="button" class="rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-700 hover:border-zbb hover:text-zbb" @click="editEintrag(eintrag)">
+                    <td v-if="canManageEntries" class="px-4 py-3 text-right">
+                      <div class="inline-flex gap-2">
+                        <button v-if="canEditEntries" type="button" class="rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-700 hover:border-zbb hover:text-zbb" @click="editEintrag(eintrag)">
                           Bearbeiten
                         </button>
-                        <button type="button" class="rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50" @click="deleteEintrag(eintrag)">
+                        <button v-if="canRemoveEntries" type="button" class="rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50" @click="deleteEintrag(eintrag)">
                           Entfernen
                         </button>
                       </div>
-                      <span v-else class="text-xs text-zinc-400">gesperrt</span>
                     </td>
                   </tr>
                 </tbody>
@@ -324,14 +349,14 @@ function updateKommentar(kommentar) {
           <section class="rounded border border-zinc-200 bg-white p-5 shadow-sm">
             <h2 class="text-lg font-semibold text-zinc-900">Kommentare und Notizen</h2>
 
-            <form class="mt-4 space-y-3" @submit.prevent="saveKommentar">
+            <form v-if="canStoreComment" class="mt-4 space-y-3" @submit.prevent="saveKommentar">
               <div class="grid gap-3 sm:grid-cols-[160px_1fr]">
                 <select v-model="commentForm.typ" class="rounded border-zinc-300 text-sm focus:border-zbb focus:ring-zbb">
                   <option value="kommentar">Kommentar</option>
                   <option value="notiz">Notiz</option>
                   <option value="korrektur">Korrektur</option>
                 </select>
-                <label v-if="canReview" class="inline-flex items-center gap-2 text-sm text-zinc-600">
+                <label v-if="canReviewWeek" class="inline-flex items-center gap-2 text-sm text-zinc-600">
                   <input v-model="commentForm.intern" type="checkbox" class="rounded border-zinc-300 text-zbb focus:ring-zbb" />
                   Interne Notiz nur für Leitung/Assistenz
                 </label>
@@ -360,7 +385,7 @@ function updateKommentar(kommentar) {
                       {{ kommentar.typ }} <span v-if="kommentar.intern">/ intern</span> / {{ timeLabel(kommentar.created_at) }}
                     </span>
                     <button
-                      v-if="canReview || kommentar.user_id === $page.props.auth.user.id"
+                      v-if="canUpdateComment && (canReviewWeek || kommentar.user_id === $page.props.auth.user.id)"
                       type="button"
                       class="rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-600 hover:border-zbb hover:text-zbb"
                       @click="editKommentar(kommentar)"
@@ -385,7 +410,7 @@ function updateKommentar(kommentar) {
         </main>
 
         <aside class="space-y-6">
-          <section v-if="canReview && isSubmitted" class="rounded border border-sky-200 bg-white p-5 shadow-sm">
+          <section v-if="canReviewWeek && isSubmitted" class="rounded border border-sky-200 bg-white p-5 shadow-sm">
             <h2 class="text-lg font-semibold text-zinc-900">Prüfung</h2>
             <p class="mt-2 text-sm text-zinc-600">
               OK sperrt diese Kalenderwoche endgültig. Korrektur öffnet sie wieder für die Bearbeitung.
@@ -447,6 +472,8 @@ function updateKommentar(kommentar) {
                 :key="person.id"
                 type="button"
                 class="grid w-full grid-cols-[44px_1fr] border-b border-zinc-100 text-left last:border-b-0 hover:bg-zbb/5"
+                :disabled="!canEditEntries"
+                :class="!canEditEntries ? 'cursor-default opacity-60' : ''"
                 @click="entryForm.azubi_nummern = entryForm.azubi_nummern ? `${entryForm.azubi_nummern}, ${person.nr}` : String(person.nr)"
               >
                 <span class="bg-zinc-50 px-3 py-2 text-sm font-semibold text-zinc-600">{{ person.nr }}</span>

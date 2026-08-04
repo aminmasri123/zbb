@@ -3,6 +3,7 @@
     import { Link, router, Head } from '@inertiajs/vue3';
     import { ref, computed } from 'vue';
     import ModalDestroy from '@/Components/ModalDestroyForm.vue';
+    import { usePermissions } from '@/utils/permissions';
 
     const props = defineProps({
         vehicles: Array,
@@ -16,6 +17,20 @@
     let seite = 'dienstwagen';
     const search = ref("");
     const locationFilter = ref("");
+    const { can } = usePermissions();
+    const canCreateDienstwagen = computed(() => can('dienstwagen.create'));
+    const canEditDienstwagen = computed(() => can('dienstwagen.edit'));
+    const canDeleteDienstwagen = computed(() => can('dienstwagen.destroy'));
+    const canViewBuchungen = computed(() => can('dienstwagen.buchungen.index'));
+    const canViewMeldungen = computed(() => can('dienstwagen.meldungen.index'));
+    const canViewFahrtenbuch = computed(() => can('dienstwagen.fahrtenbuch.index'));
+    const canViewVerlauf = computed(() => can('dienstwagen.verlauf.index'));
+    const canManageDienstwagen = computed(() =>
+        canEditDienstwagen.value
+        || canDeleteDienstwagen.value
+        || canViewFahrtenbuch.value
+        || canViewVerlauf.value
+    );
     let dienstwagenToDelete = ref(null);
     let showModalLöschen = ref(false);
 
@@ -82,6 +97,8 @@
 
     // Bestätigung vor Löschung
     const confirmDelete = (dienstwagen) => {
+        if (!canDeleteDienstwagen.value) return;
+
         dienstwagenToDelete.value = {
             name: dienstwagen.kennzeichen,
             id: dienstwagen.id
@@ -132,15 +149,16 @@
                     </option>
                 </select>
                    <Link
+	                    v-if="canCreateDienstwagen"
 	                    :href="route('dienstwagen.create')"
 	                    class="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold py-3 px-5 rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all"
 	                >
 	                    <span class="text-xl">＋</span> Neues Fahrzeug
 	                </Link>
-                    <Link :href="route('dienstwagen.buchungen.index')" class="inline-flex items-center gap-2 bg-white border border-gray-300 text-gray-800 font-semibold py-3 px-5 rounded-xl hover:bg-gray-50">
+                    <Link v-if="canViewBuchungen" :href="route('dienstwagen.buchungen.index')" class="inline-flex items-center gap-2 bg-white border border-gray-300 text-gray-800 font-semibold py-3 px-5 rounded-xl hover:bg-gray-50">
                         <i class="la la-calendar"></i> Buchungen
                     </Link>
-                    <Link :href="route('dienstwagen.meldungen.index')" class="inline-flex items-center gap-2 bg-white border border-gray-300 text-gray-800 font-semibold py-3 px-5 rounded-xl hover:bg-gray-50">
+                    <Link v-if="canViewMeldungen" :href="route('dienstwagen.meldungen.index')" class="inline-flex items-center gap-2 bg-white border border-gray-300 text-gray-800 font-semibold py-3 px-5 rounded-xl hover:bg-gray-50">
                         <i class="la la-exclamation-circle"></i> Meldungen
                     </Link>
 	            </div>
@@ -214,32 +232,36 @@
 	                    </div>
 
                     <!-- Aktionen -->
-                    <div class="grid grid-cols-2 gap-3 border-t border-gray-100 bg-gray-50 p-5 text-sm font-semibold dark:border-gray-700 dark:bg-gray-900/40">
+                    <div v-if="canManageDienstwagen" class="grid grid-cols-2 gap-3 border-t border-gray-100 bg-gray-50 p-5 text-sm font-semibold dark:border-gray-700 dark:bg-gray-900/40">
                         <Link
+                            v-if="canEditDienstwagen"
                             :href="route('dienstwagen.edit', v.id)"
                             class="text-blue-600 transition-colors hover:text-blue-800"
                         >
 	                            ✏️ Bearbeiten
 	                        </Link>
                             <Link
+                                v-if="canViewFahrtenbuch"
                                 :href="route('dienstwagen.fahrtenbuch.index', { dienstwagen_id: v.id })"
                                 class="text-green-700 transition-colors hover:text-green-900"
                             >
                                 Fahrtenbuch
                             </Link>
                             <Link
+                                v-if="canViewVerlauf"
                                 :href="route('dienstwagen.verlauf.index', v.id)"
                                 class="text-gray-600 transition-colors hover:text-gray-900"
                             >
                                 Verlauf
                             </Link>
                             <Link
+                                v-if="canViewFahrtenbuch"
                                 :href="route('dienstwagen.fahrtenbuch.code', v.id)"
                                 class="text-indigo-700 transition-colors hover:text-indigo-900"
                             >
                                 QR drucken
                             </Link>
-	                        <span class="col-span-2 flex cursor-pointer items-center justify-center rounded border border-red-200 px-4 py-2 text-red-700 hover:bg-red-50"  @click="confirmDelete(v)">
+	                        <span v-if="canDeleteDienstwagen" class="col-span-2 flex cursor-pointer items-center justify-center rounded border border-red-200 px-4 py-2 text-red-700 hover:bg-red-50"  @click="confirmDelete(v)">
                             🗑️ {{ $t('Löschen') }}
                         </span>
 
@@ -255,7 +277,9 @@
         </div>
 
 
+        <template v-if="canDeleteDienstwagen">
         <ModalDestroy v-if="showModalLöschen" @delete="handleDelete" @close="showModalLöschen = false" :seite="seite"  :toDelete="dienstwagenToDelete"></ModalDestroy>
+        </template>
 
     </AppLayout>
 </template>

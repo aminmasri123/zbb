@@ -1,12 +1,13 @@
 <script setup>
     import AppLayout from '@/Layouts/AppLayout.vue';
-    import { ref, defineProps, watch } from 'vue';
+    import { computed, ref, defineProps, watch } from 'vue';
     import { router, Link, Head } from '@inertiajs/vue3';
     import Dropdown from '@/Components/Dropdown.vue';
     import ModalDestroy from '@/Components/ModalDestroyForm.vue';
      import ModalCreate from '@/Pages/Fahrten/Fahrtkosten/ModalCreate.vue';
     import ModalEdit from '@/Pages/Fahrten/Fahrtkosten/ModalEdit.vue';
     import { formatDate } from '@/utils/dateFormat.js';
+    import { usePermissions } from '@/utils/permissions';
 
 
     let seite = 'fahrtkosten';
@@ -16,6 +17,11 @@
     let isModalCreateOpen = ref(false);
     let isModalEditOpen = ref(false);
     let fahrtkostenToEdit = ref(null);
+    const { can } = usePermissions();
+    const canCreateFahrtkosten = computed(() => can('fahrtkosten.store'));
+    const canUpdateFahrtkosten = computed(() => can('fahrtkosten.update'));
+    const canDeleteFahrtkosten = computed(() => can('fahrtkosten.destroy'));
+    const canManageFahrtkosten = computed(() => canUpdateFahrtkosten.value || canDeleteFahrtkosten.value);
 
     // Props
     const props = defineProps({
@@ -28,10 +34,14 @@
     let filteredfahrtkosten = ref([...localfahrtkosten.value]);
 
     // Modals
-    const openModalCreate = () => { isModalCreateOpen.value = true; };
+    const openModalCreate = () => {
+        if (!canCreateFahrtkosten.value) return;
+        isModalCreateOpen.value = true;
+    };
     const closeModalCreate = () => { isModalCreateOpen.value = false; };
 
     const openModalEdit = (kosten) => {
+        if (!canUpdateFahrtkosten.value) return;
         fahrtkostenToEdit.value = kosten;
         isModalEditOpen.value = true;
     };
@@ -39,6 +49,8 @@
 
     // CRUD
     const addFahrtkosten = (kosten) => {
+        if (!canCreateFahrtkosten.value) return;
+
         localfahrtkosten.value.unshift(kosten);
         applySearchFilter();
     };
@@ -53,6 +65,8 @@
 
     // Delete
     const confirmDelete = (kosten) => {
+        if (!canDeleteFahrtkosten.value) return;
+
         fahrtkostenToDelete.value = { id: kosten.id, name: kosten.fahrtart.name };
         showModalLöschen.value = true;
     };
@@ -97,15 +111,25 @@
     <template #header>{{$t('Fahrtkosten')}}</template>
 
     <!-- Toolbar -->
-    <div class="flex justify-around items-center mb-3">
-      <div @click="openModalCreate" class="flex items-center">
-        <i class="la la-plus bg-white border border-gray-300 rounded-l-md px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
-      </div>
+    <div class="flex items-stretch mb-3 overflow-hidden rounded-md border border-gray-300 bg-white shadow-sm">
+      <button
+        v-if="canCreateFahrtkosten"
+        type="button"
+        @click="openModalCreate"
+        class="flex w-14 items-center justify-center border-r border-gray-300 text-zbb transition hover:bg-zbb hover:text-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-inset"
+        title="Fahrtkosten anlegen"
+      >
+        <i class="la la-plus"></i>
+      </button>
       <input v-model="search" type="text"
-             class="border border-gray-300 text-sm p-2.5 w-full"
+             class="min-w-0 flex-1 border-0 text-sm px-3 py-2.5 focus:ring-2 focus:ring-orange-400 focus:ring-inset"
              placeholder="Suchen ..." />
-      <Link :href="route('fahrtkosten.index')" class="flex items-center">
-        <i class="la la-refresh bg-white border border-gray-300 rounded-r-md px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
+      <Link
+        :href="route('fahrtkosten.index')"
+        class="flex w-14 items-center justify-center border-l border-gray-300 text-zbb transition hover:bg-zbb hover:text-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-inset"
+        title="Aktualisieren"
+      >
+        <i class="la la-refresh"></i>
       </Link>
     </div>
 
@@ -120,7 +144,7 @@
             <th class="border px-3 py-3 text-left">{{ $t('Betrag/Prozent') }}</th>
             <th class="border px-3 py-3 text-left">{{ $t('Gültigkeitszeitraum') }}</th>
             <th class="border px-3 py-3 text-left">{{ $t('Bemwerkung') }}</th>
-            <th class="border px-3 py-3 text-center">*</th>
+            <th v-if="canManageFahrtkosten" class="border px-3 py-3 text-center">*</th>
           </tr>
         </thead>
         <tbody>
@@ -139,19 +163,21 @@
             <td class="border px-6 py-4">{{ kosten.bemerkung }}</td>
 
 
-            <td class="border px-6 py-4 text-center">
+            <td v-if="canManageFahrtkosten" class="border px-6 py-4 text-center">
               <Dropdown>
                 <template #trigger>
                   <i class="la la-ellipsis-v cursor-pointer"></i>
                 </template>
                 <template #content>
                   <span
+                    v-if="canUpdateFahrtkosten"
                     class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"
                     @click="openModalEdit(kosten)"
                   >
                     {{ $t('Bearbeiten') }} <i class="las la-edit"></i>
                   </span>
                   <span
+                    v-if="canDeleteFahrtkosten"
                     class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"
                     @click="confirmDelete(kosten)"
                   >
@@ -167,21 +193,24 @@
 
     <!-- Modals -->
     <ModalCreate
+        v-if="canCreateFahrtkosten"
         :visible="isModalCreateOpen"
         :fahrtarten="props.fahrtarten"
         @close="isModalCreateOpen = false"
         @added="addFahrtkosten"/>
 
 
-    <ModalEdit :visible="isModalEditOpen"
+    <ModalEdit v-if="canUpdateFahrtkosten" :visible="isModalEditOpen"
             :toEdit="fahrtkostenToEdit"
             @close="closeModalEdit"
             @updated="updateFahrtkosten"/>
 
+    <template v-if="canDeleteFahrtkosten">
     <ModalDestroy v-if="showModalLöschen"
                   @delete="handleDelete"
                   @close="showModalLöschen = false"
                   :seite="seite"
                   :toDelete="fahrtkostenToDelete"/>
+    </template>
   </app-layout>
 </template>

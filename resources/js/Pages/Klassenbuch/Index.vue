@@ -2,6 +2,7 @@
 import { computed, watch } from 'vue'
 import { Head, Link, useForm } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import { usePermissions } from '@/utils/permissions'
 
 const props = defineProps({
   gruppen: { type: Array, default: () => [] },
@@ -11,6 +12,9 @@ const props = defineProps({
   selectedGruppeId: { type: [Number, String], default: null },
   canReview: { type: Boolean, default: false },
 })
+const { can } = usePermissions()
+const canCreateKlassenbuch = computed(() => can('klassenbuch.store'))
+const canShowKlassenbuch = computed(() => can('klassenbuch.show'))
 
 const form = useForm({
   gruppe_id: props.selectedGruppeId || props.gruppen[0]?.id || '',
@@ -53,6 +57,8 @@ const stats = computed(() => {
 })
 
 function createKlassenbuch() {
+  if (!canCreateKlassenbuch.value) return
+
   form.post(route('klassenbuch.store'), {
     preserveScroll: true,
   })
@@ -114,7 +120,7 @@ function statusClass(status) {
       </section>
 
       <section class="grid gap-6 xl:grid-cols-[minmax(320px,420px)_1fr]">
-        <form class="rounded border border-zinc-200 bg-white p-5 shadow-sm" @submit.prevent="createKlassenbuch">
+        <form v-if="canCreateKlassenbuch" class="rounded border border-zinc-200 bg-white p-5 shadow-sm" @submit.prevent="createKlassenbuch">
           <div class="flex items-center justify-between">
             <h2 class="text-lg font-semibold text-zinc-900">Klassenbuch anlegen</h2>
             <i class="las la-book-open text-2xl text-zbb"></i>
@@ -213,6 +219,7 @@ function statusClass(status) {
 
             <div v-if="klassenbuecher.length" class="divide-y divide-zinc-100">
               <Link
+                v-if="canShowKlassenbuch"
                 v-for="buch in klassenbuecher"
                 :key="buch.id"
                 :href="route('klassenbuch.show', buch.id)"

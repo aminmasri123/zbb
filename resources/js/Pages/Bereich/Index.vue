@@ -1,6 +1,6 @@
 <script setup>
     import AppLayout from '@/Layouts/AppLayout.vue';
-    import { ref, defineProps, watch } from 'vue';
+    import { computed, ref, defineProps, watch } from 'vue';
     import Swal from 'sweetalert2';
     import { router, Link, Head } from '@inertiajs/vue3';
     import axios from 'axios';
@@ -8,6 +8,7 @@
     import ModalDestroy from '@/Components/ModalDestroyForm.vue';
     import ModalCreate from '@/Pages/Bereich/ModalCreate.vue';
     import ModalEdit from '@/Pages/Bereich/ModalEdit.vue';
+    import { usePermissions } from '@/utils/permissions';
 
     let seite = 'bereich';
     let search = ref('');
@@ -16,6 +17,11 @@
     let isModalCreateOpen = ref(false);
     let isModalEditOpen = ref(false);
     let bereichToEdit = ref(null);
+    const { can } = usePermissions();
+    const canCreateBereich = computed(() => can('bereich.store'));
+    const canUpdateBereich = computed(() => can('bereich.update'));
+    const canDeleteBereich = computed(() => can('bereich.destroy'));
+    const canManageBereich = computed(() => canUpdateBereich.value || canDeleteBereich.value);
 
      // Definiere die Props direkt
     const props = defineProps({ bereiche: Object, }); // props wird hier definiert
@@ -23,6 +29,7 @@
 
 
     const openModalCreate = () => {
+        if (!canCreateBereich.value) return;
         isModalCreateOpen.value = true;
     };
 
@@ -32,6 +39,7 @@
 
 
     const openModalEdit = (bereich) => {
+        if (!canUpdateBereich.value) return;
         bereichToEdit.value = bereich;
         isModalEditOpen.value = true;
     };
@@ -105,6 +113,7 @@
 
 // Löschbestätigung anzeigen und Bereichsnamen speichern
 const confirmDelete = (bereich) => {
+    if (!canDeleteBereich.value) return;
     bereichToDelete.value = {
         name: bereich.name, // Speichere den Namen der Bereich
         id: bereich.id      // Speichere die ID der Bereich
@@ -136,6 +145,8 @@ const handleDelete = (bereichId) => {
 
 // Benutzer hinzufügen
 const addBereich = async (data) => {
+    if (!canCreateBereich.value) return;
+
     try {
         const response = await axios.post(route('bereich.store'), data);
 
@@ -183,17 +194,27 @@ export default {
         <template #header>{{$t('Bereiche')}}</template>
 
         <!-- Suchfeld -->
-        <div class="flex justify-around items-center mb-3">
-            <div @click="openModalCreate" class="flex items-center">
-                <i class="la la-plus bg-white border border-gray-300 rounded-l-md px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
-            </div>
+        <div class="flex items-stretch mb-3 overflow-hidden rounded-md border border-gray-300 bg-white shadow-sm">
+            <button
+                v-if="canCreateBereich"
+                type="button"
+                @click="openModalCreate"
+                class="flex w-14 items-center justify-center border-r border-gray-300 text-zbb transition hover:bg-zbb hover:text-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-inset"
+                title="Bereich anlegen"
+            >
+                <i class="la la-plus"></i>
+            </button>
 
             <label for="search" class="sr-only">{{$t('Suchen')}}</label>
-            <input id="search"v-model="search" type="text" class="border border-gray-300 text-gray-900 text-sm  focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5" placeholder="Suchen ..." />
+            <input id="search" v-model="search" type="text" class="min-w-0 flex-1 border-0 text-sm px-3 py-2.5 focus:ring-2 focus:ring-orange-400 focus:ring-inset" placeholder="Suchen ..." />
 
 
-            <Link :href="route('bereich.index')" class="flex items-center">
-                <i class="la la-refresh bg-white border border-gray-300 rounded-r-md px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
+            <Link
+                :href="route('bereich.index')"
+                class="flex w-14 items-center justify-center border-l border-gray-300 text-zbb transition hover:bg-zbb hover:text-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-inset"
+                title="Aktualisieren"
+            >
+                <i class="la la-refresh"></i>
             </Link>
         </div>
         <!-- Bereichausgabe -->
@@ -204,7 +225,7 @@ export default {
                         <th scope="col" class="border border-solid border-gray-300 px-6 py-3 w-10 text-center ">ID.</th>
                         <th scope="col" class="border border-solid border-gray-300 px-6 py-3 ">{{$t('Bezeichnung')}}</th>
                         <th scope="col" class="border border-solid border-gray-300 px-6 py-3 ">{{$t('Beschreibung')}}</th>
-                        <th scope="col" class="border w-10 border-solid border-gray-300 text-center px-6 py-3 ">*</th> <!-- Aktionen hinzufügen -->
+                        <th v-if="canManageBereich" scope="col" class="border w-10 border-solid border-gray-300 text-center px-6 py-3 ">*</th> <!-- Aktionen hinzufügen -->
 
                     </tr>
                 </thead>
@@ -220,9 +241,9 @@ export default {
                         <td class="border border-solid border-gray-300 px-6 py-4">
                             {{bereich.beschreibung}}
                         </td>
-                        <td class="w-10 border border-solid border-gray-300 px-6 py-4 text-center m-auto">
+                        <td v-if="canManageBereich" class="w-10 border border-solid border-gray-300 px-6 py-4 text-center m-auto">
                             <!-- Dropdown für Aktion -->
-                            <Dropdown >
+                            <Dropdown v-if="canManageBereich">
                                 <template #trigger>
                                     <button class=" items-center  text-sm leading-4 font-medium text-gray-500 bg-white hover:text-gray-700 focus:outline-none focus:bg-gray-50 active:bg-gray-50 transition ease-in-out duration-150">
                                         <span class="cursor-pointer">
@@ -233,10 +254,10 @@ export default {
 
                                 <template #content >
                                     <!-- Gefilterte Projektauswahl -->
-                                    <span class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"  @click="confirmDelete(bereich)">
+                                    <span v-if="canDeleteBereich" class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"  @click="confirmDelete(bereich)">
                                         {{ $t('Löschen') }} <i class="las la-trash-alt "></i>
                                     </span>
-                                    <span class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"  @click="openModalEdit(bereich)">
+                                    <span v-if="canUpdateBereich" class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100"  @click="openModalEdit(bereich)">
                                         {{ $t('Bearbeiten') }}  <i class="las la-edit  "></i>
                                     </span>
 
@@ -251,9 +272,11 @@ export default {
          <!-- Modal für neue Bereich -->
 
 
-        <ModalCreate :visible="isModalCreateOpen" @close="closeModalCreate" @add-bereich="addBereich"/>
-        <ModalEdit :visible="isModalEditOpen" :toEdit="bereichToEdit" @close="closeModalEdit" @updated="updateBereich"/>
+        <ModalCreate v-if="canCreateBereich" :visible="isModalCreateOpen" @close="closeModalCreate" @add-bereich="addBereich"/>
+        <ModalEdit v-if="canUpdateBereich" :visible="isModalEditOpen" :toEdit="bereichToEdit" @close="closeModalEdit" @updated="updateBereich"/>
         <!-- Modal für die Löschung des Bereiches-->
+        <template v-if="canDeleteBereich">
         <ModalDestroy v-if="showModalLöschen" @delete="handleDelete" @close="showModalLöschen = false" :seite="seite"  :toDelete="bereichToDelete"></ModalDestroy>
+        </template>
     </app-layout>
 </template>
