@@ -74,6 +74,7 @@ const filteredDokumente = computed(() => {
       dokument.einsatzbereich,
       dokument.version,
       dokument.beschreibung,
+      dokument.export_permission,
       ...(dokument.kategorien || []).map((kategorie) => kategorie.name),
       ...(dokument.projekte || []).map((projekt) => projekt.name),
       ...(dokument.bereiche || []).map((bereich) => bereich.name),
@@ -420,6 +421,9 @@ const token = (key) => '${' + key + '}';
                   <td class="px-3 py-2 align-top">
                     <div class="font-medium text-gray-800">{{ dokument.name }}</div>
                     <div class="break-words text-xs text-gray-500">{{ dokument.dateipfadName || dokument.dateipfad }}</div>
+                    <div v-if="dokument.export_permission" class="mt-1 break-words text-[11px] font-medium text-zbb">
+                      {{ dokument.export_permission }}
+                    </div>
                   </td>
                   <td class="px-3 py-2 align-top">{{ dokument.typ }} / {{ dokument.kontext }}</td>
                   <td class="px-3 py-2 align-top">

@@ -410,17 +410,17 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::delete('/gruppe/{id}', [GruppeController::class, 'destroy'])->name('gruppe.destroy');
     Route::post('/gruppe/anlegen', [GruppeController::class, 'store'])->name('gruppe.store');
     Route::get('/gruppe/{gruppe}/export/serienbrief/{dokument}', [ExportWordController::class, 'gruppeSerienbrief'])->name('gruppe.export.serienbrief');
-    Route::get('/gruppe/{gruppe}/bop-export/namensschilder', [BopGruppeExportController::class, 'namensschilder'])->name('gruppe.bop.export.namensschilder');
-    Route::get('/gruppe/{gruppe}/bop-export/anwesenheitsliste', [BopGruppeExportController::class, 'anwesenheitsliste'])->name('gruppe.bop.export.anwesenheitsliste');
-    Route::get('/gruppe/{gruppe}/bop-export/hausordnung', [BopGruppeExportController::class, 'hausordnung'])->name('gruppe.bop.export.hausordnung');
-    Route::get('/gruppe/{gruppe}/bop-export/berufsfelderprobung', [BopGruppeExportController::class, 'berufsfelderprobung'])->name('gruppe.bop.export.berufsfelderprobung');
-    Route::get('/gruppe/{gruppe}/bop-export/auswertungsbogen-bop', [BopGruppeExportController::class, 'auswertungsbogenBop'])->name('gruppe.bop.export.auswertungsbogen-bop');
-    Route::get('/gruppe/{gruppe}/bop-export/toilettennutzungsliste', [BopGruppeExportController::class, 'toilettennutzungsliste'])->name('gruppe.bop.export.toilettennutzungsliste');
-    Route::get('/gruppe/{gruppe}/bop-export/zertifikat-pobo', [BopGruppeExportController::class, 'zertifikatPobo'])->name('gruppe.bop.export.zertifikat-pobo');
-    Route::get('/gruppe/{gruppe}/bop-export/teilnahme-pobo', [BopGruppeExportController::class, 'teilnahmePobo'])->name('gruppe.bop.export.teilnahme-pobo');
-    Route::get('/gruppe/{gruppe}/bop-export/zertifikat-pa', [BopGruppeExportController::class, 'zertifikatPa'])->name('gruppe.bop.export.zertifikat-pa');
-    Route::get('/gruppe/{gruppe}/bop-export/teilnahme-pa', [BopGruppeExportController::class, 'teilnahmePa'])->name('gruppe.bop.export.teilnahme-pa');
-    Route::get('/gruppe/{gruppe}/bop-export/auswertungsbogen-pa', [BopGruppeExportController::class, 'auswertungsbogenPa'])->name('gruppe.bop.export.auswertungsbogen-pa');
+    Route::get('/gruppe/{gruppe}/bop-export/namensschilder', [BopGruppeExportController::class, 'namensschilder'])->name('gruppe.bop.export.namensschilder')->can('gruppe.bop.export.namensschilder');
+    Route::get('/gruppe/{gruppe}/bop-export/anwesenheitsliste', [BopGruppeExportController::class, 'anwesenheitsliste'])->name('gruppe.bop.export.anwesenheitsliste')->can('anwesenheit.export');
+    Route::get('/gruppe/{gruppe}/bop-export/hausordnung', [BopGruppeExportController::class, 'hausordnung'])->name('gruppe.bop.export.hausordnung')->can('gruppe.bop.export.hausordnung');
+    Route::get('/gruppe/{gruppe}/bop-export/berufsfelderprobung', [BopGruppeExportController::class, 'berufsfelderprobung'])->name('gruppe.bop.export.berufsfelderprobung')->can('gruppe.bop.export.berufsfelderprobung');
+    Route::get('/gruppe/{gruppe}/bop-export/auswertungsbogen-bop', [BopGruppeExportController::class, 'auswertungsbogenBop'])->name('gruppe.bop.export.auswertungsbogen-bop')->can('gruppe.bop.export.auswertungsbogen-bop');
+    Route::get('/gruppe/{gruppe}/bop-export/toilettennutzungsliste', [BopGruppeExportController::class, 'toilettennutzungsliste'])->name('gruppe.bop.export.toilettennutzungsliste')->can('gruppe.bop.export.toilettennutzungsliste');
+    Route::get('/gruppe/{gruppe}/bop-export/zertifikat-pobo', [BopGruppeExportController::class, 'zertifikatPobo'])->name('gruppe.bop.export.zertifikat-pobo')->can('gruppe.bop.export.zertifikat-pobo');
+    Route::get('/gruppe/{gruppe}/bop-export/teilnahme-pobo', [BopGruppeExportController::class, 'teilnahmePobo'])->name('gruppe.bop.export.teilnahme-pobo')->can('gruppe.bop.export.teilnahme-pobo');
+    Route::get('/gruppe/{gruppe}/bop-export/zertifikat-pa', [BopGruppeExportController::class, 'zertifikatPa'])->name('gruppe.bop.export.zertifikat-pa')->can('gruppe.bop.export.zertifikat-pa');
+    Route::get('/gruppe/{gruppe}/bop-export/teilnahme-pa', [BopGruppeExportController::class, 'teilnahmePa'])->name('gruppe.bop.export.teilnahme-pa')->can('gruppe.bop.export.teilnahme-pa');
+    Route::get('/gruppe/{gruppe}/bop-export/auswertungsbogen-pa', [BopGruppeExportController::class, 'auswertungsbogenPa'])->name('gruppe.bop.export.auswertungsbogen-pa')->can('gruppe.bop.export.auswertungsbogen-pa');
     Route::put('/gruppe/{gruppe}/potenzialanalyse/teilnehmer/{personen}', [PotenzialanalyseController::class, 'updateTeilnehmer'])->name('potenzialanalyse.gruppe.teilnehmer.update')->middleware(['module:participant_management', 'projectFeature:participant_management', 'projectFeature:potential_analysis']);
 
     //GruppeHasTeilnehmer

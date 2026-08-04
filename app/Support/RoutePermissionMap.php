@@ -53,6 +53,7 @@ class RoutePermissionMap
         'notifications.read' => 'notifications.readAll',
         'notifications.unread' => 'notifications.readAll',
         'notifications.destroy' => 'notifications.readAll',
+        'gruppe.export.serienbrief' => [],
         'anwesenheit.store' => 'anwesenheit.manage',
         'anwesenheit.update' => 'anwesenheit.manage',
         'gruppeHasPersonen.destroy' => 'gruppeHasTeilnehmer.destroyTeilnehmer',

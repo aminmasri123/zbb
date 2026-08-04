@@ -75,6 +75,22 @@ const statusFarbe = (statusName) => {
     : { backgroundColor: '#d1d5db' };
 }
 
+const fehltElterneinverstaendnis = (teilnehmer) => {
+  if (teilnehmer.parental_consent_received === false) {
+    return true
+  }
+
+  if (teilnehmer.parental_consent_received === true) {
+    return false
+  }
+
+  if (!Array.isArray(teilnehmer.schueler) || teilnehmer.schueler.length === 0) {
+    return false
+  }
+
+  return teilnehmer.schueler.some((schueler) => schueler.eee !== true && schueler.eee !== 1)
+}
+
 
 
 
@@ -303,8 +319,17 @@ const geheZuAktuellerWoche = () => {
   selectedWocheIndex.value = index >= 0 ? index : 0
 }
 
+const canExportDokument = (dokument) => {
+  if (dokument.export_permission) {
+    return can(dokument.export_permission)
+  }
+
+  return can('gruppe.export.serienbrief')
+}
+
 const exportVorlagen = computed(() =>
   (props.gruppe?.projekt?.dokumente || []).filter((dokument) =>
+    canExportDokument(dokument) &&
     dokument.dateipfad &&
     dokument.pivot?.gruppen_export &&
     dokument.pivot?.serienbrief
@@ -1809,7 +1834,17 @@ const exportMitTag = async () => {
                 <td class="sticky left-0 z-10 border bg-white px-4 py-3 font-medium text-gray-800">
                   <div class="flex items-start justify-between gap-2">
                     <div class="min-w-0">
-                      <p class="truncate">{{ t.vorname }} {{ t.nachname }}</p>
+                      <p class="flex min-w-0 items-center gap-2">
+                        <span class="truncate">{{ t.vorname }} {{ t.nachname }}</span>
+                        <span
+                          v-if="fehltElterneinverstaendnis(t)"
+                          class="shrink-0 text-xl font-black leading-none text-red-600"
+                          title="Elterneinverstaendniserklaerung fehlt"
+                          aria-label="Elterneinverstaendniserklaerung fehlt"
+                        >
+                          ×
+                        </span>
+                      </p>
                       <span class="text-sm text-zbb">{{ formatTime(t.pivot?.zeitgeplant?.startzeit) }} - {{formatTime(t.pivot?.zeitgeplant?.endzeit)}}</span>
                     </div>
                     <button

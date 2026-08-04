@@ -20,6 +20,7 @@ class Dokumente extends Model
         'dateipfadName',
         'beschreibung',
         'aktiv',
+        'export_permission',
     ];
 
     protected $casts = [

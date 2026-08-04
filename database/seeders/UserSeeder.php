@@ -903,6 +903,7 @@ class UserSeeder extends Seeder
             27 => ['name' => 'Bestellungen', 'beschreibung' => 'Materialanforderungen, Freigaben und Bestellwesen.'],
             28 => ['name' => 'Lager', 'beschreibung' => 'Interne Lagerverwaltung fuer Verbrauchsmaterial und Betriebsmittel.'],
             29 => ['name' => 'IT-Service', 'beschreibung' => 'Helpdesk, IT-Tickets und IT-Geraeteverwaltung.'],
+            30 => ['name' => 'Dokumentenexporte', 'beschreibung' => 'Einzelberechtigungen fuer den Export bestimmter Dokumentvorlagen.'],
         ];
     }
 

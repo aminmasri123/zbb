@@ -415,6 +415,7 @@ class ExportWordController extends Controller
     public function gruppeSerienbrief(Request $request, Gruppe $gruppe, Dokumente $dokument)
     {
         abort_unless($this->canUseGroup(auth()->user(), $gruppe), 403);
+        abort_unless($this->canExportDocument(auth()->user(), $dokument), 403);
 
         $projekt = $gruppe->projekt()->with(['dokumente', 'dokumentKategorien.dokumente'])->firstOrFail();
         $isAssigned = $this->isAssignedForGroupExport($projekt, $dokument);
@@ -734,6 +735,19 @@ class ExportWordController extends Controller
             ->where('dokument_has_kategories.gruppen_export', true)
             ->where('dokument_has_kategories.serienbrief', true)
             ->exists();
+    }
+
+    private function canExportDocument(?User $user, Dokumente $dokument): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        if ($dokument->export_permission) {
+            return $user->can($dokument->export_permission);
+        }
+
+        return $user->can('gruppe.export.serienbrief');
     }
 
     private function requestedExportFormat(Request $request, Dokumente $dokument): string

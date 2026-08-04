@@ -169,7 +169,13 @@ class GruppeHasTeilnehmerController extends Controller
         $already = array_values(array_diff($ids, $new));
 
         // ✅ Rückgabe
-        $addedTeilnehmer = Personen::whereIn('id', $new)->get(['id', 'vorname', 'nachname', 'geschlecht']);
+        $addedTeilnehmer = Personen::with('schueler:id,person_id,eee')
+            ->whereIn('id', $new)
+            ->get(['id', 'vorname', 'nachname', 'geschlecht'])
+            ->each(fn (Personen $person) => $person->setAttribute(
+                'parental_consent_received',
+                $this->parentalConsentReceived($person)
+            ));
         $alreadyTeilnehmer = Personen::whereIn('id', $already)->get(['id', 'vorname', 'nachname', 'geschlecht']);
 
         return response()->json([
@@ -229,6 +235,10 @@ class GruppeHasTeilnehmerController extends Controller
                 }
 
                 $teilnehmer = clone $eintrag->teilnehmer;
+                $teilnehmer->setAttribute(
+                    'parental_consent_received',
+                    $this->parentalConsentReceived($teilnehmer)
+                );
                 $pivot = clone $eintrag;
                 $pivot->unsetRelation('teilnehmer');
                 if (! $canReadAttendance) {
@@ -264,6 +274,7 @@ class GruppeHasTeilnehmerController extends Controller
                 $direkteDokumente
                     ->concat($kategorieDokumente)
                     ->filter(fn ($dokument) => $this->dokumentSichtbarFuerGruppe($dokument, $gruppe))
+                    ->filter(fn ($dokument) => $this->dokumentExportErlaubt($user, $dokument))
                     ->unique('id')
                     ->values()
             );
@@ -384,6 +395,15 @@ class GruppeHasTeilnehmerController extends Controller
         return $user?->person_id ?? $user?->person?->id;
     }
 
+    private function parentalConsentReceived(Personen $person): ?bool
+    {
+        if (! $person->relationLoaded('schueler') || $person->schueler->isEmpty()) {
+            return null;
+        }
+
+        return $person->schueler->every(fn ($schueler) => (bool) $schueler->eee);
+    }
+
     private function dokumentSichtbarFuerGruppe($dokument, Gruppe $gruppe): bool
     {
         if ($dokument->aktiv === false) {
@@ -397,6 +417,19 @@ class GruppeHasTeilnehmerController extends Controller
         $bereichIds = $dokument->bereiche?->pluck('id') ?? collect();
 
         return $bereichIds->isEmpty() || $bereichIds->contains((int) $gruppe->bereich_id);
+    }
+
+    private function dokumentExportErlaubt($user, $dokument): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        if ($dokument->export_permission) {
+            return $user->can($dokument->export_permission);
+        }
+
+        return $user->can('gruppe.export.serienbrief');
     }
 
     private function potenzialanalysePayload(Gruppe $gruppe): array
@@ -741,6 +774,16 @@ class GruppeHasTeilnehmerController extends Controller
         }
 
         return array_values(array_filter($items, function (array $item): bool {
+            $groupExportPermissions = [
+                'bop-pa-zertifikat-gruppe' => 'gruppe.bop.export.zertifikat-pa',
+                'bop-pa-teilnahmebescheinigung-gruppe' => 'gruppe.bop.export.teilnahme-pa',
+                'bop-pa-auswertungsbogen-gruppe' => 'gruppe.bop.export.auswertungsbogen-pa',
+            ];
+
+            if (isset($groupExportPermissions[$item['id']])) {
+                return auth()->user()?->can($groupExportPermissions[$item['id']]) ?? false;
+            }
+
             if ($item['id'] === 'bop-pa-auswertungsbogen') {
                 return auth()->user()?->can('dokumente.schule.export') ?? false;
             }
@@ -1045,10 +1088,23 @@ class GruppeHasTeilnehmerController extends Controller
             'bop-ordner-anlegen',
             'bop-auswertung-ordner',
         ];
+        $groupDocumentPermissions = [
+            'bop-gruppe-namensschilder' => 'gruppe.bop.export.namensschilder',
+            'bop-gruppe-hausordnung' => 'gruppe.bop.export.hausordnung',
+            'bop-gruppe-berufsfelderprobung' => 'gruppe.bop.export.berufsfelderprobung',
+            'bop-gruppe-auswertungsbogen' => 'gruppe.bop.export.auswertungsbogen-bop',
+            'bop-gruppe-toilettennutzungsliste' => 'gruppe.bop.export.toilettennutzungsliste',
+            'bop-gruppe-zertifikat-pobo' => 'gruppe.bop.export.zertifikat-pobo',
+            'bop-gruppe-teilnahme-pobo' => 'gruppe.bop.export.teilnahme-pobo',
+        ];
 
-        return array_values(array_filter($items, function (array $item) use ($accountingItems, $selectionPermissions, $assignmentPermissions, $schoolExportItems, $contactDocumentItems): bool {
+        return array_values(array_filter($items, function (array $item) use ($accountingItems, $selectionPermissions, $assignmentPermissions, $schoolExportItems, $contactDocumentItems, $groupDocumentPermissions): bool {
             if (in_array($item['id'], $accountingItems, true)) {
                 return auth()->user()?->can('anwesenheit.abrechnung') ?? false;
+            }
+
+            if (isset($groupDocumentPermissions[$item['id']])) {
+                return auth()->user()?->can($groupDocumentPermissions[$item['id']]) ?? false;
             }
 
             if ($item['id'] === 'bop-gruppe-anwesenheitsliste') {

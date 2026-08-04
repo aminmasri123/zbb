@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
+use Spatie\Permission\PermissionRegistrar;
 
 class DokumenteController extends Controller
 {
@@ -114,6 +115,8 @@ class DokumenteController extends Controller
                     ? collect($validated['bereich_ids'] ?? [])->unique()->values()->all()
                     : []
             );
+
+            $this->ensureDocumentExportPermission($dokument);
         });
 
         return redirect()->route('dokumente.index')->with('success', 'Export-Vorlage wurde angelegt.');
@@ -208,6 +211,8 @@ class DokumenteController extends Controller
                     ? collect($validated['bereich_ids'] ?? [])->unique()->values()->all()
                     : []
             );
+
+            $this->ensureDocumentExportPermission($dokument);
         });
 
         if ($storedPath && $this->isManagedUploadPath($oldPath)) {
@@ -331,6 +336,65 @@ class DokumenteController extends Controller
         if (!$user?->can('projekt.update') && !$user?->can('projekt.store') && !$user?->can('projekt.index')) {
             abort(403);
         }
+    }
+
+    private function ensureDocumentExportPermission(Dokumente $dokument): string
+    {
+        $permissionName = $dokument->export_permission ?: 'dokumente.export.' . $dokument->id;
+        $categoryId = $this->documentExportCategoryId();
+
+        $permissionId = DB::table('permissions')
+            ->where('name', $permissionName)
+            ->where('guard_name', 'web')
+            ->value('id');
+
+        $payload = [
+            'berechtigungskategorie_id' => $categoryId,
+            'beschreibung' => 'Erlaubt den Export der Dokumentvorlage "' . $dokument->name . '".',
+            'updated_at' => now(),
+        ];
+
+        if ($permissionId) {
+            DB::table('permissions')->where('id', $permissionId)->update($payload);
+        } else {
+            $permissionId = DB::table('permissions')->insertGetId([
+                'name' => $permissionName,
+                'guard_name' => 'web',
+                'created_at' => now(),
+            ] + $payload);
+        }
+
+        if ($dokument->export_permission !== $permissionName) {
+            $dokument->forceFill(['export_permission' => $permissionName])->save();
+        }
+
+        $administratorRoleId = DB::table('roles')->where('name', 'Administrator')->value('id');
+        if ($administratorRoleId && $permissionId) {
+            DB::table('role_has_permissions')->insertOrIgnore([
+                'permission_id' => $permissionId,
+                'role_id' => $administratorRoleId,
+            ]);
+        }
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        return $permissionName;
+    }
+
+    private function documentExportCategoryId(): int
+    {
+        $categoryId = DB::table('berechtigungskategories')
+            ->where('name', 'Dokumentenexporte')
+            ->value('id');
+
+        if ($categoryId) {
+            return (int) $categoryId;
+        }
+
+        return (int) DB::table('berechtigungskategories')->insertGetId([
+            'name' => 'Dokumentenexporte',
+            'beschreibung' => 'Einzelberechtigungen fuer den Export bestimmter Dokumentvorlagen.',
+        ]);
     }
 
     private function validateTypMatchesExtension(string $typ, string $extension): void
