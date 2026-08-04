@@ -1288,19 +1288,63 @@ const generierePaBerichtstext = async () => {
   planePotenzialanalyseSpeichern({ personenId: teilnehmer.id, sofort: true })
 }
 
-const paBerichtHatInhalt = (personenId) => {
-  if (!personenId) return false
+const paBewertungsSetHatInhalt = (entries) => {
+  if (!entries || typeof entries !== 'object') return false
 
-  const bericht = paEintrag(personenId).bericht || defaultPaBericht()
-
-  return (
-    ['staerken', 'entwicklungsfelder', 'empfehlung', 'bericht_text'].some((feld) => bereinigeText(bericht[feld])) ||
-    Boolean(bericht.fertiggestellt_at) ||
-    (bericht.status && bericht.status !== 'entwurf')
+  return Object.values(entries).some((entry) =>
+    entry &&
+    (
+      entry.bewertung !== null && entry.bewertung !== undefined && entry.bewertung !== '' ||
+      bereinigeText(entry.bemerkung)
+    )
   )
 }
 
-const loeschePaBericht = async () => {
+const paUebungsSetHatInhalt = (entries) => {
+  if (!entries || typeof entries !== 'object') return false
+
+  return Object.values(entries).some((entry) => {
+    if (!entry) return false
+
+    const zeit = Number(entry.zeit ?? 0)
+    const zeitMin = Number(entry.zeit_min ?? 0)
+    const zeitSec = Number(entry.zeit_sec ?? 0)
+
+    return (
+      entry.punkte !== null && entry.punkte !== undefined && entry.punkte !== '' ||
+      zeit > 0 ||
+      zeitMin > 0 ||
+      zeitSec > 0
+    )
+  })
+}
+
+const paBerichtHatInhalt = (bericht) => {
+  const daten = bericht || defaultPaBericht()
+
+  return (
+    ['staerken', 'entwicklungsfelder', 'empfehlung', 'bericht_text'].some((feld) => bereinigeText(daten[feld])) ||
+    Boolean(daten.fertiggestellt_at) ||
+    (daten.status && daten.status !== 'entwurf')
+  )
+}
+
+const paTeilnehmerHatDaten = (personenId) => {
+  if (!personenId) return false
+
+  const eintrag = paEintrag(personenId)
+
+  return (
+    paUebungsSetHatInhalt(eintrag.uebungen) ||
+    paBewertungsSetHatInhalt(eintrag.selbsteinschaetzung) ||
+    paBewertungsSetHatInhalt(eintrag.kompetenzen) ||
+    paBewertungsSetHatInhalt(eintrag.beurteilungen) ||
+    paBewertungsSetHatInhalt(eintrag.selbsteinschaetzungen) ||
+    paBerichtHatInhalt(eintrag.bericht)
+  )
+}
+
+const loeschePaTeilnehmerDaten = async () => {
   if (!canEditPotenzialanalyse.value) return
 
   const teilnehmer = selectedPaTeilnehmer.value
@@ -1315,15 +1359,15 @@ const loeschePaBericht = async () => {
     await Swal.fire({
       icon: 'info',
       title: 'Bitte kurz warten',
-      text: 'Der Bericht wird gerade gespeichert. Danach kann er geloescht werden.',
+      text: 'Die PA-Daten werden gerade gespeichert. Danach koennen sie geloescht werden.',
     })
     return
   }
 
   const bestaetigung = await Swal.fire({
     icon: 'warning',
-    title: 'Bericht loeschen?',
-    text: `Der Potenzialanalysebericht von ${teilnehmer.vorname} ${teilnehmer.nachname} wird geloescht.`,
+    title: 'PA-Daten loeschen?',
+    text: `Bericht, Kompetenzen, Uebungen und Selbsteinschaetzung von ${teilnehmer.vorname} ${teilnehmer.nachname} werden geloescht.`,
     showCancelButton: true,
     confirmButtonText: 'Ja, loeschen',
     cancelButtonText: 'Abbrechen',
@@ -1347,15 +1391,18 @@ const loeschePaBericht = async () => {
   paAutoSaveStatus.value = 'saving'
 
   try {
-    const response = await axios.delete(route('potenzialanalyse.gruppe.teilnehmer.bericht.destroy', {
+    const response = await axios.delete(route('potenzialanalyse.gruppe.teilnehmer.daten.destroy', {
       gruppe: props.gruppe.id,
       personen: teilnehmer.id,
     }))
 
     paTeilnehmerDaten.value[key] = {
-      ...(paTeilnehmerDaten.value[key] || {}),
-      ...(response.data?.teilnehmer || {}),
-      bericht: response.data?.teilnehmer?.bericht || defaultPaBericht(),
+      uebungen: {},
+      selbsteinschaetzung: {},
+      kompetenzen: {},
+      beurteilungen: {},
+      selbsteinschaetzungen: {},
+      bericht: defaultPaBericht(),
     }
     ensurePaEintrag(teilnehmer.id)
     paAutoSaveStatus.value = 'saved'
@@ -1363,7 +1410,7 @@ const loeschePaBericht = async () => {
     await Swal.fire({
       icon: 'success',
       title: 'Geloescht',
-      text: response.data?.message || 'Potenzialanalysebericht wurde geloescht.',
+      text: response.data?.message || 'Potenzialanalyse-Daten wurden geloescht.',
       timer: 1600,
       showConfirmButton: false,
     })
@@ -1373,7 +1420,7 @@ const loeschePaBericht = async () => {
     await Swal.fire({
       icon: 'error',
       title: 'Fehler',
-      text: error.response?.data?.message || 'Potenzialanalysebericht konnte nicht geloescht werden.',
+      text: error.response?.data?.message || 'Potenzialanalyse-Daten konnten nicht geloescht werden.',
     })
   } finally {
     paSaving.value = paSaveInFlight.size > 0
@@ -2119,11 +2166,25 @@ const exportMitTag = async () => {
 
           <div v-if="selectedPaTeilnehmer" class="space-y-2">
             <div class="rounded border border-gray-200 bg-gray-50 px-3 py-2">
-              <h4 class="text-sm font-semibold text-gray-800">
-                {{ selectedPaTeilnehmer.vorname }} {{ selectedPaTeilnehmer.nachname }}
-              </h4>
-              <p class="text-xs text-gray-500">Selbsteinschaetzung, Uebungsergebnisse, Kompetenzbewertung und Bericht</p>
-              <p v-if="!canEditPotenzialanalyse" class="mt-1 text-xs font-semibold text-amber-700">Nur Leserechte fuer Potenzialanalyse.</p>
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <h4 class="truncate text-sm font-semibold text-gray-800">
+                    {{ selectedPaTeilnehmer.vorname }} {{ selectedPaTeilnehmer.nachname }}
+                  </h4>
+                  <p class="text-xs text-gray-500">Selbsteinschaetzung, Uebungsergebnisse, Kompetenzbewertung und Bericht</p>
+                  <p v-if="!canEditPotenzialanalyse" class="mt-1 text-xs font-semibold text-amber-700">Nur Leserechte fuer Potenzialanalyse.</p>
+                </div>
+                <Button
+                  v-if="canEditPotenzialanalyse"
+                  label="PA-Daten loeschen"
+                  icon="pi pi-trash"
+                  severity="danger"
+                  outlined
+                  size="small"
+                  :disabled="paSaving || !paTeilnehmerHatDaten(selectedPaTeilnehmer.id)"
+                  @click="loeschePaTeilnehmerDaten"
+                />
+              </div>
             </div>
 
             <div class="rounded border border-gray-200 bg-white px-2 pt-2">
@@ -2334,14 +2395,6 @@ const exportMitTag = async () => {
                     outlined
                     :disabled="!canEditPotenzialanalyse"
                     @click="generierePaBerichtstext"
-                  />
-                  <Button
-                    label="Bericht loeschen"
-                    icon="pi pi-trash"
-                    severity="danger"
-                    outlined
-                    :disabled="!canEditPotenzialanalyse || paSaving || !paBerichtHatInhalt(selectedPaTeilnehmer.id)"
-                    @click="loeschePaBericht"
                   />
                   <Select
                     v-model="paEintrag(selectedPaTeilnehmer.id).bericht.status"

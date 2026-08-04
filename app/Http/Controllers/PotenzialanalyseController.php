@@ -223,22 +223,30 @@ class PotenzialanalyseController extends Controller
         ]);
     }
 
-    public function destroyTeilnehmerBericht(Gruppe $gruppe, Personen $personen)
+    public function destroyTeilnehmerDaten(Gruppe $gruppe, Personen $personen)
     {
         $gruppe->loadMissing('projekt');
         abort_unless($this->canUseGroup(auth()->user(), $gruppe), 403);
         $this->ensureProjektUsesPotenzialanalyse($gruppe->projekt);
         $this->ensureTeilnehmerInGroup($gruppe, $personen);
 
-        $deleted = PotenzialanalyseBericht::query()
-            ->where('gruppe_id', $gruppe->id)
-            ->where('personen_id', $personen->id)
-            ->delete();
+        $deleted = DB::transaction(function () use ($gruppe, $personen): int {
+            $filters = [
+                'gruppe_id' => $gruppe->id,
+                'personen_id' => $personen->id,
+            ];
+
+            return PotenzialanalyseBericht::query()->where($filters)->delete()
+                + PotenzialanalyseKompetenzbewertung::query()->where($filters)->delete()
+                + PotenzialanalyseUebungErgebnis::query()->where($filters)->delete()
+                + PotenzialanalyseBeurteilung::query()->where($filters)->delete()
+                + PotenzialanalyseSelbsteinschaetzung::query()->where($filters)->delete();
+        });
 
         return response()->json([
             'message' => $deleted > 0
-                ? 'Potenzialanalysebericht wurde geloescht.'
-                : 'Es war kein Potenzialanalysebericht vorhanden.',
+                ? 'Potenzialanalyse-Daten wurden geloescht.'
+                : 'Es waren keine Potenzialanalyse-Daten vorhanden.',
             'teilnehmer' => $this->teilnehmerPayload($gruppe, $personen->id),
         ]);
     }
