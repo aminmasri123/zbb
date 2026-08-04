@@ -1735,6 +1735,42 @@ const exportMitTag = async () => {
           </div>
         </Dialog>
 
+        <div v-if="!canReadAttendance" class="rounded border border-gray-200 bg-white p-4">
+          <div class="mb-3 flex items-center justify-between gap-3">
+            <h3 class="font-semibold text-gray-700">Teilnehmer</h3>
+            <span class="rounded bg-gray-100 px-2.5 py-1 text-xs text-gray-600">
+              {{ gruppenTeilnehmer.length }}
+            </span>
+          </div>
+
+          <div v-if="gruppenTeilnehmer.length" class="divide-y divide-gray-100">
+            <div
+              v-for="t in gruppenTeilnehmer"
+              :key="t.id"
+              class="flex items-center justify-between gap-3 py-2"
+            >
+              <div class="min-w-0">
+                <p class="flex min-w-0 items-center gap-2 font-medium text-gray-800">
+                  <span class="truncate">{{ t.vorname }} {{ t.nachname }}</span>
+                  <span
+                    v-if="fehltElterneinverstaendnis(t)"
+                    class="shrink-0 text-xl font-black leading-none text-red-600"
+                    title="Elterneinverstaendniserklaerung fehlt"
+                    aria-label="Elterneinverstaendniserklaerung fehlt"
+                  >
+                    ×
+                  </span>
+                </p>
+                <span class="text-sm text-zbb">{{ formatTime(t.pivot?.zeitgeplant?.startzeit || props.gruppe.startzeit) }} - {{ formatTime(t.pivot?.zeitgeplant?.endzeit || props.gruppe.endzeit) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div v-else class="rounded border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-400">
+            Keine Teilnehmer in dieser Gruppe
+          </div>
+        </div>
+
         <div v-if="canReadAttendance" class="space-y-4">
         <!-- Anwesenheitsstatuten Agenda-->
         <div class="flex items-center gap-6 bg-zbbTrp border p-3 rounded">

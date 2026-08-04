@@ -497,7 +497,15 @@
                                                 <div class="flex flex-row px-8 py-2">
                                                     <div class="basis-1/6">{{ permission.id}}</div>
                                                     <div class="basis-4/6 ">
-                                                        <abbr :title="permission.beschreibung" class=" no-underline">{{ permission.name }}</abbr>
+                                                        <abbr :title="permission.beschreibung" class="block no-underline">
+                                                            <span class="font-medium text-gray-800">{{ permission.display_name || permission.name }}</span>
+                                                            <span
+                                                                v-if="permission.technical_name && permission.technical_name !== permission.display_name"
+                                                                class="mt-0.5 block text-xs text-gray-500"
+                                                            >
+                                                                {{ permission.technical_name }}
+                                                            </span>
+                                                        </abbr>
                                                     </div>
                                                     <div class="basis-1/6">
                                                         <div class="flex items-center">

@@ -465,9 +465,78 @@ class ExportWordController extends Controller
             return back()->with('error', 'Dieser Vorlagentyp wird fuer Gruppen-Exporte noch nicht unterstuetzt.');
         }
 
+        $groupExportMode = $dokument->gruppen_export_modus
+            ?: ((($dokument->kontext ?? null) === 'gruppe' || $this->wordTemplateSupportsSingleGroupDocument($templateFile)) ? 'eine_datei' : 'einzelne_dateien');
+
+        if ($groupExportMode === 'kopf') {
+            return $this->downloadWordGroupDocument($templateFile, $gruppe, $projekt, $dokument, collect(), $format, false);
+        }
+
+        if ($groupExportMode === 'eine_datei') {
+            return $this->downloadWordGroupDocument($templateFile, $gruppe, $projekt, $dokument, $teilnehmer, $format, true);
+        }
+
         return $format === 'pdf'
             ? $this->downloadWordPdfZip($templateFile, $gruppe, $projekt, $dokument, $teilnehmer)
             : $this->downloadWordDocxZip($templateFile, $gruppe, $projekt, $dokument, $teilnehmer);
+    }
+
+    private function wordTemplateSupportsSingleGroupDocument(string $templateFile): bool
+    {
+        try {
+            $processor = new TemplateProcessor($templateFile);
+            $variables = collect($processor->getVariables())->map(fn ($value) => strtolower((string) $value));
+        } catch (Throwable) {
+            return false;
+        }
+
+        return $variables->contains('teilnehmer_tabelle')
+            || $variables->contains(fn ($variable) => preg_match('/^(nr|nummer|vorname|nachname|name|voller_name|geburtsdatum|geschlecht|anrede|kundennummer|strasse|hausnummer|plz|stadt|ort|adresse|email|telefon)\d+$/', $variable) === 1);
+    }
+
+    private function downloadWordGroupDocument(string $templateFile, Gruppe $gruppe, Projekt $projekt, Dokumente $dokument, $teilnehmer, string $format, bool $fillParticipants = true)
+    {
+        $tempDir = storage_path('app/temp');
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0775, true);
+        }
+
+        $extension = $format === 'pdf' ? 'pdf' : 'docx';
+        $docPath = $tempDir . DIRECTORY_SEPARATOR . uniqid('gruppe_word_', true) . '.docx';
+        $outputPath = $format === 'pdf'
+            ? $tempDir . DIRECTORY_SEPARATOR . uniqid('gruppe_word_', true) . '.pdf'
+            : $docPath;
+
+        try {
+            $processor = new TemplateProcessor($templateFile);
+            $this->fillGroupTemplate($processor, $gruppe, $projekt, $teilnehmer, $fillParticipants);
+            $processor->saveAs($docPath);
+
+            if ($format === 'pdf') {
+                WordSettings::setPdfRendererName(WordSettings::PDF_RENDERER_DOMPDF);
+                WordSettings::setPdfRendererPath(base_path('vendor/dompdf/dompdf'));
+                $phpWord = WordIOFactory::load($docPath);
+                WordIOFactory::createWriter($phpWord, 'PDF')->save($outputPath);
+
+                register_shutdown_function(static function () use ($docPath) {
+                    if (file_exists($docPath)) {
+                        @unlink($docPath);
+                    }
+                });
+            }
+        } catch (Throwable $exception) {
+            foreach ([$docPath, $outputPath] as $path) {
+                if ($path && file_exists($path)) {
+                    @unlink($path);
+                }
+            }
+
+            return back()->with('error', 'Gruppenexport konnte nicht erstellt werden: ' . $exception->getMessage());
+        }
+
+        $filename = $this->safeFileName('Export_' . $projekt->name . '_' . ($gruppe->bereich?->name ?? 'Gruppe') . '_' . $this->formatDate($gruppe->anfangsdatum) . '_bis_' . $this->formatDate($gruppe->enddatum) . '_' . $dokument->name) . '.' . $extension;
+
+        return response()->download($outputPath, $filename)->deleteFileAfterSend(true);
     }
 
     private function downloadWordDocxZip(string $templateFile, Gruppe $gruppe, Projekt $projekt, Dokumente $dokument, $teilnehmer)
@@ -601,6 +670,81 @@ class ExportWordController extends Controller
         }
     }
 
+    private function fillGroupTemplate(TemplateProcessor $processor, Gruppe $gruppe, Projekt $projekt, $teilnehmer, bool $fillParticipants = true): void
+    {
+        if ($fillParticipants) {
+            $this->cloneWordParticipantRows($processor, $gruppe, $projekt, $teilnehmer);
+        }
+
+        $groupValues = $this->placeholderValues($gruppe, $projekt);
+        $indexedVariables = $this->indexedParticipantVariables($processor->getVariables());
+        $maxIndex = max($indexedVariables->keys()->all() ?: [0]);
+
+        foreach ($processor->getVariables() as $variable) {
+            $lowerVariable = strtolower((string) $variable);
+
+            if (str_contains($lowerVariable, '#')) {
+                continue;
+            }
+
+            if ($lowerVariable === 'teilnehmer_tabelle') {
+                $processor->setValue($variable, '');
+                continue;
+            }
+
+            if (preg_match('/^([a-z_]+)(\d+)$/', $lowerVariable, $matches)) {
+                $index = (int) $matches[2];
+                $person = $fillParticipants ? $teilnehmer->get($index - 1) : null;
+                $values = $person ? $this->placeholderValues($gruppe, $projekt, $person, $index) : [];
+                $processor->setValue($variable, $values[$matches[1]] ?? '');
+                continue;
+            }
+
+            $processor->setValue($variable, $groupValues[$lowerVariable] ?? '');
+        }
+
+        if ($maxIndex > 0) {
+            for ($index = $teilnehmer->count() + 1; $index <= $maxIndex; $index++) {
+                foreach ($indexedVariables->get($index, []) as $variable) {
+                    $processor->setValue($variable, '');
+                }
+            }
+        }
+    }
+
+    private function cloneWordParticipantRows(TemplateProcessor $processor, Gruppe $gruppe, Projekt $projekt, $teilnehmer): void
+    {
+        $rowKeys = ['nr', 'nummer', 'vorname', 'nachname', 'name', 'voller_name', 'geburtsdatum', 'geschlecht', 'anrede', 'kundennummer', 'strasse', 'hausnummer', 'plz', 'stadt', 'ort', 'adresse', 'email', 'telefon'];
+        $variables = collect($processor->getVariables())->map(fn ($value) => strtolower((string) $value));
+        $cloneKey = collect($rowKeys)->first(fn ($key) => $variables->contains($key));
+
+        if (!$cloneKey) {
+            return;
+        }
+
+        try {
+            $processor->cloneRow($cloneKey, max(1, $teilnehmer->count()));
+        } catch (Throwable) {
+            return;
+        }
+
+        foreach ($teilnehmer as $index => $person) {
+            $number = $index + 1;
+            $values = $this->placeholderValues($gruppe, $projekt, $person, $number);
+
+            foreach ($rowKeys as $key) {
+                $processor->setValue($key . '#' . $number, $values[$key] ?? '');
+            }
+        }
+    }
+
+    private function indexedParticipantVariables(array $variables)
+    {
+        return collect($variables)
+            ->filter(fn ($variable) => preg_match('/^[a-z_]+\d+$/', strtolower((string) $variable)) === 1)
+            ->groupBy(fn ($variable) => (int) preg_replace('/^\D+/', '', (string) $variable));
+    }
+
     private function placeholderValues(Gruppe $gruppe, Projekt $projekt, ?Personen $person = null, int $nummer = 1): array
     {
         $adresse = $person?->adresses?->last();
@@ -630,7 +774,7 @@ class ExportWordController extends Controller
             'adresse' => trim(($adresse?->strasse ?? '') . ' ' . ($adresse?->hausnummer ?? '')),
             'email' => $email?->wert,
             'telefon' => $telefon?->wert,
-            'kundennummer' => $person->sozialedaten?->kundennummer,
+            'kundennummer' => $person?->sozialedaten?->kundennummer,
             'projekt' => $projekt->name,
             'projekt_name' => $projekt->name,
             'gruppe' => $gruppe->bereich?->name ?? ('Gruppe ' . $gruppe->id),

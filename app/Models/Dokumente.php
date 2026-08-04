@@ -21,6 +21,7 @@ class Dokumente extends Model
         'beschreibung',
         'aktiv',
         'export_permission',
+        'gruppen_export_modus',
     ];
 
     protected $casts = [

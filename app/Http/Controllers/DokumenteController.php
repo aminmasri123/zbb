@@ -61,6 +61,7 @@ class DokumenteController extends Controller
             'bereich_ids.*' => ['integer', 'exists:bereiches,id'],
             'gruppen_export' => ['nullable', 'boolean'],
             'serienbrief' => ['nullable', 'boolean'],
+            'gruppen_export_modus' => ['nullable', 'string', 'in:kopf,eine_datei,einzelne_dateien'],
         ]);
 
         $file = $request->file('datei');
@@ -89,6 +90,7 @@ class DokumenteController extends Controller
                 'dateipfadName' => $file->getClientOriginalName(),
                 'beschreibung' => $validated['beschreibung'] ?? null,
                 'aktiv' => true,
+                'gruppen_export_modus' => $validated['gruppen_export_modus'] ?? $this->defaultGroupExportMode($validated['typ'], $validated['kontext']),
             ]);
 
             $projektSync = collect($validated['projekt_ids'] ?? [])
@@ -144,6 +146,7 @@ class DokumenteController extends Controller
             'bereich_ids.*' => ['integer', 'exists:bereiches,id'],
             'gruppen_export' => ['nullable', 'boolean'],
             'serienbrief' => ['nullable', 'boolean'],
+            'gruppen_export_modus' => ['nullable', 'string', 'in:kopf,eine_datei,einzelne_dateien'],
         ]);
 
         $file = $request->file('datei');
@@ -178,6 +181,7 @@ class DokumenteController extends Controller
                 'ausgabeformate' => $formats,
                 'version' => $validated['version'] ?? null,
                 'beschreibung' => $validated['beschreibung'] ?? null,
+                'gruppen_export_modus' => $validated['gruppen_export_modus'] ?? $this->defaultGroupExportMode($validated['typ'], $validated['kontext']),
             ];
 
             if ($storedPath) {
@@ -327,6 +331,19 @@ class DokumenteController extends Controller
                     ['key' => 'nummer', 'label' => 'laufende Nummer'],
                 ],
             ],
+            [
+                'gruppe' => 'Gruppenliste / Serienbrief',
+                'werte' => [
+                    ['key' => 'teilnehmer_tabelle', 'label' => 'Marker fuer eine Teilnehmerliste in Excel'],
+                    ['key' => 'vorname', 'label' => 'Word-Tabellenzeile je Teilnehmer wiederholen'],
+                    ['key' => 'nachname', 'label' => 'Word-Tabellenzeile je Teilnehmer wiederholen'],
+                    ['key' => 'name', 'label' => 'Word-Tabellenzeile je Teilnehmer wiederholen'],
+                    ['key' => 'vorname1', 'label' => 'Fester Platzhalter fuer Teilnehmer 1'],
+                    ['key' => 'nachname1', 'label' => 'Fester Platzhalter fuer Teilnehmer 1'],
+                    ['key' => 'vorname2', 'label' => 'Fester Platzhalter fuer Teilnehmer 2, danach 3, 4, ...'],
+                    ['key' => 'nachname2', 'label' => 'Fester Platzhalter fuer Teilnehmer 2, danach 3, 4, ...'],
+                ],
+            ],
         ];
     }
 
@@ -426,6 +443,15 @@ class DokumenteController extends Controller
             ->all();
 
         return $formats ?: $allowed;
+    }
+
+    private function defaultGroupExportMode(string $typ, string $kontext): string
+    {
+        if ($typ === 'word' && $kontext === 'gruppe') {
+            return 'eine_datei';
+        }
+
+        return 'einzelne_dateien';
     }
 
     private function isManagedUploadPath(?string $path): bool

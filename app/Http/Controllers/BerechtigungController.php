@@ -40,12 +40,19 @@ class BerechtigungController extends Controller
 
         // Berechtigungskategorien abrufen, die den Benutzerrollen zugeordnet sind
         $berechtigungskategorien = Berechtigungskategorie::with(['permissions' => function($query) {
-            $query->select('id', 'name'); // Optional: spezifische Felder abrufen
+            $query->select('id', 'name', 'beschreibung', 'berechtigungskategorie_id');
         }])
         ->whereHas('roles', function($query) use ($userRoleIds) {
             $query->whereIn('role_id', $userRoleIds); // Filtere nach den Rollen des Benutzers
         })
         ->get();
+
+        $kategorienDerUser = Berechtigungskategorie::whereHas('roles', function($query) use ($userRoleIds) {
+            $query->whereIn('role_id', $userRoleIds);
+        })->with('permissions')->get();
+
+        $this->attachPermissionDisplayNames($berechtigungskategorien);
+        $this->attachPermissionDisplayNames($kategorienDerUser);
 
         return Inertia::render('Einstellung/RollePermission/Index', [
             'rollen' => Role::query()
@@ -59,9 +66,7 @@ class BerechtigungController extends Controller
             'roleSearched' => $role,
 
             // Kategorien, auf die der aktuelle Benutzer Berechtigungen hat
-            'kategorienDerUser' => Berechtigungskategorie::whereHas('roles', function($query) use ($userRoleIds) {
-                $query->whereIn('role_id', $userRoleIds);
-            })->with('permissions')->get(),
+            'kategorienDerUser' => $kategorienDerUser,
 
             'alleZugewiesenePermission' => $role->permissions,
 
@@ -72,6 +77,29 @@ class BerechtigungController extends Controller
                 'participant' => RoleDataAccessSetting::PARTICIPANT_SCOPES,
             ],
         ]);
+    }
+
+    private function attachPermissionDisplayNames($categories): void
+    {
+        $permissionNames = $categories
+            ->flatMap(fn ($category) => $category->permissions ?? collect())
+            ->pluck('name')
+            ->filter(fn ($name) => str_starts_with((string) $name, 'dokumente.export.'))
+            ->unique()
+            ->values();
+
+        $documentNames = $permissionNames->isEmpty()
+            ? collect()
+            : DB::table('dokumentes')
+                ->whereIn('export_permission', $permissionNames)
+                ->pluck('name', 'export_permission');
+
+        $categories->each(function ($category) use ($documentNames): void {
+            $category->permissions->each(function ($permission) use ($documentNames): void {
+                $permission->display_name = $documentNames[$permission->name] ?? $permission->name;
+                $permission->technical_name = $permission->name;
+            });
+        });
     }
 
     public function berechtigungZuweisen(Request $request)

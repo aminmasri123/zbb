@@ -1,6 +1,7 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Dropdown from '@/Components/Dropdown.vue';
+import Dialog from 'primevue/dialog';
 import { Head, router } from '@inertiajs/vue3';
 import axios from 'axios';
 import Swal from 'sweetalert2';
@@ -23,6 +24,7 @@ const saving = ref(false);
 const categorySaving = ref(false);
 const search = ref('');
 const editingDokument = ref(null);
+const showDokumentModal = ref(false);
 const fileInputKey = ref(0);
 const { can } = usePermissions();
 const canStoreDokument = computed(() => can('dokumente.store'));
@@ -47,6 +49,7 @@ const defaultForm = () => ({
   bereich_ids: [],
   gruppen_export: true,
   serienbrief: true,
+  gruppen_export_modus: 'einzelne_dateien',
 });
 
 const form = ref(defaultForm());
@@ -75,6 +78,7 @@ const filteredDokumente = computed(() => {
       dokument.version,
       dokument.beschreibung,
       dokument.export_permission,
+      dokument.gruppen_export_modus,
       ...(dokument.kategorien || []).map((kategorie) => kategorie.name),
       ...(dokument.projekte || []).map((projekt) => projekt.name),
       ...(dokument.bereiche || []).map((bereich) => bereich.name),
@@ -86,7 +90,21 @@ const setTyp = (typ) => {
   form.value.typ = typ;
   form.value.ausgabeformate = typ === 'excel' ? ['xlsx', 'pdf'] : (typ === 'pdf' ? ['pdf'] : ['docx', 'pdf']);
   form.value.kontext = typ === 'word' ? 'teilnehmer' : 'gruppe';
+  form.value.gruppen_export_modus = typ === 'word' && form.value.kontext === 'gruppe' ? 'eine_datei' : 'einzelne_dateien';
 };
+
+const setKontext = (event) => {
+  form.value.kontext = event.target.value;
+  if (form.value.typ === 'word') {
+    form.value.gruppen_export_modus = form.value.kontext === 'gruppe' ? 'eine_datei' : 'einzelne_dateien';
+  }
+};
+
+const gruppenExportModusLabel = (modus) => ({
+  kopf: 'Nur Kopf',
+  eine_datei: 'Eine Datei',
+  einzelne_dateien: 'Einzeln/ZIP',
+})[modus] || 'Einzeln/ZIP';
 
 const toggleArrayValue = (target, id) => {
   const value = Number(id);
@@ -109,6 +127,16 @@ const resetForm = () => {
   editingDokument.value = null;
   form.value = defaultForm();
   fileInputKey.value += 1;
+};
+
+const openCreateDokument = () => {
+  resetForm();
+  showDokumentModal.value = true;
+};
+
+const closeDokumentModal = () => {
+  showDokumentModal.value = false;
+  resetForm();
 };
 
 const refreshFromPage = (page) => {
@@ -136,9 +164,10 @@ const editDokument = (dokument) => {
     bereich_ids: (dokument.bereiche || []).map((bereich) => Number(bereich.id)),
     gruppen_export: Boolean(dokument.projekte?.[0]?.pivot?.gruppen_export ?? dokument.kategorien?.[0]?.pivot?.gruppen_export ?? true),
     serienbrief: Boolean(dokument.projekte?.[0]?.pivot?.serienbrief ?? dokument.kategorien?.[0]?.pivot?.serienbrief ?? true),
+    gruppen_export_modus: dokument.gruppen_export_modus || (dokument.kontext === 'gruppe' ? 'eine_datei' : 'einzelne_dateien'),
   };
   fileInputKey.value += 1;
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  showDokumentModal.value = true;
 };
 
 const submit = () => {
@@ -162,7 +191,7 @@ const submit = () => {
     onSuccess: (page) => {
       Swal.fire('Erfolg', editingDokument.value ? 'Export-Vorlage wurde aktualisiert.' : 'Export-Vorlage wurde angelegt.', 'success');
       refreshFromPage(page);
-      resetForm();
+      closeDokumentModal();
     },
     onError: (errors) => {
       Swal.fire('Fehler', Object.values(errors)[0] || 'Vorlage konnte nicht gespeichert werden.', 'error');
@@ -227,13 +256,21 @@ const token = (key) => '${' + key + '}';
     <template #header>Dokumentenmanager</template>
 
     <div class="space-y-6 p-4">
-      <section class="grid gap-4 xl:grid-cols-[minmax(360px,430px)_1fr]">
-        <form v-if="canStoreDokument || editingDokument" class="rounded border bg-white p-4 shadow-sm" @submit.prevent="submit">
-          <div class="mb-4 flex items-start justify-between gap-3">
+      <section class="space-y-4">
+        <Dialog
+          v-model:visible="showDokumentModal"
+          modal
+          :header="editingDokument ? 'Export-Vorlage bearbeiten' : 'Export-Vorlage anlegen'"
+          :style="{ width: '720px', maxWidth: '94vw' }"
+          :contentStyle="{ maxHeight: '76vh', overflowY: 'auto' }"
+          :draggable="false"
+          appendTo="body"
+          dismissableMask
+          @hide="resetForm"
+        >
+        <form v-if="canStoreDokument || editingDokument" class="space-y-4" @submit.prevent="submit">
+          <div class="flex items-start justify-between gap-3">
             <div>
-              <h2 class="text-base font-semibold text-gray-700">
-                {{ editingDokument ? 'Export-Vorlage bearbeiten' : 'Export-Vorlage anlegen' }}
-              </h2>
               <p v-if="editingDokument" class="mt-1 text-xs text-gray-500">
                 {{ editingDokument.dateipfadName || editingDokument.dateipfad }}
               </p>
@@ -249,9 +286,14 @@ const token = (key) => '${' + key + '}';
           </div>
 
           <div class="space-y-3">
-            <input v-model="form.name" class="w-full rounded border-gray-300 text-sm" placeholder="Bezeichnung" />
+            <label class="block">
+              <span class="mb-1 block text-xs font-semibold uppercase text-gray-500">Bezeichnung</span>
+              <input v-model="form.name" class="w-full rounded border-gray-300 text-sm" placeholder="z.B. Toilettennutzungsliste BOP" />
+            </label>
 
-            <div class="grid grid-cols-3 gap-2">
+            <div>
+              <div class="mb-1 text-xs font-semibold uppercase text-gray-500">Vorlagentyp</div>
+              <div class="grid grid-cols-3 gap-2">
               <button
                 v-for="typ in ['word', 'excel', 'pdf']"
                 :key="typ"
@@ -262,19 +304,29 @@ const token = (key) => '${' + key + '}';
               >
                 {{ typ.toUpperCase() }}
               </button>
+              </div>
             </div>
 
-            <select v-model="form.kontext" class="w-full rounded border-gray-300 text-sm">
-              <option value="teilnehmer">Teilnehmer</option>
-              <option value="gruppe">Gruppe</option>
-            </select>
+            <label class="block">
+              <span class="mb-1 block text-xs font-semibold uppercase text-gray-500">Datenbezug</span>
+              <select :value="form.kontext" class="w-full rounded border-gray-300 text-sm" @change="setKontext">
+                <option value="teilnehmer">Teilnehmer</option>
+                <option value="gruppe">Gruppe</option>
+              </select>
+            </label>
 
-            <select v-model="form.einsatzbereich" class="w-full rounded border-gray-300 text-sm">
-              <option value="gruppe">Gruppe</option>
-              <option value="partner">Partner / Schule</option>
-            </select>
+            <label class="block">
+              <span class="mb-1 block text-xs font-semibold uppercase text-gray-500">Anzeigeort</span>
+              <select v-model="form.einsatzbereich" class="w-full rounded border-gray-300 text-sm">
+                <option value="gruppe">Gruppe</option>
+                <option value="partner">Partner / Schule</option>
+              </select>
+            </label>
 
-            <input v-model="form.version" class="w-full rounded border-gray-300 text-sm" placeholder="Version" />
+            <label class="block">
+              <span class="mb-1 block text-xs font-semibold uppercase text-gray-500">Version / Programm</span>
+              <input v-model="form.version" class="w-full rounded border-gray-300 text-sm" placeholder="z.B. BOP-Programm" />
+            </label>
             <div class="rounded border border-gray-200 p-3">
               <div class="mb-2 text-xs font-semibold uppercase text-gray-500">
                 {{ editingDokument ? 'Datei ersetzen' : 'Datei' }}
@@ -299,12 +351,15 @@ const token = (key) => '${' + key + '}';
               </div>
             </div>
 
-            <textarea
-              v-model="form.beschreibung"
-              rows="3"
-              class="w-full rounded border-gray-300 text-sm"
-              placeholder="Beschreibung"
-            ></textarea>
+            <label class="block">
+              <span class="mb-1 block text-xs font-semibold uppercase text-gray-500">Beschreibung</span>
+              <textarea
+                v-model="form.beschreibung"
+                rows="3"
+                class="w-full rounded border-gray-300 text-sm"
+                placeholder="Beschreibung / interne Notiz"
+              ></textarea>
+            </label>
 
             <div class="rounded border border-gray-200 p-3">
               <div class="mb-2 text-xs font-semibold uppercase text-gray-500">Ausgabe</div>
@@ -369,25 +424,61 @@ const token = (key) => '${' + key + '}';
               </label>
             </div>
 
+            <div v-if="form.typ === 'word' && form.gruppen_export" class="rounded border border-gray-200 p-3">
+              <div class="mb-2 text-xs font-semibold uppercase text-gray-500">Gruppenexport-Art</div>
+              <div class="grid gap-2">
+                <label class="flex cursor-pointer gap-3 rounded border p-3 text-sm" :class="form.gruppen_export_modus === 'kopf' ? 'border-zbb bg-zbbTrp' : 'border-gray-200'">
+                  <input v-model="form.gruppen_export_modus" type="radio" value="kopf" class="mt-1 border-gray-300 text-zbb" />
+                  <span>
+                    <span class="block font-medium text-gray-800">Nur Kopf fuellen</span>
+                    <span class="text-xs text-gray-500">Eine Datei, nur Gruppenwerte wie Datum, Bereich, Raum und Betreuer. Teilnehmerfelder bleiben leer.</span>
+                  </span>
+                </label>
+                <label class="flex cursor-pointer gap-3 rounded border p-3 text-sm" :class="form.gruppen_export_modus === 'eine_datei' ? 'border-zbb bg-zbbTrp' : 'border-gray-200'">
+                  <input v-model="form.gruppen_export_modus" type="radio" value="eine_datei" class="mt-1 border-gray-300 text-zbb" />
+                  <span>
+                    <span class="block font-medium text-gray-800">Serienbrief in eine Datei</span>
+                    <span class="text-xs text-gray-500">Eine DOCX/PDF mit allen Teilnehmern, passend fuer Listen wie Toilettennutzungsliste.</span>
+                  </span>
+                </label>
+                <label class="flex cursor-pointer gap-3 rounded border p-3 text-sm" :class="form.gruppen_export_modus === 'einzelne_dateien' ? 'border-zbb bg-zbbTrp' : 'border-gray-200'">
+                  <input v-model="form.gruppen_export_modus" type="radio" value="einzelne_dateien" class="mt-1 border-gray-300 text-zbb" />
+                  <span>
+                    <span class="block font-medium text-gray-800">Serienbrief einzeln</span>
+                    <span class="text-xs text-gray-500">Eine Datei pro Teilnehmer, als ZIP. Sinnvoll fuer Zertifikate oder Einzelbriefe.</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+
             <div class="flex gap-2">
               <button v-if="canSubmitDokument" type="submit" class="w-full rounded bg-zbb px-4 py-2 text-white disabled:opacity-60" :disabled="saving">
                 {{ saving ? 'Speichert...' : (editingDokument ? 'Aktualisieren' : 'Speichern') }}
               </button>
               <button
-                v-if="editingDokument"
                 type="button"
                 class="rounded border border-gray-300 px-4 py-2 text-gray-600 hover:border-zbb hover:text-zbb"
-                @click="resetForm"
+                @click="closeDokumentModal"
               >
                 Abbrechen
               </button>
             </div>
           </div>
         </form>
+        </Dialog>
 
         <div class="rounded border bg-white p-4 shadow-sm">
-          <div class="mb-4 flex items-center gap-2">
+          <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
             <input v-model="search" class="w-full rounded border-gray-300 text-sm" placeholder="Vorlagen suchen" />
+            <button
+              v-if="canStoreDokument"
+              type="button"
+              class="inline-flex h-10 shrink-0 items-center justify-center rounded bg-zbb px-4 text-sm font-semibold text-white hover:bg-zbb/80"
+              @click="openCreateDokument"
+            >
+              <i class="las la-plus mr-2"></i>
+              Neue Vorlage
+            </button>
           </div>
 
           <div class="overflow-visible">
@@ -429,6 +520,9 @@ const token = (key) => '${' + key + '}';
                   <td class="px-3 py-2 align-top">
                     <span class="rounded bg-gray-100 px-2 py-1 text-xs">
                       {{ dokument.einsatzbereich === 'partner' ? 'Partner / Schule' : 'Gruppe' }}
+                    </span>
+                    <span v-if="dokument.typ === 'word'" class="mt-1 inline-flex rounded bg-zbbTrp px-2 py-1 text-xs">
+                      {{ gruppenExportModusLabel(dokument.gruppen_export_modus) }}
                     </span>
                   </td>
                   <td class="px-3 py-2 align-top">
