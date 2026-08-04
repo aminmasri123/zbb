@@ -18,16 +18,21 @@
             </li>
 
             <!-- Admin Submenu -->
-            <li v-if="canAny(adminPermissions) || $page.component.startsWith('Einstellung')" class="submenu">
+            <li v-if="canAny(adminPermissions) || $page.component.startsWith('Einstellung') || $page.component.startsWith('Dokumente')" class="submenu">
                 <a href="#" @click.prevent="toggleMenu('admin')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                     <i class="la la-user-shield la-lg mr-2"></i>
                     <span v-if="!displayHideTextSidebar">Admin</span>
-                    <span :class="{'rotate-180': activeMenu === 'admin', 'hidden': displayHideTextSidebar === true, 'text-zbb': $page.component.startsWith('Einstellung')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
+                    <span :class="{'rotate-180': activeMenu === 'admin', 'hidden': displayHideTextSidebar === true, 'text-zbb': $page.component.startsWith('Einstellung') || $page.component.startsWith('Dokumente')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
                 </a>
                 <ul v-show="activeMenu === 'admin'" class="pl-6 mt-2 space-y-2">
                     <li v-if="canAny(permissionAdminPermissions) || $page.component.startsWith('Einstellung/RollePermission')">
                         <Link class="text-gray-400 hover:text-white transition duration-200" :href="route('berechtigung.index')">
                             {{$t('Berechtigungen')}}
+                        </Link>
+                    </li>
+                    <li v-if="can('dokumente.index') || $page.component.startsWith('Dokumente')">
+                        <Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dokumente.index')">
+                            Dokumentenmanager
                         </Link>
                     </li>
                     <li v-if="canAny(notificationAdminPermissions) || $page.component.startsWith('Einstellung/NotificationRules')">
@@ -222,7 +227,7 @@
     const projectFeatureEnabled = (key) => Boolean(page.props.currentProjekt) && page.props.currentProjekt?.features?.[key] === true;
     const permissionAdminPermissions = ['berechtigung.index', 'berechtigung.store', 'berechtigung.update'];
     const notificationAdminPermissions = ['notification-rules.index', 'notification-rules.update', 'berechtigung.update'];
-    const adminPermissions = [...permissionAdminPermissions, ...notificationAdminPermissions];
+    const adminPermissions = [...permissionAdminPermissions, ...notificationAdminPermissions, 'dokumente.index'];
 
 </script>
   <script>
