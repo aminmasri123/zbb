@@ -1,6 +1,6 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { Link, router, useForm } from '@inertiajs/vue3';
+import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -18,6 +18,7 @@ const props = defineProps({
     taskColumns: { type: Array, default: () => [] },
 });
 
+const page = usePage();
 const nav = [
     { key: 'calendar', label: 'Kalender', route: 'apps.calendar', icon: 'la-calendar' },
     { key: 'contacts', label: 'Kontakte', route: 'apps.contacts', icon: 'la-address-book' },
@@ -31,6 +32,7 @@ const selectedShare = ref(null);
 const selectedEdit = ref(null);
 const selectedFile = ref(null);
 const selectedWorkflowTemplate = ref(null);
+const selectedOwnerTransfer = ref(null);
 const showFolderModal = ref(false);
 const showUploadModal = ref(false);
 const uploadMenuOpen = ref(false);
@@ -71,6 +73,8 @@ const forms = {
 const shareForm = useForm({ person_id: '', email: '', permission: 'view', message: '', send_email: false });
 const mailForm = useForm({ email: '', message: '' });
 const workflowApplyForm = useForm({ project_id: '', assignee_person_id: '', start_date: '' });
+const ownerTransferForm = useForm({ person_id: '' });
+const currentUserId = computed(() => page.props.auth?.user?.id);
 
 const tasksByStatus = computed(() => {
     const grouped = {};
@@ -320,6 +324,10 @@ function destroyItem(routeName, id) {
     router.delete(route(routeName, id), { preserveScroll: true });
 }
 
+function canOwn(item) {
+    return Number(item?.owner_user_id) === Number(currentUserId.value);
+}
+
 function visitFiles(params = {}) {
     router.get(route('apps.files'), {
         folder: props.currentFolder?.id || undefined,
@@ -407,6 +415,19 @@ function sendFileMail() {
     mailForm.post(route('apps.files.mail', selectedShare.value.id), {
         preserveScroll: true,
         onSuccess: () => selectedShare.value = null,
+    });
+}
+
+function openOwnerTransfer(item) {
+    selectedOwnerTransfer.value = item;
+    ownerTransferForm.reset();
+    ownerTransferForm.clearErrors();
+}
+
+function submitOwnerTransfer() {
+    ownerTransferForm.put(route('apps.files.owner.update', selectedOwnerTransfer.value.id), {
+        preserveScroll: true,
+        onSuccess: () => selectedOwnerTransfer.value = null,
     });
 }
 
@@ -707,7 +728,7 @@ function ownerLabel(item) {
                                                     <span class="mt-1 block text-xs text-gray-500">{{ item.type === 'folder' ? 'Ordner' : formatBytes(item.size) }}</span>
                                                 </span>
                                             </a>
-                                            <button class="rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 opacity-100 hover:border-orange-300 md:opacity-0 md:group-hover:opacity-100" @click.stop="openFileEdit(item)">
+                                            <button v-if="canOwn(item)" class="rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 opacity-100 hover:border-orange-300 md:opacity-0 md:group-hover:opacity-100" @click.stop="openFileEdit(item)">
                                                 <i class="la la-pen"></i>
                                             </button>
                                         </div>
@@ -758,9 +779,10 @@ function ownerLabel(item) {
                                         <a :href="fileRoute(selectedFile)" class="rounded bg-gray-900 px-3 py-2 text-center font-semibold text-white">
                                             {{ selectedFile.type === 'folder' ? 'Öffnen' : 'Download' }}
                                         </a>
-                                        <button class="rounded border border-gray-200 bg-white px-3 py-2 font-semibold text-gray-700" @click="openShare(selectedFile, 'file')">Teilen</button>
-                                        <button class="rounded border border-gray-200 bg-white px-3 py-2 font-semibold text-gray-700" @click="openFileEdit(selectedFile)">Bearbeiten</button>
-                                        <button class="rounded border border-red-200 bg-white px-3 py-2 font-semibold text-red-600" @click="destroyItem('apps.files.destroy', selectedFile.id)">Löschen</button>
+                                        <button v-if="canOwn(selectedFile)" class="rounded border border-gray-200 bg-white px-3 py-2 font-semibold text-gray-700" @click="openShare(selectedFile, 'file')">Teilen</button>
+                                        <button v-if="canOwn(selectedFile)" class="rounded border border-gray-200 bg-white px-3 py-2 font-semibold text-gray-700" @click="openFileEdit(selectedFile)">Bearbeiten</button>
+                                        <button v-if="canOwn(selectedFile)" class="rounded border border-gray-200 bg-white px-3 py-2 font-semibold text-gray-700" @click="openOwnerTransfer(selectedFile)">Besitzer</button>
+                                        <button v-if="canOwn(selectedFile)" class="rounded border border-red-200 bg-white px-3 py-2 font-semibold text-red-600" @click="destroyItem('apps.files.destroy', selectedFile.id)">Löschen</button>
                                     </div>
 
                                     <dl class="space-y-2 rounded border border-gray-200 bg-white p-3 text-sm">
@@ -1011,6 +1033,40 @@ function ownerLabel(item) {
                         <button class="inline-flex items-center gap-2 rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="forms.upload.processing || !forms.upload.files.length">
                             <i class="la la-cloud-upload-alt"></i>
                             Hochladen
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div v-if="selectedOwnerTransfer && section === 'files'" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div class="w-full max-w-lg rounded bg-white p-5 shadow-xl">
+                <div class="mb-4 flex items-start justify-between gap-3">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-950">Besitzer übergeben</h2>
+                        <p class="text-sm text-gray-500">{{ selectedOwnerTransfer.name }}</p>
+                    </div>
+                    <button type="button" class="text-xl text-gray-500" @click="selectedOwnerTransfer = null">&times;</button>
+                </div>
+
+                <form class="space-y-4" @submit.prevent="submitOwnerTransfer">
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Neuer Besitzer</label>
+                        <select v-model="ownerTransferForm.person_id" class="w-full rounded border-gray-300 text-sm">
+                            <option value="">Person auswählen</option>
+                            <option v-for="person in people" :key="person.id" :value="person.id">{{ person.nachname }}, {{ person.vorname }}</option>
+                        </select>
+                        <p v-if="ownerTransferForm.errors.person_id" class="mt-1 text-xs text-red-600">{{ ownerTransferForm.errors.person_id }}</p>
+                    </div>
+
+                    <div class="rounded border border-orange-200 bg-orange-50 p-3 text-sm text-orange-800">
+                        Bei Ordnern werden auch alle Unterordner und Dateien an den neuen Besitzer übergeben.
+                    </div>
+
+                    <div class="flex justify-end gap-2 border-t pt-4">
+                        <button type="button" class="rounded border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700" @click="selectedOwnerTransfer = null">Abbrechen</button>
+                        <button class="rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="ownerTransferForm.processing || !ownerTransferForm.person_id">
+                            Übergeben
                         </button>
                     </div>
                 </form>

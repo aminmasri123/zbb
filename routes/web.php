@@ -247,6 +247,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
         Route::post('/dateimanager/ordner', [AppsController::class, 'createFolder'])->name('files.folder.store');
         Route::post('/dateimanager/upload', [AppsController::class, 'uploadFile'])->name('files.upload');
         Route::get('/dateimanager/download/{file}', [AppsController::class, 'downloadFile'])->name('files.download');
+        Route::put('/dateimanager/{file}/besitzer', [AppsController::class, 'transferFileOwner'])->name('files.owner.update');
         Route::put('/dateimanager/{file}', [AppsController::class, 'updateFile'])->name('files.update');
         Route::delete('/dateimanager/{file}', [AppsController::class, 'deleteFile'])->name('files.destroy');
         Route::post('/dateimanager/{file}/mail', [AppsController::class, 'mailFile'])->name('files.mail');

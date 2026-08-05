@@ -13,6 +13,7 @@ use App\Models\AppTask;
 use App\Models\AppTaskWorkflowTemplate;
 use App\Models\Personen;
 use App\Models\Projekt;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -118,11 +119,13 @@ class AppsController extends Controller
 
         $this->ensureUsableParent($data['parent_id'] ?? null);
 
-        AppFile::create($this->fileOwnershipPayload($data, $data['parent_id'] ?? null) + [
+        $folder = AppFile::create($this->fileOwnershipPayload($data, $data['parent_id'] ?? null) + [
             'type' => 'folder',
             'name' => $data['name'],
             'size' => 0,
         ]);
+
+        $this->inheritFileShares($folder, $data['parent_id'] ?? null);
 
         return back()->with('success', 'Ordner wurde angelegt.');
     }
@@ -156,7 +159,7 @@ class AppsController extends Controller
             $uploadedFile = $upload['file'];
             $path = $uploadedFile->store('apps/files');
 
-            AppFile::create($this->fileOwnershipPayload($data, $targetParentId) + [
+            $file = AppFile::create($this->fileOwnershipPayload($data, $targetParentId) + [
                 'type' => 'file',
                 'name' => $request->input('name') ?: $fileName,
                 'original_name' => $uploadedFile->getClientOriginalName(),
@@ -164,6 +167,8 @@ class AppsController extends Controller
                 'mime_type' => $uploadedFile->getMimeType(),
                 'size' => $uploadedFile->getSize(),
             ]);
+
+            $this->inheritFileShares($file, $targetParentId);
         }
 
         return back()->with('success', count($uploads) === 1 ? 'Datei wurde hochgeladen.' : count($uploads) . ' Dateien wurden hochgeladen.');
@@ -195,6 +200,25 @@ class AppsController extends Controller
         $file->update($data);
 
         return back()->with('success', 'Datei wurde aktualisiert.');
+    }
+
+    public function transferFileOwner(Request $request, AppFile $file)
+    {
+        abort_unless($this->canManage($file), 403);
+
+        $data = $request->validate([
+            'person_id' => ['required', 'exists:personens,id'],
+        ]);
+
+        $person = Personen::with('user:id,person_id,username,email')
+            ->whereHas('user')
+            ->findOrFail($data['person_id']);
+
+        abort_unless($person->user, 422, 'Die ausgewaehlte Person hat keinen Benutzerzugang.');
+
+        $this->transferFileTreeOwner($file, $person->user);
+
+        return back()->with('success', $file->type === 'folder' ? 'Ordnerbesitzer wurde uebergeben.' : 'Dateibesitzer wurde uebergeben.');
     }
 
     public function deleteFile(AppFile $file)
@@ -238,6 +262,10 @@ class AppsController extends Controller
         if (!empty($data['send_email']) && !empty($data['email'])) {
             $this->sendShareMail($data['email'], $item, $data['message'] ?? null);
             $share->update(['sent_at' => now()]);
+        }
+
+        if ($item instanceof AppFile && $item->type === 'folder') {
+            $this->syncFolderShareToChildren($item, $data);
         }
 
         return back()->with('success', 'Freigabe wurde gespeichert.');
@@ -887,6 +915,71 @@ class AppsController extends Controller
         ]);
     }
 
+    private function inheritFileShares(AppFile $file, ?int $parentId): void
+    {
+        if (! $parentId) {
+            return;
+        }
+
+        $parent = AppFile::with('shares')->find($parentId);
+
+        if (! $parent) {
+            return;
+        }
+
+        foreach ($parent->shares as $share) {
+            AppShare::updateOrCreate(
+                [
+                    'shareable_type' => AppFile::class,
+                    'shareable_id' => $file->id,
+                    'person_id' => $share->person_id,
+                    'email' => $share->email,
+                ],
+                [
+                    'shared_by_user_id' => $share->shared_by_user_id,
+                    'permission' => $share->permission,
+                    'message' => $share->message,
+                    'sent_at' => $share->sent_at,
+                ]
+            );
+        }
+    }
+
+    private function syncFolderShareToChildren(AppFile $folder, array $shareData): void
+    {
+        $folder->children()->get()->each(function (AppFile $child) use ($shareData) {
+            AppShare::updateOrCreate(
+                [
+                    'shareable_type' => AppFile::class,
+                    'shareable_id' => $child->id,
+                    'person_id' => $shareData['person_id'] ?? null,
+                    'email' => $shareData['email'] ?? null,
+                ],
+                [
+                    'shared_by_user_id' => Auth::id(),
+                    'permission' => $shareData['permission'],
+                    'message' => $shareData['message'] ?? null,
+                    'sent_at' => ! empty($shareData['send_email']) ? now() : null,
+                ]
+            );
+
+            if ($child->type === 'folder') {
+                $this->syncFolderShareToChildren($child, $shareData);
+            }
+        });
+    }
+
+    private function transferFileTreeOwner(AppFile $file, User $newOwner): void
+    {
+        $file->update(['owner_user_id' => $newOwner->id]);
+
+        if ($file->type !== 'folder') {
+            return;
+        }
+
+        $file->children()->get()->each(fn (AppFile $child) => $this->transferFileTreeOwner($child, $newOwner));
+    }
+
     private function collectAppFileUploads(Request $request): array
     {
         $uploads = [];
@@ -952,6 +1045,10 @@ class AppsController extends Controller
                     'size' => 0,
                 ]
             );
+
+            if ($folder->wasRecentlyCreated) {
+                $this->inheritFileShares($folder, $parentId);
+            }
 
             $parentId = $folder->id;
         }
