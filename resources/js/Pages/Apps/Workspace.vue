@@ -1,7 +1,7 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { Link, router, useForm } from '@inertiajs/vue3';
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 
 const props = defineProps({
     section: String,
@@ -31,6 +31,13 @@ const selectedShare = ref(null);
 const selectedEdit = ref(null);
 const selectedFile = ref(null);
 const selectedWorkflowTemplate = ref(null);
+const showFolderModal = ref(false);
+const showUploadModal = ref(false);
+const uploadMenuOpen = ref(false);
+const isFileDragOver = ref(false);
+const dragDepth = ref(0);
+const fileInput = ref(null);
+const folderInput = ref(null);
 const fileView = ref(localStorage.getItem('zbb-file-view') || 'grid');
 const fileSearch = ref(props.fileFilters?.search || '');
 const fileType = ref(props.fileFilters?.type || 'all');
@@ -46,7 +53,7 @@ const baseVisibility = () => ({
 
 const forms = {
     folder: useForm({ name: '', parent_id: props.currentFolder?.id || '', ...baseVisibility() }),
-    upload: useForm({ file: null, parent_id: props.currentFolder?.id || '', ...baseVisibility() }),
+    upload: useForm({ files: [], relative_paths: [], parent_id: props.currentFolder?.id || '', ...baseVisibility() }),
     calendar: useForm({ title: '', description: '', starts_at: '', ends_at: '', all_day: false, location: '', color: '#f97316', ...baseVisibility() }),
     contact: useForm({ name: '', organization: '', role: '', email: '', phone: '', notes: '', ...baseVisibility() }),
     task: useForm({ title: '', description: '', assignee_person_id: '', status: 'open', priority: 'normal', due_at: '', ...baseVisibility() }),
@@ -91,8 +98,189 @@ function submitForm(key, routeName, options = {}) {
             if (key === 'folder' || key === 'upload') {
                 forms[key].parent_id = props.currentFolder?.id || '';
             }
+            options.onSuccess?.();
         },
     });
+}
+
+function resetUploadSelection() {
+    forms.upload.files = [];
+    forms.upload.relative_paths = [];
+}
+
+function openFolderModal() {
+    forms.folder.clearErrors();
+    forms.folder.name = '';
+    forms.folder.parent_id = props.currentFolder?.id || '';
+    showFolderModal.value = true;
+}
+
+function openUploadModal(picker = null) {
+    forms.upload.clearErrors();
+    forms.upload.parent_id = props.currentFolder?.id || '';
+    uploadMenuOpen.value = false;
+    showUploadModal.value = true;
+
+    if (picker === 'files' || picker === 'folder') {
+        nextTick(() => {
+            if (picker === 'folder') {
+                triggerFolderPicker();
+            } else {
+                triggerFilePicker();
+            }
+        });
+    }
+}
+
+function triggerFilePicker() {
+    fileInput.value?.click();
+}
+
+function triggerFolderPicker() {
+    folderInput.value?.click();
+}
+
+function selectedUploadLabel() {
+    const count = forms.upload.files.length;
+
+    if (!count) {
+        return 'Dateien oder Ordner auswählen';
+    }
+
+    return count === 1 ? forms.upload.relative_paths[0] || forms.upload.files[0]?.name : `${count} Dateien ausgewählt`;
+}
+
+function setUploadSelection(items) {
+    forms.upload.clearErrors();
+    forms.upload.files = items.map((item) => item.file);
+    forms.upload.relative_paths = items.map((item) => item.relativePath || item.file.name);
+}
+
+function selectUploadFiles(event) {
+    const files = Array.from(event.target.files || []);
+    setUploadSelection(files.map((file) => ({
+        file,
+        relativePath: file.webkitRelativePath || file.name,
+    })));
+    event.target.value = '';
+}
+
+function submitUpload() {
+    forms.upload.post(route('apps.files.upload'), {
+        preserveScroll: true,
+        forceFormData: true,
+        onSuccess: () => {
+            showUploadModal.value = false;
+            resetUploadSelection();
+            forms.upload.reset();
+            forms.upload.parent_id = props.currentFolder?.id || '';
+        },
+    });
+}
+
+function hasFileDrag(event) {
+    return Array.from(event.dataTransfer?.types || []).includes('Files');
+}
+
+function handleFileDragEnter(event) {
+    if (!hasFileDrag(event)) return;
+    dragDepth.value += 1;
+    isFileDragOver.value = true;
+}
+
+function handleFileDragOver(event) {
+    if (!hasFileDrag(event)) return;
+    event.dataTransfer.dropEffect = 'copy';
+    isFileDragOver.value = true;
+}
+
+function handleFileDragLeave(event) {
+    if (!hasFileDrag(event)) return;
+    dragDepth.value = Math.max(0, dragDepth.value - 1);
+    isFileDragOver.value = dragDepth.value > 0;
+}
+
+async function handleFileDrop(event) {
+    if (!hasFileDrag(event)) return;
+    dragDepth.value = 0;
+    isFileDragOver.value = false;
+
+    const items = await collectDroppedUploadItems(event.dataTransfer);
+
+    if (!items.length) return;
+
+    setUploadSelection(items);
+    openUploadModal();
+}
+
+async function collectDroppedUploadItems(dataTransfer) {
+    const transferItems = Array.from(dataTransfer?.items || []);
+    const entries = transferItems
+        .map((item) => typeof item.webkitGetAsEntry === 'function' ? item.webkitGetAsEntry() : null)
+        .filter(Boolean);
+
+    if (entries.length) {
+        const collected = [];
+
+        for (const entry of entries) {
+            collected.push(...await collectEntryFiles(entry));
+        }
+
+        return collected;
+    }
+
+    return Array.from(dataTransfer?.files || []).map((file) => ({
+        file,
+        relativePath: file.webkitRelativePath || file.name,
+    }));
+}
+
+function readEntryFile(entry) {
+    return new Promise((resolve, reject) => entry.file(resolve, reject));
+}
+
+function readDirectoryEntries(reader) {
+    return new Promise((resolve, reject) => {
+        const entries = [];
+
+        const readBatch = () => {
+            reader.readEntries((batch) => {
+                if (!batch.length) {
+                    resolve(entries);
+                    return;
+                }
+
+                entries.push(...batch);
+                readBatch();
+            }, reject);
+        };
+
+        readBatch();
+    });
+}
+
+async function collectEntryFiles(entry, prefix = '') {
+    if (entry.isFile) {
+        const file = await readEntryFile(entry);
+
+        return [{
+            file,
+            relativePath: `${prefix}${file.name}`,
+        }];
+    }
+
+    if (!entry.isDirectory) {
+        return [];
+    }
+
+    const children = await readDirectoryEntries(entry.createReader());
+    const files = [];
+
+    for (const child of children) {
+        files.push(...await collectEntryFiles(child, `${prefix}${entry.name}/`));
+    }
+
+    return files;
 }
 
 function addWorkflowStep() {
@@ -401,18 +589,31 @@ function ownerLabel(item) {
                                 </div>
 
                                 <div class="flex flex-wrap items-center gap-2">
-                                    <button class="inline-flex items-center gap-2 rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600" @click="openUploadModal">
-                                        <i class="la la-cloud-upload-alt text-lg"></i>
-                                        Datei hochladen
-                                    </button>
-                                    <button class="inline-flex items-center gap-2 rounded border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:border-orange-300 hover:text-orange-700" @click="openFolderModal">
+                                    <div class="relative">
+                                        <button type="button" class="inline-flex items-center gap-2 rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600" @click="uploadMenuOpen = !uploadMenuOpen">
+                                            <i class="la la-cloud-upload-alt text-lg"></i>
+                                            Hochladen
+                                            <i class="la la-angle-down text-sm"></i>
+                                        </button>
+                                        <div v-if="uploadMenuOpen" class="absolute right-0 z-20 mt-2 w-56 overflow-hidden rounded border border-gray-200 bg-white py-1 text-sm shadow-lg">
+                                            <button type="button" class="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-orange-50 hover:text-orange-700" @click="openUploadModal('files')">
+                                                <i class="la la-file-upload text-lg"></i>
+                                                Dateien auswählen
+                                            </button>
+                                            <button type="button" class="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-orange-50 hover:text-orange-700" @click="openUploadModal('folder')">
+                                                <i class="la la-folder-open text-lg"></i>
+                                                Ordner auswählen
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="inline-flex items-center gap-2 rounded border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:border-orange-300 hover:text-orange-700" @click="openFolderModal">
                                         <i class="la la-folder-plus text-lg"></i>
-                                        Ordner
+                                        Ordner erstellen
                                     </button>
-                                    <button :class="['rounded border px-3 py-2 text-sm', fileView === 'grid' ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-gray-200 text-gray-600']" title="Kachelansicht" @click="fileView = 'grid'">
+                                    <button type="button" :class="['rounded border px-3 py-2 text-sm', fileView === 'grid' ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-gray-200 text-gray-600']" title="Kachelansicht" @click="fileView = 'grid'">
                                         <i class="la la-th-large"></i>
                                     </button>
-                                    <button :class="['rounded border px-3 py-2 text-sm', fileView === 'list' ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-gray-200 text-gray-600']" title="Listenansicht" @click="fileView = 'list'">
+                                    <button type="button" :class="['rounded border px-3 py-2 text-sm', fileView === 'list' ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-gray-200 text-gray-600']" title="Listenansicht" @click="fileView = 'list'">
                                         <i class="la la-list"></i>
                                     </button>
                                 </div>
@@ -463,16 +664,26 @@ function ownerLabel(item) {
                         </div>
 
                         <div class="grid gap-0 xl:grid-cols-[1fr_320px]">
-                            <div class="min-h-[460px] p-4">
+                            <div
+                                :class="['min-h-[460px] p-4 transition', isFileDragOver ? 'bg-orange-50' : '']"
+                                @dragenter.prevent="handleFileDragEnter"
+                                @dragover.prevent="handleFileDragOver"
+                                @dragleave.prevent="handleFileDragLeave"
+                                @drop.prevent="handleFileDrop"
+                            >
+                                <div v-if="isFileDragOver" class="mb-4 rounded border border-dashed border-orange-300 bg-white px-4 py-5 text-center text-sm font-semibold text-orange-700">
+                                    Dateien oder Ordner hier ablegen
+                                </div>
                                 <div v-if="items.length === 0" class="flex min-h-[320px] flex-col items-center justify-center rounded border border-dashed border-gray-300 text-center">
                                     <i class="la la-folder-open mb-3 text-5xl text-gray-300"></i>
                                     <p class="text-sm font-semibold text-gray-700">Keine Einträge gefunden</p>
+                                    <p class="mt-1 text-xs text-gray-500">Dateien oder ganze Ordner hierher ziehen.</p>
                                     <div class="mt-4 flex flex-wrap justify-center gap-2">
-                                        <button class="inline-flex items-center gap-2 rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white" @click="openUploadModal">
+                                        <button type="button" class="inline-flex items-center gap-2 rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white" @click="openUploadModal">
                                             <i class="la la-cloud-upload-alt"></i>
-                                            Datei hochladen
+                                            Hochladen
                                         </button>
-                                        <button class="inline-flex items-center gap-2 rounded border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700" @click="openFolderModal">
+                                        <button type="button" class="inline-flex items-center gap-2 rounded border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700" @click="openFolderModal">
                                             <i class="la la-folder-plus"></i>
                                             Ordner erstellen
                                         </button>
@@ -761,26 +972,43 @@ function ownerLabel(item) {
             <div class="w-full max-w-lg rounded bg-white shadow-xl">
                 <div class="flex items-center justify-between border-b px-5 py-4">
                     <div>
-                        <h2 class="text-lg font-semibold text-gray-950">Datei hochladen</h2>
+                        <h2 class="text-lg font-semibold text-gray-950">Dateien oder Ordner hochladen</h2>
                         <p class="text-sm text-gray-500">{{ currentFolder?.name || 'Meine Ablage' }}</p>
                     </div>
-                    <button class="rounded p-1 text-2xl leading-none text-gray-500 hover:bg-gray-100" @click="showUploadModal = false">&times;</button>
+                    <button class="rounded p-1 text-2xl leading-none text-gray-500 hover:bg-gray-100" @click="showUploadModal = false; resetUploadSelection()">&times;</button>
                 </div>
 
-                <form class="space-y-4 p-5" @submit.prevent="submitForm('upload', 'apps.files.upload', { forceFormData: true, onSuccess: () => showUploadModal = false })">
-                    <label class="flex cursor-pointer flex-col items-center justify-center rounded border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-center hover:border-orange-300 hover:bg-orange-50">
+                <form class="space-y-4 p-5" @submit.prevent="submitUpload">
+                    <div
+                        :class="['flex flex-col items-center justify-center rounded border border-dashed px-4 py-8 text-center transition', isFileDragOver ? 'border-orange-400 bg-orange-50' : 'border-gray-300 bg-gray-50 hover:border-orange-300 hover:bg-orange-50']"
+                        @dragenter.prevent="handleFileDragEnter"
+                        @dragover.prevent="handleFileDragOver"
+                        @dragleave.prevent="handleFileDragLeave"
+                        @drop.prevent="handleFileDrop"
+                    >
                         <i class="la la-cloud-upload-alt mb-2 text-4xl text-orange-500"></i>
-                        <span class="text-sm font-semibold text-gray-900">{{ forms.upload.file?.name || 'Datei auswählen' }}</span>
-                        <span class="mt-1 text-xs text-gray-500">Maximal 50 MB</span>
-                        <input type="file" class="hidden" @input="forms.upload.file = $event.target.files[0]" />
-                    </label>
+                        <span class="text-sm font-semibold text-gray-900">{{ selectedUploadLabel() }}</span>
+                        <span class="mt-1 text-xs text-gray-500">Dateien oder Ordner hierher ziehen. Maximal 50 MB je Datei.</span>
+                        <div class="mt-4 flex flex-wrap justify-center gap-2">
+                            <button type="button" class="rounded border border-orange-200 bg-white px-3 py-2 text-sm font-semibold text-orange-700 hover:border-orange-400" @click="triggerFilePicker">
+                                Dateien auswählen
+                            </button>
+                            <button type="button" class="rounded border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:border-orange-300 hover:text-orange-700" @click="triggerFolderPicker">
+                                Ordner auswählen
+                            </button>
+                        </div>
+                        <input ref="fileInput" type="file" class="hidden" multiple @change="selectUploadFiles" />
+                        <input ref="folderInput" type="file" class="hidden" multiple webkitdirectory directory @change="selectUploadFiles" />
+                    </div>
                     <p v-if="forms.upload.errors.file" class="text-xs text-red-600">{{ forms.upload.errors.file }}</p>
+                    <p v-if="forms.upload.errors.files" class="text-xs text-red-600">{{ forms.upload.errors.files }}</p>
+                    <p v-if="forms.upload.errors['files.0']" class="text-xs text-red-600">{{ forms.upload.errors['files.0'] }}</p>
 
                     <VisibilityFields :form="forms.upload" :projects="projects" :options="visibilityOptions" />
 
                     <div class="flex justify-end gap-2 border-t pt-4">
-                        <button type="button" class="rounded border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700" @click="showUploadModal = false">Abbrechen</button>
-                        <button class="inline-flex items-center gap-2 rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white" :disabled="forms.upload.processing">
+                        <button type="button" class="rounded border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700" @click="showUploadModal = false; resetUploadSelection()">Abbrechen</button>
+                        <button class="inline-flex items-center gap-2 rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="forms.upload.processing || !forms.upload.files.length">
                             <i class="la la-cloud-upload-alt"></i>
                             Hochladen
                         </button>

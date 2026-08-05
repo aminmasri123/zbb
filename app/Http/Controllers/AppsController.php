@@ -21,6 +21,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Http\UploadedFile;
 use Inertia\Inertia;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\RichText\RichText;
@@ -116,8 +118,9 @@ class AppsController extends Controller
 
         $this->ensureUsableParent($data['parent_id'] ?? null);
 
-        AppFile::create($this->ownedPayload($data) + [
+        AppFile::create($this->fileOwnershipPayload($data, $data['parent_id'] ?? null) + [
             'type' => 'folder',
+            'name' => $data['name'],
             'size' => 0,
         ]);
 
@@ -127,26 +130,43 @@ class AppsController extends Controller
     public function uploadFile(Request $request)
     {
         $data = $request->validate([
-            'file' => ['required', 'file', 'max:51200'],
+            'file' => ['nullable', 'file', 'max:51200'],
+            'files' => ['nullable', 'array'],
+            'files.*' => ['file', 'max:51200'],
+            'relative_path' => ['nullable', 'string', 'max:1024'],
+            'relative_paths' => ['nullable', 'array'],
+            'relative_paths.*' => ['nullable', 'string', 'max:1024'],
             'parent_id' => ['nullable', 'exists:app_files,id'],
             ...$this->visibilityRules(),
         ]);
 
         $this->ensureUsableParent($data['parent_id'] ?? null);
 
-        $uploadedFile = $request->file('file');
-        $path = $uploadedFile->store('apps/files');
+        $uploads = $this->collectAppFileUploads($request);
 
-        AppFile::create($this->ownedPayload($data) + [
-            'type' => 'file',
-            'name' => $request->input('name') ?: $uploadedFile->getClientOriginalName(),
-            'original_name' => $uploadedFile->getClientOriginalName(),
-            'path' => $path,
-            'mime_type' => $uploadedFile->getMimeType(),
-            'size' => $uploadedFile->getSize(),
-        ]);
+        if (empty($uploads)) {
+            throw ValidationException::withMessages([
+                'files' => 'Bitte Datei oder Ordner auswaehlen.',
+            ]);
+        }
 
-        return back()->with('success', 'Datei wurde hochgeladen.');
+        foreach ($uploads as $upload) {
+            [$folders, $fileName] = $this->normalizeUploadPath($upload['relative_path'] ?? null, $upload['file']);
+            $targetParentId = $this->ensureUploadFolderPath($folders, $data['parent_id'] ?? null, $data);
+            $uploadedFile = $upload['file'];
+            $path = $uploadedFile->store('apps/files');
+
+            AppFile::create($this->fileOwnershipPayload($data, $targetParentId) + [
+                'type' => 'file',
+                'name' => $request->input('name') ?: $fileName,
+                'original_name' => $uploadedFile->getClientOriginalName(),
+                'path' => $path,
+                'mime_type' => $uploadedFile->getMimeType(),
+                'size' => $uploadedFile->getSize(),
+            ]);
+        }
+
+        return back()->with('success', count($uploads) === 1 ? 'Datei wurde hochgeladen.' : count($uploads) . ' Dateien wurden hochgeladen.');
     }
 
     public function downloadFile(AppFile $file)
@@ -855,6 +875,88 @@ class AppsController extends Controller
         $data['project_id'] = $visibility === 'project' ? ($data['project_id'] ?? $user->current_team_id) : null;
 
         return $data;
+    }
+
+    private function fileOwnershipPayload(array $data, ?int $parentId): array
+    {
+        return $this->ownedPayload([
+            'parent_id' => $parentId,
+            'visibility' => $data['visibility'] ?? 'private',
+            'project_id' => $data['project_id'] ?? null,
+            'team_id' => $data['team_id'] ?? null,
+        ]);
+    }
+
+    private function collectAppFileUploads(Request $request): array
+    {
+        $uploads = [];
+
+        if ($request->hasFile('file')) {
+            $uploads[] = [
+                'file' => $request->file('file'),
+                'relative_path' => $request->input('relative_path'),
+            ];
+        }
+
+        foreach ($request->file('files', []) as $index => $file) {
+            if ($file instanceof UploadedFile) {
+                $uploads[] = [
+                    'file' => $file,
+                    'relative_path' => $request->input("relative_paths.{$index}"),
+                ];
+            }
+        }
+
+        return $uploads;
+    }
+
+    private function normalizeUploadPath(?string $relativePath, UploadedFile $file): array
+    {
+        $path = trim(str_replace('\\', '/', (string) ($relativePath ?: $file->getClientOriginalName())), '/');
+        $segments = array_values(array_filter(explode('/', $path), fn ($segment) => trim($segment) !== '' && ! in_array($segment, ['.', '..'], true)));
+        $fileSegment = array_pop($segments) ?: $file->getClientOriginalName();
+
+        return [
+            array_map(fn ($segment) => $this->sanitizeUploadSegment($segment, 'Ordner'), $segments),
+            $this->sanitizeUploadSegment($fileSegment, $file->getClientOriginalName() ?: 'Datei'),
+        ];
+    }
+
+    private function sanitizeUploadSegment(string $segment, string $fallback): string
+    {
+        $segment = str_replace(["\0", '/', '\\'], '', $segment);
+        $segment = preg_replace('/[\r\n\t]+/', ' ', $segment) ?: '';
+        $segment = preg_replace('/\s+/', ' ', $segment) ?: '';
+        $segment = trim($segment, " .");
+
+        if ($segment === '' || in_array($segment, ['.', '..'], true)) {
+            $segment = $fallback;
+        }
+
+        return function_exists('mb_substr') ? mb_substr($segment, 0, 255) : substr($segment, 0, 255);
+    }
+
+    private function ensureUploadFolderPath(array $folders, ?int $rootParentId, array $data): ?int
+    {
+        $parentId = $rootParentId;
+
+        foreach ($folders as $folderName) {
+            $folder = AppFile::firstOrCreate(
+                [
+                    'owner_user_id' => Auth::id(),
+                    'parent_id' => $parentId,
+                    'type' => 'folder',
+                    'name' => $folderName,
+                ],
+                $this->fileOwnershipPayload($data, $parentId) + [
+                    'size' => 0,
+                ]
+            );
+
+            $parentId = $folder->id;
+        }
+
+        return $parentId;
     }
 
     private function calendarEventPayload(array $data): array
