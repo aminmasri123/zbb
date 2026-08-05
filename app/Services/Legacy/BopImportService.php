@@ -23,6 +23,8 @@ class BopImportService
 
     public const PROJECT_NAME = 'Bop';
 
+    private array $legacyPrimaryKeyCache = [];
+
     public function inspect(): array
     {
         $source = $this->source();
@@ -60,6 +62,41 @@ class BopImportService
             'partnership_type_exists' => $partnershipTypeExists,
             'project_exists' => $project !== null,
             'project_id' => $project?->id,
+        ];
+    }
+
+    public function inspectMissingData(): array
+    {
+        $source = $this->source();
+        $this->assertSafeSource($source);
+
+        $tables = [];
+        $sourceRows = 0;
+        $archivedRows = 0;
+
+        foreach ($this->legacyTables() as $table) {
+            $count = $source->table($table)->count();
+            $snapshots = DB::table('legacy_record_snapshots')
+                ->where('source', self::SOURCE)
+                ->where('source_table', $table)
+                ->count();
+
+            $sourceRows += $count;
+            $archivedRows += $snapshots;
+            $tables[] = [
+                'table' => $table,
+                'source_rows' => $count,
+                'archived_rows' => $snapshots,
+                'missing_rows' => max(0, $count - $snapshots),
+            ];
+        }
+
+        return [
+            'source_database' => $source->getDatabaseName(),
+            'tables' => $tables,
+            'source_rows' => $sourceRows,
+            'archived_rows' => $archivedRows,
+            'missing_rows' => max(0, $sourceRows - $archivedRows),
         ];
     }
 
@@ -115,6 +152,11 @@ class BopImportService
             'assignments_imported' => 0,
             'pa_ratings_imported' => 0,
             'pa_exercise_results_imported' => 0,
+            'pa_summaries_imported' => 0,
+            'legacy_snapshots_created' => 0,
+            'legacy_snapshots_updated' => 0,
+            'participant_school_rows_updated' => 0,
+            'participant_addresses_imported' => 0,
             'bo_ratings_imported' => 0,
             'failed' => 0,
         ]);
@@ -152,14 +194,87 @@ class BopImportService
                 $this->importSelectionsAndAssignments($runId, $participantMaps['students'], $areaMap, $summary);
                 $this->importPotentialAnalysis($runId, (int) $projectId, $participantMaps['persons'], $groupMap, $summary);
                 $this->importBoRatings($runId, $participantMaps['persons'], $groupMap, $summary);
+                $participantSummary = $this->backfillLegacyParticipantExtras();
+                $summary['participant_school_rows_updated'] += $participantSummary['school_rows_updated'];
+                $summary['participant_addresses_imported'] += $participantSummary['addresses_imported'];
+                $archiveSummary = $this->archiveAllLegacyTables($runId);
+                $summary['legacy_snapshots_created'] += $archiveSummary['created'];
+                $summary['legacy_snapshots_updated'] += $archiveSummary['updated'];
             });
 
             $readCount = $summary['schools'] + $summary['participants'] + $summary['areas'] + $summary['groups'] + $summary['group_memberships'];
             DB::table('legacy_import_runs')->where('id', $runId)->update([
                 'status' => 'completed',
                 'read_count' => $readCount,
-                'imported_count' => $summary['schools_imported'] + $summary['school_contacts_imported'] + $summary['participants_imported'] + $summary['areas_imported'] + $summary['staff_imported'] + $summary['staff_accounts_imported'] + $summary['groups_imported'] + $summary['attendance_rows_imported'] + $summary['selections_imported'] + $summary['assignments_imported'] + $summary['pa_ratings_imported'] + $summary['pa_exercise_results_imported'] + $summary['bo_ratings_imported'],
+                'imported_count' => $summary['schools_imported'] + $summary['school_contacts_imported'] + $summary['participants_imported'] + $summary['areas_imported'] + $summary['staff_imported'] + $summary['staff_accounts_imported'] + $summary['groups_imported'] + $summary['attendance_rows_imported'] + $summary['selections_imported'] + $summary['assignments_imported'] + $summary['pa_ratings_imported'] + $summary['pa_exercise_results_imported'] + $summary['pa_summaries_imported'] + $summary['participant_addresses_imported'] + $summary['bo_ratings_imported'],
                 'failed_count' => $summary['failed'],
+                'summary' => json_encode($summary, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+                'finished_at' => now(),
+                'updated_at' => now(),
+            ]);
+        } catch (Throwable $exception) {
+            DB::table('legacy_import_runs')->where('id', $runId)->update([
+                'status' => 'failed',
+                'failed_count' => 1,
+                'error_message' => $exception->getMessage(),
+                'finished_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            throw $exception;
+        }
+
+        return $summary;
+    }
+
+    public function importMissingData(bool $archiveOnly = false): array
+    {
+        $inspection = $this->inspectMissingData();
+        $runId = DB::table('legacy_import_runs')->insertGetId([
+            'source' => self::SOURCE,
+            'mapping_version' => self::MAPPING_VERSION.'-missing',
+            'status' => 'running',
+            'dry_run' => false,
+            'started_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $summary = [
+            'run_id' => $runId,
+            'source_database' => $inspection['source_database'],
+            'source_rows' => $inspection['source_rows'],
+            'legacy_snapshots_created' => 0,
+            'legacy_snapshots_updated' => 0,
+            'participant_school_rows_updated' => 0,
+            'participant_addresses_imported' => 0,
+            'pa_summaries_imported' => 0,
+            'pa_summaries_skipped' => 0,
+            'failed' => 0,
+        ];
+
+        try {
+            DB::transaction(function () use ($runId, $archiveOnly, &$summary): void {
+                $archiveSummary = $this->archiveAllLegacyTables($runId);
+                $summary['legacy_snapshots_created'] = $archiveSummary['created'];
+                $summary['legacy_snapshots_updated'] = $archiveSummary['updated'];
+
+                if (! $archiveOnly) {
+                    $participantSummary = $this->backfillLegacyParticipantExtras();
+                    $summary['participant_school_rows_updated'] = $participantSummary['school_rows_updated'];
+                    $summary['participant_addresses_imported'] = $participantSummary['addresses_imported'];
+
+                    $paSummary = $this->backfillLegacyPotentialAnalysisSummaries();
+                    $summary['pa_summaries_imported'] = $paSummary['imported'];
+                    $summary['pa_summaries_skipped'] = $paSummary['skipped'];
+                }
+            });
+
+            DB::table('legacy_import_runs')->where('id', $runId)->update([
+                'status' => 'completed',
+                'read_count' => $summary['source_rows'],
+                'imported_count' => $summary['legacy_snapshots_created'] + $summary['participant_school_rows_updated'] + $summary['participant_addresses_imported'] + $summary['pa_summaries_imported'],
+                'failed_count' => 0,
                 'summary' => json_encode($summary, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
                 'finished_at' => now(),
                 'updated_at' => now(),
@@ -416,7 +531,7 @@ class BopImportService
             );
 
             $this->storeMapping($runId, 'teilnehmers', (string) $participant->id, 'personens', $personId, $checksum);
-            $this->storeSnapshot($runId, 'teilnehmers', (string) $participant->id, $payload, 'partially_imported', 'Adresse, Einwilligung, BOP-Status und Auswertungsverweise bleiben bis zum Fachmapping im Snapshot erhalten.');
+            $this->storeSnapshot($runId, 'teilnehmers', (string) $participant->id, $payload, 'partially_imported', 'BOP-Status und Auswertungsverweise bleiben bis zum Fachmapping im Snapshot erhalten.');
             $map[(int) $participant->id] = $personId;
             $studentMap[(int) $participant->id] = (int) $studentId;
             $summary['participants_imported']++;
@@ -812,13 +927,7 @@ class BopImportService
             $exerciseMap[(int) $exercise->id] = (int) $exerciseId;
         }
 
-        $paLegacyGroups = $this->source()->table('gruppe_has_teilnehmer as membership')
-            ->join('gruppes as legacy_group', 'legacy_group.id', '=', 'membership.gruppe_id')
-            ->join('bereiches as area', 'area.id', '=', 'legacy_group.bereich_id')
-            ->whereRaw("LOWER(area.name) LIKE '%potenzial%'")
-            ->selectRaw('membership.teilnehmer_id, MIN(membership.gruppe_id) gruppe_id')
-            ->groupBy('membership.teilnehmer_id')
-            ->pluck('gruppe_id', 'teilnehmer_id');
+        $paLegacyGroups = $this->paLegacyGroups();
 
         $traits = [
             'feinmotorik', 'grobmotorik', 'wahrnehmung_symmetrie', 'analyse_problemloesefaehigkeit',
@@ -880,6 +989,8 @@ class BopImportService
             $this->storeSnapshot($runId, 'teilnehmer_has_uebungens', (string) $result->id, (array) $result, 'imported', null);
             $summary['pa_exercise_results_imported']++;
         }
+
+        $this->importPotentialAnalysisSummaries($personMap, $groupMap, $paLegacyGroups, $summary);
     }
 
     private function importBoRatings(int $runId, array $personMap, array $groupMap, array &$summary): void
@@ -917,6 +1028,287 @@ class BopImportService
 
             $this->storeSnapshot($runId, 'bewertungsbogens', (string) $row->id, $payload, 'imported', null);
         }
+    }
+
+    private function archiveAllLegacyTables(int $runId): array
+    {
+        $created = 0;
+        $updated = 0;
+
+        foreach ($this->legacyTables() as $table) {
+            foreach ($this->source()->table($table)->orderByRaw($this->legacyOrderBy($table))->cursor() as $row) {
+                $payload = (array) $row;
+                $sourceId = $this->legacySourceId($table, $payload);
+                $result = $this->storeSnapshotIfMissing(
+                    $runId,
+                    $table,
+                    $sourceId,
+                    $payload,
+                    'archived',
+                    'Vollstaendiges BOP-Legacy-Archiv fuer Daten ohne direktes Matrix-Fachmapping.'
+                );
+
+                if ($result === 'created') {
+                    $created++;
+                } elseif ($result === 'updated') {
+                    $updated++;
+                }
+            }
+        }
+
+        return compact('created', 'updated');
+    }
+
+    private function backfillLegacyParticipantExtras(): array
+    {
+        $schoolRowsUpdated = 0;
+        $addressesImported = 0;
+
+        foreach ($this->source()->table('teilnehmers')->orderBy('id')->cursor() as $participant) {
+            $personId = $this->mappedTargetId('teilnehmers', (string) $participant->id, 'personens');
+            $schoolId = isset($participant->schule_id)
+                ? $this->mappedTargetId('schules', (string) $participant->schule_id, 'partners')
+                : null;
+
+            if (! $personId || ! $schoolId) {
+                continue;
+            }
+
+            $schoolRowsUpdated += DB::table('personen_ist_schuelers')
+                ->where('person_id', $personId)
+                ->where('schule_id', $schoolId)
+                ->when($participant->schuljahr ?? null, fn ($query, $value) => $query->where('schuljahr', $value))
+                ->when($participant->teil ?? null, fn ($query, $value) => $query->where('teil', $value))
+                ->when($participant->klasse ?? null, fn ($query, $value) => $query->where('klasse', $value))
+                ->update([
+                    'foerderschueler' => $this->legacyBoolean($participant->foerderschueler ?? false),
+                    'eee' => $this->legacyBoolean($participant->eee ?? $participant->eltereklaerung ?? false),
+                    'updated_at' => now(),
+                ]);
+
+            $legacyAddress = trim((string) ($participant->adresse ?? ''));
+            if ($legacyAddress !== '' && $this->upsertLegacyParticipantAddress((int) $personId, $legacyAddress, $participant)) {
+                $addressesImported++;
+            }
+        }
+
+        return [
+            'school_rows_updated' => $schoolRowsUpdated,
+            'addresses_imported' => $addressesImported,
+        ];
+    }
+
+    private function backfillLegacyPotentialAnalysisSummaries(): array
+    {
+        $summary = ['pa_summaries_imported' => 0, 'pa_summaries_skipped' => 0];
+
+        $personMap = DB::table('legacy_id_mappings')
+            ->where('source', self::SOURCE)
+            ->where('source_table', 'teilnehmers')
+            ->where('target_table', 'personens')
+            ->pluck('target_id', 'source_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $groupMap = DB::table('legacy_id_mappings')
+            ->where('source', self::SOURCE)
+            ->where('source_table', 'gruppes')
+            ->where('target_table', 'gruppes')
+            ->pluck('target_id', 'source_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $this->importPotentialAnalysisSummaries($personMap, $groupMap, $this->paLegacyGroups(), $summary);
+
+        return [
+            'imported' => $summary['pa_summaries_imported'],
+            'skipped' => $summary['pa_summaries_skipped'],
+        ];
+    }
+
+    private function importPotentialAnalysisSummaries(array $personMap, array $groupMap, $paLegacyGroups, array &$summary): void
+    {
+        foreach ($this->source()->table('teilnehmers')
+            ->whereNotNull('zusammenfassung')
+            ->where('zusammenfassung', '!=', '')
+            ->orderBy('id')
+            ->cursor() as $participant) {
+            $personId = $personMap[(int) $participant->id] ?? $personMap[(string) $participant->id] ?? null;
+            $legacyGroupId = $paLegacyGroups[$participant->id] ?? null;
+            $groupId = $legacyGroupId ? ($groupMap[(int) $legacyGroupId] ?? $groupMap[(string) $legacyGroupId] ?? null) : null;
+
+            if (! $personId || ! $groupId) {
+                $summary['pa_summaries_skipped'] = ($summary['pa_summaries_skipped'] ?? 0) + 1;
+                continue;
+            }
+
+            $text = trim((string) $participant->zusammenfassung);
+            $existing = DB::table('potenzialanalyse_berichte')
+                ->where('gruppe_id', $groupId)
+                ->where('personen_id', $personId)
+                ->first();
+
+            if ($existing && trim((string) $existing->bericht_text) !== '') {
+                $summary['pa_summaries_skipped'] = ($summary['pa_summaries_skipped'] ?? 0) + 1;
+                continue;
+            }
+
+            DB::table('potenzialanalyse_berichte')->updateOrInsert(
+                [
+                    'gruppe_id' => $groupId,
+                    'personen_id' => $personId,
+                ],
+                [
+                    'user_id' => null,
+                    'status' => $existing->status ?? 'entwurf',
+                    'bericht_text' => $text,
+                    'created_at' => $existing->created_at ?? ($participant->created_at ?? now()),
+                    'updated_at' => $participant->updated_at ?? now(),
+                ]
+            );
+            $summary['pa_summaries_imported'] = ($summary['pa_summaries_imported'] ?? 0) + 1;
+        }
+    }
+
+    private function upsertLegacyParticipantAddress(int $personId, string $legacyAddress, object $participant): bool
+    {
+        $modelType = 'App\\Models\\Personen';
+        $existing = DB::table('adresses')
+            ->where('model_type', $modelType)
+            ->where('model_id', $personId)
+            ->first();
+
+        if (! $existing) {
+            DB::table('adresses')->insert([
+                'model_type' => $modelType,
+                'model_id' => $personId,
+                'strasse' => Str::limit($legacyAddress, 255, ''),
+                'hausnummer' => null,
+                'plz' => null,
+                'stadt' => null,
+                'land' => 'Deutschland',
+                'zusatzinfo' => 'Aus BOP migrierte Freitextadresse',
+                'created_at' => $participant->created_at ?? now(),
+                'updated_at' => $participant->updated_at ?? now(),
+            ]);
+
+            return true;
+        }
+
+        $hasStructuredAddress = trim((string) ($existing->strasse ?? '')) !== ''
+            || trim((string) ($existing->hausnummer ?? '')) !== ''
+            || trim((string) ($existing->plz ?? '')) !== ''
+            || trim((string) ($existing->stadt ?? '')) !== '';
+
+        if (! $hasStructuredAddress) {
+            DB::table('adresses')->where('id', $existing->id)->update([
+                'strasse' => Str::limit($legacyAddress, 255, ''),
+                'zusatzinfo' => 'Aus BOP migrierte Freitextadresse',
+                'updated_at' => now(),
+            ]);
+
+            return true;
+        }
+
+        $note = 'BOP-Adresse: '.$legacyAddress;
+        $currentNote = (string) ($existing->zusatzinfo ?? '');
+        if (str_contains($currentNote, $legacyAddress)) {
+            return false;
+        }
+
+        DB::table('adresses')->where('id', $existing->id)->update([
+            'zusatzinfo' => Str::limit(trim($currentNote."\n".$note), 255, ''),
+            'updated_at' => now(),
+        ]);
+
+        return true;
+    }
+
+    private function paLegacyGroups()
+    {
+        return $this->source()->table('gruppe_has_teilnehmer as membership')
+            ->join('gruppes as legacy_group', 'legacy_group.id', '=', 'membership.gruppe_id')
+            ->join('bereiches as area', 'area.id', '=', 'legacy_group.bereich_id')
+            ->whereRaw("LOWER(area.name) LIKE '%potenzial%'")
+            ->selectRaw('membership.teilnehmer_id, MIN(membership.gruppe_id) gruppe_id')
+            ->groupBy('membership.teilnehmer_id')
+            ->pluck('gruppe_id', 'teilnehmer_id');
+    }
+
+    private function legacyTables(): array
+    {
+        return collect($this->source()->select('SHOW TABLES'))
+            ->map(fn ($row) => implode('', (array) $row))
+            ->sort()
+            ->values()
+            ->all();
+    }
+
+    private function legacyOrderBy(string $table): string
+    {
+        $columns = $this->legacyPrimaryKeyColumns($table);
+        if (empty($columns)) {
+            $columns = $this->legacyTableColumns($table);
+        }
+
+        return collect($columns)
+            ->map(fn ($column) => $this->quoteIdentifier($column))
+            ->implode(', ');
+    }
+
+    private function legacySourceId(string $table, array $payload): string
+    {
+        if (array_key_exists('id', $payload)) {
+            return (string) $payload['id'];
+        }
+
+        $columns = $this->legacyPrimaryKeyColumns($table);
+        if (! empty($columns)) {
+            $sourceId = collect($columns)
+                ->map(fn ($column) => $column.'='.(string) ($payload[$column] ?? ''))
+                ->implode('|');
+
+            return $this->limitSourceId($sourceId);
+        }
+
+        return $this->checksum($payload);
+    }
+
+    private function legacyPrimaryKeyColumns(string $table): array
+    {
+        if (array_key_exists($table, $this->legacyPrimaryKeyCache)) {
+            return $this->legacyPrimaryKeyCache[$table];
+        }
+
+        $keys = $this->source()->select('SHOW KEYS FROM '.$this->quoteIdentifier($table)." WHERE Key_name = 'PRIMARY'");
+
+        return $this->legacyPrimaryKeyCache[$table] = collect($keys)
+            ->sortBy('Seq_in_index')
+            ->pluck('Column_name')
+            ->values()
+            ->all();
+    }
+
+    private function legacyTableColumns(string $table): array
+    {
+        return collect($this->source()->select('SHOW COLUMNS FROM '.$this->quoteIdentifier($table)))
+            ->pluck('Field')
+            ->values()
+            ->all();
+    }
+
+    private function limitSourceId(string $sourceId): string
+    {
+        if (mb_strlen($sourceId) <= 191) {
+            return $sourceId;
+        }
+
+        return mb_substr($sourceId, 0, 150).'#'.substr(hash('sha256', $sourceId), 0, 40);
+    }
+
+    private function quoteIdentifier(string $identifier): string
+    {
+        return '`'.str_replace('`', '``', $identifier).'`';
     }
 
     private function workdays(string $start, string $end, int $limit): array
@@ -1025,6 +1417,39 @@ class BopImportService
                 'updated_at' => now(),
             ]
         );
+    }
+
+    private function storeSnapshotIfMissing(int $runId, string $sourceTable, string $sourceId, array $payload, string $classification, ?string $reason): string
+    {
+        $existing = DB::table('legacy_record_snapshots')
+            ->where('source', self::SOURCE)
+            ->where('source_table', $sourceTable)
+            ->where('source_id', $sourceId)
+            ->first();
+
+        $values = [
+            'legacy_import_run_id' => $runId,
+            'payload' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+            'record_checksum' => $this->checksum($payload),
+            'classification' => $existing->classification ?? $classification,
+            'reason' => $existing->reason ?? $reason,
+            'updated_at' => now(),
+        ];
+
+        if ($existing) {
+            DB::table('legacy_record_snapshots')->where('id', $existing->id)->update($values);
+
+            return 'updated';
+        }
+
+        DB::table('legacy_record_snapshots')->insert($values + [
+            'source' => self::SOURCE,
+            'source_table' => $sourceTable,
+            'source_id' => $sourceId,
+            'created_at' => now(),
+        ]);
+
+        return 'created';
     }
 
     private function checksum(array $payload): string

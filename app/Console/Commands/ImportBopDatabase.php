@@ -74,11 +74,16 @@ class ImportBopDatabase extends Command
         $this->line("Gruppen verarbeitet: {$summary['groups_imported']}");
         $this->line("Anwesenheitszeilen verarbeitet: {$summary['attendance_rows_imported']}");
         $this->line("Anwesenheitskonflikte: {$summary['attendance_conflicts']}");
+        $this->line("Teilnehmer-Schulzeilen aktualisiert: {$summary['participant_school_rows_updated']}");
+        $this->line("Teilnehmer-Adressen importiert/ergaenzt: {$summary['participant_addresses_imported']}");
         $this->line("Bereichswahlen verarbeitet: {$summary['selections_imported']}");
         $this->line("Bereichseinteilungen verarbeitet: {$summary['assignments_imported']}");
         $this->line("PA-Kompetenzwerte verarbeitet: {$summary['pa_ratings_imported']}");
         $this->line("PA-Uebungsergebnisse verarbeitet: {$summary['pa_exercise_results_imported']}");
+        $this->line("PA-Zusammenfassungen verarbeitet: {$summary['pa_summaries_imported']}");
         $this->line("BO-Bewertungen verarbeitet: {$summary['bo_ratings_imported']}");
+        $this->line("Legacy-Snapshots neu: {$summary['legacy_snapshots_created']}");
+        $this->line("Legacy-Snapshots aktualisiert: {$summary['legacy_snapshots_updated']}");
 
         return self::SUCCESS;
     }
