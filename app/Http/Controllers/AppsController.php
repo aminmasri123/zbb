@@ -311,15 +311,21 @@ class AppsController extends Controller
             );
         }
 
-        if (! empty($data['send_notification'])) {
-            $this->notifyAppShareRecipients($item, $data, $personIds, $teamIds, $emails);
-        }
+        $mailFailures = ! empty($data['send_notification'])
+            ? $this->notifyAppShareRecipients($item, $data, $personIds, $teamIds, $emails)
+            : 0;
 
         if ($item instanceof AppFile && $item->type === 'folder') {
             $this->syncFolderSharesToChildren($item);
         }
 
-        return back()->with('success', 'Freigabe wurde gespeichert.');
+        $response = back()->with('success', 'Freigabe wurde gespeichert.');
+
+        if ($mailFailures > 0) {
+            $response->with('warning', 'Freigabe wurde gespeichert, aber mindestens eine Benachrichtigung konnte nicht versendet werden. Bitte Mail-Konfiguration pruefen.');
+        }
+
+        return $response;
     }
 
     public function mailFile(Request $request, AppFile $file)
@@ -333,14 +339,20 @@ class AppsController extends Controller
 
         abort_unless($file->path && Storage::exists($file->path), 404);
 
-        Mail::raw($data['message'] ?: 'Im Anhang findest du die freigegebene Datei.', function ($message) use ($data, $file) {
-            $message->to($data['email'])
-                ->subject('Datei von ZBB Apps: ' . $file->name)
-                ->attach(storage_path('app/' . $file->path), [
-                    'as' => $file->original_name ?: $file->name,
-                    'mime' => $file->mime_type,
-                ]);
-        });
+        try {
+            Mail::raw($data['message'] ?: 'Im Anhang findest du die freigegebene Datei.', function ($message) use ($data, $file) {
+                $message->to($data['email'])
+                    ->subject('Datei von ZBB Apps: ' . $file->name)
+                    ->attach(storage_path('app/' . $file->path), [
+                        'as' => $file->original_name ?: $file->name,
+                        'mime' => $file->mime_type,
+                    ]);
+            });
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return back()->with('error', 'Die Datei konnte nicht per Mail versendet werden. Bitte Mail-Konfiguration pruefen.');
+        }
 
         return back()->with('success', 'Datei wurde per Mail versendet.');
     }
@@ -993,7 +1005,7 @@ class AppsController extends Controller
         return $items;
     }
 
-    private function notifyAppShareRecipients($item, array $data, $personIds, $teamIds, $emails): void
+    private function notifyAppShareRecipients($item, array $data, $personIds, $teamIds, $emails): int
     {
         $recipients = collect($emails);
 
@@ -1010,10 +1022,18 @@ class AppsController extends Controller
             );
         }
 
-        $recipients
-            ->filter(fn ($email) => filter_var($email, FILTER_VALIDATE_EMAIL))
-            ->unique()
-            ->each(fn ($email) => $this->sendShareMail($email, $item, $data['message'] ?? null));
+        $failures = 0;
+
+        foreach ($recipients->filter(fn ($email) => filter_var($email, FILTER_VALIDATE_EMAIL))->unique() as $email) {
+            try {
+                $this->sendShareMail($email, $item, $data['message'] ?? null);
+            } catch (\Throwable $exception) {
+                $failures++;
+                report($exception);
+            }
+        }
+
+        return $failures;
     }
 
     private function inheritFileShares(AppFile $file, ?int $parentId): void
