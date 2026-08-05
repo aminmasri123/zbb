@@ -34,6 +34,8 @@ const selectedEdit = ref(null);
 const selectedFile = ref(null);
 const selectedWorkflowTemplate = ref(null);
 const selectedOwnerTransfer = ref(null);
+const deleteTarget = ref(null);
+const deleteProcessing = ref(false);
 const showFolderModal = ref(false);
 const showUploadModal = ref(false);
 const uploadMenuOpen = ref(false);
@@ -339,9 +341,38 @@ function applyWorkflowTemplate() {
     });
 }
 
-function destroyItem(routeName, id) {
-    if (!confirm('Diesen Eintrag wirklich löschen?')) return;
-    router.delete(route(routeName, id), { preserveScroll: true });
+function destroyItem(routeName, id, item = null) {
+    deleteTarget.value = {
+        routeName,
+        id,
+        item,
+        name: item?.name || item?.title || item?.organization || 'Eintrag',
+        type: item?.type === 'folder' ? 'Ordner' : item?.type === 'file' ? 'Datei' : 'Eintrag',
+    };
+}
+
+function closeDeleteModal() {
+    if (deleteProcessing.value) return;
+    deleteTarget.value = null;
+}
+
+function confirmDeleteItem() {
+    if (!deleteTarget.value) return;
+    deleteProcessing.value = true;
+
+    router.delete(route(deleteTarget.value.routeName, deleteTarget.value.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            if (selectedFile.value?.id === deleteTarget.value?.id && deleteTarget.value?.routeName === 'apps.files.destroy') {
+                selectedFile.value = null;
+            }
+
+            deleteTarget.value = null;
+        },
+        onFinish: () => {
+            deleteProcessing.value = false;
+        },
+    });
 }
 
 function canOwn(item) {
@@ -790,9 +821,14 @@ function ownerLabel(item) {
                                                     <span class="mt-1 block text-xs text-gray-500">{{ item.type === 'folder' ? 'Ordner' : formatBytes(item.size) }}</span>
                                                 </span>
                                             </a>
-                                            <button v-if="canDo(item, 'write') || canDo(item, 'share')" class="rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 opacity-100 hover:border-orange-300 md:opacity-0 md:group-hover:opacity-100" @click.stop="openFileEdit(item)">
-                                                <i class="la la-pen"></i>
-                                            </button>
+                                            <div class="flex shrink-0 items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100">
+                                                <button v-if="canDo(item, 'write') || canDo(item, 'share')" class="rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:border-orange-300" title="Bearbeiten" @click.stop="openFileEdit(item)">
+                                                    <i class="la la-pen"></i>
+                                                </button>
+                                                <button v-if="canDo(item, 'delete')" class="rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50" title="Löschen" @click.stop="destroyItem('apps.files.destroy', item.id, item)">
+                                                    <i class="la la-trash"></i>
+                                                </button>
+                                            </div>
                                         </div>
                                         <div class="mt-4 flex items-center justify-between text-xs text-gray-500">
                                             <span>{{ visibilityLabel(item.visibility) }}</span>
@@ -809,9 +845,14 @@ function ownerLabel(item) {
                                         <span>Geändert</span>
                                     </div>
                                     <div v-for="item in items" :key="item.id" class="grid cursor-pointer grid-cols-[1fr_110px_120px_120px] items-center border-t px-4 py-3 text-sm hover:bg-orange-50" @click="selectedFile = item">
-                                        <a :href="fileRoute(item)" class="min-w-0 truncate font-semibold text-gray-900 hover:text-orange-600" @click.stop>
-                                            <i :class="['la mr-2', fileIcon(item)]"></i>{{ item.name }}
-                                        </a>
+                                        <div class="flex min-w-0 items-center justify-between gap-2">
+                                            <a :href="fileRoute(item)" class="min-w-0 truncate font-semibold text-gray-900 hover:text-orange-600" @click.stop>
+                                                <i :class="['la mr-2', fileIcon(item)]"></i>{{ item.name }}
+                                            </a>
+                                            <button v-if="canDo(item, 'delete')" class="shrink-0 rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50" title="Löschen" @click.stop="destroyItem('apps.files.destroy', item.id, item)">
+                                                <i class="la la-trash"></i>
+                                            </button>
+                                        </div>
                                         <span class="text-gray-500">{{ item.type === 'folder' ? '-' : formatBytes(item.size) }}</span>
                                         <span class="text-gray-500">{{ visibilityLabel(item.visibility) }}</span>
                                         <span class="text-gray-500">{{ formatDate(item.updated_at) }}</span>
@@ -844,7 +885,7 @@ function ownerLabel(item) {
                                         <button v-if="canDo(selectedFile, 'share')" class="rounded border border-gray-200 bg-white px-3 py-2 font-semibold text-gray-700" @click="openShare(selectedFile, 'file')">Teilen</button>
                                         <button v-if="canDo(selectedFile, 'write')" class="rounded border border-gray-200 bg-white px-3 py-2 font-semibold text-gray-700" @click="openFileEdit(selectedFile)">Bearbeiten</button>
                                         <button v-if="canDo(selectedFile, 'transfer_owner')" class="rounded border border-gray-200 bg-white px-3 py-2 font-semibold text-gray-700" @click="openOwnerTransfer(selectedFile)">Besitzer</button>
-                                        <button v-if="canDo(selectedFile, 'delete')" class="rounded border border-red-200 bg-white px-3 py-2 font-semibold text-red-600" @click="destroyItem('apps.files.destroy', selectedFile.id)">Löschen</button>
+                                        <button v-if="canDo(selectedFile, 'delete')" class="rounded border border-red-200 bg-white px-3 py-2 font-semibold text-red-600" @click="destroyItem('apps.files.destroy', selectedFile.id, selectedFile)">Löschen</button>
                                     </div>
 
                                     <dl class="space-y-2 rounded border border-gray-200 bg-white p-3 text-sm">
@@ -922,7 +963,7 @@ function ownerLabel(item) {
 
                                             <div class="mt-3 flex flex-wrap gap-2">
                                                 <button class="rounded border px-2 py-1 text-xs hover:border-orange-400" @click="openShare(item, 'task')">Teilen</button>
-                                                <button class="rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50" @click="destroyItem('apps.tasks.destroy', item.id)">Löschen</button>
+                                                <button class="rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50" @click="destroyItem('apps.tasks.destroy', item.id, item)">Löschen</button>
                                             </div>
                                         </article>
                                     </div>
@@ -967,7 +1008,7 @@ function ownerLabel(item) {
 
                                     <div class="mt-4 flex flex-wrap gap-2">
                                         <button class="rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white" @click="openWorkflowTemplate(template)">In Projekt kopieren</button>
-                                        <button class="rounded border border-red-200 px-3 py-2 text-sm font-semibold text-red-600" @click="destroyItem('apps.tasks.workflows.destroy', template.id)">Deaktivieren</button>
+                                        <button class="rounded border border-red-200 px-3 py-2 text-sm font-semibold text-red-600" @click="destroyItem('apps.tasks.workflows.destroy', template.id, template)">Deaktivieren</button>
                                     </div>
                                 </article>
                             </div>
@@ -1010,7 +1051,7 @@ function ownerLabel(item) {
                                     <button class="rounded border px-2 py-1 text-xs hover:border-orange-400" @click="openShare(item, section === 'files' ? 'file' : section === 'calendar' ? 'event' : section === 'contacts' ? 'contact' : section === 'tasks' ? 'task' : 'popup')">Teilen</button>
                                     <button
                                         class="rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
-                                        @click="destroyItem(section === 'files' ? 'apps.files.destroy' : section === 'calendar' ? 'apps.calendar.destroy' : section === 'contacts' ? 'apps.contacts.destroy' : section === 'tasks' ? 'apps.tasks.destroy' : 'apps.popups.destroy', item.id)"
+                                        @click="destroyItem(section === 'files' ? 'apps.files.destroy' : section === 'calendar' ? 'apps.calendar.destroy' : section === 'contacts' ? 'apps.contacts.destroy' : section === 'tasks' ? 'apps.tasks.destroy' : 'apps.popups.destroy', item.id, item)"
                                     >
                                         Löschen
                                     </button>
@@ -1018,6 +1059,38 @@ function ownerLabel(item) {
                             </div>
                         </div>
                     </section>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="deleteTarget" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div class="w-full max-w-md rounded bg-white shadow-xl">
+                <div class="flex items-start gap-3 border-b px-5 py-4">
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-red-50 text-xl text-red-600">
+                        <i class="la la-trash"></i>
+                    </span>
+                    <div class="min-w-0">
+                        <h2 class="text-lg font-semibold text-gray-950">{{ deleteTarget.type }} löschen?</h2>
+                        <p class="mt-1 break-words text-sm text-gray-600">{{ deleteTarget.name }}</p>
+                    </div>
+                </div>
+
+                <div class="space-y-3 px-5 py-4 text-sm text-gray-700">
+                    <p>Bist du sicher, dass du diesen Eintrag löschen möchtest?</p>
+                    <p v-if="deleteTarget.item?.type === 'folder'" class="rounded border border-red-100 bg-red-50 p-3 text-red-700">
+                        Dieser Ordner und alle enthaltenen Dateien und Unterordner werden entfernt.
+                    </p>
+                    <p class="text-xs text-gray-500">Diese Aktion kann nicht rückgängig gemacht werden.</p>
+                </div>
+
+                <div class="flex justify-end gap-2 border-t px-5 py-4">
+                    <button type="button" class="rounded border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700" :disabled="deleteProcessing" @click="closeDeleteModal">
+                        Abbrechen
+                    </button>
+                    <button type="button" class="inline-flex items-center gap-2 rounded bg-red-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="deleteProcessing" @click="confirmDeleteItem">
+                        <i class="la la-trash"></i>
+                        {{ deleteProcessing ? 'Wird gelöscht ...' : 'Ja, löschen' }}
+                    </button>
                 </div>
             </div>
         </div>
@@ -1243,7 +1316,7 @@ function ownerLabel(item) {
                     </div>
 
                     <textarea v-model="shareForm.message" rows="3" class="w-full rounded border-gray-300 text-sm" placeholder="Nachricht"></textarea>
-                    <label class="flex items-center gap-2 text-sm"><input v-model="shareForm.send_notification" type="checkbox" /> Empfaenger benachrichtigen</label>
+                    <label class="flex items-center gap-2 text-sm"><input v-model="shareForm.send_notification" type="checkbox" /> Im Programm und per Mail benachrichtigen</label>
 
                     <div v-if="shareForm.errors.targets || shareForm.errors.emails" class="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                         {{ shareForm.errors.targets || shareForm.errors.emails }}

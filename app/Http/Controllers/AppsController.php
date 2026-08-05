@@ -14,12 +14,14 @@ use App\Models\AppTaskWorkflowTemplate;
 use App\Models\Personen;
 use App\Models\Projekt;
 use App\Models\User;
+use App\Notifications\ConfiguredEventNotification;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -1007,21 +1009,43 @@ class AppsController extends Controller
 
     private function notifyAppShareRecipients($item, array $data, $personIds, $teamIds, $emails): int
     {
-        $recipients = collect($emails);
+        $recipientUsers = collect();
 
         if ($personIds->isNotEmpty()) {
-            $recipients = $recipients->merge(
-                User::whereIn('person_id', $personIds)->pluck('email')
+            $recipientUsers = $recipientUsers->merge(
+                User::whereIn('person_id', $personIds)->get(['id', 'person_id', 'email'])
             );
         }
 
         if ($teamIds->isNotEmpty()) {
-            $recipients = $recipients->merge(
+            $recipientUsers = $recipientUsers->merge(
                 User::whereHas('projekte', fn (Builder $query) => $query->whereIn('projekts.id', $teamIds))
-                    ->pluck('email')
+                    ->get(['id', 'person_id', 'email'])
             );
         }
 
+        if ($emails->isNotEmpty()) {
+            $recipientUsers = $recipientUsers->merge(
+                User::whereIn('email', $emails)->get(['id', 'person_id', 'email'])
+            );
+        }
+
+        $recipientUsers = $recipientUsers
+            ->filter(fn (User $user) => (int) $user->id !== (int) Auth::id())
+            ->unique('id')
+            ->values();
+
+        if ($recipientUsers->isNotEmpty()) {
+            Notification::send($recipientUsers, new ConfiguredEventNotification([
+                'message' => $this->shareNotificationMessage($item),
+                'link' => $this->shareNotificationLink($item),
+                'id' => $item->id,
+                'typ' => $this->shareNotificationType($item),
+                'event_key' => 'apps.share',
+            ]));
+        }
+
+        $recipients = collect($emails)->merge($recipientUsers->pluck('email'));
         $failures = 0;
 
         foreach ($recipients->filter(fn ($email) => filter_var($email, FILTER_VALIDATE_EMAIL))->unique() as $email) {
@@ -1034,6 +1058,42 @@ class AppsController extends Controller
         }
 
         return $failures;
+    }
+
+    private function shareNotificationMessage($item): string
+    {
+        $sender = Auth::user()?->name ?: 'Ein Benutzer';
+        $name = $item->title ?? $item->name ?? 'Eintrag';
+
+        return $sender . ' hat "' . $name . '" fuer dich freigegeben.';
+    }
+
+    private function shareNotificationType($item): string
+    {
+        return match (true) {
+            $item instanceof AppFile => 'Dateimanager',
+            $item instanceof AppCalendarEvent => 'Kalender',
+            $item instanceof AppContact => 'Kontakte',
+            $item instanceof AppTask => 'Taskmanager',
+            $item instanceof AppTaskWorkflowTemplate => 'Workflow',
+            $item instanceof AppPopup => 'Popup',
+            default => 'Apps',
+        };
+    }
+
+    private function shareNotificationLink($item): ?string
+    {
+        return match (true) {
+            $item instanceof AppFile && $item->type === 'folder' => route('apps.files', ['folder' => $item->id]),
+            $item instanceof AppFile && $item->parent_id => route('apps.files', ['folder' => $item->parent_id]),
+            $item instanceof AppFile => route('apps.files'),
+            $item instanceof AppCalendarEvent => route('apps.calendar'),
+            $item instanceof AppContact => route('apps.contacts'),
+            $item instanceof AppTask,
+            $item instanceof AppTaskWorkflowTemplate => route('apps.tasks'),
+            $item instanceof AppPopup => route('apps.popups'),
+            default => route('apps.index'),
+        };
     }
 
     private function inheritFileShares(AppFile $file, ?int $parentId): void

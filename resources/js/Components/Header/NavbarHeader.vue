@@ -413,6 +413,9 @@ function switchToProjekt(projekt) {
 const page = usePage();
 const { can, canAny } = usePermissions();
 const notifications = ref(page.props.notify?.notifications || []);
+watch(() => page.props.notify?.notifications, (items) => {
+    notifications.value = items || [];
+});
 const assignedProjects = computed(() => page.props.auth?.user?.projekte || []);
 const projectSelectionRequired = computed(() => !page.props.currentProjekt?.id && assignedProjects.value.length > 0);
 const dashboardNavPermissions = [
