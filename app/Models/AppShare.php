@@ -15,6 +15,7 @@ class AppShare extends Model
         'shared_by_user_id',
         'person_id',
         'email',
+        'team_id',
         'permission',
         'message',
         'sent_at',
@@ -32,6 +33,11 @@ class AppShare extends Model
     public function person()
     {
         return $this->belongsTo(Personen::class);
+    }
+
+    public function team()
+    {
+        return $this->belongsTo(Projekt::class, 'team_id');
     }
 
     public function sharedBy()

@@ -61,11 +61,16 @@ class AppsController extends Controller
         $type = $request->input('type', 'all');
         $sort = $request->input('sort', 'name');
         $direction = $request->input('direction', 'asc') === 'desc' ? 'desc' : 'asc';
-        $currentFolder = $parentId ? $this->visible(AppFile::query(), AppFile::class)->whereKey($parentId)->firstOrFail() : null;
+        $currentFolder = $parentId
+            ? $this->visible(AppFile::query(), AppFile::class)
+                ->with(['owner:id,username,email', 'shares.person:id,vorname,nachname,typ', 'shares.team:id,name'])
+                ->whereKey($parentId)
+                ->firstOrFail()
+            : null;
 
         $query = $this->visible(AppFile::query(), AppFile::class)
             ->where('parent_id', $parentId)
-            ->with(['owner:id,username,email', 'shares.person:id,vorname,nachname']);
+            ->with(['owner:id,username,email', 'shares.person:id,vorname,nachname,typ', 'shares.team:id,name']);
 
         if ($search !== '') {
             $query->where(function (Builder $q) use ($search) {
@@ -88,7 +93,7 @@ class AppsController extends Controller
         $items = $query->paginate(60)->withQueryString();
 
         return $this->workspace('files', [
-            'items' => $items->items(),
+            'items' => $items->getCollection()->map(fn (AppFile $file) => $this->filePayload($file))->values(),
             'pagination' => [
                 'current_page' => $items->currentPage(),
                 'last_page' => $items->lastPage(),
@@ -97,7 +102,7 @@ class AppsController extends Controller
                 'prev_page_url' => $items->previousPageUrl(),
                 'next_page_url' => $items->nextPageUrl(),
             ],
-            'currentFolder' => $currentFolder,
+            'currentFolder' => $currentFolder ? $this->filePayload($currentFolder) : null,
             'breadcrumbs' => $this->fileBreadcrumbs($currentFolder),
             'fileFilters' => [
                 'search' => $search,
@@ -184,7 +189,7 @@ class AppsController extends Controller
 
     public function updateFile(Request $request, AppFile $file)
     {
-        abort_unless($this->canManage($file), 403);
+        abort_unless($this->canWriteFile($file), 403);
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -204,7 +209,7 @@ class AppsController extends Controller
 
     public function transferFileOwner(Request $request, AppFile $file)
     {
-        abort_unless($this->canManage($file), 403);
+        abort_unless($this->canOwn($file), 403);
 
         $data = $request->validate([
             'person_id' => ['required', 'exists:personens,id'],
@@ -235,37 +240,83 @@ class AppsController extends Controller
         abort_unless($this->canManage($item), 403);
 
         $data = $request->validate([
-            'person_id' => ['nullable', 'exists:personens,id'],
-            'email' => ['nullable', 'email', 'max:255'],
-            'permission' => ['required', Rule::in(['view', 'edit'])],
+            'person_ids' => ['nullable', 'array'],
+            'person_ids.*' => ['integer', 'exists:personens,id'],
+            'team_ids' => ['nullable', 'array'],
+            'team_ids.*' => ['integer', 'exists:projekts,id'],
+            'emails' => ['nullable', 'string', 'max:2000'],
+            'permission' => ['required', Rule::in(['view', 'edit', 'manage'])],
             'message' => ['nullable', 'string', 'max:2000'],
-            'send_email' => ['nullable', 'boolean'],
+            'send_notification' => ['nullable', 'boolean'],
         ]);
 
-        abort_if(empty($data['person_id']) && empty($data['email']), 422, 'Bitte Person oder E-Mail angeben.');
+        $personIds = collect($data['person_ids'] ?? [])->filter()->unique()->values();
+        $teamIds = collect($data['team_ids'] ?? [])->filter()->unique()->values();
+        $emails = $this->parseShareEmails($data['emails'] ?? '');
 
-        $share = AppShare::updateOrCreate(
-            [
-                'shareable_type' => $modelClass,
-                'shareable_id' => $item->id,
-                'person_id' => $data['person_id'] ?? null,
-                'email' => $data['email'] ?? null,
-            ],
-            [
-                'shared_by_user_id' => Auth::id(),
-                'permission' => $data['permission'],
-                'message' => $data['message'] ?? null,
-                'sent_at' => !empty($data['send_email']) ? now() : null,
-            ]
-        );
+        if ($teamIds->isNotEmpty()) {
+            $allowedTeamIds = Auth::user()->projekte()->pluck('projekts.id')->map(fn ($id) => (int) $id);
+            abort_if($teamIds->diff($allowedTeamIds)->isNotEmpty(), 403, 'Dieses Team kann nicht freigegeben werden.');
+        }
 
-        if (!empty($data['send_email']) && !empty($data['email'])) {
-            $this->sendShareMail($data['email'], $item, $data['message'] ?? null);
-            $share->update(['sent_at' => now()]);
+        if ($personIds->isEmpty() && $teamIds->isEmpty() && $emails->isEmpty()) {
+            throw ValidationException::withMessages([
+                'targets' => 'Bitte mindestens eine Person, ein Team oder eine E-Mail-Adresse auswaehlen.',
+            ]);
+        }
+
+        $sharePayload = [
+            'shared_by_user_id' => Auth::id(),
+            'permission' => $data['permission'],
+            'message' => $data['message'] ?? null,
+            'sent_at' => ! empty($data['send_notification']) ? now() : null,
+        ];
+
+        foreach ($personIds as $personId) {
+            AppShare::updateOrCreate(
+                [
+                    'shareable_type' => $modelClass,
+                    'shareable_id' => $item->id,
+                    'person_id' => $personId,
+                    'email' => null,
+                    'team_id' => null,
+                ],
+                $sharePayload
+            );
+        }
+
+        foreach ($teamIds as $teamId) {
+            AppShare::updateOrCreate(
+                [
+                    'shareable_type' => $modelClass,
+                    'shareable_id' => $item->id,
+                    'person_id' => null,
+                    'email' => null,
+                    'team_id' => $teamId,
+                ],
+                $sharePayload
+            );
+        }
+
+        foreach ($emails as $email) {
+            AppShare::updateOrCreate(
+                [
+                    'shareable_type' => $modelClass,
+                    'shareable_id' => $item->id,
+                    'person_id' => null,
+                    'email' => $email,
+                    'team_id' => null,
+                ],
+                $sharePayload
+            );
+        }
+
+        if (! empty($data['send_notification'])) {
+            $this->notifyAppShareRecipients($item, $data, $personIds, $teamIds, $emails);
         }
 
         if ($item instanceof AppFile && $item->type === 'folder') {
-            $this->syncFolderShareToChildren($item, $data);
+            $this->syncFolderSharesToChildren($item);
         }
 
         return back()->with('success', 'Freigabe wurde gespeichert.');
@@ -860,12 +911,20 @@ class AppsController extends Controller
 
     private function baseProps(): array
     {
+        $user = Auth::user();
+
         return [
             'projects' => Projekt::orderBy('name')->get(['id', 'name']),
-            'people' => Personen::whereHas('user')
+            'people' => Personen::with('user:id,person_id,username,email')
+                ->whereHas('user')
                 ->orderBy('nachname')
                 ->orderBy('vorname')
-                ->get(['id', 'vorname', 'nachname']),
+                ->get(['id', 'vorname', 'nachname', 'typ']),
+            'shareTeams' => $user
+                ? $user->projekte()
+                    ->orderBy('projekts.name')
+                    ->get(['projekts.id', 'projekts.name'])
+                : collect(),
             'visibilityOptions' => [
                 ['value' => 'private', 'label' => 'Privat'],
                 ['value' => 'all', 'label' => 'Fuer alle sichtbar'],
@@ -915,6 +974,48 @@ class AppsController extends Controller
         ]);
     }
 
+    private function parseShareEmails(?string $emails)
+    {
+        $items = collect(preg_split('/[\s,;]+/', (string) $emails, -1, PREG_SPLIT_NO_EMPTY))
+            ->map(fn ($email) => strtolower(trim($email)))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $invalid = $items->reject(fn ($email) => filter_var($email, FILTER_VALIDATE_EMAIL));
+
+        if ($invalid->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'emails' => 'Ungueltige E-Mail-Adresse: ' . $invalid->first(),
+            ]);
+        }
+
+        return $items;
+    }
+
+    private function notifyAppShareRecipients($item, array $data, $personIds, $teamIds, $emails): void
+    {
+        $recipients = collect($emails);
+
+        if ($personIds->isNotEmpty()) {
+            $recipients = $recipients->merge(
+                User::whereIn('person_id', $personIds)->pluck('email')
+            );
+        }
+
+        if ($teamIds->isNotEmpty()) {
+            $recipients = $recipients->merge(
+                User::whereHas('projekte', fn (Builder $query) => $query->whereIn('projekts.id', $teamIds))
+                    ->pluck('email')
+            );
+        }
+
+        $recipients
+            ->filter(fn ($email) => filter_var($email, FILTER_VALIDATE_EMAIL))
+            ->unique()
+            ->each(fn ($email) => $this->sendShareMail($email, $item, $data['message'] ?? null));
+    }
+
     private function inheritFileShares(AppFile $file, ?int $parentId): void
     {
         if (! $parentId) {
@@ -934,6 +1035,7 @@ class AppsController extends Controller
                     'shareable_id' => $file->id,
                     'person_id' => $share->person_id,
                     'email' => $share->email,
+                    'team_id' => $share->team_id,
                 ],
                 [
                     'shared_by_user_id' => $share->shared_by_user_id,
@@ -945,26 +1047,31 @@ class AppsController extends Controller
         }
     }
 
-    private function syncFolderShareToChildren(AppFile $folder, array $shareData): void
+    private function syncFolderSharesToChildren(AppFile $folder): void
     {
-        $folder->children()->get()->each(function (AppFile $child) use ($shareData) {
-            AppShare::updateOrCreate(
-                [
-                    'shareable_type' => AppFile::class,
-                    'shareable_id' => $child->id,
-                    'person_id' => $shareData['person_id'] ?? null,
-                    'email' => $shareData['email'] ?? null,
-                ],
-                [
-                    'shared_by_user_id' => Auth::id(),
-                    'permission' => $shareData['permission'],
-                    'message' => $shareData['message'] ?? null,
-                    'sent_at' => ! empty($shareData['send_email']) ? now() : null,
-                ]
-            );
+        $folder->loadMissing('shares');
+
+        $folder->children()->get()->each(function (AppFile $child) use ($folder) {
+            foreach ($folder->shares as $share) {
+                AppShare::updateOrCreate(
+                    [
+                        'shareable_type' => AppFile::class,
+                        'shareable_id' => $child->id,
+                        'person_id' => $share->person_id,
+                        'email' => $share->email,
+                        'team_id' => $share->team_id,
+                    ],
+                    [
+                        'shared_by_user_id' => $share->shared_by_user_id,
+                        'permission' => $share->permission,
+                        'message' => $share->message,
+                        'sent_at' => $share->sent_at,
+                    ]
+                );
+            }
 
             if ($child->type === 'folder') {
-                $this->syncFolderShareToChildren($child, $shareData);
+                $this->syncFolderSharesToChildren($child);
             }
         });
     }
@@ -1668,13 +1775,19 @@ class AppsController extends Controller
         return $colors[$id % count($colors)];
     }
 
+    private function userTeamIds(User $user)
+    {
+        return $user->projekte()->pluck('projekts.id')->map(fn ($id) => (int) $id)->filter()->unique()->values();
+    }
+
     private function visible(Builder $query, string $modelClass): Builder
     {
         $user = Auth::user();
         $personId = $user->person_id;
         $teamId = $user->current_team_id;
+        $teamIds = $this->userTeamIds($user);
 
-        return $query->where(function (Builder $q) use ($user, $personId, $teamId, $modelClass) {
+        return $query->where(function (Builder $q) use ($user, $personId, $teamId, $teamIds, $modelClass) {
             $q->where('owner_user_id', $user->id)
                 ->orWhere('visibility', 'all');
 
@@ -1686,14 +1799,18 @@ class AppsController extends Controller
                 });
             }
 
-            $q->orWhereHas('shares', function (Builder $share) use ($personId, $user, $modelClass) {
+            $q->orWhereHas('shares', function (Builder $share) use ($personId, $user, $teamIds, $modelClass) {
                 $share->where('shareable_type', $modelClass)
-                    ->where(function (Builder $shareTarget) use ($personId, $user) {
+                    ->where(function (Builder $shareTarget) use ($personId, $user, $teamIds) {
                         if ($personId) {
                             $shareTarget->where('person_id', $personId);
                         }
 
                         $shareTarget->orWhere('email', $user->email);
+
+                        if ($teamIds->isNotEmpty()) {
+                            $shareTarget->orWhereIn('team_id', $teamIds);
+                        }
                     });
             });
         });
@@ -1706,7 +1823,55 @@ class AppsController extends Controller
 
     private function canManage($item): bool
     {
+        if ((int) $item->owner_user_id === (int) Auth::id()) {
+            return true;
+        }
+
+        if ($item instanceof AppFile) {
+            return $this->effectiveSharePermission($item) === 'manage';
+        }
+
+        return false;
+    }
+
+    private function canOwn($item): bool
+    {
         return (int) $item->owner_user_id === (int) Auth::id();
+    }
+
+    private function canWriteFile(AppFile $file): bool
+    {
+        if ($this->canOwn($file)) {
+            return true;
+        }
+
+        return in_array($this->effectiveSharePermission($file), ['edit', 'manage'], true);
+    }
+
+    private function effectiveSharePermission(AppFile $file): ?string
+    {
+        $user = Auth::user();
+        $teamIds = $this->userTeamIds($user);
+        $rank = ['view' => 1, 'edit' => 2, 'manage' => 3];
+        $best = null;
+
+        $shares = $file->relationLoaded('shares') ? $file->shares : $file->shares()->get();
+
+        foreach ($shares as $share) {
+            $matchesPerson = $user->person_id && (int) $share->person_id === (int) $user->person_id;
+            $matchesEmail = $share->email && strcasecmp((string) $share->email, (string) $user->email) === 0;
+            $matchesTeam = $share->team_id && $teamIds->contains((int) $share->team_id);
+
+            if (! $matchesPerson && ! $matchesEmail && ! $matchesTeam) {
+                continue;
+            }
+
+            if (($rank[$share->permission] ?? 0) > ($rank[$best] ?? 0)) {
+                $best = $share->permission;
+            }
+        }
+
+        return $best;
     }
 
     private function canWorkOnTask(AppTask $task): bool
@@ -1722,13 +1887,18 @@ class AppsController extends Controller
         }
 
         return $task->shares()
-            ->where('permission', 'edit')
+            ->whereIn('permission', ['edit', 'manage'])
             ->where(function (Builder $share) use ($user) {
                 if ($user->person_id) {
                     $share->where('person_id', $user->person_id);
                 }
 
                 $share->orWhere('email', $user->email);
+
+                $teamIds = $this->userTeamIds($user);
+                if ($teamIds->isNotEmpty()) {
+                    $share->orWhereIn('team_id', $teamIds);
+                }
             })
             ->exists();
     }
@@ -1739,9 +1909,9 @@ class AppsController extends Controller
             return;
         }
 
-        $parent = $this->visible(AppFile::query(), AppFile::class)->whereKey($parentId)->first();
+        $parent = $this->visible(AppFile::query(), AppFile::class)->with('shares')->whereKey($parentId)->first();
 
-        abort_unless($parent && $parent->type === 'folder' && $this->canManage($parent), 403);
+        abort_unless($parent && $parent->type === 'folder' && $this->canWriteFile($parent), 403);
     }
 
     private function isDescendantFolder(int $parentId, AppFile $folder): bool
@@ -1755,6 +1925,72 @@ class AppsController extends Controller
         }
 
         return false;
+    }
+
+    private function filePayload(AppFile $file): array
+    {
+        $file->loadMissing(['owner:id,username,email', 'shares.person:id,vorname,nachname,typ', 'shares.team:id,name']);
+
+        $payload = $file->toArray();
+        $canOwn = $this->canOwn($file);
+        $canWrite = $this->canWriteFile($file);
+        $canManage = $this->canManage($file);
+
+        $payload['can'] = [
+            'own' => $canOwn,
+            'write' => $canWrite,
+            'manage' => $canManage,
+            'share' => $canManage,
+            'delete' => $canManage,
+            'transfer_owner' => $canOwn,
+        ];
+        $payload['effective_permission'] = $canOwn ? 'owner' : $this->effectiveSharePermission($file);
+        $payload['shares'] = $canManage
+            ? $file->shares->map(fn (AppShare $share) => $this->sharePayload($share))->values()
+            : [];
+
+        return $payload;
+    }
+
+    private function sharePayload(AppShare $share): array
+    {
+        $type = 'email';
+        $label = $share->email;
+        $detail = null;
+        $targetId = null;
+
+        if ($share->person_id) {
+            $type = 'person';
+            $targetId = $share->person_id;
+            $label = trim(($share->person?->vorname ?? '') . ' ' . ($share->person?->nachname ?? ''));
+            $detail = $share->person?->typ === 'teilnehmer' ? 'Teilnehmer' : 'Person';
+        } elseif ($share->team_id) {
+            $type = 'team';
+            $targetId = $share->team_id;
+            $label = $share->team?->name ?: 'Team #' . $share->team_id;
+            $detail = 'Team';
+        }
+
+        return [
+            'id' => $share->id,
+            'target_type' => $type,
+            'target_id' => $targetId,
+            'target_label' => $label ?: 'Unbekannt',
+            'target_detail' => $detail,
+            'permission' => $share->permission,
+            'permission_label' => $this->sharePermissionLabel($share->permission),
+            'message' => $share->message,
+            'sent_at' => $share->sent_at?->toDateTimeString(),
+        ];
+    }
+
+    private function sharePermissionLabel(?string $permission): string
+    {
+        return match ($permission) {
+            'manage' => 'Alles',
+            'edit' => 'Schreiben',
+            default => 'Lesen',
+        };
     }
 
     private function fileBreadcrumbs(?AppFile $folder): array

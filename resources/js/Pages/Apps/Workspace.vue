@@ -8,6 +8,7 @@ const props = defineProps({
     items: Array,
     projects: Array,
     people: Array,
+    shareTeams: { type: Array, default: () => [] },
     visibilityOptions: Array,
     currentFolder: Object,
     breadcrumbs: { type: Array, default: () => [] },
@@ -36,6 +37,8 @@ const selectedOwnerTransfer = ref(null);
 const showFolderModal = ref(false);
 const showUploadModal = ref(false);
 const uploadMenuOpen = ref(false);
+const sharePersonSearch = ref('');
+const shareTeamSearch = ref('');
 const isFileDragOver = ref(false);
 const dragDepth = ref(0);
 const fileInput = ref(null);
@@ -70,11 +73,25 @@ const forms = {
     popup: useForm({ title: '', message: '', level: 'info', starts_at: '', ends_at: '', active: true, ...baseVisibility() }),
 };
 
-const shareForm = useForm({ person_id: '', email: '', permission: 'view', message: '', send_email: false });
+const shareForm = useForm({ person_ids: [], team_ids: [], emails: '', permission: 'view', message: '', send_notification: true });
 const mailForm = useForm({ email: '', message: '' });
 const workflowApplyForm = useForm({ project_id: '', assignee_person_id: '', start_date: '' });
 const ownerTransferForm = useForm({ person_id: '' });
 const currentUserId = computed(() => page.props.auth?.user?.id);
+const filteredSharePeople = computed(() => {
+    const search = sharePersonSearch.value.trim().toLowerCase();
+
+    return (props.people || []).filter((person) => {
+        const label = `${person.vorname || ''} ${person.nachname || ''} ${person.user?.email || ''} ${person.typ || ''}`.toLowerCase();
+        return !search || label.includes(search);
+    });
+});
+const filteredShareTeams = computed(() => {
+    const search = shareTeamSearch.value.trim().toLowerCase();
+
+    return (props.shareTeams || []).filter((team) => !search || `${team.name || ''}`.toLowerCase().includes(search));
+});
+const canCreateInCurrentFolder = computed(() => !props.currentFolder || props.currentFolder?.can?.write);
 
 const tasksByStatus = computed(() => {
     const grouped = {};
@@ -187,12 +204,14 @@ function hasFileDrag(event) {
 }
 
 function handleFileDragEnter(event) {
+    if (!canCreateInCurrentFolder.value) return;
     if (!hasFileDrag(event)) return;
     dragDepth.value += 1;
     isFileDragOver.value = true;
 }
 
 function handleFileDragOver(event) {
+    if (!canCreateInCurrentFolder.value) return;
     if (!hasFileDrag(event)) return;
     event.dataTransfer.dropEffect = 'copy';
     isFileDragOver.value = true;
@@ -205,6 +224,7 @@ function handleFileDragLeave(event) {
 }
 
 async function handleFileDrop(event) {
+    if (!canCreateInCurrentFolder.value) return;
     if (!hasFileDrag(event)) return;
     dragDepth.value = 0;
     isFileDragOver.value = false;
@@ -328,6 +348,39 @@ function canOwn(item) {
     return Number(item?.owner_user_id) === Number(currentUserId.value);
 }
 
+function canDo(item, action) {
+    return Boolean(item?.can?.[action]);
+}
+
+function personLabel(person) {
+    return `${person.vorname || ''} ${person.nachname || ''}`.trim() || person.user?.email || `Person ${person.id}`;
+}
+
+function personDetail(person) {
+    const type = person.typ === 'teilnehmer' ? 'Teilnehmer' : 'Person';
+    return person.user?.email ? `${type} - ${person.user.email}` : type;
+}
+
+function toggleSharePerson(id) {
+    const value = Number(id);
+    const current = shareForm.person_ids.map(Number);
+    shareForm.person_ids = current.includes(value)
+        ? current.filter((personId) => personId !== value)
+        : [...current, value];
+}
+
+function toggleShareTeam(id) {
+    const value = Number(id);
+    const current = shareForm.team_ids.map(Number);
+    shareForm.team_ids = current.includes(value)
+        ? current.filter((teamId) => teamId !== value)
+        : [...current, value];
+}
+
+function sharePermissionLabel(permission) {
+    return ({ manage: 'Alles', edit: 'Schreiben', view: 'Lesen', owner: 'Besitzer' })[permission] || permission;
+}
+
 function visitFiles(params = {}) {
     router.get(route('apps.files'), {
         folder: props.currentFolder?.id || undefined,
@@ -401,7 +454,10 @@ function normalizeItem(item) {
 function openShare(item, type) {
     selectedShare.value = { ...item, shareType: type };
     shareForm.reset();
+    shareForm.clearErrors();
     mailForm.reset();
+    sharePersonSearch.value = '';
+    shareTeamSearch.value = '';
 }
 
 function submitShare() {
@@ -409,6 +465,12 @@ function submitShare() {
         preserveScroll: true,
         onSuccess: () => selectedShare.value = null,
     });
+}
+
+function openShareFromEdit() {
+    const item = selectedEdit.value;
+    selectedEdit.value = null;
+    openShare(item, 'file');
 }
 
 function sendFileMail() {
@@ -610,7 +672,7 @@ function ownerLabel(item) {
                                 </div>
 
                                 <div class="flex flex-wrap items-center gap-2">
-                                    <div class="relative">
+                                    <div v-if="canCreateInCurrentFolder" class="relative">
                                         <button type="button" class="inline-flex items-center gap-2 rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600" @click="uploadMenuOpen = !uploadMenuOpen">
                                             <i class="la la-cloud-upload-alt text-lg"></i>
                                             Hochladen
@@ -627,7 +689,7 @@ function ownerLabel(item) {
                                             </button>
                                         </div>
                                     </div>
-                                    <button type="button" class="inline-flex items-center gap-2 rounded border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:border-orange-300 hover:text-orange-700" @click="openFolderModal">
+                                    <button v-if="canCreateInCurrentFolder" type="button" class="inline-flex items-center gap-2 rounded border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:border-orange-300 hover:text-orange-700" @click="openFolderModal">
                                         <i class="la la-folder-plus text-lg"></i>
                                         Ordner erstellen
                                     </button>
@@ -700,11 +762,11 @@ function ownerLabel(item) {
                                     <p class="text-sm font-semibold text-gray-700">Keine Einträge gefunden</p>
                                     <p class="mt-1 text-xs text-gray-500">Dateien oder ganze Ordner hierher ziehen.</p>
                                     <div class="mt-4 flex flex-wrap justify-center gap-2">
-                                        <button type="button" class="inline-flex items-center gap-2 rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white" @click="openUploadModal">
+                                        <button v-if="canCreateInCurrentFolder" type="button" class="inline-flex items-center gap-2 rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white" @click="openUploadModal">
                                             <i class="la la-cloud-upload-alt"></i>
                                             Hochladen
                                         </button>
-                                        <button type="button" class="inline-flex items-center gap-2 rounded border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700" @click="openFolderModal">
+                                        <button v-if="canCreateInCurrentFolder" type="button" class="inline-flex items-center gap-2 rounded border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700" @click="openFolderModal">
                                             <i class="la la-folder-plus"></i>
                                             Ordner erstellen
                                         </button>
@@ -728,7 +790,7 @@ function ownerLabel(item) {
                                                     <span class="mt-1 block text-xs text-gray-500">{{ item.type === 'folder' ? 'Ordner' : formatBytes(item.size) }}</span>
                                                 </span>
                                             </a>
-                                            <button v-if="canOwn(item)" class="rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 opacity-100 hover:border-orange-300 md:opacity-0 md:group-hover:opacity-100" @click.stop="openFileEdit(item)">
+                                            <button v-if="canDo(item, 'write') || canDo(item, 'share')" class="rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 opacity-100 hover:border-orange-300 md:opacity-0 md:group-hover:opacity-100" @click.stop="openFileEdit(item)">
                                                 <i class="la la-pen"></i>
                                             </button>
                                         </div>
@@ -779,10 +841,10 @@ function ownerLabel(item) {
                                         <a :href="fileRoute(selectedFile)" class="rounded bg-gray-900 px-3 py-2 text-center font-semibold text-white">
                                             {{ selectedFile.type === 'folder' ? 'Öffnen' : 'Download' }}
                                         </a>
-                                        <button v-if="canOwn(selectedFile)" class="rounded border border-gray-200 bg-white px-3 py-2 font-semibold text-gray-700" @click="openShare(selectedFile, 'file')">Teilen</button>
-                                        <button v-if="canOwn(selectedFile)" class="rounded border border-gray-200 bg-white px-3 py-2 font-semibold text-gray-700" @click="openFileEdit(selectedFile)">Bearbeiten</button>
-                                        <button v-if="canOwn(selectedFile)" class="rounded border border-gray-200 bg-white px-3 py-2 font-semibold text-gray-700" @click="openOwnerTransfer(selectedFile)">Besitzer</button>
-                                        <button v-if="canOwn(selectedFile)" class="rounded border border-red-200 bg-white px-3 py-2 font-semibold text-red-600" @click="destroyItem('apps.files.destroy', selectedFile.id)">Löschen</button>
+                                        <button v-if="canDo(selectedFile, 'share')" class="rounded border border-gray-200 bg-white px-3 py-2 font-semibold text-gray-700" @click="openShare(selectedFile, 'file')">Teilen</button>
+                                        <button v-if="canDo(selectedFile, 'write')" class="rounded border border-gray-200 bg-white px-3 py-2 font-semibold text-gray-700" @click="openFileEdit(selectedFile)">Bearbeiten</button>
+                                        <button v-if="canDo(selectedFile, 'transfer_owner')" class="rounded border border-gray-200 bg-white px-3 py-2 font-semibold text-gray-700" @click="openOwnerTransfer(selectedFile)">Besitzer</button>
+                                        <button v-if="canDo(selectedFile, 'delete')" class="rounded border border-red-200 bg-white px-3 py-2 font-semibold text-red-600" @click="destroyItem('apps.files.destroy', selectedFile.id)">Löschen</button>
                                     </div>
 
                                     <dl class="space-y-2 rounded border border-gray-200 bg-white p-3 text-sm">
@@ -1085,6 +1147,7 @@ function ownerLabel(item) {
                     <textarea v-model="editFileForm.notes" rows="4" class="w-full rounded border-gray-300 text-sm" placeholder="Notizen"></textarea>
                     <VisibilityFields :form="editFileForm" :projects="projects" :options="visibilityOptions" />
                     <div class="flex justify-end gap-2 pt-2">
+                        <button v-if="canDo(selectedEdit, 'share')" type="button" class="rounded border border-orange-200 bg-white px-3 py-2 text-sm font-semibold text-orange-700" @click="openShareFromEdit">Freigeben / Teilen</button>
                         <button type="button" class="rounded border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700" @click="selectedEdit = null">Abbrechen</button>
                         <button class="rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white">Speichern</button>
                     </div>
@@ -1123,25 +1186,85 @@ function ownerLabel(item) {
         </div>
 
         <div v-if="selectedShare" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div class="w-full max-w-xl rounded bg-white p-5 shadow-xl">
+            <div class="w-full max-w-4xl rounded bg-white p-5 shadow-xl">
                 <div class="mb-4 flex items-center justify-between">
                     <h2 class="text-lg font-semibold">Freigeben: {{ selectedShare.title || selectedShare.name }}</h2>
                     <button class="text-xl" @click="selectedShare = null">&times;</button>
                 </div>
 
-                <form class="space-y-3" @submit.prevent="submitShare">
-                    <select v-model="shareForm.person_id" class="w-full rounded border-gray-300 text-sm">
-                        <option value="">Person auswählen</option>
-                        <option v-for="person in people" :key="person.id" :value="person.id">{{ person.nachname }}, {{ person.vorname }}</option>
-                    </select>
-                    <input v-model="shareForm.email" class="w-full rounded border-gray-300 text-sm" placeholder="Oder E-Mail-Adresse" />
-                    <select v-model="shareForm.permission" class="w-full rounded border-gray-300 text-sm">
-                        <option value="view">Nur ansehen</option>
-                        <option value="edit">Bearbeiten</option>
-                    </select>
+                <form class="space-y-4" @submit.prevent="submitShare">
+                    <div class="grid gap-4 md:grid-cols-2">
+                        <section class="rounded border border-gray-200 bg-gray-50 p-3">
+                            <label class="mb-2 block text-sm font-semibold text-gray-800">Personen und Teilnehmer</label>
+                            <input v-model="sharePersonSearch" class="mb-2 w-full rounded border-gray-300 text-sm" placeholder="Person suchen ..." />
+                            <div class="max-h-52 overflow-y-auto rounded border border-gray-200 bg-white">
+                                <button v-for="person in filteredSharePeople" :key="person.id" type="button" class="flex w-full items-start gap-2 border-b px-3 py-2 text-left text-sm last:border-b-0 hover:bg-orange-50" @click="toggleSharePerson(person.id)">
+                                    <input type="checkbox" class="mt-1 rounded border-gray-300 text-orange-500" :checked="shareForm.person_ids.map(Number).includes(Number(person.id))" readonly />
+                                    <span class="min-w-0">
+                                        <span class="block font-semibold text-gray-900">{{ personLabel(person) }}</span>
+                                        <span class="block truncate text-xs text-gray-500">{{ personDetail(person) }}</span>
+                                    </span>
+                                </button>
+                                <p v-if="filteredSharePeople.length === 0" class="p-3 text-sm text-gray-500">Keine Person gefunden.</p>
+                            </div>
+                        </section>
+
+                        <section class="rounded border border-gray-200 bg-gray-50 p-3">
+                            <label class="mb-2 block text-sm font-semibold text-gray-800">Teams</label>
+                            <input v-model="shareTeamSearch" class="mb-2 w-full rounded border-gray-300 text-sm" placeholder="Team suchen ..." />
+                            <div class="max-h-52 overflow-y-auto rounded border border-gray-200 bg-white">
+                                <button v-for="team in filteredShareTeams" :key="team.id" type="button" class="flex w-full items-start gap-2 border-b px-3 py-2 text-left text-sm last:border-b-0 hover:bg-orange-50" @click="toggleShareTeam(team.id)">
+                                    <input type="checkbox" class="mt-1 rounded border-gray-300 text-orange-500" :checked="shareForm.team_ids.map(Number).includes(Number(team.id))" readonly />
+                                    <span class="min-w-0">
+                                        <span class="block font-semibold text-gray-900">{{ team.name }}</span>
+                                        <span class="block text-xs text-gray-500">Team / Projekt</span>
+                                    </span>
+                                </button>
+                                <p v-if="filteredShareTeams.length === 0" class="p-3 text-sm text-gray-500">Kein Team gefunden.</p>
+                            </div>
+                        </section>
+                    </div>
+
+                    <input v-model="shareForm.emails" class="w-full rounded border-gray-300 text-sm" placeholder="Zusaetzliche E-Mail-Adressen, getrennt mit Komma" />
+
+                    <div class="grid gap-3 md:grid-cols-3">
+                        <label class="flex cursor-pointer gap-2 rounded border p-3 text-sm" :class="shareForm.permission === 'view' ? 'border-orange-400 bg-orange-50' : 'border-gray-200'">
+                            <input v-model="shareForm.permission" type="radio" value="view" class="mt-1 border-gray-300 text-orange-500" />
+                            <span><strong class="block">Lesen</strong><span class="text-xs text-gray-500">Oeffnen und herunterladen</span></span>
+                        </label>
+                        <label class="flex cursor-pointer gap-2 rounded border p-3 text-sm" :class="shareForm.permission === 'edit' ? 'border-orange-400 bg-orange-50' : 'border-gray-200'">
+                            <input v-model="shareForm.permission" type="radio" value="edit" class="mt-1 border-gray-300 text-orange-500" />
+                            <span><strong class="block">Schreiben</strong><span class="text-xs text-gray-500">Bearbeiten und hochladen</span></span>
+                        </label>
+                        <label class="flex cursor-pointer gap-2 rounded border p-3 text-sm" :class="shareForm.permission === 'manage' ? 'border-orange-400 bg-orange-50' : 'border-gray-200'">
+                            <input v-model="shareForm.permission" type="radio" value="manage" class="mt-1 border-gray-300 text-orange-500" />
+                            <span><strong class="block">Alles</strong><span class="text-xs text-gray-500">Teilen, loeschen, verwalten</span></span>
+                        </label>
+                    </div>
+
                     <textarea v-model="shareForm.message" rows="3" class="w-full rounded border-gray-300 text-sm" placeholder="Nachricht"></textarea>
-                    <label class="flex items-center gap-2 text-sm"><input v-model="shareForm.send_email" type="checkbox" /> Freigabe per Mail informieren</label>
-                    <button class="w-full rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white">Freigabe speichern</button>
+                    <label class="flex items-center gap-2 text-sm"><input v-model="shareForm.send_notification" type="checkbox" /> Empfaenger benachrichtigen</label>
+
+                    <div v-if="shareForm.errors.targets || shareForm.errors.emails" class="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                        {{ shareForm.errors.targets || shareForm.errors.emails }}
+                    </div>
+
+                    <div class="rounded border border-gray-200">
+                        <div class="border-b bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-800">Bereits geteilt</div>
+                        <div v-if="selectedShare.shares?.length" class="divide-y">
+                            <div v-for="share in selectedShare.shares" :key="share.id" class="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                                <div class="min-w-0">
+                                    <p class="truncate font-semibold text-gray-900">{{ share.target_label }}</p>
+                                    <p class="text-xs text-gray-500">{{ share.target_detail || share.target_type }}</p>
+                                </div>
+                                <span class="rounded bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">{{ share.permission_label || sharePermissionLabel(share.permission) }}</span>
+                            </div>
+                        </div>
+                        <p v-else class="px-3 py-3 text-sm text-gray-500">Noch keine Freigaben vorhanden.</p>
+                    </div>
+
+                    <button class="w-full rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="shareForm.processing">Freigabe speichern</button>
+
                 </form>
 
                 <form v-if="selectedShare.shareType === 'file' && selectedShare.type === 'file'" class="mt-5 space-y-3 border-t pt-4" @submit.prevent="sendFileMail">
