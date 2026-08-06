@@ -771,7 +771,10 @@ const pdfColumns = (layout) => {
   ]
   const staticWidth = staticColumns.reduce((sum, column) => sum + column.width, 0)
   const dayCount = Math.max(selectedDays.value.length, 1)
-  const dayWidth = Math.max(18, (layout.tableWidth - staticWidth) / dayCount)
+  const preparationSignatureWidth = form.exportFormat === 'A3' ? 75 : 60
+  const dayWidth = isPreparationPa.value
+    ? preparationSignatureWidth
+    : Math.max(18, (layout.tableWidth - staticWidth) / dayCount)
 
   return [
     ...staticColumns,

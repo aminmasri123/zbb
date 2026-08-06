@@ -320,6 +320,22 @@ class DokumenteController extends Controller
                 ],
             ],
             [
+                'gruppe' => 'Partner / Schule',
+                'werte' => [
+                    ['key' => 'partner', 'label' => 'Name des Hauptpartners / der Schule'],
+                    ['key' => 'partner_name', 'label' => 'Name des Hauptpartners / der Schule'],
+                    ['key' => 'partner_beschreibung', 'label' => 'Beschreibung des Hauptpartners'],
+                    ['key' => 'partner_adresse', 'label' => 'Straße und Hausnummer des Hauptpartners'],
+                    ['key' => 'partner_strasse', 'label' => 'Straße des Hauptpartners'],
+                    ['key' => 'partner_hausnummer', 'label' => 'Hausnummer des Hauptpartners'],
+                    ['key' => 'partner_plz', 'label' => 'PLZ des Hauptpartners'],
+                    ['key' => 'partner_stadt', 'label' => 'Stadt des Hauptpartners'],
+                    ['key' => 'partner_email', 'label' => 'E-Mail des Hauptpartners'],
+                    ['key' => 'partner_telefon', 'label' => 'Telefon/Mobil des Hauptpartners'],
+                    ['key' => 'partner_liste', 'label' => 'Alle Partner der Gruppe, kommagetrennt'],
+                ],
+            ],
+            [
                 'gruppe' => 'Betreuung und Export',
                 'werte' => [
                     ['key' => 'betreuer', 'label' => 'Betreuer/-in vollständig'],

@@ -752,8 +752,9 @@ class ExportWordController extends Controller
         $raum = $gruppe->raum;
         $email = $person?->kontaktes?->first(fn ($kontakt) => strtolower($kontakt->kontakttyp?->name ?? '') === 'email');
         $telefon = $person?->kontaktes?->first(fn ($kontakt) => in_array(strtolower($kontakt->kontakttyp?->name ?? ''), ['telefon', 'mobile', 'mobil'], true));
+        $partnerValues = $this->partnerPlaceholderValues($gruppe);
 
-        return [
+        return array_merge([
             'nr' => $nummer,
             'nummer' => $nummer,
             'datum' => now()->format('d.m.Y'),
@@ -791,6 +792,51 @@ class ExportWordController extends Controller
             'betreuer' => trim(($betreuer?->vorname ?? '') . ' ' . ($betreuer?->nachname ?? '')),
             'betreuer_vorname' => $betreuer?->vorname,
             'betreuer_nachname' => $betreuer?->nachname,
+        ], $partnerValues);
+    }
+
+    private function partnerPlaceholderValues(Gruppe $gruppe): array
+    {
+        $gruppe->loadMissing([
+            'partner.adresses',
+            'partner.kontaktes.kontakttyp',
+            'partners.adresses',
+            'partners.kontaktes.kontakttyp',
+        ]);
+
+        $partners = $gruppe->partners;
+        $hauptpartner = $gruppe->partner;
+
+        if ($hauptpartner && !$partners->contains('id', $hauptpartner->id)) {
+            $partners = $partners->prepend($hauptpartner);
+        }
+
+        $partners = $partners
+            ->unique('id')
+            ->sortBy(fn ($partner) => mb_strtolower((string) $partner->name))
+            ->values();
+
+        $hauptpartner ??= $partners->first();
+        $adresse = $hauptpartner?->adresses?->last();
+        $email = $hauptpartner?->kontaktes?->first(
+            fn ($kontakt) => in_array(mb_strtolower(trim((string) ($kontakt->kontakttyp?->name ?? ''))), ['email', 'e-mail'], true)
+        );
+        $telefon = $hauptpartner?->kontaktes?->first(
+            fn ($kontakt) => in_array(mb_strtolower(trim((string) ($kontakt->kontakttyp?->name ?? ''))), ['telefon', 'mobile', 'mobil'], true)
+        );
+
+        return [
+            'partner' => $hauptpartner?->name,
+            'partner_name' => $hauptpartner?->name,
+            'partner_beschreibung' => $hauptpartner?->beschreibung,
+            'partner_adresse' => trim(($adresse?->strasse ?? '') . ' ' . ($adresse?->hausnummer ?? '')),
+            'partner_strasse' => $adresse?->strasse,
+            'partner_hausnummer' => $adresse?->hausnummer,
+            'partner_plz' => $adresse?->plz,
+            'partner_stadt' => $adresse?->stadt,
+            'partner_email' => $email?->wert,
+            'partner_telefon' => $telefon?->wert,
+            'partner_liste' => $partners->pluck('name')->filter()->implode(', '),
         ];
     }
 
