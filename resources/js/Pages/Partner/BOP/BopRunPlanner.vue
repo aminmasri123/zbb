@@ -291,6 +291,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', closeOnEscape))
             </div>
           </template>
         </section>
+
+        <footer class="sticky bottom-0 z-20 flex flex-wrap items-center justify-end gap-2 rounded-lg border bg-white/95 px-5 py-4 shadow-lg backdrop-blur">
+          <button type="button" class="rounded border px-4 py-2 text-sm font-semibold" :disabled="saving" @click="$emit('close')">Schließen</button>
+          <button type="button" class="rounded bg-orange-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="loading || saving" @click="save">{{ saving ? 'Speichert …' : 'Alles speichern' }}</button>
+        </footer>
       </div>
     </section>
   </div>
