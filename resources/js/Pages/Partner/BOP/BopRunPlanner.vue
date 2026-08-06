@@ -99,6 +99,7 @@ function hydrate(data) {
     selected_classes: [...(phase.selected_classes || [])],
     days_per_class: Number(phase.days_per_class || 2),
     class_date_assignments: { ...(phase.class_date_assignments || {}) },
+    part_date_assignments: { ...(phase.part_date_assignments || {}) },
     participant_ids: [...(phase.participant_ids || [])].map(Number),
     start_time: String(phase.start_time || '08:00').slice(0, 5),
     end_time: String(phase.end_time || '16:00').slice(0, 5),
@@ -134,6 +135,9 @@ function removeDate(phase, date) {
   phase.dates = phase.dates.filter((value) => value !== date)
   Object.keys(phase.class_date_assignments || {}).forEach((className) => {
     phase.class_date_assignments[className] = (phase.class_date_assignments[className] || []).filter((value) => value !== date)
+  })
+  Object.keys(phase.part_date_assignments || {}).forEach((part) => {
+    phase.part_date_assignments[part] = (phase.part_date_assignments[part] || []).filter((value) => value !== date)
   })
 }
 
@@ -175,6 +179,17 @@ function assignSameClassDates(phase) {
   phase.class_date_assignments = Object.fromEntries(phase.selected_classes.map((className) => [className, [...sharedDates]]))
 }
 
+function togglePartDate(phase, part, date) {
+  const assigned = phase.part_date_assignments[part] || []
+  phase.part_date_assignments[part] = assigned.includes(date)
+    ? assigned.filter((value) => value !== date)
+    : [...assigned, date].sort()
+}
+
+function assignAllWorkshopDates(phase) {
+  phase.part_date_assignments = Object.fromEntries(parts.value.map((part) => [part, [...phase.dates]]))
+}
+
 function refreshClasses() {
   classes.value = [...new Set([
     ...students.value.map((student) => student.class_name).filter(Boolean),
@@ -199,6 +214,8 @@ function addPart() {
   const value = String(newPart.value || '').trim()
   if (!value || parts.value.includes(value)) return
   parts.value.push(value)
+  const workshop = phaseFor('workshop_days')
+  if (workshop && !workshop.part_date_assignments[value]) workshop.part_date_assignments[value] = []
   parts.value.sort((a, b) => a.localeCompare(b, 'de', { numeric: true }))
   newPart.value = ''
 }
@@ -209,6 +226,8 @@ function removePart(part) {
   plannedClasses.value.forEach((item) => {
     if (item.part === part) item.part = parts.value[0]
   })
+  const workshop = phaseFor('workshop_days')
+  if (workshop) delete workshop.part_date_assignments[part]
 }
 
 async function addDateRange(phase) {
@@ -448,11 +467,23 @@ onBeforeUnmount(() => window.removeEventListener('keydown', closeOnEscape))
                   <button v-for="date in phaseFor(definition.type).dates" :key="date" type="button" class="rounded-full px-3 py-1 text-xs font-semibold" :class="dateWarning(date) ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800'" :title="dateWarning(date)?.reason" @click="removeDate(phaseFor(definition.type), date)">{{ dateLabel(date) }} <span v-if="dateWarning(date)">⚠</span> ×</button>
                   <span v-if="!phaseFor(definition.type).dates.length" class="text-xs text-gray-400">Noch kein Termin gespeichert.</span>
                 </div>
+                <div v-if="definition.type === 'workshop_days'" class="space-y-2 rounded border border-orange-200 bg-orange-50 p-3">
+                  <div class="flex items-center justify-between gap-2"><strong class="text-xs text-orange-900">Werkstatttage nach Teil</strong><button type="button" class="rounded border border-orange-300 bg-white px-2 py-1 text-xs font-semibold text-orange-800" @click="assignAllWorkshopDates(phaseFor(definition.type))">Alle Teile: alle Termine</button></div>
+                  <div v-for="part in parts" :key="`workshop-part-${part}`" class="rounded bg-white p-2">
+                    <strong class="mb-1 block text-xs">Teil {{ part }}</strong>
+                    <div class="flex flex-wrap gap-1">
+                      <label v-for="date in phaseFor(definition.type).dates" :key="`${part}-${date}`" class="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs" :class="(phaseFor(definition.type).part_date_assignments[part] || []).includes(date) ? 'border-orange-400 bg-orange-100' : 'bg-white'">
+                        <input type="checkbox" :checked="(phaseFor(definition.type).part_date_assignments[part] || []).includes(date)" @change="togglePartDate(phaseFor(definition.type), part, date)" />{{ dateLabel(date) }}
+                      </label>
+                      <span v-if="!phaseFor(definition.type).dates.length" class="text-xs text-gray-500">Zuerst Werkstatttage hinzufügen.</span>
+                    </div>
+                  </div>
+                </div>
                 <div class="grid grid-cols-2 gap-2">
                   <label class="text-xs text-gray-600">Beginn<input v-model="phaseFor(definition.type).start_time" type="time" class="mt-1 w-full rounded border-gray-300 text-sm" /></label>
                   <label class="text-xs text-gray-600">Ende<input v-model="phaseFor(definition.type).end_time" type="time" class="mt-1 w-full rounded border-gray-300 text-sm" /></label>
                 </div>
-                <label v-if="phaseFor(definition.type).scope_type === 'classes'" class="block text-xs font-semibold text-gray-700">Tage pro Klasse
+                <label v-if="definition.type !== 'workshop_days' && phaseFor(definition.type).scope_type === 'classes'" class="block text-xs font-semibold text-gray-700">Tage pro Klasse
                   <input v-model.number="phaseFor(definition.type).days_per_class" type="number" min="1" max="20" class="mt-1 w-full rounded border-gray-300 text-sm" />
                   <span class="mt-1 block font-normal text-gray-500">{{ definition.type === 'pa' ? 'PA-Standard: 2 Tage' : 'Standard: 1 Tag' }}</span>
                 </label>
@@ -468,7 +499,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', closeOnEscape))
                     <input type="checkbox" :checked="phaseFor(definition.type).selected_classes.includes(className)" @change="toggleClass(phaseFor(definition.type), className)" />{{ className }}
                   </label>
                 </div>
-                <div v-if="phaseFor(definition.type).scope_type === 'classes' && phaseFor(definition.type).selected_classes.length" class="space-y-2 rounded border border-orange-200 bg-orange-50 p-3">
+                <div v-if="definition.type !== 'workshop_days' && phaseFor(definition.type).scope_type === 'classes' && phaseFor(definition.type).selected_classes.length" class="space-y-2 rounded border border-orange-200 bg-orange-50 p-3">
                   <div class="flex flex-wrap items-center justify-between gap-2">
                     <strong class="text-xs text-orange-900">Welche Klasse kommt wann?</strong>
                     <div class="flex flex-wrap gap-1"><button type="button" class="rounded border border-orange-300 bg-white px-2 py-1 text-xs font-semibold text-orange-800" @click="assignSameClassDates(phaseFor(definition.type))">Alle gleichzeitig</button><button type="button" class="rounded bg-orange-600 px-2 py-1 text-xs font-semibold text-white" @click="autoAssignClassDates(phaseFor(definition.type))">Getrennt verteilen</button></div>

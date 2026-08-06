@@ -94,6 +94,7 @@ class BopRunController extends Controller
             'phases.*.selected_classes.*' => ['string', 'max:50'],
             'phases.*.days_per_class' => ['nullable', 'integer', 'min:1', 'max:20'],
             'phases.*.class_date_assignments' => ['nullable', 'array'],
+            'phases.*.part_date_assignments' => ['nullable', 'array'],
             'phases.*.participant_ids' => ['nullable', 'array'],
             'phases.*.participant_ids.*' => ['integer'],
             'phases.*.group_mode' => ['required', Rule::in(['none', 'school', 'class', 'balanced', 'existing_assignment'])],
@@ -150,6 +151,9 @@ class BopRunController extends Controller
                     $dates,
                     ($data['status'] ?? 'planning') === 'confirmed'
                 );
+                $partDateAssignments = $this->validatedPartDateAssignments(
+                    $phaseData, $dates, $parts, ($data['status'] ?? 'planning') === 'confirmed'
+                );
                 $phase = BopPhaseSchedule::updateOrCreate(
                     ['bop_run_id' => $run->id, 'phase_type' => $phaseData['phase_type']],
                     [
@@ -158,6 +162,7 @@ class BopRunController extends Controller
                         'selected_classes' => array_values($phaseData['selected_classes'] ?? []),
                         'days_per_class' => (int) ($phaseData['days_per_class'] ?? 2),
                         'class_date_assignments' => $classDateAssignments,
+                        'part_date_assignments' => $partDateAssignments,
                         'group_mode' => $phaseData['group_mode'],
                         'group_count' => $phaseData['group_count'] ?? null,
                         'supervisor_person_id' => $phaseData['supervisor_person_id'] ?? null,
@@ -341,7 +346,13 @@ class BopRunController extends Controller
             );
 
             $groupDates = $dates;
-            if ($phase->scope_type === 'classes' && $phase->group_mode === 'class') {
+            if ($phase->phase_type === 'workshop_days' && ! empty($phase->part_date_assignments)) {
+                $className = $participants->pluck('class_name')->filter()->unique()->first();
+                $plannedClass = collect($phase->run->planned_classes ?? [])->firstWhere('name', $className);
+                $part = (string) ($plannedClass['part'] ?? '1');
+                $assignedDates = collect($phase->part_date_assignments[$part] ?? [])->filter()->sort()->values();
+                if ($assignedDates->isNotEmpty()) $groupDates = $assignedDates;
+            } elseif ($phase->scope_type === 'classes' && $phase->group_mode === 'class') {
                 $className = $participants->pluck('class_name')->filter()->unique()->sole();
                 $assignedDates = collect($phase->class_date_assignments[$className] ?? [])->filter()->sort()->values();
                 if ($assignedDates->isNotEmpty()) {
@@ -466,7 +477,7 @@ class BopRunController extends Controller
     {
         return [
             'phase_type' => $type, 'dates' => [], 'scope_type' => 'school', 'selected_classes' => [],
-            'days_per_class' => $type === 'pa' ? 2 : 1, 'class_date_assignments' => [],
+            'days_per_class' => $type === 'pa' ? 2 : 1, 'class_date_assignments' => [], 'part_date_assignments' => [],
             'participant_ids' => [], 'group_mode' => in_array($type, ['pa_feedback', 'wt_feedback'], true) ? 'none' : ($type === 'workshop_days' ? 'existing_assignment' : 'class'),
             'group_count' => 1, 'supervisor_person_id' => null, 'bereich_id' => null, 'raum_id' => null,
             'start_time' => '08:00', 'end_time' => '16:00', 'generate_groups' => false,
@@ -476,7 +487,7 @@ class BopRunController extends Controller
 
     private function validatedClassDateAssignments(array $phase, array $dates, bool $requireComplete): array
     {
-        if (($phase['scope_type'] ?? null) !== 'classes') {
+        if (($phase['phase_type'] ?? null) === 'workshop_days' || ($phase['scope_type'] ?? null) !== 'classes') {
             return [];
         }
 
@@ -510,6 +521,28 @@ class BopRunController extends Controller
             }
         }
 
+        return $assignments->all();
+    }
+
+    private function validatedPartDateAssignments(array $phase, array $dates, Collection $parts, bool $requireComplete): array
+    {
+        if (($phase['phase_type'] ?? null) !== 'workshop_days') return [];
+
+        $validDates = collect($dates);
+        $assignments = collect($phase['part_date_assignments'] ?? [])->only($parts->all())
+            ->map(fn ($assignedDates) => collect($assignedDates)->filter()->unique()->sort()->values()->all());
+        foreach ($assignments as $part => $assignedDates) {
+            if (collect($assignedDates)->diff($validDates)->isNotEmpty()) {
+                throw ValidationException::withMessages(['phases' => "Teil {$part} enthält einen unbekannten Werkstatttag."]);
+            }
+        }
+        if ($requireComplete) {
+            foreach ($parts as $part) {
+                if (empty($assignments->get($part, []))) {
+                    throw ValidationException::withMessages(['phases' => "Bitte Teil {$part} mindestens einen Werkstatttag zuordnen."]);
+                }
+            }
+        }
         return $assignments->all();
     }
 

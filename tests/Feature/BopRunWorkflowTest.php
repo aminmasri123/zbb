@@ -47,7 +47,9 @@ class BopRunWorkflowTest extends TestCase
             ],
             $this->phase('pa_feedback', ['2026-09-10'], 'participants', [], [$studentA->id, $studentC->id], 'none'),
             $this->phase('roll_day', ['2026-10-01'], 'school', [], [], 'balanced', false, false, 2),
-            $this->phase('workshop_days', ['2026-10-02', '2026-10-12'], 'school', [], [], 'existing_assignment'),
+            $this->phase('workshop_days', ['2026-10-02', '2026-10-12'], 'school', [], [], 'existing_assignment') + [
+                'part_date_assignments' => ['1' => ['2026-10-02'], '2' => ['2026-10-12']],
+            ],
             $this->phase('wt_feedback', ['2026-10-20'], 'school', [], [], 'none'),
         ];
 
@@ -81,6 +83,10 @@ class BopRunWorkflowTest extends TestCase
         $this->assertSame(2, $pa->days_per_class);
         $this->assertSame(['2026-09-02', '2026-09-03'], $pa->class_date_assignments['7.1']);
         $this->assertSame(['2026-09-04', '2026-09-07'], $pa->class_date_assignments['7.2']);
+
+        $workshop = BopPhaseSchedule::where('phase_type', 'workshop_days')->firstOrFail();
+        $this->assertSame(['2026-10-02'], $workshop->part_date_assignments['1']);
+        $this->assertSame(['2026-10-12'], $workshop->part_date_assignments['2']);
 
         $feedback = BopPhaseSchedule::where('phase_type', 'pa_feedback')->firstOrFail();
         $this->assertEqualsCanonicalizing([$studentA->id, $studentC->id], $feedback->participants->pluck('personen_ist_schueler_id')->all());
