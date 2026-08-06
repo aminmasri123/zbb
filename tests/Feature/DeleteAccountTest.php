@@ -19,7 +19,9 @@ class DeleteAccountTest extends TestCase
             return;
         }
 
-        $this->actingAs($user = User::factory()->create());
+        $user = User::factory()->create();
+        $this->grantTestPermission($user, 'user.profil');
+        $this->actingAs($user);
 
         $response = $this->delete('/user', [
             'password' => 'password',
@@ -36,7 +38,9 @@ class DeleteAccountTest extends TestCase
             return;
         }
 
-        $this->actingAs($user = User::factory()->create());
+        $user = User::factory()->create();
+        $this->grantTestPermission($user, 'user.profil');
+        $this->actingAs($user);
 
         $response = $this->delete('/user', [
             'password' => 'wrong-password',

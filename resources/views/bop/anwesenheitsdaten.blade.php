@@ -525,9 +525,11 @@
                 <button class="icon-button" type="button" title="Darstellung" aria-label="Darstellung">
                     <i class="las la-adjust la-lg"></i>
                 </button>
+                @can('user.profil')
                 <a class="icon-button" href="{{ route('user.profil', ['id' => auth()->user()->id]) }}" title="{{ $currentUserName }}" aria-label="Profil">
                     <i class="las la-user la-lg"></i>
                 </a>
+                @endcan
             </div>
         </div>
     </header>

@@ -40,6 +40,7 @@ const verificationLinkSent = computed(() => props.status === 'verification-link-
 
                 <div class="flex items-center text-center justify-center mt-2">
                     <Link
+                        v-if="$page.props.canManageProfile"
                         :href="route('profile.show')"
                         class="underline text-sm mx-4 text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                     >

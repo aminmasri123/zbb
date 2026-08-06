@@ -183,12 +183,8 @@ export default {
                                                 Manage Account
                                             </div>
 
-                                            <DropdownLink :href="route('profile.show')">
+                                            <DropdownLink v-if="$page.props.canManageProfile" :href="route('profile.show')">
                                                 Profile
-                                            </DropdownLink>
-
-                                            <DropdownLink v-if="$page.props.jetstream.hasApiFeatures" :href="route('api-tokens.index')">
-                                                API Tokens
                                             </DropdownLink>
 
                                             <div class="border-t border-gray-200" />
@@ -259,12 +255,8 @@ export default {
                             </div>
 
                             <div class="mt-3 space-y-1">
-                                <ResponsiveNavLink :href="route('profile.show')" :active="route().current('profile.show')">
+                                <ResponsiveNavLink v-if="$page.props.canManageProfile" :href="route('profile.show')" :active="route().current('profile.show')">
                                     Profile
-                                </ResponsiveNavLink>
-
-                                <ResponsiveNavLink v-if="$page.props.jetstream.hasApiFeatures" :href="route('api-tokens.index')" :active="route().current('api-tokens.index')">
-                                    API Tokens
                                 </ResponsiveNavLink>
 
                                 <!-- Authentication -->

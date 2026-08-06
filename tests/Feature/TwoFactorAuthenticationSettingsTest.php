@@ -19,7 +19,9 @@ class TwoFactorAuthenticationSettingsTest extends TestCase
             return;
         }
 
-        $this->actingAs($user = User::factory()->create());
+        $user = User::factory()->create();
+        $this->grantTestPermission($user, 'user.profil');
+        $this->actingAs($user);
 
         $this->withSession(['auth.password_confirmed_at' => time()]);
 
@@ -37,7 +39,9 @@ class TwoFactorAuthenticationSettingsTest extends TestCase
             return;
         }
 
-        $this->actingAs($user = User::factory()->create());
+        $user = User::factory()->create();
+        $this->grantTestPermission($user, 'user.profil');
+        $this->actingAs($user);
 
         $this->withSession(['auth.password_confirmed_at' => time()]);
 
@@ -60,7 +64,9 @@ class TwoFactorAuthenticationSettingsTest extends TestCase
             return;
         }
 
-        $this->actingAs($user = User::factory()->create());
+        $user = User::factory()->create();
+        $this->grantTestPermission($user, 'user.profil');
+        $this->actingAs($user);
 
         $this->withSession(['auth.password_confirmed_at' => time()]);
 

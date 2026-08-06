@@ -332,7 +332,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::put('/benutzer/update/{user}', [UserController::class, 'update'])->name('user.update')->can('benutzer.update');
 
     //Profile-Benutzer
-    Route::get('/user/profile/{id}', [UserController::class, 'show'])->name('user.profil');
+    Route::get('/user/profile/{id}', [UserController::class, 'show'])->name('user.profil')->can('user.profil');
 
     //Bereiche
     Route::get('/bereich', [BereichController::class, 'index'])->name('bereich.index');

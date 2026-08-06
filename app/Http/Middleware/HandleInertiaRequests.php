@@ -81,6 +81,8 @@ class HandleInertiaRequests extends Middleware
                 ? app(ModuleStateResolver::class)->availableStates()
                 : [],
 
+            'canManageProfile' => fn () => (bool) $request->user()?->can('user.profil'),
+
             'participantPortalNavigation' => fn () => $this->participantPortalNavigation($request),
 
            /*  'auth' => [

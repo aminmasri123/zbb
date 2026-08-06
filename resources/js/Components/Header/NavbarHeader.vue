@@ -207,16 +207,12 @@
                                 {{ $page.props.auth.user.first_name }} {{ $page.props.auth.user.last_name }}
                             </div>
 
-                            <DropdownLink :href="route('profile.show')">
+                            <DropdownLink v-if="$page.props.canManageProfile" :href="route('profile.show')">
                                 Profile
                             </DropdownLink>
 
                             <DropdownLink :href="route('notifications.index')">
                                 {{ $t('Benachrichtigungen') }}
-                            </DropdownLink>
-
-                            <DropdownLink v-if="$page.props.jetstream.hasApiFeatures" :href="route('api-tokens.index')">
-                                API Tokens
                             </DropdownLink>
 
                             <div class="border-t border-gray-200" />
@@ -293,7 +289,7 @@
 
                 <div class="mt-3 space-y-1">
                     <!-- Profile -->
-                    <ResponsiveNavLink :href="route('profile.show')">Profile</ResponsiveNavLink>
+                    <ResponsiveNavLink v-if="$page.props.canManageProfile" :href="route('profile.show')">Profile</ResponsiveNavLink>
 
                     <!-- Logout -->
                     <form method="POST" :action="route('logout')" @submit.prevent="logout">

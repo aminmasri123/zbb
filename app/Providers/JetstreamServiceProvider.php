@@ -21,47 +21,6 @@ class JetstreamServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        $this->configurePermissions();
-
         Jetstream::deleteUsersUsing(DeleteUser::class);
-
-    }
-
- 
-
-    /**
-     * Configure the permissions that are available within the application.
-     */
-    protected function configurePermissions(): void
-    {
-        Jetstream::defaultApiTokenPermissions(['read']);
-
-        Jetstream::permissions([
-            'create',
-            'read',
-            'update',
-            'delete',
-            'export',
-            'import',
-            'share',
-        ]);
-        Jetstream::role('admin', 'Administrator', [
-            'create',
-            'read',
-            'update',
-            'delete',
-            'export',
-            'import',
-            'share',
-        ])->description('Administrator users can perform any action.');
-
-        Jetstream::role('editor', 'Editor', [
-            'read',
-            'create',
-            'update',
-            'export',
-            'import',
-            'share',
-        ])->description('Editor users have the ability to read, create, and update.');
     }
 }

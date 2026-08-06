@@ -4,7 +4,7 @@
             <li v-if="!displayHideTextSidebar" class="text-white text-sm font-bold uppercase">
               <span>{{$t('Einstellungen')}}</span>
             </li>
-            <li class="submenu">
+            <li v-if="$page.props.canManageProfile" class="submenu">
               <a href="#" @click.prevent="toggleMenu('settings')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                 <i class="las la-address-card la-lg mr-2"></i>
                 <span v-if="!displayHideTextSidebar" class="pr-16">{{$t('Profil')}}</span>
@@ -20,11 +20,11 @@
             <li class="submenu">
               <a href="#" @click.prevent="toggleMenu('settings')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                 <i class="la la-cog la-lg mr-2"></i>
-                <span v-if="!displayHideTextSidebar" class="pr-16">{{$t('Profil-Einstellungen')}}</span>
+                <span v-if="!displayHideTextSidebar" class="pr-16">{{ $page.props.canManageProfile ? $t('Profil-Einstellungen') : $t('Einstellungen') }}</span>
                 <span :class="{'rotate-180': activeMenu === 'settings'}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
               </a>
               <ul v-show="activeMenu === 'settings'" class="pl-6 mt-2 space-y-2">
-                <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('profile.show')">{{$t('Passwort_ändern')}}</Link></li>
+                <li v-if="$page.props.canManageProfile"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('profile.show')">{{$t('Passwort_ändern')}}</Link></li>
                 <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('notifications.index')">{{$t('Benachrichtigungen')}}</Link></li>
               </ul>
             </li>
