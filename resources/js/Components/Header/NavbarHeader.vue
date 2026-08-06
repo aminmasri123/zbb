@@ -157,7 +157,7 @@
 
 
                     <!-- Notification Dropdown -->
-                    <Dropdown align="right" width="80">
+                    <Dropdown v-if="$page.props.canManageNotifications" align="right" width="80">
                         <template #trigger >
                             <button class="relative inline-flex items-center rounded-md border border-transparent px-2 py-2 text-sm font-medium leading-4 text-primary transition duration-150 ease-in-out hover:text-buttonPrimary focus:outline-none sm:mx-1">
                                 <i class="las la-bell text-lg"></i>
@@ -211,7 +211,7 @@
                                 Profile
                             </DropdownLink>
 
-                            <DropdownLink :href="route('notifications.index')">
+                            <DropdownLink v-if="$page.props.canManageNotifications" :href="route('notifications.index')">
                                 {{ $t('Benachrichtigungen') }}
                             </DropdownLink>
 
@@ -290,6 +290,10 @@
                 <div class="mt-3 space-y-1">
                     <!-- Profile -->
                     <ResponsiveNavLink v-if="$page.props.canManageProfile" :href="route('profile.show')">Profile</ResponsiveNavLink>
+
+                    <ResponsiveNavLink v-if="$page.props.canManageNotifications" :href="route('notifications.index')">
+                        {{ $t('Benachrichtigungen') }}
+                    </ResponsiveNavLink>
 
                     <!-- Logout -->
                     <form method="POST" :action="route('logout')" @submit.prevent="logout">

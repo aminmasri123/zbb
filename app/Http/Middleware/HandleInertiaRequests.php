@@ -55,6 +55,7 @@ class HandleInertiaRequests extends Middleware
 
                 // WICHTIG: ->take(5)->get() damit wirklich ein Array kommt
                 'notifications' => $request->user()
+                    && $request->user()->can('notifications.readAll')
                     ? $request->user()->unreadNotifications()->take(5)->get()
                     : [],
             ],
@@ -82,6 +83,8 @@ class HandleInertiaRequests extends Middleware
                 : [],
 
             'canManageProfile' => fn () => (bool) $request->user()?->can('user.profil'),
+
+            'canManageNotifications' => fn () => (bool) $request->user()?->can('notifications.readAll'),
 
             'participantPortalNavigation' => fn () => $this->participantPortalNavigation($request),
 

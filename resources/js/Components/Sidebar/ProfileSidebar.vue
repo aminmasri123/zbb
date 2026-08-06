@@ -17,7 +17,7 @@
 
 
             <!-- Profile Settings -->
-            <li class="submenu">
+            <li v-if="$page.props.canManageProfile || $page.props.canManageNotifications" class="submenu">
               <a href="#" @click.prevent="toggleMenu('settings')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
                 <i class="la la-cog la-lg mr-2"></i>
                 <span v-if="!displayHideTextSidebar" class="pr-16">{{ $page.props.canManageProfile ? $t('Profil-Einstellungen') : $t('Einstellungen') }}</span>
@@ -25,7 +25,7 @@
               </a>
               <ul v-show="activeMenu === 'settings'" class="pl-6 mt-2 space-y-2">
                 <li v-if="$page.props.canManageProfile"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('profile.show')">{{$t('Passwort_ändern')}}</Link></li>
-                <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('notifications.index')">{{$t('Benachrichtigungen')}}</Link></li>
+                <li v-if="$page.props.canManageNotifications"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('notifications.index')">{{$t('Benachrichtigungen')}}</Link></li>
               </ul>
             </li>
             <!-- Weitere Menüpunkte -->
