@@ -159,6 +159,45 @@ function openModal(modalName, { jahr = null, teil = null, klasse = null, partner
     modalData.value = { jahr, teil, klasse, partnerId, schoolName, klassen, teilnehmerCount };
 }
 
+async function openPreparationPaModal({ jahr, teil, partner }) {
+    closeDropdowns();
+
+    const klassen = getKlassen(jahr, teil, partner)
+        .sort((klasseA, klasseB) => String(klasseA).localeCompare(String(klasseB), 'de', { numeric: true }));
+
+    if (klassen.length === 0) {
+        await Swal.fire({
+            title: 'Keine Klasse gefunden',
+            text: 'Für dieses Schuljahr und diesen Teil sind keine Klassen hinterlegt.',
+            icon: 'info',
+            confirmButtonText: 'Schließen',
+        });
+        return;
+    }
+
+    const result = await Swal.fire({
+        title: 'Klasse auswählen',
+        text: 'Für welche Klasse soll die digitale Anwesenheitsliste Vorbereitung PA erstellt werden?',
+        input: 'select',
+        inputOptions: Object.fromEntries(klassen.map(klasse => [klasse, klasse])),
+        inputPlaceholder: 'Bitte Klasse auswählen',
+        showCancelButton: true,
+        confirmButtonText: 'Anwesenheitsliste öffnen',
+        cancelButtonText: 'Abbrechen',
+        inputValidator: value => value ? undefined : 'Bitte eine Klasse auswählen.',
+    });
+
+    if (!result.isConfirmed || !result.value) return;
+
+    openModal('anwesenheitslisteVorbereitungPA', {
+        jahr,
+        teil,
+        klasse: result.value,
+        klassen,
+        partnerId: partner.id,
+    });
+}
+
 function closeModal() {
     activeModal.value = null;
     modalData.value = { jahr: null, teil: null, klasse: null, partnerId: null, schoolName: null, klassen: [], teilnehmerCount: 0 };
@@ -436,7 +475,7 @@ const updatePartnerAPI = async (form) => {
                                                          <button
                                                             v-if="can('anwesenheit.abrechnung')"
                                                             type="button"
-                                                            @click="openModal('anwesenheitslisteVorbereitungPA', { jahr, teil, klassen: getKlassen(jahr, teil, partner), partnerId: partner.id })"
+                                                            @click="openPreparationPaModal({ jahr, teil, partner })"
                                                             class="block w-full px-4 py-1 text-left hover:bg-gray-200"
                                                          >
                                                             Anwesenheitsliste Vorbereitung PA

@@ -6,6 +6,7 @@ import Swal from 'sweetalert2'
 import axios from 'axios'
 import { jsPDF } from 'jspdf'
 import SignatureBox from '@/Components/SignatureBox.vue'
+import { prepareSignaturesForPdf } from '@/utils/signatures'
 import { usePermissions } from '@/utils/permissions'
 
 const props = defineProps({
@@ -562,11 +563,11 @@ const applyPdfPrintInk = (doc) => {
   doc.setDrawColor(0, 0, 0)
 }
 
-const signatureImageRatio = 420 / 120
-
 const drawPdfSignature = (doc, signature, x, y, width, height) => {
   if (!signature || width <= 0 || height <= 0) return
 
+  const imageSource = typeof signature === 'string' ? signature : signature.source
+  const signatureImageRatio = typeof signature === 'string' ? 420 / 120 : signature.aspectRatio
   const paddingX = Math.min(width * 0.04, 0.8)
   const paddingY = Math.min(height * 0.08, 0.45)
   const boxWidth = Math.max(0.1, width - (paddingX * 2))
@@ -580,7 +581,7 @@ const drawPdfSignature = (doc, signature, x, y, width, height) => {
   }
 
   doc.addImage(
-    signature,
+    imageSource,
     'PNG',
     x + ((width - imageWidth) / 2),
     y + ((height - imageHeight) / 2),
@@ -978,6 +979,7 @@ const createSignedPdf = async () => {
     const rowsPerPage = layout.rowsPerPage
     const totalPages = Math.max(1, Math.ceil(rows.length / rowsPerPage))
     const columns = originalColumns(layout)
+    const pdfSignatures = await prepareSignaturesForPdf(signatures)
 
     for (let page = 1; page <= totalPages; page++) {
       if (page > 1) doc.addPage()
@@ -1010,7 +1012,7 @@ const createSignedPdf = async () => {
             doc.text(String(participant?.klasse || ''), cursorX + pad, textY, { maxWidth: column.width - (2 * pad) })
           } else if (column.day && participant) {
             const key = signatureKey(column.day, participant)
-            const signature = signatures[key]
+            const signature = pdfSignatures[key]
             if (signature) {
               drawPdfSignature(doc, signature, cursorX + pad, y + (0.25 * layout.rowScale), column.width - (2 * pad), layout.rowHeight - (0.5 * layout.rowScale))
             }

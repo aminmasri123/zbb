@@ -1076,6 +1076,13 @@ class ProjektBopController extends Controller
         $this->ensurePartnerInActiveProject((int) $validated['schuleId']);
 
         $exportMode = $validated['exportMode'] ?? (empty($validated['klasse']) ? 'alle' : 'klasse');
+        $listType = $validated['listType'] ?? 'pa';
+
+        if ($listType === 'pa_preparation' && ($exportMode !== 'klasse' || empty($validated['klasse']))) {
+            throw ValidationException::withMessages([
+                'klasse' => 'Bitte eine Klasse für die Anwesenheitsliste Vorbereitung PA auswählen.',
+            ]);
+        }
 
         return response()->json($this->paPreviewPayload(
             (int) $validated['schuleId'],
@@ -1087,7 +1094,7 @@ class ProjektBopController extends Controller
             $validated['startDate'] ?? null,
             $validated['endDate'] ?? null,
             $validated['feedbackDate'] ?? null,
-            $validated['listType'] ?? 'pa'
+            $listType
         ));
     }
 
@@ -1371,6 +1378,12 @@ class ProjektBopController extends Controller
         $exportMode = $validated['exportMode'] ?? (empty($validated['klasse']) ? 'alle' : 'klasse');
         $klasse = $exportMode === 'klasse' ? (string) ($validated['klasse'] ?? '') : null;
         $listType = $validated['listType'] ?? 'pa';
+
+        if ($listType === 'pa_preparation' && ($exportMode !== 'klasse' || $klasse === '')) {
+            throw ValidationException::withMessages([
+                'klasse' => 'Bitte eine Klasse für die Anwesenheitsliste Vorbereitung PA auswählen.',
+            ]);
+        }
 
         if ($exportMode === 'klasse' && $klasse === '') {
             throw ValidationException::withMessages([

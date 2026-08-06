@@ -7,6 +7,7 @@ import axios from 'axios'
 import { jsPDF } from 'jspdf'
 import SignatureBox from '@/Components/SignatureBox.vue'
 import { usePermissions } from '@/utils/permissions'
+import { prepareSignaturesForPdf } from '@/utils/signatures'
 
 const props = defineProps({
   visible: Boolean,
@@ -67,7 +68,7 @@ const form = reactive({
   startDate: '',
   endDate: '',
   feedbackDate: '',
-  exportMode: props.klasse ? 'klasse' : 'alle',
+  exportMode: isPreparationPa.value || props.klasse ? 'klasse' : 'alle',
   klasse: props.klasse || '',
 })
 
@@ -102,7 +103,11 @@ const selectedDays = computed(() => days.value.filter((day) => day.selected))
 const selectedDay = computed(() => days.value.find((day) => day.id === selectedDayId.value) || selectedDays.value[0] || null)
 const sheetParticipants = computed(() => allParticipants.value)
 const signatureCount = computed(() => Object.values(signatures).filter(Boolean).length)
-const scopeReady = computed(() => props.partnerId && props.schuljahr && props.teil && (form.exportMode === 'alle' || form.klasse))
+const scopeReady = computed(() => props.partnerId
+  && props.schuljahr
+  && props.teil
+  && (form.exportMode === 'alle' || form.klasse)
+  && (!isPreparationPa.value || (form.exportMode === 'klasse' && form.klasse)))
 const draftStatusText = computed(() => {
   if (draftLoading.value) return 'wird geladen'
   if (draftSaving.value) return 'wird gespeichert'
@@ -302,7 +307,7 @@ const applyDraftPayload = (payload) => {
       form.startDate = payload.form.startDate || ''
       form.endDate = payload.form.endDate || ''
       form.feedbackDate = payload.form.feedbackDate || ''
-      form.exportMode = payload.form.exportMode || form.exportMode
+      form.exportMode = isPreparationPa.value ? 'klasse' : (payload.form.exportMode || form.exportMode)
       form.klasse = payload.form.klasse || form.klasse || ''
     }
 
@@ -707,11 +712,11 @@ const applyPdfPrintInk = (doc) => {
   doc.setDrawColor(0, 0, 0)
 }
 
-const signatureImageRatio = 420 / 120
-
 const drawPdfSignature = (doc, signature, x, y, width, height) => {
   if (!signature || width <= 0 || height <= 0) return
 
+  const imageSource = typeof signature === 'string' ? signature : signature.source
+  const signatureImageRatio = typeof signature === 'string' ? 420 / 120 : signature.aspectRatio
   const paddingX = Math.min(width * 0.04, 0.8)
   const paddingY = Math.min(height * 0.08, 0.45)
   const boxWidth = Math.max(0.1, width - (paddingX * 2))
@@ -725,7 +730,7 @@ const drawPdfSignature = (doc, signature, x, y, width, height) => {
   }
 
   doc.addImage(
-    signature,
+    imageSource,
     'PNG',
     x + ((width - imageWidth) / 2),
     y + ((height - imageHeight) / 2),
@@ -739,7 +744,7 @@ const pdfFormat = () => form.exportFormat === 'A3' ? 'a3' : 'a4'
 const pdfLayout = (doc) => {
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
-  const rowHeight = form.exportFormat === 'A3' ? 7.1 : 6.5
+  const rowHeight = form.exportFormat === 'A3' ? 10.5 : 9
   const tableY = form.exportFormat === 'A3' ? 42 : 39
   const bottomMargin = 12
   const headHeight = 16
@@ -835,7 +840,7 @@ const drawPdfTableHeader = (doc, columns, layout) => {
   })
 }
 
-const drawPdfRows = (doc, columns, rows, page, layout) => {
+const drawPdfRows = (doc, columns, rows, page, layout, pdfSignatures) => {
   const pageStart = (page - 1) * layout.rowsPerPage
 
   Array.from({ length: layout.rowsPerPage }).forEach((_, index) => {
@@ -861,7 +866,7 @@ const drawPdfRows = (doc, columns, rows, page, layout) => {
       } else if (column.key === 'klasse') {
         doc.text(String(participant?.klasse || ''), cursorX + 1.2, textY, { maxWidth: column.width - 2.4 })
       } else if (column.day && participant) {
-        const signature = signatures[signatureKey(column.day, participant)]
+        const signature = pdfSignatures[signatureKey(column.day, participant)]
         if (signature) {
           drawPdfSignature(doc, signature, cursorX + 1, y + 0.5, column.width - 2, layout.rowHeight - 1)
         }
@@ -885,13 +890,14 @@ const createSignedPdf = async () => {
     const layout = pdfLayout(doc)
     const columns = pdfColumns(layout)
     const rows = sheetParticipants.value
+    const pdfSignatures = await prepareSignaturesForPdf(signatures)
     const totalPages = Math.max(1, Math.ceil(Math.max(rows.length, 1) / layout.rowsPerPage))
 
     for (let page = 1; page <= totalPages; page++) {
       if (page > 1) doc.addPage()
       drawPdfHeader(doc, page, totalPages, layout)
       drawPdfTableHeader(doc, columns, layout)
-      drawPdfRows(doc, columns, rows, page, layout)
+      drawPdfRows(doc, columns, rows, page, layout, pdfSignatures)
     }
 
     const school = previewContext.value?.schule?.name || 'Schule'
@@ -989,7 +995,7 @@ const resetState = () => {
   form.startDate = ''
   form.endDate = ''
   form.feedbackDate = ''
-  form.exportMode = props.klasse ? 'klasse' : 'alle'
+  form.exportMode = isPreparationPa.value || props.klasse ? 'klasse' : 'alle'
   form.klasse = props.klasse || ''
   previewContext.value = null
   allParticipants.value = []
@@ -1073,16 +1079,26 @@ onBeforeUnmount(() => {
             </select>
           </label>
 
-          <label class="text-sm font-semibold text-gray-700">
+          <label v-if="!isPreparationPa" class="text-sm font-semibold text-gray-700">
             <span class="mb-1 block">Auswahl</span>
             <select v-model="form.exportMode" class="w-full rounded border-gray-300 text-sm" @change="reloadScope">
               <option value="alle">Alle Klassen</option>
               <option value="klasse">Eine Klasse</option>
             </select>
           </label>
+
+          <label v-else class="text-sm font-semibold text-gray-700">
+            <span class="mb-1 block">Gewählte Klasse</span>
+            <select v-model="form.klasse" class="w-full rounded border-gray-300 text-sm" @change="reloadScope">
+              <option value="" disabled>Klasse auswählen</option>
+              <option v-for="klasseOption in klassen" :key="klasseOption" :value="klasseOption">
+                {{ klasseOption }}
+              </option>
+            </select>
+          </label>
         </div>
 
-        <label v-if="form.exportMode === 'klasse'" class="block text-sm font-semibold text-gray-700">
+        <label v-if="!isPreparationPa && form.exportMode === 'klasse'" class="block text-sm font-semibold text-gray-700">
           <span class="mb-1 block">Klasse</span>
           <select v-model="form.klasse" class="w-full rounded border-gray-300 text-sm" @change="reloadScope">
             <option value="" disabled>Klasse auswählen</option>
