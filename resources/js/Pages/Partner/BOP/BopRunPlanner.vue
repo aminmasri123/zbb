@@ -1,5 +1,6 @@
 <script setup>
 import axios from 'axios'
+import Swal from 'sweetalert2'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 const props = defineProps({
@@ -80,6 +81,8 @@ function hydrate(data) {
     ...phase,
     dates: [...(phase.dates || [])].sort(),
     selected_classes: [...(phase.selected_classes || [])],
+    days_per_class: Number(phase.days_per_class || 2),
+    class_date_assignments: { ...(phase.class_date_assignments || {}) },
     participant_ids: [...(phase.participant_ids || [])].map(Number),
     start_time: String(phase.start_time || '08:00').slice(0, 5),
     end_time: String(phase.end_time || '16:00').slice(0, 5),
@@ -90,15 +93,31 @@ function phaseFor(type) {
   return phases.value.find((phase) => phase.phase_type === type)
 }
 
-function addDate(phase) {
+async function addDate(phase) {
   const date = newDates.value[phase.phase_type]
   if (!date) return
+  const warning = dateWarning(date)
+  if (warning) {
+    const result = await Swal.fire({
+      title: warning.title,
+      text: `${dateLabel(date)} ist ${warning.reason}. Soll der Termin trotzdem hinzugefügt werden?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Trotzdem hinzufügen',
+      cancelButtonText: 'Abbrechen',
+      confirmButtonColor: '#f97316',
+    })
+    if (!result.isConfirmed) return
+  }
   phase.dates = [...new Set([...(phase.dates || []), date])].sort()
   newDates.value[phase.phase_type] = ''
 }
 
 function removeDate(phase, date) {
   phase.dates = phase.dates.filter((value) => value !== date)
+  Object.keys(phase.class_date_assignments || {}).forEach((className) => {
+    phase.class_date_assignments[className] = (phase.class_date_assignments[className] || []).filter((value) => value !== date)
+  })
 }
 
 function toggleValue(values, value) {
@@ -110,6 +129,66 @@ function toggleValue(values, value) {
 
 function toggleClass(phase, className) {
   phase.selected_classes = toggleValue(phase.selected_classes || [], className)
+  if (phase.selected_classes.includes(className) && !phase.class_date_assignments[className]) {
+    phase.class_date_assignments[className] = []
+  }
+}
+
+function toggleClassDate(phase, className, date) {
+  const assigned = phase.class_date_assignments[className] || []
+  if (assigned.includes(date)) {
+    phase.class_date_assignments[className] = assigned.filter((value) => value !== date)
+    return
+  }
+  if (assigned.length >= Number(phase.days_per_class || 2)) return
+  phase.class_date_assignments[className] = [...assigned, date].sort()
+}
+
+function autoAssignClassDates(phase) {
+  const days = Math.max(1, Number(phase.days_per_class || 2))
+  phase.class_date_assignments = Object.fromEntries(phase.selected_classes.map((className, index) => [
+    className,
+    phase.dates.slice(index * days, (index + 1) * days),
+  ]))
+}
+
+function easterDate(year) {
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100, d = Math.floor(b / 4), e = b % 4
+  const f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7
+  const m = Math.floor((a + 11 * h + 22 * l) / 451)
+  return new Date(year, Math.floor((h + l - 7 * m + 114) / 31) - 1, ((h + l - 7 * m + 114) % 31) + 1, 12)
+}
+
+function isoDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function shiftedDate(date, days) {
+  const result = new Date(date)
+  result.setDate(result.getDate() + days)
+  return result
+}
+
+function saarlandHolidays(year) {
+  const easter = easterDate(year)
+  return {
+    [`${year}-01-01`]: 'Neujahr', [`${year}-05-01`]: 'Tag der Arbeit',
+    [`${year}-08-15`]: 'Mariä Himmelfahrt', [`${year}-10-03`]: 'Tag der Deutschen Einheit',
+    [`${year}-11-01`]: 'Allerheiligen', [`${year}-12-25`]: '1. Weihnachtstag', [`${year}-12-26`]: '2. Weihnachtstag',
+    [isoDate(shiftedDate(easter, -2))]: 'Karfreitag', [isoDate(shiftedDate(easter, 1))]: 'Ostermontag',
+    [isoDate(shiftedDate(easter, 39))]: 'Christi Himmelfahrt', [isoDate(shiftedDate(easter, 50))]: 'Pfingstmontag',
+    [isoDate(shiftedDate(easter, 60))]: 'Fronleichnam',
+  }
+}
+
+function dateWarning(value) {
+  const date = new Date(`${value}T12:00:00`)
+  if (Number.isNaN(date.getTime())) return null
+  const holiday = saarlandHolidays(date.getFullYear())[value]
+  if (holiday) return { title: 'Feiertag erkannt', reason: `der gesetzliche Feiertag „${holiday}“ im Saarland` }
+  if ([0, 6].includes(date.getDay())) return { title: 'Wochenende erkannt', reason: date.getDay() === 6 ? 'ein Samstag' : 'ein Sonntag' }
+  return null
 }
 
 function toggleStudent(phase, studentId) {
@@ -228,13 +307,17 @@ onBeforeUnmount(() => window.removeEventListener('keydown', closeOnEscape))
                   <button type="button" class="rounded bg-gray-900 px-3 text-sm font-semibold text-white" @click="addDate(phaseFor(definition.type))">+ Tag</button>
                 </div>
                 <div class="flex min-h-9 flex-wrap gap-2">
-                  <button v-for="date in phaseFor(definition.type).dates" :key="date" type="button" class="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-800" @click="removeDate(phaseFor(definition.type), date)">{{ dateLabel(date) }} ×</button>
+                  <button v-for="date in phaseFor(definition.type).dates" :key="date" type="button" class="rounded-full px-3 py-1 text-xs font-semibold" :class="dateWarning(date) ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800'" :title="dateWarning(date)?.reason" @click="removeDate(phaseFor(definition.type), date)">{{ dateLabel(date) }} <span v-if="dateWarning(date)">⚠</span> ×</button>
                   <span v-if="!phaseFor(definition.type).dates.length" class="text-xs text-gray-400">Noch kein Termin gespeichert.</span>
                 </div>
                 <div class="grid grid-cols-2 gap-2">
                   <label class="text-xs text-gray-600">Beginn<input v-model="phaseFor(definition.type).start_time" type="time" class="mt-1 w-full rounded border-gray-300 text-sm" /></label>
                   <label class="text-xs text-gray-600">Ende<input v-model="phaseFor(definition.type).end_time" type="time" class="mt-1 w-full rounded border-gray-300 text-sm" /></label>
                 </div>
+                <label v-if="definition.type === 'pa'" class="block text-xs font-semibold text-gray-700">PA-Tage pro Klasse
+                  <input v-model.number="phaseFor(definition.type).days_per_class" type="number" min="1" max="20" class="mt-1 w-full rounded border-gray-300 text-sm" />
+                  <span class="mt-1 block font-normal text-gray-500">Standard: 2 Tage</span>
+                </label>
               </div>
 
               <div class="space-y-3">
@@ -246,6 +329,21 @@ onBeforeUnmount(() => window.removeEventListener('keydown', closeOnEscape))
                   <label v-for="className in classes" :key="className" class="inline-flex items-center gap-2 rounded border px-3 py-2 text-sm">
                     <input type="checkbox" :checked="phaseFor(definition.type).selected_classes.includes(className)" @change="toggleClass(phaseFor(definition.type), className)" />{{ className }}
                   </label>
+                </div>
+                <div v-if="definition.type === 'pa' && phaseFor(definition.type).scope_type === 'classes' && phaseFor(definition.type).selected_classes.length" class="space-y-2 rounded border border-orange-200 bg-orange-50 p-3">
+                  <div class="flex flex-wrap items-center justify-between gap-2">
+                    <strong class="text-xs text-orange-900">PA-Termine je Klasse</strong>
+                    <button type="button" class="rounded bg-orange-600 px-2 py-1 text-xs font-semibold text-white" @click="autoAssignClassDates(phaseFor(definition.type))">Blockweise verteilen</button>
+                  </div>
+                  <div v-for="className in phaseFor(definition.type).selected_classes" :key="`dates-${className}`" class="rounded bg-white p-2">
+                    <div class="mb-1 flex justify-between text-xs"><strong>Klasse {{ className }}</strong><span>{{ (phaseFor(definition.type).class_date_assignments[className] || []).length }} / {{ phaseFor(definition.type).days_per_class }} Tage</span></div>
+                    <div class="flex flex-wrap gap-1">
+                      <label v-for="date in phaseFor(definition.type).dates" :key="`${className}-${date}`" class="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs" :class="(phaseFor(definition.type).class_date_assignments[className] || []).includes(date) ? 'border-orange-400 bg-orange-100' : 'bg-white'">
+                        <input type="checkbox" :checked="(phaseFor(definition.type).class_date_assignments[className] || []).includes(date)" :disabled="!(phaseFor(definition.type).class_date_assignments[className] || []).includes(date) && (phaseFor(definition.type).class_date_assignments[className] || []).length >= phaseFor(definition.type).days_per_class" @change="toggleClassDate(phaseFor(definition.type), className, date)" />{{ dateLabel(date) }}
+                      </label>
+                      <span v-if="!phaseFor(definition.type).dates.length" class="text-xs text-gray-500">Zuerst PA-Termine hinzufügen.</span>
+                    </div>
+                  </div>
                 </div>
                 <div v-if="phaseFor(definition.type).scope_type === 'participants'" class="max-h-60 overflow-y-auto rounded border">
                   <template v-for="(classGroup, classIndex) in sortedStudentsByClass" :key="classGroup.name">
