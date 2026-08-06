@@ -10,7 +10,7 @@ class BopRun extends Model
     use HasFactory;
 
     protected $fillable = [
-        'projekt_id', 'partner_id', 'schuljahr', 'teil', 'school_type', 'planned_classes',
+        'projekt_id', 'partner_id', 'schuljahr', 'teil', 'school_type', 'parts', 'planned_classes',
         'first_visit_date', 'last_visit_date', 'status',
         'created_by_user_id', 'updated_by_user_id',
     ];
@@ -19,6 +19,7 @@ class BopRun extends Model
         'first_visit_date' => 'date',
         'last_visit_date' => 'date',
         'planned_classes' => 'array',
+        'parts' => 'array',
     ];
 
     public function phases()

@@ -58,7 +58,10 @@ class BopRunController extends Controller
             ->where('partner_id', $partner->id)
             ->where('schuljahr', $schuljahr)
             ->where('teil', $teil)
-            ->first();
+            ->first() ?? ($teil !== '_all' ? BopRun::with(['phases.participants'])->where([
+                'projekt_id' => $project->id, 'partner_id' => $partner->id,
+                'schuljahr' => $schuljahr, 'teil' => '_all',
+            ])->first() : null);
 
         return response()->json($this->payload($project, $partner, $schuljahr, $teil, $students, $run));
     }
@@ -79,6 +82,9 @@ class BopRunController extends Controller
             'planned_classes' => ['nullable', 'array', 'max:100'],
             'planned_classes.*.name' => ['required', 'string', 'max:50'],
             'planned_classes.*.expected_participants' => ['nullable', 'integer', 'min:0', 'max:500'],
+            'planned_classes.*.part' => ['required', 'string', 'max:40'],
+            'parts' => ['nullable', 'array', 'min:1', 'max:20'],
+            'parts.*' => ['string', 'max:40'],
             'phases' => ['required', 'array', 'size:6'],
             'phases.*.phase_type' => ['required', Rule::in(self::PHASES), 'distinct'],
             'phases.*.dates' => ['nullable', 'array', 'max:60'],
@@ -103,8 +109,13 @@ class BopRunController extends Controller
         ]);
 
         $knownStudentIds = $students->pluck('id')->map(fn ($id) => (int) $id);
+        $parts = collect($data['parts'] ?? ['1'])->map(fn ($part) => trim((string) $part))->filter()->unique()->values();
+        $unknownPlannedParts = collect($data['planned_classes'] ?? [])->pluck('part')->map(fn ($part) => trim((string) $part))->diff($parts);
+        if ($unknownPlannedParts->isNotEmpty()) {
+            throw ValidationException::withMessages(['planned_classes' => 'Mindestens eine Klasse ist einem unbekannten Teil zugeordnet.']);
+        }
 
-        $run = DB::transaction(function () use ($data, $project, $partner, $schuljahr, $teil, $students, $knownStudentIds) {
+        $run = DB::transaction(function () use ($data, $parts, $project, $partner, $schuljahr, $teil, $students, $knownStudentIds) {
             $run = BopRun::firstOrNew([
                 'projekt_id' => $project->id,
                 'partner_id' => $partner->id,
@@ -116,10 +127,12 @@ class BopRunController extends Controller
             }
             $run->fill([
                 'school_type' => $data['school_type'],
+                'parts' => $parts->all(),
                 'planned_classes' => collect($data['planned_classes'] ?? [])
                     ->map(fn ($class) => [
                         'name' => trim((string) $class['name']),
                         'expected_participants' => (int) ($class['expected_participants'] ?? 0),
+                        'part' => trim((string) ($class['part'] ?? '1')),
                     ])->filter(fn ($class) => $class['name'] !== '')->unique('name')->values()->all(),
                 'status' => $data['status'] ?? 'planning',
                 'updated_by_user_id' => Auth::id(),
@@ -221,8 +234,9 @@ class BopRunController extends Controller
             'projekt_id' => $project->id,
             'partner_id' => $partner->id,
             'schuljahr' => $context['schuljahr'],
-            'teil' => $context['teil'],
-        ])->firstOrFail();
+        ])->whereIn('teil', [$context['teil'], '_all'])
+            ->orderByRaw('CASE WHEN teil = ? THEN 0 ELSE 1 END', [$context['teil']])
+            ->firstOrFail();
         $phase = $run->phases()->where('phase_type', $phaseType)->firstOrFail();
 
         if (empty($phase->dates) || in_array($phase->group_mode, ['none', 'existing_assignment'], true)) {
@@ -256,7 +270,7 @@ class BopRunController extends Controller
         return PersonenIstSchueler::with('person:id,vorname,nachname')
             ->where('schule_id', $partner->id)
             ->where('schuljahr', $schuljahr)
-            ->where('teil', $teil)
+            ->when($teil !== '_all', fn (Builder $query) => $query->where('teil', $teil))
             ->whereHas('person', fn (Builder $query) => $query->where('aktiv', true))
             ->get()
             ->sortBy(fn (PersonenIstSchueler $student) => sprintf('%s|%s|%s', $student->klasse, $student->person?->nachname, $student->person?->vorname), SORT_NATURAL | SORT_FLAG_CASE)
@@ -430,7 +444,7 @@ class BopRunController extends Controller
                 ->merge(collect($run?->planned_classes ?? [])->pluck('name'))
                 ->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values(),
             'students' => $students->map(fn ($student) => [
-                'id' => $student->id, 'person_id' => $student->person_id, 'class_name' => $student->klasse,
+                'id' => $student->id, 'person_id' => $student->person_id, 'class_name' => $student->klasse, 'part' => $student->teil,
                 'name' => trim(($student->person?->nachname ?? '') . ', ' . ($student->person?->vorname ?? '')),
             ]),
             'phases' => collect(self::PHASES)->map(function ($type) use ($phaseMap) {

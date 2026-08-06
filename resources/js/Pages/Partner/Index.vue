@@ -152,64 +152,15 @@ function getSchuljahre(partner) {
     )].sort((jahrA, jahrB) => String(jahrB).localeCompare(String(jahrA), 'de', { numeric: true }));
 }
 
-function planningSchoolYears(partner) {
-    const now = new Date();
-    const currentStartYear = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
-    const suggestedYears = [
-        `${currentStartYear}/${currentStartYear + 1}`,
-        `${currentStartYear + 1}/${currentStartYear + 2}`,
-    ];
-
-    return [...new Set([...suggestedYears, ...getSchuljahre(partner)])]
-        .sort((yearA, yearB) => String(yearB).localeCompare(String(yearA), 'de', { numeric: true }));
-}
-
-function escapeHtml(value) {
-    return String(value ?? '')
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#039;');
-}
-
 async function openBopPlannerForSchool(partner) {
     closeDropdowns();
-    const years = planningSchoolYears(partner);
     const now = new Date();
     const currentStartYear = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
     const currentYear = `${currentStartYear}/${currentStartYear + 1}`;
-    const yearOptions = years
-        .map(year => `<option value="${escapeHtml(year)}" ${year === currentYear ? 'selected' : ''}>${escapeHtml(year)}</option>`)
-        .join('');
-
-    const result = await Swal.fire({
-        title: 'BOP-Ablauf planen',
-        text: partner.name,
-        html: `
-            <label class="swal2-label" for="bop-school-year">Schuljahr</label>
-            <select id="bop-school-year" class="swal2-select" style="display:block;width:80%;margin:8px auto 18px">${yearOptions}</select>
-            <label class="swal2-label" for="bop-part">Teil</label>
-            <select id="bop-part" class="swal2-select" style="display:block;width:80%;margin:8px auto">
-                <option value="1">Teil 1</option>
-                <option value="2">Teil 2</option>
-            </select>
-        `,
-        showCancelButton: true,
-        confirmButtonText: 'Planer öffnen',
-        cancelButtonText: 'Abbrechen',
-        focusConfirm: false,
-        preConfirm: () => ({
-            jahr: document.getElementById('bop-school-year')?.value,
-            teil: document.getElementById('bop-part')?.value,
-        }),
-    });
-
-    if (!result.isConfirmed || !result.value?.jahr || !result.value?.teil) return;
 
     openModal('bopRunPlanner', {
-        jahr: result.value.jahr,
-        teil: result.value.teil,
+        jahr: currentYear,
+        teil: '_all',
         partnerId: partner.id,
         schoolName: partner.name,
     });

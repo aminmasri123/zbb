@@ -26,6 +26,10 @@ const newPlannedClass = ref({ name: '', expected_participants: null })
 const phases = ref([])
 const newDates = ref({})
 const updatingParticipant = ref(null)
+const selectedSchoolYear = ref(props.schuljahr || '')
+const parts = ref(['1'])
+const newPart = ref('')
+const dateRanges = ref({})
 
 const phaseDefinitions = [
   { type: 'pa_preparation', label: '1. Vorbereitung PA', hint: 'Gesamte Schule oder getrennt nach Klassen; auf Wunsch Gruppen erzeugen.' },
@@ -52,18 +56,21 @@ const lastDate = computed(() => phases.value.flatMap((phase) => phase.dates || [
 const expectedParticipants = computed(() => plannedClasses.value.reduce((sum, item) => sum + Number(item.expected_participants || 0), 0))
 
 watch(() => props.visible, (visible) => {
-  if (visible) load()
+  if (visible) {
+    selectedSchoolYear.value = props.schuljahr || selectedSchoolYear.value
+    load()
+  }
 }, { immediate: true })
 
 async function load() {
-  if (!props.partnerId || !props.schuljahr || !props.teil) return
+  if (!props.partnerId || !selectedSchoolYear.value) return
   loading.value = true
   error.value = ''
   try {
     const response = await axios.get(route('bop.run.show', {
       partner: props.partnerId,
-      schuljahr: props.schuljahr,
-      teil: props.teil,
+      schuljahr: selectedSchoolYear.value,
+      teil: '_all',
     }))
     hydrate(response.data)
   } catch (exception) {
@@ -80,9 +87,11 @@ function hydrate(data) {
   options.value = data.options || { areas: [], rooms: [], supervisors: [] }
   schoolType.value = data.run?.school_type || data.school_type_suggestion || 'Gemeinschaftsschule'
   status.value = data.run?.status || 'planning'
+  parts.value = [...(data.run?.parts?.length ? data.run.parts : ['1'])].map(String)
   plannedClasses.value = (data.run?.planned_classes || []).map((item) => ({
     name: String(item.name || ''),
     expected_participants: Number(item.expected_participants || 0),
+    part: String(item.part || '1'),
   }))
   phases.value = (data.phases || []).map((phase) => ({
     ...phase,
@@ -94,6 +103,7 @@ function hydrate(data) {
     start_time: String(phase.start_time || '08:00').slice(0, 5),
     end_time: String(phase.end_time || '16:00').slice(0, 5),
   }))
+  dateRanges.value = Object.fromEntries(phases.value.map((phase) => [phase.phase_type, { from: '', to: '' }]))
 }
 
 function phaseFor(type) {
@@ -179,10 +189,52 @@ function addPlannedClass() {
   if (existing) {
     existing.expected_participants = Number(newPlannedClass.value.expected_participants || existing.expected_participants || 0)
   } else {
-    plannedClasses.value.push({ name, expected_participants: Number(newPlannedClass.value.expected_participants || 0) })
+    plannedClasses.value.push({ name, expected_participants: Number(newPlannedClass.value.expected_participants || 0), part: parts.value[0] || '1' })
   }
   newPlannedClass.value = { name: '', expected_participants: null }
   refreshClasses()
+}
+
+function addPart() {
+  const value = String(newPart.value || '').trim()
+  if (!value || parts.value.includes(value)) return
+  parts.value.push(value)
+  parts.value.sort((a, b) => a.localeCompare(b, 'de', { numeric: true }))
+  newPart.value = ''
+}
+
+function removePart(part) {
+  if (parts.value.length === 1) return
+  parts.value = parts.value.filter((item) => item !== part)
+  plannedClasses.value.forEach((item) => {
+    if (item.part === part) item.part = parts.value[0]
+  })
+}
+
+async function addDateRange(phase) {
+  const range = dateRanges.value[phase.phase_type] || {}
+  if (!range.from || !range.to || range.to < range.from) return
+  const dates = []
+  const cursor = new Date(`${range.from}T12:00:00`)
+  const end = new Date(`${range.to}T12:00:00`)
+  while (cursor <= end) {
+    dates.push(isoDate(cursor))
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  const blocked = dates.filter((date) => dateWarning(date))
+  let selected = dates
+  if (blocked.length) {
+    const result = await Swal.fire({
+      title: 'Wochenenden oder Feiertage im Zeitraum',
+      text: `${blocked.length} von ${dates.length} Tagen sind keine regulären Arbeitstage.`,
+      icon: 'warning', showCancelButton: true, showDenyButton: true,
+      confirmButtonText: 'Nur Arbeitstage', denyButtonText: 'Alle Tage', cancelButtonText: 'Abbrechen',
+    })
+    if (result.isDismissed) return
+    if (result.isConfirmed) selected = dates.filter((date) => !dateWarning(date))
+  }
+  phase.dates = [...new Set([...(phase.dates || []), ...selected])].sort()
+  dateRanges.value[phase.phase_type] = { from: '', to: '' }
 }
 
 function removePlannedClass(index) {
@@ -286,11 +338,12 @@ async function save() {
   try {
     const response = await axios.put(route('bop.run.update', {
       partner: props.partnerId,
-      schuljahr: props.schuljahr,
-      teil: props.teil,
+      schuljahr: selectedSchoolYear.value,
+      teil: '_all',
     }), {
       school_type: schoolType.value,
       status: status.value,
+      parts: parts.value,
       planned_classes: plannedClasses.value,
       phases: phases.value,
     })
@@ -318,7 +371,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', closeOnEscape))
       <header class="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 rounded-t-xl border-b bg-white px-5 py-4">
         <div>
           <h2 class="text-xl font-bold text-gray-900">BOP-Ablauf · {{ schoolName }}</h2>
-          <p class="text-sm text-gray-500">{{ schuljahr }} · {{ teil }} · {{ students.length }} Teilnehmer</p>
+          <p class="text-sm text-gray-500">{{ selectedSchoolYear }} · Gesamtplanung · {{ students.length }} Teilnehmer</p>
         </div>
         <div class="flex items-center gap-2">
           <button type="button" class="rounded border px-4 py-2 text-sm font-semibold" :disabled="saving" @click="$emit('close')">Schließen</button>
@@ -330,7 +383,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', closeOnEscape))
       <div v-else class="space-y-5 p-5">
         <div v-if="error" class="rounded border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{{ error }}</div>
 
-        <section class="grid gap-4 rounded-lg border bg-white p-4 md:grid-cols-4">
+        <section class="grid gap-4 rounded-lg border bg-white p-4 md:grid-cols-5">
+          <label class="text-sm font-semibold text-gray-700">Schuljahr
+            <div class="mt-1 flex gap-1"><input v-model="selectedSchoolYear" type="text" class="min-w-0 flex-1 rounded border-gray-300 text-sm" placeholder="2026/2027" /><button type="button" class="rounded border px-2 text-xs" :disabled="loading || saving" @click="load">Laden</button></div>
+          </label>
           <label class="text-sm font-semibold text-gray-700">Schulform
             <select v-model="schoolType" class="mt-1 w-full rounded border-gray-300 text-sm"><option>Gemeinschaftsschule</option><option>Förderschule</option></select>
           </label>
@@ -351,9 +407,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', closeOnEscape))
             <input v-model.number="newPlannedClass.expected_participants" type="number" min="0" max="500" class="w-44 rounded border-gray-300 text-sm" placeholder="Erwartete Teilnehmer" @keydown.enter.prevent="addPlannedClass" />
             <button type="button" class="rounded bg-gray-900 px-4 py-2 text-sm font-semibold text-white" @click="addPlannedClass">+ Klasse</button>
           </div>
+          <div class="mt-3 flex flex-wrap items-center gap-2 rounded border bg-gray-50 p-2">
+            <strong class="text-xs text-gray-700">Teile:</strong>
+            <span v-for="part in parts" :key="part" class="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-semibold shadow-sm">Teil {{ part }}<button v-if="parts.length > 1" type="button" class="text-red-600" @click="removePart(part)">×</button></span>
+            <input v-model="newPart" type="text" class="w-24 rounded border-gray-300 py-1 text-xs" placeholder="z. B. 2" @keydown.enter.prevent="addPart" />
+            <button type="button" class="rounded border px-2 py-1 text-xs font-semibold" @click="addPart">+ Teil</button>
+          </div>
           <div class="mt-3 flex flex-wrap gap-2">
             <div v-for="(item, index) in plannedClasses" :key="`${item.name}-${index}`" class="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-3 py-1.5 text-sm">
               <strong>{{ item.name }}</strong><input v-model.number="item.expected_participants" type="number" min="0" max="500" class="w-16 rounded border-gray-300 px-1 py-0.5 text-xs" title="Erwartete Teilnehmer" /><span class="text-xs text-gray-500">TN</span>
+              <select v-if="parts.length > 1" v-model="item.part" class="rounded border-gray-300 py-0.5 text-xs"><option v-for="part in parts" :key="part" :value="part">Teil {{ part }}</option></select><span v-else class="text-xs text-gray-500">Teil 1</span>
               <button type="button" class="font-bold text-red-600" title="Planungsklasse entfernen" @click="removePlannedClass(index)">×</button>
             </div>
             <span v-if="!plannedClasses.length" class="text-xs text-gray-400">Noch keine vorläufige Klasse eingetragen.</span>
@@ -372,6 +435,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', closeOnEscape))
                 <div class="flex gap-2">
                   <input v-model="newDates[definition.type]" type="date" class="min-w-0 flex-1 rounded border-gray-300 text-sm" @keydown.enter.prevent="addDate(phaseFor(definition.type))" />
                   <button type="button" class="rounded bg-gray-900 px-3 text-sm font-semibold text-white" @click="addDate(phaseFor(definition.type))">+ Tag</button>
+                </div>
+                <div v-if="['pa', 'workshop_days'].includes(definition.type)" class="rounded border bg-gray-50 p-2">
+                  <div class="mb-1 text-xs font-semibold text-gray-700">Zeitraum von–bis hinzufügen</div>
+                  <div class="grid grid-cols-2 gap-1">
+                    <input v-model="dateRanges[definition.type].from" type="date" class="min-w-0 rounded border-gray-300 text-xs" />
+                    <input v-model="dateRanges[definition.type].to" type="date" class="min-w-0 rounded border-gray-300 text-xs" />
+                  </div>
+                  <button type="button" class="mt-2 w-full rounded border bg-white px-2 py-1 text-xs font-semibold" @click="addDateRange(phaseFor(definition.type))">Zeitraum hinzufügen</button>
                 </div>
                 <div class="flex min-h-9 flex-wrap gap-2">
                   <button v-for="date in phaseFor(definition.type).dates" :key="date" type="button" class="rounded-full px-3 py-1 text-xs font-semibold" :class="dateWarning(date) ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800'" :title="dateWarning(date)?.reason" @click="removeDate(phaseFor(definition.type), date)">{{ dateLabel(date) }} <span v-if="dateWarning(date)">⚠</span> ×</button>

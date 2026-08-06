@@ -54,14 +54,15 @@ class BopRunWorkflowTest extends TestCase
         $response = $this->actingAs($user)->putJson(route('bop.run.update', [
             'partner' => $partner,
             'schuljahr' => '2026/2027',
-            'teil' => 'Teil 1',
+            'teil' => '_all',
         ]), [
             'school_type' => 'Gemeinschaftsschule',
             'status' => 'confirmed',
             'planned_classes' => [
-                ['name' => '7.1', 'expected_participants' => 24],
-                ['name' => '7.a', 'expected_participants' => 18],
+                ['name' => '7.1', 'expected_participants' => 24, 'part' => '1'],
+                ['name' => '7.a', 'expected_participants' => 18, 'part' => '2'],
             ],
+            'parts' => ['1', '2'],
             'phases' => $phases,
         ]);
 

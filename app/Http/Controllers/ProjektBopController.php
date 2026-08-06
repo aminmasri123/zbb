@@ -1679,7 +1679,8 @@ class ProjektBopController extends Controller
             ->where('projekt_id', auth()->user()?->current_team_id)
             ->where('partner_id', $schuleId)
             ->where('schuljahr', $schuljahr)
-            ->where('teil', $teil)
+            ->whereIn('teil', [$teil, '_all'])
+            ->orderByRaw('CASE WHEN teil = ? THEN 0 ELSE 1 END', [$teil])
             ->whereHas('phases', fn ($query) => $query->where('phase_type', $phaseType))
             ->with(['phases' => fn ($query) => $query->where('phase_type', $phaseType)->with('participants')])
             ->first()?->phases?->first()?->participants?->pluck('personen_ist_schueler_id');
