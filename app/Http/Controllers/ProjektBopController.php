@@ -342,6 +342,11 @@ class ProjektBopController extends Controller
 
             $existingPayload = $this->decryptBibbDraftPayloadSignatures($draft?->payload ?? []);
             $payload = $this->mergeBibbDraftPayload($existingPayload, $incomingPayload);
+
+            if (! $this->draftPayloadHasChanges($existingPayload, $payload)) {
+                return [$draft, $existingPayload];
+            }
+
             $payload['saved_at'] = now()->toIso8601String();
 
             $draft->payload = $this->encryptBibbDraftPayloadSignatures($payload);
@@ -679,6 +684,13 @@ class ProjektBopController extends Controller
         $payload['signatures'] = $signatures;
 
         return $payload;
+    }
+
+    private function draftPayloadHasChanges(array $existingPayload, array $nextPayload): bool
+    {
+        unset($existingPayload['saved_at'], $nextPayload['saved_at']);
+
+        return $existingPayload != $nextPayload;
     }
 
     private function bibbPreviewPayload(int $schulId, string $schuljahr, string $teil, ?string $rolltagDate, array $manualDays): array
@@ -1155,6 +1167,11 @@ class ProjektBopController extends Controller
 
             $existingPayload = $this->decryptPaDraftPayloadSignatures($draft?->payload ?? []);
             $payload = $this->mergePaDraftPayload($existingPayload, $incomingPayload);
+
+            if (! $this->draftPayloadHasChanges($existingPayload, $payload)) {
+                return [$draft, $existingPayload];
+            }
+
             $payload['saved_at'] = now()->toIso8601String();
 
             $draft->payload = $this->encryptPaDraftPayloadSignatures($payload);

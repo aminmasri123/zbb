@@ -1105,9 +1105,9 @@ watch(
   { immediate: true }
 )
 
-watch(form, scheduleDraftSave, { deep: true })
-watch(days, scheduleDraftSave, { deep: true })
-watch(selectedDayId, scheduleDraftSave)
+watch(form, scheduleDraftSave, { deep: true, flush: 'sync' })
+watch(days, scheduleDraftSave, { deep: true, flush: 'sync' })
+watch(selectedDayId, scheduleDraftSave, { flush: 'sync' })
 watch(sheetFullscreen, (fullscreen) => {
   if (typeof document === 'undefined') return
 

@@ -78,5 +78,39 @@ class PaPreparationAttendanceClassTest extends TestCase
             ->assertJsonCount(1, 'participants')
             ->assertJsonPath('participants.0.vorname', 'Anna')
             ->assertJsonPath('participants.0.klasse', '7a');
+
+        $scope = $basePayload + [
+            'exportMode' => 'klasse',
+            'klasse' => '7a',
+        ];
+        $draftPayload = [
+            'version' => 1,
+            'form' => [
+                'exportFormat' => 'A4',
+                'startDate' => '2026-09-01',
+                'exportMode' => 'klasse',
+                'klasse' => '7a',
+            ],
+            'days' => [],
+            'selectedDayId' => null,
+            'signatures' => [],
+        ];
+
+        $this->actingAs($user->fresh())
+            ->putJson(route('anwesenheitsliste.PA.digital.draft.store'), $scope + ['payload' => $draftPayload])
+            ->assertOk()
+            ->assertJsonPath('revision', 1);
+
+        $this->actingAs($user->fresh())
+            ->putJson(route('anwesenheitsliste.PA.digital.draft.store'), $scope + ['payload' => $draftPayload])
+            ->assertOk()
+            ->assertJsonPath('revision', 1);
+
+        $draftPayload['form']['startDate'] = '2026-09-02';
+
+        $this->actingAs($user->fresh())
+            ->putJson(route('anwesenheitsliste.PA.digital.draft.store'), $scope + ['payload' => $draftPayload])
+            ->assertOk()
+            ->assertJsonPath('revision', 2);
     }
 }
