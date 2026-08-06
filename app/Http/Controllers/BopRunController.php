@@ -76,6 +76,9 @@ class BopRunController extends Controller
         $data = $request->validate([
             'school_type' => ['required', Rule::in(['Gemeinschaftsschule', 'Förderschule'])],
             'status' => ['nullable', Rule::in(['planning', 'confirmed', 'completed'])],
+            'planned_classes' => ['nullable', 'array', 'max:100'],
+            'planned_classes.*.name' => ['required', 'string', 'max:50'],
+            'planned_classes.*.expected_participants' => ['nullable', 'integer', 'min:0', 'max:500'],
             'phases' => ['required', 'array', 'size:6'],
             'phases.*.phase_type' => ['required', Rule::in(self::PHASES), 'distinct'],
             'phases.*.dates' => ['nullable', 'array', 'max:60'],
@@ -113,6 +116,11 @@ class BopRunController extends Controller
             }
             $run->fill([
                 'school_type' => $data['school_type'],
+                'planned_classes' => collect($data['planned_classes'] ?? [])
+                    ->map(fn ($class) => [
+                        'name' => trim((string) $class['name']),
+                        'expected_participants' => (int) ($class['expected_participants'] ?? 0),
+                    ])->filter(fn ($class) => $class['name'] !== '')->unique('name')->values()->all(),
                 'status' => $data['status'] ?? 'planning',
                 'updated_by_user_id' => Auth::id(),
             ])->save();
@@ -319,7 +327,7 @@ class BopRunController extends Controller
             );
 
             $groupDates = $dates;
-            if ($phase->phase_type === 'pa' && $phase->scope_type === 'classes' && $phase->group_mode === 'class') {
+            if ($phase->scope_type === 'classes' && $phase->group_mode === 'class') {
                 $className = $participants->pluck('class_name')->filter()->unique()->sole();
                 $assignedDates = collect($phase->class_date_assignments[$className] ?? [])->filter()->sort()->values();
                 if ($assignedDates->isNotEmpty()) {
@@ -418,7 +426,9 @@ class BopRunController extends Controller
             'context' => ['project_id' => $project->id, 'partner_id' => $partner->id, 'school_name' => $partner->name, 'schuljahr' => $schuljahr, 'teil' => $teil],
             'school_type_suggestion' => $students->isNotEmpty() && $students->filter(fn ($student) => $student->foerderschueler || $student->foederschueler)->count() > ($students->count() / 2)
                 ? 'Förderschule' : 'Gemeinschaftsschule',
-            'classes' => $students->pluck('klasse')->filter()->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values(),
+            'classes' => $students->pluck('klasse')->filter()
+                ->merge(collect($run?->planned_classes ?? [])->pluck('name'))
+                ->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values(),
             'students' => $students->map(fn ($student) => [
                 'id' => $student->id, 'person_id' => $student->person_id, 'class_name' => $student->klasse,
                 'name' => trim(($student->person?->nachname ?? '') . ', ' . ($student->person?->vorname ?? '')),
@@ -442,7 +452,7 @@ class BopRunController extends Controller
     {
         return [
             'phase_type' => $type, 'dates' => [], 'scope_type' => 'school', 'selected_classes' => [],
-            'days_per_class' => 2, 'class_date_assignments' => [],
+            'days_per_class' => $type === 'pa' ? 2 : 1, 'class_date_assignments' => [],
             'participant_ids' => [], 'group_mode' => in_array($type, ['pa_feedback', 'wt_feedback'], true) ? 'none' : ($type === 'workshop_days' ? 'existing_assignment' : 'class'),
             'group_count' => 1, 'supervisor_person_id' => null, 'bereich_id' => null, 'raum_id' => null,
             'start_time' => '08:00', 'end_time' => '16:00', 'generate_groups' => false,
@@ -452,7 +462,7 @@ class BopRunController extends Controller
 
     private function validatedClassDateAssignments(array $phase, array $dates, bool $requireComplete): array
     {
-        if (($phase['phase_type'] ?? null) !== 'pa' || ($phase['scope_type'] ?? null) !== 'classes') {
+        if (($phase['scope_type'] ?? null) !== 'classes') {
             return [];
         }
 

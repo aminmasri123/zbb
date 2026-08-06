@@ -34,7 +34,10 @@ class BopRunWorkflowTest extends TestCase
         $studentC = $this->student($partner, '7.2', 'Gamma');
 
         $phases = [
-            $this->phase('pa_preparation', ['2026-09-01'], 'classes', ['7.1'], [], 'class', false, true),
+            $this->phase('pa_preparation', ['2026-09-01'], 'classes', ['7.1'], [], 'class', false, true) + [
+                'days_per_class' => 1,
+                'class_date_assignments' => ['7.1' => ['2026-09-01']],
+            ],
             $this->phase('pa', ['2026-09-02', '2026-09-03', '2026-09-04', '2026-09-07'], 'classes', ['7.1', '7.2'], [], 'class') + [
                 'days_per_class' => 2,
                 'class_date_assignments' => [
@@ -55,6 +58,10 @@ class BopRunWorkflowTest extends TestCase
         ]), [
             'school_type' => 'Gemeinschaftsschule',
             'status' => 'confirmed',
+            'planned_classes' => [
+                ['name' => '7.1', 'expected_participants' => 24],
+                ['name' => '7.a', 'expected_participants' => 18],
+            ],
             'phases' => $phases,
         ]);
 
@@ -62,6 +69,7 @@ class BopRunWorkflowTest extends TestCase
         $run = BopRun::query()->firstOrFail();
         $this->assertSame('2026-09-01', $run->first_visit_date->toDateString());
         $this->assertSame('2026-10-20', $run->last_visit_date->toDateString());
+        $this->assertSame(42, collect($run->planned_classes)->sum('expected_participants'));
 
         $preparation = BopPhaseSchedule::where('phase_type', 'pa_preparation')->firstOrFail();
         $this->assertCount(2, $preparation->participants);

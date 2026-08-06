@@ -21,6 +21,8 @@ const students = ref([])
 const options = ref({ areas: [], rooms: [], supervisors: [] })
 const schoolType = ref('Gemeinschaftsschule')
 const status = ref('planning')
+const plannedClasses = ref([])
+const newPlannedClass = ref({ name: '', expected_participants: null })
 const phases = ref([])
 const newDates = ref({})
 const updatingParticipant = ref(null)
@@ -47,6 +49,7 @@ const sortedStudentsByClass = computed(() => {
 const totalDates = computed(() => phases.value.reduce((sum, phase) => sum + (phase.dates?.length || 0), 0))
 const firstDate = computed(() => phases.value.flatMap((phase) => phase.dates || []).sort()[0] || null)
 const lastDate = computed(() => phases.value.flatMap((phase) => phase.dates || []).sort().at(-1) || null)
+const expectedParticipants = computed(() => plannedClasses.value.reduce((sum, item) => sum + Number(item.expected_participants || 0), 0))
 
 watch(() => props.visible, (visible) => {
   if (visible) load()
@@ -77,6 +80,10 @@ function hydrate(data) {
   options.value = data.options || { areas: [], rooms: [], supervisors: [] }
   schoolType.value = data.run?.school_type || data.school_type_suggestion || 'Gemeinschaftsschule'
   status.value = data.run?.status || 'planning'
+  plannedClasses.value = (data.run?.planned_classes || []).map((item) => ({
+    name: String(item.name || ''),
+    expected_participants: Number(item.expected_participants || 0),
+  }))
   phases.value = (data.phases || []).map((phase) => ({
     ...phase,
     dates: [...(phase.dates || [])].sort(),
@@ -152,6 +159,37 @@ function autoAssignClassDates(phase) {
   ]))
 }
 
+function assignSameClassDates(phase) {
+  const days = Math.max(1, Number(phase.days_per_class || 1))
+  const sharedDates = phase.dates.slice(0, days)
+  phase.class_date_assignments = Object.fromEntries(phase.selected_classes.map((className) => [className, [...sharedDates]]))
+}
+
+function refreshClasses() {
+  classes.value = [...new Set([
+    ...students.value.map((student) => student.class_name).filter(Boolean),
+    ...plannedClasses.value.map((item) => item.name).filter(Boolean),
+  ])].sort((a, b) => String(a).localeCompare(String(b), 'de', { numeric: true }))
+}
+
+function addPlannedClass() {
+  const name = String(newPlannedClass.value.name || '').trim()
+  if (!name) return
+  const existing = plannedClasses.value.find((item) => item.name.toLocaleLowerCase('de') === name.toLocaleLowerCase('de'))
+  if (existing) {
+    existing.expected_participants = Number(newPlannedClass.value.expected_participants || existing.expected_participants || 0)
+  } else {
+    plannedClasses.value.push({ name, expected_participants: Number(newPlannedClass.value.expected_participants || 0) })
+  }
+  newPlannedClass.value = { name: '', expected_participants: null }
+  refreshClasses()
+}
+
+function removePlannedClass(index) {
+  plannedClasses.value.splice(index, 1)
+  refreshClasses()
+}
+
 function easterDate(year) {
   const a = year % 19, b = Math.floor(year / 100), c = year % 100, d = Math.floor(b / 4), e = b % 4
   const f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30
@@ -201,6 +239,15 @@ function selectedCount(phase) {
   return phase.participant_ids.length
 }
 
+function selectedCountLabel(phase) {
+  const actual = selectedCount(phase)
+  const selectedClassNames = phase.scope_type === 'classes' ? phase.selected_classes : classes.value
+  const expected = plannedClasses.value
+    .filter((item) => phase.scope_type !== 'participants' && selectedClassNames.includes(item.name))
+    .reduce((sum, item) => sum + Number(item.expected_participants || 0), 0)
+  return expected > 0 ? `${actual} erfasst / ${expected} erwartet` : String(actual)
+}
+
 function dateLabel(value) {
   return value ? new Date(`${value}T00:00:00`).toLocaleDateString('de-DE') : '–'
 }
@@ -244,6 +291,7 @@ async function save() {
     }), {
       school_type: schoolType.value,
       status: status.value,
+      planned_classes: plannedClasses.value,
       phases: phases.value,
     })
     hydrate(response.data)
@@ -293,6 +341,25 @@ onBeforeUnmount(() => window.removeEventListener('keydown', closeOnEscape))
           <div class="rounded bg-orange-50 p-3 text-sm"><span class="block text-xs text-gray-500">Letzter Besuch</span><strong>{{ dateLabel(lastDate) }}</strong><span class="ml-2 text-xs text-gray-500">({{ totalDates }} Termine)</span></div>
         </section>
 
+        <section class="rounded-lg border bg-white p-4">
+          <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div><h3 class="font-bold text-gray-900">Vorläufige Klassenplanung</h3><p class="text-xs text-gray-500">Klassen und erwartete Teilnehmer können schon vor dem Teilnehmerimport geplant werden.</p></div>
+            <span class="rounded bg-orange-50 px-3 py-2 text-sm font-semibold text-orange-800">{{ expectedParticipants }} Teilnehmer erwartet</span>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <input v-model="newPlannedClass.name" type="text" class="w-40 rounded border-gray-300 text-sm" placeholder="Klasse, z. B. 7.1" @keydown.enter.prevent="addPlannedClass" />
+            <input v-model.number="newPlannedClass.expected_participants" type="number" min="0" max="500" class="w-44 rounded border-gray-300 text-sm" placeholder="Erwartete Teilnehmer" @keydown.enter.prevent="addPlannedClass" />
+            <button type="button" class="rounded bg-gray-900 px-4 py-2 text-sm font-semibold text-white" @click="addPlannedClass">+ Klasse</button>
+          </div>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <div v-for="(item, index) in plannedClasses" :key="`${item.name}-${index}`" class="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-3 py-1.5 text-sm">
+              <strong>{{ item.name }}</strong><input v-model.number="item.expected_participants" type="number" min="0" max="500" class="w-16 rounded border-gray-300 px-1 py-0.5 text-xs" title="Erwartete Teilnehmer" /><span class="text-xs text-gray-500">TN</span>
+              <button type="button" class="font-bold text-red-600" title="Planungsklasse entfernen" @click="removePlannedClass(index)">×</button>
+            </div>
+            <span v-if="!plannedClasses.length" class="text-xs text-gray-400">Noch keine vorläufige Klasse eingetragen.</span>
+          </div>
+        </section>
+
         <section v-for="definition in phaseDefinitions" :key="definition.type" class="rounded-lg border bg-white shadow-sm">
           <template v-if="phaseFor(definition.type)">
             <div class="border-b px-4 py-3">
@@ -314,14 +381,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', closeOnEscape))
                   <label class="text-xs text-gray-600">Beginn<input v-model="phaseFor(definition.type).start_time" type="time" class="mt-1 w-full rounded border-gray-300 text-sm" /></label>
                   <label class="text-xs text-gray-600">Ende<input v-model="phaseFor(definition.type).end_time" type="time" class="mt-1 w-full rounded border-gray-300 text-sm" /></label>
                 </div>
-                <label v-if="definition.type === 'pa'" class="block text-xs font-semibold text-gray-700">PA-Tage pro Klasse
+                <label v-if="phaseFor(definition.type).scope_type === 'classes'" class="block text-xs font-semibold text-gray-700">Tage pro Klasse
                   <input v-model.number="phaseFor(definition.type).days_per_class" type="number" min="1" max="20" class="mt-1 w-full rounded border-gray-300 text-sm" />
-                  <span class="mt-1 block font-normal text-gray-500">Standard: 2 Tage</span>
+                  <span class="mt-1 block font-normal text-gray-500">{{ definition.type === 'pa' ? 'PA-Standard: 2 Tage' : 'Standard: 1 Tag' }}</span>
                 </label>
               </div>
 
               <div class="space-y-3">
-                <label class="block text-sm font-semibold text-gray-700">Wer nimmt teil? <span class="text-orange-600">{{ selectedCount(phaseFor(definition.type)) }}</span></label>
+                <label class="block text-sm font-semibold text-gray-700">Wer nimmt teil? <span class="text-orange-600">{{ selectedCountLabel(phaseFor(definition.type)) }}</span></label>
                 <select v-model="phaseFor(definition.type).scope_type" class="w-full rounded border-gray-300 text-sm">
                   <option value="school">Gesamte Schule</option><option value="classes">Bestimmte Klassen</option><option value="participants">Einzelne Teilnehmer</option>
                 </select>
@@ -330,10 +397,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', closeOnEscape))
                     <input type="checkbox" :checked="phaseFor(definition.type).selected_classes.includes(className)" @change="toggleClass(phaseFor(definition.type), className)" />{{ className }}
                   </label>
                 </div>
-                <div v-if="definition.type === 'pa' && phaseFor(definition.type).scope_type === 'classes' && phaseFor(definition.type).selected_classes.length" class="space-y-2 rounded border border-orange-200 bg-orange-50 p-3">
+                <div v-if="phaseFor(definition.type).scope_type === 'classes' && phaseFor(definition.type).selected_classes.length" class="space-y-2 rounded border border-orange-200 bg-orange-50 p-3">
                   <div class="flex flex-wrap items-center justify-between gap-2">
-                    <strong class="text-xs text-orange-900">PA-Termine je Klasse</strong>
-                    <button type="button" class="rounded bg-orange-600 px-2 py-1 text-xs font-semibold text-white" @click="autoAssignClassDates(phaseFor(definition.type))">Blockweise verteilen</button>
+                    <strong class="text-xs text-orange-900">Welche Klasse kommt wann?</strong>
+                    <div class="flex flex-wrap gap-1"><button type="button" class="rounded border border-orange-300 bg-white px-2 py-1 text-xs font-semibold text-orange-800" @click="assignSameClassDates(phaseFor(definition.type))">Alle gleichzeitig</button><button type="button" class="rounded bg-orange-600 px-2 py-1 text-xs font-semibold text-white" @click="autoAssignClassDates(phaseFor(definition.type))">Getrennt verteilen</button></div>
                   </div>
                   <div v-for="className in phaseFor(definition.type).selected_classes" :key="`dates-${className}`" class="rounded bg-white p-2">
                     <div class="mb-1 flex justify-between text-xs"><strong>Klasse {{ className }}</strong><span>{{ (phaseFor(definition.type).class_date_assignments[className] || []).length }} / {{ phaseFor(definition.type).days_per_class }} Tage</span></div>
@@ -341,7 +408,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', closeOnEscape))
                       <label v-for="date in phaseFor(definition.type).dates" :key="`${className}-${date}`" class="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs" :class="(phaseFor(definition.type).class_date_assignments[className] || []).includes(date) ? 'border-orange-400 bg-orange-100' : 'bg-white'">
                         <input type="checkbox" :checked="(phaseFor(definition.type).class_date_assignments[className] || []).includes(date)" :disabled="!(phaseFor(definition.type).class_date_assignments[className] || []).includes(date) && (phaseFor(definition.type).class_date_assignments[className] || []).length >= phaseFor(definition.type).days_per_class" @change="toggleClassDate(phaseFor(definition.type), className, date)" />{{ dateLabel(date) }}
                       </label>
-                      <span v-if="!phaseFor(definition.type).dates.length" class="text-xs text-gray-500">Zuerst PA-Termine hinzufügen.</span>
+                      <span v-if="!phaseFor(definition.type).dates.length" class="text-xs text-gray-500">Zuerst Termine hinzufügen.</span>
                     </div>
                   </div>
                 </div>

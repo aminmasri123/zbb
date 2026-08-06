@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('bop_phase_schedules', function (Blueprint $table) {
-            $table->unsignedTinyInteger('days_per_class')->default(2)->after('selected_classes');
+            $table->unsignedTinyInteger('days_per_class')->default(1)->after('selected_classes');
             $table->json('class_date_assignments')->nullable()->after('days_per_class');
         });
     }
