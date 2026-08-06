@@ -73,6 +73,7 @@ use App\Http\Controllers\ParticipantNotificationPreferenceController;
 use App\Http\Controllers\PersonalController;
 use App\Http\Controllers\PersonenHasBildungsmassnahmenController;
 use App\Http\Controllers\PotenzialanalyseController;
+use App\Http\Controllers\BopRunController;
 use App\Http\Controllers\ProjektBopController;
 use App\Http\Controllers\ProjektController;
 use App\Http\Controllers\ProjektHasPersonenController;
@@ -262,6 +263,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
         Route::post('/kalender', [AppsController::class, 'storeCalendar'])->name('calendar.store');
         Route::post('/kalender/{event}/move', [AppsController::class, 'moveCalendar'])->name('calendar.move');
         Route::post('/kalender/{event}/copy', [AppsController::class, 'copyCalendar'])->name('calendar.copy');
+        Route::post('/kalender/{event}/antwort', [AppsController::class, 'respondCalendar'])->name('calendar.respond');
         Route::put('/kalender/{event}', [AppsController::class, 'updateCalendar'])->name('calendar.update');
         Route::delete('/kalender/{event}', [AppsController::class, 'destroyCalendar'])->name('calendar.destroy');
 
@@ -750,6 +752,10 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
 
 
     Route::get('/bereichsauswahl/{partnerId}/{schuljahr}/{teil}', [ProjektBopController::class, 'bereichsauswahl'])->name('bereichsauswahl.index');
+    Route::put('/bop/durchlauf/teilnehmer/{participant}/status', [BopRunController::class, 'updateParticipantStatus'])->name('bop.run.participant.status');
+    Route::post('/bop/durchlauf/{partner}/gruppen/{phaseType}', [BopRunController::class, 'generateGroups'])->name('bop.run.groups.generate');
+    Route::get('/bop/durchlauf/{partner}', [BopRunController::class, 'show'])->name('bop.run.show');
+    Route::put('/bop/durchlauf/{partner}', [BopRunController::class, 'update'])->name('bop.run.update');
     Route::post('/bereichsauswahl/einstellung', [ProjektBopController::class, 'bereichsauswahlSettingUpdate'])->name('bereichsauswahl.setting.update');
     Route::post('/bereichwahl-update', [ProjektBopController::class, 'waehlen'])->name('bereichsauswahl.bop.radio.update');
 

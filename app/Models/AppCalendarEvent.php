@@ -26,6 +26,9 @@ class AppCalendarEvent extends Model
         'background_color',
         'text_color',
         'visibility',
+        'audience',
+        'source_type',
+        'source_id',
     ];
 
     protected $casts = [
@@ -49,5 +52,10 @@ class AppCalendarEvent extends Model
     public function shares()
     {
         return $this->morphMany(AppShare::class, 'shareable');
+    }
+
+    public function attendees()
+    {
+        return $this->hasMany(AppCalendarEventAttendee::class, 'event_id');
     }
 }

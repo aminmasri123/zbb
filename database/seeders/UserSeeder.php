@@ -784,6 +784,45 @@ class UserSeeder extends Seeder
             }
         }
 
+        $calendarLeadPermissionIds = DB::table('permissions')
+            ->whereIn('name', [
+                'apps.calendar.project.view.all',
+                'apps.calendar.project.manage',
+                'apps.calendar.project.assign',
+                'apps.calendar.respond',
+            ])
+            ->pluck('id');
+
+        DB::table('roles')
+            ->whereIn('name', ['Abteilungsleitung', 'Projektleitung'])
+            ->where('guard_name', 'web')
+            ->pluck('id')
+            ->each(function ($roleId) use ($calendarLeadPermissionIds) {
+                foreach ($calendarLeadPermissionIds as $permissionId) {
+                    DB::table('role_has_permissions')->insertOrIgnore([
+                        'permission_id' => $permissionId,
+                        'role_id' => $roleId,
+                    ]);
+                }
+            });
+
+        $calendarRespondPermissionId = DB::table('permissions')
+            ->where('name', 'apps.calendar.respond')
+            ->value('id');
+        $calendarBasePermissionId = DB::table('permissions')
+            ->where('name', 'apps.calendar')
+            ->value('id');
+
+        if ($calendarRespondPermissionId && $calendarBasePermissionId) {
+            DB::table('role_has_permissions')
+                ->where('permission_id', $calendarBasePermissionId)
+                ->pluck('role_id')
+                ->each(fn ($roleId) => DB::table('role_has_permissions')->insertOrIgnore([
+                    'permission_id' => $calendarRespondPermissionId,
+                    'role_id' => $roleId,
+                ]));
+        }
+
         $extraPermissionNames = [
             'gruppe.view.all',
             'raeumlichkeiten.index',
@@ -1231,6 +1270,10 @@ class UserSeeder extends Seeder
             $this->permission('apps.calendar.copy', 15, 'Erlaubt das Kopieren bearbeitbarer Kalenderereignisse in andere Zeitraeume.'),
             $this->permission('apps.calendar.update', 15, 'Erlaubt das Bearbeiten eigener oder bearbeitbarer Kalenderereignisse.'),
             $this->permission('apps.calendar.destroy', 15, 'Erlaubt das Loeschen eigener oder bearbeitbarer Kalenderereignisse.'),
+            $this->permission('apps.calendar.project.view.all', 15, 'Erlaubt das Einsehen aller Termine in zugeordneten Projektkalendern.'),
+            $this->permission('apps.calendar.project.manage', 15, 'Erlaubt das Anlegen und Bearbeiten von Terminen in zugeordneten Projektkalendern.'),
+            $this->permission('apps.calendar.project.assign', 15, 'Erlaubt die Zuweisung von Projektterminen an Mitarbeitende.'),
+            $this->permission('apps.calendar.respond', 15, 'Erlaubt die Zu- oder Absage eigener zugewiesener Kalendertermine.'),
             $this->permission('apps.contacts', 16, 'Erlaubt das Einsehen sichtbarer Kontakte im Apps-Arbeitsbereich.'),
             $this->permission('apps.contacts.store', 16, 'Erlaubt das Anlegen neuer Kontakte.'),
             $this->permission('apps.contacts.update', 16, 'Erlaubt das Bearbeiten eigener oder bearbeitbarer Kontakte.'),

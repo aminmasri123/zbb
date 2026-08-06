@@ -7,7 +7,11 @@ use App\Models\Projekt;
 use App\Models\Personen;
 use App\Models\Gruppe;
 use App\Models\Dokumente;
+use App\Models\EinteilungSetting;
+use App\Models\PaAttendanceListDraft;
+use App\Models\PersonenIstSchueler;
 
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +27,8 @@ use ZipArchive;
 
 class ExportWordController extends Controller
 {
+    private array $schoolPlaceholderCache = [];
+
         //dd($templateProcessor->getVariables());
 
     public function info_teilnehmende(Request $request, $id)
@@ -452,6 +458,7 @@ class ExportWordController extends Controller
             ->get()
             ->unique('id')
             ->values();
+        $gruppe->setRelation('teilnehmer', $teilnehmer);
 
         if ($teilnehmer->isEmpty()) {
             return back()->with('error', 'Die Gruppe hat keine Teilnehmer fuer den Export.');
@@ -752,7 +759,7 @@ class ExportWordController extends Controller
         $raum = $gruppe->raum;
         $email = $person?->kontaktes?->first(fn ($kontakt) => strtolower($kontakt->kontakttyp?->name ?? '') === 'email');
         $telefon = $person?->kontaktes?->first(fn ($kontakt) => in_array(strtolower($kontakt->kontakttyp?->name ?? ''), ['telefon', 'mobile', 'mobil'], true));
-        $partnerValues = $this->partnerPlaceholderValues($gruppe);
+        $partnerValues = $this->partnerPlaceholderValues($gruppe, $projekt);
 
         return array_merge([
             'nr' => $nummer,
@@ -795,7 +802,7 @@ class ExportWordController extends Controller
         ], $partnerValues);
     }
 
-    private function partnerPlaceholderValues(Gruppe $gruppe): array
+    private function partnerPlaceholderValues(Gruppe $gruppe, Projekt $projekt): array
     {
         $gruppe->loadMissing([
             'partner.adresses',
@@ -825,7 +832,7 @@ class ExportWordController extends Controller
             fn ($kontakt) => in_array(mb_strtolower(trim((string) ($kontakt->kontakttyp?->name ?? ''))), ['telefon', 'mobile', 'mobil'], true)
         );
 
-        return [
+        return array_merge([
             'partner' => $hauptpartner?->name,
             'partner_name' => $hauptpartner?->name,
             'partner_beschreibung' => $hauptpartner?->beschreibung,
@@ -837,7 +844,232 @@ class ExportWordController extends Controller
             'partner_email' => $email?->wert,
             'partner_telefon' => $telefon?->wert,
             'partner_liste' => $partners->pluck('name')->filter()->implode(', '),
+        ], $this->schoolPlaceholderValues($gruppe, $projekt, $hauptpartner));
+    }
+
+    private function schoolPlaceholderValues(Gruppe $gruppe, Projekt $projekt, $hauptpartner): array
+    {
+        $emptyValues = [
+            'schulform' => '',
+            'schuljahr' => '',
+            'teil' => '',
+            'klassen' => '',
+            'klassen_liste' => '',
+            'zeitraum' => '',
+            'zeitraum_von' => '',
+            'zeitraum_bis' => '',
+            'vorbereitung_pa_datum' => '',
+            'feedbackgespraech_datum' => '',
+            'auswertungsgespraech_datum' => '',
         ];
+
+        if (!$hauptpartner?->getKey() || !$projekt->getKey()) {
+            return $emptyValues;
+        }
+
+        $cacheKey = implode(':', [
+            (string) $projekt->getKey(),
+            (string) ($gruppe->getKey() ?? spl_object_id($gruppe)),
+            (string) $hauptpartner->getKey(),
+        ]);
+
+        if (array_key_exists($cacheKey, $this->schoolPlaceholderCache)) {
+            return $this->schoolPlaceholderCache[$cacheKey];
+        }
+
+        $personIds = $gruppe->relationLoaded('teilnehmer')
+            ? $gruppe->teilnehmer->pluck('id')->filter()->unique()->values()
+            : ($gruppe->exists
+                ? $gruppe->teilnehmer()->pluck('personens.id')->filter()->unique()->values()
+                : collect());
+
+        $contextRows = PersonenIstSchueler::query()
+            ->where('schule_id', $hauptpartner->getKey())
+            ->when($personIds->isNotEmpty(), fn ($query) => $query->whereIn('person_id', $personIds))
+            ->orderByDesc('id')
+            ->get();
+
+        if ($contextRows->isEmpty()) {
+            return $this->schoolPlaceholderCache[$cacheKey] = $emptyValues;
+        }
+
+        $context = $contextRows
+            ->groupBy(fn ($row) => (string) $row->schuljahr . "\0" . (string) $row->teil)
+            ->sortByDesc(fn ($rows) => $rows->count())
+            ->first()
+            ?->first();
+
+        if (!$context) {
+            return $this->schoolPlaceholderCache[$cacheKey] = $emptyValues;
+        }
+
+        $schoolRows = PersonenIstSchueler::query()
+            ->where('schule_id', $hauptpartner->getKey())
+            ->where('schuljahr', $context->schuljahr)
+            ->where('teil', $context->teil)
+            ->get();
+
+        $foerderCount = $schoolRows->filter(
+            fn ($row) => (bool) ($row->foerderschueler ?? $row->foederschueler ?? false)
+        )->count();
+        $schulform = $schoolRows->isNotEmpty() && ($foerderCount / $schoolRows->count()) > 0.5
+            ? 'Förderschule'
+            : 'Gemeinschaftsschule';
+
+        $klassen = $schoolRows
+            ->pluck('klasse')
+            ->map(fn ($klasse) => trim((string) $klasse))
+            ->filter()
+            ->uniqueStrict(fn ($klasse) => mb_strtolower($klasse))
+            ->sort(fn ($klasseA, $klasseB) => strnatcasecmp($klasseA, $klasseB))
+            ->values()
+            ->implode(' + ');
+
+        $dateValues = $this->schoolDatePlaceholderValues(
+            $gruppe,
+            $projekt,
+            (int) $hauptpartner->getKey(),
+            (string) $context->schuljahr,
+            (string) $context->teil
+        );
+
+        return $this->schoolPlaceholderCache[$cacheKey] = array_merge($emptyValues, [
+            'schulform' => $schulform,
+            'schuljahr' => $context->schuljahr,
+            'teil' => $context->teil,
+            'klassen' => $klassen,
+            'klassen_liste' => $klassen,
+        ], $dateValues);
+    }
+
+    private function schoolDatePlaceholderValues(
+        Gruppe $gruppe,
+        Projekt $projekt,
+        int $partnerId,
+        string $schuljahr,
+        string $teil
+    ): array {
+        $allDates = collect();
+        $preparationDates = collect();
+        $feedbackDates = collect();
+
+        PaAttendanceListDraft::query()
+            ->where('projekt_id', $projekt->getKey())
+            ->where('partner_id', $partnerId)
+            ->where('schuljahr', $schuljahr)
+            ->where('teil', $teil)
+            ->orderBy('id')
+            ->get(['payload'])
+            ->each(function ($draft) use ($allDates, $preparationDates, $feedbackDates): void {
+                $payload = is_array($draft->payload) ? $draft->payload : [];
+                $form = is_array($payload['form'] ?? null) ? $payload['form'] : [];
+                $listType = (string) ($form['listType'] ?? '');
+
+                foreach (($payload['days'] ?? []) as $day) {
+                    if (!is_array($day) || ($day['selected'] ?? true) === false) {
+                        continue;
+                    }
+
+                    $date = $this->normalizePlaceholderDate($day['date'] ?? null);
+                    if (!$date) {
+                        continue;
+                    }
+
+                    $allDates->push($date);
+                    $type = mb_strtolower((string) ($day['type'] ?? ''));
+                    $source = mb_strtolower((string) ($day['source'] ?? ''));
+                    $note = mb_strtolower((string) ($day['note'] ?? ''));
+
+                    if ($type === 'preparation' || str_contains($source, 'preparation') || str_contains($note, 'vorbereitung')) {
+                        $preparationDates->push($date);
+                    }
+
+                    if ($type === 'feedback' || str_contains($source, 'feedback') || str_contains($note, 'feedback') || str_contains($note, 'auswertung')) {
+                        $feedbackDates->push($date);
+                    }
+                }
+
+                $startDate = $this->normalizePlaceholderDate($form['startDate'] ?? null);
+                $endDate = $this->normalizePlaceholderDate($form['endDate'] ?? null);
+                $feedbackDate = $this->normalizePlaceholderDate($form['feedbackDate'] ?? null);
+
+                if ($startDate) {
+                    $allDates->push($startDate);
+                    if ($listType === 'pa_preparation') {
+                        $preparationDates->push($startDate);
+                    }
+                }
+                if ($endDate) {
+                    $allDates->push($endDate);
+                }
+                if ($feedbackDate) {
+                    $allDates->push($feedbackDate);
+                    $feedbackDates->push($feedbackDate);
+                }
+            });
+
+        $setting = EinteilungSetting::query()
+            ->where('projekt_id', $projekt->getKey())
+            ->where('partner_id', $partnerId)
+            ->where('schuljahr', $schuljahr)
+            ->where('teil', $teil)
+            ->with('rundentermine')
+            ->latest('id')
+            ->first();
+
+        $roundStart = $setting?->rundentermine
+            ?->pluck('anfangsdatum')
+            ->map(fn ($date) => $this->normalizePlaceholderDate($date))
+            ->filter()
+            ->min();
+        $roundEnd = $setting?->rundentermine
+            ?->pluck('enddatum')
+            ->map(fn ($date) => $this->normalizePlaceholderDate($date))
+            ->filter()
+            ->max();
+
+        $preparationDate = $preparationDates->filter()->min();
+        $feedbackDate = $feedbackDates->filter()->max();
+        $firstDate = $preparationDate
+            ?: $allDates->filter()->min()
+            ?: $roundStart
+            ?: $this->normalizePlaceholderDate($gruppe->anfangsdatum);
+        $lastDate = $feedbackDate
+            ?: $allDates->filter()->max()
+            ?: $roundEnd
+            ?: $this->normalizePlaceholderDate($gruppe->enddatum);
+
+        $firstFormatted = $this->formatIsoPlaceholderDate($firstDate);
+        $lastFormatted = $this->formatIsoPlaceholderDate($lastDate);
+
+        return [
+            'zeitraum' => $firstFormatted && $lastFormatted
+                ? $firstFormatted . ' – ' . $lastFormatted
+                : ($firstFormatted ?: $lastFormatted),
+            'zeitraum_von' => $firstFormatted,
+            'zeitraum_bis' => $lastFormatted,
+            'vorbereitung_pa_datum' => $this->formatIsoPlaceholderDate($preparationDate),
+            'feedbackgespraech_datum' => $this->formatIsoPlaceholderDate($feedbackDate),
+            'auswertungsgespraech_datum' => $this->formatIsoPlaceholderDate($feedbackDate),
+        ];
+    }
+
+    private function normalizePlaceholderDate($value): ?string
+    {
+        if (!filled($value)) {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($value)->toDateString();
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    private function formatIsoPlaceholderDate(?string $date): string
+    {
+        return $date ? Carbon::parse($date)->format('d.m.Y') : '';
     }
 
     private function fillSpreadsheetTemplate($spreadsheet, Gruppe $gruppe, Projekt $projekt, $teilnehmer): void

@@ -34,6 +34,17 @@ class PartnerDocumentPlaceholderTest extends TestCase
             'partner_email',
             'partner_telefon',
             'partner_liste',
+            'schulform',
+            'schuljahr',
+            'teil',
+            'klassen',
+            'klassen_liste',
+            'zeitraum',
+            'zeitraum_von',
+            'zeitraum_bis',
+            'vorbereitung_pa_datum',
+            'feedbackgespraech_datum',
+            'auswertungsgespraech_datum',
         ], collect($category['werte'])->pluck('key')->all());
     }
 

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AppCalendarEvent;
+use App\Models\AppCalendarEventAttendee;
 use App\Models\AppCalendar;
 use App\Models\AppCalendarStyle;
 use App\Models\AppContact;
@@ -372,7 +373,18 @@ class AppsController extends Controller
             'calendars' => $this->visible(AppCalendar::query(), AppCalendar::class)
                 ->orderBy('project_id')
                 ->orderBy('name')
-                ->get(),
+                ->get()
+                ->map(fn (AppCalendar $calendar) => [
+                    ...$calendar->toArray(),
+                    'can_manage' => $this->canManage($calendar),
+                ]),
+            'calendarPeople' => Auth::user()->can('apps.calendar.project.assign') ? $this->calendarPeople() : [],
+            'calendarCapabilities' => [
+                'manage_project' => Auth::user()->can('apps.calendar.project.manage'),
+                'assign_project' => Auth::user()->can('apps.calendar.project.assign'),
+                'view_all_project' => Auth::user()->can('apps.calendar.project.view.all'),
+                'respond' => Auth::user()->can('apps.calendar.respond'),
+            ],
             'styles' => AppCalendarStyle::where('owner_user_id', Auth::id())->orderBy('label')->get(),
         ]);
     }
@@ -516,7 +528,14 @@ class AppsController extends Controller
             ...$this->visibilityRules(),
         ]);
 
-        AppCalendar::create($this->ownedPayload($data));
+        AppCalendar::create([
+            ...$data,
+            'owner_user_id' => Auth::id(),
+            'project_id' => null,
+            'team_id' => null,
+            'kind' => 'personal',
+            'visibility' => 'private',
+        ]);
 
         return back()->with('success', 'Kalender wurde angelegt.');
     }
@@ -539,24 +558,17 @@ class AppsController extends Controller
 
     public function storeCalendar(Request $request)
     {
-        $data = $request->validate([
-            'title' => ['required', 'string', 'max:255'],
-            'calendar_id' => ['nullable', 'exists:app_calendars,id'],
-            'description' => ['nullable', 'string'],
-            'starts_at' => ['required', 'date'],
-            'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
-            'all_day' => ['nullable', 'boolean'],
-            'include_weekends' => ['nullable', 'boolean'],
-            'excluded_dates' => ['nullable', 'array'],
-            'excluded_dates.*' => ['date_format:Y-m-d'],
-            'location' => ['nullable', 'string', 'max:255'],
-            'color' => ['nullable', 'string', 'max:20'],
-            'background_color' => ['nullable', 'string', 'max:20'],
-            'text_color' => ['nullable', 'string', 'max:20'],
-            ...$this->visibilityRules(),
-        ]);
+        $data = $request->validate($this->calendarEventRules());
+        $calendar = $this->calendarForEventData($data);
 
-        $event = AppCalendarEvent::create($this->calendarEventPayload($data));
+        $event = DB::transaction(function () use ($data, $calendar) {
+            $event = AppCalendarEvent::create($this->calendarEventPayload(
+                $this->applyCalendarScope($data, $calendar)
+            ));
+            $this->syncCalendarAttendees($event, $data, true);
+
+            return $event;
+        });
 
         return $this->calendarEventResponse($event, 'Termin wurde angelegt.');
     }
@@ -564,24 +576,55 @@ class AppsController extends Controller
     public function updateCalendar(Request $request, AppCalendarEvent $event)
     {
         abort_unless($this->canManage($event), 403);
-        $event->update($this->calendarEventPayload($request->validate([
-            'title' => ['required', 'string', 'max:255'],
-            'calendar_id' => ['nullable', 'exists:app_calendars,id'],
-            'description' => ['nullable', 'string'],
-            'starts_at' => ['required', 'date'],
-            'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
-            'all_day' => ['nullable', 'boolean'],
-            'include_weekends' => ['nullable', 'boolean'],
-            'excluded_dates' => ['nullable', 'array'],
-            'excluded_dates.*' => ['date_format:Y-m-d'],
-            'location' => ['nullable', 'string', 'max:255'],
-            'color' => ['nullable', 'string', 'max:20'],
-            'background_color' => ['nullable', 'string', 'max:20'],
-            'text_color' => ['nullable', 'string', 'max:20'],
-            ...$this->visibilityRules(),
-        ])));
+        $data = $request->validate($this->calendarEventRules());
+        $calendar = $this->calendarForEventData($data);
+        $datesChanged = Carbon::parse($event->starts_at)->toDateTimeString() !== Carbon::parse($data['starts_at'])->toDateTimeString()
+            || Carbon::parse($event->ends_at ?: $event->starts_at)->toDateTimeString() !== Carbon::parse($data['ends_at'] ?: $data['starts_at'])->toDateTimeString();
+
+        DB::transaction(function () use ($data, $calendar, $event, $datesChanged) {
+            $payload = $this->calendarEventPayload($this->applyCalendarScope($data, $calendar));
+            unset($payload['owner_user_id']);
+            $event->update($payload);
+            $this->syncCalendarAttendees($event, $data, $datesChanged);
+        });
 
         return $this->calendarEventResponse($event, 'Termin wurde aktualisiert.');
+    }
+
+    public function respondCalendar(Request $request, AppCalendarEvent $event)
+    {
+        abort_unless($this->canSee($event, AppCalendarEvent::class), 404);
+
+        $data = $request->validate([
+            'response' => ['required', Rule::in(['accepted', 'declined'])],
+            'response_note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $attendee = $event->attendees()
+            ->where('user_id', Auth::id())
+            ->where('response_required', true)
+            ->firstOrFail();
+
+        $attendee->update([
+            'response' => $data['response'],
+            'response_note' => $data['response_note'] ?? null,
+            'responded_at' => now(),
+        ]);
+
+        $owner = $event->owner;
+        if ($owner && (int) $owner->id !== (int) Auth::id()) {
+            $person = Auth::user()->person;
+            $name = trim(($person?->vorname ?? '') . ' ' . ($person?->nachname ?? '')) ?: (Auth::user()->username ?: Auth::user()->email);
+            $owner->notify(new ConfiguredEventNotification([
+                'message' => $name . ' hat den Termin „' . $event->title . '“ ' . ($data['response'] === 'accepted' ? 'zugesagt.' : 'abgesagt.'),
+                'link' => route('apps.calendar', ['year' => $event->starts_at->year]),
+                'id' => $event->id,
+                'typ' => 'Kalender',
+                'event_key' => 'apps.calendar.response',
+            ]));
+        }
+
+        return $this->calendarEventResponse($event, $data['response'] === 'accepted' ? 'Termin wurde zugesagt.' : 'Termin wurde abgesagt.');
     }
 
     public function moveCalendar(Request $request, AppCalendarEvent $event)
@@ -605,6 +648,8 @@ class AppsController extends Controller
             abort_if(empty($data['source_date']), 422, 'Der Ursprungstag fehlt.');
             $this->moveCalendarSingleDay($event, $data['source_date'], $data['target_date']);
         });
+
+        $this->resetCalendarResponses($event->refresh());
 
         return response()->json(['success' => true]);
     }
@@ -1261,6 +1306,187 @@ class AppsController extends Controller
         return $data;
     }
 
+    private function calendarEventRules(): array
+    {
+        return [
+            'title' => ['required', 'string', 'max:255'],
+            'calendar_id' => ['nullable', 'exists:app_calendars,id'],
+            'description' => ['nullable', 'string'],
+            'starts_at' => ['required', 'date'],
+            'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
+            'all_day' => ['nullable', 'boolean'],
+            'include_weekends' => ['nullable', 'boolean'],
+            'excluded_dates' => ['nullable', 'array'],
+            'excluded_dates.*' => ['date_format:Y-m-d'],
+            'location' => ['nullable', 'string', 'max:255'],
+            'color' => ['nullable', 'string', 'max:20'],
+            'background_color' => ['nullable', 'string', 'max:20'],
+            'text_color' => ['nullable', 'string', 'max:20'],
+            'audience' => ['nullable', Rule::in(['owner', 'assignees', 'project'])],
+            'responsible_user_ids' => ['nullable', 'array'],
+            'responsible_user_ids.*' => ['integer', 'distinct', 'exists:users,id'],
+            'viewer_user_ids' => ['nullable', 'array'],
+            'viewer_user_ids.*' => ['integer', 'distinct', 'exists:users,id'],
+            'send_notification' => ['nullable', 'boolean'],
+            ...$this->visibilityRules(),
+        ];
+    }
+
+    private function calendarForEventData(array &$data): AppCalendar
+    {
+        $calendarId = $data['calendar_id'] ?? $this->personalCalendarId();
+        abort_unless($calendarId, 422, 'Bitte einen Kalender auswaehlen.');
+
+        $calendar = AppCalendar::findOrFail($calendarId);
+        abort_unless($this->canManage($calendar), 403);
+        $data['calendar_id'] = $calendar->id;
+
+        return $calendar;
+    }
+
+    private function applyCalendarScope(array $data, AppCalendar $calendar): array
+    {
+        if ($calendar->kind === 'project' && $calendar->project_id) {
+            $data['visibility'] = 'project';
+            $data['project_id'] = $calendar->project_id;
+            $data['team_id'] = null;
+            $data['audience'] = $data['audience'] ?? 'assignees';
+
+            return $data;
+        }
+
+        $data['audience'] = 'owner';
+
+        return $data;
+    }
+
+    private function syncCalendarAttendees(AppCalendarEvent $event, array $data, bool $resetResponses): void
+    {
+        if (! $event->project_id || $event->calendar?->kind !== 'project') {
+            $event->attendees()->delete();
+            return;
+        }
+
+        $responsibleIds = collect($data['responsible_user_ids'] ?? [])->map(fn ($id) => (int) $id)->filter()->unique();
+        $viewerIds = collect($data['viewer_user_ids'] ?? [])->map(fn ($id) => (int) $id)->filter()->unique()->diff($responsibleIds);
+        $requestedIds = $responsibleIds->merge($viewerIds)->unique()->values();
+        $currentIds = $event->attendees()->pluck('user_id')->map(fn ($id) => (int) $id)->sort()->values();
+
+        if (! Auth::user()->can('apps.calendar.project.assign')) {
+            abort_unless($requestedIds->sort()->values()->all() === $currentIds->all(), 403, 'Dir fehlt die Berechtigung, Projekttermine zuzuweisen.');
+            return;
+        }
+
+        $allowedIds = User::whereHas('projekte', fn (Builder $query) => $query->where('projekts.id', $event->project_id))
+            ->whereIn('id', $requestedIds)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id);
+
+        if ($requestedIds->diff($allowedIds)->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'responsible_user_ids' => 'Alle ausgewaehlten Personen muessen dem Projekt zugeordnet sein.',
+            ]);
+        }
+
+        $existing = $event->attendees()->get()->keyBy('user_id');
+        $event->attendees()->whereNotIn('user_id', $requestedIds)->delete();
+        $notifyIds = collect();
+
+        foreach ($requestedIds as $userId) {
+            $responsible = $responsibleIds->contains($userId);
+            $current = $existing->get($userId);
+            $requiresReset = $responsible && ($resetResponses || ! $current || $current->access_level !== 'responsible');
+
+            AppCalendarEventAttendee::updateOrCreate(
+                ['event_id' => $event->id, 'user_id' => $userId],
+                [
+                    'assigned_by_user_id' => Auth::id(),
+                    'access_level' => $responsible ? 'responsible' : 'viewer',
+                    'response_required' => $responsible,
+                    'response' => $responsible ? ($requiresReset ? 'pending' : $current->response) : 'accepted',
+                    'response_note' => $requiresReset ? null : $current?->response_note,
+                    'responded_at' => $requiresReset ? null : $current?->responded_at,
+                ]
+            );
+
+            if (! $current || $requiresReset) {
+                $notifyIds->push($userId);
+            }
+        }
+
+        if (($data['send_notification'] ?? true) && $notifyIds->isNotEmpty()) {
+            $recipients = User::whereIn('id', $notifyIds)->whereKeyNot(Auth::id())->get();
+            foreach ($recipients as $recipient) {
+                $responsible = $responsibleIds->contains((int) $recipient->id);
+                $recipient->notify(new ConfiguredEventNotification([
+                    'message' => $responsible
+                        ? 'Du wurdest dem Termin „' . $event->title . '“ am ' . $event->starts_at->format('d.m.Y') . ' zugewiesen. Bitte sage zu oder ab.'
+                        : 'Der Termin „' . $event->title . '“ am ' . $event->starts_at->format('d.m.Y') . ' wurde fuer dich freigegeben.',
+                    'link' => route('apps.calendar', ['year' => $event->starts_at->year]),
+                    'id' => $event->id,
+                    'typ' => 'Kalender',
+                    'event_key' => $responsible ? 'apps.calendar.assignment' : 'apps.calendar.shared',
+                ]));
+            }
+        }
+    }
+
+    private function calendarPeople()
+    {
+        $projectIds = $this->calendarProjectIds(Auth::user());
+        $query = User::query()
+            ->with(['person:id,vorname,nachname', 'projekte:id,name'])
+            ->whereHas('projekte');
+
+        if (! Auth::user()->hasRole('Administrator')) {
+            $query->whereHas('projekte', fn (Builder $projects) => $projects->whereIn('projekts.id', $projectIds));
+        }
+
+        return $query->orderBy('username')
+            ->get(['id', 'person_id', 'username', 'email'])
+            ->map(fn (User $user) => [
+                'id' => $user->id,
+                'name' => trim(($user->person?->vorname ?? '') . ' ' . ($user->person?->nachname ?? '')) ?: ($user->username ?: $user->email),
+                'project_ids' => $user->projekte->pluck('id')->map(fn ($id) => (int) $id)->values(),
+            ]);
+    }
+
+    private function calendarEventViewPayload(AppCalendarEvent $event): array
+    {
+        $canManage = $this->canManage($event);
+        $myAssignment = $event->attendees->firstWhere('user_id', Auth::id());
+        $attendees = $canManage
+            ? $event->attendees
+            : $event->attendees->where('user_id', Auth::id())->values();
+
+        return [
+            ...$event->toArray(),
+            'attendees' => $attendees->map(fn (AppCalendarEventAttendee $attendee) => [
+                'id' => $attendee->id,
+                'user_id' => $attendee->user_id,
+                'name' => trim(($attendee->user?->person?->vorname ?? '') . ' ' . ($attendee->user?->person?->nachname ?? ''))
+                    ?: ($attendee->user?->username ?: $attendee->user?->email),
+                'access_level' => $attendee->access_level,
+                'response_required' => $attendee->response_required,
+                'response' => $attendee->response,
+                'response_note' => $attendee->response_note,
+                'responded_at' => $attendee->responded_at,
+            ])->values(),
+            'can_manage' => $canManage,
+            'can_respond' => (bool) ($myAssignment?->response_required && Auth::user()->can('apps.calendar.respond')),
+            'my_assignment' => $myAssignment ? [
+                'response' => $myAssignment->response,
+                'response_note' => $myAssignment->response_note,
+                'access_level' => $myAssignment->access_level,
+            ] : null,
+            'response_summary' => [
+                'pending' => $event->attendees->where('response_required', true)->where('response', 'pending')->count(),
+                'accepted' => $event->attendees->where('response_required', true)->where('response', 'accepted')->count(),
+                'declined' => $event->attendees->where('response_required', true)->where('response', 'declined')->count(),
+            ],
+        ];
+    }
+
     private function moveCalendarGroup(AppCalendarEvent $event, string $targetDate): void
     {
         $start = Carbon::parse($event->starts_at);
@@ -1305,6 +1531,7 @@ class AppsController extends Controller
 
         $event->update(['excluded_dates' => $excludedDates]);
         $singleEvent->save();
+        $this->copyCalendarAttendees($event, $singleEvent);
     }
 
     private function copyCalendarRange(AppCalendarEvent $event, string $startDate, string $endDate, bool $includeWeekends): void
@@ -1318,6 +1545,49 @@ class AppsController extends Controller
         $copy->include_weekends = $includeWeekends;
         $copy->excluded_dates = [];
         $copy->save();
+        $this->copyCalendarAttendees($event, $copy);
+    }
+
+    private function copyCalendarAttendees(AppCalendarEvent $source, AppCalendarEvent $target): void
+    {
+        foreach ($source->attendees()->get() as $attendee) {
+            $target->attendees()->create([
+                'user_id' => $attendee->user_id,
+                'assigned_by_user_id' => Auth::id(),
+                'access_level' => $attendee->access_level,
+                'response_required' => $attendee->response_required,
+                'response' => $attendee->response_required ? 'pending' : 'accepted',
+            ]);
+        }
+    }
+
+    private function resetCalendarResponses(AppCalendarEvent $event): void
+    {
+        $userIds = $event->attendees()
+            ->where('response_required', true)
+            ->pluck('user_id');
+
+        if ($userIds->isEmpty()) {
+            return;
+        }
+
+        $event->attendees()->where('response_required', true)->update([
+            'response' => 'pending',
+            'response_note' => null,
+            'responded_at' => null,
+            'updated_at' => now(),
+        ]);
+
+        $recipients = User::whereIn('id', $userIds)->whereKeyNot(Auth::id())->get();
+        if ($recipients->isNotEmpty()) {
+            Notification::send($recipients, new ConfiguredEventNotification([
+                'message' => 'Der Termin „' . $event->title . '“ wurde verschoben. Bitte bestaetige den neuen Termin.',
+                'link' => route('apps.calendar', ['year' => $event->starts_at->year]),
+                'id' => $event->id,
+                'typ' => 'Kalender',
+                'event_key' => 'apps.calendar.changed',
+            ]));
+        }
     }
 
     private function ensureDefaultCalendars(): void
@@ -1325,7 +1595,7 @@ class AppsController extends Controller
         $user = Auth::user();
 
         AppCalendar::firstOrCreate(
-            ['owner_user_id' => $user->id, 'project_id' => null, 'name' => 'Mein Kalender'],
+            ['owner_user_id' => $user->id, 'project_id' => null, 'kind' => 'personal', 'name' => 'Mein Kalender'],
             [
                 'background_color' => '#ff7a00',
                 'text_color' => '#ffffff',
@@ -1333,12 +1603,14 @@ class AppsController extends Controller
             ]
         );
 
-        Projekt::whereIn('id', $user->projekte()->pluck('projekts.id'))
+        Projekt::whereIn('id', $this->calendarProjectIds($user))
             ->get(['id', 'name'])
             ->each(function (Projekt $project) use ($user) {
                 AppCalendar::firstOrCreate(
-                    ['owner_user_id' => $user->id, 'project_id' => $project->id, 'name' => $project->name],
+                    ['project_id' => $project->id, 'kind' => 'project'],
                     [
+                        'owner_user_id' => $user->id,
+                        'name' => $project->name,
                         'background_color' => $this->projectColor($project->id),
                         'text_color' => '#ffffff',
                         'visibility' => 'project',
@@ -1358,22 +1630,35 @@ class AppsController extends Controller
     private function calendarEventsForYear(int $year)
     {
         return $this->visible(AppCalendarEvent::query(), AppCalendarEvent::class)
-            ->with(['owner:id,username,email', 'calendar:id,name,background_color,text_color,project_id', 'shares.person:id,vorname,nachname'])
+            ->with([
+                'owner:id,person_id,username,email',
+                'calendar:id,name,background_color,text_color,project_id,kind',
+                'shares.person:id,vorname,nachname',
+                'attendees.user:id,person_id,username,email',
+                'attendees.user.person:id,vorname,nachname',
+            ])
             ->whereDate('starts_at', '<=', $year . '-12-31')
             ->where(function (Builder $q) use ($year) {
                 $q->whereNull('ends_at')->orWhereDate('ends_at', '>=', $year . '-01-01');
             })
             ->orderBy('starts_at')
-            ->get();
+            ->get()
+            ->map(fn (AppCalendarEvent $event) => $this->calendarEventViewPayload($event));
     }
 
     private function calendarEventResponse(AppCalendarEvent $event, string $message)
     {
-        $event->load(['owner:id,username,email', 'calendar:id,name,background_color,text_color,project_id', 'shares.person:id,vorname,nachname']);
+        $event->load([
+            'owner:id,person_id,username,email',
+            'calendar:id,name,background_color,text_color,project_id,kind',
+            'shares.person:id,vorname,nachname',
+            'attendees.user:id,person_id,username,email',
+            'attendees.user.person:id,vorname,nachname',
+        ]);
 
         return response()->json([
             'success' => true,
-            'event' => $event,
+            'event' => $this->calendarEventViewPayload($event),
             'message' => $message,
         ]);
     }
@@ -1860,12 +2145,38 @@ class AppsController extends Controller
         return $user->projekte()->pluck('projekts.id')->map(fn ($id) => (int) $id)->filter()->unique()->values();
     }
 
+    private function calendarProjectIds(User $user)
+    {
+        if ($user->hasRole('Administrator')) {
+            return Projekt::pluck('id')->map(fn ($id) => (int) $id)->values();
+        }
+
+        if ($user->hasRole('Abteilungsleitung') && $user->abteilung_id && $user->can('apps.calendar.project.view.all')) {
+            return Projekt::where('abteilung_id', $user->abteilung_id)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->values();
+        }
+
+        return $this->userTeamIds($user);
+    }
+
     private function visible(Builder $query, string $modelClass): Builder
     {
         $user = Auth::user();
         $personId = $user->person_id;
         $teamId = $user->current_team_id;
-        $teamIds = $this->userTeamIds($user);
+        $teamIds = in_array($modelClass, [AppCalendarEvent::class, AppCalendar::class], true)
+            ? $this->calendarProjectIds($user)
+            : $this->userTeamIds($user);
+
+        if ($modelClass === AppCalendarEvent::class) {
+            return $this->visibleCalendarEvents($query, $user, $teamIds);
+        }
+
+        if ($modelClass === AppCalendar::class) {
+            return $this->visibleCalendars($query, $user, $teamIds);
+        }
 
         return $query->where(function (Builder $q) use ($user, $personId, $teamId, $teamIds, $modelClass) {
             $q->where('owner_user_id', $user->id)
@@ -1903,6 +2214,22 @@ class AppsController extends Controller
 
     private function canManage($item): bool
     {
+        if ($item instanceof AppCalendarEvent) {
+            if ($item->project_id) {
+                return $this->canManageProjectCalendar((int) $item->project_id);
+            }
+
+            return (int) $item->owner_user_id === (int) Auth::id();
+        }
+
+        if ($item instanceof AppCalendar) {
+            if ($item->kind === 'project' && $item->project_id) {
+                return $this->canManageProjectCalendar((int) $item->project_id);
+            }
+
+            return (int) $item->owner_user_id === (int) Auth::id();
+        }
+
         if ((int) $item->owner_user_id === (int) Auth::id()) {
             return true;
         }
@@ -1912,6 +2239,81 @@ class AppsController extends Controller
         }
 
         return false;
+    }
+
+    private function visibleCalendarEvents(Builder $query, User $user, $projectIds): Builder
+    {
+        $canViewAll = $user->can('apps.calendar.project.view.all');
+        $isAdministrator = $user->hasRole('Administrator');
+
+        return $query->where(function (Builder $visible) use ($user, $projectIds, $canViewAll, $isAdministrator) {
+            $visible->where('owner_user_id', $user->id)
+                ->orWhere('visibility', 'all')
+                ->orWhereHas('attendees', fn (Builder $attendees) => $attendees->where('user_id', $user->id));
+
+            if ($isAdministrator) {
+                $visible->orWhereNotNull('project_id');
+            } elseif ($projectIds->isNotEmpty()) {
+                $visible->orWhere(function (Builder $project) use ($projectIds) {
+                    $project->where('audience', 'project')->whereIn('project_id', $projectIds);
+                });
+
+                if ($canViewAll) {
+                    $visible->orWhereIn('project_id', $projectIds);
+                }
+            }
+
+            $visible->orWhereHas('shares', function (Builder $share) use ($user, $projectIds) {
+                $share->where('shareable_type', AppCalendarEvent::class)
+                    ->where(function (Builder $target) use ($user, $projectIds) {
+                        if ($user->person_id) {
+                            $target->where('person_id', $user->person_id);
+                        }
+                        $target->orWhere('email', $user->email);
+                        if ($projectIds->isNotEmpty()) {
+                            $target->orWhereIn('team_id', $projectIds);
+                        }
+                    });
+            });
+        });
+    }
+
+    private function visibleCalendars(Builder $query, User $user, $projectIds): Builder
+    {
+        $canViewAll = $user->can('apps.calendar.project.view.all');
+        $isAdministrator = $user->hasRole('Administrator');
+
+        return $query->where(function (Builder $visible) use ($user, $projectIds, $canViewAll, $isAdministrator) {
+            $visible->where(function (Builder $personal) use ($user) {
+                $personal->where('kind', 'personal')->where('owner_user_id', $user->id);
+            });
+
+            if ($isAdministrator) {
+                $visible->orWhere('kind', 'project');
+            } elseif ($projectIds->isNotEmpty()) {
+                $visible->orWhere(function (Builder $project) use ($user, $projectIds, $canViewAll) {
+                    $project->where('kind', 'project')->whereIn('project_id', $projectIds);
+
+                    if (! $canViewAll) {
+                        $project->where(function (Builder $allowed) use ($user) {
+                            $allowed->whereHas('events.attendees', fn (Builder $attendees) => $attendees->where('user_id', $user->id))
+                                ->orWhereHas('events', fn (Builder $events) => $events->where('audience', 'project'));
+                        });
+                    }
+                });
+            }
+        });
+    }
+
+    private function canManageProjectCalendar(int $projectId): bool
+    {
+        $user = Auth::user();
+
+        if (! $user->can('apps.calendar.project.manage')) {
+            return false;
+        }
+
+        return $this->calendarProjectIds($user)->contains($projectId);
     }
 
     private function canOwn($item): bool

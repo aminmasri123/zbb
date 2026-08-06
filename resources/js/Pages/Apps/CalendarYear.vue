@@ -10,6 +10,8 @@ const props = defineProps({
     items: Array,
     calendars: Array,
     projects: Array,
+    calendarPeople: Array,
+    calendarCapabilities: Object,
     visibilityOptions: Array,
     styles: Array,
 });
@@ -84,6 +86,11 @@ const eventForm = useForm({
     visibility: 'private',
     project_id: '',
     team_id: '',
+    audience: 'owner',
+    responsible_user_ids: [],
+    viewer_user_ids: [],
+    send_notification: true,
+    response_note: '',
 });
 
 const calendarForm = useForm({
@@ -103,6 +110,16 @@ const styleForm = useForm({
 
 const personalCalendar = computed(() => (props.calendars || []).find((calendar) => calendar.name === 'Mein Kalender' && !calendar.project_id) || (props.calendars || [])[0] || null);
 const defaultCalendarId = computed(() => personalCalendar.value?.id || '');
+const eventReadonly = computed(() => Boolean(editingEvent.value && !editingEvent.value.can_manage));
+const selectedEventCalendar = computed(() => (props.calendars || []).find((calendar) => String(calendar.id) === String(eventForm.calendar_id)) || null);
+const isProjectEventForm = computed(() => selectedEventCalendar.value?.kind === 'project');
+const formCalendars = computed(() => editingEvent.value
+    ? (props.calendars || [])
+    : (props.calendars || []).filter((calendar) => calendar.can_manage));
+const projectCalendarPeople = computed(() => {
+    const projectId = Number(selectedEventCalendar.value?.project_id || 0);
+    return (props.calendarPeople || []).filter((person) => (person.project_ids || []).map(Number).includes(projectId));
+});
 
 const filteredEvents = computed(() => {
     if (selectedCalendar.value === 'all') return calendarItems.value;
@@ -151,7 +168,7 @@ const visibleEventDays = computed(() => {
     return items.sort((a, b) => String(a.day.iso + a.starts_at).localeCompare(String(b.day.iso + b.starts_at)));
 });
 
-const visibleListEventIds = computed(() => Array.from(new Set(visibleEventDays.value.map((item) => String(eventId(item.event))).filter(Boolean))));
+const visibleListEventIds = computed(() => Array.from(new Set(visibleEventDays.value.filter((item) => item.event.can_manage).map((item) => String(eventId(item.event))).filter(Boolean))));
 const selectedVisibleListEventIds = computed(() => selectedListEventIds.value.filter((id) => visibleListEventIds.value.includes(String(id))));
 const allVisibleListEventsSelected = computed(() => visibleListEventIds.value.length > 0 && selectedVisibleListEventIds.value.length === visibleListEventIds.value.length);
 const nextListSelectionCount = computed(() => Math.min(
@@ -295,6 +312,11 @@ function openCreateRange(startIso, endIso) {
     eventForm.text_color = '#ffffff';
     eventForm.calendar_id = defaultCalendarId.value;
     eventForm.visibility = 'private';
+    eventForm.audience = 'owner';
+    eventForm.responsible_user_ids = [];
+    eventForm.viewer_user_ids = [];
+    eventForm.send_notification = true;
+    eventForm.response_note = '';
     eventForm.starts_at = `${startIso}T08:00`;
     eventForm.ends_at = `${endIso}T16:00`;
     showModal.value = true;
@@ -319,6 +341,11 @@ function openEdit(event, day = null) {
     eventForm.visibility = event.visibility || 'private';
     eventForm.project_id = event.project_id || '';
     eventForm.team_id = event.team_id || '';
+    eventForm.audience = event.audience || (event.project_id ? 'assignees' : 'owner');
+    eventForm.responsible_user_ids = (event.attendees || []).filter((item) => item.access_level === 'responsible').map((item) => item.user_id);
+    eventForm.viewer_user_ids = (event.attendees || []).filter((item) => item.access_level === 'viewer').map((item) => item.user_id);
+    eventForm.send_notification = true;
+    eventForm.response_note = event.my_assignment?.response_note || '';
     showModal.value = true;
 }
 
@@ -354,6 +381,9 @@ function eventFormPayload() {
         all_day: Boolean(eventForm.all_day),
         include_weekends: Boolean(eventForm.include_weekends),
         excluded_dates: eventForm.excluded_dates || [],
+        responsible_user_ids: eventForm.responsible_user_ids || [],
+        viewer_user_ids: eventForm.viewer_user_ids || [],
+        send_notification: Boolean(eventForm.send_notification),
     };
 }
 
@@ -636,11 +666,16 @@ function payloadFromEvent(event, overrides = {}) {
         visibility: event.visibility || 'private',
         project_id: event.project_id || '',
         team_id: event.team_id || '',
+        audience: event.audience || (event.project_id ? 'assignees' : 'owner'),
+        responsible_user_ids: (event.attendees || []).filter((item) => item.access_level === 'responsible').map((item) => item.user_id),
+        viewer_user_ids: (event.attendees || []).filter((item) => item.access_level === 'viewer').map((item) => item.user_id),
+        send_notification: true,
         ...overrides,
     };
 }
 
 function saveEvent() {
+    if (eventReadonly.value) return;
     if (editingEvent.value) {
         const url = calendarEventRoute('apps.calendar.update', editingEvent.value);
         if (!url) return;
@@ -656,6 +691,54 @@ function saveEvent() {
             reload: false,
         });
     }
+}
+
+async function respondToEvent(response) {
+    if (!editingEvent.value?.can_respond || savingEvent.value) return;
+
+    const url = `${calendarEventRoute('apps.calendar.update', editingEvent.value)}/antwort`;
+    await calendarRequest('post', url, {
+        response,
+        response_note: eventForm.response_note || null,
+    }, {
+        closeModal: false,
+        successMessage: response === 'accepted' ? 'Du hast zugesagt.' : 'Du hast abgesagt.',
+        applyResponse: (data) => {
+            upsertCalendarEvent(data.event);
+            editingEvent.value = data.event;
+        },
+        reload: false,
+    });
+}
+
+function responseLabel(response) {
+    return ({ pending: 'Offen', accepted: 'Zugesagt', declined: 'Abgesagt' })[response] || 'Keine Antwort';
+}
+
+function toggleAttendee(userId, level) {
+    const target = level === 'responsible' ? 'responsible_user_ids' : 'viewer_user_ids';
+    const other = level === 'responsible' ? 'viewer_user_ids' : 'responsible_user_ids';
+    const id = Number(userId);
+    const selected = (eventForm[target] || []).map(Number).includes(id);
+
+    eventForm[target] = selected
+        ? eventForm[target].filter((value) => Number(value) !== id)
+        : [...eventForm[target], id];
+
+    if (!selected) {
+        eventForm[other] = (eventForm[other] || []).filter((value) => Number(value) !== id);
+    }
+}
+
+function applySelectedCalendarDefaults() {
+    const calendar = selectedEventCalendar.value;
+    if (!calendar) return;
+
+    eventForm.project_id = calendar.project_id || '';
+    eventForm.visibility = calendar.kind === 'project' ? 'project' : 'private';
+    eventForm.audience = calendar.kind === 'project' ? 'assignees' : 'owner';
+    eventForm.responsible_user_ids = [];
+    eventForm.viewer_user_ids = [];
 }
 
 async function deleteEvent() {
@@ -1325,7 +1408,7 @@ function germanHolidays(year) {
                                     <button
                                         v-for="event in dayEvents(day)"
                                         :key="`${day.iso}-${event.id}`"
-                                        draggable="true"
+                                        :draggable="Boolean(event.can_manage)"
                                         class="mb-0.5 block w-full truncate rounded px-1 py-0.5 text-left text-[8px] font-semibold shadow-sm"
                                         :style="eventStyle(event)"
                                         :title="event.title"
@@ -1366,7 +1449,7 @@ function germanHolidays(year) {
                                     <button
                                         v-for="event in dayEvents(day)"
                                         :key="`${day.iso}-${event.id}`"
-                                        draggable="true"
+                                        :draggable="Boolean(event.can_manage)"
                                         class="mb-1 block w-full truncate rounded px-2 py-1 text-left text-xs font-semibold shadow-sm"
                                         :style="eventStyle(event)"
                                         :title="event.title"
@@ -1437,6 +1520,7 @@ function germanHolidays(year) {
                                 </span>
                                 <span class="truncate text-gray-600">{{ eventCalendarName(item.event) }}</span>
                                 <button
+                                    v-if="item.event.can_manage"
                                     type="button"
                                     class="flex h-8 w-8 items-center justify-center rounded border border-red-200 bg-white text-red-600 hover:bg-red-50 disabled:opacity-50"
                                     title="Termin löschen"
@@ -1461,13 +1545,17 @@ function germanHolidays(year) {
                     <h2 class="text-lg font-semibold">{{ editingEvent ? 'Event bearbeiten' : 'Event anlegen' }}</h2>
                     <button type="button" class="text-xl" :disabled="savingEvent" @click="showModal = false">&times;</button>
                 </div>
-                <div class="grid gap-3 md:grid-cols-2">
+                <fieldset class="grid gap-3 md:grid-cols-2" :disabled="eventReadonly">
                     <input v-model="eventForm.title" class="rounded border-gray-300 text-sm md:col-span-2" placeholder="Bezeichnung" />
-                    <select v-model="eventForm.calendar_id" class="rounded border-gray-300 text-sm">
-                        <option v-for="calendar in calendars" :key="calendar.id" :value="calendar.id">{{ calendar.name }}</option>
+                    <select v-model="eventForm.calendar_id" class="rounded border-gray-300 text-sm" @change="applySelectedCalendarDefaults">
+                        <option v-for="calendar in formCalendars" :key="calendar.id" :value="calendar.id">{{ calendar.kind === 'project' ? 'Projekt: ' : '' }}{{ calendar.name }}</option>
                     </select>
-                    <select v-model="eventForm.visibility" class="rounded border-gray-300 text-sm">
+                    <select v-if="!isProjectEventForm" v-model="eventForm.visibility" class="rounded border-gray-300 text-sm">
                         <option v-for="option in visibilityOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                    </select>
+                    <select v-else v-model="eventForm.audience" class="rounded border-gray-300 text-sm">
+                        <option value="assignees">Nur zugewiesene/freigegebene Personen</option>
+                        <option value="project">Alle Mitarbeitenden im Projekt</option>
                     </select>
                     <input v-model="eventForm.starts_at" type="datetime-local" class="rounded border-gray-300 text-sm" />
                     <input v-model="eventForm.ends_at" type="datetime-local" class="rounded border-gray-300 text-sm" />
@@ -1525,16 +1613,54 @@ function germanHolidays(year) {
                             </div>
                         </div>
                     </div>
-                    <select v-if="eventForm.visibility === 'project'" v-model="eventForm.project_id" class="rounded border-gray-300 text-sm md:col-span-2">
-                        <option value="">Aktuelles Projekt</option>
-                        <option v-for="project in projects" :key="project.id" :value="project.id">{{ project.name }}</option>
-                    </select>
+                    <div v-if="isProjectEventForm && !eventReadonly && calendarCapabilities?.assign_project" class="space-y-3 rounded border border-blue-100 bg-blue-50/60 p-3 md:col-span-2">
+                        <div>
+                            <div class="text-sm font-semibold text-gray-900">Mitarbeitende zuweisen oder freigeben</div>
+                            <p class="mt-0.5 text-xs text-gray-600">Verantwortliche werden benachrichtigt und sollen zu- oder absagen. Freigegebene Personen duerfen den Termin sehen, muessen aber nicht antworten.</p>
+                        </div>
+                        <div class="max-h-52 overflow-y-auto rounded border border-blue-100 bg-white">
+                            <div v-for="person in projectCalendarPeople" :key="person.id" class="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b px-3 py-2 text-sm last:border-b-0">
+                                <span class="truncate font-medium text-gray-800">{{ person.name }}</span>
+                                <label class="inline-flex items-center gap-1.5 text-xs text-gray-700">
+                                    <input type="checkbox" class="rounded border-gray-300 text-orange-500 focus:ring-orange-500" :checked="eventForm.responsible_user_ids.map(Number).includes(Number(person.id))" @change="toggleAttendee(person.id, 'responsible')" />
+                                    Verantwortlich
+                                </label>
+                                <label class="inline-flex items-center gap-1.5 text-xs text-gray-700">
+                                    <input type="checkbox" class="rounded border-gray-300 text-blue-500 focus:ring-blue-500" :checked="eventForm.viewer_user_ids.map(Number).includes(Number(person.id))" @change="toggleAttendee(person.id, 'viewer')" />
+                                    Nur sehen
+                                </label>
+                            </div>
+                            <div v-if="projectCalendarPeople.length === 0" class="px-3 py-4 text-center text-xs text-gray-500">Dem Projekt sind keine Benutzer zugeordnet.</div>
+                        </div>
+                        <label class="inline-flex items-center gap-2 text-xs text-gray-700">
+                            <input v-model="eventForm.send_notification" type="checkbox" class="rounded border-gray-300 text-orange-500 focus:ring-orange-500" />
+                            Neue oder geaenderte Zuweisungen benachrichtigen
+                        </label>
+                    </div>
+                </fieldset>
+
+                <div v-if="editingEvent?.my_assignment" class="mt-4 rounded border border-gray-200 bg-gray-50 p-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <span class="text-sm font-semibold text-gray-900">Meine Rueckmeldung</span>
+                        <span class="rounded-full px-2 py-1 text-xs font-semibold" :class="editingEvent.my_assignment.response === 'accepted' ? 'bg-green-100 text-green-700' : editingEvent.my_assignment.response === 'declined' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'">{{ responseLabel(editingEvent.my_assignment.response) }}</span>
+                    </div>
+                    <textarea v-if="editingEvent.can_respond" v-model="eventForm.response_note" rows="2" class="mt-3 w-full rounded border-gray-300 text-sm" placeholder="Optionale Bemerkung"></textarea>
+                    <div v-if="editingEvent.can_respond" class="mt-3 flex flex-wrap gap-2">
+                        <button type="button" class="rounded bg-green-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="savingEvent" @click="respondToEvent('accepted')">Zusagen</button>
+                        <button type="button" class="rounded bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="savingEvent" @click="respondToEvent('declined')">Absagen</button>
+                    </div>
+                </div>
+
+                <div v-if="editingEvent?.can_manage && editingEvent.response_summary" class="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
+                    <span class="rounded-full bg-amber-100 px-2 py-1 text-amber-700">Offen: {{ editingEvent.response_summary.pending }}</span>
+                    <span class="rounded-full bg-green-100 px-2 py-1 text-green-700">Zugesagt: {{ editingEvent.response_summary.accepted }}</span>
+                    <span class="rounded-full bg-red-100 px-2 py-1 text-red-700">Abgesagt: {{ editingEvent.response_summary.declined }}</span>
                 </div>
                 <div class="mt-5 flex justify-between">
                     <div class="flex flex-wrap gap-2">
-                        <button v-if="editingEvent" type="button" class="rounded border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 disabled:opacity-50" :disabled="savingEvent" @click="deleteEvent">Ganzes Event löschen</button>
+                        <button v-if="editingEvent?.can_manage" type="button" class="rounded border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 disabled:opacity-50" :disabled="savingEvent" @click="deleteEvent">Ganzes Event löschen</button>
                     </div>
-                    <button class="rounded bg-orange-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="savingEvent">{{ savingEvent ? 'Speichert ...' : 'Speichern' }}</button>
+                    <button v-if="!eventReadonly" class="rounded bg-orange-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="savingEvent">{{ savingEvent ? 'Speichert ...' : 'Speichern' }}</button>
                 </div>
             </form>
         </div>

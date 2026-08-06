@@ -26,6 +26,7 @@ class Gruppe extends Model
         'raum_id',
         'bereich_id',
         'projekt_id',
+        'bop_phase_schedule_id',
         'partner_id',
         'standort_id',
         'ort_typ',
@@ -99,5 +100,10 @@ class Gruppe extends Model
     public function klassenbuecher()
     {
         return $this->hasMany(Klassenbuch::class, 'gruppe_id');
+    }
+
+    public function bopPhaseSchedule()
+    {
+        return $this->belongsTo(BopPhaseSchedule::class);
     }
 }

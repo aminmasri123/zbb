@@ -15,7 +15,7 @@ class PaPreparationAttendanceClassTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_pa_preparation_requires_a_class_and_filters_participants_by_it(): void
+    public function test_pa_preparation_supports_the_whole_school_or_one_class(): void
     {
         $user = User::factory()->create();
         $this->grantTestPermission($user, 'anwesenheit.abrechnung');
@@ -57,15 +57,15 @@ class PaPreparationAttendanceClassTest extends TestCase
             ->postJson(route('anwesenheitsliste.PA.digital.preview'), $basePayload + [
                 'exportMode' => 'alle',
             ])
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors('klasse');
+            ->assertOk()
+            ->assertJsonPath('context.export_mode', 'alle')
+            ->assertJsonCount(2, 'participants');
 
         $this->actingAs($user->fresh())
             ->postJson(route('anwesenheitsliste.PA.digital.draft.show'), $basePayload + [
                 'exportMode' => 'alle',
             ])
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors('klasse');
+            ->assertOk();
 
         $this->actingAs($user->fresh())
             ->postJson(route('anwesenheitsliste.PA.digital.preview'), $basePayload + [

@@ -6,6 +6,7 @@ use App\Models\Bereich;
 use App\Models\Bereichsauswahl;
 use App\Models\BereichsauswahlSetting;
 use App\Models\BibbAttendanceListDraft;
+use App\Models\BopRun;
 use App\Models\EinteilungBereiche;
 use App\Models\Gruppe;
 use App\Models\GruppeHasPersonen;
@@ -1090,12 +1091,6 @@ class ProjektBopController extends Controller
         $exportMode = $validated['exportMode'] ?? (empty($validated['klasse']) ? 'alle' : 'klasse');
         $listType = $validated['listType'] ?? 'pa';
 
-        if ($listType === 'pa_preparation' && ($exportMode !== 'klasse' || empty($validated['klasse']))) {
-            throw ValidationException::withMessages([
-                'klasse' => 'Bitte eine Klasse für die Anwesenheitsliste Vorbereitung PA auswählen.',
-            ]);
-        }
-
         return response()->json($this->paPreviewPayload(
             (int) $validated['schuleId'],
             (string) $validated['schuljahr'],
@@ -1396,7 +1391,7 @@ class ProjektBopController extends Controller
         $klasse = $exportMode === 'klasse' ? (string) ($validated['klasse'] ?? '') : null;
         $listType = $validated['listType'] ?? 'pa';
 
-        if ($listType === 'pa_preparation' && ($exportMode !== 'klasse' || $klasse === '')) {
+        if ($listType === 'pa_preparation' && $exportMode === 'klasse' && $klasse === '') {
             throw ValidationException::withMessages([
                 'klasse' => 'Bitte eine Klasse für die Anwesenheitsliste Vorbereitung PA auswählen.',
             ]);
@@ -1512,7 +1507,7 @@ class ProjektBopController extends Controller
         string $listType = 'pa'
     ): array {
         $schule = Partner::findOrFail($schuleId);
-        $teilnehmer = $this->paTeilnehmer($schuleId, $schuljahr, $teil, $exportMode, $klasse);
+        $teilnehmer = $this->paTeilnehmer($schuleId, $schuljahr, $teil, $exportMode, $klasse, $listType);
         $listType = $listType === 'pa_preparation' ? 'pa_preparation' : 'pa';
 
         if ($teilnehmer->isEmpty()) {
@@ -1676,11 +1671,23 @@ class ProjektBopController extends Controller
         string $schuljahr,
         string $teil,
         string $exportMode,
-        ?string $klasse
+        ?string $klasse,
+        string $listType = 'pa'
     ): Collection {
+        $phaseType = $listType === 'pa_preparation' ? 'pa_preparation' : 'pa';
+        $plannedStudentIds = BopRun::query()
+            ->where('projekt_id', auth()->user()?->current_team_id)
+            ->where('partner_id', $schuleId)
+            ->where('schuljahr', $schuljahr)
+            ->where('teil', $teil)
+            ->whereHas('phases', fn ($query) => $query->where('phase_type', $phaseType))
+            ->with(['phases' => fn ($query) => $query->where('phase_type', $phaseType)->with('participants')])
+            ->first()?->phases?->first()?->participants?->pluck('personen_ist_schueler_id');
+
         return PersonenIstSchueler::query()
             ->filterSchueler($schuleId, $schuljahr, $teil)
             ->when($exportMode === 'klasse', fn ($query) => $query->where('klasse', $klasse))
+            ->when($plannedStudentIds?->isNotEmpty(), fn ($query) => $query->whereIn('id', $plannedStudentIds))
             ->with('person')
             ->get()
             ->sort(function ($a, $b) {

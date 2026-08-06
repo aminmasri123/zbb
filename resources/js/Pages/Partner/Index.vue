@@ -13,6 +13,7 @@ import ModalAnwesenheitslistePA from './BOP/ModalAnwesenheitslistePADigital.vue'
 import ModalBoTag1 from './BOP/ModalBoTag1.vue'
 import ModalHausordnung from './BOP/ModalHausordnung.vue';
 import ModalUsbStickBrief from './BOP/ModalUsbStickBrief.vue';
+import BopRunPlanner from './BOP/BopRunPlanner.vue';
 import { usePermissions } from '@/utils/permissions';
 
 // Props
@@ -176,15 +177,18 @@ async function openPreparationPaModal({ jahr, teil, partner }) {
     }
 
     const result = await Swal.fire({
-        title: 'Klasse auswählen',
-        text: 'Für welche Klasse soll die digitale Anwesenheitsliste Vorbereitung PA erstellt werden?',
+        title: 'Umfang auswählen',
+        text: 'Soll die digitale Anwesenheitsliste Vorbereitung PA für die gesamte Schule oder für eine einzelne Klasse erstellt werden?',
         input: 'select',
-        inputOptions: Object.fromEntries(klassen.map(klasse => [klasse, klasse])),
-        inputPlaceholder: 'Bitte Klasse auswählen',
+        inputOptions: {
+            __all__: 'Gesamte Schule / alle Klassen',
+            ...Object.fromEntries(klassen.map(klasse => [klasse, `Klasse ${klasse}`])),
+        },
+        inputPlaceholder: 'Bitte Umfang auswählen',
         showCancelButton: true,
         confirmButtonText: 'Anwesenheitsliste öffnen',
         cancelButtonText: 'Abbrechen',
-        inputValidator: value => value ? undefined : 'Bitte eine Klasse auswählen.',
+        inputValidator: value => value ? undefined : 'Bitte gesamte Schule oder eine Klasse auswählen.',
     });
 
     if (!result.isConfirmed || !result.value) return;
@@ -192,7 +196,7 @@ async function openPreparationPaModal({ jahr, teil, partner }) {
     openModal('anwesenheitslisteVorbereitungPA', {
         jahr,
         teil,
-        klasse: result.value,
+        klasse: result.value === '__all__' ? '' : result.value,
         klassen,
         partnerId: partner.id,
     });
@@ -470,6 +474,15 @@ const updatePartnerAPI = async (form) => {
 
                                                         <!-- Links analog Blade -->
 
+                                                        <button
+                                                            v-if="isBopProject && can('einteilung.planning')"
+                                                            type="button"
+                                                            class="block w-full bg-orange-50 px-4 py-2 text-left font-bold text-orange-700 hover:bg-orange-100"
+                                                            @click="openModal('bopRunPlanner', { jahr, teil, partnerId: partner.id, schoolName: partner.name })"
+                                                        >
+                                                            BOP-Ablauf planen
+                                                        </button>
+
                                                         <!-- Bearbeitet -->
 
                                                          <button
@@ -687,6 +700,15 @@ const updatePartnerAPI = async (form) => {
         <ModalBoTag1 v-if="activeModal === 'boTag1Config'" :visible="true" :anzahlBereiche="props.anzahlBereiche" :jahr="modalData.jahr" :teil="modalData.teil" :klassen="modalData.klassen" :teilnehmerCount="modalData.teilnehmerCount" :partnerId="modalData.partnerId" @close="closeModal" @submit="handleBoTag1" />
         <ModalHausordnung v-if="activeModal === 'hausordnungConfig'" :visible="true" :partnerId="modalData.partnerId" :jahr="modalData.jahr" :teil="modalData.teil" @close="closeModal"/>
         <ModalUsbStickBrief v-if="activeModal === 'usbStickBrief'" :partner-id="modalData.partnerId" :schuljahr="modalData.jahr" :school-name="modalData.schoolName" @close="closeModal" />
+        <BopRunPlanner
+            v-if="activeModal === 'bopRunPlanner'"
+            :visible="true"
+            :partner-id="modalData.partnerId"
+            :schuljahr="modalData.jahr"
+            :teil="modalData.teil"
+            :school-name="modalData.schoolName"
+            @close="closeModal"
+        />
 
 
 

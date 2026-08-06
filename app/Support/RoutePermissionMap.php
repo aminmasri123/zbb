@@ -99,6 +99,10 @@ class RoutePermissionMap
             'bereichsauswahl.update',
             'bereichsauswahl.planning',
         ],
+        'bop.run.show' => 'kooperationspartner.index',
+        'bop.run.update' => 'einteilung.planning',
+        'bop.run.participant.status' => 'einteilung.planning',
+        'bop.run.groups.generate' => 'einteilung.planning',
         'bereichsauswahl.setting.update' => 'bereichsauswahl.planning',
         'bereichsauswahl.bop.radio.update' => [
             'bereichsauswahl.store',

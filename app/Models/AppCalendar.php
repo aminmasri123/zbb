@@ -13,6 +13,7 @@ class AppCalendar extends Model
         'owner_user_id',
         'project_id',
         'team_id',
+        'kind',
         'name',
         'background_color',
         'text_color',
@@ -32,5 +33,15 @@ class AppCalendar extends Model
     public function shares()
     {
         return $this->morphMany(AppShare::class, 'shareable');
+    }
+
+    public function attendees()
+    {
+        return $this->hasManyThrough(
+            AppCalendarEventAttendee::class,
+            AppCalendarEvent::class,
+            'calendar_id',
+            'event_id'
+        );
     }
 }

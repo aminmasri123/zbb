@@ -44,7 +44,7 @@ const canExport = computed(() => {
 
 watch(
   () => props.visible,
-  (visible) => {
+  async (visible) => {
     if (!visible) return
 
     termin.value = ''
@@ -54,6 +54,24 @@ watch(
     raumKapazitaeten.value = ['']
     raumNamen.value = ['']
     loading.value = false
+
+    try {
+      const response = await axios.get(route('bop.run.show', {
+        partner: props.partnerId,
+        schuljahr: props.jahr,
+        teil: props.teil,
+      }))
+      const phase = (response.data?.phases || []).find((item) => item.phase_type === 'roll_day')
+      termin.value = [...(phase?.dates || [])].sort()[0] || ''
+      if (phase?.group_mode === 'balanced') {
+        selectedExport.value = 'raeume'
+        roomCount.value = Math.max(1, Number(phase.group_count || 1))
+      } else if (phase?.group_mode === 'school') {
+        selectedExport.value = 'klassenZip'
+      }
+    } catch {
+      // Ohne gespeicherten BOP-Ablauf bleibt die manuelle Eingabe erhalten.
+    }
   },
   { immediate: true }
 )

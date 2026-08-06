@@ -31,6 +31,7 @@ const props = defineProps({
 const emit = defineEmits(['update:visible', 'close'])
 const { can } = usePermissions()
 const canArchiveAttendance = computed(() => can('anwesenheit.archiv'))
+const canGenerateBopGroups = computed(() => can('einteilung.planning'))
 const PaSwal = Swal.mixin({
   customClass: {
     container: 'pa-swal-container',
@@ -68,7 +69,7 @@ const form = reactive({
   startDate: '',
   endDate: '',
   feedbackDate: '',
-  exportMode: isPreparationPa.value || props.klasse ? 'klasse' : 'alle',
+  exportMode: props.klasse ? 'klasse' : 'alle',
   klasse: props.klasse || '',
 })
 
@@ -92,6 +93,7 @@ const draftDirty = ref(false)
 const draftLastSavedAt = ref(null)
 const draftExpiresAt = ref(null)
 const sheetFullscreen = ref(false)
+const generateGroupsFromPlan = ref(false)
 const draftAutoSaveDelayMs = 5000
 const draftPollIntervalMs = 12000
 let draftSaveTimer = null
@@ -106,8 +108,7 @@ const signatureCount = computed(() => Object.values(signatures).filter(Boolean).
 const scopeReady = computed(() => props.partnerId
   && props.schuljahr
   && props.teil
-  && (form.exportMode === 'alle' || form.klasse)
-  && (!isPreparationPa.value || (form.exportMode === 'klasse' && form.klasse)))
+  && (form.exportMode === 'alle' || form.klasse))
 const draftStatusText = computed(() => {
   if (draftLoading.value) return 'wird geladen'
   if (draftSaving.value) return 'wird gespeichert'
@@ -470,6 +471,16 @@ const loadPreview = async ({ includeDraft = false } = {}) => {
   loadingPreview.value = true
 
   try {
+    if (generateGroupsFromPlan.value) {
+      await axios.post(route('bop.run.groups.generate', {
+        partner: props.partnerId,
+        phaseType: isPreparationPa.value ? 'pa_preparation' : 'pa',
+      }), {
+        schuljahr: props.schuljahr,
+        teil: props.teil,
+      })
+    }
+
     const response = await axios.post(route('anwesenheitsliste.PA.digital.preview'), {
       ...draftScopePayload(),
       startDate: form.startDate || null,
@@ -998,7 +1009,8 @@ const resetState = () => {
   form.startDate = ''
   form.endDate = ''
   form.feedbackDate = ''
-  form.exportMode = isPreparationPa.value || props.klasse ? 'klasse' : 'alle'
+  generateGroupsFromPlan.value = false
+  form.exportMode = props.klasse ? 'klasse' : 'alle'
   form.klasse = props.klasse || ''
   previewContext.value = null
   allParticipants.value = []
@@ -1015,10 +1027,46 @@ const onHide = () => {
   emit('close')
 }
 
+const loadBopPlanDefaults = async () => {
+  if (form.startDate || days.value.length) return
+
+  try {
+    const response = await axios.get(route('bop.run.show', {
+      partner: props.partnerId,
+      schuljahr: props.schuljahr,
+      teil: props.teil,
+    }))
+    const plannedPhases = response.data?.phases || []
+    const mainType = isPreparationPa.value ? 'pa_preparation' : 'pa'
+    const phase = plannedPhases.find((item) => item.phase_type === mainType)
+    const plannedDates = [...(phase?.dates || [])].sort()
+
+    if (plannedDates.length) {
+      form.startDate = plannedDates[0]
+      form.endDate = isPreparationPa.value ? '' : (plannedDates.at(-1) || plannedDates[0])
+      appendPaDays(plannedDates.map((date, index) => ({
+        id: `bop-plan-${mainType}-${date}`,
+        date,
+        type: isPreparationPa.value ? 'preparation' : 'pa_day',
+        source: 'bop-plan',
+        note: isPreparationPa.value ? 'Vorbereitung PA' : `PA-Tag ${index + 1}`,
+      })), 'bop-plan')
+    }
+
+    if (!isPreparationPa.value) {
+      const feedback = plannedPhases.find((item) => item.phase_type === 'pa_feedback')
+      form.feedbackDate = [...(feedback?.dates || [])].sort()[0] || ''
+    }
+  } catch {
+    // Ein fehlender Plan blockiert die bisherige manuelle Listenerstellung nicht.
+  }
+}
+
 watch(
   () => props.visible,
-  (visible) => {
+  async (visible) => {
     if (visible) {
+      await loadBopPlanDefaults()
       loadPreview({ includeDraft: true })
       startDraftPolling()
     } else {
@@ -1082,7 +1130,7 @@ onBeforeUnmount(() => {
             </select>
           </label>
 
-          <label v-if="!isPreparationPa" class="text-sm font-semibold text-gray-700">
+          <label class="text-sm font-semibold text-gray-700">
             <span class="mb-1 block">Auswahl</span>
             <select v-model="form.exportMode" class="w-full rounded border-gray-300 text-sm" @change="reloadScope">
               <option value="alle">Alle Klassen</option>
@@ -1090,18 +1138,9 @@ onBeforeUnmount(() => {
             </select>
           </label>
 
-          <label v-else class="text-sm font-semibold text-gray-700">
-            <span class="mb-1 block">Gewählte Klasse</span>
-            <select v-model="form.klasse" class="w-full rounded border-gray-300 text-sm" @change="reloadScope">
-              <option value="" disabled>Klasse auswählen</option>
-              <option v-for="klasseOption in klassen" :key="klasseOption" :value="klasseOption">
-                {{ klasseOption }}
-              </option>
-            </select>
-          </label>
         </div>
 
-        <label v-if="!isPreparationPa && form.exportMode === 'klasse'" class="block text-sm font-semibold text-gray-700">
+        <label v-if="form.exportMode === 'klasse'" class="block text-sm font-semibold text-gray-700">
           <span class="mb-1 block">Klasse</span>
           <select v-model="form.klasse" class="w-full rounded border-gray-300 text-sm" @change="reloadScope">
             <option value="" disabled>Klasse auswählen</option>
@@ -1137,6 +1176,11 @@ onBeforeUnmount(() => {
         <label v-if="!isPreparationPa" class="block text-sm font-semibold text-gray-700">
           <span class="mb-1 block">Feedbackgespräch</span>
           <input v-model="form.feedbackDate" type="date" class="w-full rounded border-gray-300 text-sm" />
+        </label>
+
+        <label v-if="canGenerateBopGroups" class="flex items-start gap-2 rounded border border-orange-200 bg-orange-50 p-3 text-xs text-orange-900">
+          <input v-model="generateGroupsFromPlan" type="checkbox" class="mt-0.5 rounded border-gray-300 text-orange-500 focus:ring-orange-500" />
+          <span><strong class="block">Anwesenheitsgruppen erzeugen</strong>Beim Laden der Liste werden die im BOP-Ablauf gespeicherte Teilnehmerauswahl, Gruppenart und Termine verwendet.</span>
         </label>
 
         <div v-if="!isPreparationPa" class="rounded border border-gray-200 p-3">
