@@ -1,7 +1,7 @@
 <script setup>
 import axios from 'axios'
 import Swal from 'sweetalert2'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 const props = defineProps({
   visible: Boolean,
@@ -22,7 +22,7 @@ const options = ref({ areas: [], rooms: [], supervisors: [] })
 const schoolType = ref('Gemeinschaftsschule')
 const status = ref('planning')
 const plannedClasses = ref([])
-const newPlannedClass = ref({ name: '', expected_participants: null })
+const newPlannedClass = ref({ name: '', expected_participants: 30 })
 const phases = ref([])
 const newDates = ref({})
 const updatingParticipant = ref(null)
@@ -206,7 +206,7 @@ function addPlannedClass() {
   } else {
     plannedClasses.value.push({ name, expected_participants: Number(newPlannedClass.value.expected_participants || 0), part: parts.value[0] || '1' })
   }
-  newPlannedClass.value = { name: '', expected_participants: null }
+  newPlannedClass.value = { name: '', expected_participants: 30 }
   refreshClasses()
 }
 
@@ -376,18 +376,12 @@ async function save() {
   }
 }
 
-function closeOnEscape(event) {
-  if (event.key === 'Escape' && props.visible && !saving.value) emit('close')
-}
-
-onMounted(() => window.addEventListener('keydown', closeOnEscape))
-onBeforeUnmount(() => window.removeEventListener('keydown', closeOnEscape))
 </script>
 
 <template>
-  <div v-if="visible" class="fixed inset-0 z-[100] overflow-y-auto bg-slate-950/55 p-3 md:p-6" @click.self="$emit('close')">
-    <section class="mx-auto min-h-[calc(100vh-24px)] max-w-7xl rounded-xl bg-gray-50 shadow-2xl md:min-h-0">
-      <header class="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 rounded-t-xl border-b bg-white px-5 py-4">
+  <div v-if="visible" class="fixed inset-0 z-[100] overflow-hidden bg-slate-950/55 p-3 md:p-6">
+    <section class="mx-auto flex h-full max-w-7xl flex-col overflow-hidden rounded-xl bg-gray-50 shadow-2xl">
+      <header class="z-20 flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-t-xl border-b bg-white px-5 py-4">
         <div>
           <h2 class="text-xl font-bold text-gray-900">BOP-Ablauf · {{ schoolName }}</h2>
           <p class="text-sm text-gray-500">{{ selectedSchoolYear }} · Gesamtplanung · {{ students.length }} Teilnehmer</p>
@@ -398,8 +392,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', closeOnEscape))
         </div>
       </header>
 
-      <div v-if="loading" class="p-12 text-center text-gray-500">BOP-Daten werden geladen …</div>
-      <div v-else class="space-y-5 p-5">
+      <div v-if="loading" class="min-h-0 flex-1 overflow-y-auto p-12 text-center text-gray-500">BOP-Daten werden geladen …</div>
+      <div v-else class="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
         <div v-if="error" class="rounded border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{{ error }}</div>
 
         <section class="grid gap-4 rounded-lg border bg-white p-4 md:grid-cols-5">
@@ -559,10 +553,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', closeOnEscape))
           </template>
         </section>
 
-        <footer class="sticky bottom-0 z-20 flex flex-wrap items-center justify-end gap-2 rounded-lg border bg-white/95 px-5 py-4 shadow-lg backdrop-blur">
-          <button type="button" class="rounded border px-4 py-2 text-sm font-semibold" :disabled="saving" @click="$emit('close')">Schließen</button>
-          <button type="button" class="rounded bg-orange-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="loading || saving" @click="save">{{ saving ? 'Speichert …' : 'Alles speichern' }}</button>
-        </footer>
       </div>
     </section>
   </div>
