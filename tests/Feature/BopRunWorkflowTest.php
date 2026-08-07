@@ -100,15 +100,30 @@ class BopRunWorkflowTest extends TestCase
         $this->assertSame(3, $rollDay->participants->count());
         $this->assertDatabaseHas('bop_phase_participants', ['personen_ist_schueler_id' => $studentB->id]);
 
+        $renamePhases = collect($phases)->map(fn (array $phase) => [...$phase, 'participant_ids' => []])->all();
+        $this->actingAs($user)->putJson(route('bop.run.update', [
+            'partner' => $partner, 'schuljahr' => '2027/2028', 'teil' => '_all',
+        ]), [
+            'original_schuljahr' => '2026/2027',
+            'school_type' => 'Gemeinschaftsschule', 'status' => 'confirmed',
+            'planned_classes' => [
+                ['name' => '7.1', 'expected_participants' => 24, 'part' => '1'],
+                ['name' => '7.a', 'expected_participants' => 18, 'part' => '2'],
+            ],
+            'parts' => ['1', '2'], 'phases' => $renamePhases,
+        ])->assertOk()->assertJsonPath('previous_schuljahr', '2026/2027');
+        $this->assertSame('2027/2028', $run->fresh()->schuljahr);
+        $this->assertSame(1, BopRun::query()->count());
+
         $this->actingAs($user)->deleteJson(route('bop.run.reset', ['partner' => $partner]), [
-            'schuljahr' => '2026/2027', 'teil' => '_all', 'mode' => 'dates',
+            'schuljahr' => '2027/2028', 'teil' => '_all', 'mode' => 'dates',
         ])->assertOk()->assertJsonPath('reset_mode', 'dates');
         $this->assertSame([], $preparation->fresh()->dates);
         $this->assertDatabaseMissing('app_calendar_events', ['id' => $preparationEvent->id]);
         $this->assertSame('planning', $run->fresh()->status);
 
         $this->actingAs($user)->deleteJson(route('bop.run.reset', ['partner' => $partner]), [
-            'schuljahr' => '2026/2027', 'teil' => '_all', 'mode' => 'full',
+            'schuljahr' => '2027/2028', 'teil' => '_all', 'mode' => 'full',
         ])->assertOk()->assertJsonPath('reset_mode', 'full');
         $this->assertDatabaseMissing('bop_runs', ['id' => $run->id]);
         $this->assertDatabaseHas('personen_ist_schuelers', ['id' => $studentA->id]);

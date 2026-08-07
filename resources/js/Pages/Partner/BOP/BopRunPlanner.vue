@@ -29,6 +29,7 @@ const phases = ref([])
 const newDates = ref({})
 const updatingParticipant = ref(null)
 const selectedSchoolYear = ref(props.schuljahr || '')
+const loadedSchoolYear = ref(null)
 const parts = ref(['1'])
 const newPart = ref('')
 const dateRanges = ref({})
@@ -85,6 +86,8 @@ async function load() {
 function hydrate(data) {
   context.value = data.context
   hasSavedRun.value = Boolean(data.run)
+  loadedSchoolYear.value = data.run?.schuljahr || null
+  if (data.run?.schuljahr) selectedSchoolYear.value = data.run.schuljahr
   classes.value = data.classes || []
   students.value = data.students || []
   options.value = data.options || { areas: [], rooms: [], supervisors: [] }
@@ -364,6 +367,7 @@ async function save() {
       teil: '_all',
     }), {
       school_type: schoolType.value,
+      original_schuljahr: loadedSchoolYear.value,
       status: status.value,
       parts: parts.value,
       planned_classes: plannedClasses.value,
@@ -379,16 +383,18 @@ async function save() {
   }
 }
 
-async function resetPlanning() {
-  const choice = await Swal.fire({
-    title: 'BOP-Planung zurücksetzen?',
-    html: `<strong>${schoolName}</strong><br>${selectedSchoolYear}<br><br>Wähle aus, was zurückgesetzt werden soll.`,
-    icon: 'warning', showCancelButton: true, showDenyButton: true,
-    confirmButtonText: 'Nur Termine', denyButtonText: 'Gesamte Planung', cancelButtonText: 'Abbrechen',
-    confirmButtonColor: '#f97316', denyButtonColor: '#dc2626',
-  })
-  if (choice.isDismissed) return
-  const mode = choice.isDenied ? 'full' : 'dates'
+async function resetPlanning(forcedMode = null) {
+  let mode = forcedMode
+  if (!mode) {
+    const choice = await Swal.fire({
+      title: 'Alle Planungstermine zurücksetzen?',
+      html: `<strong>${schoolName}</strong><br>${selectedSchoolYear}<br><br>Klassen, Teile und Bemerkungen bleiben erhalten.`,
+      icon: 'warning', showCancelButton: true,
+      confirmButtonText: 'Termine zurücksetzen', cancelButtonText: 'Abbrechen', confirmButtonColor: '#f97316',
+    })
+    if (!choice.isConfirmed) return
+    mode = 'dates'
+  }
   if (mode === 'full') {
     const confirmation = await Swal.fire({
       title: 'Gesamte Planung wirklich löschen?',
@@ -426,7 +432,8 @@ async function resetPlanning() {
           <p class="text-sm text-gray-500">{{ selectedSchoolYear }} · Gesamtplanung · {{ students.length }} Teilnehmer</p>
         </div>
         <div class="flex items-center gap-2">
-          <button v-if="hasSavedRun" type="button" class="rounded border border-red-300 px-4 py-2 text-sm font-semibold text-red-700" :disabled="loading || saving" @click="resetPlanning">Zurücksetzen</button>
+          <button v-if="hasSavedRun" type="button" class="rounded border border-orange-300 px-3 py-2 text-sm font-semibold text-orange-700" :disabled="loading || saving" @click="resetPlanning()">Termine zurücksetzen</button>
+          <button v-if="hasSavedRun" type="button" class="rounded border border-red-300 px-3 py-2 text-sm font-semibold text-red-700" :disabled="loading || saving" @click="resetPlanning('full')">Planung löschen</button>
           <button type="button" class="rounded border px-4 py-2 text-sm font-semibold" :disabled="saving" @click="$emit('close')">Schließen</button>
           <button type="button" class="rounded bg-orange-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="loading || saving" @click="save">{{ saving ? 'Speichert …' : 'Alles speichern' }}</button>
         </div>

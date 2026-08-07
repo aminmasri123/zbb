@@ -232,7 +232,7 @@ function handleBopPlanSaved(payload) {
         return;
     }
     if (!run) return;
-    const plans = [...(partner.bop_plans ?? [])];
+    const plans = [...(partner.bop_plans ?? [])].filter(plan => !payload.previous_schuljahr || String(plan.schuljahr) !== String(payload.previous_schuljahr));
     const index = plans.findIndex(plan => String(plan.schuljahr) === String(run.schuljahr));
     const summary = { id: run.id, partner_id: run.partner_id, schuljahr: run.schuljahr, status: run.status, parts: run.parts || ['1'], updated_at: run.updated_at };
     if (index >= 0) plans[index] = summary;

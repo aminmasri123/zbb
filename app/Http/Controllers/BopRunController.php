@@ -71,9 +71,11 @@ class BopRunController extends Controller
         $context = $request->validate([
             'schuljahr' => ['required', 'string', 'max:20'],
             'teil' => ['required', 'string', 'max:40'],
+            'original_schuljahr' => ['nullable', 'string', 'max:20'],
         ]);
         $schuljahr = $context['schuljahr'];
         $teil = $context['teil'];
+        $originalSchuljahr = $context['original_schuljahr'] ?? null;
         $project = $this->bopProject($request, $partner);
         $students = $this->students($partner, $schuljahr, $teil);
         $data = $request->validate([
@@ -116,8 +118,21 @@ class BopRunController extends Controller
             throw ValidationException::withMessages(['planned_classes' => 'Mindestens eine Klasse ist einem unbekannten Teil zugeordnet.']);
         }
 
-        $run = DB::transaction(function () use ($data, $parts, $project, $partner, $schuljahr, $teil, $students, $knownStudentIds) {
-            $run = BopRun::firstOrNew([
+        $sourceRun = $originalSchuljahr ? BopRun::where([
+            'projekt_id' => $project->id, 'partner_id' => $partner->id,
+            'schuljahr' => $originalSchuljahr, 'teil' => $teil,
+        ])->first() : null;
+        if ($sourceRun && $originalSchuljahr !== $schuljahr && BopRun::where([
+            'projekt_id' => $project->id, 'partner_id' => $partner->id,
+            'schuljahr' => $schuljahr, 'teil' => $teil,
+        ])->where('id', '!=', $sourceRun->id)->exists()) {
+            throw ValidationException::withMessages([
+                'schuljahr' => "Für das Schuljahr {$schuljahr} existiert bereits eine Planung. Bitte diese zuerst öffnen oder löschen.",
+            ]);
+        }
+
+        $run = DB::transaction(function () use ($data, $parts, $project, $partner, $schuljahr, $teil, $students, $knownStudentIds, $sourceRun) {
+            $run = $sourceRun ?: BopRun::firstOrNew([
                 'projekt_id' => $project->id,
                 'partner_id' => $partner->id,
                 'schuljahr' => $schuljahr,
@@ -126,6 +141,7 @@ class BopRunController extends Controller
             if (! $run->exists) {
                 $run->created_by_user_id = Auth::id();
             }
+            $run->schuljahr = $schuljahr;
             $run->fill([
                 'school_type' => $data['school_type'],
                 'parts' => $parts->all(),
@@ -207,6 +223,7 @@ class BopRunController extends Controller
 
         return response()->json([
             'message' => 'BOP-Ablauf, Termine, Teilnehmer und Gruppen wurden gespeichert.',
+            'previous_schuljahr' => $sourceRun && $originalSchuljahr !== $schuljahr ? $originalSchuljahr : null,
             ...$this->payload($project, $partner, $schuljahr, $teil, $students, $run),
         ]);
     }
