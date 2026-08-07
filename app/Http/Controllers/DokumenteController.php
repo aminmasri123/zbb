@@ -46,7 +46,7 @@ class DokumenteController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:150'],
             'typ' => ['required', 'string', 'in:word,excel,pdf'],
-            'kontext' => ['required', 'string', 'in:teilnehmer,gruppe'],
+            'kontext' => ['required', 'string', 'in:teilnehmer,gruppe,partner'],
             'einsatzbereich' => ['required', 'string', 'in:partner,gruppe'],
             'version' => ['nullable', 'string', 'max:50'],
             'beschreibung' => ['nullable', 'string'],
@@ -131,7 +131,7 @@ class DokumenteController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:150'],
             'typ' => ['required', 'string', 'in:word,excel,pdf'],
-            'kontext' => ['required', 'string', 'in:teilnehmer,gruppe'],
+            'kontext' => ['required', 'string', 'in:teilnehmer,gruppe,partner'],
             'einsatzbereich' => ['required', 'string', 'in:partner,gruppe'],
             'version' => ['nullable', 'string', 'max:50'],
             'beschreibung' => ['nullable', 'string'],

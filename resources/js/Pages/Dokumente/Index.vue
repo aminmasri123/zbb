@@ -312,6 +312,7 @@ const token = (key) => '${' + key + '}';
               <select :value="form.kontext" class="w-full rounded border-gray-300 text-sm" @change="setKontext">
                 <option value="teilnehmer">Teilnehmer</option>
                 <option value="gruppe">Gruppe</option>
+                <option value="partner">Partner / Schule</option>
               </select>
             </label>
 
