@@ -574,7 +574,7 @@ const updatePartnerAPI = async (form) => {
                                                 <div class="dropdown dropdown-action inline-block relative" @click.stop>
                                                     <button @click="openPartMenu(partner, jahr, teil)"
                                                         class="dropdown-toggle py-1 rounded text-xs w-full">
-                                                        {{ partLabel(teil) }}
+                                                        {{ normalizedPart(teil) }}
                                                     </button>
                                                     <div v-show="isDropdownOpen(partner.id, jahr, teil)"
                                                         class="dropdown-menu absolute mt-1  bg-white border rounded text-xs shadow-lg z-50">
