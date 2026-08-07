@@ -6,6 +6,7 @@ use App\Models\Adresse;
 use App\Models\BopRun;
 use App\Models\Kontakte;
 use App\Models\Kontakttypen;
+use App\Models\Dokumente;
 use App\Models\Partner;
 use App\Models\PartnerHasPartnerschaftstypen;
 use App\Models\Partnerschaftstypen;
@@ -119,6 +120,35 @@ class PartnerController extends Controller
         ));
     }
 
+    private function partnerDocumentsForProject(Projekt $project, User $user)
+    {
+        return Dokumente::query()
+            ->where('aktiv', true)
+            ->where('einsatzbereich', 'partner')
+            ->where('kontext', 'partner')
+            ->where(function ($query) use ($project) {
+                $query
+                    ->whereHas('projekte', fn ($projectQuery) => $projectQuery->whereKey($project->id))
+                    ->orWhereHas('kategorien.projekte', fn ($projectQuery) => $projectQuery->whereKey($project->id));
+            })
+            ->orderBy('name')
+            ->get(['id', 'name', 'typ', 'ausgabeformate', 'export_permission'])
+            ->filter(fn (Dokumente $document) => $document->export_permission
+                ? $user->can($document->export_permission)
+                : $user->can('dokumente.schule.export'))
+            ->map(fn (Dokumente $document) => [
+                'id' => $document->id,
+                'name' => $document->name,
+                'typ' => $document->typ,
+                'ausgabeformate' => $document->ausgabeformate ?: match ($document->typ) {
+                    'word' => ['docx', 'pdf'],
+                    'excel' => ['xlsx', 'pdf'],
+                    default => ['pdf'],
+                },
+            ])
+            ->values();
+    }
+
     public function index(Request $request)
     {
         $kontaktypens = Kontakttypen::all();
@@ -152,6 +182,7 @@ class PartnerController extends Controller
             'projektName' => $projektName,
             'kontaktypens' => $kontaktypens,
             'anzahlBereiche' => $anzahlBereiche,
+            'partnerDokumente' => $this->partnerDocumentsForProject($projekt, $user),
         ]);
     }
 

@@ -10,6 +10,8 @@ use App\Models\Dokumente;
 use App\Models\EinteilungSetting;
 use App\Models\PaAttendanceListDraft;
 use App\Models\PersonenIstSchueler;
+use App\Models\Partner;
+use App\Services\Projects\ActiveProjectContext;
 
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -488,6 +490,132 @@ class ExportWordController extends Controller
             : $this->downloadWordDocxZip($templateFile, $gruppe, $projekt, $dokument, $teilnehmer);
     }
 
+    public function partnerDokument(
+        Request $request,
+        Partner $partner,
+        Dokumente $dokument,
+        ActiveProjectContext $activeProjectContext
+    ) {
+        $context = $request->validate([
+            'schuljahr' => ['required', 'string', 'max:20'],
+            'teil' => ['required', 'string', 'max:20'],
+            'format' => ['nullable', 'string', 'in:docx,xlsx,pdf'],
+        ]);
+
+        $user = $request->user();
+        $projekt = $user ? $activeProjectContext->currentAvailableFor($user) : null;
+
+        abort_unless($projekt, 409, 'Bitte wählen Sie zuerst ein aktives Projekt aus.');
+        abort_unless($projekt->partners()->whereKey($partner->id)->exists(), 404);
+        abort_unless($dokument->aktiv !== false, 404);
+        abort_unless(($dokument->einsatzbereich ?? 'gruppe') === 'partner', 404);
+        abort_unless(($dokument->kontext ?? null) === 'partner', 404);
+        abort_unless($this->isAssignedToProject($projekt, $dokument), 404);
+        abort_unless($this->canExportPartnerDocument($user, $dokument), 403);
+
+        if (!$dokument->dateipfad) {
+            return back()->with('error', 'Diese Vorlage hat keinen Dateipfad.');
+        }
+
+        $format = $this->requestedExportFormat($request, $dokument);
+        if (!$this->formatAllowed($dokument, $format)) {
+            return back()->with('error', 'Dieses Ausgabeformat ist für die Vorlage nicht freigegeben.');
+        }
+
+        $templateFile = $this->storageTemplatePath($dokument->dateipfad);
+        if (!file_exists($templateFile)) {
+            return back()->with('error', 'Die Vorlage wurde nicht gefunden: ' . $dokument->dateipfad);
+        }
+
+        if ($dokument->typ === 'pdf') {
+            return response()->download(
+                $templateFile,
+                $this->safeFileName($dokument->name . '_' . $partner->name) . '.pdf'
+            );
+        }
+
+        $studentRows = PersonenIstSchueler::query()
+            ->where('schule_id', $partner->id)
+            ->where('schuljahr', $context['schuljahr'])
+            ->where('teil', $context['teil'])
+            ->with(['person.adresses', 'person.kontaktes.kontakttyp', 'person.sozialedaten'])
+            ->get();
+
+        $teilnehmer = $studentRows->pluck('person')->filter()->unique('id')->values();
+        $partner->loadMissing(['adresses', 'kontaktes.kontakttyp']);
+
+        $gruppe = new Gruppe([
+            'projekt_id' => $projekt->id,
+            'partner_id' => $partner->id,
+        ]);
+        $gruppe->setAttribute('export_schuljahr', $context['schuljahr']);
+        $gruppe->setAttribute('export_teil', $context['teil']);
+        $gruppe->setRelation('partner', $partner);
+        $gruppe->setRelation('partners', collect([$partner]));
+        $gruppe->setRelation('teilnehmer', $teilnehmer);
+        $gruppe->setRelation('betreuer', null);
+        $gruppe->setRelation('raum', null);
+        $gruppe->setRelation('bereich', null);
+
+        return $this->downloadPartnerTemplate($templateFile, $gruppe, $projekt, $partner, $dokument, $format);
+    }
+
+    private function downloadPartnerTemplate(
+        string $templateFile,
+        Gruppe $gruppe,
+        Projekt $projekt,
+        Partner $partner,
+        Dokumente $dokument,
+        string $format
+    ) {
+        $tempDir = storage_path('app/temp');
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0775, true);
+        }
+
+        try {
+            if ($dokument->typ === 'word') {
+                $docPath = $tempDir . DIRECTORY_SEPARATOR . uniqid('partner_word_', true) . '.docx';
+                $processor = new TemplateProcessor($templateFile);
+                $this->fillGroupTemplate($processor, $gruppe, $projekt, collect(), false);
+                $processor->saveAs($docPath);
+
+                if ($format === 'pdf') {
+                    $outputPath = $tempDir . DIRECTORY_SEPARATOR . uniqid('partner_word_', true) . '.pdf';
+                    WordSettings::setPdfRendererName(WordSettings::PDF_RENDERER_DOMPDF);
+                    WordSettings::setPdfRendererPath(base_path('vendor/dompdf/dompdf'));
+                    $phpWord = WordIOFactory::load($docPath);
+                    WordIOFactory::createWriter($phpWord, 'PDF')->save($outputPath);
+                    @unlink($docPath);
+                } else {
+                    $outputPath = $docPath;
+                }
+            } elseif ($dokument->typ === 'excel') {
+                $spreadsheet = SpreadsheetIOFactory::load($templateFile);
+                $this->fillSpreadsheetTemplate($spreadsheet, $gruppe, $projekt, collect());
+                $extension = $format === 'pdf' ? 'pdf' : 'xlsx';
+                $outputPath = $tempDir . DIRECTORY_SEPARATOR . uniqid('partner_excel_', true) . '.' . $extension;
+                SpreadsheetIOFactory::createWriter($spreadsheet, $format === 'pdf' ? 'Dompdf' : 'Xlsx')->save($outputPath);
+            } else {
+                return back()->with('error', 'Dieser Vorlagentyp wird für Partner-Exporte nicht unterstützt.');
+            }
+        } catch (Throwable $exception) {
+            if (isset($docPath) && file_exists($docPath)) {
+                @unlink($docPath);
+            }
+            if (isset($outputPath) && file_exists($outputPath)) {
+                @unlink($outputPath);
+            }
+
+            return back()->with('error', 'Partnerdokument konnte nicht erstellt werden: ' . $exception->getMessage());
+        }
+
+        $extension = pathinfo($outputPath, PATHINFO_EXTENSION);
+        $filename = $this->safeFileName($dokument->name . '_' . $partner->name) . '.' . $extension;
+
+        return response()->download($outputPath, $filename)->deleteFileAfterSend(true);
+    }
+
     private function wordTemplateSupportsSingleGroupDocument(string $templateFile): bool
     {
         try {
@@ -867,10 +995,15 @@ class ExportWordController extends Controller
             return $emptyValues;
         }
 
+        $requestedSchuljahr = trim((string) $gruppe->getAttribute('export_schuljahr'));
+        $requestedTeil = trim((string) $gruppe->getAttribute('export_teil'));
+
         $cacheKey = implode(':', [
             (string) $projekt->getKey(),
             (string) ($gruppe->getKey() ?? spl_object_id($gruppe)),
             (string) $hauptpartner->getKey(),
+            $requestedSchuljahr,
+            $requestedTeil,
         ]);
 
         if (array_key_exists($cacheKey, $this->schoolPlaceholderCache)) {
@@ -886,11 +1019,26 @@ class ExportWordController extends Controller
         $contextRows = PersonenIstSchueler::query()
             ->where('schule_id', $hauptpartner->getKey())
             ->when($personIds->isNotEmpty(), fn ($query) => $query->whereIn('person_id', $personIds))
+            ->when($requestedSchuljahr !== '', fn ($query) => $query->where('schuljahr', $requestedSchuljahr))
+            ->when($requestedTeil !== '', fn ($query) => $query->where('teil', $requestedTeil))
             ->orderByDesc('id')
             ->get();
 
         if ($contextRows->isEmpty()) {
-            return $this->schoolPlaceholderCache[$cacheKey] = $emptyValues;
+            $dateValues = ($requestedSchuljahr !== '' && $requestedTeil !== '')
+                ? $this->schoolDatePlaceholderValues(
+                    $gruppe,
+                    $projekt,
+                    (int) $hauptpartner->getKey(),
+                    $requestedSchuljahr,
+                    $requestedTeil
+                )
+                : [];
+
+            return $this->schoolPlaceholderCache[$cacheKey] = array_merge($emptyValues, [
+                'schuljahr' => $requestedSchuljahr,
+                'teil' => $requestedTeil,
+            ], $dateValues);
         }
 
         $context = $contextRows
@@ -1157,6 +1305,35 @@ class ExportWordController extends Controller
             ->where('dokument_has_kategories.gruppen_export', true)
             ->where('dokument_has_kategories.serienbrief', true)
             ->exists();
+    }
+
+    private function isAssignedToProject(Projekt $projekt, Dokumente $dokument): bool
+    {
+        if (DB::table('projekt_has_dokumentes')
+            ->where('projekt_id', $projekt->id)
+            ->where('dokument_id', $dokument->id)
+            ->exists()) {
+            return true;
+        }
+
+        return DB::table('projekt_has_dokument_kategories')
+            ->join('dokument_has_kategories', 'projekt_has_dokument_kategories.dokument_kategorie_id', '=', 'dokument_has_kategories.dokument_kategorie_id')
+            ->where('projekt_has_dokument_kategories.projekt_id', $projekt->id)
+            ->where('dokument_has_kategories.dokument_id', $dokument->id)
+            ->exists();
+    }
+
+    private function canExportPartnerDocument(?User $user, Dokumente $dokument): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        if ($dokument->export_permission) {
+            return $user->can($dokument->export_permission);
+        }
+
+        return $user->can('dokumente.schule.export');
     }
 
     private function canExportDocument(?User $user, Dokumente $dokument): bool

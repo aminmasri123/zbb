@@ -558,6 +558,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::put('/organisation/partner/edit/{id}', [PartnerController::class, 'update'])->name('partner.update');
     Route::get('/organisation/partner/ajax/fresh', [PartnerController::class, 'indexAjaxFresh'])->name('partner.indexAjaxFresh');
     Route::post('/organisation/partner/{partner}/bop-usb-stick-brief', [PartnerController::class, 'exportBopUsbStickLetter'])->name('partner.bop-usb-stick-letter.export');
+    Route::get('/organisation/partner/{partner}/dokumente/{dokument}/export', [ExportWordController::class, 'partnerDokument'])->name('partner.document.export');
 
     //Kostenstelle
     Route::get('/kostenstelle', [KostenstelleController::class, 'index'])->name('kostenstelle.index');

@@ -23,6 +23,7 @@ const props = defineProps({
     projektName: String,
     kontaktypens: Array,
     anzahlBereiche: Number,
+    partnerDokumente: { type: Array, default: () => [] },
 });
 const { can, canAny } = usePermissions();
 const canAnySelectionPermission = computed(() => canAny([
@@ -625,6 +626,20 @@ const updatePartnerAPI = async (form) => {
                                                         >
                                                             USB-Stick-Brief
                                                         </button>
+
+                                                        <div v-if="partnerDokumente.length" class="my-1 border-t border-gray-200 pt-1">
+                                                            <template v-for="dokument in partnerDokumente" :key="dokument.id">
+                                                                <a
+                                                                    v-for="format in dokument.ausgabeformate"
+                                                                    :key="`${dokument.id}-${format}`"
+                                                                    :href="route('partner.document.export', { partner: partner.id, dokument: dokument.id, schuljahr: jahr, teil, format })"
+                                                                    class="flex items-center justify-between gap-3 px-4 py-1 hover:bg-gray-200"
+                                                                >
+                                                                    <span>{{ dokument.name }}</span>
+                                                                    <span class="text-[10px] font-semibold uppercase text-gray-400">{{ format }}</span>
+                                                                </a>
+                                                            </template>
+                                                        </div>
 
                                                         <!--  Bereichsauswahl -->
                                                         <a v-if="canAnySelectionPermission" :href="route('bereichsauswahl.index', { partnerId: partner.id, schuljahr: jahr, teil: teil })" class="block px-4 py-1  hover:bg-gray-200">Bereichsauswahl</a>
