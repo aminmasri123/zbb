@@ -240,26 +240,6 @@ function handleBopPlanSaved(payload) {
     partner.bop_plans = plans;
 }
 
-async function deleteBopYearPlanning(partner, jahr) {
-    const result = await Swal.fire({
-        title: `Planung ${displaySchoolYear(jahr)} löschen?`,
-        text: `Die BOP-Planung für ${partner.name} wird entfernt. Importierte Teilnehmer und Anwesenheiten bleiben erhalten.`,
-        icon: 'warning', showCancelButton: true,
-        confirmButtonText: 'Planung löschen', cancelButtonText: 'Abbrechen', confirmButtonColor: '#dc2626',
-    });
-    if (!result.isConfirmed) return;
-
-    try {
-        await axios.delete(route('bop.run.reset', { partner: partner.id }), {
-            data: { schuljahr: jahr, teil: '_all', mode: 'full' },
-        });
-        partner.bop_plans = (partner.bop_plans ?? []).filter(plan => String(plan.schuljahr) !== String(jahr));
-        await Swal.fire({ title: 'Planung gelöscht', icon: 'success', confirmButtonText: 'OK' });
-    } catch (error) {
-        await Swal.fire({ title: 'Löschen nicht möglich', text: error.response?.data?.message || 'Die Planung konnte nicht gelöscht werden.', icon: 'error' });
-    }
-}
-
 async function openBopPlannerForSchool(partner) {
     closeDropdowns();
     const now = new Date();
@@ -586,10 +566,7 @@ const updatePartnerAPI = async (form) => {
                                 )">
 
                                     <div v-for="jahr in getSchuljahre(partner)" :key="jahr">
-                                        <div class="flex items-center gap-1">
-                                            <div class="font-bold text-xs" :class="isBopProject ? bopYearClass(partner, jahr) : 'text-gray-700'" :title="isBopProject ? bopYearTitle(partner, jahr) : ''">{{ displaySchoolYear(jahr) }}</div>
-                                            <button v-if="isBopProject && bopYearStatus(partner, jahr) && can('einteilung.planning')" type="button" class="text-xs font-bold text-red-500 hover:text-red-700" title="BOP-Planung dieses Schuljahres löschen" @click.stop="deleteBopYearPlanning(partner, jahr)">×</button>
-                                        </div>
+                                        <div class="font-bold text-xs" :class="isBopProject ? bopYearClass(partner, jahr) : 'text-gray-700'" :title="isBopProject ? bopYearTitle(partner, jahr) : ''">{{ displaySchoolYear(jahr) }}</div>
 
                                         <div class="flex gap-1">
                                             <span v-for="teil in getTeile(partner, jahr)" :key="teil" class="text-xs">
