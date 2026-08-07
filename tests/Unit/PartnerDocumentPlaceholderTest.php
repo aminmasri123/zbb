@@ -48,6 +48,7 @@ class PartnerDocumentPlaceholderTest extends TestCase
             'feedbackgespraech_pa_datum',
             'rolltag_datum',
             'werkstatttage_daten',
+            'werkstatttage_gesamt_daten',
             'wt_daten',
             'feedbackgespraech_wt_datum',
             'feedbackgespraech_datum',

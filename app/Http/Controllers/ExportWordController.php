@@ -994,6 +994,7 @@ class ExportWordController extends Controller
             'feedbackgespraech_pa_datum' => '',
             'rolltag_datum' => '',
             'werkstatttage_daten' => '',
+            'werkstatttage_gesamt_daten' => '',
             'wt_daten' => '',
             'feedbackgespraech_wt_datum' => '',
             'feedbackgespraech_datum' => '',
@@ -1113,6 +1114,7 @@ class ExportWordController extends Controller
         $bopPaFeedbackDates = collect();
         $bopRollDayDates = collect();
         $bopWorkshopDates = collect();
+        $bopWorkshopAllDates = collect();
         $bopWtFeedbackDates = collect();
         $allDates = collect();
         $preparationDates = collect();
@@ -1143,6 +1145,11 @@ class ExportWordController extends Controller
 
             foreach ($run->phases as $phase) {
                 $phaseDates = collect($phase->dates ?? []);
+                if ($phase->phase_type === 'workshop_days') {
+                    $bopWorkshopAllDates->push(...$phaseDates
+                        ->map(fn ($date) => $this->normalizePlaceholderDate($date))
+                        ->filter());
+                }
                 $partAssignments = collect($phase->part_date_assignments ?? [])
                     ->mapWithKeys(fn ($dates, $part) => [$normalisePart($part) => $dates]);
 
@@ -1300,6 +1307,7 @@ class ExportWordController extends Controller
             'feedbackgespraech_pa_datum' => $this->formatIsoPlaceholderDate($paFeedbackDate),
             'rolltag_datum' => $this->formatPlaceholderDateList($bopRollDayDates),
             'werkstatttage_daten' => $this->formatPlaceholderDateList($bopWorkshopDates),
+            'werkstatttage_gesamt_daten' => $this->formatPlaceholderDateList($bopWorkshopAllDates),
             'wt_daten' => $this->formatPlaceholderDateList($bopWorkshopDates),
             'feedbackgespraech_wt_datum' => $this->formatIsoPlaceholderDate($wtFeedbackDate),
             'feedbackgespraech_datum' => $this->formatIsoPlaceholderDate($feedbackDate),

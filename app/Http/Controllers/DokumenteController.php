@@ -347,6 +347,7 @@ class DokumenteController extends Controller
                     ['key' => 'feedbackgespraech_pa_datum', 'label' => 'Letzter Termin Feedbackgespräch PA'],
                     ['key' => 'rolltag_datum', 'label' => 'Termin oder Termine des Rolltags'],
                     ['key' => 'werkstatttage_daten', 'label' => 'Termine der Werkstatttage'],
+                    ['key' => 'werkstatttage_gesamt_daten', 'label' => 'Alle Werkstatttage der gesamten Schule'],
                     ['key' => 'wt_daten', 'label' => 'Termine der Werkstatttage'],
                     ['key' => 'feedbackgespraech_wt_datum', 'label' => 'Letzter Termin Feedbackgespräch WT'],
                     ['key' => 'feedbackgespraech_datum', 'label' => 'Letzter Termin Feedbackgespräch'],

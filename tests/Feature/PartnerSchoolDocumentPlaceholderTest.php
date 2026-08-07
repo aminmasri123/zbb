@@ -210,6 +210,8 @@ class PartnerSchoolDocumentPlaceholderTest extends TestCase
         $this->assertSame('20.10.2026', $values['zeitraum_bis']);
         $this->assertSame('01.09.2026', $values['vorbereitung_pa_datum']);
         $this->assertSame('20.10.2026', $values['feedbackgespraech_datum']);
+        $this->assertSame('01.10.2026', $values['werkstatttage_daten']);
+        $this->assertSame('01.10.2026, 08.10.2026', $values['werkstatttage_gesamt_daten']);
     }
 
     public function test_excel_pa_class_marker_repeats_the_formatted_block_for_every_planned_class(): void
