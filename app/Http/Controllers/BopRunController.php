@@ -227,6 +227,50 @@ class BopRunController extends Controller
         return response()->json(['message' => 'Teilnehmerstatus wurde gespeichert.', 'participant' => $participant->fresh()]);
     }
 
+    public function reset(Request $request, Partner $partner)
+    {
+        $data = $request->validate([
+            'schuljahr' => ['required', 'string', 'max:20'],
+            'teil' => ['nullable', 'string', 'max:40'],
+            'mode' => ['required', Rule::in(['dates', 'full'])],
+        ]);
+        $project = $this->bopProject($request, $partner);
+        $teil = $data['teil'] ?? '_all';
+        $run = BopRun::with('phases')->where([
+            'projekt_id' => $project->id, 'partner_id' => $partner->id,
+            'schuljahr' => $data['schuljahr'], 'teil' => $teil,
+        ])->firstOrFail();
+
+        DB::transaction(function () use ($run, $data) {
+            foreach ($run->phases as $phase) {
+                AppCalendarEvent::where('source_type', BopPhaseSchedule::class)->where('source_id', $phase->id)->delete();
+                if ($data['mode'] === 'dates') {
+                    $phase->update([
+                        'dates' => [], 'class_date_assignments' => [], 'part_date_assignments' => [],
+                        'publish_to_calendar' => false, 'calendar_event_id' => null, 'generate_groups' => false,
+                    ]);
+                }
+            }
+
+            if ($data['mode'] === 'full') {
+                $run->delete();
+            } else {
+                $run->update([
+                    'first_visit_date' => null, 'last_visit_date' => null,
+                    'status' => 'planning', 'updated_by_user_id' => Auth::id(),
+                ]);
+            }
+        });
+
+        $students = $this->students($partner, $data['schuljahr'], $teil);
+        $freshRun = $data['mode'] === 'full' ? null : BopRun::with(['phases.participants'])->find($run->id);
+        return response()->json([
+            ...$this->payload($project, $partner, $data['schuljahr'], $teil, $students, $freshRun),
+            'reset' => true, 'reset_mode' => $data['mode'],
+            'message' => $data['mode'] === 'full' ? 'Die gesamte BOP-Planung wurde zurückgesetzt.' : 'Alle Planungstermine wurden zurückgesetzt.',
+        ]);
+    }
+
     public function generateGroups(Request $request, Partner $partner, string $phaseType)
     {
         abort_unless(in_array($phaseType, self::PHASES, true), 404);
@@ -410,7 +454,7 @@ class BopRunController extends Controller
             $eventLookup,
             [
                 'owner_user_id' => Auth::id(), 'calendar_id' => $calendar->id, 'project_id' => $project->id,
-                'title' => 'BOP · ' . $this->phaseLabel($phase->phase_type) . ' · ' . $partner->name,
+                'title' => $this->phaseCalendarTitle($phase->phase_type, $partner->name),
                 'description' => 'Optional aus dem BOP-Durchlauf uebernommen. Die BOP-Daten bleiben fuehrend.',
                 'starts_at' => $nextStart,
                 'ends_at' => $nextEnd,
@@ -567,5 +611,20 @@ class BopRunController extends Controller
             'wt_feedback' => ['background' => '#111827', 'text' => '#ffffff'],
             default => ['background' => '#f97316', 'text' => '#ffffff'],
         };
+    }
+
+    private function phaseCalendarTitle(string $type, string $schoolName): string
+    {
+        $prefix = match ($type) {
+            'pa_preparation' => 'Vorb. PA',
+            'pa' => 'PA',
+            'pa_feedback' => 'Feedb.',
+            'roll_day' => 'Rolltag',
+            'workshop_days' => 'BO.',
+            'wt_feedback' => 'Feedb. BO.',
+            default => $this->phaseLabel($type),
+        };
+
+        return trim($prefix . ' ' . $schoolName);
     }
 }

@@ -756,6 +756,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::post('/bop/durchlauf/{partner}/gruppen/{phaseType}', [BopRunController::class, 'generateGroups'])->name('bop.run.groups.generate');
     Route::get('/bop/durchlauf/{partner}', [BopRunController::class, 'show'])->name('bop.run.show');
     Route::put('/bop/durchlauf/{partner}', [BopRunController::class, 'update'])->name('bop.run.update');
+    Route::delete('/bop/durchlauf/{partner}', [BopRunController::class, 'reset'])->name('bop.run.reset');
     Route::post('/bereichsauswahl/einstellung', [ProjektBopController::class, 'bereichsauswahlSettingUpdate'])->name('bereichsauswahl.setting.update');
     Route::post('/bereichwahl-update', [ProjektBopController::class, 'waehlen'])->name('bereichsauswahl.bop.radio.update');
 

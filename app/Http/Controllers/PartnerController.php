@@ -110,7 +110,7 @@ class PartnerController extends Controller
             ->where('projekt_id', $projectId)
             ->whereIn('partner_id', $items->pluck('id'))
             ->orderByDesc('updated_at')
-            ->get(['id', 'partner_id', 'schuljahr', 'status', 'updated_at'])
+            ->get(['id', 'partner_id', 'schuljahr', 'status', 'parts', 'updated_at'])
             ->groupBy('partner_id');
 
         $items->each(fn (Partner $partner) => $partner->setAttribute(

@@ -174,13 +174,67 @@ function bopYearTitle(partner, jahr) {
     }[bopYearStatus(partner, jahr)] || 'Noch keine BOP-Planung gespeichert';
 }
 
+function displaySchoolYear(jahr) {
+    return isBopProject.value ? String(jahr).split('/')[0] : jahr;
+}
+
+function normalizedPart(part) {
+    return String(part ?? '').replace(/^Teil\s*/i, '').trim();
+}
+
+function getTeile(partner, jahr) {
+    const actualParts = (partner.schueler ?? [])
+        .filter(student => String(student.schuljahr) === String(jahr))
+        .map(student => String(student.teil));
+    const plannedParts = (partner.bop_plans ?? [])
+        .filter(plan => String(plan.schuljahr) === String(jahr))
+        .flatMap(plan => plan.parts ?? ['1'])
+        .map(String);
+    const parts = new Map();
+    actualParts.forEach(part => parts.set(normalizedPart(part), part));
+    plannedParts.forEach(part => {
+        const key = normalizedPart(part);
+        if (!parts.has(key)) parts.set(key, part);
+    });
+    return [...parts.values()].sort((partA, partB) => normalizedPart(partA).localeCompare(normalizedPart(partB), 'de', { numeric: true }));
+}
+
+function partLabel(part) {
+    return `Teil ${normalizedPart(part)}`;
+}
+
+function partHasParticipants(partner, jahr, teil) {
+    const key = normalizedPart(teil);
+    return (partner.schueler ?? []).some(student =>
+        String(student.schuljahr) === String(jahr) && normalizedPart(student.teil) === key
+    );
+}
+
+async function openPartMenu(partner, jahr, teil) {
+    if (!partHasParticipants(partner, jahr, teil)) {
+        await Swal.fire({
+            title: 'Teilnehmer fehlen',
+            text: `Für ${partLabel(teil)} im Schuljahr ${displaySchoolYear(jahr)} wurden noch keine Teilnehmer importiert.`,
+            icon: 'info',
+            confirmButtonText: 'Schließen',
+        });
+        return;
+    }
+    toggleDropdown(partner.id, jahr, teil);
+}
+
 function handleBopPlanSaved(payload) {
     const partner = localPartners.value.find(item => Number(item.id) === Number(modalData.value.partnerId));
     const run = payload?.run;
-    if (!partner || !run) return;
+    if (!partner) return;
+    if (payload?.reset_mode === 'full') {
+        partner.bop_plans = (partner.bop_plans ?? []).filter(plan => String(plan.schuljahr) !== String(payload.context?.schuljahr));
+        return;
+    }
+    if (!run) return;
     const plans = [...(partner.bop_plans ?? [])];
     const index = plans.findIndex(plan => String(plan.schuljahr) === String(run.schuljahr));
-    const summary = { id: run.id, partner_id: run.partner_id, schuljahr: run.schuljahr, status: run.status, updated_at: run.updated_at };
+    const summary = { id: run.id, partner_id: run.partner_id, schuljahr: run.schuljahr, status: run.status, parts: run.parts || ['1'], updated_at: run.updated_at };
     if (index >= 0) plans[index] = summary;
     else plans.push(summary);
     partner.bop_plans = plans;
@@ -511,20 +565,16 @@ const updatePartnerAPI = async (form) => {
                                 )">
 
                                     <div v-for="jahr in getSchuljahre(partner)" :key="jahr">
-                                        <div class="font-bold text-xs" :class="isBopProject ? bopYearClass(partner, jahr) : 'text-gray-700'" :title="isBopProject ? bopYearTitle(partner, jahr) : ''">{{ jahr }}</div>
+                                        <div class="font-bold text-xs" :class="isBopProject ? bopYearClass(partner, jahr) : 'text-gray-700'" :title="isBopProject ? bopYearTitle(partner, jahr) : ''">{{ displaySchoolYear(jahr) }}</div>
 
                                         <div class="flex gap-1">
-                                            <span v-for="teil in [...new Set(
-                                                partner.schueler
-                                                    .filter(s => s.schuljahr === jahr)
-                                                    .map(s => s.teil)
-                                            )]" :key="teil" class="text-xs">
+                                            <span v-for="teil in getTeile(partner, jahr)" :key="teil" class="text-xs">
 
                                                 <!-- Dropdown -->
                                                 <div class="dropdown dropdown-action inline-block relative" @click.stop>
-                                                    <button @click="toggleDropdown(partner.id, jahr, teil)"
+                                                    <button @click="openPartMenu(partner, jahr, teil)"
                                                         class="dropdown-toggle py-1 rounded text-xs w-full">
-                                                        {{ teil }}
+                                                        {{ partLabel(teil) }}
                                                     </button>
                                                     <div v-show="isDropdownOpen(partner.id, jahr, teil)"
                                                         class="dropdown-menu absolute mt-1  bg-white border rounded text-xs shadow-lg z-50">

@@ -16,6 +16,7 @@ const loading = ref(false)
 const saving = ref(false)
 const error = ref('')
 const context = ref(null)
+const hasSavedRun = ref(false)
 const classes = ref([])
 const students = ref([])
 const options = ref({ areas: [], rooms: [], supervisors: [] })
@@ -82,6 +83,7 @@ async function load() {
 
 function hydrate(data) {
   context.value = data.context
+  hasSavedRun.value = Boolean(data.run)
   classes.value = data.classes || []
   students.value = data.students || []
   options.value = data.options || { areas: [], rooms: [], supervisors: [] }
@@ -376,6 +378,42 @@ async function save() {
   }
 }
 
+async function resetPlanning() {
+  const choice = await Swal.fire({
+    title: 'BOP-Planung zurücksetzen?',
+    html: `<strong>${schoolName}</strong><br>${selectedSchoolYear}<br><br>Wähle aus, was zurückgesetzt werden soll.`,
+    icon: 'warning', showCancelButton: true, showDenyButton: true,
+    confirmButtonText: 'Nur Termine', denyButtonText: 'Gesamte Planung', cancelButtonText: 'Abbrechen',
+    confirmButtonColor: '#f97316', denyButtonColor: '#dc2626',
+  })
+  if (choice.isDismissed) return
+  const mode = choice.isDenied ? 'full' : 'dates'
+  if (mode === 'full') {
+    const confirmation = await Swal.fire({
+      title: 'Gesamte Planung wirklich löschen?',
+      text: 'Planungsphasen, Zuordnungen und Kalendertermine werden entfernt. Importierte Teilnehmer und erfasste Anwesenheiten bleiben erhalten.',
+      icon: 'error', showCancelButton: true,
+      confirmButtonText: 'Gesamte Planung löschen', cancelButtonText: 'Abbrechen', confirmButtonColor: '#dc2626',
+    })
+    if (!confirmation.isConfirmed) return
+  }
+
+  saving.value = true
+  error.value = ''
+  try {
+    const response = await axios.delete(route('bop.run.reset', { partner: props.partnerId }), {
+      data: { schuljahr: selectedSchoolYear.value, teil: '_all', mode },
+    })
+    hydrate(response.data)
+    emit('saved', response.data)
+    await Swal.fire({ title: 'Zurückgesetzt', text: response.data.message, icon: 'success', confirmButtonText: 'OK' })
+  } catch (exception) {
+    error.value = exception.response?.data?.message || 'Die BOP-Planung konnte nicht zurückgesetzt werden.'
+  } finally {
+    saving.value = false
+  }
+}
+
 </script>
 
 <template>
@@ -387,6 +425,7 @@ async function save() {
           <p class="text-sm text-gray-500">{{ selectedSchoolYear }} · Gesamtplanung · {{ students.length }} Teilnehmer</p>
         </div>
         <div class="flex items-center gap-2">
+          <button v-if="hasSavedRun" type="button" class="rounded border border-red-300 px-4 py-2 text-sm font-semibold text-red-700" :disabled="loading || saving" @click="resetPlanning">Zurücksetzen</button>
           <button type="button" class="rounded border px-4 py-2 text-sm font-semibold" :disabled="saving" @click="$emit('close')">Schließen</button>
           <button type="button" class="rounded bg-orange-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="loading || saving" @click="save">{{ saving ? 'Speichert …' : 'Alles speichern' }}</button>
         </div>

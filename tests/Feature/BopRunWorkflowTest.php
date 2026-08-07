@@ -79,7 +79,9 @@ class BopRunWorkflowTest extends TestCase
         $this->assertCount(2, $preparation->participants);
         $this->assertSame(['7.1'], $preparation->participants->pluck('group_key')->unique()->values()->all());
         $this->assertNotNull($preparation->calendar_event_id);
-        $this->assertSame('#6b7280', AppCalendarEvent::findOrFail($preparation->calendar_event_id)->background_color);
+        $preparationEvent = AppCalendarEvent::findOrFail($preparation->calendar_event_id);
+        $this->assertSame('#6b7280', $preparationEvent->background_color);
+        $this->assertSame('Vorb. PA Testschule', $preparationEvent->title);
 
         $pa = BopPhaseSchedule::where('phase_type', 'pa')->firstOrFail();
         $this->assertSame(2, $pa->days_per_class);
@@ -97,6 +99,19 @@ class BopRunWorkflowTest extends TestCase
         $this->assertSame(['Gruppe 1', 'Gruppe 2'], $rollDay->participants->pluck('group_key')->unique()->sort()->values()->all());
         $this->assertSame(3, $rollDay->participants->count());
         $this->assertDatabaseHas('bop_phase_participants', ['personen_ist_schueler_id' => $studentB->id]);
+
+        $this->actingAs($user)->deleteJson(route('bop.run.reset', ['partner' => $partner]), [
+            'schuljahr' => '2026/2027', 'teil' => '_all', 'mode' => 'dates',
+        ])->assertOk()->assertJsonPath('reset_mode', 'dates');
+        $this->assertSame([], $preparation->fresh()->dates);
+        $this->assertDatabaseMissing('app_calendar_events', ['id' => $preparationEvent->id]);
+        $this->assertSame('planning', $run->fresh()->status);
+
+        $this->actingAs($user)->deleteJson(route('bop.run.reset', ['partner' => $partner]), [
+            'schuljahr' => '2026/2027', 'teil' => '_all', 'mode' => 'full',
+        ])->assertOk()->assertJsonPath('reset_mode', 'full');
+        $this->assertDatabaseMissing('bop_runs', ['id' => $run->id]);
+        $this->assertDatabaseHas('personen_ist_schuelers', ['id' => $studentA->id]);
     }
 
     public function test_bop_run_is_unavailable_in_non_bop_project(): void
