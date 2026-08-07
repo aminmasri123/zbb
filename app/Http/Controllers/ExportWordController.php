@@ -19,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\IOFactory as SpreadsheetIOFactory;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpWord\IOFactory as WordIOFactory;
@@ -988,6 +989,13 @@ class ExportWordController extends Controller
             'zeitraum_von' => '',
             'zeitraum_bis' => '',
             'vorbereitung_pa_datum' => '',
+            'pa_datum' => '',
+            'pa_daten' => '',
+            'feedbackgespraech_pa_datum' => '',
+            'rolltag_datum' => '',
+            'werkstatttage_daten' => '',
+            'wt_daten' => '',
+            'feedbackgespraech_wt_datum' => '',
             'feedbackgespraech_datum' => '',
             'auswertungsgespraech_datum' => '',
         ];
@@ -1101,6 +1109,11 @@ class ExportWordController extends Controller
         $bopAllDates = collect();
         $bopPreparationDates = collect();
         $bopFeedbackDates = collect();
+        $bopPaDates = collect();
+        $bopPaFeedbackDates = collect();
+        $bopRollDayDates = collect();
+        $bopWorkshopDates = collect();
+        $bopWtFeedbackDates = collect();
         $allDates = collect();
         $preparationDates = collect();
         $feedbackDates = collect();
@@ -1150,6 +1163,21 @@ class ExportWordController extends Controller
 
                 if ($phase->phase_type === 'pa_preparation') {
                     $bopPreparationDates->push(...$phaseDates);
+                }
+                if ($phase->phase_type === 'pa') {
+                    $bopPaDates->push(...$phaseDates);
+                }
+                if ($phase->phase_type === 'pa_feedback') {
+                    $bopPaFeedbackDates->push(...$phaseDates);
+                }
+                if ($phase->phase_type === 'roll_day') {
+                    $bopRollDayDates->push(...$phaseDates);
+                }
+                if ($phase->phase_type === 'workshop_days') {
+                    $bopWorkshopDates->push(...$phaseDates);
+                }
+                if ($phase->phase_type === 'wt_feedback') {
+                    $bopWtFeedbackDates->push(...$phaseDates);
                 }
                 if (in_array($phase->phase_type, ['pa_feedback', 'wt_feedback'], true)) {
                     $bopFeedbackDates->push(...$phaseDates);
@@ -1243,6 +1271,9 @@ class ExportWordController extends Controller
             ?: $preparationDates->filter()->min();
         $feedbackDate = $bopFeedbackDates->filter()->max()
             ?: $feedbackDates->filter()->max();
+        $paFeedbackDate = $bopPaFeedbackDates->filter()->max()
+            ?: $feedbackDates->filter()->max();
+        $wtFeedbackDate = $bopWtFeedbackDates->filter()->max();
         $firstDate = $bopAllDates->filter()->min()
             ?: $preparationDate
             ?: $allDates->filter()->min()
@@ -1264,6 +1295,13 @@ class ExportWordController extends Controller
             'zeitraum_von' => $firstFormatted,
             'zeitraum_bis' => $lastFormatted,
             'vorbereitung_pa_datum' => $this->formatIsoPlaceholderDate($preparationDate),
+            'pa_datum' => $this->formatPlaceholderDateList($bopPaDates),
+            'pa_daten' => $this->formatPlaceholderDateList($bopPaDates),
+            'feedbackgespraech_pa_datum' => $this->formatIsoPlaceholderDate($paFeedbackDate),
+            'rolltag_datum' => $this->formatPlaceholderDateList($bopRollDayDates),
+            'werkstatttage_daten' => $this->formatPlaceholderDateList($bopWorkshopDates),
+            'wt_daten' => $this->formatPlaceholderDateList($bopWorkshopDates),
+            'feedbackgespraech_wt_datum' => $this->formatIsoPlaceholderDate($wtFeedbackDate),
             'feedbackgespraech_datum' => $this->formatIsoPlaceholderDate($feedbackDate),
             'auswertungsgespraech_datum' => $this->formatIsoPlaceholderDate($feedbackDate),
         ];
@@ -1287,11 +1325,71 @@ class ExportWordController extends Controller
         return $date ? Carbon::parse($date)->format('d.m.Y') : '';
     }
 
+    private function formatPlaceholderDateList($dates): string
+    {
+        $dates = collect($dates)
+            ->map(fn ($date) => $this->normalizePlaceholderDate($date))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values();
+
+        if ($dates->isEmpty()) {
+            return '';
+        }
+
+        $ranges = [];
+        $rangeStart = $dates->first();
+        $previous = $rangeStart;
+
+        foreach ($dates->slice(1) as $date) {
+            if (Carbon::parse($previous)->addDay()->toDateString() === $date) {
+                $previous = $date;
+                continue;
+            }
+
+            $ranges[] = [$rangeStart, $previous];
+            $rangeStart = $previous = $date;
+        }
+        $ranges[] = [$rangeStart, $previous];
+
+        return collect($ranges)->map(function (array $range): string {
+            [$from, $to] = $range;
+            if ($from === $to) {
+                return Carbon::parse($from)->format('d.m.Y');
+            }
+
+            $fromDate = Carbon::parse($from);
+            $toDate = Carbon::parse($to);
+            $fromFormatted = $fromDate->year === $toDate->year
+                ? $fromDate->format('d.m.')
+                : $fromDate->format('d.m.Y');
+
+            return $fromFormatted . '–' . $toDate->format('d.m.Y');
+        })->implode(', ');
+    }
+
     private function fillSpreadsheetTemplate($spreadsheet, Gruppe $gruppe, Projekt $projekt, $teilnehmer): void
     {
         $gruppeValues = $this->placeholderValues($gruppe, $projekt);
 
         foreach ($spreadsheet->getWorksheetIterator() as $sheet) {
+            $paMarkers = collect($sheet->getCellCollection()->getCoordinates())
+                ->filter(fn ($coordinate) => is_string($sheet->getCell($coordinate)->getValue())
+                    && $this->containsPaClassTableMarker($sheet->getCell($coordinate)->getValue()))
+                ->sortByDesc(fn ($coordinate) => Coordinate::coordinateFromString($coordinate)[1]);
+
+            foreach ($paMarkers as $coordinate) {
+                [$column, $row] = Coordinate::coordinateFromString($coordinate);
+                $this->writePaClassTable(
+                    $sheet,
+                    Coordinate::columnIndexFromString($column),
+                    (int) $row,
+                    $gruppe,
+                    $projekt
+                );
+            }
+
             foreach ($sheet->getCellCollection()->getCoordinates() as $coordinate) {
                 $cell = $sheet->getCell($coordinate);
                 $value = $cell->getValue();
@@ -1307,9 +1405,174 @@ class ExportWordController extends Controller
                     continue;
                 }
 
-                $cell->setValue($this->replacePlaceholderText($value, $gruppeValues));
+                $replacedValue = $this->replacePlaceholderText($value, $gruppeValues);
+                if ($replacedValue !== $value) {
+                    $cell->setValueExplicit($replacedValue, DataType::TYPE_STRING);
+                }
             }
         }
+    }
+
+    private function containsPaClassTableMarker(string $value): bool
+    {
+        return str_contains($value, '${pa_klassen_tabelle}')
+            || str_contains($value, '{{pa_klassen_tabelle}}');
+    }
+
+    private function writePaClassTable($sheet, int $markerColumn, int $markerRow, Gruppe $gruppe, Projekt $projekt): void
+    {
+        $entries = $this->paClassSchedule($gruppe, $projekt);
+        if ($entries->isEmpty()) {
+            $entries = collect([['class' => '', 'dates' => '']]);
+        }
+
+        $blockStart = max(1, $markerRow - 1);
+        $blockHeight = $markerRow - $blockStart + 1;
+        $blockEnd = $markerRow;
+        $lastColumn = max(
+            $markerColumn + 1,
+            Coordinate::columnIndexFromString($sheet->getHighestDataColumn())
+        );
+        $sourceMerges = collect($sheet->getMergeCells())->filter(function (string $range) use ($blockStart, $blockEnd): bool {
+            $boundaries = Coordinate::rangeBoundaries($range);
+            $startRow = (int) $boundaries[0][1];
+            $endRow = (int) $boundaries[1][1];
+
+            return $startRow >= $blockStart && $endRow <= $blockEnd;
+        })->values();
+
+        $additionalRows = ($entries->count() - 1) * $blockHeight;
+        if ($additionalRows > 0) {
+            $sheet->insertNewRowBefore($blockEnd + 1, $additionalRows);
+        }
+
+        for ($index = 1; $index < $entries->count(); $index++) {
+            $targetStart = $blockStart + ($index * $blockHeight);
+            for ($offset = 0; $offset < $blockHeight; $offset++) {
+                $sourceRow = $blockStart + $offset;
+                $targetRow = $targetStart + $offset;
+                $sourceDimension = $sheet->getRowDimension($sourceRow);
+                $targetDimension = $sheet->getRowDimension($targetRow);
+                $targetDimension->setRowHeight($sourceDimension->getRowHeight());
+                $targetDimension->setVisible($sourceDimension->getVisible());
+                $targetDimension->setOutlineLevel($sourceDimension->getOutlineLevel());
+                $targetDimension->setCollapsed($sourceDimension->getCollapsed());
+
+                for ($column = 1; $column <= $lastColumn; $column++) {
+                    $sourceCoordinate = Coordinate::stringFromColumnIndex($column) . $sourceRow;
+                    $targetCoordinate = Coordinate::stringFromColumnIndex($column) . $targetRow;
+                    $sourceCell = $sheet->getCell($sourceCoordinate);
+                    $sheet->getCell($targetCoordinate)->setValueExplicit($sourceCell->getValue(), $sourceCell->getDataType());
+                    $sheet->duplicateStyle($sheet->getStyle($sourceCoordinate), $targetCoordinate);
+                }
+            }
+
+            foreach ($sourceMerges as $range) {
+                $boundaries = Coordinate::rangeBoundaries($range);
+                $rowOffset = $index * $blockHeight;
+                $sheet->mergeCells(
+                    Coordinate::stringFromColumnIndex($boundaries[0][0]) . ($boundaries[0][1] + $rowOffset)
+                    . ':' .
+                    Coordinate::stringFromColumnIndex($boundaries[1][0]) . ($boundaries[1][1] + $rowOffset)
+                );
+            }
+        }
+
+        foreach ($entries->values() as $index => $entry) {
+            $targetStart = $blockStart + ($index * $blockHeight);
+            $targetMarkerRow = $markerRow + ($index * $blockHeight);
+            $classMarkerFound = false;
+
+            for ($row = $targetStart; $row < $targetStart + $blockHeight; $row++) {
+                for ($column = 1; $column <= $lastColumn; $column++) {
+                    $cell = $sheet->getCell(Coordinate::stringFromColumnIndex($column) . $row);
+                    $value = $cell->getValue();
+                    if (!is_string($value)) {
+                        continue;
+                    }
+
+                    if ($this->containsPaClassTableMarker($value)) {
+                        $cell->setValueExplicit(str_replace(
+                            ['${pa_klassen_tabelle}', '{{pa_klassen_tabelle}}'],
+                            $entry['dates'],
+                            $value
+                        ), DataType::TYPE_STRING);
+                    }
+                    if (str_contains($value, '${pa_klasse}') || str_contains($value, '{{pa_klasse}}')) {
+                        $classMarkerFound = true;
+                        $cell->setValueExplicit(str_replace(
+                            ['${pa_klasse}', '{{pa_klasse}}'],
+                            $entry['class'],
+                            $value
+                        ), DataType::TYPE_STRING);
+                    }
+                }
+            }
+
+            if (!$classMarkerFound && $markerColumn < $lastColumn) {
+                $sheet->getCell([$markerColumn + 1, $targetMarkerRow])
+                    ->setValueExplicit($entry['class'], DataType::TYPE_STRING);
+            }
+        }
+    }
+
+    private function paClassSchedule(Gruppe $gruppe, Projekt $projekt)
+    {
+        $partner = $gruppe->relationLoaded('partner') ? $gruppe->partner : $gruppe->partner()->first();
+        if (!$partner?->getKey()) {
+            return collect();
+        }
+
+        $schuljahr = trim((string) $gruppe->getAttribute('export_schuljahr'));
+        $teil = trim((string) $gruppe->getAttribute('export_teil'));
+        if ($schuljahr === '' || $teil === '') {
+            $personIds = $gruppe->relationLoaded('teilnehmer')
+                ? $gruppe->teilnehmer->pluck('id')->filter()->unique()
+                : collect();
+            $context = PersonenIstSchueler::query()
+                ->where('schule_id', $partner->getKey())
+                ->when($personIds->isNotEmpty(), fn ($query) => $query->whereIn('person_id', $personIds))
+                ->latest('id')
+                ->first(['schuljahr', 'teil']);
+            $schuljahr = $schuljahr ?: trim((string) $context?->schuljahr);
+            $teil = $teil ?: trim((string) $context?->teil);
+        }
+        if ($schuljahr === '' || $teil === '') {
+            return collect();
+        }
+
+        $normalisePart = fn ($value) => trim((string) preg_replace('/^Teil\s*/i', '', (string) $value));
+        $normalisedPart = $normalisePart($teil);
+        $run = BopRun::query()
+            ->where('projekt_id', $projekt->getKey())
+            ->where('partner_id', $partner->getKey())
+            ->where('schuljahr', $schuljahr)
+            ->whereIn('teil', array_values(array_unique([$teil, $normalisedPart, 'Teil ' . $normalisedPart, '_all'])))
+            ->with('phases')
+            ->first();
+        $phase = $run?->phases?->firstWhere('phase_type', 'pa');
+        if (!$run || !$phase) {
+            return collect();
+        }
+
+        $classes = collect($run->planned_classes ?? [])
+            ->filter(fn ($class) => $normalisePart($class['part'] ?? '1') === $normalisedPart)
+            ->pluck('name')
+            ->map(fn ($name) => trim((string) $name))
+            ->filter();
+        if ($classes->isEmpty()) {
+            $classes = collect($phase->selected_classes ?? [])->map(fn ($name) => trim((string) $name))->filter();
+        }
+
+        $assignments = collect($phase->class_date_assignments ?? []);
+        $defaultDates = collect($phase->dates ?? []);
+
+        return $classes->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values()->map(fn ($className) => [
+            'class' => $className,
+            'dates' => $this->formatPlaceholderDateList($assignments->has($className)
+                ? $assignments->get($className, [])
+                : $defaultDates),
+        ]);
     }
 
     private function containsParticipantTableMarker(string $value): bool
