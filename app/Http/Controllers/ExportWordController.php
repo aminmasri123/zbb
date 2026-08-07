@@ -11,6 +11,7 @@ use App\Models\EinteilungSetting;
 use App\Models\PaAttendanceListDraft;
 use App\Models\PersonenIstSchueler;
 use App\Models\Partner;
+use App\Models\BopRun;
 use App\Services\Projects\ActiveProjectContext;
 
 use Carbon\Carbon;
@@ -1097,9 +1098,71 @@ class ExportWordController extends Controller
         string $schuljahr,
         string $teil
     ): array {
+        $bopAllDates = collect();
+        $bopPreparationDates = collect();
+        $bopFeedbackDates = collect();
         $allDates = collect();
         $preparationDates = collect();
         $feedbackDates = collect();
+
+        $normalisePart = fn ($value) => trim((string) preg_replace('/^Teil\s*/i', '', (string) $value));
+        $normalisedPart = $normalisePart($teil);
+        $run = BopRun::query()
+            ->where('projekt_id', $projekt->getKey())
+            ->where('partner_id', $partnerId)
+            ->where('schuljahr', $schuljahr)
+            ->whereIn('teil', array_values(array_unique([$teil, $normalisedPart, 'Teil ' . $normalisedPart, '_all'])))
+            ->with('phases')
+            ->orderByRaw('CASE WHEN teil = ? THEN 0 WHEN teil = ? THEN 1 WHEN teil = ? THEN 2 ELSE 3 END', [
+                $teil,
+                $normalisedPart,
+                'Teil ' . $normalisedPart,
+            ])
+            ->first();
+
+        if ($run) {
+            $plannedClassesForPart = collect($run->planned_classes ?? [])
+                ->filter(fn ($class) => $normalisePart($class['part'] ?? '1') === $normalisedPart)
+                ->pluck('name')
+                ->map(fn ($name) => trim((string) $name))
+                ->filter()
+                ->values();
+
+            foreach ($run->phases as $phase) {
+                $phaseDates = collect($phase->dates ?? []);
+                $partAssignments = collect($phase->part_date_assignments ?? [])
+                    ->mapWithKeys(fn ($dates, $part) => [$normalisePart($part) => $dates]);
+
+                if ($partAssignments->has($normalisedPart)) {
+                    $phaseDates = collect($partAssignments->get($normalisedPart, []));
+                } elseif (!empty($phase->class_date_assignments) && $plannedClassesForPart->isNotEmpty()) {
+                    $classAssignments = collect($phase->class_date_assignments ?? []);
+                    $phaseDates = $plannedClassesForPart
+                        ->flatMap(fn ($className) => $classAssignments->get($className, []));
+                }
+
+                $phaseDates = $phaseDates
+                    ->map(fn ($date) => $this->normalizePlaceholderDate($date))
+                    ->filter()
+                    ->unique()
+                    ->values();
+                $bopAllDates->push(...$phaseDates);
+
+                if ($phase->phase_type === 'pa_preparation') {
+                    $bopPreparationDates->push(...$phaseDates);
+                }
+                if (in_array($phase->phase_type, ['pa_feedback', 'wt_feedback'], true)) {
+                    $bopFeedbackDates->push(...$phaseDates);
+                }
+            }
+
+            if ($bopAllDates->isEmpty()) {
+                $bopAllDates->push(
+                    $this->normalizePlaceholderDate($run->first_visit_date),
+                    $this->normalizePlaceholderDate($run->last_visit_date)
+                );
+            }
+        }
 
         PaAttendanceListDraft::query()
             ->where('projekt_id', $projekt->getKey())
@@ -1176,13 +1239,17 @@ class ExportWordController extends Controller
             ->filter()
             ->max();
 
-        $preparationDate = $preparationDates->filter()->min();
-        $feedbackDate = $feedbackDates->filter()->max();
-        $firstDate = $preparationDate
+        $preparationDate = $bopPreparationDates->filter()->min()
+            ?: $preparationDates->filter()->min();
+        $feedbackDate = $bopFeedbackDates->filter()->max()
+            ?: $feedbackDates->filter()->max();
+        $firstDate = $bopAllDates->filter()->min()
+            ?: $preparationDate
             ?: $allDates->filter()->min()
             ?: $roundStart
             ?: $this->normalizePlaceholderDate($gruppe->anfangsdatum);
-        $lastDate = $feedbackDate
+        $lastDate = $bopAllDates->filter()->max()
+            ?: $feedbackDate
             ?: $allDates->filter()->max()
             ?: $roundEnd
             ?: $this->normalizePlaceholderDate($gruppe->enddatum);

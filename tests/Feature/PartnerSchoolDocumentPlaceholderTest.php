@@ -6,6 +6,7 @@ use App\Http\Controllers\ExportWordController;
 use App\Models\Gruppe;
 use App\Models\EinteilungSetting;
 use App\Models\PaAttendanceListDraft;
+use App\Models\BopRun;
 use App\Models\Partner;
 use App\Models\Personen;
 use App\Models\PersonenIstSchueler;
@@ -141,6 +142,71 @@ class PartnerSchoolDocumentPlaceholderTest extends TestCase
         $this->assertSame('13.10.2026', $values['zeitraum_bis']);
         $this->assertSame('', $values['vorbereitung_pa_datum']);
         $this->assertSame('', $values['feedbackgespraech_datum']);
+    }
+
+    public function test_saved_bop_plan_is_the_primary_period_source_and_respects_the_part(): void
+    {
+        $project = Projekt::factory()->create(['name' => 'BOP Test']);
+        $school = Partner::query()->create(['name' => 'Testschule']);
+        $participant = $this->student($school, '7.1', false);
+
+        $run = BopRun::query()->create([
+            'projekt_id' => $project->id,
+            'partner_id' => $school->id,
+            'schuljahr' => '2026/2027',
+            'teil' => '_all',
+            'school_type' => 'Gemeinschaftsschule',
+            'parts' => ['1', '2'],
+            'planned_classes' => [
+                ['name' => '7.1', 'expected_participants' => 20, 'part' => '1'],
+                ['name' => '8.1', 'expected_participants' => 20, 'part' => '2'],
+            ],
+            'status' => 'confirmed',
+        ]);
+        $run->phases()->create([
+            'phase_type' => 'pa_preparation',
+            'dates' => ['2026-08-25', '2026-09-01'],
+            'scope_type' => 'classes',
+            'selected_classes' => ['7.1', '8.1'],
+            'class_date_assignments' => [
+                '7.1' => ['2026-09-01'],
+                '8.1' => ['2026-08-25'],
+            ],
+            'group_mode' => 'class',
+        ]);
+        $run->phases()->create([
+            'phase_type' => 'workshop_days',
+            'dates' => ['2026-10-01', '2026-10-08'],
+            'scope_type' => 'school',
+            'part_date_assignments' => [
+                '1' => ['2026-10-01'],
+                '2' => ['2026-10-08'],
+            ],
+            'group_mode' => 'existing_assignment',
+        ]);
+        $run->phases()->create([
+            'phase_type' => 'wt_feedback',
+            'dates' => ['2026-10-20'],
+            'scope_type' => 'school',
+            'group_mode' => 'none',
+        ]);
+
+        $group = new Gruppe();
+        $group->id = 101;
+        $group->setRelation('partner', $school);
+        $group->setRelation('partners', new Collection([$school]));
+        $group->setRelation('teilnehmer', new Collection([$participant]));
+        $group->setRelation('betreuer', null);
+        $group->setRelation('raum', null);
+        $group->setRelation('bereich', null);
+
+        $values = $this->placeholderValues($group, $project);
+
+        $this->assertSame('01.09.2026 – 20.10.2026', $values['zeitraum']);
+        $this->assertSame('01.09.2026', $values['zeitraum_von']);
+        $this->assertSame('20.10.2026', $values['zeitraum_bis']);
+        $this->assertSame('01.09.2026', $values['vorbereitung_pa_datum']);
+        $this->assertSame('20.10.2026', $values['feedbackgespraech_datum']);
     }
 
     private function student(Partner $school, string $class, bool $specialNeeds): Personen
