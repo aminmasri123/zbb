@@ -508,6 +508,29 @@ class BopRunController extends Controller
     private function payload(Projekt $project, Partner $partner, string $schuljahr, string $teil, Collection $students, ?BopRun $run): array
     {
         $phaseMap = $run?->phases?->keyBy('phase_type') ?? collect();
+        $normalisePart = fn ($part) => trim((string) preg_replace('/^Teil\s*/i', '', (string) $part));
+        $suggestedParts = $students->pluck('teil')->map($normalisePart)->filter()->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values();
+        $suggestedClasses = $students
+            ->filter(fn ($student) => filled($student->klasse))
+            ->groupBy(fn ($student) => trim((string) $student->klasse))
+            ->map(function (Collection $classStudents, string $className) use ($normalisePart) {
+                $part = (string) ($classStudents->pluck('teil')
+                    ->map($normalisePart)
+                    ->filter()
+                    ->countBy()
+                    ->sortDesc()
+                    ->keys()
+                    ->first() ?: '1');
+
+                return [
+                    'name' => $className,
+                    'expected_participants' => $classStudents->pluck('person_id')->filter()->unique()->count(),
+                    'part' => $part,
+                ];
+            })
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
+
         return [
             'run' => $run,
             'context' => ['project_id' => $project->id, 'partner_id' => $partner->id, 'school_name' => $partner->name, 'schuljahr' => $schuljahr, 'teil' => $teil],
@@ -516,6 +539,8 @@ class BopRunController extends Controller
             'classes' => $students->pluck('klasse')->filter()
                 ->merge(collect($run?->planned_classes ?? [])->pluck('name'))
                 ->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values(),
+            'suggested_parts' => $suggestedParts->isNotEmpty() ? $suggestedParts : collect(['1']),
+            'suggested_planned_classes' => $suggestedClasses,
             'students' => $students->map(fn ($student) => [
                 'id' => $student->id, 'person_id' => $student->person_id, 'class_name' => $student->klasse, 'part' => $student->teil,
                 'name' => trim(($student->person?->nachname ?? '') . ', ' . ($student->person?->vorname ?? '')),

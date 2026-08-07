@@ -256,6 +256,17 @@ async function openBopPlannerForSchool(partner) {
     });
 }
 
+function openBopPlannerForYear(partner, jahr) {
+    closeDropdowns();
+    openModal('bopRunPlanner', {
+        jahr: String(jahr),
+        teil: '_all',
+        partnerId: partner.id,
+        schoolName: partner.name,
+        schoolYears: getSchuljahre(partner),
+    });
+}
+
 // -----------------------------
 // Modal-Funktionen
 // -----------------------------
@@ -567,7 +578,17 @@ const updatePartnerAPI = async (form) => {
                                 )">
 
                                     <div v-for="jahr in getSchuljahre(partner)" :key="jahr">
-                                        <div class="font-bold text-xs" :class="isBopProject ? bopYearClass(partner, jahr) : 'text-gray-700'" :title="isBopProject ? bopYearTitle(partner, jahr) : ''">{{ displaySchoolYear(jahr) }}</div>
+                                        <button
+                                            v-if="isBopProject && can('einteilung.planning')"
+                                            type="button"
+                                            class="block text-xs font-bold hover:underline"
+                                            :class="bopYearClass(partner, jahr)"
+                                            :title="bopYearStatus(partner, jahr) ? `${bopYearTitle(partner, jahr)} · anklicken zum Bearbeiten` : 'Noch keine BOP-Planung gespeichert · anklicken zum Nachtragen'"
+                                            @click.stop="openBopPlannerForYear(partner, jahr)"
+                                        >
+                                            {{ displaySchoolYear(jahr) }}
+                                        </button>
+                                        <div v-else class="font-bold text-xs" :class="isBopProject ? bopYearClass(partner, jahr) : 'text-gray-700'" :title="isBopProject ? bopYearTitle(partner, jahr) : ''">{{ displaySchoolYear(jahr) }}</div>
 
                                         <div class="flex gap-1">
                                             <span v-for="teil in getTeile(partner, jahr)" :key="teil" class="text-xs">

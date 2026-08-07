@@ -144,6 +144,42 @@ class BopRunWorkflowTest extends TestCase
         ]))->assertNotFound();
     }
 
+    public function test_historical_school_year_without_plan_suggests_imported_classes_parts_and_counts(): void
+    {
+        $user = User::factory()->create();
+        $project = Projekt::factory()->create(['name' => 'BOP']);
+        $partner = Partner::query()->create(['name' => 'Historische Schule']);
+        $user->projekte()->attach($project->id);
+        $user->update(['current_team_id' => $project->id]);
+        $project->partners()->attach($partner->id);
+        $this->givePermission($user, 'kooperationspartner.index');
+
+        $this->student($partner, '7.1', 'Alpha');
+        $this->student($partner, '7.1', 'Beta');
+        $person = Personen::factory()->create(['typ' => 'teilnehmer', 'aktiv' => true, 'nachname' => 'Gamma']);
+        PersonenIstSchueler::query()->create([
+            'person_id' => $person->id,
+            'klasse' => '8a',
+            'schuljahr' => '2026/2027',
+            'teil' => '2',
+            'schule_id' => $partner->id,
+        ]);
+
+        $this->actingAs($user)->getJson(route('bop.run.show', [
+            'partner' => $partner,
+            'schuljahr' => '2026/2027',
+            'teil' => '_all',
+        ]))->assertOk()
+            ->assertJsonPath('run', null)
+            ->assertJsonPath('suggested_parts', ['1', '2'])
+            ->assertJsonPath('suggested_planned_classes.0.name', '7.1')
+            ->assertJsonPath('suggested_planned_classes.0.expected_participants', 2)
+            ->assertJsonPath('suggested_planned_classes.0.part', '1')
+            ->assertJsonPath('suggested_planned_classes.1.name', '8a')
+            ->assertJsonPath('suggested_planned_classes.1.expected_participants', 1)
+            ->assertJsonPath('suggested_planned_classes.1.part', '2');
+    }
+
     private function student(Partner $partner, string $class, string $lastName): PersonenIstSchueler
     {
         $person = Personen::factory()->create(['typ' => 'teilnehmer', 'aktiv' => true, 'nachname' => $lastName]);

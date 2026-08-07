@@ -93,8 +93,8 @@ function hydrate(data) {
   options.value = data.options || { areas: [], rooms: [], supervisors: [] }
   schoolType.value = data.run?.school_type || data.school_type_suggestion || 'Gemeinschaftsschule'
   status.value = data.run?.status || 'planning'
-  parts.value = [...(data.run?.parts?.length ? data.run.parts : ['1'])].map(String)
-  plannedClasses.value = (data.run?.planned_classes || []).map((item) => ({
+  parts.value = [...(data.run ? (data.run.parts?.length ? data.run.parts : ['1']) : (data.suggested_parts?.length ? data.suggested_parts : ['1']))].map(String)
+  plannedClasses.value = (data.run ? (data.run.planned_classes || []) : (data.suggested_planned_classes || [])).map((item) => ({
     name: String(item.name || ''),
     expected_participants: Number(item.expected_participants || 0),
     part: String(item.part || '1'),
