@@ -146,10 +146,44 @@ function getSchuelerCount(jahr, teil, partner) {
 
 function getSchuljahre(partner) {
     return [...new Set(
-        (partner.schueler ?? [])
-            .map(schueler => schueler.schuljahr)
+        [
+            ...(partner.schueler ?? []).map(schueler => schueler.schuljahr),
+            ...(partner.bop_plans ?? []).map(plan => plan.schuljahr),
+        ]
             .filter(jahr => jahr !== null && jahr !== undefined && jahr !== '')
     )].sort((jahrA, jahrB) => String(jahrB).localeCompare(String(jahrA), 'de', { numeric: true }));
+}
+
+function bopYearStatus(partner, jahr) {
+    return (partner.bop_plans ?? []).find(plan => String(plan.schuljahr) === String(jahr))?.status || null;
+}
+
+function bopYearClass(partner, jahr) {
+    return {
+        planning: 'text-red-600',
+        confirmed: 'text-gray-950',
+        completed: 'text-green-700',
+    }[bopYearStatus(partner, jahr)] || 'text-gray-700';
+}
+
+function bopYearTitle(partner, jahr) {
+    return {
+        planning: 'BOP-Planung: In Planung',
+        confirmed: 'BOP-Planung: Bestätigt',
+        completed: 'BOP-Planung: Abgeschlossen',
+    }[bopYearStatus(partner, jahr)] || 'Noch keine BOP-Planung gespeichert';
+}
+
+function handleBopPlanSaved(payload) {
+    const partner = localPartners.value.find(item => Number(item.id) === Number(modalData.value.partnerId));
+    const run = payload?.run;
+    if (!partner || !run) return;
+    const plans = [...(partner.bop_plans ?? [])];
+    const index = plans.findIndex(plan => String(plan.schuljahr) === String(run.schuljahr));
+    const summary = { id: run.id, partner_id: run.partner_id, schuljahr: run.schuljahr, status: run.status, updated_at: run.updated_at };
+    if (index >= 0) plans[index] = summary;
+    else plans.push(summary);
+    partner.bop_plans = plans;
 }
 
 async function openBopPlannerForSchool(partner) {
@@ -477,7 +511,7 @@ const updatePartnerAPI = async (form) => {
                                 )">
 
                                     <div v-for="jahr in getSchuljahre(partner)" :key="jahr">
-                                        <div class="font-bold text-xs">{{ jahr }}</div>
+                                        <div class="font-bold text-xs" :class="isBopProject ? bopYearClass(partner, jahr) : 'text-gray-700'" :title="isBopProject ? bopYearTitle(partner, jahr) : ''">{{ jahr }}</div>
 
                                         <div class="flex gap-1">
                                             <span v-for="teil in [...new Set(
@@ -721,6 +755,7 @@ const updatePartnerAPI = async (form) => {
             :schuljahr="modalData.jahr"
             :teil="modalData.teil"
             :school-name="modalData.schoolName"
+            @saved="handleBopPlanSaved"
             @close="closeModal"
         />
 

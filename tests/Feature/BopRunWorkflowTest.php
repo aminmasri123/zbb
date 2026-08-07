@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Berechtigungskategorie;
+use App\Models\AppCalendarEvent;
 use App\Models\BopPhaseSchedule;
 use App\Models\BopRun;
 use App\Models\Partner;
@@ -78,6 +79,7 @@ class BopRunWorkflowTest extends TestCase
         $this->assertCount(2, $preparation->participants);
         $this->assertSame(['7.1'], $preparation->participants->pluck('group_key')->unique()->values()->all());
         $this->assertNotNull($preparation->calendar_event_id);
+        $this->assertSame('#6b7280', AppCalendarEvent::findOrFail($preparation->calendar_event_id)->background_color);
 
         $pa = BopPhaseSchedule::where('phase_type', 'pa')->firstOrFail();
         $this->assertSame(2, $pa->days_per_class);

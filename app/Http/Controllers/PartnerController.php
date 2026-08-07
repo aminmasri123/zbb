@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Adresse;
+use App\Models\BopRun;
 use App\Models\Kontakte;
 use App\Models\Kontakttypen;
 use App\Models\Partner;
@@ -102,6 +103,22 @@ class PartnerController extends Controller
         });
     }
 
+    private function attachBopPlanningStatuses($partners, int $projectId): void
+    {
+        $items = $partners->getCollection();
+        $plans = BopRun::query()
+            ->where('projekt_id', $projectId)
+            ->whereIn('partner_id', $items->pluck('id'))
+            ->orderByDesc('updated_at')
+            ->get(['id', 'partner_id', 'schuljahr', 'status', 'updated_at'])
+            ->groupBy('partner_id');
+
+        $items->each(fn (Partner $partner) => $partner->setAttribute(
+            'bop_plans',
+            $plans->get($partner->id, collect())->unique('schuljahr')->values()
+        ));
+    }
+
     public function index(Request $request)
     {
         $kontaktypens = Kontakttypen::all();
@@ -124,6 +141,10 @@ class PartnerController extends Controller
             ->orderBy('partners.id')
 
             ->paginate(20);
+
+        if (str_contains(mb_strtoupper((string) $projektName), 'BOP')) {
+            $this->attachBopPlanningStatuses($partners, $userProjektAktiv);
+        }
 
         return Inertia::render('Partner/Index', [
             'partners' => $partners,
@@ -148,6 +169,11 @@ class PartnerController extends Controller
             ->distinct()
             ->orderBy('partners.id')
             ->paginate(20);
+
+        $projectName = Projekt::whereKey($userProjektAktiv)->value('name');
+        if (str_contains(mb_strtoupper((string) $projectName), 'BOP')) {
+            $this->attachBopPlanningStatuses($partners, $userProjektAktiv);
+        }
 
         return response()->json([
             'partners' => $partners,

@@ -405,6 +405,7 @@ class BopRunController extends Controller
         $materiallyChanged = ! $existingEvent
             || Carbon::parse($existingEvent->starts_at)->toDateTimeString() !== Carbon::parse($nextStart)->toDateTimeString()
             || Carbon::parse($existingEvent->ends_at ?: $existingEvent->starts_at)->toDateTimeString() !== Carbon::parse($nextEnd)->toDateTimeString();
+        $colors = $this->phaseCalendarColors($phase->phase_type);
         $event = AppCalendarEvent::updateOrCreate(
             $eventLookup,
             [
@@ -415,7 +416,7 @@ class BopRunController extends Controller
                 'ends_at' => $nextEnd,
                 'all_day' => false, 'include_weekends' => false, 'excluded_dates' => [],
                 'visibility' => 'project', 'audience' => 'assignees',
-                'background_color' => '#f97316', 'text_color' => '#ffffff',
+                'background_color' => $colors['background'], 'text_color' => $colors['text'],
             ]
         );
         $phase->update(['calendar_event_id' => $event->id]);
@@ -553,5 +554,18 @@ class BopRunController extends Controller
             'pa_feedback' => 'Feedbackgespraech PA', 'roll_day' => 'Rolltag',
             'workshop_days' => 'Werkstatttage', 'wt_feedback' => 'Feedbackgespraech WT',
         ][$type] ?? $type;
+    }
+
+    private function phaseCalendarColors(string $type): array
+    {
+        return match ($type) {
+            'pa_preparation' => ['background' => '#6b7280', 'text' => '#ffffff'],
+            'pa' => ['background' => '#2563eb', 'text' => '#ffffff'],
+            'pa_feedback' => ['background' => '#9333ea', 'text' => '#ffffff'],
+            'roll_day' => ['background' => '#dc2626', 'text' => '#ffffff'],
+            'workshop_days' => ['background' => '#16a34a', 'text' => '#ffffff'],
+            'wt_feedback' => ['background' => '#111827', 'text' => '#ffffff'],
+            default => ['background' => '#f97316', 'text' => '#ffffff'],
+        };
     }
 }
