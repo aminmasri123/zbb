@@ -50,7 +50,7 @@ let isModalCreateOpen = ref(false);
 let isModalEditOpen = ref(false);
 let partnerToEdit = ref(null);
 let activeModal = ref(null);
-let modalData = ref({ jahr: null, teil: null, klasse: null, partnerId: null, schoolName: null, klassen: [], teilnehmerCount: 0 });
+let modalData = ref({ jahr: null, teil: null, klasse: null, partnerId: null, schoolName: null, schoolYears: [], klassen: [], teilnehmerCount: 0 });
 const normalizePartner = (partner) => {
     const ansprechpartners = Object.values(
         (partner.ansprechpartners ?? []).reduce((persons, person) => {
@@ -240,6 +240,26 @@ function handleBopPlanSaved(payload) {
     partner.bop_plans = plans;
 }
 
+async function deleteBopYearPlanning(partner, jahr) {
+    const result = await Swal.fire({
+        title: `Planung ${displaySchoolYear(jahr)} löschen?`,
+        text: `Die BOP-Planung für ${partner.name} wird entfernt. Importierte Teilnehmer und Anwesenheiten bleiben erhalten.`,
+        icon: 'warning', showCancelButton: true,
+        confirmButtonText: 'Planung löschen', cancelButtonText: 'Abbrechen', confirmButtonColor: '#dc2626',
+    });
+    if (!result.isConfirmed) return;
+
+    try {
+        await axios.delete(route('bop.run.reset', { partner: partner.id }), {
+            data: { schuljahr: jahr, teil: '_all', mode: 'full' },
+        });
+        partner.bop_plans = (partner.bop_plans ?? []).filter(plan => String(plan.schuljahr) !== String(jahr));
+        await Swal.fire({ title: 'Planung gelöscht', icon: 'success', confirmButtonText: 'OK' });
+    } catch (error) {
+        await Swal.fire({ title: 'Löschen nicht möglich', text: error.response?.data?.message || 'Die Planung konnte nicht gelöscht werden.', icon: 'error' });
+    }
+}
+
 async function openBopPlannerForSchool(partner) {
     closeDropdowns();
     const now = new Date();
@@ -251,15 +271,16 @@ async function openBopPlannerForSchool(partner) {
         teil: '_all',
         partnerId: partner.id,
         schoolName: partner.name,
+        schoolYears: getSchuljahre(partner),
     });
 }
 
 // -----------------------------
 // Modal-Funktionen
 // -----------------------------
-function openModal(modalName, { jahr = null, teil = null, klasse = null, partnerId = null, schoolName = null, klassen = null, teilnehmerCount = 0 } = {}) {
+function openModal(modalName, { jahr = null, teil = null, klasse = null, partnerId = null, schoolName = null, schoolYears = [], klassen = null, teilnehmerCount = 0 } = {}) {
     activeModal.value = modalName;
-    modalData.value = { jahr, teil, klasse, partnerId, schoolName, klassen, teilnehmerCount };
+    modalData.value = { jahr, teil, klasse, partnerId, schoolName, schoolYears, klassen, teilnehmerCount };
 }
 
 async function openPreparationPaModal({ jahr, teil, partner }) {
@@ -306,7 +327,7 @@ async function openPreparationPaModal({ jahr, teil, partner }) {
 
 function closeModal() {
     activeModal.value = null;
-    modalData.value = { jahr: null, teil: null, klasse: null, partnerId: null, schoolName: null, klassen: [], teilnehmerCount: 0 };
+    modalData.value = { jahr: null, teil: null, klasse: null, partnerId: null, schoolName: null, schoolYears: [], klassen: [], teilnehmerCount: 0 };
 }
 
 const openModalCreate = () => isModalCreateOpen.value = true;
@@ -565,7 +586,10 @@ const updatePartnerAPI = async (form) => {
                                 )">
 
                                     <div v-for="jahr in getSchuljahre(partner)" :key="jahr">
-                                        <div class="font-bold text-xs" :class="isBopProject ? bopYearClass(partner, jahr) : 'text-gray-700'" :title="isBopProject ? bopYearTitle(partner, jahr) : ''">{{ displaySchoolYear(jahr) }}</div>
+                                        <div class="flex items-center gap-1">
+                                            <div class="font-bold text-xs" :class="isBopProject ? bopYearClass(partner, jahr) : 'text-gray-700'" :title="isBopProject ? bopYearTitle(partner, jahr) : ''">{{ displaySchoolYear(jahr) }}</div>
+                                            <button v-if="isBopProject && bopYearStatus(partner, jahr) && can('einteilung.planning')" type="button" class="text-xs font-bold text-red-500 hover:text-red-700" title="BOP-Planung dieses Schuljahres löschen" @click.stop="deleteBopYearPlanning(partner, jahr)">×</button>
+                                        </div>
 
                                         <div class="flex gap-1">
                                             <span v-for="teil in getTeile(partner, jahr)" :key="teil" class="text-xs">
@@ -805,6 +829,7 @@ const updatePartnerAPI = async (form) => {
             :schuljahr="modalData.jahr"
             :teil="modalData.teil"
             :school-name="modalData.schoolName"
+            :school-years="modalData.schoolYears"
             @saved="handleBopPlanSaved"
             @close="closeModal"
         />
