@@ -792,8 +792,7 @@ const uebernehmeAllePaVorschlaege = async () => {
   if (!canEditPotenzialanalyse.value) return
   const teilnehmer = selectedPaTeilnehmer.value
   if (!teilnehmer) return
-  let daten = paVorschlaege.value[String(teilnehmer.id)]
-  if (!daten) daten = await holePaVorschlaege(teilnehmer.id)
+  const daten = await holePaVorschlaege(teilnehmer.id)
   if (!daten) return
 
   let anzahl = 0
@@ -2609,7 +2608,7 @@ const exportMitTag = async () => {
                 </div>
                 <div class="flex gap-2">
                   <Button label="Vorschläge berechnen" icon="pi pi-calculator" size="small" severity="secondary" outlined :loading="paVorschlagLaedt" :disabled="!canEditPotenzialanalyse" @click="holePaVorschlaege(selectedPaTeilnehmer.id)" />
-                  <Button label="Alle übernehmen" icon="pi pi-check" size="small" :loading="paSaving" :disabled="!canEditPotenzialanalyse || paSaving || !paVorschlaege[String(selectedPaTeilnehmer.id)]" @click="uebernehmeAllePaVorschlaege" />
+                  <Button label="Alle berechnen & übernehmen" icon="pi pi-check" size="small" :loading="paVorschlagLaedt || paSaving" :disabled="!canEditPotenzialanalyse || paVorschlagLaedt || paSaving" @click="uebernehmeAllePaVorschlaege" />
                 </div>
               </div>
               <div class="overflow-x-auto">
