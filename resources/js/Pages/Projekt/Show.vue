@@ -1138,16 +1138,9 @@ const addMitarbeiter = (person) => {
                             Beschreibung
                             <textarea v-model="uebung.beschreibung" rows="2" class="mt-1 w-full rounded border-gray-300 text-sm"></textarea>
                         </label>
-                        <details class="mt-3 rounded border border-gray-200 bg-gray-50 p-3">
-                            <summary class="cursor-pointer text-sm font-semibold text-gray-700">Kompetenz-Zuordnung ({{ uebung.kompetenzen.filter((entry) => entry.aktiv).length }})</summary>
-                            <div class="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                                <div v-for="entry in uebung.kompetenzen" :key="`${uebung.id}-${entry.merkmal}`" class="flex items-center gap-2 rounded border bg-white px-3 py-2">
-                                    <input v-model="entry.aktiv" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
-                                    <span class="min-w-0 flex-1 text-sm">{{ entry.label }}</span>
-                                    <input v-model.number="entry.gewichtung" type="number" min="1" max="1000" :disabled="!entry.aktiv" class="w-20 rounded border-gray-300 text-sm disabled:bg-gray-100" title="Gewichtung" />
-                                </div>
-                            </div>
-                        </details>
+                        <div class="mt-3 rounded border border-dashed border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500">
+                            Kompetenzzuordnung gespeichert
+                        </div>
                         <div class="mt-3 flex flex-wrap justify-end gap-2">
                             <button
                                 type="button"
