@@ -494,6 +494,21 @@ class PotenzialanalyseController extends Controller
         Personen $personen,
         Collection $uebungen
     ): void {
+        $gesendeteUebungIds = collect(array_keys($entries))
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $uebungen->has($id))
+            ->values();
+
+        $fehlendeErgebnisse = PotenzialanalyseUebungErgebnis::query()
+            ->where('gruppe_id', $gruppe->id)
+            ->where('personen_id', $personen->id);
+
+        if ($gesendeteUebungIds->isEmpty()) {
+            $fehlendeErgebnisse->delete();
+        } else {
+            $fehlendeErgebnisse->whereNotIn('uebung_id', $gesendeteUebungIds)->delete();
+        }
+
         foreach ($entries as $uebungId => $entry) {
             $uebungId = (int) $uebungId;
             $uebung = $uebungen->get($uebungId);
@@ -554,6 +569,18 @@ class PotenzialanalyseController extends Controller
         Gruppe $gruppe,
         Personen $personen
     ): void {
+        $vorhandeneMerkmale = array_values(array_intersect(array_keys($entries), self::PA_MERKMALE));
+        $fehlendeBewertungen = PotenzialanalyseKompetenzbewertung::query()
+            ->where('gruppe_id', $gruppe->id)
+            ->where('personen_id', $personen->id)
+            ->where('typ', $typ);
+
+        if ($vorhandeneMerkmale === []) {
+            $fehlendeBewertungen->delete();
+        } else {
+            $fehlendeBewertungen->whereNotIn('merkmal', $vorhandeneMerkmale)->delete();
+        }
+
         foreach ($entries as $merkmal => $entry) {
             if (! in_array($merkmal, self::PA_MERKMALE, true)) {
                 continue;
@@ -660,15 +687,42 @@ class PotenzialanalyseController extends Controller
         Collection $kriteriumIds,
         bool $submitted
     ): void {
+        $gesendeteKriteriumIds = collect(array_keys($entries))
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $kriteriumIds->contains($id))
+            ->values();
+
+        $fehlendeBewertungen = $modelClass::query()
+            ->where('gruppe_id', $gruppe->id)
+            ->where('personen_id', $personen->id);
+
+        if ($gesendeteKriteriumIds->isEmpty()) {
+            $fehlendeBewertungen->delete();
+        } else {
+            $fehlendeBewertungen->whereNotIn('kriterium_id', $gesendeteKriteriumIds)->delete();
+        }
+
         foreach ($entries as $kriteriumId => $entry) {
             $kriteriumId = (int) $kriteriumId;
             if (! $kriteriumIds->contains($kriteriumId)) {
                 continue;
             }
 
+            $bewertung = $entry['bewertung'] ?? null;
+            $bemerkung = $entry['bemerkung'] ?? null;
+
+            if (($bewertung === null || $bewertung === '') && blank($bemerkung)) {
+                $modelClass::query()
+                    ->where('gruppe_id', $gruppe->id)
+                    ->where('personen_id', $personen->id)
+                    ->where('kriterium_id', $kriteriumId)
+                    ->delete();
+                continue;
+            }
+
             $payload = [
-                'bewertung' => $entry['bewertung'] ?? null,
-                'bemerkung' => $entry['bemerkung'] ?? null,
+                'bewertung' => $bewertung,
+                'bemerkung' => $bemerkung,
                 'user_id' => auth()->id(),
             ];
 
@@ -690,6 +744,19 @@ class PotenzialanalyseController extends Controller
     private function syncBericht(array $berichtData, Gruppe $gruppe, Personen $personen): void
     {
         $status = $berichtData['status'] ?? 'entwurf';
+        $hatInhalt = collect(['staerken', 'entwicklungsfelder', 'empfehlung', 'bericht_text'])
+            ->contains(fn ($feld) => filled($berichtData[$feld] ?? null))
+            || ! empty($berichtData['generator_snapshot'])
+            || in_array($status, ['in_bearbeitung', 'fertig', 'geprueft'], true);
+
+        if (! $hatInhalt) {
+            PotenzialanalyseBericht::query()
+                ->where('gruppe_id', $gruppe->id)
+                ->where('personen_id', $personen->id)
+                ->delete();
+            return;
+        }
+
         $existing = PotenzialanalyseBericht::query()
             ->where('gruppe_id', $gruppe->id)
             ->where('personen_id', $personen->id)
