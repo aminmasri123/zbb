@@ -1,2 +1,5 @@
 *
 !.gitignore
+!img/
+img/*
+!img/logo-hamet-bop.png

@@ -26,15 +26,12 @@ import { Head, Link } from '@inertiajs/vue3';
                         <p class="mt-1 text-sm text-slate-600">Profil, Kommunikation mit den Betreuenden, Bewerbungen und Lerninhalte in einer Übersicht.</p>
                     </article>
                 </div>
-                <div class="mt-8 grid gap-3 sm:grid-cols-3">
+                <div class="mt-8 grid gap-3 sm:grid-cols-2">
                     <Link :href="route('participant-portal.login')" class="inline-flex items-center justify-center rounded-xl bg-zbb px-5 py-3 text-center font-semibold text-white shadow-sm transition hover:opacity-95">
                         Zum Portal-Login
                     </Link>
                     <a href="/" class="inline-flex items-center justify-center rounded-xl border border-slate-300 px-5 py-3 text-center font-semibold text-slate-700 transition hover:border-slate-400">
                         Zurück zur Startseite
-                    </a>
-                    <a href="/portal/anmelden" class="inline-flex items-center justify-center rounded-xl border border-sky-200 bg-sky-50 px-5 py-3 text-center font-semibold text-sky-700 transition hover:bg-sky-100">
-                        Direkt zum Login
                     </a>
                 </div>
             </section>

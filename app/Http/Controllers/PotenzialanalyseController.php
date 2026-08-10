@@ -19,6 +19,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\HeaderUtils;
 
 class PotenzialanalyseController extends Controller
 {
@@ -262,9 +263,15 @@ class PotenzialanalyseController extends Controller
         $this->ensureProjektUsesPotenzialanalyse($gruppe->projekt);
         $this->ensureTeilnehmerInGroup($gruppe, $personen);
 
+        $filename = $reports->fileName($personen, 'pdf', $gruppe);
+
         return response($reports->renderPdf($gruppe, $personen), 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="' . $reports->fileName($personen) . '"',
+            'Content-Disposition' => HeaderUtils::makeDisposition(
+                HeaderUtils::DISPOSITION_ATTACHMENT,
+                $filename,
+                iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $filename) ?: 'Bericht-PA.pdf'
+            ),
         ]);
     }
 

@@ -139,15 +139,88 @@ class PotenzialanalyseReportService
 
     public function renderPdf(Gruppe $gruppe, Personen $person): string
     {
-        return Pdf::loadView('pdf.potenzialanalyse-bericht', $this->reportData($gruppe, $person))
+        $data = $this->originalBopReportData($gruppe, $person);
+
+        return Pdf::loadView('pdf.berichtPA', $data)
+            ->setOption('isHtml5ParserEnabled', true)
+            ->setOption('isRemoteEnabled', true)
             ->setPaper('a4', 'portrait')
             ->output();
+    }
+
+    private function originalBopReportData(Gruppe $gruppe, Personen $person): array
+    {
+        $gruppe->loadMissing(['projekt', 'bereich', 'partner']);
+        $person->loadMissing('schueler.schule');
+
+        $student = $this->studentContext($gruppe, $person);
+        $school = $student?->schule ?: $gruppe->partner;
+        $ratings = PotenzialanalyseKompetenzbewertung::query()
+            ->where('gruppe_id', $gruppe->id)
+            ->where('personen_id', $person->id)
+            ->get()
+            ->groupBy('typ');
+
+        $coach = ($ratings->get('anleiter') ?? collect())->keyBy('merkmal');
+        $self = ($ratings->get('selbst') ?? collect())->keyBy('merkmal');
+        $fields = collect(self::MERKMALE)->pluck('key');
+
+        $coachValues = $fields
+            ->mapWithKeys(fn (string $field) => [$field => $coach->get($field)?->bewertung])
+            ->all();
+        $selfValues = $fields
+            ->mapWithKeys(fn (string $field) => [$field => $self->get($field)?->bewertung])
+            ->all();
+
+        $exercises = PotenzialanalyseUebungErgebnis::query()
+            ->with('uebung')
+            ->where('gruppe_id', $gruppe->id)
+            ->where('personen_id', $person->id)
+            ->get()
+            ->sortBy([
+                fn ($a, $b) => ((int) ($a->uebung?->tag ?? 0)) <=> ((int) ($b->uebung?->tag ?? 0)),
+                fn ($a, $b) => ((int) ($a->uebung?->sort_order ?? 0)) <=> ((int) ($b->uebung?->sort_order ?? 0)),
+            ])
+            ->map(function ($result) {
+                return (object) [
+                    'name' => $result->uebung?->name ?? '',
+                    'hoechstwert' => $result->uebung?->hoechstwert,
+                    'auswertbar' => $result->uebung?->auswertbar ? '1' : '0',
+                    'pivot' => (object) [
+                        'punkte' => $result->punkte,
+                        'zeit' => (string) ($result->zeit ?? ''),
+                    ],
+                ];
+            })
+            ->values();
+
+        $report = PotenzialanalyseBericht::query()
+            ->where('gruppe_id', $gruppe->id)
+            ->where('personen_id', $person->id)
+            ->first();
+
+        $participant = (object) [
+            'id' => $person->id,
+            'vorname' => $person->vorname ?? '',
+            'nachname' => $person->nachname ?? '',
+            'klasse' => $student?->klasse ?? '',
+            'schule' => (object) ['schule' => $school?->name ?? ''],
+            'auswertungPa' => (object) $coachValues,
+            'selbsteinschaetzung' => (object) $selfValues,
+            'zusammenfassung' => (string) ($report?->bericht_text ?? ''),
+            'uebungen' => $exercises,
+        ];
+
+        return [
+            'beurteilungen' => config('beurteilungen'),
+            'teilnehmer' => $participant,
+        ];
     }
 
     public function writePdf(Gruppe $gruppe, Personen $person, string $directory): string
     {
         File::ensureDirectoryExists($directory);
-        $path = $directory . DIRECTORY_SEPARATOR . $this->fileName($person, 'pdf');
+        $path = $directory . DIRECTORY_SEPARATOR . $this->fileName($person, 'pdf', $gruppe);
         File::put($path, $this->renderPdf($gruppe, $person));
 
         return $path;
@@ -247,18 +320,24 @@ class PotenzialanalyseReportService
                     return null;
                 }
 
-                return ['gruppe' => $group, 'person' => $student->person];
+                return ['gruppe' => $group, 'person' => $student->person, 'student' => $student];
             })
             ->filter()
             ->sortBy(fn (array $item) => mb_strtolower(($item['person']->nachname ?? '') . ' ' . ($item['person']->vorname ?? '')))
             ->values();
     }
 
-    public function fileName(Personen $person, string $extension = 'pdf'): string
+    public function fileName(Personen $person, string $extension = 'pdf', ?Gruppe $gruppe = null): string
     {
-        $name = trim(($person->nachname ?? '') . '_' . ($person->vorname ?? ''));
+        if ($gruppe) {
+            $person->loadMissing('schueler.schule');
+        }
 
-        return $this->safeName('PA_Bericht_' . ($name ?: 'Teilnehmer') . '_' . $person->id) . '.' . $extension;
+        $student = $gruppe ? $this->studentContext($gruppe, $person) : null;
+        $name = trim(($person->nachname ?? '') . ' ' . ($person->vorname ?? ''));
+        $class = trim((string) ($student?->klasse ?? ''));
+
+        return trim('Bericht PA - ' . ($name ?: 'Teilnehmer') . ' ' . $class) . '.' . $extension;
     }
 
     private function studentContext(Gruppe $gruppe, Personen $person): ?PersonenIstSchueler

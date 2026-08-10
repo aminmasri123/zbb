@@ -2,69 +2,80 @@
 
 namespace Tests\Feature;
 
-use App\Models\Gruppe;
-use App\Models\Partner;
-use App\Models\Personen;
-use App\Models\PersonenIstSchueler;
-use App\Models\PotenzialanalyseBericht;
 use App\Support\RoutePermissionMap;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class PotenzialanalyseReportExportTest extends TestCase
 {
-    public function test_pa_report_pdf_can_be_rendered_with_the_complete_report_payload(): void
+    public function test_pa_report_uses_the_unchanged_original_bop_sources(): void
     {
-        $person = new Personen([
-            'id' => 42,
+        $this->assertSame(
+            '93bbe8777936934b24d9eaaa8f4d2e8d6d0a5dcd814001ba98b6d10554e90443',
+            hash_file('sha256', resource_path('views/pdf/berichtPA.blade.php'))
+        );
+        $this->assertSame(
+            'fb73d15b9efd482f3c85975f976708c3bf1ea0ba618bd93984577ae806d39d99',
+            hash_file('sha256', config_path('beurteilungen.php'))
+        );
+        $this->assertSame(
+            '52385fe29d95bd73ff7015626f8902011cb6a29fae0ad84db53aed59b3f38c8e',
+            hash_file('sha256', storage_path('app/public/img/logo-hamet-bop.png'))
+        );
+        $this->assertSame(
+            'd17547962849aa7081d3f5dc5b74c511070a3031241e1c2f69b28ce3ab43fc2b',
+            hash_file('sha256', public_path('css/bootstrap.min.css'))
+        );
+    }
+
+    public function test_original_bop_pa_report_renders_as_four_page_pdf(): void
+    {
+        $fields = [
+            'feinmotorik',
+            'grobmotorik',
+            'wahrnehmung_symmetrie',
+            'analyse_problemloesefaehigkeit',
+            'arbeitsplanung',
+            'motivation_leistungsbereitschaft',
+            'durchhaltevermoegen',
+            'sorgfalt',
+            'kommunikation',
+            'teamfaehigkeit',
+            'umgangsformen',
+        ];
+        $ratings = array_fill_keys($fields, 4);
+        $participant = (object) [
             'vorname' => 'Mia',
             'nachname' => 'Beispiel',
-            'geburtsdatum' => '2012-03-04',
-        ]);
-        $person->id = 42;
-
-        $school = new Partner(['name' => 'GemS Beispiel']);
-        $student = new PersonenIstSchueler(['klasse' => '7.1']);
-        $report = new PotenzialanalyseBericht([
-            'status' => 'fertig',
-            'staerken' => 'Teamfähigkeit',
-            'entwicklungsfelder' => 'Arbeitsplanung',
-            'empfehlung' => 'Weitere praktische Erprobung.',
-            'bericht_text' => 'Mia hat engagiert an der Potenzialanalyse teilgenommen.',
-        ]);
-        $report->updated_at = Carbon::parse('2026-08-10');
-
-        $pdf = Pdf::loadView('pdf.potenzialanalyse-bericht', [
-            'person' => $person,
-            'gruppe' => new Gruppe(),
-            'student' => $student,
-            'school' => $school,
-            'merkmale' => collect([
-                'Soziale Kompetenzen' => collect([[
-                    'label' => 'Teamfähigkeit',
-                    'selbst' => 4,
-                    'anleiter' => 5,
-                    'selbst_bemerkung' => null,
-                    'anleiter_bemerkung' => 'Arbeitet konstruktiv mit.',
-                ]]),
+            'klasse' => '7.1',
+            'schule' => (object) ['schule' => 'GemS Beispiel'],
+            'auswertungPa' => (object) $ratings,
+            'selbsteinschaetzung' => (object) $ratings,
+            'zusammenfassung' => 'Mia hat engagiert an der Potenzialanalyse teilgenommen.',
+            'uebungen' => collect([
+                (object) [
+                    'name' => 'Hammerwerk',
+                    'hoechstwert' => 20,
+                    'auswertbar' => '1',
+                    'pivot' => (object) ['punkte' => 18, 'zeit' => '542'],
+                ],
             ]),
-            'uebungen' => collect([[
-                'name' => 'Hammerwerk',
-                'tag' => 1,
-                'punkte' => 18,
-                'hoechstwert' => 20,
-                'zeit' => '12:30 min',
-            ]]),
-            'kriterien' => collect(),
-            'bericht' => $report,
-            'statusLabel' => 'Fertig',
-            'zeitraum' => '08.06.2026 – 09.06.2026',
-            'erstelltAm' => '10.08.2026',
-        ])->setPaper('a4')->output();
+        ];
 
-        $this->assertStringStartsWith('%PDF-', $pdf);
-        $this->assertGreaterThan(1000, strlen($pdf));
+        $pdf = Pdf::loadView('pdf.berichtPA', [
+            'beurteilungen' => config('beurteilungen'),
+            'teilnehmer' => $participant,
+        ])
+            ->setOption('isHtml5ParserEnabled', true)
+            ->setOption('isRemoteEnabled', true)
+            ->setPaper('a4', 'portrait');
+
+        $pdf->render();
+        $output = $pdf->output();
+
+        $this->assertStringStartsWith('%PDF-', $output);
+        $this->assertGreaterThan(1000, strlen($output));
+        $this->assertSame(4, $pdf->getDomPDF()->getCanvas()->get_page_count());
     }
 
     public function test_pa_report_routes_use_the_existing_pa_export_permission(): void

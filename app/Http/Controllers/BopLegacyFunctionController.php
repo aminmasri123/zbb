@@ -56,6 +56,13 @@ class BopLegacyFunctionController extends Controller
         return preg_replace('/[^A-Za-z0-9_\-\.]+/', '_', trim($value));
     }
 
+    private function safeFolderSegment(string $value): string
+    {
+        $value = preg_replace('/[<>:"\/\\\\|?*\x00-\x1F]/u', '_', trim($value));
+
+        return trim((string) $value, ". \t\n\r\0\x0B") ?: 'Unbekannt';
+    }
+
     private function baseFolder(int $schuleId, string $schuljahr, string $teil): string
     {
         $partner = $this->partner($schuleId);
@@ -540,11 +547,20 @@ class BopLegacyFunctionController extends Controller
             return back()->with('error', 'Für diese Schule wurden noch keine PA-Daten gespeichert.');
         }
 
-        $folder = $this->baseFolder($schulId, $schuljahr, $teil) . DIRECTORY_SEPARATOR . 'Auswertung_PA';
-        File::ensureDirectoryExists($folder);
+        $folder = storage_path(
+            'app/public/files/Schulen/'
+            . $this->safeFolderSegment($partner->name)
+            . '/' . $this->safeFolderSegment($schuljahr)
+        );
 
         foreach ($assignments as $assignment) {
-            $reports->writePdf($assignment['gruppe'], $assignment['person'], $folder);
+            $class = $this->safeFolderSegment((string) ($assignment['student']?->klasse ?? 'ohne Klasse'));
+            $participant = $this->safeFolderSegment(trim(
+                ($assignment['person']->nachname ?? '') . ' ' . ($assignment['person']->vorname ?? '')
+            ));
+            $participantFolder = $folder . DIRECTORY_SEPARATOR . $class . DIRECTORY_SEPARATOR . $participant;
+
+            $reports->writePdf($assignment['gruppe'], $assignment['person'], $participantFolder);
         }
 
         return back()->with(
