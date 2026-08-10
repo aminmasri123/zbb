@@ -6,20 +6,6 @@
     <link rel="stylesheet" href="{{asset('css/bootstrap.min.css')}}">
     <title>Abschlussbericht PA</title>
     <style>
-        @page {
-            size: A4 portrait;
-            margin: 8mm 8mm 10mm 8mm;
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        html, body {
-            width: 100%;
-            min-width: 0;
-        }
-
         body {
             font-family: Arial, sans-serif;
             font-size: 10pt;
@@ -42,7 +28,6 @@
         }
         .table {
             width: 100%;
-            table-layout: fixed;
             border-collapse: collapse;
             font-size: 9.5pt;
         }
