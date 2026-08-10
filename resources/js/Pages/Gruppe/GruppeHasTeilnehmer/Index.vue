@@ -755,6 +755,7 @@ const holePaVorschlaege = async (personenId = null) => {
   if (!teilnehmerId) return null
 
   const snapshot = paEintragSnapshot(teilnehmerId)
+  const variation = Number(snapshot.bericht?.generator_snapshot?.variation || 0) + 1
   paVorschlagLaedt.value = true
   try {
     const response = await axios.post(
@@ -765,6 +766,7 @@ const holePaVorschlaege = async (personenId = null) => {
         kompetenzen: snapshot.kompetenzen,
         bericht: snapshot.bericht,
         style: snapshot.bericht?.generator_stil || props.potenzialanalyse?.auswertung_config?.report_style || 'staerkenorientiert',
+        variation,
       },
     )
     paVorschlaege.value[String(teilnehmerId)] = response.data
@@ -1389,6 +1391,7 @@ const generierePaBerichtstext = async () => {
   eintrag.bericht.generator_stil = daten.report.style
   eintrag.bericht.generator_snapshot = {
     generated_at: new Date().toISOString(),
+    variation: daten.report.variation,
     exercise_scores: daten.exercise_scores,
     combined_scores: daten.combined_scores,
   }

@@ -193,6 +193,7 @@ class PotenzialanalyseScoringService
         array $self,
         array $reportFields,
         string $style = 'staerkenorientiert',
+        int $variation = 0,
     ): array {
         $style = collect(self::REPORT_STYLES)->pluck('value')->contains($style) ? $style : 'staerkenorientiert';
         $rated = collect($combinedScores)->filter(fn (array $item) => $item['rating'] !== null);
@@ -204,7 +205,12 @@ class PotenzialanalyseScoringService
         $manualRecommendation = trim((string) ($reportFields['empfehlung'] ?? ''));
 
         $firstName = trim((string) data_get($participant, 'vorname', ''));
-        $greeting = $firstName !== '' ? 'Hallo ' . $firstName . ',' : 'Hallo,';
+        $gender = Str::lower(trim((string) data_get($participant, 'geschlecht', '')));
+        $greeting = match ($gender) {
+            'w', 'weiblich', 'frau', 'f', 'female' => 'Liebe ' . ($firstName !== '' ? $firstName : 'Teilnehmerin') . ',',
+            'm', 'männlich', 'maennlich', 'mann', 'herr', 'male' => 'Lieber ' . ($firstName !== '' ? $firstName : 'Teilnehmer') . ',',
+            default => $firstName !== '' ? 'Hallo ' . $firstName . ',' : 'Hallo,',
+        };
         $focus = $strengths->first() ?? $solid->first() ?? $rated->first();
         $focusLabel = (string) ($focus['label'] ?? 'deinen persönlichen Fähigkeiten');
         $focusKey = (string) ($focus['key'] ?? '');
@@ -217,39 +223,120 @@ class PotenzialanalyseScoringService
             $manualRecommendation,
         ]);
         $seed = (int) sprintf('%u', crc32($seedSource));
-
-        $introductions = [
-            'Bei der Potenzialanalyse hast du besonders mit deiner %s überzeugt.',
-            'Deine Ergebnisse zeigen, dass %s zu deinen besonderen Stärken gehört.',
-            'In der Potenzialanalyse wurde deine Stärke im Bereich %s deutlich.',
-            'Besonders positiv fällt deine %s auf.',
-            'Du bringst im Bereich %s bereits eine überzeugende Stärke mit.',
-            'Deine ausgeprägte %s ist eine wertvolle Fähigkeit für deinen weiteren Weg.',
-        ];
-        $sentences = [sprintf($introductions[$seed % count($introductions)], $focusLabel)];
+        $variation = $variation > 0 ? $variation : random_int(1, PHP_INT_MAX);
+        $variantSeed = $seed + $variation;
 
         $competencySentences = [
-            'feinmotorik' => 'Du arbeitest bei feinmotorischen Anforderungen kontrolliert und geschickt.',
-            'grobmotorik' => 'Du setzt Bewegungsabläufe sicher und zielgerichtet um.',
-            'wahrnehmung_symmetrie' => 'Du erkennst Formen und Zusammenhänge aufmerksam und setzt sie passend um.',
-            'analyse_problemloesefaehigkeit' => 'Du erfasst Aufgabenstellungen aufmerksam und findest passende Lösungswege.',
-            'arbeitsplanung' => 'Du gehst Aufgaben strukturiert an und behältst dein Ziel im Blick.',
-            'motivation_leistungsbereitschaft' => 'Du bringst dich engagiert ein und arbeitest mit spürbarer Einsatzbereitschaft.',
-            'durchhaltevermoegen' => 'Du bleibst auch bei anspruchsvollen Aufgaben konzentriert und ausdauernd.',
-            'sorgfalt' => 'Du arbeitest gewissenhaft und achtest zuverlässig auf wichtige Einzelheiten.',
-            'kommunikation' => 'Du bringst deine Gedanken verständlich ein und gehst aufmerksam auf andere ein.',
-            'teamfaehigkeit' => 'Du arbeitest verlässlich mit anderen zusammen und trägst zu einem guten Miteinander bei.',
-            'umgangsformen' => 'Du begegnest anderen respektvoll und trittst freundlich sowie angemessen auf.',
+            'feinmotorik' => [
+                'du hast feinmotorische Aufgaben geschickt und kontrolliert bearbeitet.',
+                'du hast bei feinmotorischen Anforderungen eine sichere und ruhige Arbeitsweise gezeigt.',
+                'du konntest deine Hände gezielt einsetzen und hast feinmotorische Aufgaben sorgfältig ausgeführt.',
+                'du hast bei handwerklichen Feinaufgaben Geschick und eine gute Kontrolle bewiesen.',
+                'du bist feinmotorische Aufgaben konzentriert und mit einer sicheren Hand angegangen.',
+                'du verfügst über ein gutes feinmotorisches Geschick und setzt dieses aufmerksam ein.',
+            ],
+            'grobmotorik' => [
+                'du hast Bewegungsabläufe sicher und zielgerichtet umgesetzt.',
+                'du konntest körperliche Bewegungen gut koordinieren und kontrolliert ausführen.',
+                'du hast bei praktischen Aufgaben eine gute Bewegungskoordination gezeigt.',
+                'du bist körperlich-praktische Anforderungen sicher und geschickt angegangen.',
+                'du hast deine Bewegungen passend gesteuert und Aufgaben körperlich sicher umgesetzt.',
+                'du bringst eine gute grobmotorische Sicherheit für praktische Tätigkeiten mit.',
+            ],
+            'wahrnehmung_symmetrie' => [
+                'du hast Formen und Zusammenhänge aufmerksam erkannt und passend umgesetzt.',
+                'du besitzt eine gute Wahrnehmung und konntest räumliche sowie symmetrische Strukturen sicher erfassen.',
+                'du hast genau hingesehen und Formen, Abstände und Zusammenhänge zuverlässig erkannt.',
+                'du konntest visuelle Informationen aufmerksam aufnehmen und richtig übertragen.',
+                'du hast bei Aufgaben zur Wahrnehmung ein gutes Auge für Formen und Einzelheiten gezeigt.',
+                'du erkennst räumliche Zusammenhänge gut und setzt deine Beobachtungen passend um.',
+            ],
+            'analyse_problemloesefaehigkeit' => [
+                'du hast Aufgabenstellungen aufmerksam erfasst und passende Lösungswege gefunden.',
+                'du konntest Probleme gut analysieren und bist überlegt zu einer Lösung gekommen.',
+                'du hast Zusammenhänge schnell erkannt und sinnvolle Entscheidungen getroffen.',
+                'du bist schwierige Aufgaben überlegt angegangen und hast eigenständig Lösungen entwickelt.',
+                'du hast Informationen gut ausgewertet und daraus passende Schritte abgeleitet.',
+                'du zeigst ein gutes Gespür dafür, Probleme zu verstehen und zielgerichtet zu lösen.',
+            ],
+            'arbeitsplanung' => [
+                'du bist Aufgaben strukturiert angegangen und hast dein Ziel im Blick behalten.',
+                'du hast deine Arbeitsschritte sinnvoll geplant und zuverlässig umgesetzt.',
+                'du konntest Aufgaben gut ordnen und bist planvoll vorgegangen.',
+                'du hast vorausschauend gearbeitet und deine einzelnen Schritte passend aufeinander abgestimmt.',
+                'du bist organisiert vorgegangen und hast deine Aufgaben zielgerichtet bearbeitet.',
+                'du hast gezeigt, dass du Arbeitsabläufe gut planen und selbstständig umsetzen kannst.',
+            ],
+            'motivation_leistungsbereitschaft' => [
+                'du hast eine gute Motivation und Leistungsbereitschaft gezeigt.',
+                'du warst leistungsbereit und zielstrebig und wolltest deine Aufgaben gut erledigen.',
+                'du bist deine Aufgaben motiviert angegangen und hast dich engagiert eingebracht.',
+                'du hast konzentriert gearbeitet und dabei eine hohe Einsatzbereitschaft gezeigt.',
+                'du warst aufmerksam bei der Sache und hast dich mit viel Motivation eingesetzt.',
+                'du hast deine Aufgaben mit Interesse, Energie und erkennbarem Leistungswillen bearbeitet.',
+            ],
+            'durchhaltevermoegen' => [
+                'du hast auch bei anspruchsvollen Aufgaben konzentriert weitergearbeitet und nicht aufgegeben.',
+                'du warst ausdauernd und hast deine Aufgaben konsequent zu Ende gebracht.',
+                'du hast dich auch bei längeren Aufgaben nicht entmutigen lassen und bist am Ball geblieben.',
+                'du hast Geduld und Ausdauer gezeigt und dein Ziel zuverlässig verfolgt.',
+                'du bist auch bei Schwierigkeiten konzentriert geblieben und hast dich weiter angestrengt.',
+                'du hast Aufgaben beharrlich bearbeitet und dabei ein gutes Durchhaltevermögen bewiesen.',
+            ],
+            'sorgfalt' => [
+                'du hast gewissenhaft gearbeitet und zuverlässig auf wichtige Einzelheiten geachtet.',
+                'du bist bei deinen Aufgaben genau vorgegangen und hast sorgfältig gearbeitet.',
+                'du hast Wert auf ein ordentliches Ergebnis gelegt und deine Arbeit aufmerksam ausgeführt.',
+                'du konntest konzentriert und präzise arbeiten und hast Details gut berücksichtigt.',
+                'du hast deine Aufgaben verlässlich geprüft und mit großer Sorgfalt abgeschlossen.',
+                'du arbeitest genau und möchtest deine Sache erkennbar gut machen.',
+            ],
+            'kommunikation' => [
+                'du hast deine Gedanken verständlich eingebracht und anderen aufmerksam zugehört.',
+                'du konntest dich klar ausdrücken und bist gut auf dein Gegenüber eingegangen.',
+                'du hast offen kommuniziert und wichtige Informationen verständlich weitergegeben.',
+                'du hast dich angemessen ausgedrückt und Gespräche aufmerksam mitgestaltet.',
+                'du konntest deine Meinung verständlich vertreten und hast andere ausreden lassen.',
+                'du hast im Austausch mit anderen freundlich und verständlich kommuniziert.',
+            ],
+            'teamfaehigkeit' => [
+                'du hast verlässlich mit anderen zusammengearbeitet und dein Team gut unterstützt.',
+                'du warst ein hilfsbereites Teammitglied und hast dich gut in die Gruppe eingebracht.',
+                'du konntest gemeinsam mit anderen zielgerichtet arbeiten und Absprachen einhalten.',
+                'du hast kooperativ gearbeitet und zu einem guten Ergebnis der Gruppe beigetragen.',
+                'du bist auf andere eingegangen und hast gemeinsame Aufgaben verantwortungsvoll mitgetragen.',
+                'du hast Teamgeist gezeigt und andere bei der gemeinsamen Arbeit unterstützt.',
+            ],
+            'umgangsformen' => [
+                'du bist anderen respektvoll begegnet und freundlich sowie angemessen aufgetreten.',
+                'du hast dich höflich und rücksichtsvoll verhalten und bist wertschätzend mit anderen umgegangen.',
+                'du bist deinem Gegenüber freundlich begegnet und hast gute Umgangsformen gezeigt.',
+                'du hast dich respektvoll in die Gruppe eingebracht und bist anderen aufmerksam begegnet.',
+                'du warst höflich, verlässlich und hast zu einer angenehmen Zusammenarbeit beigetragen.',
+                'du hast im Kontakt mit anderen ein freundliches und angemessenes Auftreten gezeigt.',
+            ],
         ];
-        if (isset($competencySentences[$focusKey])) {
-            $sentences[] = $competencySentences[$focusKey];
-        }
+        $focusVariants = $competencySentences[$focusKey] ?? [
+            'du hast in der Potenzialanalyse persönliche Stärken gezeigt, die dir auf deinem weiteren Weg helfen können.',
+            'du hast dich während der Potenzialanalyse engagiert eingebracht und wertvolle Fähigkeiten gezeigt.',
+            'du hast bei der Potenzialanalyse gute persönliche Voraussetzungen erkennen lassen.',
+        ];
+        $sentences = [$focusVariants[$variantSeed % count($focusVariants)]];
 
         if ($manualStrengths !== '') {
             preg_match_all('/\p{L}+/u', $manualStrengths, $words);
-            $sentences[] = count($words[0] ?? []) >= 5
-                ? $this->sentence($manualStrengths)
-                : 'Zusätzlich gehört ' . rtrim($manualStrengths, '.!?') . ' zu deinen persönlichen Stärken.';
+            if (count($words[0] ?? []) >= 5) {
+                $sentences[] = $this->sentence($manualStrengths);
+            } else {
+                $manualLabel = rtrim($manualStrengths, '.!?');
+                $manualVariants = [
+                    'Auch ' . $manualLabel . ' gehört zu deinen persönlichen Stärken.',
+                    'Darüber hinaus zählt ' . $manualLabel . ' zu deinen guten Fähigkeiten.',
+                    'Eine weitere erkennbare Stärke von dir ist ' . $manualLabel . '.',
+                    'Zusätzlich bringst du im Bereich ' . $manualLabel . ' gute Voraussetzungen mit.',
+                ];
+                $sentences[] = $manualVariants[intdiv($variantSeed, 6) % count($manualVariants)];
+            }
         } else {
             $additionalLabels = $strengths
                 ->pluck('label')
@@ -269,12 +356,12 @@ class PotenzialanalyseScoringService
         })->pluck('label')->take(3)->all();
         if ($agreements !== []) {
             $agreementVariants = [
-                'Deine eigene Einschätzung stimmt dabei gut mit den Beobachtungen überein.',
-                'Du schätzt deine Fähigkeiten in diesen Bereichen bereits sehr passend ein.',
-                'Deine Selbsteinschätzung und die Beobachtungen ergeben ein stimmiges Gesamtbild.',
-                'Auch deine eigene Einschätzung bestätigt dieses positive Bild.',
+                'Deine eigene Einschätzung passt gut zu den Fähigkeiten, die du gezeigt hast.',
+                'Du kennst deine persönlichen Stärken bereits gut und kannst darauf aufbauen.',
+                'Deine Einschätzung deiner Fähigkeiten ergibt ein stimmiges Gesamtbild.',
+                'Auch du selbst hast diese Fähigkeiten als persönliche Stärken erkannt.',
             ];
-            $sentences[] = $agreementVariants[intdiv($seed, 7) % count($agreementVariants)];
+            $sentences[] = $agreementVariants[intdiv($variantSeed, 24) % count($agreementVariants)];
         }
 
         if ($manualRecommendation !== '') {
@@ -286,22 +373,34 @@ class PotenzialanalyseScoringService
                 'Deine Stärken können dir bei zukünftigen schulischen und beruflichen Aufgaben helfen.',
                 'Auf diese Fähigkeiten kannst du bei deiner weiteren beruflichen Orientierung gut aufbauen.',
                 'Bewahre dir diese Stärken und setze sie auf deinem weiteren Weg selbstbewusst ein.',
+                'Diese Eigenschaften werden dir in der Schule und im zukünftigen Berufsleben nützlich sein.',
+                'Damit besitzt du Fähigkeiten, die dich auf deinem schulischen und beruflichen Weg unterstützen.',
+                'Diese Eigenschaften sind für deinen weiteren Schul- und Berufsweg besonders wertvoll.',
             ];
-            $sentences[] = $closingVariants[intdiv($seed, 29) % count($closingVariants)];
+            $sentences[] = $closingVariants[intdiv($variantSeed, 96) % count($closingVariants)];
         }
 
-        $wish = 'Wir wünschen dir viel Erfolg für deine Zukunft.';
-        $text = $greeting;
+        $wishVariants = [
+            'Wir wünschen dir alles Gute für deine Zukunft.',
+            'Für deinen weiteren Berufsweg wünschen wir dir alles Gute und viel Erfolg.',
+            'Wir wünschen dir für deine weitere Zukunft alles Gute und viel Erfolg.',
+            'Für deine berufliche Zukunft wünschen wir dir viel Erfolg und alles Gute.',
+            'Wir wünschen dir auf deinem weiteren Schul- und Berufsweg alles Gute.',
+            'Für deinen weiteren Weg wünschen wir dir viel Erfolg und alles Gute.',
+        ];
+        $wish = $wishVariants[intdiv($variantSeed, 768) % count($wishVariants)];
+        $body = '';
         foreach (array_values(array_filter($sentences)) as $sentence) {
-            $candidate = $text . "\n\n" . $sentence;
-            if (mb_strlen($candidate . "\n\n" . $wish) <= 500) {
-                $text = $candidate;
+            $candidate = trim($body . ' ' . $sentence);
+            if (mb_strlen($greeting . "\n\n" . $candidate . "\n\n" . $wish) <= 500) {
+                $body = $candidate;
             }
         }
 
         return [
-            'text' => trim($text) . "\n\n" . $wish,
+            'text' => $greeting . "\n\n" . $body . "\n\n" . $wish,
             'style' => $style,
+            'variation' => $variation,
             'strengths' => $strengths->pluck('label')->values()->all(),
             'development_steps' => $developing->pluck('label')->values()->all(),
             'scores' => $combinedScores,

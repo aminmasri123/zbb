@@ -118,21 +118,36 @@ class PotenzialanalyseScoringServiceTest extends TestCase
             ->all();
         $exerciseScores['teamfaehigkeit']['contributions'] = [['exercise' => 'Teamaufgabe', 'percentage' => 90]];
 
+        $participant = ['vorname' => 'Mina', 'geschlecht' => 'w'];
+        $reportFields = ['staerken' => 'Mina arbeitet verlässlich mit anderen zusammen', 'empfehlung' => 'Diese Stärke sollte weiter genutzt werden'];
         $report = $this->service->generateReport(
-            ['vorname' => 'Mina'],
+            $participant,
             $combined,
             $exerciseScores,
             ['teamfaehigkeit' => ['bewertung' => 5]],
             ['teamfaehigkeit' => ['bewertung' => 4]],
-            ['staerken' => 'Mina arbeitet verlässlich mit anderen zusammen', 'empfehlung' => 'Diese Stärke sollte weiter genutzt werden'],
+            $reportFields,
+            'staerkenorientiert',
+            1,
         );
 
-        $this->assertStringStartsWith("Hallo Mina,\n\n", $report['text']);
-        $this->assertStringContainsString('Teamfähigkeit', $report['text']);
+        $secondReport = $this->service->generateReport(
+            $participant,
+            $combined,
+            $exerciseScores,
+            ['teamfaehigkeit' => ['bewertung' => 5]],
+            ['teamfaehigkeit' => ['bewertung' => 4]],
+            $reportFields,
+            'staerkenorientiert',
+            2,
+        );
+
+        $this->assertStringStartsWith("Liebe Mina,\n\ndu", $report['text']);
         $this->assertStringContainsString('Diese Stärke sollte weiter genutzt werden', $report['text']);
         $this->assertStringNotContainsString('Teamaufgabe', $report['text']);
         $this->assertStringNotContainsString('weiter stärken', $report['text']);
         $this->assertStringNotContainsString('...', $report['text']);
         $this->assertLessThanOrEqual(500, mb_strlen($report['text']));
+        $this->assertNotSame($report['text'], $secondReport['text']);
     }
 }

@@ -206,6 +206,7 @@ class PotenzialanalyseController extends Controller
             'bericht.entwicklungsfelder' => ['nullable', 'string'],
             'bericht.empfehlung' => ['nullable', 'string'],
             'style' => ['nullable', Rule::in(collect(PotenzialanalyseScoringService::REPORT_STYLES)->pluck('value')->all())],
+            'variation' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $config = $this->scoring->normalizeConfig($gruppe->projekt->potenzialanalyse_auswertung_config);
@@ -230,6 +231,7 @@ class PotenzialanalyseController extends Controller
             $validated['selbsteinschaetzung'] ?? [],
             $validated['bericht'] ?? [],
             $style,
+            (int) ($validated['variation'] ?? 0),
         );
 
         return response()->json([
