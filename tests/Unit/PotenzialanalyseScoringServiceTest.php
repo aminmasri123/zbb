@@ -110,6 +110,8 @@ class PotenzialanalyseScoringServiceTest extends TestCase
             ->all();
         $combined['teamfaehigkeit']['percentage'] = 90;
         $combined['teamfaehigkeit']['rating'] = 5;
+        $combined['arbeitsplanung']['percentage'] = 10;
+        $combined['arbeitsplanung']['rating'] = 1;
 
         $exerciseScores = collect(PotenzialanalyseScoringService::COMPETENCIES)
             ->mapWithKeys(fn (array $item) => [$item['key'] => $item + ['contributions' => []]])
@@ -125,9 +127,12 @@ class PotenzialanalyseScoringServiceTest extends TestCase
             ['staerken' => 'Mina arbeitet verlässlich mit anderen zusammen', 'empfehlung' => 'Diese Stärke sollte weiter genutzt werden'],
         );
 
+        $this->assertStringStartsWith("Hallo Mina,\n\n", $report['text']);
         $this->assertStringContainsString('Teamfähigkeit', $report['text']);
-        $this->assertStringContainsString('Teamaufgabe', $report['text']);
-        $this->assertStringContainsString('Selbsteinschätzung', $report['text']);
         $this->assertStringContainsString('Diese Stärke sollte weiter genutzt werden', $report['text']);
+        $this->assertStringNotContainsString('Teamaufgabe', $report['text']);
+        $this->assertStringNotContainsString('weiter stärken', $report['text']);
+        $this->assertStringNotContainsString('...', $report['text']);
+        $this->assertLessThanOrEqual(500, mb_strlen($report['text']));
     }
 }

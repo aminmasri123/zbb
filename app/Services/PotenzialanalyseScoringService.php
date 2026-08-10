@@ -201,35 +201,65 @@ class PotenzialanalyseScoringService
         $solid = $rated->filter(fn (array $item) => $item['rating'] === 3)->sortByDesc('percentage')->values();
 
         $manualStrengths = trim((string) ($reportFields['staerken'] ?? ''));
-        $manualDevelopment = trim((string) ($reportFields['entwicklungsfelder'] ?? ''));
         $manualRecommendation = trim((string) ($reportFields['empfehlung'] ?? ''));
 
-        $strengthLabels = $strengths->pluck('label')->take($style === 'kompakt' ? 1 : 2)->all();
-        $solidLabels = $solid->pluck('label')->take(2)->all();
-        $focusLabel = $strengthLabels[0] ?? $solidLabels[0] ?? ($rated->first()['label'] ?? 'deinen Aufgaben');
+        $firstName = trim((string) data_get($participant, 'vorname', ''));
+        $greeting = $firstName !== '' ? 'Hallo ' . $firstName . ',' : 'Hallo,';
+        $focus = $strengths->first() ?? $solid->first() ?? $rated->first();
+        $focusLabel = (string) ($focus['label'] ?? 'deinen persönlichen Fähigkeiten');
+        $focusKey = (string) ($focus['key'] ?? '');
 
-        $sentences = ['du zeigst besonders in ' . $focusLabel . ' eine starke Grundlage.'];
+        $seedSource = implode('|', [
+            (string) data_get($participant, 'id', ''),
+            $firstName,
+            json_encode($rated->pluck('percentage', 'key')->all()),
+            $manualStrengths,
+            $manualRecommendation,
+        ]);
+        $seed = (int) sprintf('%u', crc32($seedSource));
 
-        if ($manualStrengths !== '') {
-            $sentences[] = $this->sentence($manualStrengths);
-        } elseif ($strengthLabels !== []) {
-            $sentences[] = 'Diese Stärke hast du in der Potenzialanalyse zuverlässig gezeigt.';
-        } elseif ($solidLabels !== []) {
-            $sentences[] = 'Weitere gute Ansätze zeigen sich in ' . $this->joinWords($solidLabels) . '.';
-        } else {
-            $sentences[] = 'Die Potenzialanalyse zeigt wertvolle Ansätze, an die du bei deinen nächsten Lernschritten anknüpfen kannst.';
+        $introductions = [
+            'Bei der Potenzialanalyse hast du besonders mit deiner %s überzeugt.',
+            'Deine Ergebnisse zeigen, dass %s zu deinen besonderen Stärken gehört.',
+            'In der Potenzialanalyse wurde deine Stärke im Bereich %s deutlich.',
+            'Besonders positiv fällt deine %s auf.',
+            'Du bringst im Bereich %s bereits eine überzeugende Stärke mit.',
+            'Deine ausgeprägte %s ist eine wertvolle Fähigkeit für deinen weiteren Weg.',
+        ];
+        $sentences = [sprintf($introductions[$seed % count($introductions)], $focusLabel)];
+
+        $competencySentences = [
+            'feinmotorik' => 'Du arbeitest bei feinmotorischen Anforderungen kontrolliert und geschickt.',
+            'grobmotorik' => 'Du setzt Bewegungsabläufe sicher und zielgerichtet um.',
+            'wahrnehmung_symmetrie' => 'Du erkennst Formen und Zusammenhänge aufmerksam und setzt sie passend um.',
+            'analyse_problemloesefaehigkeit' => 'Du erfasst Aufgabenstellungen aufmerksam und findest passende Lösungswege.',
+            'arbeitsplanung' => 'Du gehst Aufgaben strukturiert an und behältst dein Ziel im Blick.',
+            'motivation_leistungsbereitschaft' => 'Du bringst dich engagiert ein und arbeitest mit spürbarer Einsatzbereitschaft.',
+            'durchhaltevermoegen' => 'Du bleibst auch bei anspruchsvollen Aufgaben konzentriert und ausdauernd.',
+            'sorgfalt' => 'Du arbeitest gewissenhaft und achtest zuverlässig auf wichtige Einzelheiten.',
+            'kommunikation' => 'Du bringst deine Gedanken verständlich ein und gehst aufmerksam auf andere ein.',
+            'teamfaehigkeit' => 'Du arbeitest verlässlich mit anderen zusammen und trägst zu einem guten Miteinander bei.',
+            'umgangsformen' => 'Du begegnest anderen respektvoll und trittst freundlich sowie angemessen auf.',
+        ];
+        if (isset($competencySentences[$focusKey])) {
+            $sentences[] = $competencySentences[$focusKey];
         }
 
-        $exerciseNames = collect($exerciseScores)
-            ->flatMap(fn (array $score) => $score['contributions'] ?? [])
-            ->sortByDesc('percentage')
-            ->pluck('exercise')
-            ->unique()
-            ->take($style === 'kompakt' ? 2 : 3)
-            ->values()
-            ->all();
-        if ($exerciseNames !== []) {
-            $sentences[] = 'Das wurde besonders bei ' . $this->joinWords($exerciseNames) . ' sichtbar.';
+        if ($manualStrengths !== '') {
+            preg_match_all('/\p{L}+/u', $manualStrengths, $words);
+            $sentences[] = count($words[0] ?? []) >= 5
+                ? $this->sentence($manualStrengths)
+                : 'Zusätzlich gehört ' . rtrim($manualStrengths, '.!?') . ' zu deinen persönlichen Stärken.';
+        } else {
+            $additionalLabels = $strengths
+                ->pluck('label')
+                ->filter(fn (string $label) => $label !== $focusLabel)
+                ->take($style === 'kompakt' ? 1 : 2)
+                ->values()
+                ->all();
+            if ($additionalLabels !== []) {
+                $sentences[] = 'Auch ' . $this->joinWords($additionalLabels) . ' zählen zu deinen erkennbaren Stärken.';
+            }
         }
 
         $agreements = collect(self::COMPETENCIES)->filter(function (array $competency) use ($coach, $self) {
@@ -238,40 +268,35 @@ class PotenzialanalyseScoringService
             return $coachRating !== null && $selfRating !== null && abs((int) $coachRating - (int) $selfRating) <= 1;
         })->pluck('label')->take(3)->all();
         if ($agreements !== []) {
-            $sentences[] = 'Deine Selbsteinschätzung passt bei ' . $this->joinWords($agreements) . ' gut zu den Beobachtungen.';
-        }
-
-        if ($manualDevelopment !== '') {
-            $sentences[] = 'Als nächsten Schritt kannst du ' . Str::lower(rtrim($manualDevelopment, '.!?')) . ' weiter stärken.';
-        } elseif ($developing->isNotEmpty()) {
-            $sentences[] = 'Als nächsten Schritt kannst du ' . $this->joinWords(
-                $developing->pluck('label')->take($style === 'kompakt' ? 1 : 2)->map(fn ($label) => Str::lower($label))->all()
-            ) . ' weiter stärken.';
+            $agreementVariants = [
+                'Deine eigene Einschätzung stimmt dabei gut mit den Beobachtungen überein.',
+                'Du schätzt deine Fähigkeiten in diesen Bereichen bereits sehr passend ein.',
+                'Deine Selbsteinschätzung und die Beobachtungen ergeben ein stimmiges Gesamtbild.',
+                'Auch deine eigene Einschätzung bestätigt dieses positive Bild.',
+            ];
+            $sentences[] = $agreementVariants[intdiv($seed, 7) % count($agreementVariants)];
         }
 
         if ($manualRecommendation !== '') {
             $sentences[] = $this->sentence($manualRecommendation);
         } elseif ($rated->isNotEmpty()) {
-            $sentences[] = 'Nutze deine Stärken weiterhin bewusst in unterschiedlichen Aufgaben und Teams.';
-        }
-
-        if ($style === 'ausfuehrlich') {
-            $sourceSummary = $rated->take(5)->map(fn (array $item) => sprintf(
-                '%s: %s %% (Stufe %s)',
-                $item['label'],
-                number_format((float) $item['percentage'], 1, ',', '.'),
-                $item['rating'],
-            ))->implode('; ');
-            if ($sourceSummary !== '') {
-                $sentences[] = 'Berechnungsgrundlage: ' . $sourceSummary . '.';
-            }
+            $closingVariants = [
+                'Diese Fähigkeiten sind eine gute Grundlage für deine berufliche Orientierung.',
+                'Mit diesen Stärken bringst du wertvolle Voraussetzungen für deinen weiteren Berufsweg mit.',
+                'Deine Stärken können dir bei zukünftigen schulischen und beruflichen Aufgaben helfen.',
+                'Auf diese Fähigkeiten kannst du bei deiner weiteren beruflichen Orientierung gut aufbauen.',
+                'Bewahre dir diese Stärken und setze sie auf deinem weiteren Weg selbstbewusst ein.',
+            ];
+            $sentences[] = $closingVariants[intdiv($seed, 29) % count($closingVariants)];
         }
 
         $wish = 'Wir wünschen dir viel Erfolg für deine Zukunft.';
-        $text = implode(' ', array_values(array_filter($sentences)));
-        $maxLength = 500 - mb_strlen("\n\n" . $wish);
-        if (mb_strlen($text) > $maxLength) {
-            $text = rtrim(mb_substr($text, 0, max(0, $maxLength - 3))) . '...';
+        $text = $greeting;
+        foreach (array_values(array_filter($sentences)) as $sentence) {
+            $candidate = $text . "\n\n" . $sentence;
+            if (mb_strlen($candidate . "\n\n" . $wish) <= 500) {
+                $text = $candidate;
+            }
         }
 
         return [
