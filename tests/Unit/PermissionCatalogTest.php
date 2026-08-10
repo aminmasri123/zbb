@@ -23,9 +23,10 @@ class PermissionCatalogTest extends TestCase
         );
         $duplicates = array_keys(array_filter(array_count_values($keys), fn (int $count) => $count > 1));
 
+        $knownCategoryIds = array_keys(app(UserSeeder::class)->permissionCategoryCatalog());
         $invalidCategories = array_values(array_filter(
             $catalog,
-            fn (array $permission) => ! in_array((int) $permission['berechtigungskategorie_id'], range(1, 29), true)
+            fn (array $permission) => ! in_array((int) $permission['berechtigungskategorie_id'], $knownCategoryIds, true)
         ));
 
         $this->assertSame([], $duplicates, 'Permission-Namen duerfen im Katalog nicht doppelt vorkommen.');
@@ -95,6 +96,13 @@ class PermissionCatalogTest extends TestCase
             }
 
             if ($this->routeAlreadyDefinesAuthorization($route->gatherMiddleware())) {
+                continue;
+            }
+
+            $overrides = RoutePermissionMap::overrides();
+            if (array_key_exists($routeName, $overrides) && $overrides[$routeName] === []) {
+                // Explizit leer bedeutet: Die Route autorisiert dynamisch im Controller,
+                // etwa anhand der konkreten Dokumentvorlage oder des Dateibesitzers.
                 continue;
             }
 

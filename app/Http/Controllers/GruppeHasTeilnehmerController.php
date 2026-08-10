@@ -20,14 +20,19 @@ use App\Models\PotenzialanalyseKompetenzbewertung;
 use App\Models\PotenzialanalyseSelbsteinschaetzung;
 use App\Models\PotenzialanalyseUebungErgebnis;
 use App\Services\Projects\ActiveProjectContext;
+use App\Services\PotenzialanalyseScoringService;
+use App\Services\SaarlandWorkdayService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class GruppeHasTeilnehmerController extends Controller
 {
-    public function __construct(private readonly ActiveProjectContext $activeProjectContext)
-    {
+    public function __construct(
+        private readonly ActiveProjectContext $activeProjectContext,
+        private readonly SaarlandWorkdayService $workdays,
+        private readonly PotenzialanalyseScoringService $paScoring,
+    ) {
     }
 
     /**
@@ -122,18 +127,21 @@ class GruppeHasTeilnehmerController extends Controller
         // 📅 Alle Tage zwischen Start- und Enddatum ermitteln
         $start = Carbon::parse($validated['startdatum']);
         $end = Carbon::parse($validated['enddatum']);
+        $confirmedNonWorkingDates = collect($gruppe->non_working_dates ?? []);
 
         $tageIDs = [];
         for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
-            if ($projekt->rule('attendance_skip_weekends', false) && $date->isWeekend()) {
+            $workday = $this->workdays->details($date);
+            if (! $workday['is_workday'] && ! $confirmedNonWorkingDates->contains($date->toDateString())) {
                 continue;
             }
             // Feiertage / Wochenenden kannst du hier optional überspringen
-            $tag = Tage::firstOrCreate([
+            $tag = Tage::updateOrCreate([
                 'datum' => $date->format('Y-m-d'),
             ], [
                 'wochentag' => $date->locale('de')->dayName,
-                'feiertag_typ' => 'kein_feiertag',
+                'feiertag_typ' => $workday['type'] === 'holiday' ? 'gesetzlicher_feiertag' : 'kein_feiertag',
+                'feiertag_name' => $workday['type'] === 'holiday' ? $workday['name'] : null,
             ]);
 
             $tageIDs[] = $tag->id;
@@ -207,6 +215,7 @@ class GruppeHasTeilnehmerController extends Controller
             'projekt.dokumente.bereiche',
             'projekt.dokumentKategorien.dokumente.bereiche',
             'projekt.potenzialanalyseUebungen.kriterien',
+            'projekt.potenzialanalyseUebungen.kompetenzZuordnungen',
 
         ])->findOrFail($id);
 
@@ -299,6 +308,10 @@ class GruppeHasTeilnehmerController extends Controller
             'gruppe' => $gruppe,
             'teilnehmer' => $teilnehmer,
             'anwesenheitsstatuten' => $anwesenheitsstatuten,
+            'nonWorkingDays' => $this->workdays->nonWorkingDays(
+                $gruppe->anfangsdatum,
+                $gruppe->enddatum ?: $gruppe->anfangsdatum,
+            ),
             'bopLegacyExporte' => $this->bopLegacyExporte($gruppe),
             'potenzialanalyse' => $this->potenzialanalysePayload($gruppe, $user),
         ]);
@@ -466,6 +479,9 @@ class GruppeHasTeilnehmerController extends Controller
             'tage' => null,
             'uebungen' => [],
             'teilnehmer' => [],
+            'kompetenzen' => PotenzialanalyseScoringService::COMPETENCIES,
+            'bericht_stile' => PotenzialanalyseScoringService::REPORT_STYLES,
+            'auswertung_config' => $this->paScoring->defaultConfig(),
         ];
 
         if (! $this->istPotenzialanalyseGruppe($gruppe) || ! $projekt?->potenzialanalyse_aktiv || ! $canView) {
@@ -482,7 +498,17 @@ class GruppeHasTeilnehmerController extends Controller
                     'beschreibung' => $uebung->beschreibung,
                     'hoechstwert' => $uebung->hoechstwert,
                     'auswertbar' => $uebung->auswertbar,
+                    'ergebnis_typ' => $uebung->ergebnis_typ,
+                    'mindestwert' => $uebung->mindestwert,
                     'sort_order' => $uebung->sort_order,
+                    'kompetenzen' => $uebung->kompetenzZuordnungen
+                        ->filter(fn ($zuordnung) => $zuordnung->aktiv)
+                        ->values()
+                        ->map(fn ($zuordnung) => [
+                            'merkmal' => $zuordnung->merkmal,
+                            'gewichtung' => $zuordnung->gewichtung,
+                        ])
+                        ->all(),
                     'kriterien' => $uebung->kriterien
                         ->filter(fn ($kriterium) => $kriterium->aktiv)
                         ->values()
@@ -515,6 +541,9 @@ class GruppeHasTeilnehmerController extends Controller
                 'tage' => $projekt->potenzialanalyse_tage,
                 'uebungen' => $uebungen,
                 'teilnehmer' => [],
+                'kompetenzen' => PotenzialanalyseScoringService::COMPETENCIES,
+                'bericht_stile' => PotenzialanalyseScoringService::REPORT_STYLES,
+                'auswertung_config' => $this->paScoring->normalizeConfig($projekt->potenzialanalyse_auswertung_config),
             ];
         }
 
@@ -590,6 +619,8 @@ class GruppeHasTeilnehmerController extends Controller
                     'entwicklungsfelder',
                     'empfehlung',
                     'bericht_text',
+                    'generator_stil',
+                    'generator_snapshot',
                     'fertiggestellt_at',
                 ]) ?? [
                     'status' => 'entwurf',
@@ -597,6 +628,8 @@ class GruppeHasTeilnehmerController extends Controller
                     'entwicklungsfelder' => null,
                     'empfehlung' => null,
                     'bericht_text' => null,
+                    'generator_stil' => null,
+                    'generator_snapshot' => null,
                     'fertiggestellt_at' => null,
                 ],
             ]])
@@ -612,6 +645,9 @@ class GruppeHasTeilnehmerController extends Controller
             'tage' => $projekt->potenzialanalyse_tage,
             'uebungen' => $uebungen,
             'teilnehmer' => $teilnehmer,
+            'kompetenzen' => PotenzialanalyseScoringService::COMPETENCIES,
+            'bericht_stile' => PotenzialanalyseScoringService::REPORT_STYLES,
+            'auswertung_config' => $this->paScoring->normalizeConfig($projekt->potenzialanalyse_auswertung_config),
         ];
     }
 

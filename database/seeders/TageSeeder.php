@@ -102,7 +102,7 @@ class TageSeeder extends Seeder
         $end = Carbon::create($jahr, 12, 31);
 
         // 🇩🇪 Feiertage für Saarland (korrekte Reihenfolge der Parameter)
-        $feiertage = Yasumi::create('Germany', $jahr, 'de_DE', 'Saarland');
+        $feiertage = Yasumi::create('Germany/Saarland', $jahr, 'de_DE');
 
         $wochentage = [
             'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag',

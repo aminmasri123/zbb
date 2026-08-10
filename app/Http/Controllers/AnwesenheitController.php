@@ -8,13 +8,16 @@ use App\Models\Personen;
 use App\Models\Tage;
 use App\Models\Zeiten;
 use App\Services\Projects\ActiveProjectContext;
+use App\Services\SaarlandWorkdayService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class AnwesenheitController extends Controller
 {
-    public function __construct(private readonly ActiveProjectContext $activeProjectContext)
-    {
+    public function __construct(
+        private readonly ActiveProjectContext $activeProjectContext,
+        private readonly SaarlandWorkdayService $workdays,
+    ) {
     }
 
     public function store(Request $request)
@@ -34,7 +37,8 @@ class AnwesenheitController extends Controller
 
         $groupId = (int) ($validated['gruppe_id'] ?? $validated['bereich_id']);
         $this->authorizeParticipant((int) $validated['personen_id']);
-        $this->authorizedGroup($groupId);
+        $group = $this->authorizedGroup($groupId);
+        $this->assertAttendanceDateAllowed($group, $validated['tag']);
 
         DB::transaction(function () use ($validated, $groupId): void {
             $tagId = (int) Tage::where('datum', $validated['tag'])->value('id');
@@ -94,7 +98,8 @@ class AnwesenheitController extends Controller
 
         $groupId = $requestedGroupId ?: $attendance?->gruppe_id;
         abort_unless($groupId, 422, 'Bitte waehlen Sie eine Gruppe aus.');
-        $this->authorizedGroup((int) $groupId);
+        $group = $this->authorizedGroup((int) $groupId);
+        $this->assertAttendanceDateAllowed($group, $validated['tag']);
 
         $plannedTimeId = $attendance?->zeitgeplant_id;
         if (! empty($validated['startzeit']) && ! empty($validated['endzeit'])) {
@@ -106,7 +111,7 @@ class AnwesenheitController extends Controller
             $actualTimeId = $this->timeId($validated['tatstartTime'], $validated['tatendTime']);
         }
 
-        GruppeHasPersonen::updateOrCreate(
+        $savedAttendance = GruppeHasPersonen::updateOrCreate(
             ['id' => $attendance?->id],
             [
                 'personen_id' => $validated['personen_id'],
@@ -119,6 +124,13 @@ class AnwesenheitController extends Controller
                 'user_id' => request()->user()?->id,
             ]
         );
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => $attendance ? 'Anwesenheit aktualisiert.' : 'Anwesenheit hinzugefuegt.',
+                'attendance_id' => $savedAttendance->id,
+            ]);
+        }
 
         return redirect()->back()->with('success', $attendance ? 'Anwesenheit aktualisiert.' : 'Anwesenheit hinzugefuegt.');
     }
@@ -163,6 +175,19 @@ class AnwesenheitController extends Controller
             ->whereKey($groupId)
             ->where('projekt_id', $project->id)
             ->firstOrFail();
+    }
+
+    private function assertAttendanceDateAllowed(Gruppe $group, string $date): void
+    {
+        if ($this->workdays->isWorkday($date)) {
+            return;
+        }
+
+        abort_unless(
+            in_array($date, $group->non_working_dates ?? [], true),
+            422,
+            'An diesem Wochenende oder Feiertag wurde keine Arbeit bestaetigt.',
+        );
     }
 
     private function timeId(?string $start, ?string $end): ?int

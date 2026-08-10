@@ -263,18 +263,66 @@ const savePortalFeatures = async () => {
 const selectedStandorte = reactive({});
 const projektMitarbeiter = ref([...(props.projekt.mitarbeiter || [])]);
 const fehlendeMitarbeiterListe = ref([...(props.fehlendeMitarbeiter || [])]);
-const paUebungen = ref(JSON.parse(JSON.stringify(props.projekt.potenzialanalyse_uebungen || [])));
+const paKompetenzen = [
+    ['feinmotorik', 'Feinmotorik'],
+    ['grobmotorik', 'Grobmotorik'],
+    ['wahrnehmung_symmetrie', 'Wahrnehmung und Symmetrie'],
+    ['analyse_problemloesefaehigkeit', 'Analyse- und Problemlösefähigkeit'],
+    ['arbeitsplanung', 'Arbeitsplanung'],
+    ['motivation_leistungsbereitschaft', 'Motivation und Leistungsbereitschaft'],
+    ['durchhaltevermoegen', 'Durchhaltevermögen'],
+    ['sorgfalt', 'Sorgfalt und Genauigkeit'],
+    ['kommunikation', 'Kommunikation'],
+    ['teamfaehigkeit', 'Teamfähigkeit'],
+    ['umgangsformen', 'Umgangsformen'],
+].map(([key, label]) => ({ key, label }));
+const paReportStyles = [
+    { value: 'staerkenorientiert', label: 'Stärkenorientiert' },
+    { value: 'ausfuehrlich', label: 'Ausführlich' },
+    { value: 'kompakt', label: 'Kompakt' },
+    { value: 'sachlich', label: 'Sachlich und wertschätzend' },
+];
+const paZuordnungen = (entries = []) => paKompetenzen.map((kompetenz) => {
+    const found = entries.find((entry) => entry.merkmal === kompetenz.key);
+    return {
+        merkmal: kompetenz.key,
+        label: kompetenz.label,
+        aktiv: Boolean(found),
+        gewichtung: Number(found?.gewichtung ?? 100),
+    };
+});
+const normalizePaUebung = (uebung) => ({
+    ...uebung,
+    ergebnis_typ: uebung.ergebnis_typ || 'punkte',
+    mindestwert: Number(uebung.mindestwert ?? 0),
+    kompetenzen: paZuordnungen(uebung.kompetenz_zuordnungen || uebung.kompetenzen || []),
+});
+const paUebungen = ref((props.projekt.potenzialanalyse_uebungen || []).map(normalizePaUebung));
 const paUebungForm = reactive({
     name: '',
     tag: null,
     beschreibung: '',
     hoechstwert: null,
     auswertbar: false,
+    ergebnis_typ: 'punkte',
+    mindestwert: 0,
+    kompetenzen: paZuordnungen(),
     sort_order: 0,
     aktiv: true,
 });
 const paKriteriumForms = reactive({});
 const savingPa = ref(false);
+const defaultPaConfig = {
+    thresholds: { rating_2_from: 20, rating_3_from: 40, rating_4_from: 60, rating_5_from: 80 },
+    source_weights: { exercises: 60, coach: 30, self: 10 },
+    report_style: 'staerkenorientiert',
+};
+const paAuswertungConfig = reactive(JSON.parse(JSON.stringify({
+    ...defaultPaConfig,
+    ...(props.projekt.potenzialanalyse_auswertung_config || {}),
+    thresholds: { ...defaultPaConfig.thresholds, ...(props.projekt.potenzialanalyse_auswertung_config?.thresholds || {}) },
+    source_weights: { ...defaultPaConfig.source_weights, ...(props.projekt.potenzialanalyse_auswertung_config?.source_weights || {}) },
+})));
 
 const paAktiv = computed(() => Boolean(props.projekt.potenzialanalyse_aktiv));
 
@@ -324,6 +372,9 @@ const resetUebungForm = () => {
     paUebungForm.beschreibung = '';
     paUebungForm.hoechstwert = null;
     paUebungForm.auswertbar = false;
+    paUebungForm.ergebnis_typ = 'punkte';
+    paUebungForm.mindestwert = 0;
+    paUebungForm.kompetenzen = paZuordnungen();
     paUebungForm.sort_order = 0;
     paUebungForm.aktiv = true;
 };
@@ -355,7 +406,7 @@ const resetKriteriumForm = (uebungId) => {
 };
 
 const updatePaUebungen = (uebungen) => {
-    paUebungen.value = JSON.parse(JSON.stringify(uebungen || []));
+    paUebungen.value = JSON.parse(JSON.stringify((uebungen || []).map(normalizePaUebung)));
 };
 
 const paPayload = (item) => ({
@@ -364,9 +415,33 @@ const paPayload = (item) => ({
     beschreibung: item.beschreibung || null,
     hoechstwert: item.hoechstwert || null,
     auswertbar: Boolean(item.auswertbar),
+    ergebnis_typ: item.ergebnis_typ || 'punkte',
+    mindestwert: Number(item.mindestwert ?? 0),
+    kompetenzen: (item.kompetenzen || [])
+        .filter((entry) => entry.aktiv)
+        .map((entry) => ({ merkmal: entry.merkmal, gewichtung: Number(entry.gewichtung || 100), aktiv: true })),
     sort_order: item.sort_order || 0,
     aktiv: Boolean(item.aktiv),
 });
+
+const savePaAuswertungConfig = async () => {
+    if (!canManagePotenzialanalyse.value) return;
+    savingPa.value = true;
+    try {
+        const response = await axios.put(
+            route('potenzialanalyse.projekt.auswertung-config.update', props.projekt.id),
+            JSON.parse(JSON.stringify(paAuswertungConfig)),
+        );
+        Object.assign(paAuswertungConfig, response.data.config);
+        Swal.fire('Gespeichert', response.data.message || 'Auswertungseinstellungen wurden gespeichert.', 'success');
+    } catch (error) {
+        const errors = error.response?.data?.errors;
+        const message = errors ? Object.values(errors).flat()[0] : error.response?.data?.message;
+        Swal.fire('Fehler', message || 'Auswertungseinstellungen konnten nicht gespeichert werden.', 'error');
+    } finally {
+        savingPa.value = false;
+    }
+};
 
 const kriteriumPayload = (item) => ({
     name: item.name,
@@ -914,9 +989,42 @@ const addMitarbeiter = (person) => {
                 </div>
 
                 <div v-if="paAktiv" class="space-y-5">
+                    <div class="rounded border border-blue-200 bg-blue-50 p-4">
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <h3 class="text-sm font-semibold text-blue-900">Berechnung und Berichtstext</h3>
+                                <p class="mt-1 text-xs text-blue-700">Die Werte erzeugen einen prüfbaren Vorschlag. Sie ersetzen nicht die fachliche Einschätzung.</p>
+                            </div>
+                            <button type="button" class="rounded bg-zbb px-4 py-2 text-sm text-white disabled:opacity-60" :disabled="savingPa" @click="savePaAuswertungConfig">Einstellungen speichern</button>
+                        </div>
+                        <div class="mt-4 grid gap-4 lg:grid-cols-3">
+                            <div>
+                                <p class="mb-2 text-xs font-semibold uppercase text-gray-500">Grenzen der Stufen (Prozent)</p>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <label v-for="stufe in [2, 3, 4, 5]" :key="stufe" class="text-xs text-gray-600">
+                                        Stufe {{ stufe }} ab
+                                        <input v-model.number="paAuswertungConfig.thresholds[`rating_${stufe}_from`]" type="number" min="0" max="100" class="mt-1 w-full rounded border-gray-300 text-sm" />
+                                    </label>
+                                </div>
+                            </div>
+                            <div>
+                                <p class="mb-2 text-xs font-semibold uppercase text-gray-500">Gewichtung der Quellen</p>
+                                <div class="grid grid-cols-3 gap-2">
+                                    <label class="text-xs text-gray-600">Übungen<input v-model.number="paAuswertungConfig.source_weights.exercises" type="number" min="0" max="100" class="mt-1 w-full rounded border-gray-300 text-sm" /></label>
+                                    <label class="text-xs text-gray-600">Anleitung<input v-model.number="paAuswertungConfig.source_weights.coach" type="number" min="0" max="100" class="mt-1 w-full rounded border-gray-300 text-sm" /></label>
+                                    <label class="text-xs text-gray-600">Selbst<input v-model.number="paAuswertungConfig.source_weights.self" type="number" min="0" max="100" class="mt-1 w-full rounded border-gray-300 text-sm" /></label>
+                                </div>
+                            </div>
+                            <label class="text-xs text-gray-600">Standard-Berichtsstil
+                                <select v-model="paAuswertungConfig.report_style" class="mt-1 w-full rounded border-gray-300 text-sm">
+                                    <option v-for="stil in paReportStyles" :key="stil.value" :value="stil.value">{{ stil.label }}</option>
+                                </select>
+                            </label>
+                        </div>
+                    </div>
                     <div class="rounded border border-gray-200 bg-gray-50 p-4">
                         <h3 class="mb-3 text-sm font-semibold text-gray-700">Übung anlegen</h3>
-                        <div class="grid gap-3 md:grid-cols-[1fr_120px_150px_120px]">
+                        <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-6">
                             <label class="text-sm text-gray-600">
                                 Name
                                 <input v-model="paUebungForm.name" class="mt-1 w-full rounded border-gray-300 text-sm" />
@@ -931,9 +1039,16 @@ const addMitarbeiter = (person) => {
                                     class="mt-1 w-full rounded border-gray-300 text-sm"
                                 />
                             </label>
-                            <label class="text-sm text-gray-600">
-                                Erreichbare Punktzahl
-                                <input v-model.number="paUebungForm.hoechstwert" type="number" min="0" class="mt-1 w-full rounded border-gray-300 text-sm" />
+                            <label class="text-sm text-gray-600">Ergebnistyp
+                                <select v-model="paUebungForm.ergebnis_typ" class="mt-1 w-full rounded border-gray-300 text-sm">
+                                    <option value="punkte">Punkte</option><option value="prozent">Prozent</option><option value="skala">Skala</option>
+                                </select>
+                            </label>
+                            <label class="text-sm text-gray-600">Mindestwert
+                                <input v-model.number="paUebungForm.mindestwert" type="number" min="0" class="mt-1 w-full rounded border-gray-300 text-sm" />
+                            </label>
+                            <label class="text-sm text-gray-600">Höchstwert
+                                <input v-model.number="paUebungForm.hoechstwert" type="number" min="1" :disabled="paUebungForm.ergebnis_typ === 'prozent'" :placeholder="paUebungForm.ergebnis_typ === 'prozent' ? '100' : ''" class="mt-1 w-full rounded border-gray-300 text-sm disabled:bg-gray-100" />
                             </label>
                             <label class="text-sm text-gray-600">
                                 Reihenfolge
@@ -944,6 +1059,17 @@ const addMitarbeiter = (person) => {
                             Beschreibung
                             <textarea v-model="paUebungForm.beschreibung" rows="2" class="mt-1 w-full rounded border-gray-300 text-sm"></textarea>
                         </label>
+                        <details class="mt-3 rounded border border-gray-200 bg-white p-3">
+                            <summary class="cursor-pointer text-sm font-semibold text-gray-700">Kompetenzen und Gewichtung zuordnen</summary>
+                            <p class="mt-2 text-xs text-gray-500">Eine Übung kann mehrere Kompetenzen beeinflussen. 100 ist die normale Gewichtung; 200 zählt doppelt so stark wie 100.</p>
+                            <div class="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                                <div v-for="entry in paUebungForm.kompetenzen" :key="entry.merkmal" class="flex items-center gap-2 rounded border bg-gray-50 px-3 py-2">
+                                    <input v-model="entry.aktiv" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
+                                    <span class="min-w-0 flex-1 text-sm">{{ entry.label }}</span>
+                                    <input v-model.number="entry.gewichtung" type="number" min="1" max="1000" :disabled="!entry.aktiv" class="w-20 rounded border-gray-300 text-sm disabled:bg-gray-100" title="Gewichtung" />
+                                </div>
+                            </div>
+                        </details>
                         <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
                             <label class="flex items-center gap-2 text-sm text-gray-600">
                                 <input v-model="paUebungForm.auswertbar" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
@@ -969,7 +1095,7 @@ const addMitarbeiter = (person) => {
                         :key="uebung.id"
                         class="rounded border border-gray-200 p-4"
                     >
-                        <div class="grid gap-3 md:grid-cols-[1fr_110px_150px_110px_auto_auto]">
+                        <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-7">
                             <label class="text-sm text-gray-600">
                                 Uebung
                                 <input v-model="uebung.name" class="mt-1 w-full rounded border-gray-300 text-sm" />
@@ -984,9 +1110,16 @@ const addMitarbeiter = (person) => {
                                     class="mt-1 w-full rounded border-gray-300 text-sm"
                                 />
                             </label>
-                            <label class="text-sm text-gray-600">
-                                Erreichbare Punktzahl
-                                <input v-model.number="uebung.hoechstwert" type="number" min="0" class="mt-1 w-full rounded border-gray-300 text-sm" />
+                            <label class="text-sm text-gray-600">Ergebnistyp
+                                <select v-model="uebung.ergebnis_typ" class="mt-1 w-full rounded border-gray-300 text-sm">
+                                    <option value="punkte">Punkte</option><option value="prozent">Prozent</option><option value="skala">Skala</option>
+                                </select>
+                            </label>
+                            <label class="text-sm text-gray-600">Mindestwert
+                                <input v-model.number="uebung.mindestwert" type="number" min="0" class="mt-1 w-full rounded border-gray-300 text-sm" />
+                            </label>
+                            <label class="text-sm text-gray-600">Höchstwert
+                                <input v-model.number="uebung.hoechstwert" type="number" min="1" :disabled="uebung.ergebnis_typ === 'prozent'" class="mt-1 w-full rounded border-gray-300 text-sm disabled:bg-gray-100" />
                             </label>
                             <label class="text-sm text-gray-600">
                                 Reihenfolge
@@ -1005,6 +1138,16 @@ const addMitarbeiter = (person) => {
                             Beschreibung
                             <textarea v-model="uebung.beschreibung" rows="2" class="mt-1 w-full rounded border-gray-300 text-sm"></textarea>
                         </label>
+                        <details class="mt-3 rounded border border-gray-200 bg-gray-50 p-3">
+                            <summary class="cursor-pointer text-sm font-semibold text-gray-700">Kompetenz-Zuordnung ({{ uebung.kompetenzen.filter((entry) => entry.aktiv).length }})</summary>
+                            <div class="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                                <div v-for="entry in uebung.kompetenzen" :key="`${uebung.id}-${entry.merkmal}`" class="flex items-center gap-2 rounded border bg-white px-3 py-2">
+                                    <input v-model="entry.aktiv" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
+                                    <span class="min-w-0 flex-1 text-sm">{{ entry.label }}</span>
+                                    <input v-model.number="entry.gewichtung" type="number" min="1" max="1000" :disabled="!entry.aktiv" class="w-20 rounded border-gray-300 text-sm disabled:bg-gray-100" title="Gewichtung" />
+                                </div>
+                            </div>
+                        </details>
                         <div class="mt-3 flex flex-wrap justify-end gap-2">
                             <button
                                 type="button"

@@ -390,6 +390,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     });
     Route::delete('/projekt/{id}', [ProjektController::class, 'destroy'])->name('projekt.destroy');
     Route::middleware(['projectFeature:potential_analysis', 'can:potenzialanalyse.manage'])->group(function () {
+        Route::put('/projekt/{projekt}/potenzialanalyse/auswertung-config', [PotenzialanalyseController::class, 'updateAuswertungConfig'])->name('potenzialanalyse.projekt.auswertung-config.update');
         Route::post('/projekt/{projekt}/potenzialanalyse/uebungen', [PotenzialanalyseController::class, 'storeUebung'])->name('potenzialanalyse.projekt.uebungen.store');
         Route::put('/potenzialanalyse/uebungen/{uebung}', [PotenzialanalyseController::class, 'updateUebung'])->name('potenzialanalyse.projekt.uebungen.update');
         Route::delete('/potenzialanalyse/uebungen/{uebung}', [PotenzialanalyseController::class, 'destroyUebung'])->name('potenzialanalyse.projekt.uebungen.destroy');
@@ -409,6 +410,8 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     //Gruppe
     Route::middleware('projectFeature:group_management')->group(function () {
     Route::get('/gruppe', [GruppeController::class, 'index'])->name('gruppe.index');
+    Route::post('/gruppe/arbeitstage-vorschau', [GruppeController::class, 'workdayPreview'])->name('gruppe.workday-preview')->can('gruppe.store');
+    Route::post('/gruppe/{gruppe}/arbeitstag-ausnahme', [GruppeController::class, 'updateNonWorkingDate'])->name('gruppe.non-working-date.update')->can('anwesenheit.manage');
     Route::put('/gruppe/{id}', [GruppeController::class, 'update'])->name('gruppe.update');
     Route::delete('/gruppe/{id}', [GruppeController::class, 'destroy'])->name('gruppe.destroy');
     Route::post('/gruppe/anlegen', [GruppeController::class, 'store'])->name('gruppe.store');
@@ -427,6 +430,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::get('/gruppe/{gruppe}/potenzialanalyse/teilnehmer/{personen}/bericht', [PotenzialanalyseController::class, 'downloadTeilnehmerBericht'])->name('potenzialanalyse.gruppe.teilnehmer.bericht')->can('gruppe.bop.export.auswertungsbogen-pa')->middleware(['module:participant_management', 'projectFeature:participant_management', 'projectFeature:potential_analysis', 'canAnyPermission:potenzialanalyse.index,potenzialanalyse.update,potenzialanalyse.manage']);
     Route::get('/gruppe/{gruppe}/potenzialanalyse/berichte', [PotenzialanalyseController::class, 'downloadGruppenBerichte'])->name('potenzialanalyse.gruppe.berichte')->can('gruppe.bop.export.auswertungsbogen-pa')->middleware(['module:participant_management', 'projectFeature:participant_management', 'projectFeature:potential_analysis', 'canAnyPermission:potenzialanalyse.index,potenzialanalyse.update,potenzialanalyse.manage']);
     Route::put('/gruppe/{gruppe}/potenzialanalyse/teilnehmer/{personen}', [PotenzialanalyseController::class, 'updateTeilnehmer'])->name('potenzialanalyse.gruppe.teilnehmer.update')->middleware(['module:participant_management', 'projectFeature:participant_management', 'projectFeature:potential_analysis', 'can:potenzialanalyse.update']);
+    Route::post('/gruppe/{gruppe}/potenzialanalyse/teilnehmer/{personen}/vorschlag', [PotenzialanalyseController::class, 'generateSuggestions'])->name('potenzialanalyse.gruppe.teilnehmer.vorschlag')->middleware(['module:participant_management', 'projectFeature:participant_management', 'projectFeature:potential_analysis', 'can:potenzialanalyse.update']);
     Route::delete('/gruppe/{gruppe}/potenzialanalyse/teilnehmer/{personen}/daten', [PotenzialanalyseController::class, 'destroyTeilnehmerDaten'])->name('potenzialanalyse.gruppe.teilnehmer.daten.destroy')->middleware(['module:participant_management', 'projectFeature:participant_management', 'projectFeature:potential_analysis', 'can:potenzialanalyse.update']);
 
     //GruppeHasTeilnehmer

@@ -18,6 +18,8 @@ class PotenzialanalyseUebung extends Model
         'beschreibung',
         'hoechstwert',
         'auswertbar',
+        'ergebnis_typ',
+        'mindestwert',
         'sort_order',
         'aktiv',
     ];
@@ -26,6 +28,7 @@ class PotenzialanalyseUebung extends Model
         'tag' => 'integer',
         'hoechstwert' => 'integer',
         'auswertbar' => 'boolean',
+        'mindestwert' => 'float',
         'sort_order' => 'integer',
         'aktiv' => 'boolean',
     ];
@@ -45,5 +48,11 @@ class PotenzialanalyseUebung extends Model
     public function ergebnisse()
     {
         return $this->hasMany(PotenzialanalyseUebungErgebnis::class, 'uebung_id');
+    }
+
+    public function kompetenzZuordnungen()
+    {
+        return $this->hasMany(PotenzialanalyseUebungKompetenz::class, 'uebung_id')
+            ->orderBy('merkmal');
     }
 }

@@ -118,6 +118,43 @@
           </div>
         </div>
 
+        <div v-if="form.startDate && form.endDate" class="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <p class="text-sm font-semibold text-gray-800">Wochenenden und Feiertage</p>
+                    <p class="mt-1 text-xs text-gray-500">
+                        Diese Tage bleiben im Gruppenzeitraum sichtbar, sind in der Anwesenheit aber gesperrt. Bestätige nur Tage, an denen tatsächlich gearbeitet wird.
+                    </p>
+                </div>
+                <span v-if="datePreviewLoading" class="text-xs text-gray-500">Prüfung …</span>
+            </div>
+
+            <p v-if="datePreviewError" class="mt-3 rounded bg-red-50 px-3 py-2 text-xs text-red-700">
+                {{ datePreviewError }}
+            </p>
+            <p v-else-if="!datePreviewLoading && nonWorkingDays.length === 0" class="mt-3 text-xs font-medium text-green-700">
+                Der Zeitraum enthält nur reguläre Arbeitstage.
+            </p>
+            <div v-else class="mt-3 max-h-48 space-y-2 overflow-y-auto">
+                <label
+                    v-for="day in nonWorkingDays"
+                    :key="day.date"
+                    class="flex cursor-pointer items-start gap-3 rounded border border-gray-200 bg-white p-3"
+                >
+                    <input
+                        v-model="form.non_working_dates"
+                        type="checkbox"
+                        :value="day.date"
+                        class="mt-0.5 rounded border-gray-300 text-zbb focus:ring-zbb"
+                    />
+                    <span class="text-sm text-gray-700">
+                        <span class="block font-semibold">{{ formatGermanDate(day.date) }} â€“ {{ day.label }}</span>
+                        <span class="mt-0.5 block text-xs text-gray-500">Ja, an diesem Tag wird gearbeitet.</span>
+                    </span>
+                </label>
+            </div>
+        </div>
+
         <!-- Zeit -->
         <div class="grid grid-cols-2 gap-4 mb-6">
           <div>
@@ -162,6 +199,7 @@ import Select from 'primevue/select'
 import MultiSelect from 'primevue/multiselect'
 import FloatLabel from 'primevue/floatlabel';
 import Swal from 'sweetalert2';
+import axios from 'axios'
 
 const props = defineProps({
     visible: Boolean,
@@ -195,7 +233,13 @@ const form = useForm({
   standort_id: '',
   externer_ort: '',
   bemerkung: '',
+  non_working_dates: [],
 })
+
+const nonWorkingDays = ref([])
+const datePreviewLoading = ref(false)
+const datePreviewError = ref('')
+let datePreviewVersion = 0
 
 
 const groupTypes = [
@@ -368,33 +412,71 @@ watch(
 // 🔹 Reaktive Logik: Enddatum automatisch berechnen
 watch(
   () => [form.groupType, form.startDate],
-  ([type, start]) => {
-    if (!start) return
-
-    const startDate = new Date(start)
-
-    if (type === '1-day') {
-      form.endDate = formatDate(startDate)
-    } else if (type === '2-day') {
-      form.endDate = formatDate(addDays(startDate, 1))
-    } else if (type === '3-day') {
-      form.endDate = formatDate(addDays(startDate, 2))
-    } else if (type === 'unlimited') {
+  ([type], [oldType]) => {
+    if (type === 'unlimited' && oldType !== 'unlimited') {
       form.endDate = ''
+      nonWorkingDays.value = []
+      form.non_working_dates = []
+      return
     }
+
+    refreshWorkdayPreview()
   }
 )
 
 // 🔹 Hilfsfunktionen
-function addDays(date, days) {
-  const newDate = new Date(date)
-  newDate.setDate(newDate.getDate() + days)
-  return newDate
+async function refreshWorkdayPreview() {
+  const version = ++datePreviewVersion
+  datePreviewError.value = ''
+
+  if (!form.groupType || !form.startDate || (form.groupType === 'unlimited' && !form.endDate)) {
+    nonWorkingDays.value = []
+    form.non_working_dates = []
+    return
+  }
+
+  datePreviewLoading.value = true
+
+  try {
+    const response = await axios.post(route('gruppe.workday-preview'), {
+      groupType: form.groupType,
+      startDate: form.startDate,
+      endDate: form.groupType === 'unlimited' ? form.endDate : null,
+    })
+
+    if (version !== datePreviewVersion) return
+
+    form.endDate = response.data.endDate
+    nonWorkingDays.value = response.data.nonWorkingDays || []
+    const availableDates = new Set(nonWorkingDays.value.map((day) => day.date))
+    form.non_working_dates = form.non_working_dates.filter((date) => availableDates.has(date))
+  } catch (error) {
+    if (version !== datePreviewVersion) return
+    nonWorkingDays.value = []
+    form.non_working_dates = []
+    datePreviewError.value = error.response?.data?.message || 'Arbeitstage und Feiertage konnten nicht geprüft werden.'
+  } finally {
+    if (version === datePreviewVersion) {
+      datePreviewLoading.value = false
+    }
+  }
 }
 
-function formatDate(date) {
-  return date.toISOString().split('T')[0]
-}
+watch(
+  () => form.endDate,
+  () => {
+    if (form.groupType === 'unlimited') {
+      refreshWorkdayPreview()
+    }
+  }
+)
+
+const formatGermanDate = (value) => new Date(`${value}T12:00:00`).toLocaleDateString('de-DE', {
+  weekday: 'short',
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+})
 
 
 

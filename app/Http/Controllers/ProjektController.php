@@ -226,6 +226,7 @@ class ProjektController extends Controller
                 'dokumente.bereiche',
                 'dokumentKategorien',
                 'potenzialanalyseUebungen.kriterien',
+                'potenzialanalyseUebungen.kompetenzZuordnungen',
                 'mitarbeiter.user.roles',
                 'intakeChecklistItems' => fn ($query) => $query->where('active', true),
                 'completionChecklistItems' => fn ($query) => $query->where('active', true),

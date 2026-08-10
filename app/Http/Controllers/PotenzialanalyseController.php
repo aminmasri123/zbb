@@ -11,9 +11,11 @@ use App\Models\PotenzialanalyseKompetenzbewertung;
 use App\Models\PotenzialanalyseKriterium;
 use App\Models\PotenzialanalyseSelbsteinschaetzung;
 use App\Models\PotenzialanalyseUebung;
+use App\Models\PotenzialanalyseUebungKompetenz;
 use App\Models\PotenzialanalyseUebungErgebnis;
 use App\Models\Projekt;
 use App\Services\Bop\PotenzialanalyseReportService;
+use App\Services\PotenzialanalyseScoringService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -37,6 +39,11 @@ class PotenzialanalyseController extends Controller
         'umgangsformen',
     ];
 
+    public function __construct(
+        private readonly PotenzialanalyseScoringService $scoring,
+    ) {
+    }
+
     public function storeUebung(Request $request, Projekt $projekt)
     {
         $this->authorizeProjectConfig($projekt);
@@ -44,10 +51,16 @@ class PotenzialanalyseController extends Controller
 
         $validated = $this->validateUebung($request, $projekt);
 
-        PotenzialanalyseUebung::create([
-            ...$validated,
-            'projekt_id' => $projekt->id,
-        ]);
+        DB::transaction(function () use ($validated, $projekt) {
+            $kompetenzen = $validated['kompetenzen'];
+            unset($validated['kompetenzen']);
+
+            $uebung = PotenzialanalyseUebung::create([
+                ...$validated,
+                'projekt_id' => $projekt->id,
+            ]);
+            $this->syncUebungKompetenzen($uebung, $kompetenzen);
+        });
 
         return response()->json([
             'message' => 'Übung wurde angelegt.',
@@ -60,7 +73,14 @@ class PotenzialanalyseController extends Controller
         $uebung->load('projekt');
         $this->authorizeProjectConfig($uebung->projekt);
 
-        $uebung->update($this->validateUebung($request, $uebung->projekt));
+        $validated = $this->validateUebung($request, $uebung->projekt);
+
+        DB::transaction(function () use ($validated, $uebung) {
+            $kompetenzen = $validated['kompetenzen'];
+            unset($validated['kompetenzen']);
+            $uebung->update($validated);
+            $this->syncUebungKompetenzen($uebung, $kompetenzen);
+        });
 
         return response()->json([
             'message' => 'Übung wurde aktualisiert.',
@@ -125,6 +145,101 @@ class PotenzialanalyseController extends Controller
         ]);
     }
 
+    public function updateAuswertungConfig(Request $request, Projekt $projekt)
+    {
+        $this->authorizeProjectConfig($projekt);
+        $this->ensureProjektUsesPotenzialanalyse($projekt);
+
+        $validated = $request->validate([
+            'thresholds' => ['required', 'array'],
+            'thresholds.rating_2_from' => ['required', 'numeric', 'min:0', 'max:100'],
+            'thresholds.rating_3_from' => ['required', 'numeric', 'min:0', 'max:100'],
+            'thresholds.rating_4_from' => ['required', 'numeric', 'min:0', 'max:100'],
+            'thresholds.rating_5_from' => ['required', 'numeric', 'min:0', 'max:100'],
+            'source_weights' => ['required', 'array'],
+            'source_weights.exercises' => ['required', 'numeric', 'min:0', 'max:100'],
+            'source_weights.coach' => ['required', 'numeric', 'min:0', 'max:100'],
+            'source_weights.self' => ['required', 'numeric', 'min:0', 'max:100'],
+            'report_style' => ['required', Rule::in(collect(PotenzialanalyseScoringService::REPORT_STYLES)->pluck('value')->all())],
+        ]);
+
+        $thresholds = array_values($validated['thresholds']);
+        if ($thresholds !== collect($thresholds)->sort()->values()->all()) {
+            throw ValidationException::withMessages([
+                'thresholds' => 'Die Grenzen der Bewertungsstufen müssen aufsteigend sein.',
+            ]);
+        }
+
+        if (array_sum($validated['source_weights']) <= 0) {
+            throw ValidationException::withMessages([
+                'source_weights' => 'Mindestens eine Datenquelle muss gewichtet werden.',
+            ]);
+        }
+
+        $config = $this->scoring->normalizeConfig($validated);
+        $projekt->update(['potenzialanalyse_auswertung_config' => $config]);
+
+        return response()->json([
+            'message' => 'Auswertungseinstellungen wurden gespeichert.',
+            'config' => $config,
+        ]);
+    }
+
+    public function generateSuggestions(Request $request, Gruppe $gruppe, Personen $personen)
+    {
+        $gruppe->loadMissing('projekt');
+        abort_unless($this->canUseGroup(auth()->user(), $gruppe), 403);
+        $this->ensureProjektUsesPotenzialanalyse($gruppe->projekt);
+        $this->ensureTeilnehmerInGroup($gruppe, $personen);
+
+        $validated = $request->validate([
+            'uebungen' => ['nullable', 'array'],
+            'uebungen.*.punkte' => ['nullable', 'numeric', 'min:0', 'max:100000'],
+            'selbsteinschaetzung' => ['nullable', 'array'],
+            'selbsteinschaetzung.*.bewertung' => ['nullable', 'integer', 'min:1', 'max:5'],
+            'selbsteinschaetzung.*.bemerkung' => ['nullable', 'string', 'max:5000'],
+            'kompetenzen' => ['nullable', 'array'],
+            'kompetenzen.*.bewertung' => ['nullable', 'integer', 'min:1', 'max:5'],
+            'kompetenzen.*.bemerkung' => ['nullable', 'string', 'max:5000'],
+            'bericht' => ['nullable', 'array'],
+            'bericht.staerken' => ['nullable', 'string'],
+            'bericht.entwicklungsfelder' => ['nullable', 'string'],
+            'bericht.empfehlung' => ['nullable', 'string'],
+            'style' => ['nullable', Rule::in(collect(PotenzialanalyseScoringService::REPORT_STYLES)->pluck('value')->all())],
+        ]);
+
+        $config = $this->scoring->normalizeConfig($gruppe->projekt->potenzialanalyse_auswertung_config);
+        $exercises = PotenzialanalyseUebung::query()
+            ->where('projekt_id', $gruppe->projekt_id)
+            ->where('aktiv', true)
+            ->with('kompetenzZuordnungen')
+            ->get();
+        $exerciseScores = $this->scoring->scoreExercises($exercises, $validated['uebungen'] ?? [], $config);
+        $combinedScores = $this->scoring->combinedScores(
+            $exerciseScores,
+            $validated['kompetenzen'] ?? [],
+            $validated['selbsteinschaetzung'] ?? [],
+            $config,
+        );
+        $style = $validated['style'] ?? $config['report_style'];
+        $report = $this->scoring->generateReport(
+            $personen,
+            $combinedScores,
+            $exerciseScores,
+            $validated['kompetenzen'] ?? [],
+            $validated['selbsteinschaetzung'] ?? [],
+            $validated['bericht'] ?? [],
+            $style,
+        );
+
+        return response()->json([
+            'exercise_scores' => $exerciseScores,
+            'combined_scores' => $combinedScores,
+            'report' => $report,
+            'config' => $config,
+        ]);
+    }
+
     public function updateTeilnehmer(Request $request, Gruppe $gruppe, Personen $personen)
     {
         $gruppe->loadMissing('projekt');
@@ -163,6 +278,8 @@ class PotenzialanalyseController extends Controller
             'bericht.entwicklungsfelder' => ['nullable', 'string'],
             'bericht.empfehlung' => ['nullable', 'string'],
             'bericht.bericht_text' => ['nullable', 'string'],
+            'bericht.generator_stil' => ['nullable', Rule::in(collect(PotenzialanalyseScoringService::REPORT_STYLES)->pluck('value')->all())],
+            'bericht.generator_snapshot' => ['nullable', 'array'],
         ]);
 
         $kriteriumIds = $this->projektKriteriumIds((int) $gruppe->projekt_id);
@@ -292,20 +409,56 @@ class PotenzialanalyseController extends Controller
     {
         $maxTag = max(1, (int) ($projekt->potenzialanalyse_tage ?: 60));
 
-        return $request->validate([
+        $validated = $request->validate([
             'name' => ['required', 'string', 'max:150'],
             'tag' => ['nullable', 'integer', 'min:1', 'max:' . $maxTag],
             'beschreibung' => ['nullable', 'string'],
-            'hoechstwert' => ['nullable', 'integer', 'min:0', 'max:100000'],
+            'hoechstwert' => ['nullable', 'numeric', 'min:0', 'max:100000'],
             'auswertbar' => ['nullable', 'boolean'],
+            'ergebnis_typ' => ['nullable', Rule::in(['punkte', 'prozent', 'skala'])],
+            'mindestwert' => ['nullable', 'numeric', 'min:0', 'max:99999'],
+            'kompetenzen' => ['nullable', 'array'],
+            'kompetenzen.*.merkmal' => ['required', Rule::in(self::PA_MERKMALE), 'distinct'],
+            'kompetenzen.*.gewichtung' => ['required', 'numeric', 'gt:0', 'max:1000'],
+            'kompetenzen.*.aktiv' => ['nullable', 'boolean'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:65535'],
             'aktiv' => ['nullable', 'boolean'],
         ]) + [
             'hoechstwert' => null,
             'auswertbar' => false,
+            'ergebnis_typ' => 'punkte',
+            'mindestwert' => 0,
+            'kompetenzen' => [],
             'sort_order' => 0,
             'aktiv' => true,
         ];
+
+        $maximum = $validated['ergebnis_typ'] === 'prozent' ? 100 : $validated['hoechstwert'];
+        if ($validated['auswertbar'] && ($maximum === null || (float) $maximum <= (float) $validated['mindestwert'])) {
+            throw ValidationException::withMessages([
+                'hoechstwert' => 'Der Höchstwert muss für auswertbare Übungen größer als der Mindestwert sein.',
+            ]);
+        }
+
+        if ($validated['ergebnis_typ'] === 'prozent') {
+            $validated['hoechstwert'] = 100;
+        }
+
+        return $validated;
+    }
+
+    private function syncUebungKompetenzen(PotenzialanalyseUebung $uebung, array $entries): void
+    {
+        $uebung->kompetenzZuordnungen()->delete();
+
+        foreach ($entries as $entry) {
+            PotenzialanalyseUebungKompetenz::create([
+                'uebung_id' => $uebung->id,
+                'merkmal' => $entry['merkmal'],
+                'gewichtung' => $entry['gewichtung'],
+                'aktiv' => $entry['aktiv'] ?? true,
+            ]);
+        }
     }
 
     private function validateKriterium(Request $request): array
@@ -353,9 +506,16 @@ class PotenzialanalyseController extends Controller
             if ($punkte !== null) {
                 $punkte = (int) $punkte;
 
-                if ($uebung->hoechstwert !== null && $punkte > (int) $uebung->hoechstwert) {
+                if ($uebung->hoechstwert !== null && $punkte > (float) $uebung->hoechstwert) {
                     throw ValidationException::withMessages([
                         "uebungen.$uebungId.punkte" => "Die Punkte für {$uebung->name} dürfen maximal {$uebung->hoechstwert} betragen.",
+                    ]);
+                }
+
+
+                if ($punkte < (float) ($uebung->mindestwert ?? 0)) {
+                    throw ValidationException::withMessages([
+                        "uebungen.$uebungId.punkte" => "Der Wert für {$uebung->name} muss mindestens {$uebung->mindestwert} betragen.",
                     ]);
                 }
             }
@@ -545,6 +705,8 @@ class PotenzialanalyseController extends Controller
                 'entwicklungsfelder' => $berichtData['entwicklungsfelder'] ?? null,
                 'empfehlung' => $berichtData['empfehlung'] ?? null,
                 'bericht_text' => $berichtData['bericht_text'] ?? null,
+                'generator_stil' => $berichtData['generator_stil'] ?? null,
+                'generator_snapshot' => $berichtData['generator_snapshot'] ?? null,
                 'fertiggestellt_at' => in_array($status, ['fertig', 'geprueft'], true)
                     ? ($existing?->fertiggestellt_at ?? now())
                     : null,
@@ -556,7 +718,7 @@ class PotenzialanalyseController extends Controller
     {
         return $projekt->fresh()
             ->potenzialanalyseUebungen()
-            ->with('kriterien')
+            ->with(['kriterien', 'kompetenzZuordnungen'])
             ->get();
     }
 
@@ -572,6 +734,7 @@ class PotenzialanalyseController extends Controller
     {
         return PotenzialanalyseUebung::query()
             ->where('projekt_id', $projektId)
+            ->with('kompetenzZuordnungen')
             ->get()
             ->keyBy('id');
     }
@@ -611,6 +774,8 @@ class PotenzialanalyseController extends Controller
                     'entwicklungsfelder',
                     'empfehlung',
                     'bericht_text',
+                    'generator_stil',
+                    'generator_snapshot',
                     'fertiggestellt_at',
                 ]) ?? [
                     'status' => 'entwurf',
@@ -618,6 +783,8 @@ class PotenzialanalyseController extends Controller
                     'entwicklungsfelder' => null,
                     'empfehlung' => null,
                     'bericht_text' => null,
+                    'generator_stil' => null,
+                    'generator_snapshot' => null,
                     'fertiggestellt_at' => null,
             ],
         ];

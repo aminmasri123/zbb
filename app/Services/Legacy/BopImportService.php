@@ -1320,7 +1320,7 @@ class BopImportService
 
         while ($date->lte($endDate) && count($dates) < $limit) {
             $year = $date->year;
-            $holidaysByYear[$year] ??= Yasumi::create('Germany', $year, 'de_DE', 'Saarland');
+            $holidaysByYear[$year] ??= Yasumi::create('Germany/Saarland', $year, 'de_DE');
             if (! $date->isWeekend() && ! $holidaysByYear[$year]->isHoliday($date)) {
                 $dates[] = $date->format('Y-m-d');
             }

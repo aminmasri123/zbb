@@ -4,12 +4,14 @@ namespace App\Http\Controllers;
 
 use Inertia\Inertia;
 use App\Models\Gruppe;
+use App\Models\Tage;
 use App\Models\Personen;
 use App\Models\ProjektHasPersonen;
 use App\Models\Raeume;
 use App\Models\RaumHasPersonen;
 use App\Models\Projekt;
 use App\Services\RaumBelegungService;
+use App\Services\SaarlandWorkdayService;
 use App\Services\Projects\ActiveProjectContext;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -21,8 +23,42 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class GruppeController extends Controller
 {
-    public function __construct(private readonly ActiveProjectContext $activeProjectContext)
+    public function __construct(
+        private readonly ActiveProjectContext $activeProjectContext,
+        private readonly SaarlandWorkdayService $workdays,
+    ) {
+    }
+
+    public function workdayPreview(Request $request)
     {
+        $this->authorizeAny($request->user(), ['gruppe.store']);
+
+        $validated = $request->validate([
+            'groupType' => ['required', Rule::in(['1-day', '2-day', '3-day', 'unlimited'])],
+            'startDate' => ['required', 'date'],
+            'endDate' => ['nullable', 'date', 'after_or_equal:startDate'],
+        ]);
+
+        $start = Carbon::parse($validated['startDate'])->startOfDay();
+        $end = match ($validated['groupType']) {
+            '1-day' => $start->copy(),
+            '2-day' => $this->workdays->endDateForDuration($start, 2),
+            '3-day' => $this->workdays->endDateForDuration($start, 3),
+            default => isset($validated['endDate'])
+                ? Carbon::parse($validated['endDate'])->startOfDay()
+                : $start->copy(),
+        };
+
+        if ($start->diffInDays($end) > 3660) {
+            throw ValidationException::withMessages([
+                'endDate' => 'Der Gruppenzeitraum darf maximal zehn Jahre umfassen.',
+            ]);
+        }
+
+        return response()->json([
+            'endDate' => $end->toDateString(),
+            'nonWorkingDays' => $this->workdays->nonWorkingDays($start, $end),
+        ]);
     }
 
     public function index(Request $request)
@@ -70,8 +106,9 @@ class GruppeController extends Controller
         ]);
 
         $validated = $request->validate([
+            'groupType' => ['required', Rule::in(['1-day', '2-day', '3-day', 'unlimited'])],
             'startDate' => 'required|date',
-            'endDate' => 'nullable|date|after_or_equal:startDate',
+            'endDate' => ['required_if:groupType,unlimited', 'nullable', 'date', 'after_or_equal:startDate'],
             'startZeit' => 'required|date_format:H:i',
             'endZeit' => 'required|date_format:H:i|after:startZeit',
             'bereich' => 'required|integer|exists:bereiches,id',
@@ -88,7 +125,26 @@ class GruppeController extends Controller
             'standort_id' => 'nullable|required_if:ort_typ,extern|integer|exists:standorts,id',
             'externer_ort' => 'nullable|required_if:ort_typ,extern|string|max:255',
             'bemerkung' => 'nullable|string|max:1000',
+            'non_working_dates' => ['nullable', 'array'],
+            'non_working_dates.*' => ['date', 'distinct'],
         ]);
+
+        if ($validated['groupType'] !== 'unlimited') {
+            $duration = match ($validated['groupType']) {
+                '2-day' => 2,
+                '3-day' => 3,
+                default => 1,
+            };
+            $validated['endDate'] = $this->workdays
+                ->endDateForDuration($validated['startDate'], $duration)
+                ->toDateString();
+        }
+
+        $nonWorkingDates = $this->validatedNonWorkingDates(
+            $validated['non_working_dates'] ?? [],
+            $validated['startDate'],
+            $validated['endDate'] ?? $validated['startDate'],
+        );
 
         $projekt = $this->projektMitVerfuegbarenRaeumen($activeProject->id);
         $this->validateProjektZuordnung($projekt, (int) $validated['bereich'], $validated['raum_id'] ?? null);
@@ -109,6 +165,7 @@ class GruppeController extends Controller
             'startzeit' => $validated['startZeit'],
             'endzeit' => $validated['endZeit'],
             'bemerkung' => $validated['bemerkung'] ?? null,
+            'non_working_dates' => $nonWorkingDates,
         ]);
         $gruppe->partners()->sync($validated['partner_ids'] ?? []);
 
@@ -119,6 +176,61 @@ class GruppeController extends Controller
                 'teilnehmer as teilnehmer_count' => fn ($query) => $query->select(DB::raw('count(distinct personens.id)')),
             ]),
         ], 201);
+    }
+
+    public function updateNonWorkingDate(Request $request, Gruppe $gruppe)
+    {
+        $activeProject = $this->activeProjectContext->currentAvailableFor($request->user());
+        abort_unless($activeProject && (int) $gruppe->projekt_id === (int) $activeProject->id, 403);
+
+        $validated = $request->validate([
+            'date' => ['required', 'date'],
+            'worked' => ['required', 'boolean'],
+        ]);
+        $date = Carbon::parse($validated['date'])->startOfDay();
+        $start = Carbon::parse($gruppe->anfangsdatum)->startOfDay();
+        $end = Carbon::parse($gruppe->enddatum ?: $gruppe->anfangsdatum)->startOfDay();
+
+        if ($date->lt($start) || $date->gt($end)) {
+            throw ValidationException::withMessages([
+                'date' => 'Das Datum liegt ausserhalb des Gruppenzeitraums.',
+            ]);
+        }
+
+        if ($this->workdays->isWorkday($date)) {
+            throw ValidationException::withMessages([
+                'date' => 'Fuer einen regulaeren Arbeitstag ist keine Freigabe erforderlich.',
+            ]);
+        }
+
+        $dates = collect($gruppe->non_working_dates ?? [])
+            ->map(fn ($value) => Carbon::parse($value)->toDateString())
+            ->unique()
+            ->values();
+
+        $dates = $validated['worked']
+            ? $dates->push($date->toDateString())->unique()->sort()->values()
+            : $dates->reject(fn ($value) => $value === $date->toDateString())->values();
+
+        $gruppe->update(['non_working_dates' => $dates->all()]);
+
+        if ($validated['worked']) {
+            $details = $this->workdays->details($date);
+            Tage::updateOrCreate([
+                'datum' => $date->toDateString(),
+            ], [
+                'wochentag' => $date->locale('de')->dayName,
+                'feiertag_typ' => $details['type'] === 'holiday' ? 'gesetzlicher_feiertag' : 'kein_feiertag',
+                'feiertag_name' => $details['type'] === 'holiday' ? $details['name'] : null,
+            ]);
+        }
+
+        return response()->json([
+            'message' => $validated['worked']
+                ? 'Der Einsatz an diesem freien Tag wurde bestaetigt.'
+                : 'Die Freigabe fuer den freien Tag wurde entfernt.',
+            'non_working_dates' => $gruppe->fresh()->non_working_dates ?? [],
+        ]);
     }
 
     public function update(Request $request, $id, RaumBelegungService $belegungService)
@@ -490,5 +602,34 @@ class GruppeController extends Controller
                 'betreuer' => 'Der Betreuer gehoert nicht zum ausgewaehlten Projekt oder ist nicht als Vertretung verfuegbar.',
             ]);
         }
+    }
+
+    private function validatedNonWorkingDates(array $dates, string $startDate, string $endDate): array
+    {
+        $start = Carbon::parse($startDate)->startOfDay();
+        $end = Carbon::parse($endDate)->startOfDay();
+        $validated = [];
+
+        foreach (array_unique($dates) as $value) {
+            $date = Carbon::parse($value)->startOfDay();
+
+            if ($date->lt($start) || $date->gt($end)) {
+                throw ValidationException::withMessages([
+                    'non_working_dates' => 'Eine bestaetigte Ausnahme liegt ausserhalb des Gruppenzeitraums.',
+                ]);
+            }
+
+            if ($this->workdays->isWorkday($date)) {
+                throw ValidationException::withMessages([
+                    'non_working_dates' => 'Nur Wochenenden und Feiertage duerfen als Sonderarbeitstage bestaetigt werden.',
+                ]);
+            }
+
+            $validated[] = $date->toDateString();
+        }
+
+        sort($validated);
+
+        return $validated;
     }
 }

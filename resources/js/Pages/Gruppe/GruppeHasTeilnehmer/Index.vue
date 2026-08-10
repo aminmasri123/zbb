@@ -18,6 +18,7 @@
     gruppe: { type: Object, required: true },
     teilnehmer: { type: Array, required: true },
     anwesenheitsstatuten: { type: Array, required: true },
+    nonWorkingDays: { type: Array, default: () => [] },
     bopLegacyExporte: { type: Array, default: () => [] },
     potenzialanalyse: { type: Object, default: () => ({ aktiv: false, erlaubt: false, can: { view: false, update: false }, tage: null, uebungen: [], teilnehmer: {} }) },
     })
@@ -51,6 +52,50 @@
     ]))
     const canViewAttendance = computed(() => canReadAttendance.value || canUseAttendanceExports.value)
     const canManageAttendance = computed(() => can('anwesenheit.manage'))
+    const confirmedNonWorkingDates = ref([...(props.gruppe?.non_working_dates || [])])
+    const nonWorkingDayMap = computed(() => new Map(
+      props.nonWorkingDays.map((day) => [day.date, day])
+    ))
+    const attendanceDateEditable = (tag) =>
+      !nonWorkingDayMap.value.has(tag.date) || confirmedNonWorkingDates.value.includes(tag.date)
+
+    const confirmNonWorkingDay = async (tag) => {
+      const details = nonWorkingDayMap.value.get(tag.date)
+      if (!details || attendanceDateEditable(tag) || !canManageAttendance.value) return
+
+      const result = await Swal.fire({
+        icon: 'warning',
+        title: 'Arbeit an einem freien Tag bestätigen?',
+        text: `${details.label} (${new Date(`${tag.date}T12:00:00`).toLocaleDateString('de-DE')}). Bitte nur bestätigen, wenn an diesem Tag tatsächlich gearbeitet wurde.`,
+        showCancelButton: true,
+        confirmButtonText: 'Ja, es wurde gearbeitet',
+        cancelButtonText: 'Abbrechen',
+        confirmButtonColor: '#ea580c',
+      })
+
+      if (!result.isConfirmed) return
+
+      try {
+        const response = await axios.post(route('gruppe.non-working-date.update', props.gruppe.id), {
+          date: tag.date,
+          worked: true,
+        })
+        confirmedNonWorkingDates.value = response.data.non_working_dates || []
+        await Swal.fire({
+          icon: 'success',
+          title: 'Arbeitstag freigegeben',
+          text: 'Die Anwesenheit kann für diesen Tag jetzt bearbeitet werden.',
+          timer: 1800,
+          showConfirmButton: false,
+        })
+      } catch (error) {
+        await Swal.fire({
+          icon: 'error',
+          title: 'Freigabe fehlgeschlagen',
+          text: error.response?.data?.message || 'Der freie Tag konnte nicht freigegeben werden.',
+        })
+      }
+    }
     const canExportAttendance = canUseAttendanceExports
     const canAddTeilnehmerToGroup = computed(() => can('gruppeHasTeilnehmer.store'))
     const canRemoveTeilnehmerFromGroup = computed(() => can('gruppeHasTeilnehmer.destroyTeilnehmer'))
@@ -363,6 +408,14 @@ const gefilterteExportVorlagen = computed(() => {
 const bopLegacyExporte = computed(() => props.bopLegacyExporte || [])
 const paAktiv = computed(() => Boolean(props.potenzialanalyse?.aktiv) && canViewPotenzialanalyse.value)
 const paUebungen = computed(() => props.potenzialanalyse?.uebungen || [])
+const paBerichtStile = computed(() => props.potenzialanalyse?.bericht_stile || [
+  { value: 'staerkenorientiert', label: 'Stärkenorientiert' },
+  { value: 'ausfuehrlich', label: 'Ausführlich' },
+  { value: 'kompakt', label: 'Kompakt' },
+  { value: 'sachlich', label: 'Sachlich und wertschätzend' },
+])
+const paVorschlaege = ref({})
+const paVorschlagLaedt = ref(false)
 const paBerichtStatusOptionen = [
   { label: 'Entwurf', value: 'entwurf' },
   { label: 'In Bearbeitung', value: 'in_bearbeitung' },
@@ -484,6 +537,8 @@ const defaultPaBericht = () => ({
   entwicklungsfelder: '',
   empfehlung: '',
   bericht_text: '',
+  generator_stil: props.potenzialanalyse?.auswertung_config?.report_style || 'staerkenorientiert',
+  generator_snapshot: null,
   fertiggestellt_at: null,
 })
 
@@ -589,7 +644,7 @@ const normalisierePaUebungswerte = (personenId) => {
     const maxPunkte = Number(uebung.hoechstwert)
 
     ergebnis.punkte = normalisierePaZahl(ergebnis.punkte, {
-      min: 0,
+      min: Number(uebung.mindestwert ?? 0),
       max: Number.isFinite(maxPunkte) ? maxPunkte : null,
     })
     ergebnis.zeit_min = normalisierePaZahl(ergebnis.zeit_min, { min: 0, max: 999 }) ?? 0
@@ -613,7 +668,7 @@ const clampUebungPunkte = (personenId, uebung) => {
   }
 
   const max = Number(uebung.hoechstwert)
-  const wert = Math.max(0, Number(ergebnis.punkte || 0))
+  const wert = Math.max(Number(uebung.mindestwert ?? 0), Number(ergebnis.punkte || 0))
   ergebnis.punkte = Number.isFinite(max) && max >= 0 ? Math.min(wert, max) : wert
   planePotenzialanalyseSpeichern({ personenId, sofort: true })
 }
@@ -665,7 +720,7 @@ const paUebungenPayload = (eintrag) =>
 
     payload[key] = {
       punkte: normalisierePaZahl(wert.punkte, {
-        min: 0,
+        min: Number(uebung.mindestwert ?? 0),
         max: Number.isFinite(Number(uebung.hoechstwert)) ? Number(uebung.hoechstwert) : null,
       }),
       zeit_min: normalisierePaZahl(wert.zeit_min, { min: 0, max: 999 }) ?? 0,
@@ -692,6 +747,56 @@ const paEintragSnapshot = (personenId) => {
       kompetenzen,
     },
   }
+}
+
+const holePaVorschlaege = async (personenId = null) => {
+  if (!canEditPotenzialanalyse.value) return null
+  const teilnehmerId = resolvePaTeilnehmerId(personenId)
+  if (!teilnehmerId) return null
+
+  const snapshot = paEintragSnapshot(teilnehmerId)
+  paVorschlagLaedt.value = true
+  try {
+    const response = await axios.post(
+      route('potenzialanalyse.gruppe.teilnehmer.vorschlag', [props.gruppe.id, teilnehmerId]),
+      {
+        uebungen: snapshot.uebungen,
+        selbsteinschaetzung: snapshot.selbsteinschaetzung,
+        kompetenzen: snapshot.kompetenzen,
+        bericht: snapshot.bericht,
+        style: snapshot.bericht?.generator_stil || props.potenzialanalyse?.auswertung_config?.report_style || 'staerkenorientiert',
+      },
+    )
+    paVorschlaege.value[String(teilnehmerId)] = response.data
+    return response.data
+  } catch (error) {
+    Swal.fire('Berechnung fehlgeschlagen', error.response?.data?.message || 'Die Vorschläge konnten nicht berechnet werden.', 'error')
+    return null
+  } finally {
+    paVorschlagLaedt.value = false
+  }
+}
+
+const paVorschlagFuer = (personenId, merkmalKey) =>
+  paVorschlaege.value[String(personenId)]?.combined_scores?.[merkmalKey] || null
+
+const uebernehmePaVorschlag = (personenId, merkmalKey, speichern = true) => {
+  const vorschlag = paVorschlagFuer(personenId, merkmalKey)
+  if (!vorschlag?.rating) return
+  setzePaBewertung(personenId, 'kompetenzen', merkmalKey, vorschlag.rating, speichern)
+}
+
+const uebernehmeAllePaVorschlaege = async () => {
+  const teilnehmer = selectedPaTeilnehmer.value
+  if (!teilnehmer) return
+  let daten = paVorschlaege.value[String(teilnehmer.id)]
+  if (!daten) daten = await holePaVorschlaege(teilnehmer.id)
+  if (!daten) return
+
+  Object.entries(daten.combined_scores || {}).forEach(([merkmalKey, vorschlag]) => {
+    if (vorschlag?.rating) uebernehmePaVorschlag(teilnehmer.id, merkmalKey, false)
+  })
+  planePotenzialanalyseSpeichern({ personenId: teilnehmer.id, sofort: true })
 }
 
 const csrfToken = () =>
@@ -1278,12 +1383,15 @@ const generierePaBerichtstext = async () => {
     }
   }
 
-  paBerichtGenerierungZaehler.value += 1
-  eintrag.bericht.bericht_text = bauePaBerichtstext(
-    teilnehmer,
-    eintrag,
-    paBerichtGenerierungZaehler.value + Date.now()
-  )
+  const daten = await holePaVorschlaege(teilnehmer.id)
+  if (!daten?.report?.text) return
+  eintrag.bericht.bericht_text = daten.report.text
+  eintrag.bericht.generator_stil = daten.report.style
+  eintrag.bericht.generator_snapshot = {
+    generated_at: new Date().toISOString(),
+    exercise_scores: daten.exercise_scores,
+    combined_scores: daten.combined_scores,
+  }
   activePaTab.value = 'bericht'
   planePotenzialanalyseSpeichern({ personenId: teilnehmer.id, sofort: true })
 }
@@ -1579,6 +1687,8 @@ onBeforeUnmount(() => {
 
 //Anwesenheit speichern
 const speichernSofort = async (tID, ttag, statusName, tatstartTime, tatendTime) => {
+  if (!canManageAttendance.value || !attendanceDateEditable(ttag)) return
+
   try {
     const teilnehmerId = tID
     const tag = ttag.date
@@ -1588,7 +1698,7 @@ const speichernSofort = async (tID, ttag, statusName, tatstartTime, tatendTime) 
 
     console.log('speichernSofort:', { teilnehmerId, tag, statusName, tatstartTime , tatendTime })
 
-    router.post(route('anwesenheit.update'), {
+    await axios.post(route('anwesenheit.update'), {
       personen_id: teilnehmerId,
       gruppe_id: props.gruppe.id,
       tag: tag,
@@ -2019,11 +2129,26 @@ const exportMitTag = async () => {
                   v-for="tag in sichtbareTage"
                   :key="tag.date"
                   class="border px-2 py-2 text-center"
+                  :class="nonWorkingDayMap.has(tag.date) ? 'bg-gray-200' : ''"
                 >
                   <div class="flex flex-col items-center">
                     <span class="font-semibold">{{ tag.wochentag }}</span>
                     <span class="text-xs text-gray-500">{{ tag.kurzdatum }}</span>
                     <span class="text-[11px] text-gray-400">{{ tag.label }}</span>
+                    <span v-if="nonWorkingDayMap.has(tag.date)" class="mt-1 rounded bg-gray-700 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                      {{ nonWorkingDayMap.get(tag.date).label }}
+                    </span>
+                    <span v-if="nonWorkingDayMap.has(tag.date) && attendanceDateEditable(tag)" class="mt-1 text-[10px] font-semibold text-green-700">
+                      Arbeit bestätigt
+                    </span>
+                    <button
+                      v-else-if="nonWorkingDayMap.has(tag.date) && canManageAttendance"
+                      type="button"
+                      class="mt-1 rounded border border-orange-300 bg-white px-1.5 py-1 text-[10px] font-semibold text-orange-700 hover:bg-orange-50"
+                      @click="confirmNonWorkingDay(tag)"
+                    >
+                      Arbeit freigeben
+                    </button>
                   </div>
                 </th>
               </tr>
@@ -2069,7 +2194,7 @@ const exportMitTag = async () => {
 
                         <Select
                         v-model="gruppenTeilnehmer[tIndex].anwesenheit[tttag.index]"
-                        :disabled="!canManageAttendance"
+                        :disabled="!canManageAttendance || !attendanceDateEditable(tttag)"
                         :options="props.anwesenheitsstatuten"
                         optionLabel="status"
                         optionValue="status"
@@ -2104,7 +2229,7 @@ const exportMitTag = async () => {
                         <InputText
                             type="time"
                             v-model="t.zeiten[tttag.index].start"
-                            :disabled="!canManageAttendance"
+                            :disabled="!canManageAttendance || !attendanceDateEditable(tttag)"
                             class="min-w-0 !w-full px-1 text-xs"
                             @blur="speichernSofort(
                                 t.id,
@@ -2118,7 +2243,7 @@ const exportMitTag = async () => {
                         <InputText
                             type="time"
                             v-model="t.zeiten[tttag.index].ende"
-                            :disabled="!canManageAttendance"
+                            :disabled="!canManageAttendance || !attendanceDateEditable(tttag)"
                             class="min-w-0 !w-full px-1 text-xs"
                             @blur="speichernSofort(
                                 t.id,
@@ -2296,17 +2421,22 @@ const exportMitTag = async () => {
                         <div class="flex flex-wrap items-center gap-2">
                           <p class="font-medium text-gray-800">{{ uebung.name }}</p>
                           <span v-if="uebung.tag" class="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-500">Tag {{ uebung.tag }}</span>
-                          <span class="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-500">Max. {{ uebung.hoechstwert ?? '-' }}</span>
+                          <span class="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-500">{{ uebung.ergebnis_typ || 'punkte' }}: {{ uebung.mindestwert ?? 0 }}–{{ uebung.hoechstwert ?? '-' }}</span>
                           <span v-if="uebung.auswertbar" class="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">Auswertbar</span>
                         </div>
                         <p v-if="uebung.beschreibung" class="mt-1 text-xs text-gray-500">{{ uebung.beschreibung }}</p>
+                        <div v-if="uebung.kompetenzen?.length" class="mt-2 flex flex-wrap gap-1">
+                          <span v-for="zuordnung in uebung.kompetenzen" :key="`${uebung.id}-${zuordnung.merkmal}`" class="rounded bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">
+                            {{ paMerkmale.find((item) => item.key === zuordnung.merkmal)?.label || zuordnung.merkmal }} · {{ Number(zuordnung.gewichtung) }}
+                          </span>
+                        </div>
                       </td>
                       <td class="px-3 py-3 align-top">
                         <div class="flex items-center gap-2">
                           <InputText
                             v-model.number="paUebungErgebnis(selectedPaTeilnehmer.id, uebung.id).punkte"
                             type="number"
-                            min="0"
+                            :min="uebung.mindestwert ?? 0"
                             :max="uebung.hoechstwert ?? undefined"
                             class="w-28"
                             :disabled="!canEditPotenzialanalyse"
@@ -2346,8 +2476,15 @@ const exportMitTag = async () => {
             </div>
 
             <div v-show="activePaTab === 'kompetenzen'" class="rounded border border-gray-200 bg-white">
-              <div class="border-b border-gray-100 bg-gray-50 px-3 py-2">
-                <h5 class="text-sm font-semibold text-gray-800">Schritt 3: Einschätzung der Kompetenzen</h5>
+              <div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 bg-gray-50 px-3 py-2">
+                <div>
+                  <h5 class="text-sm font-semibold text-gray-800">Schritt 3: Einschätzung der Kompetenzen</h5>
+                  <p class="text-xs text-gray-500">Die Berechnung ist ein Vorschlag und wird erst nach Ihrer Bestätigung übernommen.</p>
+                </div>
+                <div class="flex gap-2">
+                  <Button label="Vorschläge berechnen" icon="pi pi-calculator" size="small" severity="secondary" outlined :loading="paVorschlagLaedt" :disabled="!canEditPotenzialanalyse" @click="holePaVorschlaege(selectedPaTeilnehmer.id)" />
+                  <Button label="Alle übernehmen" icon="pi pi-check" size="small" :disabled="!canEditPotenzialanalyse || !paVorschlaege[String(selectedPaTeilnehmer.id)]" @click="uebernehmeAllePaVorschlaege" />
+                </div>
               </div>
               <div class="overflow-x-auto">
                 <table class="w-full min-w-[720px] text-xs">
@@ -2355,6 +2492,7 @@ const exportMitTag = async () => {
                     <tr>
                       <th class="border-b px-2 py-1.5 text-left">Merkmal</th>
                       <th class="border-b px-2 py-1.5 text-center">Kat.</th>
+                      <th class="border-b px-2 py-1.5 text-left">Berechneter Vorschlag</th>
                       <th v-for="wert in paBewertungWerte" :key="'kompetenz-head-' + wert" class="border-b px-1 py-1 text-center">
                         <button
                           type="button"
@@ -2373,6 +2511,13 @@ const exportMitTag = async () => {
                     <tr v-for="merkmal in paMerkmale" :key="'kompetenz-' + merkmal.key" class="border-b last:border-b-0">
                       <td class="px-2 py-1.5 font-medium text-gray-800">{{ merkmal.label }}</td>
                       <td class="px-2 py-1.5 text-center text-xs text-gray-500">{{ merkmal.kategorie }}</td>
+                      <td class="px-2 py-1.5">
+                        <div v-if="paVorschlagFuer(selectedPaTeilnehmer.id, merkmal.key)?.rating" class="flex items-center gap-2">
+                          <span class="rounded bg-blue-100 px-2 py-1 font-semibold text-blue-800">Stufe {{ paVorschlagFuer(selectedPaTeilnehmer.id, merkmal.key).rating }} · {{ paVorschlagFuer(selectedPaTeilnehmer.id, merkmal.key).percentage }} %</span>
+                          <button type="button" class="text-xs font-semibold text-zbb hover:underline" @click="uebernehmePaVorschlag(selectedPaTeilnehmer.id, merkmal.key)">Übernehmen</button>
+                        </div>
+                        <span v-else class="text-gray-400">–</span>
+                      </td>
                       <td v-for="wert in paBewertungWerte" :key="'kompetenz-' + merkmal.key + '-' + wert" class="px-2 py-1.5 text-center">
                         <input
                           v-model.number="paEintrag(selectedPaTeilnehmer.id).kompetenzen[merkmal.key].bewertung"
@@ -2403,6 +2548,14 @@ const exportMitTag = async () => {
               <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <h5 class="font-semibold text-gray-800">Bericht</h5>
                 <div class="flex flex-wrap items-center gap-2">
+                  <Select
+                    v-model="paEintrag(selectedPaTeilnehmer.id).bericht.generator_stil"
+                    :options="paBerichtStile"
+                    optionLabel="label"
+                    optionValue="value"
+                    class="w-56 max-w-full"
+                    :disabled="!canEditPotenzialanalyse"
+                  />
                   <Button
                     v-if="can('gruppe.bop.export.auswertungsbogen-pa')"
                     label="Bericht als PDF"

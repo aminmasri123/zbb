@@ -20,10 +20,13 @@ class PotenzialanalyseBericht extends Model
         'entwicklungsfelder',
         'empfehlung',
         'bericht_text',
+        'generator_stil',
+        'generator_snapshot',
         'fertiggestellt_at',
     ];
 
     protected $casts = [
         'fertiggestellt_at' => 'datetime',
+        'generator_snapshot' => 'array',
     ];
 }

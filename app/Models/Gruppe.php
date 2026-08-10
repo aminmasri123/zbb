@@ -36,6 +36,11 @@ class Gruppe extends Model
         'endzeit',
         'externer_ort',
         'bemerkung',
+        'non_working_dates',
+    ];
+
+    protected $casts = [
+        'non_working_dates' => 'array',
     ];
 
     public function teilnehmer()
