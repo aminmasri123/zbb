@@ -789,16 +789,40 @@ const uebernehmePaVorschlag = (personenId, merkmalKey, speichern = true) => {
 }
 
 const uebernehmeAllePaVorschlaege = async () => {
+  if (!canEditPotenzialanalyse.value) return
   const teilnehmer = selectedPaTeilnehmer.value
   if (!teilnehmer) return
   let daten = paVorschlaege.value[String(teilnehmer.id)]
   if (!daten) daten = await holePaVorschlaege(teilnehmer.id)
   if (!daten) return
 
+  let anzahl = 0
   Object.entries(daten.combined_scores || {}).forEach(([merkmalKey, vorschlag]) => {
-    if (vorschlag?.rating) uebernehmePaVorschlag(teilnehmer.id, merkmalKey, false)
+    if (vorschlag?.rating) {
+      uebernehmePaVorschlag(teilnehmer.id, merkmalKey, false)
+      anzahl += 1
+    }
   })
-  planePotenzialanalyseSpeichern({ personenId: teilnehmer.id, sofort: true })
+
+  if (!anzahl) {
+    await Swal.fire({
+      icon: 'info',
+      title: 'Keine Vorschläge vorhanden',
+      text: 'Aus den eingetragenen Übungen konnten noch keine Kompetenzwerte berechnet werden.',
+    })
+    return
+  }
+
+  const gespeichert = await speicherePotenzialanalyse({ personenId: teilnehmer.id, silent: true })
+  if (!gespeichert) return
+
+  await Swal.fire({
+    icon: 'success',
+    title: 'Alle Vorschläge übernommen',
+    text: `${anzahl} Kompetenzbewertungen wurden übernommen und gespeichert.`,
+    timer: 1600,
+    showConfirmButton: false,
+  })
 }
 
 const csrfToken = () =>
@@ -2585,7 +2609,7 @@ const exportMitTag = async () => {
                 </div>
                 <div class="flex gap-2">
                   <Button label="Vorschläge berechnen" icon="pi pi-calculator" size="small" severity="secondary" outlined :loading="paVorschlagLaedt" :disabled="!canEditPotenzialanalyse" @click="holePaVorschlaege(selectedPaTeilnehmer.id)" />
-                  <Button label="Alle übernehmen" icon="pi pi-check" size="small" :disabled="!canEditPotenzialanalyse || !paVorschlaege[String(selectedPaTeilnehmer.id)]" @click="uebernehmeAllePaVorschlaege" />
+                  <Button label="Alle übernehmen" icon="pi pi-check" size="small" :loading="paSaving" :disabled="!canEditPotenzialanalyse || paSaving || !paVorschlaege[String(selectedPaTeilnehmer.id)]" @click="uebernehmeAllePaVorschlaege" />
                 </div>
               </div>
               <div class="overflow-x-auto">
