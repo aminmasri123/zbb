@@ -1,0 +1,337 @@
+<?php
+
+namespace App\Services\Bop;
+
+use App\Models\Gruppe;
+use App\Models\GruppeHasPersonen;
+use App\Models\Partner;
+use App\Models\Personen;
+use App\Models\PersonenIstSchueler;
+use App\Models\PotenzialanalyseBericht;
+use App\Models\PotenzialanalyseBeurteilung;
+use App\Models\PotenzialanalyseKompetenzbewertung;
+use App\Models\PotenzialanalyseSelbsteinschaetzung;
+use App\Models\PotenzialanalyseUebungErgebnis;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
+use ZipArchive;
+
+class PotenzialanalyseReportService
+{
+    private const MERKMALE = [
+        ['key' => 'feinmotorik', 'bereich' => 'Berufsübergreifende Kompetenzen', 'label' => 'Feinmotorik'],
+        ['key' => 'grobmotorik', 'bereich' => 'Berufsübergreifende Kompetenzen', 'label' => 'Grobmotorik'],
+        ['key' => 'wahrnehmung_symmetrie', 'bereich' => 'Berufsübergreifende Kompetenzen', 'label' => 'Wahrnehmung und Symmetrie'],
+        ['key' => 'analyse_problemloesefaehigkeit', 'bereich' => 'Methodenkompetenz', 'label' => 'Analyse- und Problemlösefähigkeit'],
+        ['key' => 'arbeitsplanung', 'bereich' => 'Methodenkompetenz', 'label' => 'Arbeitsplanung'],
+        ['key' => 'motivation_leistungsbereitschaft', 'bereich' => 'Personale Kompetenzen', 'label' => 'Motivation und Leistungsbereitschaft'],
+        ['key' => 'durchhaltevermoegen', 'bereich' => 'Personale Kompetenzen', 'label' => 'Durchhaltevermögen'],
+        ['key' => 'sorgfalt', 'bereich' => 'Personale Kompetenzen', 'label' => 'Sorgfalt und Genauigkeit'],
+        ['key' => 'kommunikation', 'bereich' => 'Soziale Kompetenzen', 'label' => 'Kommunikationsfähigkeit'],
+        ['key' => 'teamfaehigkeit', 'bereich' => 'Soziale Kompetenzen', 'label' => 'Teamfähigkeit'],
+        ['key' => 'umgangsformen', 'bereich' => 'Soziale Kompetenzen', 'label' => 'Umgangsformen'],
+    ];
+
+    public function reportData(Gruppe $gruppe, Personen $person): array
+    {
+        $gruppe->loadMissing(['projekt', 'bereich', 'partner', 'teilnehmer.schueler']);
+        $person->loadMissing('schueler.schule');
+
+        $student = $this->studentContext($gruppe, $person);
+        $ratings = PotenzialanalyseKompetenzbewertung::query()
+            ->where('gruppe_id', $gruppe->id)
+            ->where('personen_id', $person->id)
+            ->get()
+            ->groupBy('typ');
+
+        $selfRatings = ($ratings->get('selbst') ?? collect())->keyBy('merkmal');
+        $coachRatings = ($ratings->get('anleiter') ?? collect())->keyBy('merkmal');
+
+        $merkmale = collect(self::MERKMALE)->map(function (array $merkmal) use ($selfRatings, $coachRatings) {
+            $self = $selfRatings->get($merkmal['key']);
+            $coach = $coachRatings->get($merkmal['key']);
+
+            return $merkmal + [
+                'selbst' => $self?->bewertung,
+                'selbst_bemerkung' => $self?->bemerkung,
+                'anleiter' => $coach?->bewertung,
+                'anleiter_bemerkung' => $coach?->bemerkung,
+            ];
+        })->groupBy('bereich');
+
+        $results = PotenzialanalyseUebungErgebnis::query()
+            ->with('uebung')
+            ->where('gruppe_id', $gruppe->id)
+            ->where('personen_id', $person->id)
+            ->get()
+            ->sortBy([
+                fn ($a, $b) => ((int) ($a->uebung?->tag ?? 0)) <=> ((int) ($b->uebung?->tag ?? 0)),
+                fn ($a, $b) => ((int) ($a->uebung?->sort_order ?? 0)) <=> ((int) ($b->uebung?->sort_order ?? 0)),
+            ])
+            ->values()
+            ->map(fn ($result) => [
+                'name' => $result->uebung?->name ?? 'Übung',
+                'tag' => $result->uebung?->tag,
+                'punkte' => $result->punkte,
+                'hoechstwert' => $result->uebung?->hoechstwert,
+                'zeit' => $this->formatDuration((int) ($result->zeit ?? 0)),
+            ]);
+
+        $assessment = PotenzialanalyseBeurteilung::query()
+            ->with('kriterium.uebung')
+            ->where('gruppe_id', $gruppe->id)
+            ->where('personen_id', $person->id)
+            ->get()
+            ->keyBy('kriterium_id');
+
+        $selfAssessment = PotenzialanalyseSelbsteinschaetzung::query()
+            ->with('kriterium.uebung')
+            ->where('gruppe_id', $gruppe->id)
+            ->where('personen_id', $person->id)
+            ->get()
+            ->keyBy('kriterium_id');
+
+        $kriterien = $assessment->keys()
+            ->merge($selfAssessment->keys())
+            ->unique()
+            ->map(function ($kriteriumId) use ($assessment, $selfAssessment) {
+                $entry = $assessment->get($kriteriumId);
+                $self = $selfAssessment->get($kriteriumId);
+                $kriterium = $entry?->kriterium ?: $self?->kriterium;
+
+                return [
+                    'uebung' => $kriterium?->uebung?->name ?? '',
+                    'kriterium' => $kriterium?->name ?? '',
+                    'selbst' => $self?->bewertung,
+                    'anleiter' => $entry?->bewertung,
+                    'bemerkung' => $entry?->bemerkung ?: $self?->bemerkung,
+                ];
+            })
+            ->filter(fn (array $entry) => filled($entry['kriterium']))
+            ->values();
+
+        $bericht = PotenzialanalyseBericht::query()
+            ->where('gruppe_id', $gruppe->id)
+            ->where('personen_id', $person->id)
+            ->first();
+
+        $school = $student?->schule ?: $gruppe->partner;
+
+        return [
+            'person' => $person,
+            'gruppe' => $gruppe,
+            'student' => $student,
+            'school' => $school,
+            'merkmale' => $merkmale,
+            'uebungen' => $results,
+            'kriterien' => $kriterien,
+            'bericht' => $bericht,
+            'statusLabel' => $this->statusLabel($bericht?->status),
+            'zeitraum' => $this->dateRange($gruppe->anfangsdatum, $gruppe->enddatum),
+            'erstelltAm' => $bericht?->fertiggestellt_at?->format('d.m.Y')
+                ?: $bericht?->updated_at?->format('d.m.Y')
+                ?: now()->format('d.m.Y'),
+        ];
+    }
+
+    public function renderPdf(Gruppe $gruppe, Personen $person): string
+    {
+        return Pdf::loadView('pdf.potenzialanalyse-bericht', $this->reportData($gruppe, $person))
+            ->setPaper('a4', 'portrait')
+            ->output();
+    }
+
+    public function writePdf(Gruppe $gruppe, Personen $person, string $directory): string
+    {
+        File::ensureDirectoryExists($directory);
+        $path = $directory . DIRECTORY_SEPARATOR . $this->fileName($person, 'pdf');
+        File::put($path, $this->renderPdf($gruppe, $person));
+
+        return $path;
+    }
+
+    public function createGroupZip(Gruppe $gruppe): array
+    {
+        $gruppe->loadMissing(['teilnehmer', 'bereich']);
+        $people = $gruppe->teilnehmer
+            ->unique('id')
+            ->sortBy(fn (Personen $person) => mb_strtolower(($person->nachname ?? '') . ' ' . ($person->vorname ?? '')))
+            ->values();
+
+        abort_if($people->isEmpty(), 422, 'Die Gruppe verfügt über keine Teilnehmer.');
+
+        $directory = storage_path('app/tmp/pa_berichte_' . Str::uuid());
+        File::ensureDirectoryExists($directory);
+
+        $zipName = $this->safeName('PA_Berichte_Gruppe_' . ($gruppe->bereich?->name ?: $gruppe->id)) . '.zip';
+        $zipPath = storage_path('app/tmp/' . Str::uuid() . '_' . $zipName);
+        $zip = new ZipArchive();
+
+        if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+            File::deleteDirectory($directory);
+            throw new \RuntimeException('Das ZIP-Archiv für die PA-Berichte konnte nicht erstellt werden.');
+        }
+
+        foreach ($people as $person) {
+            $path = $this->writePdf($gruppe, $person, $directory);
+            $zip->addFile($path, basename($path));
+        }
+
+        $zip->close();
+        File::deleteDirectory($directory);
+
+        return ['path' => $zipPath, 'name' => $zipName, 'count' => $people->count()];
+    }
+
+    public function schoolAssignments(int $schoolId, string $schoolYear, string $part, int $projectId): Collection
+    {
+        $students = PersonenIstSchueler::query()
+            ->with(['person', 'schule'])
+            ->where('schule_id', $schoolId)
+            ->where('schuljahr', $schoolYear)
+            ->where('teil', $part)
+            ->get()
+            ->keyBy('person_id');
+
+        if ($students->isEmpty()) {
+            return collect();
+        }
+
+        $groupIds = GruppeHasPersonen::query()
+            ->whereIn('personen_id', $students->keys())
+            ->whereHas('gruppe', fn ($query) => $query->where('projekt_id', $projectId))
+            ->pluck('gruppe_id')
+            ->unique()
+            ->values();
+
+        if ($groupIds->isEmpty()) {
+            return collect();
+        }
+
+        $pairs = collect();
+        foreach ([
+            PotenzialanalyseBericht::class,
+            PotenzialanalyseKompetenzbewertung::class,
+            PotenzialanalyseUebungErgebnis::class,
+            PotenzialanalyseBeurteilung::class,
+            PotenzialanalyseSelbsteinschaetzung::class,
+        ] as $model) {
+            $pairs = $pairs->concat(
+                $model::query()
+                    ->whereIn('gruppe_id', $groupIds)
+                    ->whereIn('personen_id', $students->keys())
+                    ->orderByDesc('updated_at')
+                    ->get(['gruppe_id', 'personen_id', 'updated_at'])
+            );
+        }
+
+        $latestByPerson = $pairs
+            ->unique('personen_id')
+            ->keyBy('personen_id');
+
+        $groups = Gruppe::query()
+            ->with(['projekt', 'bereich', 'partner'])
+            ->whereIn('id', $latestByPerson->pluck('gruppe_id')->unique())
+            ->get()
+            ->keyBy('id');
+
+        return $latestByPerson
+            ->map(function ($pair) use ($students, $groups) {
+                $student = $students->get($pair->personen_id);
+                $group = $groups->get($pair->gruppe_id);
+
+                if (! $student?->person || ! $group) {
+                    return null;
+                }
+
+                return ['gruppe' => $group, 'person' => $student->person];
+            })
+            ->filter()
+            ->sortBy(fn (array $item) => mb_strtolower(($item['person']->nachname ?? '') . ' ' . ($item['person']->vorname ?? '')))
+            ->values();
+    }
+
+    public function fileName(Personen $person, string $extension = 'pdf'): string
+    {
+        $name = trim(($person->nachname ?? '') . '_' . ($person->vorname ?? ''));
+
+        return $this->safeName('PA_Bericht_' . ($name ?: 'Teilnehmer') . '_' . $person->id) . '.' . $extension;
+    }
+
+    private function studentContext(Gruppe $gruppe, Personen $person): ?PersonenIstSchueler
+    {
+        $context = $this->groupContext($gruppe);
+        $students = $person->schueler;
+
+        return $students->first(function (PersonenIstSchueler $student) use ($context) {
+            if (! empty($context['partner_id']) && (int) $student->schule_id !== (int) $context['partner_id']) {
+                return false;
+            }
+            if (! empty($context['schuljahr']) && (string) $student->schuljahr !== (string) $context['schuljahr']) {
+                return false;
+            }
+            if (! empty($context['teil']) && (string) $student->teil !== (string) $context['teil']) {
+                return false;
+            }
+
+            return true;
+        }) ?: $students->sortByDesc('id')->first();
+    }
+
+    private function groupContext(Gruppe $gruppe): array
+    {
+        $context = ['partner_id' => $gruppe->partner_id];
+
+        if (preg_match('/BOP Einteilung Schule\s+(\d+)\s+Schuljahr\s+(.+?)\s+Teil\s+(.+?)\s+Runde\s+(\d+)/u', (string) $gruppe->bemerkung, $matches)) {
+            $context = [
+                'partner_id' => (int) $matches[1],
+                'schuljahr' => trim($matches[2]),
+                'teil' => trim($matches[3]),
+            ];
+        }
+
+        return array_filter($context, fn ($value) => filled($value));
+    }
+
+    private function statusLabel(?string $status): string
+    {
+        return match ($status) {
+            'in_bearbeitung' => 'In Bearbeitung',
+            'fertig' => 'Fertig',
+            'geprueft' => 'Geprüft',
+            default => 'Entwurf',
+        };
+    }
+
+    private function dateRange($start, $end): string
+    {
+        if (! $start && ! $end) {
+            return '';
+        }
+
+        $startValue = $start ? Carbon::parse($start)->format('d.m.Y') : '';
+        $endValue = $end ? Carbon::parse($end)->format('d.m.Y') : '';
+
+        return $startValue === $endValue || $endValue === '' ? $startValue : $startValue . ' - ' . $endValue;
+    }
+
+    private function formatDuration(int $seconds): string
+    {
+        if ($seconds <= 0) {
+            return '';
+        }
+
+        return intdiv($seconds, 60) . ':' . str_pad((string) ($seconds % 60), 2, '0', STR_PAD_LEFT) . ' min';
+    }
+
+    private function safeName(string $value): string
+    {
+        $value = Str::ascii($value);
+        $value = preg_replace('/[^A-Za-z0-9_.-]+/', '_', trim($value));
+
+        return trim((string) $value, '_') ?: 'PA_Bericht';
+    }
+}

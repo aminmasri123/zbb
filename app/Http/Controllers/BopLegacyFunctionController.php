@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Partner;
 use App\Models\PersonenIstSchueler;
+use App\Services\Bop\PotenzialanalyseReportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\DB;
@@ -524,14 +525,32 @@ class BopLegacyFunctionController extends Controller
         return back()->with('success', 'POBO-Auswertungen wurden im Ordner generiert.');
     }
 
-    public function auswertungPaToFolder(int $schulId, string $schuljahr, string $teil)
+    public function auswertungPaToFolder(
+        int $schulId,
+        string $schuljahr,
+        string $teil,
+        PotenzialanalyseReportService $reports
+    )
     {
+        $partner = $this->partner($schulId);
+        $projektId = (int) auth()->user()?->current_team_id;
+        $assignments = $reports->schoolAssignments($schulId, $schuljahr, $teil, $projektId);
+
+        if ($assignments->isEmpty()) {
+            return back()->with('error', 'Für diese Schule wurden noch keine PA-Daten gespeichert.');
+        }
+
         $folder = $this->baseFolder($schulId, $schuljahr, $teil) . DIRECTORY_SEPARATOR . 'Auswertung_PA';
         File::ensureDirectoryExists($folder);
-        $spreadsheet = $this->simpleSpreadsheet('PA Berichte', $schulId, $schuljahr, $teil, ['Bericht erstellt']);
-        (new Xlsx($spreadsheet))->save($folder . DIRECTORY_SEPARATOR . 'PA_Berichte.xlsx');
 
-        return back()->with('success', 'PA-Berichte wurden im Ordner generiert.');
+        foreach ($assignments as $assignment) {
+            $reports->writePdf($assignment['gruppe'], $assignment['person'], $folder);
+        }
+
+        return back()->with(
+            'success',
+            $assignments->count() . ' PA-Bericht(e) wurden für ' . $partner->name . ' im Ordner generiert: ' . $folder
+        );
     }
 
     public function auswertungPoboRunde(int $schuleId, string $schuljahr, string $teil, Request $request)

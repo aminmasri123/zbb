@@ -769,6 +769,14 @@ class GruppeHasTeilnehmerController extends Controller
                 'url' => route('gruppe.bop.export.auswertungsbogen-pa', $gruppe->id),
             ],
             [
+                'id' => 'bop-pa-berichte-gruppe',
+                'name' => 'PA-Berichte Gruppe',
+                'format' => 'ZIP / PDF',
+                'typ' => 'Potenzialanalyse',
+                'method' => 'get',
+                'url' => route('potenzialanalyse.gruppe.berichte', $gruppe->id),
+            ],
+            [
                 'id' => 'bop-pa-auswertungsbogen',
                 'name' => 'Auswertungsbogen PA Schule',
                 'format' => 'PDF',
@@ -819,6 +827,7 @@ class GruppeHasTeilnehmerController extends Controller
                 'bop-pa-zertifikat-gruppe' => 'gruppe.bop.export.zertifikat-pa',
                 'bop-pa-teilnahmebescheinigung-gruppe' => 'gruppe.bop.export.teilnahme-pa',
                 'bop-pa-auswertungsbogen-gruppe' => 'gruppe.bop.export.auswertungsbogen-pa',
+                'bop-pa-berichte-gruppe' => 'gruppe.bop.export.auswertungsbogen-pa',
             ];
 
             if (isset($groupExportPermissions[$item['id']])) {

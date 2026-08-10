@@ -13,6 +13,7 @@ use App\Models\PotenzialanalyseSelbsteinschaetzung;
 use App\Models\PotenzialanalyseUebung;
 use App\Models\PotenzialanalyseUebungErgebnis;
 use App\Models\Projekt;
+use App\Services\Bop\PotenzialanalyseReportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -249,6 +250,35 @@ class PotenzialanalyseController extends Controller
                 : 'Es waren keine Potenzialanalyse-Daten vorhanden.',
             'teilnehmer' => $this->teilnehmerPayload($gruppe, $personen->id),
         ]);
+    }
+
+    public function downloadTeilnehmerBericht(
+        Gruppe $gruppe,
+        Personen $personen,
+        PotenzialanalyseReportService $reports
+    ) {
+        $gruppe->loadMissing('projekt');
+        abort_unless($this->canUseGroup(auth()->user(), $gruppe), 403);
+        $this->ensureProjektUsesPotenzialanalyse($gruppe->projekt);
+        $this->ensureTeilnehmerInGroup($gruppe, $personen);
+
+        return response($reports->renderPdf($gruppe, $personen), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="' . $reports->fileName($personen) . '"',
+        ]);
+    }
+
+    public function downloadGruppenBerichte(
+        Gruppe $gruppe,
+        PotenzialanalyseReportService $reports
+    ) {
+        $gruppe->loadMissing('projekt');
+        abort_unless($this->canUseGroup(auth()->user(), $gruppe), 403);
+        $this->ensureProjektUsesPotenzialanalyse($gruppe->projekt);
+
+        $archive = $reports->createGroupZip($gruppe);
+
+        return response()->download($archive['path'], $archive['name'])->deleteFileAfterSend(true);
     }
 
     private function validateUebung(Request $request, Projekt $projekt): array

@@ -143,6 +143,8 @@ class RoutePermissionMap
         'potenzialanalyse.projekt.kriterien.destroy' => 'potenzialanalyse.manage',
         'potenzialanalyse.gruppe.teilnehmer.update' => 'potenzialanalyse.update',
         'potenzialanalyse.gruppe.teilnehmer.daten.destroy' => 'potenzialanalyse.update',
+        'potenzialanalyse.gruppe.teilnehmer.bericht' => 'gruppe.bop.export.auswertungsbogen-pa',
+        'potenzialanalyse.gruppe.berichte' => 'gruppe.bop.export.auswertungsbogen-pa',
         'projekt.intake-checklist.update' => 'projekt.update',
         'teilnehmer.intake-checklist.update' => 'teilnehmer.update',
         'projekt.completion-checklist.update' => 'projekt.update',

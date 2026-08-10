@@ -1438,6 +1438,21 @@ const gefilterteBopLegacyExporte = computed(() => {
   )
 })
 
+const exportierePaTeilnehmerBericht = async () => {
+  const teilnehmer = selectedPaTeilnehmer.value
+  if (!teilnehmer) return
+
+  if (canEditPotenzialanalyse.value) {
+    const gespeichert = await speicherePotenzialanalyse({ personenId: teilnehmer.id, silent: true })
+    if (!gespeichert) return
+  }
+
+  window.location.href = route('potenzialanalyse.gruppe.teilnehmer.bericht', {
+    gruppe: props.gruppe.id,
+    personen: teilnehmer.id,
+  })
+}
+
 const exportTreffer = computed(() => gefilterteExportVorlagen.value.length + gefilterteBopLegacyExporte.value.length)
 const exportGesamt = computed(() => exportVorlagen.value.length + bopLegacyExporte.value.length)
 
@@ -2388,6 +2403,15 @@ const exportMitTag = async () => {
               <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <h5 class="font-semibold text-gray-800">Bericht</h5>
                 <div class="flex flex-wrap items-center gap-2">
+                  <Button
+                    v-if="can('gruppe.bop.export.auswertungsbogen-pa')"
+                    label="Bericht als PDF"
+                    icon="pi pi-file-pdf"
+                    severity="secondary"
+                    outlined
+                    :disabled="paSaving"
+                    @click="exportierePaTeilnehmerBericht"
+                  />
                   <Button
                     label="Text generieren"
                     icon="pi pi-pencil"

@@ -1,0 +1,38 @@
+<svg width="1200" height="840" viewBox="0 0 1200 840" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="welcomeIllustrationTitle welcomeIllustrationDesc">
+  <title id="welcomeIllustrationTitle">Teilnehmerportal Einstieg</title>
+  <desc id="welcomeIllustrationDesc">Freundliche Illustration mit Lernmodulen und Kommunikation für Teilnehmende.</desc>
+  <rect width="1200" height="840" rx="42" fill="#EAF5FF"/>
+  <ellipse cx="920" cy="730" rx="250" ry="70" fill="#DBEEFF" opacity="0.75"/>
+  <rect x="130" y="130" width="520" height="330" rx="28" fill="#FFFFFF" stroke="#C9E3FF" stroke-width="3"/>
+  <rect x="170" y="175" width="440" height="56" rx="14" fill="#F4FAFF"/>
+  <circle cx="198" cy="203" r="14" fill="#38BDF8"/>
+  <rect x="230" y="193" width="360" height="20" rx="10" fill="#D2E9FF"/>
+  <rect x="170" y="245" width="440" height="56" rx="14" fill="#F9FCFF"/>
+  <circle cx="198" cy="273" r="14" fill="#10B981"/>
+  <rect x="230" y="263" width="360" height="20" rx="10" fill="#DFF7ED"/>
+  <rect x="170" y="315" width="290" height="56" rx="14" fill="#F4FAFF"/>
+  <circle cx="198" cy="343" r="14" fill="#8B5CF6"/>
+  <rect x="230" y="333" width="220" height="20" rx="10" fill="#E5DDFF"/>
+  <circle cx="190" cy="430" r="52" fill="#2563EB"/>
+  <circle cx="190" cy="430" r="17" fill="#DBEAFE"/>
+  <circle cx="245" cy="430" r="28" fill="#F97316"/>
+  <circle cx="245" cy="430" r="12" fill="#FFEDD5"/>
+  <circle cx="130" cy="510" r="26" fill="#10B981"/>
+  <circle cx="130" cy="510" r="10" fill="#DCFCE7"/>
+  <circle cx="250" cy="540" r="38" fill="#14B8A6"/>
+  <circle cx="250" cy="540" r="14" fill="#CCFBF1"/>
+  <rect x="390" y="420" width="330" height="235" rx="28" fill="#FFFFFF" stroke="#C9E3FF" stroke-width="3"/>
+  <rect x="430" y="455" width="250" height="50" rx="14" fill="#EEF7FF"/>
+  <rect x="430" y="520" width="250" height="50" rx="14" fill="#EEF7FF"/>
+  <rect x="430" y="585" width="250" height="50" rx="14" fill="#EEF7FF"/>
+  <path d="M740 240C840 250 930 305 1010 250" stroke="#0EA5E9" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="740" cy="225" r="52" fill="#0EA5E9"/>
+  <rect x="705" y="205" width="18" height="50" rx="9" fill="#FFFFFF"/>
+  <rect x="770" cy="205" width="18" height="50" rx="9" fill="#FFFFFF"/>
+  <circle cx="760" cy="225" r="15" fill="#FFFFFF"/>
+  <path d="M720 225c4-10 12-17 20-17 8 0 16 7 20 17 4-10 12-17 20-17 8 0 16 7 20 17 0-18 20-18 20 0" stroke="#0B5AA8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="790" y="600" width="360" height="140" rx="24" fill="#FFFBEB" stroke="#FFD59E" stroke-width="3"/>
+  <rect x="845" y="655" width="250" height="30" rx="12" fill="#FFEDD5"/>
+  <rect x="845" y="700" width="200" height="22" rx="11" fill="#FED7AA"/>
+  <path d="M700 650c30 30 80 40 130 40h260" stroke="#38BDF8" stroke-width="3" stroke-dasharray="12 10" opacity="0.6"/>
+</svg>
