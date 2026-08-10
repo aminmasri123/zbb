@@ -9,7 +9,7 @@ import { Head, Link } from '@inertiajs/vue3';
             <section class="relative rounded-[2rem] border border-sky-100 bg-white/90 p-8 shadow-[0_20px_70px_-30px_rgba(14,165,233,0.45)] backdrop-blur sm:p-10">
                 <p class="text-sm font-semibold uppercase tracking-[0.22em] text-zbb">Teilnehmerportal</p>
                 <h1 class="mt-4 text-4xl font-black leading-tight text-slate-900 sm:text-5xl">
-                    Willkommen im digitalen Startpunkt für deine Ausbildung
+                    Willkommen im digitalen Bildungsportal
                 </h1>
                 <p class="mt-5 max-w-xl text-lg leading-8 text-slate-600">
                     Deine Aufgaben, Termine, Kurse und Nachrichten findest du hier an einem Ort. Das Portal ist speziell aufgebaut, damit du schnell verstehst, was als Nächstes ansteht.
