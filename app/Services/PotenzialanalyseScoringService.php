@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 namespace App\Services;
 
@@ -8,24 +8,24 @@ use Illuminate\Support\Str;
 class PotenzialanalyseScoringService
 {
     public const COMPETENCIES = [
-        ['key' => 'feinmotorik', 'label' => 'Feinmotorik', 'category' => 'BerufsÃ¼bergreifende Kompetenzen'],
-        ['key' => 'grobmotorik', 'label' => 'Grobmotorik', 'category' => 'BerufsÃ¼bergreifende Kompetenzen'],
-        ['key' => 'wahrnehmung_symmetrie', 'label' => 'Wahrnehmung und Symmetrie', 'category' => 'BerufsÃ¼bergreifende Kompetenzen'],
-        ['key' => 'analyse_problemloesefaehigkeit', 'label' => 'Analyse- und ProblemlÃ¶sefÃ¤higkeit', 'category' => 'Methodische Kompetenzen'],
+        ['key' => 'feinmotorik', 'label' => 'Feinmotorik', 'category' => 'Berufsübergreifende Kompetenzen'],
+        ['key' => 'grobmotorik', 'label' => 'Grobmotorik', 'category' => 'Berufsübergreifende Kompetenzen'],
+        ['key' => 'wahrnehmung_symmetrie', 'label' => 'Wahrnehmung und Symmetrie', 'category' => 'Berufsübergreifende Kompetenzen'],
+        ['key' => 'analyse_problemloesefaehigkeit', 'label' => 'Analyse- und Problemlösefähigkeit', 'category' => 'Methodische Kompetenzen'],
         ['key' => 'arbeitsplanung', 'label' => 'Arbeitsplanung', 'category' => 'Methodische Kompetenzen'],
         ['key' => 'motivation_leistungsbereitschaft', 'label' => 'Motivation und Leistungsbereitschaft', 'category' => 'Personale Kompetenzen'],
-        ['key' => 'durchhaltevermoegen', 'label' => 'DurchhaltevermÃ¶gen', 'category' => 'Personale Kompetenzen'],
+        ['key' => 'durchhaltevermoegen', 'label' => 'Durchhaltevermögen', 'category' => 'Personale Kompetenzen'],
         ['key' => 'sorgfalt', 'label' => 'Sorgfalt und Genauigkeit', 'category' => 'Personale Kompetenzen'],
         ['key' => 'kommunikation', 'label' => 'Kommunikation', 'category' => 'Soziale Kompetenzen'],
-        ['key' => 'teamfaehigkeit', 'label' => 'TeamfÃ¤higkeit', 'category' => 'Soziale Kompetenzen'],
+        ['key' => 'teamfaehigkeit', 'label' => 'Teamfähigkeit', 'category' => 'Soziale Kompetenzen'],
         ['key' => 'umgangsformen', 'label' => 'Umgangsformen', 'category' => 'Soziale Kompetenzen'],
     ];
 
     public const REPORT_STYLES = [
-        ['value' => 'staerkenorientiert', 'label' => 'StÃ¤rkenorientiert'],
-        ['value' => 'ausfuehrlich', 'label' => 'AusfÃ¼hrlich'],
+        ['value' => 'staerkenorientiert', 'label' => 'Stärkenorientiert'],
+        ['value' => 'ausfuehrlich', 'label' => 'Ausführlich'],
         ['value' => 'kompakt', 'label' => 'Kompakt'],
-        ['value' => 'sachlich', 'label' => 'Sachlich und wertschÃ¤tzend'],
+        ['value' => 'sachlich', 'label' => 'Sachlich und wertschätzend'],
     ];
 
     public function defaultConfig(): array
@@ -107,7 +107,7 @@ class PotenzialanalyseScoringService
                 $buckets[$key]['weight_sum'] += $weight;
                 $buckets[$key]['contributions'][] = [
                     'exercise_id' => $exerciseId,
-                    'exercise' => (string) data_get($exercise, 'name', 'Ãœbung'),
+                    'exercise' => (string) data_get($exercise, 'name', 'Übung'),
                     'value' => (float) $value,
                     'minimum' => $minimum,
                     'maximum' => $maximum,
@@ -125,7 +125,7 @@ class PotenzialanalyseScoringService
                     'rating' => null,
                     'total_weight' => 0,
                     'contributions' => [],
-                    'explanation' => 'Noch keine auswertbaren Ãœbungsergebnisse vorhanden.',
+                    'explanation' => 'Noch keine auswertbaren Übungsergebnisse vorhanden.',
                 ]];
             }
 
@@ -158,10 +158,10 @@ class PotenzialanalyseScoringService
             $exercisePercentage = $exerciseScores[$key]['percentage'] ?? null;
 
             if ($exercisePercentage !== null && (float) $weights['exercises'] > 0) {
-                $sources[] = ['source' => 'Ãœbungen', 'percentage' => (float) $exercisePercentage, 'weight' => (float) $weights['exercises']];
+                $sources[] = ['source' => 'Übungen', 'percentage' => (float) $exercisePercentage, 'weight' => (float) $weights['exercises']];
             }
 
-            foreach ([['Anleiter', $coach, 'coach'], ['SelbsteinschÃ¤tzung', $self, 'self']] as [$label, $entries, $weightKey]) {
+            foreach ([['Anleiter', $coach, 'coach'], ['Selbsteinschätzung', $self, 'self']] as [$label, $entries, $weightKey]) {
                 $rating = data_get($entries, "$key.bewertung");
                 if ($rating !== null && $rating !== '' && (float) $weights[$weightKey] > 0) {
                     $sources[] = [
@@ -192,99 +192,97 @@ class PotenzialanalyseScoringService
         array $coach,
         array $self,
         array $reportFields,
-        string $style = ''staerkenorientiert'',
+        string $style = 'staerkenorientiert',
     ): array {
-        $style = collect(self::REPORT_STYLES)->pluck(''value'')->contains($style) ? $style : ''staerkenorientiert'';
-        $rated = collect($combinedScores)->filter(fn (array $item) => $item[''rating''] !== null);
-        $strengths = $rated->filter(fn (array $item) => $item[''rating''] >= 4)->sortByDesc(''percentage'')->values();
-        $developing = $rated->filter(fn (array $item) => $item[''rating''] <= 2)->sortBy(''percentage'')->values();
-        $solid = $rated->filter(fn (array $item) => $item[''rating''] === 3)->sortByDesc(''percentage'')->values();
+        $style = collect(self::REPORT_STYLES)->pluck('value')->contains($style) ? $style : 'staerkenorientiert';
+        $rated = collect($combinedScores)->filter(fn (array $item) => $item['rating'] !== null);
+        $strengths = $rated->filter(fn (array $item) => $item['rating'] >= 4)->sortByDesc('percentage')->values();
+        $developing = $rated->filter(fn (array $item) => $item['rating'] <= 2)->sortBy('percentage')->values();
+        $solid = $rated->filter(fn (array $item) => $item['rating'] === 3)->sortByDesc('percentage')->values();
 
-        $manualStrengths = trim((string) ($reportFields[''staerken''] ?? ''''));
-        $manualDevelopment = trim((string) ($reportFields[''entwicklungsfelder''] ?? ''''));
-        $manualRecommendation = trim((string) ($reportFields[''empfehlung''] ?? ''''));
+        $manualStrengths = trim((string) ($reportFields['staerken'] ?? ''));
+        $manualDevelopment = trim((string) ($reportFields['entwicklungsfelder'] ?? ''));
+        $manualRecommendation = trim((string) ($reportFields['empfehlung'] ?? ''));
 
-        $strengthLabels = $strengths->pluck(''label'')->take($style === ''kompakt'' ? 1 : 2)->all();
-        $solidLabels = $solid->pluck(''label'')->take(2)->all();
-        $focusLabel = $manualStrengths !== ''''
-            ? $manualStrengths
-            : ($strengthLabels[0] ?? $solidLabels[0] ?? ($rated->first()[''label''] ?? ''deinen Aufgaben''));
+        $strengthLabels = $strengths->pluck('label')->take($style === 'kompakt' ? 1 : 2)->all();
+        $solidLabels = $solid->pluck('label')->take(2)->all();
+        $focusLabel = $strengthLabels[0] ?? $solidLabels[0] ?? ($rated->first()['label'] ?? 'deinen Aufgaben');
 
-        $sentences = [];
-        $sentences[] = ''du zeigst besonders in '' . $focusLabel . '' eine starke Grundlage.'';
+        $sentences = ['du zeigst besonders in ' . $focusLabel . ' eine starke Grundlage.'];
 
-        if ($manualStrengths !== '''') {
+        if ($manualStrengths !== '') {
             $sentences[] = $this->sentence($manualStrengths);
         } elseif ($strengthLabels !== []) {
-            $sentences[] = ''Besonders deutlich zeigen sich deine Stärken auch in '' . $this->joinWords($strengthLabels) . ''.'';
+            $sentences[] = 'Diese Stärke hast du in der Potenzialanalyse zuverlässig gezeigt.';
         } elseif ($solidLabels !== []) {
-            $sentences[] = ''Weitere stabile Ansätze zeigen sich in '' . $this->joinWords($solidLabels) . ''.'';
+            $sentences[] = 'Weitere gute Ansätze zeigen sich in ' . $this->joinWords($solidLabels) . '.';
         } else {
-            $sentences[] = ''Die Potenzialanalyse zeigt erste wertvolle Ansätze, an die du bei deinen nächsten Lernschritten gut anknüpfen kannst.'';
+            $sentences[] = 'Die Potenzialanalyse zeigt wertvolle Ansätze, an die du bei deinen nächsten Lernschritten anknüpfen kannst.';
         }
 
         $exerciseNames = collect($exerciseScores)
-            ->flatMap(fn (array $score) => $score[''contributions''] ?? [])
-            ->sortByDesc(''percentage'')
-            ->pluck(''exercise'')
+            ->flatMap(fn (array $score) => $score['contributions'] ?? [])
+            ->sortByDesc('percentage')
+            ->pluck('exercise')
             ->unique()
-            ->take($style === ''kompakt'' ? 2 : 3)
+            ->take($style === 'kompakt' ? 2 : 3)
             ->values()
             ->all();
         if ($exerciseNames !== []) {
-            $sentences[] = ''Das zeigt sich auch bei '' . $this->joinWords($exerciseNames) . ''.'';
+            $sentences[] = 'Das wurde besonders bei ' . $this->joinWords($exerciseNames) . ' sichtbar.';
         }
 
         $agreements = collect(self::COMPETENCIES)->filter(function (array $competency) use ($coach, $self) {
-            $coachRating = data_get($coach, $competency[''key''] . ''.bewertung'');
-            $selfRating = data_get($self, $competency[''key''] . ''.bewertung'');
+            $coachRating = data_get($coach, $competency['key'] . '.bewertung');
+            $selfRating = data_get($self, $competency['key'] . '.bewertung');
             return $coachRating !== null && $selfRating !== null && abs((int) $coachRating - (int) $selfRating) <= 1;
-        })->pluck(''label'')->take(3)->all();
+        })->pluck('label')->take(3)->all();
         if ($agreements !== []) {
-            $sentences[] = ''Deine Selbsteinschätzung passt bei '' . $this->joinWords($agreements) . '' gut zu den Beobachtungen.'';
+            $sentences[] = 'Deine Selbsteinschätzung passt bei ' . $this->joinWords($agreements) . ' gut zu den Beobachtungen.';
         }
 
-        if ($manualDevelopment !== '''') {
-            $sentences[] = ''Ein nächster Entwicklungsschritt ist '' . rtrim($manualDevelopment, ''.!?'') . ''.'';
+        if ($manualDevelopment !== '') {
+            $sentences[] = 'Als nächsten Schritt kannst du ' . Str::lower(rtrim($manualDevelopment, '.!?')) . ' weiter stärken.';
         } elseif ($developing->isNotEmpty()) {
-            $sentences[] = ''Als nächsten Entwicklungsschritt kannst du '' . $this->joinWords(
-                $developing->pluck(''label'')->take($style === ''kompakt'' ? 1 : 2)->map(fn ($label) => Str::lower($label))->all()
-            ) . '' weiter stärken.'';
+            $sentences[] = 'Als nächsten Schritt kannst du ' . $this->joinWords(
+                $developing->pluck('label')->take($style === 'kompakt' ? 1 : 2)->map(fn ($label) => Str::lower($label))->all()
+            ) . ' weiter stärken.';
         }
 
-        if ($manualRecommendation !== '''') {
+        if ($manualRecommendation !== '') {
             $sentences[] = $this->sentence($manualRecommendation);
         } elseif ($rated->isNotEmpty()) {
-            $sentences[] = ''Nutze deine erkennbaren Stärken weiterhin bewusst und erprobe sie in unterschiedlichen Aufgaben und Teams.'';
+            $sentences[] = 'Nutze deine Stärken weiterhin bewusst in unterschiedlichen Aufgaben und Teams.';
         }
 
-        if ($style === ''ausfuehrlich'') {
+        if ($style === 'ausfuehrlich') {
             $sourceSummary = $rated->take(5)->map(fn (array $item) => sprintf(
-                ''%s: %s %% (Stufe %s)'',
-                $item[''label''],
-                number_format((float) $item[''percentage''], 1, '','', ''.''),
-                $item[''rating''],
-            ))->implode(''; '');
-            if ($sourceSummary !== '''') {
-                $sentences[] = ''Berechnungsgrundlage: '' . $sourceSummary . ''.'';
+                '%s: %s %% (Stufe %s)',
+                $item['label'],
+                number_format((float) $item['percentage'], 1, ',', '.'),
+                $item['rating'],
+            ))->implode('; ');
+            if ($sourceSummary !== '') {
+                $sentences[] = 'Berechnungsgrundlage: ' . $sourceSummary . '.';
             }
         }
 
-        $wish = ''Wir wünschen dir viel Erfolg für deine Zukunft.'';
-        $text = implode('' '', array_values(array_filter($sentences)));
+        $wish = 'Wir wünschen dir viel Erfolg für deine Zukunft.';
+        $text = implode(' ', array_values(array_filter($sentences)));
         $maxLength = 500 - mb_strlen("\n\n" . $wish);
         if (mb_strlen($text) > $maxLength) {
-            $text = rtrim(mb_substr($text, 0, max(0, $maxLength - 3))) . ''...'';
+            $text = rtrim(mb_substr($text, 0, max(0, $maxLength - 3))) . '...';
         }
 
         return [
-            ''text'' => trim($text) . "\n\n" . $wish,
-            ''style'' => $style,
-            ''strengths'' => $strengths->pluck(''label'')->values()->all(),
-            ''development_steps'' => $developing->pluck(''label'')->values()->all(),
-            ''scores'' => $combinedScores,
+            'text' => trim($text) . "\n\n" . $wish,
+            'style' => $style,
+            'strengths' => $strengths->pluck('label')->values()->all(),
+            'development_steps' => $developing->pluck('label')->values()->all(),
+            'scores' => $combinedScores,
         ];
     }
+
     private function ratingFromPercentage(float $percentage, array $thresholds): int
     {
         if ($percentage >= (float) $thresholds['rating_5_from']) return 5;
@@ -316,6 +314,6 @@ class PotenzialanalyseScoringService
     private function positiveDevelopmentSentence(string $value): string
     {
         $value = rtrim(trim($value), '.!?');
-        return 'Als nÃ¤chsten Entwicklungsschritt kannst du ' . Str::lower($value) . ' weiter stÃ¤rken.';
+        return 'Als nächsten Entwicklungsschritt kannst du ' . Str::lower($value) . ' weiter stärken.';
     }
 }
