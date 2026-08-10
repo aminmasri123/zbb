@@ -83,7 +83,7 @@ class PotenzialanalyseScoringServiceTest extends TestCase
     }
 
     #[Test]
-    public function it_combines_only_available_sources_using_the_configured_weights(): void
+    public function it_calculates_the_competency_score_only_from_completed_exercises(): void
     {
         $exerciseScores = collect(PotenzialanalyseScoringService::COMPETENCIES)
             ->mapWithKeys(fn (array $item) => [$item['key'] => $item + ['percentage' => null]])
@@ -92,14 +92,18 @@ class PotenzialanalyseScoringServiceTest extends TestCase
 
         $scores = $this->service->combinedScores(
             $exerciseScores,
-            [],
-            ['kommunikation' => ['bewertung' => 3]],
+            ['kommunikation' => ['bewertung' => 1]],
+            ['kommunikation' => ['bewertung' => 1]],
             ['source_weights' => ['exercises' => 60, 'coach' => 30, 'self' => 10]],
         );
 
-        $this->assertSame(75.7, $scores['kommunikation']['percentage']);
-        $this->assertSame(4, $scores['kommunikation']['rating']);
-        $this->assertCount(2, $scores['kommunikation']['sources']);
+        $this->assertSame(80.0, $scores['kommunikation']['percentage']);
+        $this->assertSame(5, $scores['kommunikation']['rating']);
+        $this->assertSame([
+            ['source' => 'Übungen', 'percentage' => 80.0, 'weight' => 100.0],
+        ], $scores['kommunikation']['sources']);
+        $this->assertNull($scores['sorgfalt']['percentage']);
+        $this->assertNull($scores['sorgfalt']['rating']);
     }
 
     #[Test]

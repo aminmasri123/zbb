@@ -94,7 +94,10 @@ class TeilnehmerController extends Controller
             )->orderBy('name')->get()
             : collect();
         $gruppen = Gruppe::query()
-            ->with('bereich')
+            ->with([
+                'bereich:id,name',
+                'betreuer:id,vorname,nachname',
+            ])
             ->where('projekt_id', $defaultProjekt)
             ->when(
                 !$benutzer->can('gruppe.view.all') && !$benutzer->can('projekt.mitarbeiter.view.all'),

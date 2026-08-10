@@ -314,14 +314,14 @@ const paKriteriumForms = reactive({});
 const savingPa = ref(false);
 const defaultPaConfig = {
     thresholds: { rating_2_from: 20, rating_3_from: 40, rating_4_from: 60, rating_5_from: 80 },
-    source_weights: { exercises: 60, coach: 30, self: 10 },
+    source_weights: { exercises: 100, coach: 0, self: 0 },
     report_style: 'staerkenorientiert',
 };
 const paAuswertungConfig = reactive(JSON.parse(JSON.stringify({
     ...defaultPaConfig,
     ...(props.projekt.potenzialanalyse_auswertung_config || {}),
     thresholds: { ...defaultPaConfig.thresholds, ...(props.projekt.potenzialanalyse_auswertung_config?.thresholds || {}) },
-    source_weights: { ...defaultPaConfig.source_weights, ...(props.projekt.potenzialanalyse_auswertung_config?.source_weights || {}) },
+    source_weights: { ...defaultPaConfig.source_weights },
 })));
 
 const paAktiv = computed(() => Boolean(props.projekt.potenzialanalyse_aktiv));
@@ -997,7 +997,7 @@ const addMitarbeiter = (person) => {
                             </div>
                             <button type="button" class="rounded bg-zbb px-4 py-2 text-sm text-white disabled:opacity-60" :disabled="savingPa" @click="savePaAuswertungConfig">Einstellungen speichern</button>
                         </div>
-                        <div class="mt-4 grid gap-4 lg:grid-cols-3">
+                        <div class="mt-4 grid gap-4 lg:grid-cols-2">
                             <div>
                                 <p class="mb-2 text-xs font-semibold uppercase text-gray-500">Grenzen der Stufen (Prozent)</p>
                                 <div class="grid grid-cols-2 gap-2">
@@ -1007,13 +1007,13 @@ const addMitarbeiter = (person) => {
                                     </label>
                                 </div>
                             </div>
-                            <div>
-                                <p class="mb-2 text-xs font-semibold uppercase text-gray-500">Gewichtung der Quellen</p>
-                                <div class="grid grid-cols-3 gap-2">
-                                    <label class="text-xs text-gray-600">Übungen<input v-model.number="paAuswertungConfig.source_weights.exercises" type="number" min="0" max="100" class="mt-1 w-full rounded border-gray-300 text-sm" /></label>
-                                    <label class="text-xs text-gray-600">Anleitung<input v-model.number="paAuswertungConfig.source_weights.coach" type="number" min="0" max="100" class="mt-1 w-full rounded border-gray-300 text-sm" /></label>
-                                    <label class="text-xs text-gray-600">Selbst<input v-model.number="paAuswertungConfig.source_weights.self" type="number" min="0" max="100" class="mt-1 w-full rounded border-gray-300 text-sm" /></label>
-                                </div>
+                            <div class="rounded border border-green-200 bg-green-50 p-3">
+                                <p class="text-xs font-semibold uppercase text-green-800">Berechnungsgrundlage</p>
+                                <p class="mt-2 text-xs leading-relaxed text-green-700">
+                                    Prozentwert und Stufe werden ausschließlich aus den ausgefüllten Übungen berechnet.
+                                    Nicht gemachte Übungen zählen nicht als null. Anleiter- und Selbsteinschätzung bleiben
+                                    als zusätzliche Dokumentation erhalten, verändern das Ergebnis aber nicht.
+                                </p>
                             </div>
                             <label class="text-xs text-gray-600">Standard-Berichtsstil
                                 <select v-model="paAuswertungConfig.report_style" class="mt-1 w-full rounded border-gray-300 text-sm">
@@ -1138,9 +1138,16 @@ const addMitarbeiter = (person) => {
                             Beschreibung
                             <textarea v-model="uebung.beschreibung" rows="2" class="mt-1 w-full rounded border-gray-300 text-sm"></textarea>
                         </label>
-                        <div class="mt-3 rounded border border-dashed border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500">
-                            Kompetenzzuordnung gespeichert
-                        </div>
+                        <details class="mt-3 rounded border border-gray-200 bg-gray-50 p-3">
+                            <summary class="cursor-pointer text-sm font-semibold text-gray-700">Kompetenz-Zuordnung ({{ uebung.kompetenzen.filter((entry) => entry.aktiv).length }})</summary>
+                            <div class="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                                <div v-for="entry in uebung.kompetenzen" :key="entry.merkmal" class="flex items-center gap-2 rounded border bg-white px-3 py-2">
+                                    <input v-model="entry.aktiv" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
+                                    <span class="min-w-0 flex-1 text-sm">{{ entry.label }}</span>
+                                    <input v-model.number="entry.gewichtung" type="number" min="1" max="1000" :disabled="!entry.aktiv" class="w-20 rounded border-gray-300 text-sm disabled:bg-gray-100" title="Gewichtung" />
+                                </div>
+                            </div>
+                        </details>
                         <div class="mt-3 flex flex-wrap justify-end gap-2">
                             <button
                                 type="button"

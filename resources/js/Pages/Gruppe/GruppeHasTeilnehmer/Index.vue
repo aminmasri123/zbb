@@ -1455,6 +1455,97 @@ const paTeilnehmerHatDaten = (personenId) => {
   )
 }
 
+const aktiverPaTab = computed(() =>
+  paTabs.find((tab) => tab.key === activePaTab.value) || paTabs[0]
+)
+
+const paTabHatDaten = (personenId, tabKey = activePaTab.value) => {
+  if (!personenId) return false
+
+  const eintrag = paEintrag(personenId)
+
+  if (tabKey === 'selbst') {
+    return paBewertungsSetHatInhalt(eintrag.selbsteinschaetzung)
+      || paBewertungsSetHatInhalt(eintrag.selbsteinschaetzungen)
+  }
+
+  if (tabKey === 'uebungen') return paUebungsSetHatInhalt(eintrag.uebungen)
+  if (tabKey === 'kompetenzen') {
+    return paBewertungsSetHatInhalt(eintrag.kompetenzen)
+      || paBewertungsSetHatInhalt(eintrag.beurteilungen)
+  }
+  if (tabKey === 'bericht') return paBerichtHatInhalt(eintrag.bericht)
+
+  return false
+}
+
+const leereAktivenPaTab = async () => {
+  if (!canEditPotenzialanalyse.value) return
+
+  const teilnehmer = selectedPaTeilnehmer.value
+  if (!teilnehmer) return
+
+  const tabKey = activePaTab.value
+  const tabLabel = aktiverPaTab.value.label
+  const key = String(teilnehmer.id)
+
+  if (paSaveInFlight.has(key)) {
+    await Swal.fire({
+      icon: 'info',
+      title: 'Bitte kurz warten',
+      text: 'Die PA-Daten werden gerade gespeichert. Danach kann der Tab geleert werden.',
+    })
+    return
+  }
+
+  const bestaetigung = await Swal.fire({
+    icon: 'warning',
+    title: `${tabLabel} leeren?`,
+    text: `Nur der Tab „${tabLabel}“ von ${teilnehmer.vorname} ${teilnehmer.nachname} wird geleert. Die anderen Tabs bleiben erhalten.`,
+    showCancelButton: true,
+    confirmButtonText: 'Ja, Tab leeren',
+    cancelButtonText: 'Abbrechen',
+    confirmButtonColor: '#dc2626',
+  })
+
+  if (!bestaetigung.isConfirmed) return
+
+  const eintrag = paEintrag(teilnehmer.id)
+
+  if (tabKey === 'selbst') {
+    eintrag.selbsteinschaetzung = {}
+    eintrag.selbsteinschaetzungen = {}
+  } else if (tabKey === 'uebungen') {
+    eintrag.uebungen = {}
+  } else if (tabKey === 'kompetenzen') {
+    eintrag.kompetenzen = {}
+    eintrag.beurteilungen = {}
+  } else if (tabKey === 'bericht') {
+    eintrag.bericht = defaultPaBericht()
+  }
+
+  ensurePaEintrag(teilnehmer.id)
+  delete paVorschlaege.value[key]
+  const gespeichert = await speicherePotenzialanalyse({ personenId: teilnehmer.id, silent: true })
+
+  if (!gespeichert) {
+    await Swal.fire({
+      icon: 'error',
+      title: 'Speichern fehlgeschlagen',
+      text: `„${tabLabel}“ konnte nicht zuverlässig geleert werden. Bitte versuchen Sie es erneut.`,
+    })
+    return
+  }
+
+  await Swal.fire({
+    icon: 'success',
+    title: 'Tab geleert',
+    text: `„${tabLabel}“ wurde geleert.`,
+    timer: 1400,
+    showConfirmButton: false,
+  })
+}
+
 const loeschePaTeilnehmerDaten = async () => {
   if (!canEditPotenzialanalyse.value) return
 
@@ -2331,23 +2422,36 @@ const exportMitTag = async () => {
             </div>
 
             <div class="rounded border border-gray-200 bg-white px-2 pt-2">
-              <div class="flex gap-2 overflow-x-auto">
-                <button
-                  v-for="(tab, index) in paTabs"
-                  :key="'pa-tab-' + tab.key"
-                  type="button"
-                  class="-mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-2 pb-2 text-xs font-medium transition"
-                  :class="activePaTab === tab.key ? 'border-zbb text-zbb' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'"
-                  @click="setPaTab(tab.key)"
-                >
-                  <span
-                    class="flex h-5 w-5 items-center justify-center rounded-full text-xs font-semibold"
-                    :class="activePaTab === tab.key ? 'bg-zbb text-white' : 'bg-gray-100 text-gray-500'"
+              <div class="flex items-start justify-between gap-3">
+                <div class="flex min-w-0 gap-2 overflow-x-auto">
+                  <button
+                    v-for="(tab, index) in paTabs"
+                    :key="'pa-tab-' + tab.key"
+                    type="button"
+                    class="-mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-2 pb-2 text-xs font-medium transition"
+                    :class="activePaTab === tab.key ? 'border-zbb text-zbb' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'"
+                    @click="setPaTab(tab.key)"
                   >
-                    {{ index + 1 }}
-                  </span>
-                  <span class="whitespace-nowrap">{{ tab.label }}</span>
-                </button>
+                    <span
+                      class="flex h-5 w-5 items-center justify-center rounded-full text-xs font-semibold"
+                      :class="activePaTab === tab.key ? 'bg-zbb text-white' : 'bg-gray-100 text-gray-500'"
+                    >
+                      {{ index + 1 }}
+                    </span>
+                    <span class="whitespace-nowrap">{{ tab.label }}</span>
+                  </button>
+                </div>
+                <Button
+                  v-if="canEditPotenzialanalyse"
+                  :label="`${aktiverPaTab.label} leeren`"
+                  icon="pi pi-eraser"
+                  severity="danger"
+                  text
+                  size="small"
+                  class="mb-1 shrink-0"
+                  :disabled="paSaving || !paTabHatDaten(selectedPaTeilnehmer.id)"
+                  @click="leereAktivenPaTab"
+                />
               </div>
             </div>
 
@@ -2428,11 +2532,6 @@ const exportMitTag = async () => {
                           <span v-if="uebung.auswertbar" class="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">Auswertbar</span>
                         </div>
                         <p v-if="uebung.beschreibung" class="mt-1 text-xs text-gray-500">{{ uebung.beschreibung }}</p>
-                        <div v-if="uebung.kompetenzen?.length" class="mt-2 flex flex-wrap gap-1">
-                          <span v-for="zuordnung in uebung.kompetenzen" :key="`${uebung.id}-${zuordnung.merkmal}`" class="rounded bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">
-                            {{ paMerkmale.find((item) => item.key === zuordnung.merkmal)?.label || zuordnung.merkmal }} · {{ Number(zuordnung.gewichtung) }}
-                          </span>
-                        </div>
                       </td>
                       <td class="px-3 py-3 align-top">
                         <div class="flex items-center gap-2">

@@ -38,9 +38,9 @@ class PotenzialanalyseScoringService
                 'rating_5_from' => 80,
             ],
             'source_weights' => [
-                'exercises' => 60,
-                'coach' => 30,
-                'self' => 10,
+                'exercises' => 100,
+                'coach' => 0,
+                'self' => 0,
             ],
             'report_style' => 'staerkenorientiert',
         ];
@@ -53,7 +53,9 @@ class PotenzialanalyseScoringService
 
         return [
             'thresholds' => array_merge($defaults['thresholds'], $config['thresholds'] ?? []),
-            'source_weights' => array_merge($defaults['source_weights'], $config['source_weights'] ?? []),
+            // Prozentwert und Stufe basieren ausschließlich auf den Übungen.
+            // Gespeicherte Alt-Konfigurationen mit 60/30/10 dürfen das Ergebnis nicht mehr verändern.
+            'source_weights' => $defaults['source_weights'],
             'report_style' => $config['report_style'] ?? $defaults['report_style'],
         ];
     }
@@ -150,32 +152,14 @@ class PotenzialanalyseScoringService
     public function combinedScores(array $exerciseScores, array $coach, array $self, ?array $config = null): array
     {
         $config = $this->normalizeConfig($config);
-        $weights = $config['source_weights'];
 
-        return collect(self::COMPETENCIES)->mapWithKeys(function (array $competency) use ($exerciseScores, $coach, $self, $weights, $config) {
+        return collect(self::COMPETENCIES)->mapWithKeys(function (array $competency) use ($exerciseScores, $config) {
             $key = $competency['key'];
-            $sources = [];
             $exercisePercentage = $exerciseScores[$key]['percentage'] ?? null;
-
-            if ($exercisePercentage !== null && (float) $weights['exercises'] > 0) {
-                $sources[] = ['source' => 'Übungen', 'percentage' => (float) $exercisePercentage, 'weight' => (float) $weights['exercises']];
-            }
-
-            foreach ([['Anleiter', $coach, 'coach'], ['Selbsteinschätzung', $self, 'self']] as [$label, $entries, $weightKey]) {
-                $rating = data_get($entries, "$key.bewertung");
-                if ($rating !== null && $rating !== '' && (float) $weights[$weightKey] > 0) {
-                    $sources[] = [
-                        'source' => $label,
-                        'percentage' => $this->ratingToPercentage((int) $rating),
-                        'weight' => (float) $weights[$weightKey],
-                    ];
-                }
-            }
-
-            $weightSum = collect($sources)->sum('weight');
-            $percentage = $weightSum > 0
-                ? collect($sources)->sum(fn (array $source) => $source['percentage'] * $source['weight']) / $weightSum
-                : null;
+            $percentage = $exercisePercentage !== null ? (float) $exercisePercentage : null;
+            $sources = $percentage !== null
+                ? [['source' => 'Übungen', 'percentage' => $percentage, 'weight' => 100.0]]
+                : [];
 
             return [$key => $competency + [
                 'percentage' => $percentage !== null ? round($percentage, 1) : null,
@@ -414,11 +398,6 @@ class PotenzialanalyseScoringService
         if ($percentage >= (float) $thresholds['rating_3_from']) return 3;
         if ($percentage >= (float) $thresholds['rating_2_from']) return 2;
         return 1;
-    }
-
-    private function ratingToPercentage(int $rating): float
-    {
-        return max(0, min(100, (($rating - 1) / 4) * 100));
     }
 
     private function joinWords(array $values): string
