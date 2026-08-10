@@ -879,6 +879,30 @@ class UserSeeder extends Seeder
             }
         }
 
+        $oldPaAuswertungsbogenPermissionId = DB::table('permissions')
+            ->where('name', 'gruppe.bop.export.auswertungsbogen-pa')
+            ->where('guard_name', 'web')
+            ->value('id');
+
+        $newPaBerichtePermissionId = DB::table('permissions')
+            ->where('name', 'gruppe.bop.export.berichte-pa')
+            ->where('guard_name', 'web')
+            ->value('id');
+
+        if ($oldPaAuswertungsbogenPermissionId && $newPaBerichtePermissionId) {
+            $roleIdsWithOldPaAuswertungsbogen = DB::table('role_has_permissions')
+                ->where('permission_id', $oldPaAuswertungsbogenPermissionId)
+                ->distinct()
+                ->pluck('role_id');
+
+            foreach ($roleIdsWithOldPaAuswertungsbogen as $roleId) {
+                DB::table('role_has_permissions')->insertOrIgnore([
+                    'role_id' => $roleId,
+                    'permission_id' => $newPaBerichtePermissionId,
+                ]);
+            }
+        }
+
         app('cache')
             ->store(config('permission.cache.store') !== 'default' ? config('permission.cache.store') : null)
             ->forget(config('permission.cache.key'));
@@ -1120,6 +1144,7 @@ class UserSeeder extends Seeder
             $this->permission('gruppe.bop.export.zertifikat-pa', 3, 'Erlaubt den BOP-Export von PA-Zertifikaten fuer eine Gruppe.'),
             $this->permission('gruppe.bop.export.teilnahme-pa', 3, 'Erlaubt den BOP-Export von PA-Teilnahmebescheinigungen fuer eine Gruppe.'),
             $this->permission('gruppe.bop.export.auswertungsbogen-pa', 3, 'Erlaubt den BOP-Export von PA-Auswertungsboegen fuer eine Gruppe.'),
+            $this->permission('gruppe.bop.export.berichte-pa', 3, 'Erlaubt den Export von PA-Berichten fuer einzelne Teilnehmer und Gruppen.'),
 
             // Anwesenheit: fachliche Rechte statt technischer Einzelrouten
             $this->permission('anwesenheit.index', 11, 'Erlaubt das Einsehen von Anwesenheitseintraegen, Statuswerten, Soll- und Ist-Zeiten sowie Anwesenheitsauswertungen der Teilnehmer, die gemaess aktivem Projekt und rollenbezogenem Datenzugriff sichtbar sind.'),

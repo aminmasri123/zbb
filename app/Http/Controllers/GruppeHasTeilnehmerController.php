@@ -863,7 +863,7 @@ class GruppeHasTeilnehmerController extends Controller
                 'bop-pa-zertifikat-gruppe' => 'gruppe.bop.export.zertifikat-pa',
                 'bop-pa-teilnahmebescheinigung-gruppe' => 'gruppe.bop.export.teilnahme-pa',
                 'bop-pa-auswertungsbogen-gruppe' => 'gruppe.bop.export.auswertungsbogen-pa',
-                'bop-pa-berichte-gruppe' => 'gruppe.bop.export.auswertungsbogen-pa',
+                'bop-pa-berichte-gruppe' => 'gruppe.bop.export.berichte-pa',
             ];
 
             if (isset($groupExportPermissions[$item['id']])) {

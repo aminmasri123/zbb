@@ -2682,7 +2682,7 @@ const exportMitTag = async () => {
                     :disabled="!canEditPotenzialanalyse"
                   />
                   <Button
-                    v-if="can('gruppe.bop.export.auswertungsbogen-pa')"
+                    v-if="can('gruppe.bop.export.berichte-pa')"
                     label="Bericht als PDF"
                     icon="pi pi-file-pdf"
                     severity="secondary"
