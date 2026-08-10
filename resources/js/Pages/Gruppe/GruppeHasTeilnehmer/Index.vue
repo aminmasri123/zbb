@@ -2746,7 +2746,7 @@ const exportMitTag = async () => {
                   <textarea
                     v-model="paEintrag(selectedPaTeilnehmer.id).bericht.bericht_text"
                     rows="6"
-                    class="mt-1 w-full rounded border-gray-300 text-sm"
+                    class="mt-1 h-80 w-full rounded border-gray-300 text-sm"
                     :disabled="!canEditPotenzialanalyse"
                     @input="planePotenzialanalyseSpeichern({ personenId: selectedPaTeilnehmer.id })"
                   ></textarea>
