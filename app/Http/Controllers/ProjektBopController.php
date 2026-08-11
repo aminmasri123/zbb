@@ -2502,61 +2502,78 @@ class ProjektBopController extends Controller
 
     public function generatePdfAuswertungsbogenPaRolandSchule($partnerId, $schuljahr, $teil)
     {
-        $this->ensurePartnerInActiveProject((int) $partnerId);
-        $schule = Partner::findOrFail($partnerId);
+        try {
+            $this->ensurePartnerInActiveProject((int) $partnerId);
+            $schuljahr = (string) $schuljahr;
+            $teil = (string) $teil;
 
-        $schueler = PersonenIstSchueler::with('person')
-            ->filterSchueler($partnerId, $schuljahr, $teil)
-            ->get()
-            ->sort(function ($a, $b) {
-                $klasseCompare = strnatcasecmp((string) $a->klasse, (string) $b->klasse);
-                if ($klasseCompare !== 0) {
-                    return $klasseCompare;
-                }
+            $schule = Partner::findOrFail($partnerId);
 
-                $nachnameCompare = strnatcasecmp((string) ($a->person?->nachname ?? ''), (string) ($b->person?->nachname ?? ''));
-                if ($nachnameCompare !== 0) {
-                    return $nachnameCompare;
-                }
+            $schueler = PersonenIstSchueler::with('person')
+                ->filterSchueler((int) $partnerId, $schuljahr, $teil)
+                ->get()
+                ->sort(function ($a, $b) {
+                    $klasseCompare = strnatcasecmp((string) $a->klasse, (string) $b->klasse);
+                    if ($klasseCompare !== 0) {
+                        return $klasseCompare;
+                    }
 
-                return strnatcasecmp((string) ($a->person?->vorname ?? ''), (string) ($b->person?->vorname ?? ''));
-            })
-            ->values();
+                    $nachnameCompare = strnatcasecmp((string) ($a->person?->nachname ?? ''), (string) ($b->person?->nachname ?? ''));
+                    if ($nachnameCompare !== 0) {
+                        return $nachnameCompare;
+                    }
 
-        if ($schueler->isEmpty()) {
-            return redirect()->back()->with('error', 'Die Schule: ' . $schule->name . ' verfügt über keine Teilnehmer.');
-        }
+                    return strnatcasecmp((string) ($a->person?->vorname ?? ''), (string) ($b->person?->vorname ?? ''));
+                })
+                ->values();
 
-        $klasseCounter = [];
-        $teilnehmer = $schueler->map(function (PersonenIstSchueler $schueler) use (&$klasseCounter, $schule, $schuljahr, $teil) {
-            $klasse = trim((string) $schueler->klasse) ?: 'ohne Klasse';
-            $klasseCounter[$klasse] = ($klasseCounter[$klasse] ?? 0) + 1;
+            if ($schueler->isEmpty()) {
+                return redirect()->back()->with('error', 'Die Schule: ' . $schule->name . ' verfügt über keine Teilnehmer.');
+            }
 
-            return [
-                'vorname' => $schueler->person?->vorname ?? '',
-                'nachname' => $schueler->person?->nachname ?? '',
-                'name' => trim(($schueler->person?->nachname ?? '') . ', ' . ($schueler->person?->vorname ?? '')),
-                'geburtsdatum' => $schueler->person?->geburtsdatum ? Carbon::parse($schueler->person->geburtsdatum)->format('d.m.Y') : '',
-                'geschlecht' => $schueler->person?->geschlecht ?? '',
-                'schule' => $schule->name,
-                'klasse' => $klasse,
+            $klasseCounter = [];
+            $teilnehmer = $schueler->map(function (PersonenIstSchueler $schueler) use (&$klasseCounter, $schule, $schuljahr, $teil) {
+                $klasse = trim((string) $schueler->klasse) ?: 'ohne Klasse';
+                $klasseCounter[$klasse] = ($klasseCounter[$klasse] ?? 0) + 1;
+
+                $geburtsdatum = $this->safeGermanDate($schueler->person?->geburtsdatum ?? null);
+
+                return [
+                    'vorname' => $schueler->person?->vorname ?? '',
+                    'nachname' => $schueler->person?->nachname ?? '',
+                    'name' => trim(($schueler->person?->nachname ?? '') . ', ' . ($schueler->person?->vorname ?? '')),
+                    'geburtsdatum' => $geburtsdatum,
+                    'geschlecht' => $schueler->person?->geschlecht ?? '',
+                    'schule' => $schule->name,
+                    'klasse' => $klasse,
+                    'schuljahr' => $schuljahr,
+                    'teil' => $teil,
+                    'footer_nummer' => $klasse . '-' . $klasseCounter[$klasse],
+                ];
+            })->values();
+
+            $pdf = Pdf::loadView('pdf.auswertungsbogenPA-roland', [
+                'teilnehmer' => $teilnehmer,
+                'schulname' => $schule->name,
                 'schuljahr' => $schuljahr,
                 'teil' => $teil,
-                'footer_nummer' => $klasse . '-' . $klasseCounter[$klasse],
-            ];
-        })->values();
+            ]);
+            $pdf->setPaper('A4', 'landscape');
 
-        $pdf = Pdf::loadView('pdf.auswertungsbogenPA-roland', [
-            'teilnehmer' => $teilnehmer,
-            'schulname' => $schule->name,
-            'schuljahr' => $schuljahr,
-            'teil' => $teil,
-        ]);
-        $pdf->setPaper('A4', 'landscape');
+            return $pdf->download(
+                'Auswertungsbogen_PA_neu_Roland_' . $this->exportFilePart($schule->name) . '_' . $this->exportFilePart($schuljahr) . '_Teil_' . $this->exportFilePart($teil) . '.pdf'
+            );
+        } catch (\Throwable $e) {
+            Log::error('Auswertungsbogen PA neu Roland konnte nicht erstellt werden.', [
+                'route' => 'export.auswertungsbogenPA.roland.schule.pdf',
+                'partner_id' => (int) $partnerId,
+                'schuljahr' => (string) $schuljahr,
+                'teil' => (string) $teil,
+                'error' => $e->getMessage(),
+            ]);
 
-        return $pdf->download(
-            'Auswertungsbogen_PA_neu_Roland_' . $this->exportFilePart($schule->name) . '_' . $this->exportFilePart($schuljahr) . '_Teil_' . $this->exportFilePart($teil) . '.pdf'
-        );
+            return redirect()->back()->with('error', 'Auswertungsbogen PA neu Roland konnte nicht erstellt werden. Bitte prüfen Sie die Daten (Name/Geburtsdatum) der Schule und probieren Sie es erneut.');
+        }
     }
 
 
@@ -2633,6 +2650,19 @@ class ProjektBopController extends Controller
         $value = preg_replace('/[^A-Za-z0-9_\-\.]+/', '_', trim($value));
 
         return trim($value, '_') ?: 'export';
+    }
+
+    private function safeGermanDate(?string $value): string
+    {
+        if (empty($value)) {
+            return '';
+        }
+
+        try {
+            return Carbon::parse($value)->format('d.m.Y');
+        } catch (\Throwable $e) {
+            return '';
+        }
     }
 
 
