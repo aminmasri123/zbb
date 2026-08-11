@@ -2502,6 +2502,10 @@ class ProjektBopController extends Controller
 
     public function generatePdfAuswertungsbogenPaRolandSchule($partnerId, $schuljahr, $teil)
     {
+        // Dieser Export erzeugt eine vollständige PDF-Seite je Teilnehmer.
+        // Das höhere Limit gilt ausschließlich für die Dauer dieses Requests.
+        $this->prepareLargePdfExport();
+
         try {
             $this->ensurePartnerInActiveProject((int) $partnerId);
             $schuljahr = (string) $schuljahr;
@@ -2572,7 +2576,7 @@ class ProjektBopController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
-            return redirect()->back()->with('error', 'Auswertungsbogen PA neu Roland konnte nicht erstellt werden. Bitte prüfen Sie die Daten (Name/Geburtsdatum) der Schule und probieren Sie es erneut.');
+            return redirect()->back()->with('error', 'Auswertungsbogen PA neu Roland konnte nicht erstellt werden. Bitte probieren Sie es erneut.');
         }
     }
 
@@ -2663,6 +2667,37 @@ class ProjektBopController extends Controller
         } catch (\Throwable $e) {
             return '';
         }
+    }
+
+    private function prepareLargePdfExport(): void
+    {
+        $minimumBytes = 512 * 1024 * 1024;
+        $currentLimit = trim((string) ini_get('memory_limit'));
+
+        if ($currentLimit !== '-1' && $this->phpIniSizeToBytes($currentLimit) < $minimumBytes) {
+            @ini_set('memory_limit', '512M');
+        }
+
+        @set_time_limit(180);
+    }
+
+    private function phpIniSizeToBytes(string $value): int
+    {
+        $value = trim($value);
+
+        if ($value === '' || $value === '-1') {
+            return PHP_INT_MAX;
+        }
+
+        $number = (float) $value;
+        $unit = strtolower(substr($value, -1));
+
+        return match ($unit) {
+            'g' => (int) ($number * 1024 * 1024 * 1024),
+            'm' => (int) ($number * 1024 * 1024),
+            'k' => (int) ($number * 1024),
+            default => (int) $number,
+        };
     }
 
 
