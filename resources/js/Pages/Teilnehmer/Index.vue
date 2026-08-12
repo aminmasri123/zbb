@@ -589,8 +589,6 @@ const addTeilnehmer = async (formData) => {
             //const response = await axios.post(route('teilnehmer.store'), formData);
             const response = await axios.post(route('teilnehmer.store'), formData);
 
-            teilnehmerList.value.unshift(response.data.teilnehmer);
-
             // Zeige eine Erfolgsnachricht an
             Swal.fire({
                 title: 'Erfolg!',
@@ -602,6 +600,11 @@ const addTeilnehmer = async (formData) => {
 
             // Optional: Formular zurücksetzen und Modal schließen
             closeModal();
+            router.reload({
+                only: ['teilnehmers', 'overviewStats'],
+                preserveScroll: true,
+                preserveState: true,
+            });
         } catch (error) {
             // Fehlerbehandlung hier
             console.error(error);

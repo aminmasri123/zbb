@@ -118,15 +118,17 @@ watch(() => props.visible, (visible) => {
 </script>
 
 <template>
-  <Modal v-if="visible" @close="close">
+  <Modal v-if="visible" scrollable-layout @close="close">
     <!-- Header -->
-    <template #header>{{$t('Benutzer anlegen')}}</template>
+    <template #header><span class="text-lg font-semibold text-gray-900">Teilnehmer anlegen</span></template>
 
     <!-- Body -->
     <template #body>
-      <form @submit.prevent="submitForm">
-        <div class="flex flex-col sm:flex-row">
-          <div class="mb-4 w-full mx-1">
+      <form id="participant-create-form" class="space-y-4" @submit.prevent="submitForm">
+        <section class="rounded-lg border border-gray-200 bg-white p-3 sm:p-4">
+          <h3 class="mb-4 text-sm font-semibold text-gray-800">Stammdaten</h3>
+          <div class="grid gap-4 sm:grid-cols-2">
+          <div class="w-full">
               <input type="hidden" name="_token" :value="$page.props.csrf_token">
 
             <FloatLabel variant="on">
@@ -134,15 +136,14 @@ watch(() => props.visible, (visible) => {
               <label>Vorname</label>
             </FloatLabel>
           </div>
-          <div class="mb-4 w-full mx-1">
+          <div class="w-full">
             <FloatLabel variant="on">
               <InputText v-model="form.nachname" class="w-full" />
               <label>Nachname</label>
             </FloatLabel>
           </div>
-        </div>
 
-           <div class="mb-4 w-full mx-1">
+           <div class="w-full">
             <FloatLabel variant="on">
 
                 <Select
@@ -160,7 +161,7 @@ watch(() => props.visible, (visible) => {
                 <label>Geschlecht</label>
             </FloatLabel>
           </div>
-          <div class="mb-4 w-full mx-1">
+          <div class="w-full">
             <label class="block text-sm text-gray-600">
               Geburtsdatum
               <span v-if="activeProject?.rules?.participant_birthdate_required" class="text-red-600">*</span>
@@ -182,7 +183,7 @@ watch(() => props.visible, (visible) => {
               </span>
             </label>
           </div>
-        <div class="mb-4 w-full mx-1">
+        <div class="w-full">
             <FloatLabel variant="on">
                 <Select
                     v-model="form.standort"
@@ -195,14 +196,16 @@ watch(() => props.visible, (visible) => {
             </FloatLabel>
           </div>
 
-          <div class="mb-4 w-full mx-1 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+          <div class="w-full rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 sm:col-span-2">
             <span class="block text-xs text-gray-500">Aktives Projekt</span>
             <span class="font-medium">{{ activeProject?.name || 'Kein Projekt gewählt' }}</span>
           </div>
+          </div>
+        </section>
 
           <fieldset
             v-if="activeProject?.rules?.participant_address_enabled"
-            class="mb-4 w-full rounded border border-gray-200 p-4"
+            class="w-full rounded-lg border border-gray-200 p-3 sm:p-4"
           >
             <legend class="px-2 font-semibold text-gray-700">Adresse</legend>
             <div class="grid gap-4 sm:grid-cols-3">
@@ -235,12 +238,12 @@ watch(() => props.visible, (visible) => {
 
           <fieldset
             v-if="schoolContextEnabled"
-            class="mb-4 w-full rounded border border-gray-200 p-4"
+            class="w-full rounded-lg border border-gray-200 p-3 sm:p-4"
           >
             <legend class="px-2 font-semibold text-gray-700">Schulzuordnung</legend>
             <p class="mb-4 text-xs text-gray-500">Die Zuordnung wird für diesen Teilnehmer und dieses Schuljahr gespeichert.</p>
             <div class="grid gap-4 sm:grid-cols-2">
-              <FloatLabel v-if="activeProject?.rules?.participant_parts_enabled" variant="on" class="sm:col-span-2">
+              <FloatLabel variant="on" class="sm:col-span-2">
                 <Select
                   v-model="form.schulzuordnung.schule_id"
                   :options="props.schools"
@@ -258,7 +261,7 @@ watch(() => props.visible, (visible) => {
                 <InputText v-model="form.schulzuordnung.klasse" class="w-full" placeholder="z. B. 8.1" />
                 <label>Klasse *</label>
               </FloatLabel>
-              <FloatLabel variant="on" class="sm:col-span-2">
+              <FloatLabel v-if="activeProject?.rules?.participant_parts_enabled" variant="on" class="sm:col-span-2">
                 <InputText v-model="form.schulzuordnung.teil" class="w-full" placeholder="z. B. 1 oder 2" />
                 <label>Teil des Teilnehmers *</label>
               </FloatLabel>
@@ -274,8 +277,8 @@ watch(() => props.visible, (visible) => {
 
     <!-- Footer -->
     <template #footer>
-      <button @click="close" class="mr-2 border border-zbb text-zbb px-4 py-2 rounded">Abbrechen</button>
-      <button @click="submitForm" class="bg-zbb text-white px-4 py-2 rounded">Hinzufügen</button>
+      <button type="button" @click="close" class="w-full rounded border border-zbb px-4 py-2 text-zbb sm:w-auto">Abbrechen</button>
+      <button type="submit" form="participant-create-form" class="w-full rounded bg-zbb px-4 py-2 text-white sm:w-auto">Hinzufügen</button>
     </template>
   </Modal>
 </template>
