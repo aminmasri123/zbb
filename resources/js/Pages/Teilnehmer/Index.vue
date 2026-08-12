@@ -41,7 +41,7 @@ const groupModal = ref(null);
 let teilnehmerToDelete = ref(null); // Speichert den Namen der Teilnehmer, die gelöscht werden sollen
 let showModalLöschen = ref(false); // Modal für die Löschung
 
-const { teilnehmers, authProjekte, rollen, gruppen, projekte, standorte, defaultProjekt, filters, overviewPeriods, overviewStats, participantOverviewColumns, participantOverviewColumnDefinitions, participantOverviewShowMetrics  } = defineProps({
+const { teilnehmers, authProjekte, rollen, gruppen, projekte, standorte, defaultProjekt, filters, overviewPeriods, overviewStats, participantOverviewColumns, participantOverviewColumnDefinitions, participantOverviewShowMetrics, participantSchools  } = defineProps({
     pagination: {
         type: Object,
     },
@@ -72,6 +72,7 @@ const { teilnehmers, authProjekte, rollen, gruppen, projekte, standorte, default
      participantOverviewColumns: { type: Array, default: () => [] },
      participantOverviewColumnDefinitions: { type: Array, default: () => [] },
      participantOverviewShowMetrics: { type: Boolean, default: true },
+     participantSchools: { type: Array, default: () => [] },
      filters: {
         type: Object,
         default: () => ({})
@@ -919,6 +920,7 @@ const sortByColumn = (column) => {
                 :visible="isModalOpen"
                 :active-project="$page.props.currentProjekt"
                 :standorte="standorte"
+                :schools="participantSchools"
                 :defaultProjekt="defaultProjekt"
                 @close="closeModal"
                 @add-teilnehmer="addTeilnehmer"

@@ -174,6 +174,9 @@ class TeilnehmerController extends Controller
                 : Projekt::DEFAULT_PARTICIPANT_OVERVIEW_COLUMNS,
             'participantOverviewColumnDefinitions' => Projekt::participantOverviewColumnDefinitions(),
             'participantOverviewShowMetrics' => $projekt?->participantOverviewShowsMetrics() ?? true,
+            'participantSchools' => $projekt
+                ? $projekt->partners()->orderBy('name')->get(['partners.id', 'partners.name'])
+                : [],
             'filters' => [
                 'search'    => $suchbegriff,
                 'standort'  => $standortId,
@@ -275,34 +278,63 @@ class TeilnehmerController extends Controller
             $validatedData = $request->validate(array_merge($this->participantCoreRules($activeProject), [
                 'projekt'   => ['required', 'integer', 'exists:projekts,id'],
                 'standort'  => ['required', 'integer', 'exists:standorts,id'],
-            ]));
+            ], $this->participantAddressRules($activeProject), $this->participantSchoolContextRules($activeProject)));
 
-            // Teilnehmer erstellen
-            $teilnehmer = Personen::create([
-                'vorname'   => $validatedData['vorname'],
-                'nachname'  => $validatedData['nachname'],
-                'geschlecht'=> $validatedData['geschlecht'],
-                'geburtsdatum' => $validatedData['geburtsdatum'] ?? null,
-                'typ'       => 'teilnehmer',
-                'aktiv'=> 1,
-            ]);
+            if ($this->participantSchoolContextEnabled($activeProject)) {
+                $schoolBelongsToProject = $activeProject->partners()
+                    ->whereKey($validatedData['schulzuordnung']['schule_id'])
+                    ->exists();
 
-            // Sicherheitscheck
-            if (!$teilnehmer) {
-                return response()->json([
-                    'message' => 'Fehler',
-                    'errors'  => 'Teilnehmer konnte nicht erstellt werden'
-                ], 422);
+                if (!$schoolBelongsToProject) {
+                    throw ValidationException::withMessages([
+                        'schulzuordnung.schule_id' => 'Die ausgewählte Schule gehört nicht zum aktiven Projekt.',
+                    ]);
+                }
             }
 
-            // Beziehung korrekt erstellen
-           $teilnehmer->projekte()->attach(
-                $validatedData['projekt'], // projekt_id
-                [
+            $teilnehmer = DB::transaction(function () use ($validatedData, $activeProject) {
+                $teilnehmer = Personen::create([
+                    'vorname'   => $validatedData['vorname'],
+                    'nachname'  => $validatedData['nachname'],
+                    'geschlecht'=> $validatedData['geschlecht'],
+                    'geburtsdatum' => $validatedData['geburtsdatum'] ?? null,
+                    'typ'       => 'teilnehmer',
+                    'aktiv'=> 1,
+                ]);
+
+                if (!$teilnehmer) {
+                    throw new Exception('Teilnehmer konnte nicht erstellt werden.');
+                }
+
+                $teilnehmer->projekte()->attach($validatedData['projekt'], [
                     'standort_id' => $validatedData['standort'],
                     'status' => $activeProject->rule('participation_initial_status', 'aktiv'),
-                ]
-            );
+                ]);
+
+                if ($activeProject->rule('participant_address_enabled', false)) {
+                    $teilnehmer->adresses()->create([
+                        'strasse' => $validatedData['adresse']['strasse'],
+                        'hausnummer' => $validatedData['adresse']['hausnummer'],
+                        'plz' => $validatedData['adresse']['plz'],
+                        'stadt' => $validatedData['adresse']['stadt'],
+                        'land' => $validatedData['adresse']['land'] ?? 'Deutschland',
+                        'zusatzinfo' => $validatedData['adresse']['zusatzinfo'] ?? null,
+                    ]);
+                }
+
+                if ($this->participantSchoolContextEnabled($activeProject)) {
+                    $teilnehmer->schueler()->create([
+                        'schule_id' => $validatedData['schulzuordnung']['schule_id'],
+                        'schuljahr' => $validatedData['schulzuordnung']['schuljahr'],
+                        'klasse' => $validatedData['schulzuordnung']['klasse'],
+                        'teil' => $validatedData['schulzuordnung']['teil'] ?? '1',
+                        'foerderschueler' => false,
+                        'eee' => false,
+                    ]);
+                }
+
+                return $teilnehmer;
+            });
 
             Notification::send(
                 app(NotificationRecipientService::class)->forEvent('teilnehmer.created', [
@@ -810,10 +842,15 @@ class TeilnehmerController extends Controller
                         $schuljahr = null;
                         $teil = null;
                         $klasse = null;
+                    } elseif (!$activeProject->rule('participant_parts_enabled', false)) {
+                        $teil = '1';
                     }
 
                     if ($isBopImport && (empty($schuleId) || empty($schuljahr) || empty($teil) || empty($klasse))) {
-                        $errors[] = "Zeile " . $rowNumber . " ist BOP, aber Schule_ID, Schuljahr, Teil oder Klasse fehlt.";
+                        $requiredSchoolColumns = $activeProject->rule('participant_parts_enabled', false)
+                            ? 'Schule_ID, Schuljahr, Teil oder Klasse'
+                            : 'Schule_ID, Schuljahr oder Klasse';
+                        $errors[] = "Zeile " . $rowNumber . " ist BOP, aber {$requiredSchoolColumns} fehlt.";
                         continue;
                     }
 
@@ -1042,6 +1079,49 @@ class TeilnehmerController extends Controller
             'geschlecht' => ['required', 'in:m,w,d'],
             'geburtsdatum' => $birthdateRules,
         ];
+    }
+
+    private function participantAddressRules(Projekt $project): array
+    {
+        if (!$project->rule('participant_address_enabled', false)) {
+            return [];
+        }
+
+        return [
+            'adresse' => ['required', 'array'],
+            'adresse.strasse' => ['required', 'string', 'max:255'],
+            'adresse.hausnummer' => ['required', 'string', 'max:10'],
+            'adresse.plz' => ['required', 'string', 'max:10'],
+            'adresse.stadt' => ['required', 'string', 'max:255'],
+            'adresse.land' => ['nullable', 'string', 'max:255'],
+            'adresse.zusatzinfo' => ['nullable', 'string', 'max:255'],
+        ];
+    }
+
+    private function participantSchoolContextRules(Projekt $project): array
+    {
+        if (!$this->participantSchoolContextEnabled($project)) {
+            return [];
+        }
+
+        $rules = [
+            'schulzuordnung' => ['required', 'array'],
+            'schulzuordnung.schule_id' => ['required', 'integer', 'exists:partners,id'],
+            'schulzuordnung.schuljahr' => ['required', 'string', 'max:20'],
+            'schulzuordnung.klasse' => ['required', 'string', 'max:50'],
+        ];
+
+        $rules['schulzuordnung.teil'] = $project->rule('participant_parts_enabled', false)
+            ? ['required', 'string', 'max:40']
+            : ['nullable', 'string', 'max:40'];
+
+        return $rules;
+    }
+
+    private function participantSchoolContextEnabled(Projekt $project): bool
+    {
+        return $project->usesBopParticipantOverviewPreset()
+            || $project->rule('participant_parts_enabled', false);
     }
 
     private function cleanImportValue($value)

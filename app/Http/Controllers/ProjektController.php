@@ -8,6 +8,8 @@ use App\Models\Bereich;
 use App\Models\DokumentKategorie;
 use App\Models\Dokumente;
 use App\Models\Projekt;
+use App\Models\BopRun;
+use App\Models\PersonenIstSchueler;
 use App\Models\Personen;
 use App\Models\Standort;
 use App\Models\Abteilung;
@@ -551,13 +553,39 @@ class ProjektController extends Controller
             'rules.attendance_skip_weekends' => ['required', 'boolean'],
             'rules.attendance_default_status' => ['required', 'string', 'exists:anwesenheitsstatutens,status'],
             'rules.participant_birthdate_required' => ['required', 'boolean'],
+            'rules.participant_address_enabled' => ['sometimes', 'boolean'],
+            'rules.participant_parts_enabled' => ['sometimes', 'boolean'],
             'rules.participant_min_age' => ['nullable', 'integer', 'min:0', 'max:120'],
             'rules.participant_max_age' => ['nullable', 'integer', 'min:0', 'max:120', 'gte:rules.participant_min_age'],
             'rules.participation_initial_status' => ['required', 'string', Rule::in(Projekt::PARTICIPATION_STATUSES)],
             'rules.participant_overview_columns' => ['nullable', 'array', 'min:1'],
             'rules.participant_overview_columns.*' => ['string', Rule::in(Projekt::participantOverviewColumnKeys())],
-            'rules.participant_overview_show_metrics' => ['required', 'boolean'],
+            'rules.participant_overview_show_metrics' => ['sometimes', 'boolean'],
         ]);
+
+        $partsEnabled = (bool) ($validated['rules']['participant_parts_enabled']
+            ?? $projekt->rule('participant_parts_enabled', false));
+
+        if (!$partsEnabled && $projekt->rule('participant_parts_enabled', false)) {
+            $partnerIds = $projekt->partners()->pluck('partners.id');
+            $hasNonDefaultParticipantParts = PersonenIstSchueler::query()
+                ->whereIn('schule_id', $partnerIds)
+                ->whereNotIn('teil', ['1', 'Teil 1'])
+                ->exists();
+            $hasMultiplePlannedParts = BopRun::query()
+                ->where('projekt_id', $projekt->id)
+                ->get(['parts'])
+                ->contains(fn (BopRun $run) => collect($run->parts ?? ['1'])
+                    ->map(fn ($part) => trim((string) preg_replace('/^Teil\s*/i', '', (string) $part)))
+                    ->filter(fn ($part) => $part !== '1')
+                    ->isNotEmpty());
+
+            if ($hasNonDefaultParticipantParts || $hasMultiplePlannedParts) {
+                throw ValidationException::withMessages([
+                    'rules.participant_parts_enabled' => 'Teilabschnitte können nicht deaktiviert werden, solange Teilnehmer oder BOP-Planungen einem anderen Teil als Teil 1 zugeordnet sind.',
+                ]);
+            }
+        }
 
         $projekt->update([
             'rule_settings' => [
@@ -567,6 +595,9 @@ class ProjektController extends Controller
                 'attendance_skip_weekends' => (bool) $validated['rules']['attendance_skip_weekends'],
                 'attendance_default_status' => $validated['rules']['attendance_default_status'],
                 'participant_birthdate_required' => (bool) $validated['rules']['participant_birthdate_required'],
+                'participant_address_enabled' => (bool) ($validated['rules']['participant_address_enabled']
+                    ?? $projekt->rule('participant_address_enabled', false)),
+                'participant_parts_enabled' => $partsEnabled,
                 'participant_min_age' => isset($validated['rules']['participant_min_age'])
                     ? (int) $validated['rules']['participant_min_age']
                     : null,
@@ -577,7 +608,8 @@ class ProjektController extends Controller
                 'participant_overview_columns' => Projekt::normalizeParticipantOverviewColumns(
                     $validated['rules']['participant_overview_columns'] ?? $projekt->participantOverviewColumns()
                 ),
-                'participant_overview_show_metrics' => (bool) $validated['rules']['participant_overview_show_metrics'],
+                'participant_overview_show_metrics' => (bool) ($validated['rules']['participant_overview_show_metrics']
+                    ?? $projekt->participantOverviewShowsMetrics()),
             ],
         ]);
 

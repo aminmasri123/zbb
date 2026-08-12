@@ -2,7 +2,7 @@
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { computed, ref, defineProps, watch, onMounted, onBeforeUnmount } from 'vue';
 import Swal from 'sweetalert2';
-import { Link, Head } from '@inertiajs/vue3';
+import { Link, Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 import Dropdown from '@/Components/Dropdown.vue';
 import ModalCreate from '@/Pages/Partner/ModalCreate.vue';
@@ -26,6 +26,7 @@ const props = defineProps({
     partnerDokumente: { type: Array, default: () => [] },
 });
 const { can, canAny } = usePermissions();
+const page = usePage();
 const canAnySelectionPermission = computed(() => canAny([
     'bereichsauswahl.index',
     'bereichsauswahl.store',
@@ -41,6 +42,7 @@ const canAnyAssignmentPermission = computed(() => canAny([
     'einteilung.planning',
 ]));
 const isBopProject = computed(() => String(props.projektName ?? '').toUpperCase().includes('BOP'));
+const participantPartsEnabled = computed(() => page.props.currentProjekt?.rules?.participant_parts_enabled !== false);
 
 // States
 let seite = 'partner';
@@ -184,6 +186,7 @@ function normalizedPart(part) {
 }
 
 function getTeile(partner, jahr) {
+    if (!participantPartsEnabled.value) return ['1'];
     const actualParts = (partner.schueler ?? [])
         .filter(student => String(student.schuljahr) === String(jahr))
         .map(student => String(student.teil));
@@ -597,7 +600,7 @@ const updatePartnerAPI = async (form) => {
                                                 <div class="dropdown dropdown-action inline-block relative" @click.stop>
                                                     <button @click="openPartMenu(partner, jahr, teil)"
                                                         class="dropdown-toggle py-1 rounded text-xs w-full">
-                                                        {{ normalizedPart(teil) }}
+                                                        {{ participantPartsEnabled ? normalizedPart(teil) : 'Aktionen' }}
                                                     </button>
                                                     <div v-show="isDropdownOpen(partner.id, jahr, teil)"
                                                         class="dropdown-menu absolute mt-1  bg-white border rounded text-xs shadow-lg z-50">

@@ -73,6 +73,8 @@ class Projekt extends Model
         'attendance_skip_weekends' => false,
         'attendance_default_status' => 'unentschuldigt',
         'participant_birthdate_required' => false,
+        'participant_address_enabled' => false,
+        'participant_parts_enabled' => false,
         'participant_min_age' => null,
         'participant_max_age' => null,
         'participation_initial_status' => 'aktiv',
@@ -206,6 +208,14 @@ class Projekt extends Model
     public function ruleSettings(): array
     {
         $settings = array_replace(self::RULE_DEFAULTS, $this->rule_settings ?? []);
+
+        // Bestehende BOP-Projekte arbeiteten schon vor der konfigurierbaren
+        // Regel mit Teil 1, Teil 2 usw. Dieses Verhalten bleibt standardmäßig
+        // erhalten, bis es im Projekt ausdrücklich deaktiviert wird.
+        if (!array_key_exists('participant_parts_enabled', $this->rule_settings ?? [])) {
+            $settings['participant_parts_enabled'] = $this->usesBopParticipantOverviewPreset();
+        }
+
         $settings['participant_overview_columns'] = $this->participantOverviewColumns();
         $settings['participant_overview_show_metrics'] = $this->participantOverviewShowsMetrics();
 

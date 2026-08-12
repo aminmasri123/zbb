@@ -8,6 +8,7 @@ use App\Models\Bereich;
 use App\Models\Gruppe;
 use App\Models\GruppeHasPersonen;
 use App\Models\Personen;
+use App\Models\Partner;
 use App\Models\Projekt;
 use App\Models\ProjektHasPersonen;
 use App\Models\Raeume;
@@ -44,16 +45,21 @@ class ProjectRuleConfigurationTest extends TestCase
                 'attendance_skip_weekends' => true,
                 'attendance_default_status' => 'anwesend',
                 'participant_birthdate_required' => true,
+                'participant_address_enabled' => true,
+                'participant_parts_enabled' => true,
                 'participant_min_age' => 16,
                 'participant_max_age' => 25,
                 'participation_initial_status' => 'angefragt',
             ],
         ])->assertOk()
             ->assertJsonPath('rules.max_group_participants', 12)
-            ->assertJsonPath('rules.attendance_skip_weekends', true);
+            ->assertJsonPath('rules.attendance_skip_weekends', true)
+            ->assertJsonPath('rules.participant_address_enabled', true);
 
         $this->assertSame('anwesend', $project->fresh()->rule('attendance_default_status'));
         $this->assertSame(16, $project->fresh()->rule('participant_min_age'));
+        $this->assertTrue($project->fresh()->rule('participant_address_enabled'));
+        $this->assertTrue($project->fresh()->rule('participant_parts_enabled'));
     }
 
     public function test_participant_birthdate_and_age_rules_are_enforced_for_active_project(): void
@@ -95,6 +101,129 @@ class ProjectRuleConfigurationTest extends TestCase
             'vorname' => 'Regel',
             'nachname' => 'Teilnehmer',
             'geburtsdatum' => $payload['geburtsdatum'] . ' 00:00:00',
+        ]);
+    }
+
+    public function test_enabled_address_rule_requires_and_saves_address_for_new_participant(): void
+    {
+        Notification::fake();
+        $user = User::factory()->create();
+        $this->givePermission($user, 'teilnehmer.store');
+        $location = Standort::factory()->create();
+        $project = Projekt::factory()->create([
+            'rule_settings' => ['participant_address_enabled' => true],
+        ]);
+        $this->assign($project, $user->person, $location);
+        $user->update(['current_team_id' => $project->id]);
+
+        $payload = [
+            'vorname' => 'Ada',
+            'nachname' => 'Adresse',
+            'geschlecht' => 'w',
+            'standort' => $location->id,
+        ];
+
+        $this->actingAs($user)->postJson(route('teilnehmer.store'), $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('adresse');
+
+        $response = $this->actingAs($user)->postJson(route('teilnehmer.store'), $payload + [
+            'adresse' => [
+                'strasse' => 'Musterstraße',
+                'hausnummer' => '12a',
+                'plz' => '66111',
+                'stadt' => 'Saarbrücken',
+                'land' => 'Deutschland',
+            ],
+        ])->assertCreated();
+
+        $participantId = $response->json('teilnehmer.id');
+
+        $this->assertDatabaseHas('adresses', [
+            'model_type' => Personen::class,
+            'model_id' => $participantId,
+            'strasse' => 'Musterstraße',
+            'hausnummer' => '12a',
+            'plz' => '66111',
+            'stadt' => 'Saarbrücken',
+        ]);
+    }
+
+    public function test_enabled_part_rule_requires_and_saves_the_part_for_each_participant(): void
+    {
+        Notification::fake();
+        $user = User::factory()->create();
+        $this->givePermission($user, 'teilnehmer.store');
+        $location = Standort::factory()->create();
+        $school = Partner::query()->create(['name' => 'BOP-Testschule']);
+        $project = Projekt::factory()->create([
+            'name' => 'BOP Test',
+            'rule_settings' => ['participant_parts_enabled' => true],
+        ]);
+        $project->partners()->attach($school->id);
+        $this->assign($project, $user->person, $location);
+        $user->update(['current_team_id' => $project->id]);
+
+        $payload = [
+            'vorname' => 'Teil',
+            'nachname' => 'Zwei',
+            'geschlecht' => 'd',
+            'standort' => $location->id,
+        ];
+
+        $this->actingAs($user)->postJson(route('teilnehmer.store'), $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('schulzuordnung');
+
+        $response = $this->actingAs($user)->postJson(route('teilnehmer.store'), $payload + [
+            'schulzuordnung' => [
+                'schule_id' => $school->id,
+                'schuljahr' => '2026/2027',
+                'klasse' => '8.2',
+                'teil' => '2',
+            ],
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('personen_ist_schuelers', [
+            'person_id' => $response->json('teilnehmer.id'),
+            'schule_id' => $school->id,
+            'schuljahr' => '2026/2027',
+            'klasse' => '8.2',
+            'teil' => '2',
+        ]);
+    }
+
+    public function test_bop_without_part_rule_keeps_school_context_without_asking_for_a_part(): void
+    {
+        Notification::fake();
+        $user = User::factory()->create();
+        $this->givePermission($user, 'teilnehmer.store');
+        $location = Standort::factory()->create();
+        $school = Partner::query()->create(['name' => 'BOP-Schule ohne Teile']);
+        $project = Projekt::factory()->create([
+            'name' => 'BOP ohne Teile',
+            'rule_settings' => ['participant_parts_enabled' => false],
+        ]);
+        $project->partners()->attach($school->id);
+        $this->assign($project, $user->person, $location);
+        $user->update(['current_team_id' => $project->id]);
+
+        $response = $this->actingAs($user)->postJson(route('teilnehmer.store'), [
+            'vorname' => 'Ohne',
+            'nachname' => 'Teilwahl',
+            'geschlecht' => 'd',
+            'standort' => $location->id,
+            'schulzuordnung' => [
+                'schule_id' => $school->id,
+                'schuljahr' => '2026/2027',
+                'klasse' => '8.1',
+            ],
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('personen_ist_schuelers', [
+            'person_id' => $response->json('teilnehmer.id'),
+            'schule_id' => $school->id,
+            'teil' => '1',
         ]);
     }
 

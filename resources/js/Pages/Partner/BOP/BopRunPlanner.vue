@@ -31,6 +31,7 @@ const updatingParticipant = ref(null)
 const selectedSchoolYear = ref(props.schuljahr || '')
 const loadedSchoolYear = ref(null)
 const parts = ref(['1'])
+const participantPartsEnabled = ref(true)
 const newPart = ref('')
 const dateRanges = ref({})
 
@@ -93,7 +94,10 @@ function hydrate(data) {
   options.value = data.options || { areas: [], rooms: [], supervisors: [] }
   schoolType.value = data.run?.school_type || data.school_type_suggestion || 'Gemeinschaftsschule'
   status.value = data.run?.status || 'planning'
-  parts.value = [...(data.run ? (data.run.parts?.length ? data.run.parts : ['1']) : (data.suggested_parts?.length ? data.suggested_parts : ['1']))].map(String)
+  participantPartsEnabled.value = data.participant_parts_enabled !== false
+  parts.value = participantPartsEnabled.value
+    ? [...(data.run ? (data.run.parts?.length ? data.run.parts : ['1']) : (data.suggested_parts?.length ? data.suggested_parts : ['1']))].map(String)
+    : ['1']
   plannedClasses.value = (data.run ? (data.run.planned_classes || []) : (data.suggested_planned_classes || [])).map((item) => ({
     name: String(item.name || ''),
     expected_participants: Number(item.expected_participants || 0),
@@ -217,6 +221,7 @@ function addPlannedClass() {
 }
 
 function addPart() {
+  if (!participantPartsEnabled.value) return
   const value = String(newPart.value || '').trim()
   if (!value || parts.value.includes(value)) return
   parts.value.push(value)
@@ -468,7 +473,7 @@ async function resetPlanning(forcedMode = null) {
             <input v-model.number="newPlannedClass.expected_participants" type="number" min="0" max="500" class="w-44 rounded border-gray-300 text-sm" placeholder="Erwartete Teilnehmer" @keydown.enter.prevent="addPlannedClass" />
             <button type="button" class="rounded bg-gray-900 px-4 py-2 text-sm font-semibold text-white" @click="addPlannedClass">+ Klasse</button>
           </div>
-          <div class="mt-3 flex flex-wrap items-center gap-2 rounded border bg-gray-50 p-2">
+          <div v-if="participantPartsEnabled" class="mt-3 flex flex-wrap items-center gap-2 rounded border bg-gray-50 p-2">
             <strong class="text-xs text-gray-700">Teile:</strong>
             <span v-for="part in parts" :key="part" class="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-semibold shadow-sm">Teil {{ part }}<button v-if="parts.length > 1" type="button" class="text-red-600" @click="removePart(part)">×</button></span>
             <input v-model="newPart" type="text" class="w-24 rounded border-gray-300 py-1 text-xs" placeholder="z. B. 2" @keydown.enter.prevent="addPart" />
@@ -477,7 +482,7 @@ async function resetPlanning(forcedMode = null) {
           <div class="mt-3 flex flex-wrap gap-2">
             <div v-for="(item, index) in plannedClasses" :key="`${item.name}-${index}`" class="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-3 py-1.5 text-sm">
               <strong>{{ item.name }}</strong><input v-model.number="item.expected_participants" type="number" min="0" max="500" class="w-16 rounded border-gray-300 px-1 py-0.5 text-xs" title="Erwartete Teilnehmer" /><span class="text-xs text-gray-500">TN</span>
-              <select v-if="parts.length > 1" v-model="item.part" class="rounded border-gray-300 py-0.5 text-xs"><option v-for="part in parts" :key="part" :value="part">Teil {{ part }}</option></select><span v-else class="text-xs text-gray-500">Teil 1</span>
+              <select v-if="participantPartsEnabled && parts.length > 1" v-model="item.part" class="rounded border-gray-300 py-0.5 text-xs"><option v-for="part in parts" :key="part" :value="part">Teil {{ part }}</option></select><span v-else-if="participantPartsEnabled" class="text-xs text-gray-500">Teil 1</span>
               <button type="button" class="font-bold text-red-600" title="Planungsklasse entfernen" @click="removePlannedClass(index)">×</button>
             </div>
             <span v-if="!plannedClasses.length" class="text-xs text-gray-400">Noch keine vorläufige Klasse eingetragen.</span>
@@ -509,7 +514,7 @@ async function resetPlanning(forcedMode = null) {
                   <button v-for="date in phaseFor(definition.type).dates" :key="date" type="button" class="rounded-full px-3 py-1 text-xs font-semibold" :class="dateWarning(date) ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800'" :title="dateWarning(date)?.reason" @click="removeDate(phaseFor(definition.type), date)">{{ dateLabel(date) }} <span v-if="dateWarning(date)">⚠</span> ×</button>
                   <span v-if="!phaseFor(definition.type).dates.length" class="text-xs text-gray-400">Noch kein Termin gespeichert.</span>
                 </div>
-                <div v-if="definition.type === 'workshop_days'" class="space-y-2 rounded border border-orange-200 bg-orange-50 p-3">
+                <div v-if="definition.type === 'workshop_days' && participantPartsEnabled" class="space-y-2 rounded border border-orange-200 bg-orange-50 p-3">
                   <div class="flex items-center justify-between gap-2"><strong class="text-xs text-orange-900">Werkstatttage nach Teil</strong><button type="button" class="rounded border border-orange-300 bg-white px-2 py-1 text-xs font-semibold text-orange-800" @click="assignAllWorkshopDates(phaseFor(definition.type))">Alle Teile: alle Termine</button></div>
                   <div v-for="part in parts" :key="`workshop-part-${part}`" class="rounded bg-white p-2">
                     <strong class="mb-1 block text-xs">Teil {{ part }}</strong>

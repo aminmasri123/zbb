@@ -931,6 +931,30 @@ const addMitarbeiter = (person) => {
                                 <span class="mt-1 block text-xs text-gray-500">Gilt bei manueller Anlage, Bearbeitung und Excel-Import.</span>
                             </span>
                         </label>
+                        <label class="flex items-start gap-3 rounded border border-gray-200 p-4 text-sm text-gray-600">
+                            <input
+                                v-model="projectRules.participant_address_enabled"
+                                type="checkbox"
+                                class="mt-1 rounded border-gray-300 text-zbb focus:ring-zbb"
+                                :disabled="!projectFeatures.participant_management || !can('projekt.update')"
+                            />
+                            <span>
+                                <span class="block font-semibold text-gray-800">Adresse bei Neuanlage erfassen</span>
+                                <span class="mt-1 block text-xs text-gray-500">Zeigt die Adressfelder im Modal an und speichert sie direkt beim Teilnehmer.</span>
+                            </span>
+                        </label>
+                        <label class="flex items-start gap-3 rounded border border-gray-200 p-4 text-sm text-gray-600">
+                            <input
+                                v-model="projectRules.participant_parts_enabled"
+                                type="checkbox"
+                                class="mt-1 rounded border-gray-300 text-zbb focus:ring-zbb"
+                                :disabled="!projectFeatures.participant_management || !can('projekt.update')"
+                            />
+                            <span>
+                                <span class="block font-semibold text-gray-800">Teilnehmer nach Teilabschnitt erfassen</span>
+                                <span class="mt-1 block text-xs text-gray-500">Fragt bei jedem neuen Schüler, ob er an Teil 1, Teil 2 usw. teilnimmt.</span>
+                            </span>
+                        </label>
                         <label class="text-sm text-gray-600">
                             Mindestalter
                             <input

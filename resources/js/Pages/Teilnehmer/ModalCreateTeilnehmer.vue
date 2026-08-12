@@ -1,5 +1,5 @@
 <script setup>
-import { defineProps, defineEmits, ref, watch } from 'vue';
+import { computed, defineProps, defineEmits, ref, watch } from 'vue';
 import FloatLabel from 'primevue/floatlabel';
 import InputText from 'primevue/inputtext';
 import Select from 'primevue/select';
@@ -10,12 +10,16 @@ const props = defineProps({
   visible: { type: Boolean, default: false },
   activeProject: { type: Object, default: null },
   standorte: Array,
+  schools: { type: Array, default: () => [] },
   defaultProjekt: { type: Number, default: null },
 })
 
 
 // Events an die Eltern-Komponente
 const emit = defineEmits(["close", "add-teilnehmer"]);
+const validationMessage = ref("");
+const isBopProject = computed(() => String(props.activeProject?.name || '').toUpperCase().includes('BOP'));
+const schoolContextEnabled = computed(() => isBopProject.value || props.activeProject?.rules?.participant_parts_enabled);
 
 let form = ref({
   vorname: "",
@@ -24,10 +28,56 @@ let form = ref({
   geburtsdatum: "",
   projekt: props.defaultProjekt,
   standort: "",
+  adresse: {
+    strasse: "",
+    hausnummer: "",
+    plz: "",
+    stadt: "",
+    land: "Deutschland",
+    zusatzinfo: "",
+  },
+  schulzuordnung: {
+    schule_id: null,
+    schuljahr: "",
+    klasse: "",
+    teil: "1",
+  },
 });
 const submitForm = () => {
-  emit("add-teilnehmer", form.value); // sende die Daten zurück an Parent
-  resetForm();
+  validationMessage.value = "";
+
+  if (!form.value.vorname || !form.value.nachname || !form.value.geschlecht || !form.value.standort) {
+    validationMessage.value = "Bitte füllen Sie alle Pflichtfelder aus.";
+    return;
+  }
+
+  if (
+    props.activeProject?.rules?.participant_address_enabled
+    && (!form.value.adresse.strasse
+      || !form.value.adresse.hausnummer
+      || !form.value.adresse.plz
+      || !form.value.adresse.stadt)
+  ) {
+    validationMessage.value = "Bitte füllen Sie Straße, Hausnummer, PLZ und Ort aus.";
+    return;
+  }
+
+  if (
+    schoolContextEnabled.value
+    && (!form.value.schulzuordnung.schule_id
+      || !form.value.schulzuordnung.schuljahr
+      || !form.value.schulzuordnung.klasse)
+  ) {
+    validationMessage.value = "Bitte wählen Sie eine Schule und geben Sie Schuljahr und Klasse an.";
+    return;
+  }
+
+  if (props.activeProject?.rules?.participant_parts_enabled && !form.value.schulzuordnung.teil) {
+    validationMessage.value = "Bitte geben Sie an, an welchem Teil der Teilnehmer teilnimmt.";
+    return;
+  }
+
+  emit("add-teilnehmer", JSON.parse(JSON.stringify(form.value)));
 };
 
 const close = () => {
@@ -36,6 +86,7 @@ const close = () => {
 };
 
 const resetForm = () => {
+  validationMessage.value = "";
   form.value = {
     vorname: "",
     nachname: "",
@@ -43,10 +94,27 @@ const resetForm = () => {
     geburtsdatum: "",
     projekt: props.defaultProjekt,
     standort: "",
+    adresse: {
+      strasse: "",
+      hausnummer: "",
+      plz: "",
+      stadt: "",
+      land: "Deutschland",
+      zusatzinfo: "",
+    },
+    schulzuordnung: {
+      schule_id: null,
+      schuljahr: "",
+      klasse: "",
+      teil: "1",
+    },
   };
 };
 
 watch(() => props.defaultProjekt, () => resetForm());
+watch(() => props.visible, (visible) => {
+  if (!visible) resetForm();
+});
 </script>
 
 <template>
@@ -131,6 +199,75 @@ watch(() => props.defaultProjekt, () => resetForm());
             <span class="block text-xs text-gray-500">Aktives Projekt</span>
             <span class="font-medium">{{ activeProject?.name || 'Kein Projekt gewählt' }}</span>
           </div>
+
+          <fieldset
+            v-if="activeProject?.rules?.participant_address_enabled"
+            class="mb-4 w-full rounded border border-gray-200 p-4"
+          >
+            <legend class="px-2 font-semibold text-gray-700">Adresse</legend>
+            <div class="grid gap-4 sm:grid-cols-3">
+              <FloatLabel variant="on" class="sm:col-span-2">
+                <InputText v-model="form.adresse.strasse" class="w-full" required />
+                <label>Straße *</label>
+              </FloatLabel>
+              <FloatLabel variant="on">
+                <InputText v-model="form.adresse.hausnummer" class="w-full" required />
+                <label>Hausnummer *</label>
+              </FloatLabel>
+              <FloatLabel variant="on">
+                <InputText v-model="form.adresse.plz" class="w-full" required />
+                <label>PLZ *</label>
+              </FloatLabel>
+              <FloatLabel variant="on" class="sm:col-span-2">
+                <InputText v-model="form.adresse.stadt" class="w-full" required />
+                <label>Ort *</label>
+              </FloatLabel>
+              <FloatLabel variant="on" class="sm:col-span-3">
+                <InputText v-model="form.adresse.land" class="w-full" />
+                <label>Land</label>
+              </FloatLabel>
+              <FloatLabel variant="on" class="sm:col-span-3">
+                <InputText v-model="form.adresse.zusatzinfo" class="w-full" />
+                <label>Adresszusatz (optional)</label>
+              </FloatLabel>
+            </div>
+          </fieldset>
+
+          <fieldset
+            v-if="schoolContextEnabled"
+            class="mb-4 w-full rounded border border-gray-200 p-4"
+          >
+            <legend class="px-2 font-semibold text-gray-700">Schulzuordnung</legend>
+            <p class="mb-4 text-xs text-gray-500">Die Zuordnung wird für diesen Teilnehmer und dieses Schuljahr gespeichert.</p>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <FloatLabel v-if="activeProject?.rules?.participant_parts_enabled" variant="on" class="sm:col-span-2">
+                <Select
+                  v-model="form.schulzuordnung.schule_id"
+                  :options="props.schools"
+                  optionLabel="name"
+                  optionValue="id"
+                  class="w-full"
+                />
+                <label>Schule *</label>
+              </FloatLabel>
+              <FloatLabel variant="on">
+                <InputText v-model="form.schulzuordnung.schuljahr" class="w-full" placeholder="z. B. 2026/2027" />
+                <label>Schuljahr *</label>
+              </FloatLabel>
+              <FloatLabel variant="on">
+                <InputText v-model="form.schulzuordnung.klasse" class="w-full" placeholder="z. B. 8.1" />
+                <label>Klasse *</label>
+              </FloatLabel>
+              <FloatLabel variant="on" class="sm:col-span-2">
+                <InputText v-model="form.schulzuordnung.teil" class="w-full" placeholder="z. B. 1 oder 2" />
+                <label>Teil des Teilnehmers *</label>
+              </FloatLabel>
+            </div>
+          </fieldset>
+
+          <p v-if="validationMessage" class="mb-2 text-sm text-red-600">
+            {{ validationMessage }}
+          </p>
 
       </form>
     </template>

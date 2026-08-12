@@ -111,6 +111,21 @@ class BopRunController extends Controller
             'phases.*.notes' => ['nullable', 'string', 'max:3000'],
         ]);
 
+        if (!$project->rule('participant_parts_enabled', false)) {
+            $data['parts'] = ['1'];
+            $data['planned_classes'] = collect($data['planned_classes'] ?? [])
+                ->map(fn ($class) => [...$class, 'part' => '1'])
+                ->all();
+            $data['phases'] = collect($data['phases'])
+                ->map(function ($phase) {
+                    $phase['part_date_assignments'] = ($phase['phase_type'] ?? null) === 'workshop_days'
+                        ? ['1' => array_values($phase['dates'] ?? [])]
+                        : [];
+
+                    return $phase;
+                })->all();
+        }
+
         $knownStudentIds = $students->pluck('id')->map(fn ($id) => (int) $id);
         $parts = collect($data['parts'] ?? ['1'])->map(fn ($part) => trim((string) $part))->filter()->unique()->values();
         $unknownPlannedParts = collect($data['planned_classes'] ?? [])->pluck('part')->map(fn ($part) => trim((string) $part))->diff($parts);
@@ -540,6 +555,7 @@ class BopRunController extends Controller
                 ->merge(collect($run?->planned_classes ?? [])->pluck('name'))
                 ->unique()->sort(SORT_NATURAL | SORT_FLAG_CASE)->values(),
             'suggested_parts' => $suggestedParts->isNotEmpty() ? $suggestedParts : collect(['1']),
+            'participant_parts_enabled' => $project->rule('participant_parts_enabled', false),
             'suggested_planned_classes' => $suggestedClasses,
             'students' => $students->map(fn ($student) => [
                 'id' => $student->id, 'person_id' => $student->person_id, 'class_name' => $student->klasse, 'part' => $student->teil,
