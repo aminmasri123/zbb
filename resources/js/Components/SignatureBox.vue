@@ -24,7 +24,6 @@ const expandedCanvas = ref(null)
 const expanded = ref(false)
 let ctx = null
 let expandedCtx = null
-let drawing = false
 let expandedDrawing = false
 
 const configureContext = (context, lineWidth = 4.5) => {
@@ -73,34 +72,6 @@ const pointerPosition = (event, targetCanvas) => {
     x: (event.clientX - rect.left) * (targetCanvas.width / rect.width),
     y: (event.clientY - rect.top) * (targetCanvas.height / rect.height),
   }
-}
-
-const startDrawing = (event) => {
-  if (props.disabled || !ctx) return
-
-  event.preventDefault()
-  drawing = true
-  canvas.value.setPointerCapture?.(event.pointerId)
-  const point = pointerPosition(event, canvas.value)
-  ctx.beginPath()
-  ctx.moveTo(point.x, point.y)
-}
-
-const draw = (event) => {
-  if (!drawing || props.disabled || !ctx) return
-
-  event.preventDefault()
-  const point = pointerPosition(event, canvas.value)
-  ctx.lineTo(point.x, point.y)
-  ctx.stroke()
-}
-
-const stopDrawing = (event) => {
-  if (!drawing || !canvas.value) return
-
-  event.preventDefault()
-  drawing = false
-  emit('update:modelValue', canvas.value.toDataURL('image/png'))
 }
 
 const openExpanded = async () => {
@@ -172,13 +143,9 @@ onMounted(() => {
       ref="canvas"
       width="420"
       height="120"
-      class="w-full touch-none rounded border border-gray-300 bg-white"
+      class="pointer-events-none w-full rounded border border-gray-300 bg-white"
       :class="compact ? 'h-10 min-w-[92px]' : 'h-16'"
-      @pointerdown="startDrawing"
-      @pointermove="draw"
-      @pointerup="stopDrawing"
-      @pointerleave="stopDrawing"
-      @pointercancel="stopDrawing"
+      aria-label="Vorschau der Unterschrift"
     />
 
     <button
