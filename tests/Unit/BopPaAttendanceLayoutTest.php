@@ -21,6 +21,10 @@ class BopPaAttendanceLayoutTest extends TestCase
             $this->assertStringContainsString('${nachname34}', $documentXml);
             $this->assertStringContainsString('${vorname34}', $documentXml);
             $this->assertStringContainsString('Ausbilder/-innen', $documentXml);
+            $this->assertSame(
+                file_get_contents(public_path('img/bop/kooperationspartner.png')),
+                $zip->getFromName('word/media/bop-attendance-footer.png')
+            );
         } finally {
             $zip->close();
         }
@@ -32,8 +36,15 @@ class BopPaAttendanceLayoutTest extends TestCase
 
         $this->assertIsString($component);
         $this->assertStringContainsString('rowsPerPage: 17', $component);
+        $this->assertStringContainsString('firstParticipantPageRows: isPreparationPa.value ? 17 : 14', $component);
+        $this->assertStringContainsString('secondParticipantPageRows: isPreparationPa.value ? 17 : 20', $component);
         $this->assertStringContainsString('const participantPages = isPreparationPa.value ? calculatedParticipantPages : 2', $component);
         $this->assertStringContainsString('drawTrainerTable(doc, layout)', $component);
+        $this->assertStringContainsString("doc.text(String(participant?.nachname || '')", $component);
+        $this->assertStringContainsString('drawPdfSignature(doc, signature', $component);
         $this->assertStringContainsString('Unterschriftenliste zum Nachweis der Potenzialanalyse - PA/ Ausbilder/-innen', $component);
+        $this->assertStringContainsString("headerPageY: (isPreparationPa.value ? 7 : 15) * widthScale", $component);
+        $this->assertStringContainsString("doc.text('Zeitraum:', layout.headerPeriodX, layout.headerTitleY)", $component);
+        $this->assertStringContainsString('const tableWidth = 201.6 * layout.widthScale', $component);
     }
 }

@@ -139,7 +139,9 @@ const periodText = computed(() => {
   const values = selectedDays.value.map((day) => day.date).sort()
   if (!values.length) return ''
 
-  return values.length === 1 ? dateLabel(values[0]) : `${dateLabel(values[0])} - ${dateLabel(values.at(-1))}`
+  return values.length === 1
+    ? `(${dateLabel(values[0])})`
+    : `(${dateLabel(values[0])} + ${dateLabel(values.at(-1))})`
 })
 const sheetSectionClass = computed(() => sheetFullscreen.value
   ? 'fixed inset-0 z-[9999] overflow-hidden border-0 bg-white p-4 shadow-2xl'
@@ -761,22 +763,29 @@ const pdfLayout = (doc) => {
   const pageHeight = doc.internal.pageSize.getHeight()
   const widthScale = pageWidth / 297
   const rowScale = form.exportFormat === 'A3' ? widthScale : 1
+  const tableWidth = (isPreparationPa.value ? 283 : 244.8) * widthScale
 
   return {
     pageWidth,
     pageHeight,
     widthScale,
     rowScale,
-    tableX: 7 * widthScale,
-    tableY: form.exportFormat === 'A3' ? 62 : 48,
-    tableWidth: 283 * widthScale,
-    headHeight: 13.8 * rowScale,
-    rowHeight: 6.15 * rowScale,
+    tableX: (pageWidth - tableWidth) / 2,
+    tableY: (isPreparationPa.value ? 48 : 58) * widthScale,
+    tableWidth,
+    headHeight: (isPreparationPa.value ? 13.8 : 18) * rowScale,
+    rowHeight: (isPreparationPa.value ? 6.15 : 7) * rowScale,
     rowsPerPage: 17,
-    headerX: 7 * widthScale,
-    headerTitleY: form.exportFormat === 'A3' ? 16 : 11,
-    headerFirstRowY: form.exportFormat === 'A3' ? 25 : 18,
-    headerRowGap: form.exportFormat === 'A3' ? 6.2 : 5.2,
+    firstParticipantPageRows: isPreparationPa.value ? 17 : 14,
+    secondParticipantPageRows: isPreparationPa.value ? 17 : 20,
+    secondPageTableY: 25 * widthScale,
+    headerX: (isPreparationPa.value ? 7 : 20) * widthScale,
+    headerPageY: (isPreparationPa.value ? 7 : 15) * widthScale,
+    headerTitleY: (isPreparationPa.value ? 14 : 28) * widthScale,
+    headerFirstRowY: (isPreparationPa.value ? 22 : 36) * widthScale,
+    headerRowGap: 5.2 * widthScale,
+    headerPeriodX: 190 * widthScale,
+    headerPeriodValueX: 214 * widthScale,
     headerLabelWidth: 25 * widthScale,
     headerValueWidth: 75 * widthScale,
     headerSecondLabelWidth: 50 * widthScale,
@@ -785,6 +794,25 @@ const pdfLayout = (doc) => {
 }
 
 const pdfColumns = (layout) => {
+  if (!isPreparationPa.value) {
+    const days = Array.from({ length: 3 }, (_, index) => selectedDays.value[index] || null)
+
+    return [
+      { key: 'nr', label: 'Nr.', width: 14.9 * layout.widthScale },
+      { key: 'nachname', label: 'Name', width: 32.5 * layout.widthScale },
+      { key: 'vorname', label: 'Vorname', width: 30 * layout.widthScale },
+      ...days.map((day, index) => ({
+        key: day?.id || `termin-${index + 1}`,
+        day,
+        isDay: true,
+        label: `Termin ${index + 1}`,
+        width: 42.5 * layout.widthScale,
+      })),
+      { key: 'gesamtstunden', label: 'Gesamt-\nstunden:', width: 22.4 * layout.widthScale },
+      { key: 'zertifikat', label: 'Zertifikat\nJa/nein', width: 17.5 * layout.widthScale },
+    ]
+  }
+
   const staticColumns = [
     { key: 'nr', label: 'Nr.', width: 8 },
     { key: 'nachname', label: 'Name', width: 34 },
@@ -809,6 +837,13 @@ const pdfColumns = (layout) => {
   ]
 }
 
+const drawPdfPageNumber = (doc, pageNumber, totalPages, layout) => {
+  applyPdfPrintInk(doc)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(form.exportFormat === 'A3' ? 9.5 : 8)
+  doc.text(`Seite ${pageNumber} von ${totalPages}`, layout.pageWidth - (47 * layout.widthScale), layout.headerPageY)
+}
+
 const drawPdfHeader = (doc, pageNumber, totalPages, layout, trainerPage = false) => {
   const x0 = layout.headerX
   const x1 = x0 + layout.headerLabelWidth
@@ -821,12 +856,26 @@ const drawPdfHeader = (doc, pageNumber, totalPages, layout, trainerPage = false)
     ? 'Unterschriftenliste zum Nachweis der Potenzialanalyse - PA/ Ausbilder/-innen'
     : pdfDocumentTitle.value
 
-  applyPdfPrintInk(doc)
+  drawPdfPageNumber(doc, pageNumber, totalPages, layout)
   doc.setFont('helvetica', 'bold')
+
+  if (trainerPage) {
+    doc.setFontSize(form.exportFormat === 'A3' ? 13 : 10.5)
+    doc.text(title, x0, 36 * layout.widthScale)
+    return
+  }
+
   doc.setFontSize(form.exportFormat === 'A3' ? 13 : 10.5)
   doc.text(title, x0, layout.headerTitleY)
-  doc.setFontSize(form.exportFormat === 'A3' ? 9.5 : 8)
-  doc.text(`Seite ${pageNumber} von ${totalPages}`, layout.pageWidth - (47 * layout.widthScale), layout.headerTitleY)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(form.exportFormat === 'A3' ? 9 : 7.2)
+  doc.text('Zeitraum:', layout.headerPeriodX, layout.headerTitleY)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(form.exportFormat === 'A3' ? 9.5 : 7.5)
+  doc.text(periodText.value || '', layout.headerPeriodValueX, layout.headerTitleY, {
+    maxWidth: layout.pageWidth - layout.headerPeriodValueX - (7 * layout.widthScale),
+  })
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(form.exportFormat === 'A3' ? 9 : 7.2)
@@ -843,8 +892,6 @@ const drawPdfHeader = (doc, pageNumber, totalPages, layout, trainerPage = false)
   doc.text('Zentrum für Bildung und Beruf Saar gGmbH in Burbach', x3, rowY(1), { maxWidth: layout.headerSecondValueWidth - 2 })
   doc.text('AZ/FKZ:', x2, rowY(2))
   doc.text('4.5-3444-10/0004', x3, rowY(2), { maxWidth: layout.headerSecondValueWidth - 2 })
-  doc.text('Zeitraum:', x2, rowY(3))
-  doc.text(periodText.value || '', x3, rowY(3), { maxWidth: layout.headerSecondValueWidth - 2 })
 }
 
 const drawPdfTableHeader = (doc, columns, layout) => {
@@ -855,6 +902,68 @@ const drawPdfTableHeader = (doc, columns, layout) => {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(6.4)
   doc.setLineWidth(0.25)
+
+  if (!isPreparationPa.value) {
+    const topHeight = 10.5 * layout.rowScale
+    const bottomHeight = 7.5 * layout.rowScale
+    const pad = 1.2 * layout.widthScale
+    let dayIndex = 0
+
+    columns.forEach((column) => {
+      if (column.isDay) {
+        const groupLabel = dayIndex < 2 ? 'PA' : 'Auswertungsgespräch'
+        doc.text(groupLabel, cursorX + (column.width / 2), y - (2 * layout.rowScale), { align: 'center' })
+        dayIndex++
+      }
+      cursorX += column.width
+    })
+
+    cursorX = layout.tableX
+    columns.forEach((column) => {
+      doc.rect(cursorX, y, column.width, topHeight)
+
+      if (column.isDay) {
+        doc.setFont('helvetica', 'normal')
+        doc.text(`${column.label}:`, cursorX + pad, y + (3.2 * layout.rowScale))
+        if (column.day?.date) {
+          doc.setFont('helvetica', 'bold')
+          doc.text(dateLabel(column.day.date), cursorX + pad, y + (6.9 * layout.rowScale), {
+            maxWidth: column.width - (2 * pad),
+          })
+        }
+      } else if (['gesamtstunden', 'zertifikat'].includes(column.key)) {
+        doc.setFont('helvetica', 'normal')
+        String(column.label).split('\n').forEach((line, lineIndex) => {
+          doc.text(line, cursorX + pad, y + (3.2 * layout.rowScale) + (lineIndex * 3 * layout.rowScale))
+        })
+      }
+
+      cursorX += column.width
+    })
+
+    cursorX = layout.tableX
+    columns.forEach((column) => {
+      const bottomY = y + topHeight
+      if (['gesamtstunden', 'zertifikat'].includes(column.key)) {
+        doc.setFillColor(190, 190, 190)
+        doc.rect(cursorX, bottomY, column.width, bottomHeight, 'FD')
+      } else {
+        doc.rect(cursorX, bottomY, column.width, bottomHeight)
+      }
+
+      doc.setFont('helvetica', 'bold')
+      if (column.isDay) {
+        doc.text('Unterschrift', cursorX + pad, bottomY + (3 * layout.rowScale))
+        doc.text('Schüler/-in', cursorX + pad, bottomY + (6 * layout.rowScale))
+      } else if (!['gesamtstunden', 'zertifikat'].includes(column.key)) {
+        doc.text(column.label, cursorX + pad, bottomY + (4.7 * layout.rowScale))
+      }
+
+      cursorX += column.width
+    })
+
+    return
+  }
 
   columns.forEach((column) => {
     doc.rect(cursorX, y, column.width, layout.headHeight)
@@ -875,12 +984,18 @@ const drawPdfTableHeader = (doc, columns, layout) => {
 }
 
 const drawPdfRows = (doc, columns, rows, page, layout, pdfSignatures) => {
-  const pageStart = (page - 1) * layout.rowsPerPage
+  const pageStart = isPreparationPa.value ? (page - 1) * layout.rowsPerPage : (page === 1 ? 0 : 14)
+  const pageRows = isPreparationPa.value
+    ? layout.rowsPerPage
+    : (page === 1 ? layout.firstParticipantPageRows : layout.secondParticipantPageRows)
+  const rowsY = !isPreparationPa.value && page === 2
+    ? layout.secondPageTableY
+    : layout.tableY + layout.headHeight
 
-  Array.from({ length: layout.rowsPerPage }).forEach((_, index) => {
+  Array.from({ length: pageRows }).forEach((_, index) => {
     const participant = rows[pageStart + index] || null
     const rowNumber = pageStart + index + 1
-    const y = layout.tableY + layout.headHeight + (index * layout.rowHeight)
+    const y = rowsY + (index * layout.rowHeight)
     let cursorX = layout.tableX
 
     columns.forEach((column) => {
@@ -912,18 +1027,18 @@ const drawPdfRows = (doc, columns, rows, page, layout, pdfSignatures) => {
 }
 
 const drawTrainerTable = (doc, layout) => {
-  const daysForTable = selectedDays.value.slice(0, 3)
-  const tableDays = daysForTable.length ? daysForTable : [{ date: '' }]
-  const labelWidth = 44 * layout.widthScale
-  const dayWidth = (layout.tableWidth - labelWidth) / tableDays.length
-  const rowHeights = [10, 10, 15, 22].map((height) => height * layout.rowScale)
+  const tableDays = Array.from({ length: 3 }, (_, index) => selectedDays.value[index] || { date: '' })
+  const tableWidth = 201.6 * layout.widthScale
+  const tableX = (layout.pageWidth - tableWidth) / 2
+  const columnWidth = tableWidth / 4
+  const rowHeights = [7.5, 7.5, 9, 9].map((height) => height * layout.rowScale)
   const labels = [
     'Datum',
     'Zeitstunden',
     'Name/Vorname\nAusbilder/-in',
     'Unterschrift\nAusbilder/-in',
   ]
-  let y = layout.tableY + (form.exportFormat === 'A3' ? 8 : 4)
+  let y = 48 * layout.widthScale
 
   applyPdfPrintInk(doc)
   doc.setLineWidth(0.25)
@@ -932,14 +1047,14 @@ const drawTrainerTable = (doc, layout) => {
 
   labels.forEach((label, rowIndex) => {
     const rowHeight = rowHeights[rowIndex]
-    doc.rect(layout.tableX, y, labelWidth, rowHeight)
+    doc.rect(tableX, y, columnWidth, rowHeight)
     label.split('\n').forEach((line, lineIndex) => {
-      doc.text(line, layout.tableX + (2 * layout.widthScale), y + (4.2 * layout.rowScale) + (lineIndex * 3.6 * layout.rowScale))
+      doc.text(line, tableX + (2 * layout.widthScale), y + (3.8 * layout.rowScale) + (lineIndex * 3.4 * layout.rowScale))
     })
 
     tableDays.forEach((day, dayIndex) => {
-      const x = layout.tableX + labelWidth + (dayIndex * dayWidth)
-      doc.rect(x, y, dayWidth, rowHeight)
+      const x = tableX + columnWidth + (dayIndex * columnWidth)
+      doc.rect(x, y, columnWidth, rowHeight)
       if (rowIndex === 0 && day.date) {
         doc.text(dateLabel(day.date), x + (2 * layout.widthScale), y + (4.2 * layout.rowScale))
       }
@@ -979,8 +1094,12 @@ const createSignedPdf = async () => {
 
     for (let page = 1; page <= participantPages; page++) {
       if (page > 1) doc.addPage()
-      drawPdfHeader(doc, page, totalPages, layout)
-      drawPdfTableHeader(doc, columns, layout)
+      if (!isPreparationPa.value && page === 2) {
+        drawPdfPageNumber(doc, page, totalPages, layout)
+      } else {
+        drawPdfHeader(doc, page, totalPages, layout)
+        drawPdfTableHeader(doc, columns, layout)
+      }
       drawPdfRows(doc, columns, rows, page, layout, pdfSignatures)
       drawBopAttendanceFooter(doc, footerImage)
     }
