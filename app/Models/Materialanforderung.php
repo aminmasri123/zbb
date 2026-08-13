@@ -16,15 +16,29 @@ class Materialanforderung extends Model
     protected $fillable = [
         'projekt_id',
         'kostenstelle',
+        'benoetigt_am',
+        'prioritaet',
         'status',
         'gesamtpreis',
         'endsumme',
         'bemerkungen',
         'ersteller_id',
     ];
+
+    protected $casts = [
+        'benoetigt_am' => 'date',
+        'gesamtpreis' => 'decimal:2',
+        'endsumme' => 'decimal:2',
+    ];
+
     public function vergabevermerke()
     {
         return $this->hasMany(MaterialanforderungVergabevermerk::class, 'anforderung_id');
+    }
+
+    public function vergabevermerk()
+    {
+        return $this->hasOne(MaterialanforderungVergabevermerk::class, 'anforderung_id');
     }
     // Beziehungen
     public function besteller()
@@ -47,7 +61,7 @@ class Materialanforderung extends Model
     // Berechne Gesamtsumme inkl. MwSt
     public function berechneEndsumme(): float
     {
-        return $this->positionen->sum(function ($position) {
+        return $this->artikeln->sum(function ($position) {
             return $position->gesamtpreis + ($position->gesamtpreis * $position->mwst / 100);
         });
     }

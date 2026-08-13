@@ -2,7 +2,6 @@
 
 namespace App\Notifications;
 
-use App\Models\Personen;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
 
@@ -26,11 +25,11 @@ class UpdateMaterialanforderungNotification extends Notification
 
     public function toDatabase($notifiable)
     {
-        $ersteller = Personen::find($this->anforderung->ersteller_id);
+        $ersteller = $this->anforderung->besteller;
 
         switch ($this->status) {
             case 'eingereicht':
-                $message = "Materialanforderung #{$this->anforderung->id} von {$ersteller->vorname} wartet auf Ihre sachliche Genehmigung.";
+                $message = "Materialanforderung #{$this->anforderung->id} von " . ($ersteller?->name ?? 'Unbekannt') . " wartet auf Ihre sachliche Genehmigung.";
                 break;
 
             case 'sachlich_genehmigt':
@@ -45,7 +44,7 @@ class UpdateMaterialanforderungNotification extends Notification
                 $message = "Materialanforderung #{$this->anforderung->id} wurde zur Überarbeitung zurückgesendet.";
                 break;
 
-            case 'stornieren':
+            case 'storniert':
                 $message = "Materialanforderung #{$this->anforderung->id} wurde storniert.";
                 break;
 

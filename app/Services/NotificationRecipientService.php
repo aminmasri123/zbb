@@ -17,7 +17,9 @@ class NotificationRecipientService
 {
     public function forMaterialanforderung(Materialanforderung $anforderung, string $status, ?User $actor = null): Collection
     {
-        $eventKey = 'materialanforderung.' . $status;
+        $eventKey = $status === 'storniert'
+            ? 'materialanforderung.stornieren'
+            : 'materialanforderung.' . $status;
 
         return $this->configuredRecipients($eventKey, [
             'actor' => $actor,
@@ -40,7 +42,7 @@ class NotificationRecipientService
                 $actor
             ),
             'zur_ueberarbeitung',
-            'stornieren',
+            'storniert',
             'bestellt',
             'geliefert',
             'teilweise_geliefert' => $this->creatorOfMaterialanforderung($anforderung),

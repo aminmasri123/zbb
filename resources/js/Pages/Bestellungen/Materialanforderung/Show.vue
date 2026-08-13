@@ -1,522 +1,249 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
-import { ref, reactive, computed } from 'vue'
-import { Head, router, usePage } from '@inertiajs/vue3'
-import Modal from '@/Components/ModalForm.vue'
-import Swal from 'sweetalert2';
-import Dropdown from 'primevue/dropdown';
-import InputText from 'primevue/inputtext';
-import Button from 'primevue/button';
-import FloatLabel from 'primevue/floatlabel';
-import Select from 'primevue/select';
+import { computed, ref } from 'vue'
+import { Head, Link, router, useForm } from '@inertiajs/vue3'
+import Swal from 'sweetalert2'
 
 const props = defineProps({
     anforderung: Object,
-    permissions: Object,
+    kostenstellen: { type: Array, default: () => [] },
     canEditMaterialanforderung: Boolean,
     canConfirmKaufmaenisch: Boolean,
     canConfirmSachlich: Boolean,
     canBestellen: Boolean,
-    verlauf: Array,
-    kostenstellen: {
-        type: Array,
-        default: () => [],
+    canDeleteMaterialanforderung: Boolean,
+    verlauf: { type: Array, default: () => [] },
+})
+
+const editing = ref(new URLSearchParams(window.location.search).get('edit') === '1')
+const deliveryOpen = ref(false)
+const liefermengen = ref(Object.fromEntries(props.anforderung.artikeln.map((item) => [item.id, Number(item.gelieferte_menge || 0)])))
+const vergabe = props.anforderung.vergabevermerk || {}
+const form = useForm({
+    id: props.anforderung.id,
+    kostenstelle: props.anforderung.kostenstelle,
+    benoetigt_am: props.anforderung.benoetigt_am?.substring(0, 10) || '',
+    prioritaet: props.anforderung.prioritaet || 'normal',
+    bemerkungen: props.anforderung.bemerkungen || '',
+    positionen: props.anforderung.artikeln.map((item) => ({
+        id: item.id,
+        pos: item.pos,
+        artikel: item.artikel,
+        link: item.link || '',
+        stueck: Number(item.stueck),
+        art_nr: item.art_nr || '',
+        einzelpreis: Number(item.einzelpreis),
+        mwst: Number(item.mwst),
+    })),
+    vergabe: {
+        kurzbeschreibung: vergabe.kurzbeschreibung || '',
+        lieferung_art: vergabe.lieferung_art || 'Lieferleistung',
+        begruendung_optionen: vergabe.begruendung_optionen || [],
+        begruendung: vergabe.begruendung || '',
+        lieferant: vergabe.lieferant || '',
+        lieferung_option: vergabe.lieferung_option || 'per Lieferung',
+        lieferadresse: vergabe.lieferadresse || '',
+        bestellnummer: vergabe.bestellnummer || '',
     },
 })
-const anmerkung = ref('')
-const selectedStatus = ref(null)
-const statusOptions = [
-    { label: 'Überarbeiten', value: 'zur_ueberarbeitung' },
-    { label: 'Stornieren', value: 'stornieren' },
-    { label: 'Geliefert', value: 'geliefert' },
-    { label: 'Teilweise geliefert', value: 'teilweise_geliefert' },
-    { label: 'Bestellt', value: 'bestellt' }
+
+const statusMeta = {
+    entwurf: ['Entwurf', 'bg-gray-100 text-gray-700'],
+    eingereicht: ['Eingereicht', 'bg-blue-100 text-blue-700'],
+    sachlich_genehmigt: ['Sachlich genehmigt', 'bg-violet-100 text-violet-700'],
+    kaufmaennisch_genehmigt: ['Kaufmännisch genehmigt', 'bg-emerald-100 text-emerald-700'],
+    bestellt: ['Bestellt', 'bg-cyan-100 text-cyan-700'],
+    teilweise_geliefert: ['Teilweise geliefert', 'bg-amber-100 text-amber-800'],
+    geliefert: ['Geliefert', 'bg-green-100 text-green-800'],
+    zur_ueberarbeitung: ['Zur Überarbeitung', 'bg-orange-100 text-orange-800'],
+    storniert: ['Storniert', 'bg-red-100 text-red-700'],
+}
+const editable = computed(() => props.canEditMaterialanforderung && ['entwurf', 'zur_ueberarbeitung'].includes(props.anforderung.status))
+const netto = computed(() => form.positionen.reduce((sum, item) => sum + item.stueck * item.einzelpreis, 0))
+const mwst = computed(() => form.positionen.reduce((sum, item) => sum + item.stueck * item.einzelpreis * item.mwst / 100, 0))
+const begruendungen = [
+    ['nur_ein_anbieter', 'Es existiert nur ein Anbieter'],
+    ['besondere_gruende', 'Aufgrund besonderer Gründe'],
+    ['besondere_dringlichkeit', 'Besondere Dringlichkeit'],
+    ['zubehoer_ersatzteile', 'Zubehör oder Ersatzteile zu vorhandenen Geräten'],
+    ['vertragliche_gruende', 'Aus vertraglichen Gründen'],
+    ['guenstigster_anbieter', 'Günstigster Anbieter'],
 ]
-// Bearbeitungsmodus
-const editing = ref(false)
-const editableStatuses = ['entwurf', 'eingereicht', 'zur_ueberarbeitung']
-const canStillEdit = computed(() =>
-    props.canEditMaterialanforderung && editableStatuses.includes(props.anforderung.status)
-)
 
-if (usePage().url.includes('edit=1') && canStillEdit.value) {
-    editing.value = true
+function euro(value) {
+    return Number(value || 0).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
 }
 
-// Modal für Genehmigungen
-const visibleBestellen = ref(false)
-const visibleKaufmaennisch = ref(false)
-const visibleSachlich = ref(false)
-const sendenModal = ref(false)
-
-// Formular für inline editing
-const form = reactive({
-    kostenstelle: props.anforderung.kostenstelle,
-    bemerkungen: props.anforderung.bemerkungen,
-    artikeln: props.anforderung.artikeln.map(a => ({
-        id: a.id,
-        pos: a.pos,
-        artikel: a.artikel,
-        stueck: Number(a.stueck) || 0,
-        art_nr: a.art_nr,
-        einzelpreis: Number(a.einzelpreis) || 0,
-        mwst: Number(a.mwst) || 19,
-        gesamtpreis: Number(a.gesamtpreis) || 0,
-        link: a.link
-    }))
-})
-
-// Gesamtpreis pro Position aktualisieren
-const updateGesamtpreis = (p) => {
-    const stueck = Number(p.stueck) || 0
-    const einzelpreis = Number(p.einzelpreis) || 0
-    p.gesamtpreis = parseFloat((stueck * einzelpreis).toFixed(2))
+function date(value) {
+    return value ? new Intl.DateTimeFormat('de-DE').format(new Date(value)) : '–'
 }
 
-// Endsumme inkl. MwSt
-const endsumme = computed(() => {
-    return form.artikeln.reduce((sum, p) => {
-        const gesamt = Number(p.gesamtpreis) || 0
-        const mwst = Number(p.mwst) || 0
-        return sum + gesamt * (1 + mwst / 100)
-    }, 0).toFixed(2)
-})
+function addPosition() {
+    form.positionen.push({ id: null, pos: form.positionen.length + 1, artikel: '', link: '', stueck: 1, art_nr: '', einzelpreis: 0, mwst: 19 })
+}
 
-// Artikel hinzufügen
-const addArtikel = () => {
-    form.artikeln.push({
-        id: null,
-        pos: form.artikeln.length + 1,
-        artikel: '',
-        stueck: 1,
-        art_nr: '',
-        einzelpreis: 0,
-        mwst: 19,
-        gesamtpreis: 0,
-        link: ''
+function removePosition(index) {
+    if (form.positionen.length === 1) return
+    form.positionen.splice(index, 1)
+    form.positionen.forEach((item, i) => { item.pos = i + 1 })
+}
+
+function save() {
+    form.put(route('materialanforderung.update'), {
+        preserveScroll: true,
+        onSuccess: () => { editing.value = false },
     })
 }
 
-// Artikel löschen
-const removeArtikel = (index) => {
-    form.artikeln.splice(index, 1)
-    form.artikeln.forEach((p, i) => p.pos = i + 1)
-}
-// Materialanforderung senden
-
-const bestellungSenden = () => {
-    router.get(route('materialanforderung.genehmigen', {
-        id: props.anforderung.id,
-        status: 'eingereicht',
-        anmerkung: anmerkung.value
-    }), {
-        onSuccess: () => {
-            anmerkung.value = ''
-            sendenModal.value = false
-            Swal.fire('Erfolg!', 'Materialanforderung erfolgreich gesendet!', 'success')
-        }
+async function changeStatus(status, label, requireComment = false) {
+    const result = await Swal.fire({
+        title: label,
+        text: `Materialanforderung #${props.anforderung.id}`,
+        input: requireComment ? 'textarea' : undefined,
+        inputLabel: requireComment ? 'Begründung / Hinweis' : undefined,
+        inputValidator: requireComment ? (value) => !value?.trim() ? 'Bitte eine Begründung eintragen.' : undefined : undefined,
+        showCancelButton: true,
+        confirmButtonText: 'Bestätigen',
+        cancelButtonText: 'Abbrechen',
+        confirmButtonColor: '#ea580c',
     })
+    if (!result.isConfirmed) return
+
+    router.put(route('materialanforderung.genehmigen', { id: props.anforderung.id, status }), {
+        anmerkung: result.value || '',
+    }, { preserveScroll: true })
 }
-const sachlichGenehmigt = () => {
-    router.get(route('materialanforderung.genehmigen', {
-        id: props.anforderung.id,
-        status: 'sachlich_genehmigt',
-        anmerkung: anmerkung.value
-    }), {
-        onSuccess: () => {
-            anmerkung.value = '' // reset
-            visibleSachlich.value = false
-        }
+
+async function deleteDraft() {
+    const result = await Swal.fire({
+        title: 'Entwurf löschen?',
+        text: 'Die Materialanforderung und alle Positionen werden endgültig gelöscht.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Löschen',
+        cancelButtonText: 'Abbrechen',
+        confirmButtonColor: '#dc2626',
     })
+    if (result.isConfirmed) router.delete(route('materialanforderung.destroy', props.anforderung.id))
 }
 
-const kaufmaennischGenehmigt = () => {
-    router.get(route('materialanforderung.genehmigen', {id: props.anforderung.id, status: 'kaufmaennisch_genehmigt'}))
-}
-const bestellwesenUpdate = () => {
-    if (!selectedStatus.value) {
-        Swal.fire('Fehler', 'Bitte Status auswählen!', 'warning')
-        return
-    }
-
-    router.get(route('materialanforderung.genehmigen', {
-        id: props.anforderung.id,
-        status: selectedStatus.value,
-        anmerkung: anmerkung.value
-    }), {
-        onSuccess: () => {
-            anmerkung.value = ''
-            visibleBestellen.value = false
-        }
+async function markOrdered() {
+    const result = await Swal.fire({
+        title: 'Als bestellt markieren',
+        input: 'text',
+        inputLabel: 'Bestellnummer *',
+        inputValue: vergabe.bestellnummer || '',
+        inputValidator: (value) => !value?.trim() ? 'Bitte die Bestellnummer eintragen.' : undefined,
+        showCancelButton: true,
+        confirmButtonText: 'Bestellung speichern',
+        cancelButtonText: 'Abbrechen',
+        confirmButtonColor: '#0e7490',
     })
-}
-// Änderungen speichern
-const save = () => {
-    // id zum Form-Datenobjekt hinzufügen
-    const payload = { ...form, id: props.anforderung.id };
-
-    router.put(route('materialanforderung.update', props.anforderung.id), payload, {
-        onSuccess: () => {
-            editing.value = false
-            Swal.fire('Erfolg!', 'Materialanforderung erfolgreich aktualisiert!', 'success')
-        }
-    })
+    if (!result.isConfirmed) return
+    router.put(route('materialanforderung.genehmigen', { id: props.anforderung.id, status: 'bestellt' }), {
+        bestellnummer: result.value.trim(),
+    }, { preserveScroll: true })
 }
 
-// Genehmigungsaktionen
-const sachlichGenehmigen = () => {
-        anmerkung.value = ''
-
-    visibleSachlich.value = true
+function submitPartialDelivery() {
+    router.put(route('materialanforderung.genehmigen', { id: props.anforderung.id, status: 'teilweise_geliefert' }), {
+        liefermengen: liefermengen.value,
+    }, { preserveScroll: true, onSuccess: () => { deliveryOpen.value = false } })
 }
-const kaufmaennischGenehmigen = () => {
-        anmerkung.value = ''
-
-    visibleKaufmaennisch.value = true
-}
-const bestellen = () => {
-        anmerkung.value = ''
-
-    visibleBestellen.value = true
-}
-const senden = () => {
-        anmerkung.value = ''
-
-    sendenModal.value = true
-}
-
 </script>
 
 <template>
-<Head title="Materialanforderung" />
+    <Head :title="`Materialanforderung #${anforderung.id}`" />
+    <AppLayout>
+        <template #header>Materialanforderung #{{ anforderung.id }}</template>
 
-<AppLayout>
-    <template #header>
-        <template v-if="editing">Materialanforderungen bearbeiten</template>
-        <div v-else class="flex justify-between items-center">
-            <div>
-                <h2 class="text-2xl font-bold text-gray-800">Materialanforderung #{{ anforderung.id }}</h2>
-                <p class="text-sm text-gray-500">Übersicht der Bestellung</p>
-            </div>
-
-            <span class="px-4 py-1 text-sm rounded-full bg-blue-100 text-blue-700 font-medium">
-                {{ anforderung.status }}
-            </span>
-
-            <div class="flex gap-2">
-                <!-- Bearbeiten Button -->
-                  <button v-if="['entwurf', 'zur_ueberarbeitung'].includes(anforderung.status) && !editing"
-                        @click="senden"
-                        class="bg-zbb text-white px-4 py-2 rounded">
-                    Senden
-                </button>
-                <button v-if="canStillEdit"
-                        @click="editing = !editing"
-                        class="bg-green-500 text-white px-4 py-2 rounded">
-                        {{ editing ? 'Abbrechen' : 'Bearbeiten' }}
-                </button>
-                <!-- Genehmigungsbuttons -->
-                <button v-if="anforderung.status === 'eingereicht' && canConfirmSachlich"
-                        @click="sachlichGenehmigen"
-                        class="bg-zbb text-white px-4 py-2 rounded">
-                    Sachlich genehmigen
-                </button>
-
-                <button v-if="anforderung.status === 'sachlich_genehmigt' && canConfirmKaufmaenisch"
-                        @click="kaufmaennischGenehmigen"
-                        class="bg-blue-500 text-white px-4 py-2 rounded">
-                    Kaufmännisch genehmigen
-                </button>
-
-
-                <template @click="bestellen" v-if="anforderung.status !== 'entwurf'
-                    && anforderung.status !== 'zur_ueberarbeitung' && anforderung.status !== 'eingereicht'
-                 && canBestellen">
-                   <Dropdown
-                    v-model="selectedStatus"
-                    :options="statusOptions"
-                    optionLabel="label"
-                    optionValue="value"
-                    placeholder="Status auswählen"
-                    class="w-full"
-                    @change="visibleBestellen = true"
-                />
-                </template>
-
-            </div>
-        </div>
-    </template>
-
-    <div v-if="editing" class="flex flex-col gap-3 max-w-8xl bg-white shadow-lg p-8 rounded-lg">
-        <div class="grid grid-cols-3 gap-4">
-            <FloatLabel variant="on" class="w-full">
-                <InputText :value="anforderung.projekt.name" disabled class="w-full" placeholder="" />
-                <label>Projekt</label>
-            </FloatLabel>
-
-            <FloatLabel variant="on" class="w-full">
-                <InputText :value="`${anforderung.besteller?.first_name || ''} ${anforderung.besteller?.last_name || ''}`.trim()" disabled class="w-full" placeholder="" />
-                <label>Besteller</label>
-            </FloatLabel>
-
-            <FloatLabel variant="on" class="w-full">
-                <Select
-                    v-model="form.kostenstelle"
-                    :options="kostenstellen"
-                    optionLabel="kostenstelle"
-                    optionValue="kostenstelle"
-                    placeholder="Bitte auswählen"
-                    class="w-full"
-                />
-                <label>Kostenstelle</label>
-            </FloatLabel>
-        </div>
-
-        <div class="grid grid-cols-1 mt-2">
-            <FloatLabel variant="on" class="w-full">
-                <InputText v-model="form.bemerkungen" class="w-full" placeholder="" />
-                <label>Bemerkungen</label>
-            </FloatLabel>
-        </div>
-
-        <hr class="my-2" />
-        <h3 class="font-semibold">Artikel</h3>
-        <table class="min-w-full border divide-y divide-gray-200">
-            <thead class="bg-gray-200">
-                <tr>
-                    <th>Pos</th>
-                    <th>Link</th>
-                    <th>Artikel</th>
-                    <th>Stück</th>
-                    <th>Art.Nr</th>
-                    <th>Einzelpreis</th>
-                    <th>MwSt %</th>
-                    <th>Gesamtpreis</th>
-                    <th>*</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr v-for="(p, index) in form.artikeln" :key="p.id ?? `new-${index}`">
-                    <td>{{ p.pos }}</td>
-                    <td><InputText v-model="p.link" /></td>
-                    <td><InputText v-model="p.artikel" required /></td>
-                    <td><InputText type="number" v-model.number="p.stueck" @input="updateGesamtpreis(p)" /></td>
-                    <td><InputText v-model="p.art_nr" /></td>
-                    <td><InputText type="number" v-model.number="p.einzelpreis" @input="updateGesamtpreis(p)" /></td>
-                    <td><InputText type="number" v-model.number="p.mwst" /></td>
-                    <td>{{ (Number(p.gesamtpreis) || 0).toFixed(2) }}</td>
-                    <td>
-                        <Button severity="danger" @click="removeArtikel(index)">
-                            <i class="las la-trash"></i>
-                        </Button>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-
-        <Button class="p-button-sm p-button-secondary mt-3" @click="addArtikel">+ Artikel hinzufügen</Button>
-
-        <div class="mt-4 font-semibold text-right text-lg">
-            Endsumme inkl. MwSt: {{ endsumme }} €
-        </div>
-
-        <div class="flex gap-2 mt-4">
-            <button @click="save" class="bg-zbb text-white px-4 py-2 rounded">Speichern</button>
-            <button @click="editing = false" class="border px-4 py-2 rounded">Abbrechen</button>
-        </div>
-    </div>
-
-    <div v-else class="space-y-8 mt-4">
-
-        <!-- Projekt / Besteller / Kostenstelle -->
-        <div class="grid grid-cols-3 gap-6">
-            <div class="bg-white p-6 rounded-2xl shadow-sm border hover:shadow-md transition">
-                <p class="text-gray-500 text-sm">Projekt</p>
-                <p class="text-lg font-semibold mt-1">{{ anforderung.projekt.name }}</p>
-            </div>
-
-            <div class="bg-white p-6 rounded-2xl shadow-sm border hover:shadow-md transition">
-                <p class="text-gray-500 text-sm">Besteller</p>
-                <p class="text-lg font-semibold mt-1">
-                    {{ anforderung.besteller?.first_name }} {{ anforderung.besteller?.last_name }}
-                </p>
-            </div>
-
-            <div class="bg-white p-6 rounded-2xl shadow-sm border hover:shadow-md transition">
-                <p class="text-gray-500 text-sm">Kostenstelle</p>
-                <template v-if="editing">
-                    <input v-model="form.kostenstelle" class="border rounded px-2 py-1 w-full"/>
-                </template>
-                <template v-else>{{ anforderung.kostenstelle }}</template>
-            </div>
-        </div>
-
-        <div class="grid grid-cols-2 gap-6">
-        <!-- Bemerkungen -->
-            <div class="bg-white p-6 rounded-2xl shadow-sm border">
-                <h3 class="font-semibold text-gray-800 mb-2">Bemerkung</h3>
-                <template v-if="editing">
-                    <textarea v-model="form.bemerkungen" class="border rounded w-full px-2 py-1"></textarea>
-                </template>
-                <template v-else>
-                    {{ anforderung.bemerkungen || 'Keine Bemerkung vorhanden.' }}
-                </template>
-            </div>
-
-            <!-- Verlauf -->
-            <div class="bg-white p-6 rounded-2xl shadow-sm border">
-                <h3 class="font-semibold text-gray-800 mb-2">Verlauf</h3>
-                <ul class="text-gray-600 text-sm space-y-1">
-                    <li v-for="v in verlauf" :key="v.id">
-                        <span class="font-medium">{{ v.genehmiger.vorname }} {{ v.genehmiger.nachname }}</span> - <b class="text-red-500">{{ v.status }}</b> am {{ new Date(v.created_at).toLocaleString() }} || <b class="text-red-500">Bemmerkung: </b>{{ v.kommentar }}
-                    </li>
-                </ul>
-            </div>
-        </div>
-        <!-- Artikel -->
-        <div class="bg-white rounded-2xl shadow-sm border overflow-hidden">
-            <div class="flex justify-between items-center p-6 border-b">
-                <h3 class="text-lg font-semibold text-gray-800">Artikel</h3>
-            </div>
-
-            <div class="overflow-x-auto p-6">
-                <table class="w-full border divide-y divide-gray-200">
-                    <thead class="bg-gray-50 text-gray-500 text-sm text-left">
-                        <tr>
-                            <th>Pos</th><th>Link</th><th>Artikel</th><th>Stück</th>
-                            <th>Art.Nr</th><th>Einzelpreis</th><th>MwSt %</th><th>Gesamtpreis</th><th>*</th>
-                        </tr>
-                    </thead>
-
-                    <tbody>
-                        <tr v-for="(p,index) in form.artikeln" :key="p.id">
-                            <td>{{ p.pos }}</td>
-                            <td>
-                                <template v-if="editing">
-                                    <input v-model="p.link" class="border rounded px-2 py-1 w-full"/>
-                                </template>
-                                <template v-else><a :title="p.link" :href="p.link" target="_blank" rel="noopener noreferrer">{{ p.link.slice(0,20) }}</a> </template>
-                            </td>
-                            <td>
-                                <template v-if="editing">
-                                    <input v-model="p.artikel" class="border rounded px-2 py-1 w-full"/>
-                                </template>
-                                <template v-else>{{ p.artikel }}</template>
-                            </td>
-                            <td>
-                                <template v-if="editing">
-                                    <input type="number" v-model.number="p.stueck" @input="updateGesamtpreis(p)" class="border rounded px-2 py-1 w-20"/>
-                                </template>
-                                <template v-else>{{ p.stueck }}</template>
-                            </td>
-                            <td>
-                                <template v-if="editing">
-                                    <input v-model="p.art_nr" class="border rounded px-2 py-1 w-full"/>
-                                </template>
-                                <template v-else>{{ p.art_nr }}</template>
-                            </td>
-                            <td>
-                                <template v-if="editing">
-                                    <input type="number" v-model.number="p.einzelpreis" @input="updateGesamtpreis(p)" class="border rounded px-2 py-1 w-24"/>
-                                </template>
-                                <template v-else>{{ p.einzelpreis }}</template>
-                            </td>
-                            <td>
-                                <template v-if="editing">
-                                    <input type="number" v-model.number="p.mwst" @input="updateGesamtpreis(p)" class="border rounded px-2 py-1 w-20"/>
-                                </template>
-                                <template v-else>{{ p.mwst }}</template>
-                            </td>
-                            <td>{{ (Number(p.gesamtpreis) || 0).toFixed(2) }}</td>
-                            <td>
-                                <template v-if="editing">
-                                    <button @click.prevent="removeArtikel(index)" class="text-red-500">✖</button>
-                                </template>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-
-                <div v-if="editing" class="mt-2">
-                    <button @click.prevent="addArtikel" class="bg-gray-700 text-white px-3 py-1 rounded">+ Artikel hinzufügen</button>
+        <div class="mx-auto max-w-7xl space-y-5 pb-12">
+            <section class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h1 class="text-xl font-bold text-gray-900">{{ anforderung.projekt?.name }}</h1>
+                            <span class="rounded-full px-3 py-1 text-xs font-semibold" :class="statusMeta[anforderung.status]?.[1] || 'bg-gray-100'">{{ statusMeta[anforderung.status]?.[0] || anforderung.status }}</span>
+                            <span v-if="anforderung.prioritaet === 'dringend'" class="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">Dringend</span>
+                        </div>
+                        <p class="mt-1 text-sm text-gray-500">Erstellt am {{ date(anforderung.created_at) }} · benötigt am {{ date(anforderung.benoetigt_am) }}</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <a :href="route('materialanforderung.pdf', anforderung.id)" class="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700"><i class="las la-file-pdf text-red-600"></i> PDF</a>
+                        <button v-if="editable && !editing" type="button" class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold" @click="editing = true"><i class="las la-edit mr-1"></i> Bearbeiten</button>
+                        <button v-if="canDeleteMaterialanforderung && !editing" type="button" class="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700" @click="deleteDraft">Löschen</button>
+                        <Link :href="route('materialanforderung.index')" class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold">Zur Übersicht</Link>
+                    </div>
                 </div>
 
-                <div class="mt-4 font-semibold text-right text-lg">
-                    Endsumme inkl. MwSt: {{ endsumme }} €
+                <div v-if="!editing" class="mt-5 flex flex-wrap gap-2 border-t border-gray-100 pt-5">
+                    <button v-if="['entwurf', 'zur_ueberarbeitung'].includes(anforderung.status) && canEditMaterialanforderung" class="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white" @click="changeStatus('eingereicht', 'Materialanforderung einreichen?')">Einreichen</button>
+                    <button v-if="anforderung.status === 'eingereicht' && canConfirmSachlich" class="rounded-lg bg-violet-700 px-4 py-2 text-sm font-semibold text-white" @click="changeStatus('sachlich_genehmigt', 'Sachlich genehmigen?')">Sachlich genehmigen</button>
+                    <button v-if="anforderung.status === 'eingereicht' && canConfirmSachlich" class="rounded-lg border border-orange-300 px-4 py-2 text-sm font-semibold text-orange-700" @click="changeStatus('zur_ueberarbeitung', 'Zur Überarbeitung zurückgeben?', true)">Zurückgeben</button>
+                    <button v-if="anforderung.status === 'sachlich_genehmigt' && canConfirmKaufmaenisch" class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white" @click="changeStatus('kaufmaennisch_genehmigt', 'Kaufmännisch genehmigen?')">Kaufmännisch genehmigen</button>
+                    <button v-if="anforderung.status === 'sachlich_genehmigt' && canConfirmKaufmaenisch" class="rounded-lg border border-orange-300 px-4 py-2 text-sm font-semibold text-orange-700" @click="changeStatus('zur_ueberarbeitung', 'Zur Überarbeitung zurückgeben?', true)">Zurückgeben</button>
+                    <template v-if="canBestellen && ['kaufmaennisch_genehmigt', 'bestellt', 'teilweise_geliefert'].includes(anforderung.status)">
+                        <button v-if="anforderung.status === 'kaufmaennisch_genehmigt'" class="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white" @click="markOrdered">Als bestellt markieren</button>
+                        <button v-if="['bestellt', 'teilweise_geliefert'].includes(anforderung.status)" class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white" @click="deliveryOpen = true">Teillieferung erfassen</button>
+                        <button v-if="['bestellt', 'teilweise_geliefert'].includes(anforderung.status)" class="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white" @click="changeStatus('geliefert', 'Als vollständig geliefert markieren?')">Vollständig geliefert</button>
+                    </template>
+                    <button v-if="['entwurf', 'eingereicht', 'zur_ueberarbeitung'].includes(anforderung.status) && canEditMaterialanforderung" class="rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700" @click="changeStatus('storniert', 'Materialanforderung stornieren?', true)">Stornieren</button>
                 </div>
+            </section>
+
+            <template v-if="!editing">
+                <div class="grid grid-cols-1 gap-5 lg:grid-cols-3">
+                    <section class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm lg:col-span-2">
+                        <h2 class="mb-4 text-lg font-semibold">Artikel</h2>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-[760px] w-full text-sm">
+                                <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500"><tr><th class="px-3 py-3">Pos.</th><th class="px-3 py-3">Artikel</th><th class="px-3 py-3">Stück</th><th v-if="['bestellt', 'teilweise_geliefert', 'geliefert'].includes(anforderung.status)" class="px-3 py-3">Geliefert</th><th class="px-3 py-3">Art.-Nr.</th><th class="px-3 py-3 text-right">Einzelpreis</th><th class="px-3 py-3 text-right">MwSt.</th><th class="px-3 py-3 text-right">Gesamt</th></tr></thead>
+                                <tbody class="divide-y divide-gray-100"><tr v-for="item in anforderung.artikeln" :key="item.id"><td class="px-3 py-3">{{ item.pos }}</td><td class="px-3 py-3 font-medium"><a v-if="item.link" :href="item.link" target="_blank" class="text-blue-700 hover:underline">{{ item.artikel }}</a><span v-else>{{ item.artikel }}</span></td><td class="px-3 py-3">{{ item.stueck }}</td><td v-if="['bestellt', 'teilweise_geliefert', 'geliefert'].includes(anforderung.status)" class="px-3 py-3 font-semibold">{{ item.gelieferte_menge || 0 }}</td><td class="px-3 py-3">{{ item.art_nr || '–' }}</td><td class="px-3 py-3 text-right">{{ euro(item.einzelpreis) }}</td><td class="px-3 py-3 text-right">{{ item.mwst }} %</td><td class="px-3 py-3 text-right font-semibold">{{ euro(item.gesamtpreis) }}</td></tr></tbody>
+                            </table>
+                        </div>
+                    </section>
+                    <aside class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                        <h2 class="mb-4 text-lg font-semibold">Summe</h2>
+                        <dl class="space-y-3 text-sm"><div class="flex justify-between"><dt class="text-gray-500">Netto</dt><dd class="font-medium">{{ euro(anforderung.gesamtpreis) }}</dd></div><div class="flex justify-between"><dt class="text-gray-500">MwSt.</dt><dd class="font-medium">{{ euro(anforderung.endsumme - anforderung.gesamtpreis) }}</dd></div><div class="flex justify-between border-t pt-3 text-base"><dt class="font-semibold">Endsumme</dt><dd class="font-bold text-orange-600">{{ euro(anforderung.endsumme) }}</dd></div></dl>
+                        <dl class="mt-6 space-y-3 border-t pt-5 text-sm"><div><dt class="text-gray-500">Kostenstelle</dt><dd class="font-medium">{{ anforderung.kostenstelle }}</dd></div><div><dt class="text-gray-500">Antragsteller</dt><dd class="font-medium">{{ anforderung.besteller?.name }}</dd></div><div><dt class="text-gray-500">Bemerkungen</dt><dd class="whitespace-pre-wrap">{{ anforderung.bemerkungen || '–' }}</dd></div></dl>
+                    </aside>
+                </div>
+
+                <section class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                    <h2 class="mb-4 text-lg font-semibold">Vergabevermerk und Lieferung</h2>
+                    <dl class="grid grid-cols-1 gap-4 text-sm md:grid-cols-2"><div class="md:col-span-2"><dt class="text-gray-500">Kurzbeschreibung</dt><dd class="whitespace-pre-wrap font-medium">{{ vergabe.kurzbeschreibung || '–' }}</dd></div><div><dt class="text-gray-500">Art der Leistung</dt><dd class="font-medium">{{ vergabe.lieferung_art || '–' }}</dd></div><div><dt class="text-gray-500">Lieferung</dt><dd class="font-medium">{{ vergabe.lieferung_option || '–' }}</dd></div><div><dt class="text-gray-500">Lieferant</dt><dd class="font-medium">{{ vergabe.lieferant || '–' }}</dd></div><div><dt class="text-gray-500">Bestellnummer</dt><dd class="font-medium">{{ vergabe.bestellnummer || '–' }}</dd></div><div class="md:col-span-2"><dt class="text-gray-500">Lieferadresse</dt><dd class="whitespace-pre-wrap">{{ vergabe.lieferadresse || '–' }}</dd></div><div class="md:col-span-2"><dt class="text-gray-500">Begründung</dt><dd class="whitespace-pre-wrap">{{ vergabe.begruendung || '–' }}</dd></div></dl>
+                </section>
+            </template>
+
+            <form v-else class="space-y-5" @submit.prevent="save">
+                <section class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                    <h2 class="mb-4 text-lg font-semibold">Grunddaten bearbeiten</h2>
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-3"><label class="text-sm">Kostenstelle *<select v-model="form.kostenstelle" class="mt-1 w-full rounded-lg border-gray-300"><option v-for="item in kostenstellen" :key="item.id" :value="item.kostenstelle">{{ item.kostenstelle }}</option></select></label><label class="text-sm">Benötigt am<input v-model="form.benoetigt_am" type="date" class="mt-1 w-full rounded-lg border-gray-300" /></label><label class="text-sm">Priorität<select v-model="form.prioritaet" class="mt-1 w-full rounded-lg border-gray-300"><option value="normal">Normal</option><option value="dringend">Dringend</option></select></label><label class="text-sm md:col-span-3">Bemerkungen<textarea v-model="form.bemerkungen" rows="2" class="mt-1 w-full rounded-lg border-gray-300"></textarea></label></div>
+                </section>
+                <section class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                    <div class="mb-4 flex items-center justify-between"><h2 class="text-lg font-semibold">Artikel bearbeiten</h2><button type="button" class="rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white" @click="addPosition">+ Artikel</button></div>
+                    <div class="space-y-3"><article v-for="(item, index) in form.positionen" :key="item.id || index" class="grid grid-cols-2 gap-3 rounded-lg border border-gray-200 p-4 md:grid-cols-8"><label class="text-sm md:col-span-2">Artikel *<input v-model="item.artikel" class="mt-1 w-full rounded-lg border-gray-300" /></label><label class="text-sm">Stück *<input v-model.number="item.stueck" type="number" min="1" class="mt-1 w-full rounded-lg border-gray-300" /></label><label class="text-sm">Art.-Nr.<input v-model="item.art_nr" class="mt-1 w-full rounded-lg border-gray-300" /></label><label class="text-sm">Einzelpreis *<input v-model.number="item.einzelpreis" type="number" min="0" step="0.01" class="mt-1 w-full rounded-lg border-gray-300" /></label><label class="text-sm">MwSt. *<input v-model.number="item.mwst" type="number" min="0" max="100" step="0.01" class="mt-1 w-full rounded-lg border-gray-300" /></label><label class="text-sm md:col-span-2">Link<input v-model="item.link" type="url" class="mt-1 w-full rounded-lg border-gray-300" /></label><div class="col-span-2 flex items-center justify-between md:col-span-8"><strong>{{ euro(item.stueck * item.einzelpreis) }}</strong><button v-if="form.positionen.length > 1" type="button" class="text-sm text-red-600" @click="removePosition(index)">Entfernen</button></div></article></div>
+                </section>
+                <section class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                    <h2 class="mb-4 text-lg font-semibold">Vergabevermerk bearbeiten</h2>
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2"><label class="text-sm md:col-span-2">Kurzbeschreibung<textarea v-model="form.vergabe.kurzbeschreibung" rows="2" class="mt-1 w-full rounded-lg border-gray-300"></textarea></label><label class="text-sm">Art der Leistung<select v-model="form.vergabe.lieferung_art" class="mt-1 w-full rounded-lg border-gray-300"><option>Lieferleistung</option><option>Dienstleistung</option></select></label><label class="text-sm">Lieferung<select v-model="form.vergabe.lieferung_option" class="mt-1 w-full rounded-lg border-gray-300"><option>per Lieferung</option><option>per Abholung</option></select></label><fieldset class="md:col-span-2"><legend class="text-sm">Begründungsmerkmale</legend><div class="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2"><label v-for="option in begruendungen" :key="option[0]" class="flex gap-2 rounded-lg border p-2 text-sm"><input v-model="form.vergabe.begruendung_optionen" type="checkbox" :value="option[0]" /> {{ option[1] }}</label></div></fieldset><label class="text-sm md:col-span-2">Ergänzende Begründung<textarea v-model="form.vergabe.begruendung" rows="2" class="mt-1 w-full rounded-lg border-gray-300"></textarea></label><label class="text-sm">Lieferant<input v-model="form.vergabe.lieferant" class="mt-1 w-full rounded-lg border-gray-300" /></label><label v-if="form.vergabe.lieferung_option === 'per Lieferung'" class="text-sm">Lieferadresse *<textarea v-model="form.vergabe.lieferadresse" rows="2" class="mt-1 w-full rounded-lg border-gray-300"></textarea></label><label class="text-sm">Bestellnummer<input v-model="form.vergabe.bestellnummer" class="mt-1 w-full rounded-lg border-gray-300" /></label></div>
+                </section>
+                <div class="sticky bottom-3 flex flex-col gap-3 rounded-xl border border-gray-200 bg-white/95 p-4 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between"><div class="text-sm"><span class="text-gray-500">Endsumme:</span> <strong class="text-lg text-orange-600">{{ euro(netto + mwst) }}</strong></div><div class="flex gap-2"><button type="button" class="flex-1 rounded-lg border border-gray-300 px-4 py-2 font-semibold" @click="editing = false">Abbrechen</button><button type="submit" :disabled="form.processing" class="flex-1 rounded-lg bg-orange-600 px-4 py-2 font-semibold text-white">Speichern</button></div></div>
+            </form>
+
+            <section class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                <h2 class="mb-4 text-lg font-semibold">Bearbeitungsverlauf</h2>
+                <ol v-if="verlauf.length" class="space-y-4"><li v-for="item in verlauf" :key="item.id" class="flex gap-3"><span class="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-orange-500"></span><div><p class="text-sm font-medium">{{ item.genehmiger?.name || 'Unbekannt' }} · {{ statusMeta[item.status]?.[0] || item.status }}</p><p class="text-xs text-gray-500">{{ new Date(item.created_at).toLocaleString('de-DE') }}</p><p v-if="item.kommentar" class="mt-1 whitespace-pre-wrap text-sm text-gray-700">{{ item.kommentar }}</p></div></li></ol>
+                <p v-else class="text-sm text-gray-500">Noch keine Statusänderungen vorhanden.</p>
+            </section>
+
+            <div v-if="deliveryOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="deliveryOpen = false">
+                <form class="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl bg-white shadow-2xl" @submit.prevent="submitPartialDelivery">
+                    <div class="sticky top-0 flex items-center justify-between border-b bg-white p-5"><div><h2 class="text-lg font-semibold">Teillieferung erfassen</h2><p class="text-sm text-gray-500">Kumulierte gelieferte Menge je Position</p></div><button type="button" class="rounded-lg p-2 text-gray-500 hover:bg-gray-100" @click="deliveryOpen = false"><i class="las la-times text-xl"></i></button></div>
+                    <div class="space-y-3 p-5"><label v-for="item in anforderung.artikeln" :key="item.id" class="grid grid-cols-[1fr_120px] items-center gap-4 rounded-lg border border-gray-200 p-3"><span><strong class="block">{{ item.pos }}. {{ item.artikel }}</strong><small class="text-gray-500">Bestellt: {{ item.stueck }}</small></span><input v-model.number="liefermengen[item.id]" type="number" min="0" :max="item.stueck" class="w-full rounded-lg border-gray-300" /></label></div>
+                    <div class="sticky bottom-0 flex justify-end gap-2 border-t bg-white p-4"><button type="button" class="rounded-lg border border-gray-300 px-4 py-2 font-semibold" @click="deliveryOpen = false">Abbrechen</button><button type="submit" class="rounded-lg bg-amber-600 px-4 py-2 font-semibold text-white">Teillieferung speichern</button></div>
+                </form>
             </div>
         </div>
-
-    </div>
-
-    <!-- Modal für Genehmigung -->
-    <Modal v-if="visibleSachlich" @close="visibleSachlich = false">
-        <template #header>Genehmigung bestätigen</template>
-        <template #body>
-            <p>Sind Sie sicher, dass Sie diese Aktion ausführen möchten?</p>
-            <textarea
-                v-model="anmerkung"
-                placeholder="Anmerkung hinzufügen..."
-                class="w-full border rounded mt-3 px-3 py-2"
-            ></textarea>
-        </template>
-        <template #footer>
-            <button @click="sachlichGenehmigt" class="bg-zbb text-white px-4 py-2 rounded">Bestätigen</button>
-            <button @click="visibleSachlich=false" class="border px-4 py-2 rounded">Abbrechen</button>
-        </template>
-    </Modal>
-
-    <!-- Kaufmännische bestätigung -->
-    <Modal v-if="visibleKaufmaennisch" @close="visibleKaufmaennisch = false">
-        <template #header>Genehmigung bestätigen</template>
-        <template #body>
-            <p>Sind Sie sicher, dass Sie diese Aktion ausführen möchten?</p>
-            <textarea
-                v-model="anmerkung"
-                placeholder="Anmerkung hinzufügen..."
-                class="w-full border rounded mt-3 px-3 py-2">
-            </textarea>
-        </template>
-        <template #footer>
-            <button @click="kaufmaennischGenehmigt" class="bg-zbb text-white px-4 py-2 rounded">Bestätigen</button>
-            <button @click="visibleKaufmaennisch=false" class="border px-4 py-2 rounded">Abbrechen</button>
-        </template>
-    </Modal>
-    <!-- Bestellwesen update -->
-    <Modal v-if="visibleBestellen" @close="visibleBestellen = false">
-        <template #header>Genehmigung bestätigen</template>
-        <template #body>
-            <p>Sind Sie sicher, dass Sie diese Aktion ausführen möchten?</p>
-            <textarea
-                v-model="anmerkung"
-                placeholder="Anmerkung hinzufügen..."
-                class="w-full border rounded mt-3 px-3 py-2">
-            </textarea>
-        </template>
-        <template #footer>
-            <button @click="bestellwesenUpdate" class="bg-zbb text-white px-4 py-2 rounded">Bestätigen</button>
-            <button @click="visibleBestellen=false" class="border px-4 py-2 rounded">Abbrechen</button>
-        </template>
-    </Modal>
-    <Modal v-if="sendenModal" @close="sendenModal = false">
-        <template #header>Materialanforderung senden</template>
-        <template #body>
-            <p><b>Sind Sie sicher, dass Sie diese Aktion ausführen möchten?</b></p>
-            <p>Bitte achten Sie darauf, dass eine Bearbeitung der Materialanforderung nach der Versendung nicht mehr möglich ist.</p>
-            <textarea
-                v-model="anmerkung"
-                placeholder="Anmerkung hinzufügen..."
-                class="w-full border rounded mt-3 px-3 py-2">
-            </textarea>
-        </template>
-        <template #footer>
-            <button @click="bestellungSenden" class="bg-zbb text-white px-2 py-2 rounded">Bestätigen</button>
-            <button @click="sendenModal = false" class="border px-2 py-2 rounded">Abbrechen</button>
-        </template>
-    </Modal>
-
-
-
-
-</AppLayout>
+    </AppLayout>
 </template>

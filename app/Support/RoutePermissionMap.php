@@ -42,6 +42,8 @@ class RoutePermissionMap
         'partner.document.export' => [],
         'geraet.edit' => 'geraet.update',
         'getGeraeteID' => 'geraet.index',
+        'materialanforderung.genehmigen' => [],
+        'materialanforderung.pdf' => 'materialanforderung.show',
         'it-service.index' => [
             'it.service.index',
             'it.ticket.store',

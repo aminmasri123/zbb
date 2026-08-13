@@ -13,6 +13,7 @@ class MaterialanforderungArtikel extends Model
         'pos',
         'artikel',
         'stueck',
+        'gelieferte_menge',
         'art_nr',
         'einzelpreis',
         'gesamtpreis',

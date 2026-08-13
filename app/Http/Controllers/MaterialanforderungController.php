@@ -5,9 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Materialanforderung;
 use App\Models\MaterialanforderungGenehmigung;
 use App\Models\Projekt;
-use App\Notifications\CreateMaterialanforderungNotification;
 use App\Notifications\UpdateMaterialanforderungNotification;
 use App\Services\NotificationRecipientService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -20,372 +20,385 @@ class MaterialanforderungController extends Controller
     {
     }
 
-    /* public function index(Request $request)
-    {
-        $search = $request->get('search', '');
-        $user = Auth()->User()->person;
-
-        $anforderungen = Materialanforderung::with(['besteller', 'artikeln'])
-            ->when($search, fn($q) => $q->where('projekt', 'like', "%$search%"))
-            ->where('ersteller_id', $user->id)
-            ->get();
-
-
-        $projekt = Projekt::where('id', Auth()->User()->current_team_id)->first();
-
-        return Inertia::render('Bestellungen/Materialanforderung/Index', [
-            'anforderungen' => $anforderungen,
-            'user' => $user,
-            'projekt' => $projekt,
-        ]);
-    } */
-
-
     public function index(Request $request)
     {
+        $user = $request->user();
+        $search = trim((string) $request->input('search', ''));
 
-    $user = auth()->user();
-    $search = $request->input('search');
-    // Grundquery
-    $query = Materialanforderung::with(['projekt', 'besteller', 'artikeln'])->where('projekt_id', $user->current_team_id);
+        $query = Materialanforderung::with(['projekt', 'besteller.person', 'artikeln', 'vergabevermerk'])
+            ->where('projekt_id', $user->current_team_id);
 
-    // Suche
-    if ($search) {
-        $query->where('materialanforderungen.id', 'like', "%{$search}%")
-              ->orWhere('materialanforderungen.bemerkungen', 'like', "%{$search}%");
-    }
-
-    // Eigene Anforderungen sind immer sichtbar. Freigabeberechtigungen
-    // erweitern die Liste um die jeweils zu bearbeitenden Anforderungen.
-    $projekteIds = $user->projekte()->pluck('projekts.id');
-    $query->where(function ($visibility) use ($user, $projekteIds) {
-        $visibility->where('materialanforderungs.ersteller_id', $user->id);
-
-        if ($user->can('materialanforderung.kaufmännische_freigabe.index')) {
-            $visibility->orWhere(function ($approval) {
-                $approval->whereNotIn('status', ['entwurf', 'eingereicht']);
+        if ($search !== '') {
+            $query->where(function ($searchQuery) use ($search) {
+                $searchQuery->where('materialanforderungen.id', 'like', "%{$search}%")
+                    ->orWhere('materialanforderungen.bemerkungen', 'like', "%{$search}%")
+                    ->orWhereHas('artikeln', fn ($artikel) => $artikel->where('artikel', 'like', "%{$search}%"));
             });
         }
 
-        if ($user->can('materialanforderung.sachlische_freigabe.index')) {
-            $visibility->orWhere(function ($approval) use ($projekteIds) {
-                $approval->where('status', 'eingereicht')
-                    ->whereHas('projekt', function ($project) use ($projekteIds) {
-                        $project->whereIn('projekts.id', $projekteIds);
-                    });
-            });
-        }
-    });
+        $assignedProjectIds = $user->projekte()->pluck('projekts.id');
+        $query->where(function ($visibility) use ($user, $assignedProjectIds) {
+            $visibility->where('materialanforderungen.ersteller_id', $user->id);
 
-    $anforderungen = $query
-        ->orderByDesc('materialanforderungs.created_at')
-        ->orderByDesc('materialanforderungs.id')
-        ->get();
+            if ($user->can('materialanforderung.sachlische_freigabe.index')) {
+                $visibility->orWhere(function ($approval) use ($assignedProjectIds) {
+                    $approval->where('status', 'eingereicht')
+                        ->whereIn('projekt_id', $assignedProjectIds);
+                });
+            }
 
-        return inertia('Bestellungen/Materialanforderung/Index', [
-            'anforderungen' => $anforderungen,
-            'user' => $user,
+            if ($user->can('materialanforderung.kaufmännische_freigabe.index')
+                || $user->can('materialanforderung.bestellwesen.update')) {
+                $visibility->orWhereNotIn('status', ['entwurf', 'eingereicht']);
+            }
+        });
+
+        return Inertia::render('Bestellungen/Materialanforderung/Index', [
+            'anforderungen' => $query->latest()->get(),
+            'filters' => ['search' => $search],
         ]);
     }
 
-    public function create()
+    public function create(Request $request)
     {
-        $user = Auth()->User()->person;
-
-        $projekt = Projekt::where('id', Auth()->User()->current_team_id)->first();
-        $kostenstellen = $projekt
-            ? $projekt->kostenstellen()
-                ->orderByPivot('gueltig_von', 'desc')
-                ->orderByPivot('id', 'desc')
-                ->limit(3)
-                ->get(['kostenstelles.id', 'kostenstelles.kostenstelle'])
-            : collect();
+        $projekt = Projekt::findOrFail($request->user()->current_team_id);
 
         return Inertia::render('Bestellungen/Materialanforderung/Create', [
-            'user' => $user,
+            'user' => $request->user()->person,
             'projekt' => $projekt,
-            'kostenstellen' => $kostenstellen,
+            'kostenstellen' => $this->kostenstellen($projekt),
         ]);
     }
 
     public function store(Request $request)
     {
-        $projekt = Projekt::findOrFail(auth()->user()->current_team_id);
-        $projektKostenstellenIds = $projekt->kostenstellen()->pluck('kostenstelles.id');
+        $projekt = Projekt::findOrFail($request->user()->current_team_id);
+        $data = $request->validate($this->requestRules($projekt));
 
-        $data = $request->validate([
-            'kostenstelle' => [
-                'required',
-                'string',
-                Rule::exists('kostenstelles', 'kostenstelle')
-                    ->where(fn ($query) => $query->whereIn('id', $projektKostenstellenIds)),
-            ],
-            'bemerkungen' => 'nullable|string',
-            'positionen' => 'required|array|min:1',
+        $anforderung = DB::transaction(function () use ($request, $projekt, $data) {
+            [$netto, $brutto] = $this->calculateTotals($data['positionen']);
 
-            'positionen.*.pos' => 'required|integer',
-            'positionen.*.artikel' => 'required|string',
-            'positionen.*.link' => 'nullable|string',
-            'positionen.*.stueck' => 'required|integer|min:1',
-            'positionen.*.art_nr' => 'nullable|string',
-            'positionen.*.einzelpreis' => 'required|numeric',
-            'positionen.*.mwst' => 'required|numeric',
-            'positionen.*.gesamtpreis' => 'required|numeric',
-        ]);
-
-        $gesamtsumme = 0;
-        $endsumme = 0;
-
-        foreach ($data['positionen'] as $pos) {
-
-            $netto = $pos['einzelpreis'] * $pos['stueck'];
-
-            $mwst = $netto * ($pos['mwst'] / 100);
-
-            $brutto = $netto + $mwst;
-
-            $gesamtsumme += $netto;
-            $endsumme += $brutto;
-        }
-
-        /*
-        Materialanforderung erstellen
-        */
-
-        $anforderung = Materialanforderung::create([
-            'projekt_id' => $projekt->id,
-            'kostenstelle' => $data['kostenstelle'],
-            'ersteller_id' => auth()->id(),
-            'bemerkungen' => $data['bemerkungen'] ?? null,
-            'gesamtpreis' => $gesamtsumme,
-            'endsumme' => $endsumme
-        ]);
-
-        /*
-        Positionen speichern
-        */
-
-        foreach ($data['positionen'] as $pos) {
-
-            $anforderung->artikeln()->create([
-                'pos' => $pos['pos'],
-                'artikel' => $pos['artikel'],
-                'link' => $pos['link'],
-                'stueck' => $pos['stueck'],
-                'art_nr' => $pos['art_nr'],
-                'einzelpreis' => $pos['einzelpreis'],
-                'mwst' => $pos['mwst'],
-                'gesamtpreis' => $pos['gesamtpreis'],
+            $anforderung = Materialanforderung::create([
+                'projekt_id' => $projekt->id,
+                'kostenstelle' => $data['kostenstelle'],
+                'benoetigt_am' => $data['benoetigt_am'] ?? null,
+                'prioritaet' => $data['prioritaet'],
+                'ersteller_id' => $request->user()->id,
+                'bemerkungen' => $data['bemerkungen'] ?? null,
+                'gesamtpreis' => $netto,
+                'endsumme' => $brutto,
+                'status' => 'entwurf',
             ]);
-        }
-        Notification::send(
-            $this->notificationRecipients->forMaterialanforderung($anforderung, 'eingereicht', auth()->user()),
-            new CreateMaterialanforderungNotification($anforderung)
-        );
 
+            foreach ($data['positionen'] as $position) {
+                $anforderung->artikeln()->create($this->positionValues($position));
+            }
 
-        return redirect()->route('materialanforderung.index');
+            $anforderung->vergabevermerk()->create($this->vergabeValues($data['vergabe'] ?? []));
+
+            return $anforderung;
+        });
+
+        return redirect()->route('materialanforderung.show', $anforderung)
+            ->with('success', 'Materialanforderung wurde als Entwurf gespeichert.');
     }
 
     public function update(Request $request)
     {
-        $anforderung = Materialanforderung::with('artikeln')->findOrFail($request->id);
+        $anforderung = Materialanforderung::with(['artikeln', 'projekt'])->findOrFail($request->id);
+        abort_unless($request->user()->can('materialanforderung.update'), 403);
+        abort_unless((int) $anforderung->ersteller_id === (int) $request->user()->id, 403);
+        abort_unless(in_array($anforderung->status, ['entwurf', 'zur_ueberarbeitung'], true), 403);
 
-        // Berechtigung prüfen
-        $this->authorize('materialanforderung.update');
+        $payload = $request->all();
+        $payload['positionen'] = $payload['positionen'] ?? $payload['artikeln'] ?? [];
+        $request->replace($payload);
+        $data = $request->validate($this->requestRules($anforderung->projekt, true));
 
-        // Bis zur ersten Genehmigung darf die Anforderung vollständig bearbeitet werden.
-        if (!in_array($anforderung->status, ['entwurf', 'eingereicht', 'zur_ueberarbeitung'], true)) {
-            abort(403, 'Bereits genehmigte Materialanforderungen können nicht mehr bearbeitet werden.');
-        }
+        DB::transaction(function () use ($anforderung, $data) {
+            $keptIds = collect($data['positionen'])->pluck('id')->filter()->map(fn ($id) => (int) $id);
+            $anforderung->artikeln()->whereNotIn('id', $keptIds)->delete();
 
-        // Validierung
-        $validator = $request->validate([
-            'kostenstelle' => ['required', 'string', 'max:255'],
-            'bemerkungen' => ['nullable', 'string'],
-            'artikeln' => ['required', 'array', 'min:1'],
-            'artikeln.*.id' => ['nullable', 'integer'],
-            'artikeln.*.pos' => ['required', 'integer', 'min:1'],
-            'artikeln.*.artikel' => ['required', 'string', 'max:255'],
-            'artikeln.*.stueck' => ['required', 'integer', 'min:1'],
-            'artikeln.*.einzelpreis' => ['required', 'numeric', 'min:0'],
-            'artikeln.*.mwst' => ['required', 'numeric', 'between:0,100'],
-            'artikeln.*.link' => ['nullable', 'string'],
-            'artikeln.*.art_nr' => ['nullable', 'string', 'max:100'],
-        ]);
-
-
-
-        DB::transaction(function () use ($anforderung, $validator) {
-            $artikelIds = collect($validator['artikeln'])
-                ->pluck('id')
-                ->filter()
-                ->map(fn ($id) => (int) $id);
-
-            // Im Formular entfernte Positionen auch in der Datenbank löschen.
-            $anforderung->artikeln()->whereNotIn('id', $artikelIds)->delete();
-
-            $gesamtsumme = 0;
-            $endsumme = 0;
-
-            foreach ($validator['artikeln'] as $a) {
-                $gesamtpreis = $a['stueck'] * $a['einzelpreis'];
-                $gesamtsumme += $gesamtpreis;
-                $endsumme += $gesamtpreis * (1 + ($a['mwst'] / 100));
-
-                $values = [
-                    'pos' => $a['pos'],
-                    'artikel' => $a['artikel'],
-                    'stueck' => $a['stueck'],
-                    'art_nr' => $a['art_nr'] ?? null,
-                    'einzelpreis' => $a['einzelpreis'],
-                    'mwst' => $a['mwst'],
-                    'gesamtpreis' => $gesamtpreis,
-                    'link' => $a['link'] ?? null,
-                ];
-
-                $artikel = isset($a['id'])
-                    ? $anforderung->artikeln()->find($a['id'])
-                    : null;
-
-                $artikel ? $artikel->update($values) : $anforderung->artikeln()->create($values);
+            foreach ($data['positionen'] as $position) {
+                $values = $this->positionValues($position);
+                $existing = isset($position['id']) ? $anforderung->artikeln()->find($position['id']) : null;
+                $existing ? $existing->update($values) : $anforderung->artikeln()->create($values);
             }
 
+            [$netto, $brutto] = $this->calculateTotals($data['positionen']);
             $anforderung->update([
-                'kostenstelle' => $validator['kostenstelle'],
-                'bemerkungen' => $validator['bemerkungen'] ?? null,
-                'gesamtpreis' => $gesamtsumme,
-                'endsumme' => $endsumme,
+                'kostenstelle' => $data['kostenstelle'],
+                'benoetigt_am' => $data['benoetigt_am'] ?? null,
+                'prioritaet' => $data['prioritaet'],
+                'bemerkungen' => $data['bemerkungen'] ?? null,
+                'gesamtpreis' => $netto,
+                'endsumme' => $brutto,
             ]);
+
+            $anforderung->vergabevermerk()->updateOrCreate(
+                ['anforderung_id' => $anforderung->id],
+                $this->vergabeValues($data['vergabe'] ?? [])
+            );
         });
 
-        return back()->with('success', 'Materialanforderung erfolgreich aktualisiert.');
+        return back()->with('success', 'Materialanforderung wurde aktualisiert.');
     }
 
-    public function destroy(Materialanforderung $materialanforderung)
+    public function destroy(Request $request, Materialanforderung $materialanforderung)
     {
+        abort_unless($request->user()->can('materialanforderung.destroy'), 403);
+        abort_unless((int) $materialanforderung->ersteller_id === (int) $request->user()->id, 403);
+        abort_unless(in_array($materialanforderung->status, ['entwurf', 'zur_ueberarbeitung'], true), 422);
+
         $materialanforderung->delete();
 
-        return redirect()->route('materialanforderung.index');
+        return redirect()->route('materialanforderung.index')->with('success', 'Entwurf wurde gelöscht.');
     }
 
-    public function show($id)
+    public function show(Request $request, $id)
     {
-        $user = auth()->user();
-        $query = Materialanforderung::with(['projekt', 'besteller', 'artikeln'])
-        ->where('id', $id)
-        ->first();
+        $anforderung = Materialanforderung::with(['projekt', 'besteller.person', 'artikeln', 'vergabevermerk'])
+            ->findOrFail($id);
+        abort_unless($this->mayView($request->user(), $anforderung), 403);
 
-        $verlauf = MaterialanforderungGenehmigung::with('genehmiger')->where('anforderung_id', $id)->orderBy('created_at', 'desc')->get();
-        if(!$query) {
-            return back()->with('error', 'Materialanforderung nicht gefunden.');
-        }
-        // Berechtigungen
-        if ($user->can('materialanforderung.kaufmännische_freigabe.index') || $user->can('materialanforderung.sachlische_freigabe.index')) {
+        $verlauf = MaterialanforderungGenehmigung::with('genehmiger.person')
+            ->where('anforderung_id', $id)
+            ->latest()
+            ->get();
 
-
-        }elseif($query->ersteller_id != $user->id){
-            return back()->with('error', 'Sie haben keine Berechtigung, diese Materialanforderung einzusehen.');
-        }
-
-        $notification = auth()->user()->notifications()->where('data->id', $id)->where('data->typ', 'Materialanforderung')->first();
-        if ($notification) {
-            $notification->markAsRead();
-        }
-
-        $kostenstellen = $query->projekt
-            ? $query->projekt->kostenstellen()
-                ->orderByPivot('gueltig_von', 'desc')
-                ->orderByPivot('id', 'desc')
-                ->limit(3)
-                ->get(['kostenstelles.id', 'kostenstelles.kostenstelle'])
-            : collect();
+        $notification = $request->user()->notifications()
+            ->where('data->id', $id)
+            ->where('data->typ', 'Materialanforderung')
+            ->first();
+        $notification?->markAsRead();
 
         return Inertia::render('Bestellungen/Materialanforderung/Show', [
-            'anforderung' => $query,
-            'kostenstellen' => $kostenstellen,
-            'canConfirmSachlich' => auth()->user()->can('materialanforderung.sachlische_freigabe.update'),
-            'canConfirmKaufmaenisch' => auth()->user()->can('materialanforderung.kaufmännische_freigabe.update'),
-            'canEditMaterialanforderung' => auth()->user()->can('materialanforderung.update'),
-            'canBestellen' => auth()->user()->can('materialanforderung.bestellwesen.update'),
+            'anforderung' => $anforderung,
+            'kostenstellen' => $this->kostenstellen($anforderung->projekt),
+            'canConfirmSachlich' => $request->user()->can('materialanforderung.sachlische_freigabe.update')
+                && $this->isAssignedToProject($request->user(), $anforderung->projekt_id),
+            'canConfirmKaufmaenisch' => $request->user()->can('materialanforderung.kaufmännische_freigabe.update'),
+            'canEditMaterialanforderung' => $request->user()->can('materialanforderung.update')
+                && (int) $anforderung->ersteller_id === (int) $request->user()->id,
+            'canBestellen' => $request->user()->can('materialanforderung.bestellwesen.update'),
+            'canDeleteMaterialanforderung' => $request->user()->can('materialanforderung.destroy')
+                && (int) $anforderung->ersteller_id === (int) $request->user()->id
+                && in_array($anforderung->status, ['entwurf', 'zur_ueberarbeitung'], true),
             'verlauf' => $verlauf,
-
         ]);
     }
 
-   /* public function genehmigenSachlich($id)
+    public function genehmigen(Request $request, $id, $status)
     {
-        $user = auth()->user();
+        abort_unless(in_array($status, [
+            'eingereicht', 'sachlich_genehmigt', 'kaufmaennisch_genehmigt',
+            'zur_ueberarbeitung', 'storniert', 'bestellt', 'teilweise_geliefert', 'geliefert',
+        ], true), 422, 'Ungültiger Status.');
 
-        // Materialanforderung laden
-        $anforderung = Materialanforderung::findOrFail($id);
+        $anforderung = DB::transaction(function () use ($request, $id, $status) {
+            $anforderung = Materialanforderung::with(['artikeln', 'vergabevermerk'])->whereKey($id)->lockForUpdate()->firstOrFail();
+            $this->authorizeTransition($request->user(), $anforderung, $status);
 
-
-
-        if ($anforderung->status !== 'Entwurf') {
-            return back()->with('error', 'Diese Genehmigung wurde bereits bearbeitet.');
-        }
-
-
-        // Genehmigung aktualisieren
-        MaterialanforderungGenehmigung::create([
-                'anforderung_id' => $anforderung->id,
-                'genehmiger_id' => $user->id,
-            ]);
-
-
-
-            $anforderung->update([
-                'status' => 'Freigegeben'
-            ]);
-
-              $users = User::permission('materialanforderung.kaufmännische_freigabe.update')->get();
-
-
-            foreach ($users as $user) {
-                $user->notify(new CreateMaterialanforderungGenehmigenKufmaenischNotification($anforderung));
+            if (in_array($status, ['zur_ueberarbeitung', 'storniert'], true)) {
+                $request->validate(['anmerkung' => ['required', 'string', 'max:2000']]);
             }
 
-        return back()->with('success', 'Materialanforderung erfolgreich sachlich genehmigt.');
-    } */
-    public function genehmigen($id, $status)
-    {
+            if ($status === 'bestellt') {
+                $data = $request->validate(['bestellnummer' => ['required', 'string', 'max:100']]);
+                $anforderung->vergabevermerk()->updateOrCreate(
+                    ['anforderung_id' => $anforderung->id],
+                    ['bestellnummer' => $data['bestellnummer']]
+                );
+            }
 
+            if ($status === 'teilweise_geliefert') {
+                $data = $request->validate([
+                    'liefermengen' => ['required', 'array'],
+                    'liefermengen.*' => ['required', 'integer', 'min:0'],
+                ]);
+                $totalDelivered = 0;
+                $totalOrdered = 0;
+                foreach ($anforderung->artikeln as $artikel) {
+                    $menge = (int) ($data['liefermengen'][$artikel->id] ?? 0);
+                    abort_if($menge > (int) $artikel->stueck, 422, 'Die Liefermenge darf die bestellte Menge nicht überschreiten.');
+                    $artikel->update(['gelieferte_menge' => $menge]);
+                    $totalDelivered += $menge;
+                    $totalOrdered += (int) $artikel->stueck;
+                }
+                abort_if($totalDelivered === 0 || $totalDelivered >= $totalOrdered, 422, 'Für eine Teillieferung muss mindestens eine, aber noch nicht die vollständige Menge geliefert sein.');
+            }
 
-        if(!in_array($status, ['sachlich_genehmigt', 'eingereicht', 'kaufmaennisch_genehmigt', 'zur_ueberarbeitung', 'stornieren', 'geliefert', 'teilweise_geliefert', 'bestellt'])){
-            return back()->with('error', 'Ungültiger Status.');
-        }
+            if ($status === 'geliefert') {
+                foreach ($anforderung->artikeln as $artikel) {
+                    $artikel->update(['gelieferte_menge' => $artikel->stueck]);
+                }
+            }
 
-        $user = auth()->user();
-        $anforderung = Materialanforderung::findOrFail($id);
-
-        if($status == 'eingereicht' && $anforderung->status != 'entwurf' && $anforderung->status != 'zur_ueberarbeitung'){
-            return redirect()->back()->with('error', 'Ein fehler ist aufgetreten, bitte kontaktieren Sie den Administrator.');
-        }
-
-        if($status == 'sachlich_genehmigt' && $anforderung->status != 'eingereicht'){
-            return redirect()->back()->with('error', 'die Materialanforderung soll zu erst Freigegeben werden.');
-        }
-        if($status == 'kaufmaennisch_genehmigt' && $anforderung->status != 'sachlich_genehmigt'){
-            return redirect()->back()->with('error', 'Die Materialanforderung soll zuerst sachlich genehmigt werden.');
-        }
-        // Genehmigung aktualisieren
-
-        MaterialanforderungGenehmigung::create([
+            MaterialanforderungGenehmigung::create([
                 'anforderung_id' => $anforderung->id,
-                'genehmiger_id' => $user->person->id,
+                'genehmiger_id' => $request->user()->id,
                 'status' => $status,
-                'kommentar' => request('anmerkung'),
+                'kommentar' => $request->input('anmerkung'),
             ]);
+            $anforderung->update(['status' => $status]);
 
-            $anforderung->update([
-                'status' => $status,
-            ]);
+            return $anforderung;
+        });
+
         Notification::send(
-            $this->notificationRecipients->forMaterialanforderung($anforderung, $status, auth()->user()),
+            $this->notificationRecipients->forMaterialanforderung($anforderung, $status, $request->user()),
             new UpdateMaterialanforderungNotification($anforderung, $status)
         );
 
-        return back()->with('success', 'Materialanforderung erfolgreich ' . $status . '.');
+        return back()->with('success', 'Status wurde aktualisiert.');
+    }
+
+    public function exportPdf(Request $request, Materialanforderung $materialanforderung)
+    {
+        abort_unless($request->user()->can('materialanforderung.show'), 403);
+        abort_unless($this->mayView($request->user(), $materialanforderung), 403);
+
+        $materialanforderung->load([
+            'projekt', 'besteller.person', 'artikeln', 'vergabevermerk',
+            'genehmigungen' => fn ($query) => $query->with('genehmiger.person')->oldest(),
+        ]);
+
+        return Pdf::loadView('pdf.materialanforderung', ['anforderung' => $materialanforderung])
+            ->setPaper('a4')
+            ->download('Materialanforderung-' . $materialanforderung->id . '.pdf');
+    }
+
+    private function requestRules(Projekt $projekt, bool $forUpdate = false): array
+    {
+        $kostenstellenIds = $projekt->kostenstellen()->pluck('kostenstelles.id');
+
+        return [
+            'kostenstelle' => [
+                'required', 'string',
+                Rule::exists('kostenstelles', 'kostenstelle')->where(fn ($query) => $query->whereIn('id', $kostenstellenIds)),
+            ],
+            'benoetigt_am' => ['nullable', 'date'],
+            'prioritaet' => ['required', Rule::in(['normal', 'dringend'])],
+            'bemerkungen' => ['nullable', 'string', 'max:4000'],
+            'positionen' => ['required', 'array', 'min:1'],
+            'positionen.*.id' => $forUpdate ? ['nullable', 'integer'] : ['prohibited'],
+            'positionen.*.pos' => ['required', 'integer', 'min:1'],
+            'positionen.*.artikel' => ['required', 'string', 'max:255'],
+            'positionen.*.link' => ['nullable', 'url', 'max:2000'],
+            'positionen.*.stueck' => ['required', 'integer', 'min:1', 'max:999999'],
+            'positionen.*.art_nr' => ['nullable', 'string', 'max:100'],
+            'positionen.*.einzelpreis' => ['required', 'numeric', 'min:0', 'max:99999999.99'],
+            'positionen.*.mwst' => ['required', 'numeric', 'between:0,100'],
+            'vergabe' => ['required', 'array'],
+            'vergabe.kurzbeschreibung' => ['nullable', 'string', 'max:2000'],
+            'vergabe.lieferung_art' => ['required', Rule::in(['Lieferleistung', 'Dienstleistung'])],
+            'vergabe.begruendung_optionen' => ['nullable', 'array'],
+            'vergabe.begruendung_optionen.*' => ['string', Rule::in([
+                'nur_ein_anbieter', 'besondere_gruende', 'besondere_dringlichkeit',
+                'zubehoer_ersatzteile', 'vertragliche_gruende', 'guenstigster_anbieter',
+            ])],
+            'vergabe.begruendung' => ['nullable', 'string', 'max:4000'],
+            'vergabe.lieferant' => ['nullable', 'string', 'max:255'],
+            'vergabe.lieferung_option' => ['required', Rule::in(['per Abholung', 'per Lieferung'])],
+            'vergabe.lieferadresse' => ['nullable', 'required_if:vergabe.lieferung_option,per Lieferung', 'string', 'max:1000'],
+            'vergabe.bestellnummer' => ['nullable', 'string', 'max:100'],
+        ];
+    }
+
+    private function calculateTotals(array $positionen): array
+    {
+        $netto = collect($positionen)->sum(fn ($position) => (float) $position['stueck'] * (float) $position['einzelpreis']);
+        $brutto = collect($positionen)->sum(fn ($position) => ((float) $position['stueck'] * (float) $position['einzelpreis']) * (1 + ((float) $position['mwst'] / 100)));
+
+        return [round($netto, 2), round($brutto, 2)];
+    }
+
+    private function positionValues(array $position): array
+    {
+        return [
+            'pos' => $position['pos'],
+            'artikel' => $position['artikel'],
+            'link' => $position['link'] ?? null,
+            'stueck' => $position['stueck'],
+            'art_nr' => $position['art_nr'] ?? null,
+            'einzelpreis' => $position['einzelpreis'],
+            'mwst' => $position['mwst'],
+            'gesamtpreis' => round((float) $position['stueck'] * (float) $position['einzelpreis'], 2),
+        ];
+    }
+
+    private function vergabeValues(array $vergabe): array
+    {
+        return [
+            'kurzbeschreibung' => $vergabe['kurzbeschreibung'] ?? null,
+            'lieferung_art' => $vergabe['lieferung_art'] ?? 'Lieferleistung',
+            'begruendung' => $vergabe['begruendung'] ?? null,
+            'begruendung_optionen' => $vergabe['begruendung_optionen'] ?? [],
+            'lieferant' => $vergabe['lieferant'] ?? null,
+            'lieferung_option' => $vergabe['lieferung_option'] ?? 'per Lieferung',
+            'lieferadresse' => $vergabe['lieferadresse'] ?? null,
+            'bestellnummer' => $vergabe['bestellnummer'] ?? null,
+        ];
+    }
+
+    private function kostenstellen(Projekt $projekt)
+    {
+        return $projekt->kostenstellen()
+            ->orderByPivot('gueltig_von', 'desc')
+            ->orderByPivot('id', 'desc')
+            ->limit(3)
+            ->get(['kostenstelles.id', 'kostenstelles.kostenstelle']);
+    }
+
+    private function isAssignedToProject($user, int $projektId): bool
+    {
+        return $user->projekte()->whereKey($projektId)->exists();
+    }
+
+    private function mayView($user, Materialanforderung $anforderung): bool
+    {
+        if ((int) $anforderung->ersteller_id === (int) $user->id) {
+            return true;
+        }
+
+        if ($user->can('materialanforderung.sachlische_freigabe.index')
+            && $anforderung->status === 'eingereicht'
+            && $this->isAssignedToProject($user, $anforderung->projekt_id)) {
+            return true;
+        }
+
+        return ($user->can('materialanforderung.kaufmännische_freigabe.index')
+                || $user->can('materialanforderung.bestellwesen.update'))
+            && ! in_array($anforderung->status, ['entwurf', 'eingereicht'], true);
+    }
+
+    private function authorizeTransition($user, Materialanforderung $anforderung, string $targetStatus): void
+    {
+        $allowed = match ($targetStatus) {
+            'eingereicht' => (int) $anforderung->ersteller_id === (int) $user->id
+                && $user->can('materialanforderung.update')
+                && in_array($anforderung->status, ['entwurf', 'zur_ueberarbeitung'], true),
+            'sachlich_genehmigt' => $user->can('materialanforderung.sachlische_freigabe.update')
+                && $this->isAssignedToProject($user, $anforderung->projekt_id)
+                && $anforderung->status === 'eingereicht',
+            'kaufmaennisch_genehmigt' => $user->can('materialanforderung.kaufmännische_freigabe.update')
+                && $anforderung->status === 'sachlich_genehmigt',
+            'bestellt' => $user->can('materialanforderung.bestellwesen.update')
+                && $anforderung->status === 'kaufmaennisch_genehmigt',
+            'teilweise_geliefert' => $user->can('materialanforderung.bestellwesen.update')
+                && in_array($anforderung->status, ['bestellt', 'teilweise_geliefert'], true),
+            'geliefert' => $user->can('materialanforderung.bestellwesen.update')
+                && in_array($anforderung->status, ['bestellt', 'teilweise_geliefert'], true),
+            'zur_ueberarbeitung' => ($user->can('materialanforderung.sachlische_freigabe.update')
+                    && $this->isAssignedToProject($user, $anforderung->projekt_id)
+                    && $anforderung->status === 'eingereicht')
+                || ($user->can('materialanforderung.kaufmännische_freigabe.update') && $anforderung->status === 'sachlich_genehmigt'),
+            'storniert' => (int) $anforderung->ersteller_id === (int) $user->id
+                && $user->can('materialanforderung.update')
+                && in_array($anforderung->status, ['entwurf', 'eingereicht', 'zur_ueberarbeitung'], true),
+            default => false,
+        };
+
+        abort_unless($allowed, 403);
     }
 }

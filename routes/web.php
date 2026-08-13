@@ -732,13 +732,14 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     /*   Bestellungen // Materialanforderung */
     Route::get('/Bestellungen', [MaterialanforderungController::class, 'index'])->name('materialanforderung.index');
     Route::get('/Materialanforderung/{id}', [MaterialanforderungController::class, 'show'])->name('materialanforderung.show');
+    Route::get('/Materialanforderung/{materialanforderung}/pdf', [MaterialanforderungController::class, 'exportPdf'])->name('materialanforderung.pdf');
     Route::get('/Bestellungen/create', [MaterialanforderungController::class, 'create'])->name('materialanforderung.create');
     Route::post('/Bestellungen/senden', [MaterialanforderungController::class,'store'])->name('materialanforderung.store');
     Route::put('/Bestellungen/update', [MaterialanforderungController::class,'update'])->name('materialanforderung.update');
+    Route::delete('/Materialanforderung/{materialanforderung}', [MaterialanforderungController::class, 'destroy'])->name('materialanforderung.destroy');
 
 
-    Route::post('/materialanforderung/sachlich/{id}/genehmigen', [MaterialanforderungController::class, 'genehmigenSachlich'])->name('materialanforderung.sachlich.genehmigen');
-    Route::get('/materialanforderung/{id}/{status}/genehmigen', [MaterialanforderungController::class, 'genehmigen'])->name('materialanforderung.genehmigen');
+    Route::put('/materialanforderung/{id}/{status}/genehmigen', [MaterialanforderungController::class, 'genehmigen'])->name('materialanforderung.genehmigen');
 
 
 
