@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import Pagination from '@/Components/Pagination.vue'
+import Swal from 'sweetalert2'
 
 const props = defineProps({
     notifications: Object,
@@ -59,12 +60,55 @@ const markAsUnread = (notification) => {
     })
 }
 
-const destroyNotification = (notification) => {
-    if (!window.confirm('Diese Benachrichtigung entfernen?')) {
-        return
-    }
+const confirmDeletion = async ({ title, text, confirmButtonText }) => {
+    const result = await Swal.fire({
+        title,
+        text,
+        icon: 'warning',
+        input: 'text',
+        inputLabel: 'Geben Sie zur Bestätigung JA oder DELETE ein.',
+        inputPlaceholder: 'JA oder DELETE',
+        showCancelButton: true,
+        confirmButtonText,
+        cancelButtonText: 'Abbrechen',
+        confirmButtonColor: '#dc2626',
+        focusCancel: true,
+        inputValidator: (value) => {
+            const confirmation = value?.trim().toUpperCase()
+
+            return ['JA', 'DELETE'].includes(confirmation)
+                ? undefined
+                : 'Bitte geben Sie JA oder DELETE ein.'
+        },
+    })
+
+    return result.isConfirmed
+}
+
+const destroyNotification = async (notification) => {
+    const confirmed = await confirmDeletion({
+        title: 'Benachrichtigung löschen?',
+        text: `Diese Benachrichtigung wird endgültig entfernt: „${notification.message}“`,
+        confirmButtonText: 'Benachrichtigung löschen',
+    })
+
+    if (!confirmed) return
 
     router.delete(route('notifications.destroy', notification.id), {
+        preserveScroll: true,
+    })
+}
+
+const destroyAllNotifications = async () => {
+    const confirmed = await confirmDeletion({
+        title: 'Alle Benachrichtigungen löschen?',
+        text: `Alle ${props.stats.total} Benachrichtigungen werden endgültig entfernt. Dieser Vorgang kann nicht rückgängig gemacht werden.`,
+        confirmButtonText: 'Alle löschen',
+    })
+
+    if (!confirmed) return
+
+    router.delete(route('notifications.destroyAll'), {
         preserveScroll: true,
     })
 }
@@ -146,6 +190,17 @@ const resetFilters = () => {
                     >
                         <i class="las la-check-double"></i>
                         <span>Alle gelesen</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        @click="destroyAllNotifications"
+                        :disabled="stats.total === 0"
+                        class="inline-flex items-center justify-center gap-2 border border-red-600 bg-white px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-100 disabled:text-gray-400"
+                        title="Alle eigenen Benachrichtigungen löschen"
+                    >
+                        <i class="las la-trash-alt"></i>
+                        <span>Alle löschen</span>
                     </button>
                 </div>
             </div>

@@ -114,6 +114,17 @@ class NotificationController extends Controller
         return $this->notificationResponse($request, 'Benachrichtigung wurde entfernt.');
     }
 
+    public function destroyAll(Request $request)
+    {
+        $deletedCount = $request->user()->notifications()->delete();
+
+        $message = $deletedCount === 1
+            ? 'Eine Benachrichtigung wurde entfernt.'
+            : "{$deletedCount} Benachrichtigungen wurden entfernt.";
+
+        return $this->notificationResponse($request, $message);
+    }
+
     private function notificationPayload($notification): array
     {
         $data = $notification->data ?: [];

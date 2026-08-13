@@ -2,6 +2,8 @@
 
 namespace App\Notifications;
 
+use App\Models\Materialanforderung;
+use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
 
@@ -9,13 +11,11 @@ class UpdateMaterialanforderungNotification extends Notification
 {
     use Queueable;
 
-    public $anforderung;
-    public $status;
-
-    public function __construct($anforderung, $status)
-    {
-        $this->anforderung = $anforderung;
-        $this->status = $status;
+    public function __construct(
+        public Materialanforderung $anforderung,
+        public string $status,
+        public User $actor,
+    ) {
     }
 
     public function via(object $notifiable): array
@@ -26,55 +26,57 @@ class UpdateMaterialanforderungNotification extends Notification
     public function toDatabase($notifiable)
     {
         $ersteller = $this->anforderung->besteller;
+        $actorName = trim($this->actor->name) ?: 'Unbekannte Person';
         $link = $this->status === 'zurueckgezogen'
             ? route('materialanforderung.index')
             : route('materialanforderung.show', $this->anforderung->id);
 
         switch ($this->status) {
             case 'eingereicht':
-                $message = "Materialanforderung #{$this->anforderung->id} von " . ($ersteller?->name ?? 'Unbekannt') . " wartet auf Ihre sachliche Genehmigung.";
+                $message = "{$actorName} hat die Materialanforderung #{$this->anforderung->id} eingereicht. Sie wartet auf Ihre sachliche Genehmigung.";
                 break;
 
             case 'sachlich_genehmigt':
-                $message = "Materialanforderung #{$this->anforderung->id} wurde sachlich genehmigt und wartet auf kaufmännische Genehmigung.";
+                $message = "{$actorName} hat die Materialanforderung #{$this->anforderung->id} sachlich genehmigt. Sie wartet auf die kaufmännische Genehmigung.";
                 break;
 
             case 'kaufmaennisch_genehmigt':
-                $message = "Materialanforderung #{$this->anforderung->id} wurde vollständig genehmigt und ist bereit zur Bestellung.";
+                $message = "{$actorName} hat die Materialanforderung #{$this->anforderung->id} kaufmännisch genehmigt. Sie ist zur Bestellung freigegeben.";
                 break;
 
             case 'zur_ueberarbeitung':
-                $message = "Materialanforderung #{$this->anforderung->id} wurde zur Überarbeitung zurückgesendet.";
+                $message = "{$actorName} hat die Materialanforderung #{$this->anforderung->id} zur Überarbeitung an " . ($ersteller?->name ?? 'den Antragsteller') . ' zurückgegeben.';
                 break;
 
             case 'zurueckgezogen':
-                $message = "Materialanforderung #{$this->anforderung->id} wurde vom Antragsteller zurückgezogen.";
+                $message = "{$actorName} hat die Materialanforderung #{$this->anforderung->id} zurückgezogen.";
                 break;
 
             case 'storniert':
-                $message = "Materialanforderung #{$this->anforderung->id} wurde storniert.";
+                $message = "{$actorName} hat die Materialanforderung #{$this->anforderung->id} storniert.";
                 break;
 
             case 'bestellt':
-                $message = "Materialanforderung #{$this->anforderung->id} wurde bestellt.";
+                $message = "{$actorName} hat die Materialanforderung #{$this->anforderung->id} als bestellt markiert.";
                 break;
 
             case 'geliefert':
-                $message = "Materialanforderung #{$this->anforderung->id} wurde vollständig geliefert.";
+                $message = "{$actorName} hat die Materialanforderung #{$this->anforderung->id} als vollständig geliefert markiert.";
                 break;
 
             case 'teilweise_geliefert':
-                $message = "Materialanforderung #{$this->anforderung->id} wurde teilweise geliefert.";
+                $message = "{$actorName} hat für die Materialanforderung #{$this->anforderung->id} eine Teillieferung erfasst.";
                 break;
 
             default:
-                $message = "Status der Materialanforderung #{$this->anforderung->id} wurde aktualisiert.";
+                $message = "{$actorName} hat den Status der Materialanforderung #{$this->anforderung->id} aktualisiert.";
         }
 
         return [
             'message' => $message,
             'link' => $link,
-            'user_name' => auth()->user()->name,
+            'user_name' => $actorName,
+            'user_id' => $this->actor->id,
             'id' => $this->anforderung->id,
             'typ' => 'Materialanforderung',
             'status' => $this->status

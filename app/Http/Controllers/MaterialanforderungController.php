@@ -263,7 +263,7 @@ class MaterialanforderungController extends Controller
 
         Notification::send(
             $recipients,
-            new UpdateMaterialanforderungNotification($anforderung, $status)
+            new UpdateMaterialanforderungNotification($anforderung, $status, $request->user())
         );
 
         $message = $status === 'zurueckgezogen'

@@ -7,6 +7,7 @@ use App\Models\Projekt;
 use App\Models\ProjektHasPersonen;
 use App\Models\Standort;
 use App\Models\User;
+use App\Notifications\UpdateMaterialanforderungNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
@@ -90,7 +91,11 @@ class MaterialanforderungWorkflowTest extends TestCase
         Notification::fake();
         $project = Projekt::factory()->create(['name' => 'BOP']);
         $creator = User::factory()->create(['current_team_id' => $project->id]);
+        $creator->person->update(['vorname' => 'Amin', 'nachname' => 'Masri']);
         $this->grantTestPermission($creator, 'materialanforderung.update');
+        $approver = User::factory()->create(['current_team_id' => $project->id]);
+        $this->grantTestPermission($approver, 'materialanforderung.sachlische_freigabe.index');
+        $this->assign($approver, $project);
         $anforderung = $this->anforderung($creator, $project, 'eingereicht');
 
         $this->actingAs($creator)
@@ -106,6 +111,13 @@ class MaterialanforderungWorkflowTest extends TestCase
             'status' => 'zurueckgezogen',
             'kommentar' => 'Preis muss noch korrigiert werden.',
         ]);
+        Notification::assertSentTo(
+            $approver,
+            UpdateMaterialanforderungNotification::class,
+            fn (UpdateMaterialanforderungNotification $notification) =>
+                $notification->toDatabase($approver)['message']
+                    === "Amin Masri hat die Materialanforderung #{$anforderung->id} zurückgezogen."
+        );
 
         $this->actingAs($creator)
             ->get(route('materialanforderung.show', $anforderung))
