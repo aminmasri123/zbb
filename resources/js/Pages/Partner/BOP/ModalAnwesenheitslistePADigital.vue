@@ -1390,6 +1390,7 @@ onBeforeUnmount(() => {
                       </span>
                       <SignatureBox
                         :model-value="signatures[signatureKey(day, participant)] || ''"
+                        :participant-name="[participant.vorname, participant.nachname].filter(Boolean).join(' ')"
                         compact
                         @update:model-value="saveCompletedSignature(day, participant, $event)"
                         @cleared="removeSignature(day, participant)"

@@ -670,7 +670,7 @@ const addMitarbeiter = (person) => {
                     </div>
                     <div>
                         <p class="text-xs uppercase text-gray-500">Bereiche</p>
-                        <p class="font-semibold">{{ projekt.bereiche?.map((bereich) => bereich.name).join(', ') || '-' }}</p>
+                        <p class="font-semibold">{{ projekt.bereiche?.map((bereich) => bereich.code || bereich.name).join(', ') || '-' }}</p>
                     </div>
                     <div>
                         <p class="text-xs uppercase text-gray-500">Kostenstellen</p>

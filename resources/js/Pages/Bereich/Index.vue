@@ -94,10 +94,12 @@
     // Setze ein Intervall, um die Daten regelmäßig zu überprüfen
     setInterval(compareAndReload, 5000); // Alle 5 Sekunden vergleichen
  // Funktion, um die Suchergebnisse zu filtern
- const applySearchFilter = () => {
+    const applySearchFilter = () => {
         if (search.value) {
+            const term = search.value.toLowerCase();
             filteredBereiche.value = localBereiche.value.filter(bereich =>
-                bereich.name.toLowerCase().includes(search.value.toLowerCase())
+                bereich.name.toLowerCase().includes(term)
+                || (bereich.code || '').toLowerCase().includes(term)
             );
         } else {
             // Wenn keine Suchanfrage vorliegt, alle Abteilungen anzeigen
@@ -133,12 +135,14 @@ const handleDelete = (bereichId) => {
     // Neuen Benutzer
         let newBereich = ref({
             name: '',
+            code: '',
             beschreibung:'',
         });
 
     const resetForm = () => {
     newBereich.value = {
         name: '',
+        code: '',
         beschreibung: '',
     };
 };
@@ -224,6 +228,7 @@ export default {
                     <tr class="font-bold ">
                         <th scope="col" class="border border-solid border-gray-300 px-6 py-3 w-10 text-center ">ID.</th>
                         <th scope="col" class="border border-solid border-gray-300 px-6 py-3 ">{{$t('Bezeichnung')}}</th>
+                        <th scope="col" class="border border-solid border-gray-300 px-6 py-3 ">{{$t('Abkürzung')}}</th>
                         <th scope="col" class="border border-solid border-gray-300 px-6 py-3 ">{{$t('Beschreibung')}}</th>
                         <th v-if="canManageBereich" scope="col" class="border w-10 border-solid border-gray-300 text-center px-6 py-3 ">*</th> <!-- Aktionen hinzufügen -->
 
@@ -237,6 +242,9 @@ export default {
                         </th>
                         <td class="border border-solid border-gray-300 px-6 py-4">
                             {{bereich.name}}
+                        </td>
+                        <td class="border border-solid border-gray-300 px-6 py-4">
+                            {{bereich.code || '-'}}
                         </td>
                         <td class="border border-solid border-gray-300 px-6 py-4">
                             {{bereich.beschreibung}}

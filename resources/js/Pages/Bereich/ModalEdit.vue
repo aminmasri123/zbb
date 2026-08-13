@@ -16,6 +16,7 @@ const emit = defineEmits(['close', 'updated']);
 let editBereich = ref({
   id: null,
   name: '',
+  code: '',
   beschreibung: ''
 });
 
@@ -35,6 +36,7 @@ const save = async () => {
   try {
     const response = await axios.put(route('bereich.update', editBereich.value.id), {
       name: editBereich.value.name,
+      code: editBereich.value.code,
       beschreibung: editBereich.value.beschreibung,
     });
 
@@ -67,6 +69,12 @@ const save = async () => {
         <FloatLabel variant="on">
           <InputText id="name" v-model="editBereich.name" class="w-full" />
           <label for="name">Bezeichnung</label>
+        </FloatLabel>
+      </div>
+      <div class="mb-4">
+        <FloatLabel variant="on">
+          <InputText id="edit-code" v-model="editBereich.code" maxlength="10" class="w-full" />
+          <label for="edit-code">Abkürzung</label>
         </FloatLabel>
       </div>
       <div class="mb-4">

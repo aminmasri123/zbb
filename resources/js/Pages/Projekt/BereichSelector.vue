@@ -24,6 +24,7 @@ const showCreateForm = ref(false);
 const creating = ref(false);
 const newBereich = ref({
   name: '',
+  code: '',
   beschreibung: '',
 });
 
@@ -35,6 +36,7 @@ const selectedBereiche = computed({
 const resetNewBereich = () => {
   newBereich.value = {
     name: '',
+    code: '',
     beschreibung: '',
   };
 };
@@ -74,6 +76,7 @@ const saveBereich = async () => {
   try {
     const response = await axios.post(route('bereich.store'), {
       name,
+      code: newBereich.value.code.trim(),
       beschreibung: newBereich.value.beschreibung,
     });
 
@@ -131,6 +134,13 @@ const saveBereich = async () => {
         <FloatLabel variant="on">
           <InputText v-model="newBereich.name" class="w-full" />
           <label>Bereichsname</label>
+        </FloatLabel>
+      </div>
+
+      <div class="mb-3">
+        <FloatLabel variant="on">
+          <InputText v-model="newBereich.code" maxlength="10" class="w-full" />
+          <label>Abkürzung</label>
         </FloatLabel>
       </div>
 

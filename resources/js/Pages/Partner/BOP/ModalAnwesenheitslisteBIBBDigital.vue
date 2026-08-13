@@ -1431,6 +1431,7 @@ onBeforeUnmount(() => {
                       <SignatureBox
                         v-if="participantCanSignDay(participant, day)"
                         :model-value="signatures[signatureKey(day, participant)] || ''"
+                        :participant-name="[participant.vorname, participant.nachname].filter(Boolean).join(' ')"
                         compact
                         @update:model-value="saveCompletedSignature(day, participant, $event)"
                         @cleared="removeSignature(day, participant)"
@@ -1453,6 +1454,7 @@ onBeforeUnmount(() => {
                       <SignatureBox
                         v-if="feedbackDay"
                         :model-value="signatures[signatureKey(feedbackDay, participant)] || ''"
+                        :participant-name="[participant.vorname, participant.nachname].filter(Boolean).join(' ')"
                         compact
                         @update:model-value="saveCompletedSignature(feedbackDay, participant, $event)"
                         @cleared="removeSignature(feedbackDay, participant)"

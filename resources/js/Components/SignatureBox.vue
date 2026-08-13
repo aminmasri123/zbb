@@ -1,5 +1,6 @@
 <script setup>
 import { nextTick, onMounted, ref, watch } from 'vue'
+import Swal from 'sweetalert2'
 
 const props = defineProps({
   modelValue: {
@@ -14,6 +15,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  participantName: {
+    type: String,
+    default: '',
+  },
 })
 
 const emit = defineEmits(['update:modelValue', 'cleared'])
@@ -22,6 +27,7 @@ const signatureInkColor = '#003f9e'
 const canvas = ref(null)
 const expandedCanvas = ref(null)
 const expanded = ref(false)
+const hasInk = ref(Boolean(props.modelValue))
 let ctx = null
 let expandedCtx = null
 let expandedDrawing = false
@@ -113,13 +119,45 @@ const stopExpandedDrawing = (event) => {
 
   event.preventDefault()
   expandedDrawing = false
+  hasInk.value = true
   emit('update:modelValue', expandedCanvas.value.toDataURL('image/png'))
 }
 
-const clearSignature = () => {
+const clearSignature = async () => {
   if (props.disabled) return
 
+  if (hasInk.value) {
+    const participantText = props.participantName
+      ? ` von ${props.participantName}`
+      : ''
+    const result = await Swal.fire({
+      title: 'Unterschrift wirklich löschen?',
+      text: `Die Unterschrift${participantText} kann nach dem Löschen nicht wiederhergestellt werden.`,
+      icon: 'warning',
+      input: 'text',
+      inputLabel: 'Zur Bestätigung JA oder DELETE eingeben',
+      inputPlaceholder: 'JA oder DELETE',
+      showCancelButton: true,
+      confirmButtonText: 'Unterschrift löschen',
+      cancelButtonText: 'Abbrechen',
+      customClass: {
+        container: 'signature-swal-container',
+      },
+      preConfirm: (value) => {
+        const confirmation = String(value || '').trim().toUpperCase()
+        if (!['JA', 'DELETE', 'LÖSCHEN', 'LOESCHEN'].includes(confirmation)) {
+          Swal.showValidationMessage('Bitte JA oder DELETE eingeben.')
+          return false
+        }
+        return true
+      },
+    })
+
+    if (!result.isConfirmed) return
+  }
+
   syncCanvases('')
+  hasInk.value = false
   emit('update:modelValue', '')
   emit('cleared')
 }
@@ -127,6 +165,7 @@ const clearSignature = () => {
 watch(
   () => props.modelValue,
   (value) => {
+    hasInk.value = Boolean(value)
     syncCanvases(value)
   }
 )
@@ -143,9 +182,11 @@ onMounted(() => {
       ref="canvas"
       width="420"
       height="120"
-      class="pointer-events-none w-full rounded border border-gray-300 bg-white"
+      class="w-full cursor-pointer rounded border border-gray-300 bg-white"
       :class="compact ? 'h-10 min-w-[92px]' : 'h-16'"
       aria-label="Vorschau der Unterschrift"
+      title="Zum Unterschreiben oder Bearbeiten anklicken"
+      @click="openExpanded"
     />
 
     <button
@@ -173,12 +214,17 @@ onMounted(() => {
     <Teleport to="body">
       <div
         v-if="expanded"
-        class="fixed inset-0 z-[14000] flex items-center justify-center bg-black/50 p-4"
+        class="fixed inset-0 z-[14000] flex items-center justify-center bg-black/60 p-2 sm:p-4"
         @click.self="closeExpanded"
       >
-        <div class="w-full max-w-5xl rounded border border-gray-200 bg-white p-4 shadow-2xl">
+        <div class="flex h-[calc(100vh-1rem)] max-h-[900px] w-full max-w-[1500px] flex-col rounded border border-gray-200 bg-white p-3 shadow-2xl sm:h-[calc(100vh-2rem)] sm:p-5">
           <div class="mb-3 flex items-center justify-between gap-3">
-            <h3 class="text-base font-bold text-gray-900">Unterschrift</h3>
+            <h3 class="min-w-0 text-base font-bold text-gray-900 sm:text-lg">
+              Unterschrift
+              <span v-if="participantName" class="ml-1 font-normal text-gray-600">
+                – {{ participantName }}
+              </span>
+            </h3>
             <button
               type="button"
               class="inline-flex h-9 w-9 items-center justify-center rounded border border-gray-300 text-gray-700 hover:bg-gray-50"
@@ -191,9 +237,10 @@ onMounted(() => {
 
           <canvas
             ref="expandedCanvas"
-            width="840"
-            height="240"
-            class="h-[38vh] min-h-[220px] w-full touch-none rounded border border-gray-400 bg-white"
+            width="1400"
+            height="600"
+            class="min-h-0 w-full flex-1 touch-none rounded border-2 border-gray-400 bg-white"
+            :aria-label="participantName ? `Unterschriftsfeld für ${participantName}` : 'Unterschriftsfeld'"
             @pointerdown="startExpandedDrawing"
             @pointermove="drawExpanded"
             @pointerup="stopExpandedDrawing"
@@ -223,3 +270,9 @@ onMounted(() => {
     </Teleport>
   </div>
 </template>
+
+<style>
+.signature-swal-container {
+  z-index: 15000 !important;
+}
+</style>

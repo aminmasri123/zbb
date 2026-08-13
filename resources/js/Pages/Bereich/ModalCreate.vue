@@ -14,11 +14,12 @@ const emit = defineEmits(['close', 'add-bereich']);
 
 let newBereich = ref({
   name: '',
+  code: '',
   beschreibung: '',
 });
 
 const resetForm = () => {
-  newBereich.value = { name: '', beschreibung: '' };
+  newBereich.value = { name: '', code: '', beschreibung: '' };
 };
 
 const save = () => {
@@ -47,6 +48,12 @@ const close = () => {
         <FloatLabel variant="on">
           <InputText id="name" v-model="newBereich.name" class="w-full" />
           <label for="name">Bezeichnung</label>
+        </FloatLabel>
+      </div>
+      <div class="mb-4">
+        <FloatLabel variant="on">
+          <InputText id="code" v-model="newBereich.code" maxlength="10" class="w-full" />
+          <label for="code">Abkürzung</label>
         </FloatLabel>
       </div>
       <div class="mb-4">

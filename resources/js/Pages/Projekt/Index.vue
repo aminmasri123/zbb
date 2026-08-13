@@ -253,7 +253,7 @@
                         :key="bereich.id"
                         class="rounded bg-gray-100 px-2 py-1 text-xs text-gray-700"
                     >
-                        {{ bereich.name }}
+                        {{ bereich.code || bereich.name }}
                     </span>
                 </div>
                 <span v-else>-</span>

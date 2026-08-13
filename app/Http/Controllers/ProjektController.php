@@ -37,7 +37,7 @@ class ProjektController extends Controller
         $abteilungen = Abteilung::select('id', 'name')->get();
         $bereiche = Bereich::query()
             ->orderBy('name')
-            ->get(['id', 'name', 'beschreibung']);
+            ->get(['id', 'name', 'code', 'beschreibung']);
         $kostenstellen = Kostenstelle::query()
             ->orderBy('kostenstelle')
             ->get(['id', 'kostenstelle']);

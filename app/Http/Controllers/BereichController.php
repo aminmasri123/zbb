@@ -20,7 +20,11 @@ class BereichController extends Controller
         // Hole die Abteilungen mit Suchfilter und lade die notwendigen Beziehungen
         $bereiche = Bereich::query()
             ->when($search, function ($query) use ($search) {
-                $query->where('name', 'like', "%{$search}%");
+                $query->where(function ($searchQuery) use ($search) {
+                    $searchQuery
+                        ->where('name', 'like', "%{$search}%")
+                        ->orWhere('code', 'like', "%{$search}%");
+                });
             })
             ->orderBy('name') // Sortiere nach Name
             ->paginate(20)    // Wende die Paginierung an
@@ -38,7 +42,11 @@ class BereichController extends Controller
         // Hole die Abteilungen mit Suchfilter und lade die notwendigen Beziehungen
         $bereiche = Bereich::query()
             ->when($search, function ($query) use ($search) {
-                $query->where('name', 'like', "%{$search}%");
+                $query->where(function ($searchQuery) use ($search) {
+                    $searchQuery
+                        ->where('name', 'like', "%{$search}%")
+                        ->orWhere('code', 'like', "%{$search}%");
+                });
             })
             ->orderBy('name') // Sortiere nach Name
             ->paginate(20)    // Wende die Paginierung an
@@ -70,20 +78,22 @@ class BereichController extends Controller
     {
         // Validierung
         $validatedData = $request->validate([
-            'name' => 'required|max:50',
-            'beschreibung' => '',
+            'name' => 'required|string|max:30',
+            'code' => 'nullable|string|max:10',
+            'beschreibung' => 'nullable|string|max:200',
         ]);
 
         try {
             // Abteilung erstellen
             $bereich = Bereich::create([
-                'name' => $validatedData['name'],
-                'beschreibung' => $validatedData['beschreibung'], // Abteilungsleiter
+                'name' => trim($validatedData['name']),
+                'code' => $this->nullableTrimmedValue($validatedData['code'] ?? null),
+                'beschreibung' => $this->nullableTrimmedValue($validatedData['beschreibung'] ?? null),
             ]);
 
             //Ajax Automatisch anzeigen
             return response()->json([
-                'message' => 'Abteilung erfolgreich erstellt.',
+                'message' => 'Bereich erfolgreich erstellt.',
                 'bereich' => $bereich
             ], 201);
 
@@ -118,12 +128,17 @@ class BereichController extends Controller
     public function update(Request $request, $id)
 {
     $validated = $request->validate([
-        'name' => 'required|max:255',
-        'beschreibung' => 'nullable|string',
+        'name' => 'required|string|max:30',
+        'code' => 'nullable|string|max:10',
+        'beschreibung' => 'nullable|string|max:200',
     ]);
 
     $bereich = Bereich::findOrFail($id);
-    $bereich->update($validated);
+    $bereich->update([
+        'name' => trim($validated['name']),
+        'code' => $this->nullableTrimmedValue($validated['code'] ?? null),
+        'beschreibung' => $this->nullableTrimmedValue($validated['beschreibung'] ?? null),
+    ]);
 
     return response()->json([
         'message' => 'Bereich erfolgreich aktualisiert',
@@ -154,6 +169,13 @@ class BereichController extends Controller
         } catch (\Exception $e) {
             return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
         }
+}
+
+    private function nullableTrimmedValue(?string $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
     }
 
 }
