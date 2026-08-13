@@ -27,17 +27,23 @@
     <div class="bg-gray-50 ">
         <div class="bg-gray-100  space-y-6 -mt-6">
             <!-- =================== TABS =================== -->
-            <div class="bg-white shadow-md rounded-xl p-6 border border-gray-200">
-                <nav class="flex flex-wrap gap-1 border-b pb-2 mb-4 justify-center">
+            <div class="bg-white shadow-md rounded-xl p-4 sm:p-6 border border-gray-200">
+                <div class="mb-4 sm:hidden">
+                    <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Bereich auswählen</label>
+                    <select v-model="activeTab" class="w-full rounded-lg border-gray-300 text-sm focus:border-zbb focus:ring-zbb">
+                        <option v-for="tab in tabs" :key="tab" :value="tab">{{ tab }}</option>
+                    </select>
+                </div>
+                <nav class="mb-5 hidden gap-2 overflow-x-auto border-b pb-3 sm:flex" aria-label="Teilnehmerbereiche">
                     <button
                     v-for="tab in tabs"
                     :key="tab"
-                    @click="activeTab = activeTab === tab ? '' : tab"
+                    @click="activeTab = tab"
                     :class="[
-                        'px-3 py-1 text-sm font-medium rounded-t-md',
+                        'shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition',
                         activeTab === tab
-                        ? 'bg-zbbTrp text-zbb border-b-2 border-zbb'
-                        : 'text-gray-600 hover:text-zbb',
+                        ? 'bg-zbb text-white shadow-sm'
+                        : 'bg-gray-50 text-gray-600 hover:bg-zbbTrp hover:text-zbb',
                     ]"
                     >
                     {{ tab }}
@@ -2076,6 +2082,7 @@
         participantDataRequests: { type: Array, default: () => [] },
         jobRecommendations: { type: Array, default: () => [] },
         participantCv: { type: Object, default: () => ({ visible: false, profile: null, entries: [], versions: [] }) },
+        participantProfile: { type: Object, default: () => ({ enabled_tabs: [], tab_order: [], definitions: [] }) },
     });
 
 
@@ -2097,37 +2104,31 @@ watchEffect(() => {
     const portalEnabled = computed(() => Boolean(featurePage.props.enabledModules?.participant_portal));
     const projectFeatureEnabled = (key) => projectFeatures.value[key] !== false;
     const portalFeatureEnabled = (key) => portalEnabled.value && portalFeatures.value[key] === true;
-    const tabs = computed(() => [
-        "Stammdaten",
-        "Sozialdaten",
-        "Adresse",
-        "Kontaktdaten",
-        "Projektverlauf",
-        "Aufnahme",
-        ...(portalFeatureEnabled('tasks_and_appointments') ? ["Aufgaben"] : []),
-        ...(projectFeatureEnabled('completion_management') ? ["Teilnahmeabschluss"] : []),
-        ...(portalFeatureEnabled('job_search') || portalFeatureEnabled('application_management') ? ["Bewerbungen"] : []),
-        ...(portalFeatureEnabled('messaging') ? ["Nachrichten"] : []),
-        ...(portalFeatureEnabled('consents_and_approvals') ? ["Einwilligungen"] : []),
-        ...(portalFeatureEnabled('profile') ? ["Datenauskunft", "Lebenslauf", "Portal-Dokumente"] : []),
-        ...(projectFeatureEnabled('attendance_management') && canAny([
+    const participantTabDefinitions = computed(() => new Map(
+        (props.participantProfile?.definitions || []).map((definition) => [definition.key, definition])
+    ));
+    const configuredParticipantTabKeys = computed(() => {
+        const enabled = new Set(props.participantProfile?.enabled_tabs || []);
+        const order = props.participantProfile?.tab_order || [];
+        return order.filter((key) => enabled.has(key));
+    });
+    const participantTabAvailable = (definition) => {
+        if (!definition) return false;
+        if (definition.feature && !projectFeatureEnabled(definition.feature)) return false;
+        if (definition.portal_feature && !portalFeatureEnabled(definition.portal_feature)) return false;
+        if (definition.portal_feature_any && !definition.portal_feature_any.some(portalFeatureEnabled)) return false;
+        if (definition.key === 'anwesenheit' && !canAny([
             'anwesenheit.index',
             'anwesenheit.manage',
             'anwesenheit.destroy',
             'anwesenheit.export',
-        ]) ? ["Anwesenheit"] : []),
-        "Bank",
-        ...(projectFeatureEnabled('completion_management') ? ["Schule/Beruf"] : []),
-        "Briefe",
-        "Notizen",
-        "Kinder",
-        "Netzwerke",
-        "Vermittlung",
-        ...(projectFeatureEnabled('internship_management') ? ["Praktika"] : []),
-        "Fahrtkosten",
-        ...(projectFeatureEnabled('potential_analysis') ? ["LuV"] : []),
-        "Exportieren"
-    ]);
+        ])) return false;
+        return true;
+    };
+    const tabs = computed(() => configuredParticipantTabKeys.value
+        .map((key) => participantTabDefinitions.value.get(key))
+        .filter(participantTabAvailable)
+        .map((definition) => definition.label));
 
     // Lokale Kopie der Teilnehmerdaten
     const teilnehmer = ref(JSON.parse(JSON.stringify(props.teilnehmer)));
@@ -2382,9 +2383,9 @@ const neueAnwesenheit = ref({
 
 
 
-const activeTab = ref("");
+const activeTab = ref(tabs.value[0] || 'Stammdaten');
 watch(tabs, (visibleTabs) => {
-    if (activeTab.value && !visibleTabs.includes(activeTab.value)) activeTab.value = '';
+    if (!visibleTabs.includes(activeTab.value)) activeTab.value = visibleTabs[0] || '';
 });
 watch(activeTab, async (tab) => {
   if (tab !== 'Nachrichten' || !props.activeParticipationId) return;

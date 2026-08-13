@@ -316,7 +316,8 @@ class MaterialanforderungWorkflowTest extends TestCase
                 'begruendung' => 'Doppelte Testbestellung wurde irrtümlich angelegt.',
                 'bestaetigung' => "LÖSCHEN #{$anforderung->id}",
             ])
-            ->assertRedirect(route('materialanforderung.index'));
+            ->assertRedirect(route('materialanforderung.index'))
+            ->assertSessionHas('success', "Materialanforderung #{$anforderung->id} und alle zugehörigen Daten wurden endgültig gelöscht. Das Löschprotokoll bleibt erhalten.");
 
         $this->assertDatabaseMissing('materialanforderungs', ['id' => $anforderung->id]);
         $this->assertDatabaseMissing('materialanforderung_artikels', ['id' => $artikel->id]);
@@ -337,6 +338,21 @@ class MaterialanforderungWorkflowTest extends TestCase
             ->where('materialanforderung_id', $anforderung->id)
             ->value('snapshot');
         $this->assertSame('Schutzbrille', json_decode($snapshot, true, 512, JSON_THROW_ON_ERROR)['artikel'][0]['artikel']);
+    }
+
+    public function test_creator_with_special_permission_sees_delete_button_for_own_ordered_request(): void
+    {
+        $project = Projekt::factory()->create(['name' => 'BOP']);
+        $creator = User::factory()->create(['current_team_id' => $project->id]);
+        $this->grantTestPermission($creator, 'materialanforderung.bestellte.destroy');
+        $anforderung = $this->anforderung($creator, $project, 'bestellt');
+
+        $this->actingAs($creator)
+            ->get(route('materialanforderung.show', $anforderung))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('anforderung.id', $anforderung->id)
+                ->where('canDeleteOrderedMaterialanforderung', true));
     }
 
     public function test_ordered_deletion_requires_special_permission_and_delivered_requests_remain_protected(): void

@@ -38,6 +38,7 @@ class Projekt extends Model
         'feature_settings',
         'rule_settings',
         'portal_feature_settings',
+        'participant_profile_settings',
     ];
 
     protected $casts = [
@@ -49,6 +50,7 @@ class Projekt extends Model
         'feature_settings' => 'array',
         'rule_settings' => 'array',
         'portal_feature_settings' => 'array',
+        'participant_profile_settings' => 'array',
     ];
 
     public const FEATURE_DEFAULTS = [
@@ -194,6 +196,73 @@ class Projekt extends Model
         'messaging' => false,
         'consents_and_approvals' => false,
     ];
+
+    public const PARTICIPANT_PROFILE_TAB_DEFINITIONS = [
+        'stammdaten' => ['label' => 'Stammdaten', 'group' => 'Grunddaten', 'description' => 'Name, Geburtsdatum, Geschlecht und Betreuung.', 'required' => true],
+        'sozialdaten' => ['label' => 'Sozialdaten', 'group' => 'Grunddaten', 'description' => 'Kundennummer, Leistungsbezug und sensible Sozialmerkmale.'],
+        'adresse' => ['label' => 'Adresse', 'group' => 'Grunddaten', 'description' => 'Wohnanschrift und zusätzliche Adressangaben.'],
+        'kontaktdaten' => ['label' => 'Kontaktdaten', 'group' => 'Grunddaten', 'description' => 'Telefon, E-Mail und weitere Kontaktwege.'],
+        'bank' => ['label' => 'Bank', 'group' => 'Grunddaten', 'description' => 'Bankverbindung des Teilnehmers.'],
+        'schule_beruf' => ['label' => 'Schule/Beruf', 'group' => 'Grunddaten', 'description' => 'Schulischer und beruflicher Werdegang.', 'feature' => 'completion_management'],
+        'projektverlauf' => ['label' => 'Projektverlauf', 'group' => 'Teilnahme', 'description' => 'Projektteilnahme, Zeitraum, Standort und Betreuung.'],
+        'aufnahme' => ['label' => 'Aufnahme', 'group' => 'Teilnahme', 'description' => 'Projektbezogene Aufnahmecheckliste.'],
+        'aufgaben' => ['label' => 'Aufgaben', 'group' => 'Teilnahme', 'description' => 'Aufgaben und Termine der Teilnahme.', 'portal_feature' => 'tasks_and_appointments'],
+        'teilnahmeabschluss' => ['label' => 'Teilnahmeabschluss', 'group' => 'Teilnahme', 'description' => 'Abschlusscheckliste und Abschlussberichte.', 'feature' => 'completion_management'],
+        'anwesenheit' => ['label' => 'Anwesenheit', 'group' => 'Teilnahme', 'description' => 'Anwesenheiten des aktiven Projekts.', 'feature' => 'attendance_management'],
+        'praktika' => ['label' => 'Praktika', 'group' => 'Teilnahme', 'description' => 'Praktika und betriebliche Erprobungen.', 'feature' => 'internship_management'],
+        'fahrtkosten' => ['label' => 'Fahrtkosten', 'group' => 'Teilnahme', 'description' => 'Fahrtkostenabrechnungen des Teilnehmers.'],
+        'luv' => ['label' => 'LuV', 'group' => 'Teilnahme', 'description' => 'Leistungs- und Verhaltensbeurteilungen.', 'feature' => 'potential_analysis'],
+        'briefe' => ['label' => 'Briefe', 'group' => 'Dokumentation', 'description' => 'Erstellte und freigegebene Briefe.'],
+        'notizen' => ['label' => 'Notizen', 'group' => 'Dokumentation', 'description' => 'Projektbezogene Notizen und Vermerke.'],
+        'kinder' => ['label' => 'Kinder', 'group' => 'Dokumentation', 'description' => 'Angaben zu Kindern und familiärem Kontext.'],
+        'netzwerke' => ['label' => 'Netzwerke', 'group' => 'Dokumentation', 'description' => 'Unterstützungsnetzwerke und beteiligte Stellen.'],
+        'vermittlung' => ['label' => 'Vermittlung', 'group' => 'Dokumentation', 'description' => 'Vermittlungsaktivitäten und Arbeitsvermittlung.'],
+        'bewerbungen' => ['label' => 'Bewerbungen', 'group' => 'Portal', 'description' => 'Bewerbungen und Stellenempfehlungen.', 'portal_feature_any' => ['job_search', 'application_management']],
+        'nachrichten' => ['label' => 'Nachrichten', 'group' => 'Portal', 'description' => 'Nachrichten zwischen Teilnehmer und Projektteam.', 'portal_feature' => 'messaging'],
+        'einwilligungen' => ['label' => 'Einwilligungen', 'group' => 'Portal', 'description' => 'Einwilligungen und deren Versionshistorie.', 'portal_feature' => 'consents_and_approvals'],
+        'datenauskunft' => ['label' => 'Datenauskunft', 'group' => 'Portal', 'description' => 'Datenschutzanfragen und Datenauskünfte.', 'portal_feature' => 'profile'],
+        'lebenslauf' => ['label' => 'Lebenslauf', 'group' => 'Portal', 'description' => 'Strukturierter Lebenslauf aus dem Portal.', 'portal_feature' => 'profile'],
+        'portal_dokumente' => ['label' => 'Portal-Dokumente', 'group' => 'Portal', 'description' => 'Vom Teilnehmer oder Projektteam bereitgestellte Dateien.', 'portal_feature' => 'profile'],
+        'exportieren' => ['label' => 'Exportieren', 'group' => 'Dokumentation', 'description' => 'Projektbezogene Dokument- und Datenexporte.'],
+    ];
+
+    public static function participantProfileTabDefinitions(): array
+    {
+        return collect(self::PARTICIPANT_PROFILE_TAB_DEFINITIONS)
+            ->map(fn (array $definition, string $key) => array_merge(['key' => $key], $definition))
+            ->values()
+            ->all();
+    }
+
+    public static function participantProfileTabKeys(): array
+    {
+        return array_keys(self::PARTICIPANT_PROFILE_TAB_DEFINITIONS);
+    }
+
+    public function participantProfileSettings(): array
+    {
+        $validKeys = self::participantProfileTabKeys();
+        $settings = $this->participant_profile_settings ?? [];
+        $order = collect($settings['tab_order'] ?? $validKeys)
+            ->filter(fn ($key) => is_string($key) && in_array($key, $validKeys, true))
+            ->unique()
+            ->concat($validKeys)
+            ->unique()
+            ->values()
+            ->all();
+        $enabled = collect($settings['enabled_tabs'] ?? $validKeys)
+            ->filter(fn ($key) => is_string($key) && in_array($key, $validKeys, true))
+            ->unique()
+            ->push('stammdaten')
+            ->unique()
+            ->values()
+            ->all();
+
+        return [
+            'enabled_tabs' => array_values(array_filter($order, fn ($key) => in_array($key, $enabled, true))),
+            'tab_order' => $order,
+        ];
+    }
 
     public function portalFeatureSettings(): array
     {

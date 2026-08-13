@@ -22,6 +22,14 @@ const canConfigureProjectFeature = (featureKey) =>
     featureKey === 'potential_analysis'
         ? canConfigurePotenzialanalyse.value
         : canUpdateProjekt.value;
+const administrationTabs = computed(() => [
+    { key: 'overview', label: 'Übersicht' },
+    { key: 'participants', label: 'Teilnehmerprofil' },
+    { key: 'features', label: 'Funktionen & Regeln' },
+    ...(canManagePotenzialanalyse.value ? [{ key: 'potential_analysis', label: 'Potenzialanalyse' }] : []),
+    { key: 'staff', label: 'Mitarbeiter' },
+]);
+const activeAdministrationTab = ref('overview');
 const projectFeatures = reactive({ ...(props.projekt.features || {}) });
 const featureSaving = ref(false);
 const featureErrors = ref({});
@@ -35,6 +43,59 @@ const completionChecklistItems = ref(JSON.parse(JSON.stringify(props.projekt.com
 const completionChecklistSaving = ref(false);
 const portalFeatures = reactive({ ...(props.projekt.portal_features || {}) });
 const portalFeaturesSaving = ref(false);
+const participantProfile = reactive(JSON.parse(JSON.stringify(props.projekt.participant_profile || {
+    enabled_tabs: [],
+    tab_order: [],
+})));
+const participantProfileSaving = ref(false);
+const participantProfileDefinitions = props.projekt.participant_profile_tab_definitions || [];
+const participantProfileDefinitionMap = new Map(participantProfileDefinitions.map((item) => [item.key, item]));
+const orderedParticipantProfileDefinitions = computed(() => (participantProfile.tab_order || [])
+    .map((key) => participantProfileDefinitionMap.get(key))
+    .filter(Boolean));
+const participantProfileEnabled = (key) => participantProfile.enabled_tabs?.includes(key);
+const toggleParticipantProfileTab = (key, enabled) => {
+    const definition = participantProfileDefinitionMap.get(key);
+    if (definition?.required) return;
+    const selected = new Set(participantProfile.enabled_tabs || []);
+    enabled ? selected.add(key) : selected.delete(key);
+    selected.add('stammdaten');
+    participantProfile.enabled_tabs = participantProfile.tab_order.filter((tabKey) => selected.has(tabKey));
+};
+const moveParticipantProfileTab = (key, direction) => {
+    const order = [...participantProfile.tab_order];
+    const index = order.indexOf(key);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= order.length) return;
+    [order[index], order[target]] = [order[target], order[index]];
+    participantProfile.tab_order = order;
+    const enabled = new Set(participantProfile.enabled_tabs || []);
+    participantProfile.enabled_tabs = order.filter((tabKey) => enabled.has(tabKey));
+};
+const applyParticipantProfilePreset = (preset) => {
+    const allKeys = participantProfile.tab_order;
+    const compact = ['stammdaten', 'adresse', 'kontaktdaten', 'projektverlauf', 'aufnahme', 'anwesenheit', 'notizen', 'exportieren'];
+    const bop = ['stammdaten', 'adresse', 'kontaktdaten', 'projektverlauf', 'aufnahme', 'anwesenheit', 'schule_beruf', 'briefe', 'notizen', 'praktika', 'luv', 'exportieren'];
+    const selection = preset === 'all' ? allKeys : (preset === 'bop' ? bop : compact);
+    participantProfile.enabled_tabs = allKeys.filter((key) => selection.includes(key));
+};
+const saveParticipantProfile = async () => {
+    participantProfileSaving.value = true;
+    try {
+        const response = await axios.put(route('projekt.participant-profile.update', props.projekt.id), {
+            enabled_tabs: participantProfile.enabled_tabs,
+            tab_order: participantProfile.tab_order,
+        });
+        Object.assign(participantProfile, response.data.participant_profile);
+        props.projekt.participant_profile = response.data.participant_profile;
+        Swal.fire('Gespeichert!', 'Die Teilnehmerseite wurde für dieses Projekt konfiguriert.', 'success');
+    } catch (error) {
+        const message = Object.values(error.response?.data?.errors || {}).flat()[0];
+        Swal.fire('Fehler', message || 'Die Teilnehmerprofil-Konfiguration konnte nicht gespeichert werden.', 'error');
+    } finally {
+        participantProfileSaving.value = false;
+    }
+};
 const portalFeatureDefinitions = [
     { key: 'profile', label: 'Profil', description: 'Berufliches Profil selbst vervollständigen' },
     { key: 'attendance_self_service', label: 'Eigene Anwesenheit', description: 'Freigegebene Anwesenheitsdaten einsehen' },
@@ -658,7 +719,20 @@ const addMitarbeiter = (person) => {
         </template>
 
         <div class="space-y-6">
-            <section class="bg-white p-5 shadow-sm">
+            <nav class="flex gap-2 overflow-x-auto rounded-xl border border-gray-200 bg-white p-2 shadow-sm" aria-label="Projektverwaltung">
+                <button
+                    v-for="tab in administrationTabs"
+                    :key="tab.key"
+                    type="button"
+                    class="shrink-0 rounded-lg px-4 py-2 text-sm font-medium transition"
+                    :class="activeAdministrationTab === tab.key ? 'bg-zbb text-white shadow-sm' : 'text-gray-600 hover:bg-zbbTrp hover:text-zbb'"
+                    @click="activeAdministrationTab = tab.key"
+                >
+                    {{ tab.label }}
+                </button>
+            </nav>
+
+            <section v-if="activeAdministrationTab === 'overview'" class="bg-white p-5 shadow-sm">
                 <div class="grid gap-4 md:grid-cols-6">
                     <div>
                         <p class="text-xs uppercase text-gray-500">Projekt</p>
@@ -685,7 +759,61 @@ const addMitarbeiter = (person) => {
                 </div>
             </section>
 
-            <section v-if="projectFeatures.participant_management" class="bg-white p-5 shadow-sm">
+            <section v-if="activeAdministrationTab === 'participants' && projectFeatures.participant_management" class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 class="text-lg font-semibold">Bereiche im Teilnehmerprofil</h2>
+                        <p class="mt-1 max-w-3xl text-sm text-gray-500">
+                            Legen Sie fest, welche Tabs Mitarbeiter bei Teilnehmern dieses Projekts sehen. Das Ausblenden entfernt keine gespeicherten Daten. Projektfunktionen und Benutzerberechtigungen gelten zusätzlich.
+                        </p>
+                    </div>
+                    <div v-if="canUpdateProjekt" class="flex flex-wrap gap-2">
+                        <button type="button" class="rounded border border-gray-300 px-3 py-2 text-sm text-gray-700" @click="applyParticipantProfilePreset('compact')">Kompakt</button>
+                        <button type="button" class="rounded border border-zbb px-3 py-2 text-sm text-zbb" @click="applyParticipantProfilePreset('bop')">BOP-Vorschlag</button>
+                        <button type="button" class="rounded border border-gray-300 px-3 py-2 text-sm text-gray-700" @click="applyParticipantProfilePreset('all')">Alle Bereiche</button>
+                        <button type="button" class="rounded bg-zbb px-4 py-2 text-sm font-medium text-white disabled:opacity-50" :disabled="participantProfileSaving" @click="saveParticipantProfile">
+                            {{ participantProfileSaving ? 'Speichert …' : 'Profilansicht speichern' }}
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+                    <strong>{{ participantProfile.enabled_tabs?.length || 0 }} Bereiche aktiv.</strong>
+                    „Stammdaten“ ist ein Pflichtbereich. Mit den Pfeilen bestimmen Sie die Reihenfolge auf der Teilnehmerseite.
+                </div>
+
+                <div class="grid gap-3 xl:grid-cols-2">
+                    <div
+                        v-for="item in orderedParticipantProfileDefinitions"
+                        :key="item.key"
+                        class="flex items-start gap-3 rounded-lg border p-3 transition"
+                        :class="participantProfileEnabled(item.key) ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'"
+                    >
+                                <input
+                                    type="checkbox"
+                                    class="mt-1 rounded border-gray-300 text-zbb focus:ring-zbb"
+                                    :checked="participantProfileEnabled(item.key)"
+                                    :disabled="!canUpdateProjekt || item.required"
+                                    @change="toggleParticipantProfileTab(item.key, $event.target.checked)"
+                                />
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="font-semibold text-gray-800">{{ item.label }}</span>
+                                        <span class="rounded bg-white/80 px-2 py-0.5 text-[11px] text-gray-500">{{ item.group }}</span>
+                                        <span v-if="item.required" class="rounded bg-zbbTrp px-2 py-0.5 text-[11px] font-medium text-zbb">Pflicht</span>
+                                        <span v-if="item.feature || item.portal_feature || item.portal_feature_any" class="rounded bg-gray-200 px-2 py-0.5 text-[11px] text-gray-600">funktionsabhängig</span>
+                                    </div>
+                                    <p class="mt-1 text-xs leading-relaxed text-gray-500">{{ item.description }}</p>
+                                </div>
+                                <div v-if="canUpdateProjekt" class="flex shrink-0 flex-col gap-1">
+                                    <button type="button" class="rounded border bg-white px-2 py-1 text-xs text-gray-600 disabled:opacity-30" :disabled="participantProfile.tab_order.indexOf(item.key) === 0" title="Nach oben" @click="moveParticipantProfileTab(item.key, -1)">↑</button>
+                                    <button type="button" class="rounded border bg-white px-2 py-1 text-xs text-gray-600 disabled:opacity-30" :disabled="participantProfile.tab_order.indexOf(item.key) === participantProfile.tab_order.length - 1" title="Nach unten" @click="moveParticipantProfileTab(item.key, 1)">↓</button>
+                                </div>
+                    </div>
+                </div>
+            </section>
+
+            <section v-if="activeAdministrationTab === 'participants' && projectFeatures.participant_management" class="bg-white p-5 shadow-sm">
                 <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h2 class="text-lg font-semibold">Teilnehmerportal-Funktionen</h2>
@@ -705,12 +833,12 @@ const addMitarbeiter = (person) => {
                 </div>
             </section>
 
-            <section v-if="projectFeatures.completion_management" class="bg-white p-5 shadow-sm">
+            <section v-if="activeAdministrationTab === 'participants' && projectFeatures.completion_management" class="bg-white p-5 shadow-sm">
                 <div class="mb-4 flex flex-wrap items-start justify-between gap-3"><div><h2 class="text-lg font-semibold">Abschlusscheckliste</h2><p class="mt-1 text-sm text-gray-500">Pflichtpunkte müssen erledigt sein, bevor ein Teilnahmeabschluss freigegeben werden kann. Entfernte Punkte werden historienerhaltend deaktiviert.</p></div><div v-if="can('projekt.update')" class="flex gap-2"><button type="button" class="rounded border border-zbb px-4 py-2 text-sm text-zbb" @click="addCompletionChecklistItem">Punkt hinzufügen</button><button type="button" class="rounded bg-zbb px-4 py-2 text-sm text-white disabled:opacity-50" :disabled="completionChecklistSaving" @click="saveCompletionChecklist">{{ completionChecklistSaving ? 'Speichert …' : 'Checkliste speichern' }}</button></div></div>
                 <div class="space-y-3"><div v-for="(item, index) in completionChecklistItems" :key="item.id || `completion-new-${index}`" class="grid gap-3 rounded border border-gray-200 p-4 md:grid-cols-[60px_1fr_1fr_130px_auto]"><input v-model.number="item.sort_order" type="number" min="0" class="rounded border-gray-300 text-sm" disabled /><input v-model="item.label" maxlength="150" placeholder="Bezeichnung, z. B. Abschlussgespräch geführt" class="rounded border-gray-300 text-sm" :disabled="!can('projekt.update')" /><input v-model="item.description" maxlength="500" placeholder="Optionale Erläuterung" class="rounded border-gray-300 text-sm" :disabled="!can('projekt.update')" /><label class="flex items-center gap-2 text-sm text-gray-600"><input v-model="item.required" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" :disabled="!can('projekt.update')" />Pflichtpunkt</label><button v-if="can('projekt.update')" type="button" class="text-sm text-red-600" @click="removeCompletionChecklistItem(index)">Entfernen</button></div><p v-if="!completionChecklistItems.length" class="rounded border border-dashed p-5 text-center text-sm text-gray-500">Noch keine Abschlussprüfpunkte konfiguriert.</p></div>
             </section>
 
-            <section v-if="projectFeatures.participant_management" class="bg-white p-5 shadow-sm">
+            <section v-if="activeAdministrationTab === 'participants' && projectFeatures.participant_management" class="bg-white p-5 shadow-sm">
                 <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h2 class="text-lg font-semibold">Aufnahmecheckliste</h2>
@@ -743,7 +871,7 @@ const addMitarbeiter = (person) => {
                 </div>
             </section>
 
-            <section v-if="projectFeatures.participant_management" class="bg-white p-5 shadow-sm">
+            <section v-if="activeAdministrationTab === 'participants' && projectFeatures.participant_management" class="bg-white p-5 shadow-sm">
                 <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h2 class="text-lg font-semibold">Teilnehmeruebersicht</h2>
@@ -813,7 +941,7 @@ const addMitarbeiter = (person) => {
                 <p class="mt-3 text-xs text-gray-500">Mindestens eine Spalte bleibt aktiv.</p>
             </section>
 
-            <section class="bg-white p-5 shadow-sm">
+            <section v-if="activeAdministrationTab === 'features'" class="bg-white p-5 shadow-sm">
                 <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h2 class="text-lg font-semibold">Funktionen und Regeln</h2>
@@ -996,7 +1124,7 @@ const addMitarbeiter = (person) => {
                 </div>
             </section>
 
-            <section v-if="canManagePotenzialanalyse" class="bg-white p-5 shadow-sm">
+            <section v-if="activeAdministrationTab === 'potential_analysis' && canManagePotenzialanalyse" class="bg-white p-5 shadow-sm">
                 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h2 class="text-lg font-semibold">Potenzialanalyse</h2>
@@ -1194,7 +1322,7 @@ const addMitarbeiter = (person) => {
                 </div>
             </section>
 
-            <section class="bg-white p-5 shadow-sm">
+            <section v-if="activeAdministrationTab === 'overview'" class="bg-white p-5 shadow-sm">
                 <h2 class="mb-3 text-lg font-semibold">Zeitraume</h2>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left text-sm">
@@ -1223,7 +1351,7 @@ const addMitarbeiter = (person) => {
                 </div>
             </section>
 
-            <section class="bg-white p-5 shadow-sm">
+            <section v-if="activeAdministrationTab === 'staff'" class="bg-white p-5 shadow-sm">
                 <h2 class="mb-3 text-lg font-semibold">Mitarbeiter im Projekt</h2>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left text-sm">
@@ -1259,7 +1387,7 @@ const addMitarbeiter = (person) => {
                 </div>
             </section>
 
-            <section class="bg-white p-5 shadow-sm">
+            <section v-if="activeAdministrationTab === 'staff'" class="bg-white p-5 shadow-sm">
                 <h2 class="mb-3 text-lg font-semibold">Fehlende Mitarbeiter hinzufugen</h2>
                 <div class="space-y-3">
                     <div

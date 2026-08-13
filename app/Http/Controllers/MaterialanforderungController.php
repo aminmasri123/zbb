@@ -175,12 +175,19 @@ class MaterialanforderungController extends Controller
             abort_unless($request->user()->can('materialanforderung.destroy'), 403);
             abort_unless((int) $materialanforderung->ersteller_id === (int) $request->user()->id, 403);
 
-            DB::transaction(function () use ($materialanforderung) {
-                $this->deleteMaterialanforderungNotifications($materialanforderung->id);
-                $materialanforderung->delete();
-            });
+            try {
+                DB::transaction(function () use ($materialanforderung) {
+                    $this->deleteMaterialanforderungNotifications($materialanforderung->id);
+                    $materialanforderung->delete();
+                });
+            } catch (\Throwable $exception) {
+                report($exception);
 
-            return redirect()->route('materialanforderung.index')->with('success', 'Entwurf wurde gelöscht.');
+                return back()->with('error', 'Die Materialanforderung konnte nicht gelöscht werden. Es wurden keine Daten entfernt.');
+            }
+
+            return redirect()->route('materialanforderung.index')
+                ->with('success', "Materialanforderung #{$materialanforderung->id} wurde erfolgreich gelöscht.");
         }
 
         abort_unless($isOrdered, 422, 'Nur bestellte oder teilweise gelieferte Materialanforderungen können mit dem Sonderrecht endgültig gelöscht werden. Vollständig gelieferte Vorgänge bleiben erhalten.');
@@ -196,31 +203,37 @@ class MaterialanforderungController extends Controller
             'bestaetigung.in' => "Bitte geben Sie exakt „{$expectedConfirmation}“ ein.",
         ]);
 
-        DB::transaction(function () use ($request, $materialanforderung, $data) {
-            $materialanforderung->loadMissing([
-                'projekt',
-                'besteller.person',
-                'artikeln',
-                'vergabevermerk',
-                'genehmigungen.genehmiger.person',
-            ]);
+        try {
+            DB::transaction(function () use ($request, $materialanforderung, $data) {
+                $materialanforderung->loadMissing([
+                    'projekt',
+                    'besteller.person',
+                    'artikeln',
+                    'vergabevermerk',
+                    'genehmigungen.genehmiger.person',
+                ]);
 
-            MaterialanforderungLoeschprotokoll::create([
-                'materialanforderung_id' => $materialanforderung->id,
-                'projekt_id' => $materialanforderung->projekt_id,
-                'ersteller_id' => $materialanforderung->ersteller_id,
-                'geloescht_von_id' => $request->user()->id,
-                'status' => $materialanforderung->status,
-                'bestellnummer' => $materialanforderung->vergabevermerk?->bestellnummer,
-                'endsumme' => $materialanforderung->endsumme,
-                'begruendung' => $data['begruendung'],
-                'snapshot' => $this->deletionSnapshot($materialanforderung),
-                'geloescht_am' => now(),
-            ]);
+                MaterialanforderungLoeschprotokoll::create([
+                    'materialanforderung_id' => $materialanforderung->id,
+                    'projekt_id' => $materialanforderung->projekt_id,
+                    'ersteller_id' => $materialanforderung->ersteller_id,
+                    'geloescht_von_id' => $request->user()->id,
+                    'status' => $materialanforderung->status,
+                    'bestellnummer' => $materialanforderung->vergabevermerk?->bestellnummer,
+                    'endsumme' => $materialanforderung->endsumme,
+                    'begruendung' => $data['begruendung'],
+                    'snapshot' => $this->deletionSnapshot($materialanforderung),
+                    'geloescht_am' => now(),
+                ]);
 
-            $this->deleteMaterialanforderungNotifications($materialanforderung->id);
-            $materialanforderung->delete();
-        });
+                $this->deleteMaterialanforderungNotifications($materialanforderung->id);
+                $materialanforderung->delete();
+            });
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return back()->with('error', 'Die bestellte Materialanforderung konnte nicht gelöscht werden. Es wurden keine Daten entfernt.');
+        }
 
         return redirect()->route('materialanforderung.index')
             ->with('success', "Materialanforderung #{$materialanforderung->id} und alle zugehörigen Daten wurden endgültig gelöscht. Das Löschprotokoll bleibt erhalten.");

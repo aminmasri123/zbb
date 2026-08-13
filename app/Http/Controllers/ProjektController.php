@@ -257,6 +257,8 @@ class ProjektController extends Controller
                 'features' => $projekt->featureSettings(),
                 'rules' => $projekt->ruleSettings(),
                 'portal_features' => $projekt->portalFeatureSettings(),
+                'participant_profile' => $projekt->participantProfileSettings(),
+                'participant_profile_tab_definitions' => Projekt::participantProfileTabDefinitions(),
                 'participant_overview_column_definitions' => Projekt::participantOverviewColumnDefinitions(),
             ]),
             'fehlendeMitarbeiter' => $fehlendeMitarbeiter,
@@ -643,6 +645,42 @@ class ProjektController extends Controller
         return response()->json([
             'message' => 'Portal-Funktionen wurden gespeichert.',
             'features' => $projekt->fresh()->portalFeatureSettings(),
+        ]);
+    }
+
+    public function updateParticipantProfile(Request $request, Projekt $projekt)
+    {
+        $validKeys = Projekt::participantProfileTabKeys();
+        $validated = $request->validate([
+            'enabled_tabs' => ['required', 'array', 'min:1'],
+            'enabled_tabs.*' => ['required', 'string', 'distinct', Rule::in($validKeys)],
+            'tab_order' => ['required', 'array', 'size:'.count($validKeys)],
+            'tab_order.*' => ['required', 'string', 'distinct', Rule::in($validKeys)],
+        ]);
+
+        if (! in_array('stammdaten', $validated['enabled_tabs'], true)) {
+            throw ValidationException::withMessages([
+                'enabled_tabs' => 'Der Bereich Stammdaten ist erforderlich und kann nicht deaktiviert werden.',
+            ]);
+        }
+
+        if (count($validated['tab_order']) !== count($validKeys)
+            || array_diff($validKeys, $validated['tab_order'])) {
+            throw ValidationException::withMessages([
+                'tab_order' => 'Die Reihenfolge muss alle verfügbaren Teilnehmerbereiche genau einmal enthalten.',
+            ]);
+        }
+
+        $projekt->update([
+            'participant_profile_settings' => [
+                'enabled_tabs' => array_values($validated['enabled_tabs']),
+                'tab_order' => array_values($validated['tab_order']),
+            ],
+        ]);
+
+        return response()->json([
+            'message' => 'Die Teilnehmerprofil-Bereiche wurden gespeichert.',
+            'participant_profile' => $projekt->fresh()->participantProfileSettings(),
         ]);
     }
 

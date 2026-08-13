@@ -635,6 +635,13 @@ class TeilnehmerController extends Controller
             'participantDataRequests' => $participantDataRequests,
             'jobRecommendations' => $jobRecommendations,
             'participantCv' => $participantCv,
+            'participantProfile' => [
+                ...($portalProject?->participantProfileSettings() ?? [
+                    'enabled_tabs' => Projekt::participantProfileTabKeys(),
+                    'tab_order' => Projekt::participantProfileTabKeys(),
+                ]),
+                'definitions' => Projekt::participantProfileTabDefinitions(),
+            ],
             ],
         );
     }

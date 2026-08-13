@@ -365,6 +365,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::put('/projekt/{projekt}/aufnahmecheckliste', [IntakeChecklistController::class, 'updateDefinition'])->name('projekt.intake-checklist.update')->can('projekt.update');
     Route::put('/projekt/{projekt}/abschlusscheckliste', [ParticipationCompletionController::class, 'updateDefinition'])->name('projekt.completion-checklist.update')->middleware('projectFeature:completion_management')->can('projekt.update');
     Route::put('/projekt/{projekt}/portal-funktionen', [ProjektController::class, 'updatePortalFeatures'])->name('projekt.portal-features.update')->can('projekt.update');
+    Route::put('/projekt/{projekt}/teilnehmerprofil', [ProjektController::class, 'updateParticipantProfile'])->name('projekt.participant-profile.update')->can('projekt.update');
     Route::get('/projekt/{projekt}/einwilligungen', [ProjectConsentController::class, 'index'])->name('projekt.consents.index')->middleware('module:participant_portal')->can('projekt.update');
     Route::post('/projekt/{projekt}/einwilligungen', [ProjectConsentController::class, 'store'])->name('projekt.consents.store')->middleware('module:participant_portal')->can('projekt.update');
     Route::post('/projekt/einwilligungen/{definition}/version', [ProjectConsentController::class, 'revise'])->name('projekt.consents.revise')->middleware('module:participant_portal')->can('projekt.update');

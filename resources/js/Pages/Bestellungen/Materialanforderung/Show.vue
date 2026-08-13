@@ -18,6 +18,7 @@ const props = defineProps({
 
 const editing = ref(new URLSearchParams(window.location.search).get('edit') === '1')
 const deliveryOpen = ref(false)
+const deleting = ref(false)
 const liefermengen = ref(Object.fromEntries(props.anforderung.artikeln.map((item) => [item.id, Number(item.gelieferte_menge || 0)])))
 const vergabe = props.anforderung.vergabevermerk || {}
 const form = useForm({
@@ -126,7 +127,46 @@ async function deleteDraft() {
         cancelButtonText: 'Abbrechen',
         confirmButtonColor: '#dc2626',
     })
-    if (result.isConfirmed) router.delete(route('materialanforderung.destroy', props.anforderung.id))
+    if (!result.isConfirmed) return
+
+    deleteMaterialanforderung()
+}
+
+function deletionErrorMessage(errors) {
+    const firstError = Object.values(errors || {})[0]
+
+    if (Array.isArray(firstError)) return firstError[0]
+
+    return firstError || 'Die Materialanforderung konnte nicht gelöscht werden. Es wurden keine Daten entfernt.'
+}
+
+function deleteMaterialanforderung(data = undefined) {
+    router.delete(route('materialanforderung.destroy', props.anforderung.id), {
+        data,
+        preserveScroll: false,
+        onStart: () => { deleting.value = true },
+        onSuccess: (page) => {
+            const flash = page.props.flash || {}
+
+            if (!flash.success && !flash.error) {
+                Swal.fire({
+                    title: 'Gelöscht',
+                    text: `Materialanforderung #${props.anforderung.id} wurde erfolgreich gelöscht.`,
+                    icon: 'success',
+                    confirmButtonText: 'OK',
+                })
+            }
+        },
+        onError: (errors) => {
+            Swal.fire({
+                title: 'Nicht gelöscht',
+                text: deletionErrorMessage(errors),
+                icon: 'error',
+                confirmButtonText: 'Schließen',
+            })
+        },
+        onFinish: () => { deleting.value = false },
+    })
 }
 
 function escapeHtml(value) {
@@ -184,17 +224,7 @@ async function deleteOrderedMaterialanforderung() {
 
     if (!result.isConfirmed) return
 
-    router.delete(route('materialanforderung.destroy', props.anforderung.id), {
-        data: result.value,
-        onError: (errors) => {
-            Swal.fire({
-                title: 'Löschen nicht möglich',
-                text: Object.values(errors)[0] || 'Die Materialanforderung konnte nicht gelöscht werden.',
-                icon: 'error',
-                confirmButtonText: 'Schließen',
-            })
-        },
-    })
+    deleteMaterialanforderung(result.value)
 }
 
 async function markOrdered() {
@@ -258,8 +288,8 @@ function submitPartialDelivery() {
                     <div class="flex flex-wrap gap-2">
                         <a :href="route('materialanforderung.pdf', anforderung.id)" class="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700"><i class="las la-file-pdf text-red-600"></i> PDF</a>
                         <button v-if="editable && !editing" type="button" class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold" @click="editing = true"><i class="las la-edit mr-1"></i> Bearbeiten</button>
-                        <button v-if="canDeleteMaterialanforderung && !editing" type="button" class="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700" @click="deleteDraft">Löschen</button>
-                        <button v-if="canDeleteOrderedMaterialanforderung && !editing" type="button" class="rounded-lg border border-red-600 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-600 hover:text-white" @click="deleteOrderedMaterialanforderung"><i class="las la-trash mr-1"></i> Bestellten Vorgang löschen</button>
+                        <button v-if="canDeleteMaterialanforderung && !editing" type="button" :disabled="deleting" class="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 disabled:cursor-wait disabled:opacity-60" @click="deleteDraft">{{ deleting ? 'Wird gelöscht …' : 'Löschen' }}</button>
+                        <button v-if="canDeleteOrderedMaterialanforderung && !editing" type="button" :disabled="deleting" class="rounded-lg border border-red-600 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-600 hover:text-white disabled:cursor-wait disabled:opacity-60" @click="deleteOrderedMaterialanforderung"><i class="las la-trash mr-1"></i> {{ deleting ? 'Wird gelöscht …' : 'Bestellten Vorgang löschen' }}</button>
                         <Link :href="route('materialanforderung.index')" class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold">Zur Übersicht</Link>
                     </div>
                 </div>
