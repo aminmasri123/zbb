@@ -87,6 +87,7 @@ use App\Http\Controllers\RoleDataAccessController;
 use App\Http\Controllers\RolleController;
 use App\Http\Controllers\SchuleController;
 use App\Http\Controllers\StandortController;
+use App\Http\Controllers\StaffAccountInvitationController;
 use App\Http\Controllers\TeilnehmerController;
 use App\Http\Controllers\UserController;
 use Illuminate\Foundation\Application;
@@ -113,6 +114,13 @@ Route::get('/', function () {
         'phpVersion' => PHP_VERSION,
     ]);
 })->name('welcome');
+
+Route::middleware('throttle:10,1')->group(function () {
+    Route::get('/mitarbeiter/einladung/{token}', [StaffAccountInvitationController::class, 'show'])
+        ->name('staff-invitation.show');
+    Route::post('/mitarbeiter/einladung/{token}', [StaffAccountInvitationController::class, 'accept'])
+        ->name('staff-invitation.accept');
+});
 
 Route::get('/portal', [ParticipantPortalController::class, 'welcome'])
     ->middleware('module:participant_portal')
@@ -331,7 +339,11 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::get('/benutzer', [UserController::class, 'index'])->name('user.index')->can('benutzer.index');
     Route::get('/benutzer/anlegen', [UserController::class, 'create'])->name('user.create')->can('benutzer.store');
     Route::post('/benutzer/anlegen', [UserController::class, 'store'])->name('user.store')->can('benutzer.store');
+    Route::post('/benutzer/{user}/einladung', [StaffAccountInvitationController::class, 'resend'])->name('user.invitation.store')->can('benutzer.update');
     Route::delete('/benutzer/entfernen/{id}', [UserController::class, 'destroy'])->name('user.destroy')->can('benutzer.destroy');
+    Route::delete('/benutzer/mitarbeiter/{person}/vollstaendig', [UserController::class, 'destroyStaff'])
+        ->name('user.staff.destroy')
+        ->can('benutzer.destroy');
     Route::post('/benutzer/projekt/switch', [UserController::class, 'switch'])->name('projekt.switch');
     Route::get('/benutzer/edit/{id}', [UserController::class, 'edit'])->name('user.edit')->can('benutzer.update');
     Route::put('/benutzer/update/{user}', [UserController::class, 'update'])->name('user.update')->can('benutzer.update');

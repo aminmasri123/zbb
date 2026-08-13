@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref } from 'vue';
+import { reactive, ref, watch } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import axios from 'axios';
 import Swal from 'sweetalert2';
@@ -32,6 +32,7 @@ const form = reactive({
     last_name: '',
     username: '',
     email: '',
+    account_setup_method: 'email_invitation',
     password: '',
     password_confirmation: '',
     rollen: [],
@@ -47,6 +48,13 @@ const form = reactive({
 });
 
 const errorFor = (field) => errors.value[field]?.[0] || '';
+
+watch(() => form.account_setup_method, (method) => {
+    if (method === 'email_invitation') {
+        form.password = '';
+        form.password_confirmation = '';
+    }
+});
 
 const bereicheForProjekt = (projektId) => {
     return props.alleProjekte.find((projekt) => Number(projekt.id) === Number(projektId))?.bereiche || [];
@@ -106,12 +114,17 @@ const submit = async () => {
     errors.value = {};
 
     try {
-        await axios.post(route('user.store'), {
+        const response = await axios.post(route('user.store'), {
             ...form,
             projekt_zuweisungen: form.projekt_zuweisungen.filter((row) => row.projekt_id),
         });
 
-        Swal.fire('Gespeichert!', 'Mitarbeiter wurde angelegt.', 'success');
+        const invitationFailed = response.data?.invitation_sent === false;
+        await Swal.fire({
+            title: invitationFailed ? 'Konto angelegt, E-Mail fehlgeschlagen' : 'Gespeichert!',
+            text: response.data?.message || 'Mitarbeiter wurde angelegt.',
+            icon: invitationFailed ? 'warning' : 'success',
+        });
         router.visit(route('user.index'));
     } catch (error) {
         errors.value = error.response?.data?.errors || {};
@@ -187,7 +200,32 @@ const submit = async () => {
                     <InputError class="mt-2" :message="errorFor('email')" />
                 </div>
 
-                <div>
+                <fieldset class="md:col-span-2">
+                    <legend class="mb-2 text-sm font-semibold text-gray-700">Zugang einrichten</legend>
+                    <div class="grid gap-3 md:grid-cols-2">
+                        <label
+                            class="cursor-pointer rounded-lg border p-4"
+                            :class="form.account_setup_method === 'email_invitation' ? 'border-zbb bg-orange-50' : 'border-gray-200'"
+                        >
+                            <span class="flex items-start gap-3">
+                                <input v-model="form.account_setup_method" type="radio" value="email_invitation" class="mt-1 text-zbb" />
+                                <span><strong class="block">Einladung per E-Mail</strong><small class="text-gray-600">Empfohlen: Der Mitarbeiter legt sein Passwort über einen sieben Tage gültigen Einmal-Link selbst fest.</small></span>
+                            </span>
+                        </label>
+                        <label
+                            class="cursor-pointer rounded-lg border p-4"
+                            :class="form.account_setup_method === 'manual' ? 'border-zbb bg-orange-50' : 'border-gray-200'"
+                        >
+                            <span class="flex items-start gap-3">
+                                <input v-model="form.account_setup_method" type="radio" value="manual" class="mt-1 text-zbb" />
+                                <span><strong class="block">Passwort selbst vergeben</strong><small class="text-gray-600">Sie bestimmen ein Startpasswort und übergeben es dem Mitarbeiter separat.</small></span>
+                            </span>
+                        </label>
+                    </div>
+                    <InputError class="mt-2" :message="errorFor('account_setup_method')" />
+                </fieldset>
+
+                <div v-if="form.account_setup_method === 'manual'">
                     <InputLabel for="password" value="Passwort" />
                     <TextInput
                         id="password"
@@ -197,10 +235,11 @@ const submit = async () => {
                         required
                         autocomplete="new-password"
                     />
+                    <p class="mt-1 text-xs text-gray-500">Mindestens 10 Zeichen mit Groß- und Kleinbuchstaben sowie einer Zahl.</p>
                     <InputError class="mt-2" :message="errorFor('password')" />
                 </div>
 
-                <div>
+                <div v-if="form.account_setup_method === 'manual'">
                     <InputLabel for="password_confirmation" value="Passwort bestätigen" />
                     <TextInput
                         id="password_confirmation"

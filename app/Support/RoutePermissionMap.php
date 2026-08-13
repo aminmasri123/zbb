@@ -27,6 +27,8 @@ class RoutePermissionMap
         'two-factor.regenerate-recovery-codes' => 'user.profil',
         'current-user.destroy' => 'user.profil',
         'user.theme.update' => 'dashboard.index',
+        'user.invitation.store' => 'benutzer.update',
+        'user.staff.destroy' => 'benutzer.destroy',
         'apps.files.owner.update' => [],
         'bereich.indexAjaxFresh' => 'bereich.index',
         'abteilung.indexAjaxFresh' => 'abteilung.index',

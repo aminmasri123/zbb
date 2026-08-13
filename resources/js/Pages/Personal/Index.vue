@@ -3,7 +3,7 @@ import { ref, watch, computed } from 'vue';
 import { router, Head, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Pagination from '@/Components/Pagination.vue';
-import ModalDestroy from '@/Components/ModalDestroyForm.vue';
+import ModalDestroyStaff from '@/Components/ModalDestroyStaff.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import Swal from 'sweetalert2';
 import ModalProjektZuweisen from "@/Pages/Personal/ModalProjektZuweisen.vue";
@@ -98,6 +98,11 @@ const confirmDelete = (user) => {
         name: user.person?.vorname + ' ' + user.person?.nachname
     };
     showModalLöschen.value = true;
+};
+
+const handleStaffDeleted = ({ personId, message }) => {
+    userList.value = userList.value.filter((user) => Number(user.id) !== Number(personId));
+    Swal.fire('Gelöscht', message, 'success');
 };
 
 const groupProjects = (projekte, standorte) => {
@@ -227,7 +232,7 @@ const groupProjects = (projekte, standorte) => {
                                 <template #content>
                                     <span v-if="canDeleteUser" class="block px-4 py-2 hover:bg-gray-100 cursor-pointer"
                                           @click="confirmDelete(user)">
-                                        {{ $t('Löschen') }} <i class="las la-trash-alt"></i>
+                                        Vollständig löschen <i class="las la-trash-alt"></i>
                                     </span>
                                     <span v-if="canAssignProjects" class="block px-4 py-2 hover:bg-gray-100 cursor-pointer"
                                         @click="openProjektZuweisen(user)">
@@ -271,10 +276,10 @@ const groupProjects = (projekte, standorte) => {
 
 
         <template v-if="canDeleteUser">
-        <ModalDestroy
+        <ModalDestroyStaff
             v-if="showModalLöschen"
-            :toDelete="userToDelete"
-            seite="user"
+            :person="userToDelete"
+            @deleted="handleStaffDeleted"
             @close="showModalLöschen = false"
         />
         </template>

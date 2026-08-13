@@ -13,20 +13,26 @@ use App\Models\Role;
 use App\Models\Standort;
 use App\Models\RoleDataAccessSetting;
 use App\Notifications\ConfiguredEventNotification;
+use App\Services\Auth\StaffAccountInvitationService;
 use App\Services\NotificationRecipientService;
 use App\Services\Projects\StaffProjectAssignmentSynchronizer;
 use App\Services\Projects\ActiveProjectContext;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password as PasswordRule;
 
 class UserController extends Controller
 {
     public function __construct(
         private readonly StaffProjectAssignmentSynchronizer $projectAssignments,
         private readonly ActiveProjectContext $activeProjectContext,
+        private readonly StaffAccountInvitationService $staffInvitations,
     ) {
     }
 
@@ -70,7 +76,7 @@ class UserController extends Controller
                         ->orWhere('users.email', 'like', "%{$search}%");
                 });
             })
-            ->with(['projekte', 'user.roles:id,name,color']);
+            ->with(['projekte', 'user.roles:id,name,color', 'user.latestStaffAccountInvitation']);
 
         // Zugriffsbeschränkung
         $this->applyTeamVisibility($query, $authUser, $teamScope);
@@ -93,6 +99,16 @@ class UserController extends Controller
         $assignableProjects = $this->assignableProjectsFor($authUser);
         $users = $query->paginate(30)->withQueryString()->through(function (Personen $person): array {
             $account = $person->user;
+            $invitation = $account?->latestStaffAccountInvitation;
+            $invitationStatus = null;
+
+            if ($invitation) {
+                $invitationStatus = $invitation->accepted_at
+                    ? 'accepted'
+                    : (! $invitation->sent_at
+                        ? 'delivery_failed'
+                        : ($invitation->expires_at->isPast() ? 'expired' : 'pending'));
+            }
 
             return [
                 'id' => $account?->id,
@@ -101,6 +117,8 @@ class UserController extends Controller
                 'username' => $account?->username,
                 'email' => $account?->email,
                 'has_login' => $account !== null,
+                'invitation_status' => $invitationStatus,
+                'invitation_expires_at' => $invitation?->expires_at,
                 'person' => [
                     'id' => $person->id,
                     'vorname' => $person->vorname,
@@ -198,17 +216,25 @@ class UserController extends Controller
     public function store(Request $request)
     {
         try {
-            // Verwende die Facade für das Abrufen der Eingabedaten
-            $data = $request->all(); // holt alle Daten
+            $request->merge([
+                'account_setup_method' => $request->input('account_setup_method', 'manual'),
+            ]);
 
-            // Validierung der Eingabedaten
-            $validatedData = Validator::make($data, [
-                'first_name' => ['required', 'max:50'],
-                'last_name' => ['required', 'max:50'],
-                'email' => ['required', 'max:50', 'email', 'unique:users,email'],
-                'password' => ['required', 'min:8'],
-                'username' => ['required', 'max:50', 'unique:users,username'],
-                'rollen' => ['required', 'array'],
+            $validatedData = Validator::make($request->all(), [
+                'first_name' => ['required', 'string', 'max:50'],
+                'last_name' => ['required', 'string', 'max:50'],
+                'email' => ['required', 'string', 'max:255', 'email', 'unique:users,email'],
+                'username' => ['required', 'string', 'max:50', 'unique:users,username'],
+                'account_setup_method' => ['required', Rule::in(['manual', 'email_invitation'])],
+                'password' => [
+                    Rule::requiredIf(fn () => $request->input('account_setup_method') === 'manual'),
+                    'nullable',
+                    'string',
+                    PasswordRule::min(10)->letters()->mixedCase()->numbers(),
+                    'confirmed',
+                ],
+                'password_confirmation' => ['nullable', 'string'],
+                'rollen' => ['required', 'array', 'min:1'],
                 'rollen.*' => ['exists:roles,id'],
                 'projekt_zuweisungen' => ['nullable', 'array'],
                 'projekt_zuweisungen.*.projekt_id' => ['nullable', 'integer', 'exists:projekts,id'],
@@ -237,8 +263,12 @@ class UserController extends Controller
                 $user = User::create([
                     'person_id' => $person->id,
                     'username' => $validatedData['username'],
-                    'email' => $validatedData['email'],
-                    'password' => Hash::make($validatedData['password']),
+                    'email' => Str::lower($validatedData['email']),
+                    'password' => Hash::make(
+                        $validatedData['account_setup_method'] === 'manual'
+                            ? $validatedData['password']
+                            : Str::random(64)
+                    ),
                     'current_team_id' => collect($validatedData['projekt_zuweisungen'] ?? [])
                         ->pluck('projekt_id')
                         ->filter()
@@ -252,6 +282,17 @@ class UserController extends Controller
             });
 
             $name = trim(($user->person?->vorname ?? '') . ' ' . ($user->person?->nachname ?? '')) ?: $user->username;
+            $invitationSent = null;
+
+            if ($validatedData['account_setup_method'] === 'email_invitation') {
+                try {
+                    $this->staffInvitations->send($user, $request->user());
+                    $invitationSent = true;
+                } catch (\Throwable $exception) {
+                    report($exception);
+                    $invitationSent = false;
+                }
+            }
 
             Notification::send(
                 app(NotificationRecipientService::class)->forEvent('user.created', [
@@ -268,15 +309,30 @@ class UserController extends Controller
             );
 
 
-            return response()->json(['message' => 'Benutzer erfolgreich erstellt!', 'user' => $user], 201);
+            $message = match ($invitationSent) {
+                true => "Mitarbeiter wurde angelegt. Die Einladung wurde an {$user->email} gesendet.",
+                false => 'Mitarbeiter wurde angelegt, aber die Einladungs-E-Mail konnte nicht versendet werden. Sie können die Einladung in der Benutzerübersicht erneut senden.',
+                default => 'Mitarbeiter und Benutzerkonto wurden erfolgreich angelegt.',
+            };
+
+            return response()->json([
+                'message' => $message,
+                'user' => $user,
+                'setup_method' => $validatedData['account_setup_method'],
+                'invitation_sent' => $invitationSent,
+            ], 201);
         } catch (\Illuminate\Validation\ValidationException $e) {
-             return response()->json(['message' => 'Validation Error', 'errors' => $e->errors()], 422);
-         } catch (\Exception $e) {
-                return response()->json([
-                    'message' => 'Ein Fehler ist aufgetreten.',
-                    'error'   => $e->getMessage(),   // <-- eigentliche Ursache
-                ], 500);
-             }
+            return response()->json([
+                'message' => collect($e->errors())->flatten()->first() ?: 'Bitte prüfen Sie die Eingaben.',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'message' => 'Das Mitarbeiterkonto konnte nicht angelegt werden.',
+            ], 500);
+        }
     }
 
     /**
@@ -399,6 +455,58 @@ class UserController extends Controller
         } catch (\Exception $e) {
             return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
         }
+    }
+
+    public function destroyStaff(Request $request, Personen $person)
+    {
+        Validator::make(
+            $request->all(),
+            ['confirmation' => ['required', Rule::in(['delete'])]],
+            [
+                'confirmation.required' => 'Bitte geben Sie "delete" ein, um die vollständige Löschung zu bestätigen.',
+                'confirmation.in' => 'Die Bestätigung ist nicht korrekt. Bitte geben Sie exakt "delete" ein.',
+            ],
+        )->validate();
+
+        if ($person->typ !== 'mitarbeiter') {
+            return response()->json([
+                'message' => 'Über diese Funktion können ausschließlich Mitarbeiter gelöscht werden.',
+            ], 422);
+        }
+
+        if ($person->user()->whereKey(auth()->id())->exists()) {
+            return response()->json([
+                'message' => 'Sie können Ihren eigenen Mitarbeiterdatensatz nicht vollständig löschen.',
+            ], 403);
+        }
+
+        $personId = $person->getKey();
+        $name = trim("{$person->vorname} {$person->nachname}");
+
+        try {
+            DB::transaction(function () use ($person): void {
+                if (! $person->delete()) {
+                    throw new \RuntimeException('Der Mitarbeiterdatensatz konnte nicht gelöscht werden.');
+                }
+            });
+        } catch (QueryException $exception) {
+            report($exception);
+
+            return response()->json([
+                'message' => 'Der Mitarbeiter kann nicht vollständig gelöscht werden, weil noch geschützte Daten mit ihm verknüpft sind. Entfernen Sie zuerst diese Zuordnungen oder deaktivieren Sie den Mitarbeiter.',
+            ], 409);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'message' => 'Der Mitarbeiter konnte nicht vollständig gelöscht werden. Bitte versuchen Sie es erneut.',
+            ], 500);
+        }
+
+        return response()->json([
+            'message' => ($name !== '' ? $name : 'Der Mitarbeiter').' wurde vollständig gelöscht.',
+            'person_id' => $personId,
+        ]);
     }
 
     private function assignableProjectsFor(?User $user)

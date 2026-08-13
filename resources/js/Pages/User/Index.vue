@@ -5,6 +5,7 @@ import axios from 'axios';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Pagination from '@/Components/Pagination.vue';
 import ModalDestroy from '@/Components/ModalDestroyForm.vue';
+import ModalDestroyStaff from '@/Components/ModalDestroyStaff.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import Swal from 'sweetalert2';
 import ModalCreateUser from '@/Pages/User/ModalCreateUser.vue';
@@ -37,6 +38,7 @@ const emptyUser = () => ({
     last_name: '',
     username: '',
     email: '',
+    account_setup_method: 'email_invitation',
     password: '',
     password_confirmation: '',
     rollen: [],
@@ -99,6 +101,8 @@ const filteredUsers = computed(() => {
 // Delete modal
 let showModalLöschen = ref(false);
 let userToDelete = ref(null);
+const showCompleteDeleteModal = ref(false);
+const staffToDelete = ref(null);
 
 const confirmDelete = (user) => {
     userToDelete.value = {
@@ -106,6 +110,18 @@ const confirmDelete = (user) => {
         name: user.person?.vorname + ' ' + user.person?.nachname
     };
     showModalLöschen.value = true;
+};
+const confirmCompleteDelete = (user) => {
+    staffToDelete.value = {
+        id: user.person_id,
+        name: `${user.person?.vorname || ''} ${user.person?.nachname || ''}`.trim(),
+    };
+    showCompleteDeleteModal.value = true;
+};
+
+const handleStaffDeleted = ({ personId, message }) => {
+    userList.value = userList.value.filter((user) => Number(user.person_id) !== Number(personId));
+    Swal.fire('Gelöscht', message, 'success');
 };
 const openCreateModal = () => {
     newUser.value = emptyUser();
@@ -115,17 +131,45 @@ const openCreateModal = () => {
 const addUser = () => {
     axios.post(route('user.store'), newUser.value)
         .then((response) => {
-            Swal.fire('Gespeichert!', 'Mitarbeiter wurde angelegt.', 'success');
-            if (response.data?.user) {
-                userList.value = [response.data.user, ...userList.value];
-            }
+            const invitationFailed = response.data?.invitation_sent === false;
+            Swal.fire({
+                title: invitationFailed ? 'Konto angelegt, E-Mail fehlgeschlagen' : 'Gespeichert!',
+                text: response.data?.message || 'Mitarbeiter wurde angelegt.',
+                icon: invitationFailed ? 'warning' : 'success',
+            });
             showCreateModal.value = false;
+            router.reload({ only: ['users'], preserveScroll: true });
         })
         .catch((error) => {
             const message = error.response?.data?.message || 'Speichern fehlgeschlagen.';
             Swal.fire('Fehler', message, 'error');
         });
 };
+
+const resendInvitation = async (user) => {
+    try {
+        const response = await axios.post(route('user.invitation.store', user.id));
+        user.invitation_status = response.data.invitation_status;
+        user.invitation_expires_at = response.data.invitation_expires_at;
+        Swal.fire('Einladung gesendet', response.data.message, 'success');
+    } catch (error) {
+        Swal.fire('Versand fehlgeschlagen', error.response?.data?.message || 'Die Einladung konnte nicht versendet werden.', 'error');
+    }
+};
+
+const invitationLabel = (status) => ({
+    pending: 'Einladung ausstehend',
+    expired: 'Einladung abgelaufen',
+    delivery_failed: 'E-Mail nicht versendet',
+    accepted: 'Konto aktiviert',
+}[status] || '');
+
+const invitationClass = (status) => ({
+    pending: 'bg-amber-100 text-amber-800',
+    expired: 'bg-gray-200 text-gray-700',
+    delivery_failed: 'bg-red-100 text-red-700',
+    accepted: 'bg-emerald-100 text-emerald-700',
+}[status] || 'bg-gray-100 text-gray-700');
 
 const openProjektZuweisen = (user) => {
     userForProjekt.value = user;
@@ -290,6 +334,13 @@ const handleProjektZuweisungRemoved = ({ user_id, projekt_id }) => {
                         <td class="px-6 py-3">{{ user.person?.nachname }}</td>
                         <td class="px-6 py-3">
                             {{ user.email || 'Kein Login-Konto' }}
+                            <span
+                                v-if="user.invitation_status"
+                                class="mt-1 block w-fit rounded-full px-2 py-0.5 text-xs font-semibold"
+                                :class="invitationClass(user.invitation_status)"
+                            >
+                                {{ invitationLabel(user.invitation_status) }}
+                            </span>
                         </td>
 
                         <td class="px-6 py-3">
@@ -320,7 +371,14 @@ const handleProjektZuweisungRemoved = ({ user_id, projekt_id }) => {
                                     <span v-if="user.has_login && can('benutzer.destroy')"
                                           class="block px-4 py-2 hover:bg-gray-100 cursor-pointer"
                                           @click="confirmDelete(user)">
-                                        Löschen
+                                        Nur Login-Konto entfernen
+                                    </span>
+                                    <span
+                                        v-if="user.person_id && can('benutzer.destroy')"
+                                        class="block cursor-pointer px-4 py-2 text-red-700 hover:bg-red-50"
+                                        @click="confirmCompleteDelete(user)"
+                                    >
+                                        Vollständig löschen
                                     </span>
                                     <span
                                         v-if="user.person_id && can('benutzer.update')"
@@ -328,6 +386,13 @@ const handleProjektZuweisungRemoved = ({ user_id, projekt_id }) => {
                                         @click="openProjektZuweisen(user)"
                                     >
                                         Projekte zuweisen
+                                    </span>
+                                    <span
+                                        v-if="['pending', 'expired', 'delivery_failed'].includes(user.invitation_status) && can('benutzer.update')"
+                                        class="block cursor-pointer px-4 py-2 hover:bg-gray-100"
+                                        @click="resendInvitation(user)"
+                                    >
+                                        Einladung erneut senden
                                     </span>
                                     <Link v-if="user.has_login && can('benutzer.update')" :href="route('user.edit', user.id)" class="block px-4 py-2 hover:bg-gray-100">
                                         Bearbeiten
@@ -347,6 +412,12 @@ const handleProjektZuweisungRemoved = ({ user_id, projekt_id }) => {
             :toDelete="userToDelete"
             seite="user"
             @close="showModalLöschen = false"
+        />
+        <ModalDestroyStaff
+            v-if="showCompleteDeleteModal && staffToDelete"
+            :person="staffToDelete"
+            @close="showCompleteDeleteModal = false"
+            @deleted="handleStaffDeleted"
         />
         <ModalCreateUser
             :visible="showCreateModal"

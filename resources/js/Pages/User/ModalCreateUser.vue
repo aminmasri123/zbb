@@ -110,6 +110,13 @@ watch(() => props.visible, (visible) => {
     ensureProjektZuweisungen();
   }
 }, { immediate: true });
+
+watch(() => props.newUser.account_setup_method, (method) => {
+  if (method === 'email_invitation') {
+    props.newUser.password = '';
+    props.newUser.password_confirmation = '';
+  }
+});
 </script>
 
 <template>
@@ -149,7 +156,37 @@ watch(() => props.visible, (visible) => {
           </FloatLabel>
         </div>
 
-        <div class="flex flex-col sm:flex-row">
+        <fieldset class="mb-5 mx-1">
+          <legend class="mb-2 text-sm font-semibold text-gray-700">Zugang einrichten</legend>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <label
+              class="cursor-pointer rounded-lg border p-3"
+              :class="newUser.account_setup_method === 'email_invitation' ? 'border-zbb bg-orange-50' : 'border-gray-200'"
+            >
+              <span class="flex items-start gap-2">
+                <input v-model="newUser.account_setup_method" type="radio" value="email_invitation" class="mt-1 text-zbb" />
+                <span>
+                  <strong class="block text-sm">Einladung per E-Mail</strong>
+                  <small class="text-gray-600">Empfohlen: Der Mitarbeiter legt sein Passwort über einen sicheren Einmal-Link selbst fest.</small>
+                </span>
+              </span>
+            </label>
+            <label
+              class="cursor-pointer rounded-lg border p-3"
+              :class="newUser.account_setup_method === 'manual' ? 'border-zbb bg-orange-50' : 'border-gray-200'"
+            >
+              <span class="flex items-start gap-2">
+                <input v-model="newUser.account_setup_method" type="radio" value="manual" class="mt-1 text-zbb" />
+                <span>
+                  <strong class="block text-sm">Passwort selbst vergeben</strong>
+                  <small class="text-gray-600">Sie bestimmen jetzt ein Startpasswort und übergeben es dem Mitarbeiter separat.</small>
+                </span>
+              </span>
+            </label>
+          </div>
+        </fieldset>
+
+        <div v-if="newUser.account_setup_method === 'manual'" class="flex flex-col sm:flex-row">
           <div class="mb-4 w-full mx-1">
             <FloatLabel variant="on">
               <Password v-model="newUser.password" toggleMask class="w-full">
@@ -168,8 +205,8 @@ watch(() => props.visible, (visible) => {
                     <li :class="{ 'text-green-500': /\d/.test(newUser.password), 'text-red-500': !/\d/.test(newUser.password) }">
                       <span v-if="/\d/.test(newUser.password)">✔️</span> Mindestens eine Ziffer
                     </li>
-                    <li :class="{ 'text-green-500': newUser.password.length >= 8, 'text-red-500': newUser.password.length < 8 }">
-                      <span v-if="newUser.password.length >= 8">✔️</span> Mindestens 8 Zeichen
+                    <li :class="{ 'text-green-500': newUser.password.length >= 10, 'text-red-500': newUser.password.length < 10 }">
+                      <span v-if="newUser.password.length >= 10">✔️</span> Mindestens 10 Zeichen
                     </li>
                   </ul>
                 </template>

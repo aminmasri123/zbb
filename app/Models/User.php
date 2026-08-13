@@ -179,6 +179,16 @@ class User extends Authenticatable
     {
         return $this->belongsTo(Abteilung::class, 'abteilung_id');
     }
+
+    public function staffAccountInvitations(): HasMany
+    {
+        return $this->hasMany(StaffAccountInvitation::class);
+    }
+
+    public function latestStaffAccountInvitation()
+    {
+        return $this->hasOne(StaffAccountInvitation::class)->latestOfMany();
+    }
     public function abteilungsassistent()
     {
         return $this->hasOne(Abteilungsassistent::class);
