@@ -1752,6 +1752,14 @@ class ProjektBopController extends Controller
                 return redirect()->back()->with('error', 'Die Schule hat keine Teilnehmer.');
             }
 
+            $zuGrosseKlasse = $alle_teilnehmer
+                ->groupBy(fn ($teilnehmer) => (string) ($teilnehmer->klasse ?: 'ohne Klasse'))
+                ->first(fn ($teilnehmerListe) => $teilnehmerListe->count() > 34);
+
+            if ($zuGrosseKlasse) {
+                return redirect()->back()->with('error', 'Die PA-Anwesenheitsliste unterstützt maximal 34 Teilnehmer/-innen pro Klasse.');
+            }
+
             $tag1 = Carbon::parse($request->startDate)->format('d.m.Y');
             $tag2 = Carbon::parse($request->endDate)->format('d.m.Y');
 
@@ -1771,7 +1779,7 @@ class ProjektBopController extends Controller
                     $i++;
                 }
 
-                while($i<=30){
+                while($i<=34){
                     $templateProcessor->setValue('nachname' . $i, '');
                     $templateProcessor->setValue('vorname' . $i, '');
                     $i++;
@@ -1837,7 +1845,7 @@ class ProjektBopController extends Controller
 
 
             }
-            while($i<=30){
+            while($i<=34){
                 $templateProcessor->setValue('nachname' . $i, '');
                 $templateProcessor->setValue('vorname' . $i, '');
                 $i++;

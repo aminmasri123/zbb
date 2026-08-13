@@ -7,7 +7,6 @@ import axios from 'axios'
 import { jsPDF } from 'jspdf'
 import SignatureBox from '@/Components/SignatureBox.vue'
 import {
-  bopAttendanceFooterSpace,
   drawBopAttendanceFooter,
   loadBopAttendanceFooterImage,
 } from '@/utils/bopAttendanceFooter'
@@ -61,7 +60,7 @@ const sheetTitle = computed(() => isPreparationPa.value
   : 'Potenzialanalyse mit digitalen Unterschriften')
 const pdfDocumentTitle = computed(() => isPreparationPa.value
   ? 'Anwesenheitsliste Vorbereitung PA'
-  : 'Anwesenheitsliste Potenzialanalyse (PA)')
+  : 'Teilnehmendenliste zum Nachweis der Potenzialanalyse – PA')
 const pdfFilenamePrefix = computed(() => isPreparationPa.value ? 'Anwesenheitsliste_Vorbereitung_PA' : 'Anwesenheitsliste_PA')
 const selectedDaysSummary = computed(() => {
   const label = isPreparationPa.value ? (selectedDays.value.length === 1 ? 'Termin' : 'Termine') : (selectedDays.value.length === 1 ? 'Tag' : 'Tage')
@@ -760,21 +759,28 @@ const pdfFormat = () => form.exportFormat === 'A3' ? 'a3' : 'a4'
 const pdfLayout = (doc) => {
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
-  const rowHeight = form.exportFormat === 'A3' ? 10.5 : 9
-  const tableY = form.exportFormat === 'A3' ? 42 : 39
-  const bottomMargin = bopAttendanceFooterSpace()
-  const headHeight = 16
-  const rowsPerPage = Math.floor((pageHeight - tableY - headHeight - bottomMargin) / rowHeight)
+  const widthScale = pageWidth / 297
+  const rowScale = form.exportFormat === 'A3' ? widthScale : 1
 
   return {
     pageWidth,
     pageHeight,
-    tableX: 8,
-    tableY,
-    tableWidth: pageWidth - 16,
-    headHeight,
-    rowHeight,
-    rowsPerPage: Math.max(rowsPerPage, 10),
+    widthScale,
+    rowScale,
+    tableX: 7 * widthScale,
+    tableY: form.exportFormat === 'A3' ? 62 : 48,
+    tableWidth: 283 * widthScale,
+    headHeight: 13.8 * rowScale,
+    rowHeight: 6.15 * rowScale,
+    rowsPerPage: 17,
+    headerX: 7 * widthScale,
+    headerTitleY: form.exportFormat === 'A3' ? 16 : 11,
+    headerFirstRowY: form.exportFormat === 'A3' ? 25 : 18,
+    headerRowGap: form.exportFormat === 'A3' ? 6.2 : 5.2,
+    headerLabelWidth: 25 * widthScale,
+    headerValueWidth: 75 * widthScale,
+    headerSecondLabelWidth: 50 * widthScale,
+    headerSecondValueWidth: 97 * widthScale,
   }
 }
 
@@ -803,33 +809,42 @@ const pdfColumns = (layout) => {
   ]
 }
 
-const drawPdfHeader = (doc, pageNumber, totalPages, layout) => {
-  const x = layout.tableX
+const drawPdfHeader = (doc, pageNumber, totalPages, layout, trainerPage = false) => {
+  const x0 = layout.headerX
+  const x1 = x0 + layout.headerLabelWidth
+  const x2 = x1 + layout.headerValueWidth
+  const x3 = x2 + layout.headerSecondLabelWidth
+  const rowY = (index) => layout.headerFirstRowY + (index * layout.headerRowGap)
   const school = previewContext.value?.schule?.name || 'Schule'
   const classText = previewContext.value?.klasse || (form.exportMode === 'klasse' ? form.klasse : '')
+  const title = trainerPage
+    ? 'Unterschriftenliste zum Nachweis der Potenzialanalyse - PA/ Ausbilder/-innen'
+    : pdfDocumentTitle.value
 
   applyPdfPrintInk(doc)
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10.5)
-  doc.text(pdfDocumentTitle.value, x, 13)
-  doc.setFontSize(8)
-  doc.text(`Seite ${pageNumber} von ${totalPages}`, layout.pageWidth - 40, 13)
+  doc.setFontSize(form.exportFormat === 'A3' ? 13 : 10.5)
+  doc.text(title, x0, layout.headerTitleY)
+  doc.setFontSize(form.exportFormat === 'A3' ? 9.5 : 8)
+  doc.text(`Seite ${pageNumber} von ${totalPages}`, layout.pageWidth - (47 * layout.widthScale), layout.headerTitleY)
 
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7.2)
-  doc.text('Schule:', x, 21)
-  doc.text(String(school), x + 18, 21, { maxWidth: 82 })
-  doc.text('Schulform:', x, 27)
-  doc.text(String(previewContext.value?.schulform || ''), x + 18, 27, { maxWidth: 82 })
-  doc.text('Klasse/n:', x, 33)
-  doc.text(String(classText || ''), x + 18, 33, { maxWidth: 82 })
+  doc.setFontSize(form.exportFormat === 'A3' ? 9 : 7.2)
+  doc.text('Schule:', x0, rowY(0))
+  doc.text(String(school), x1, rowY(0), { maxWidth: layout.headerValueWidth - 2 })
+  doc.text('Schulform:', x0, rowY(2))
+  doc.text(String(previewContext.value?.schulform || ''), x1, rowY(2), { maxWidth: layout.headerValueWidth - 2 })
+  doc.text('Klasse/n:', x0, rowY(3))
+  doc.text(String(classText || ''), x1, rowY(3), { maxWidth: layout.headerValueWidth - 2 })
 
-  doc.text('Zuwendungsempfänger:', x + 110, 21)
-  doc.text('- ZBB -', x + 150, 21)
-  doc.text('Ausführende Stelle:', x + 110, 27)
-  doc.text('Zentrum für Bildung und Beruf Saar gGmbH in Burbach', x + 150, 27, { maxWidth: 100 })
-  doc.text('Zeitraum:', x + 110, 33)
-  doc.text(periodText.value || '', x + 150, 33, { maxWidth: 100 })
+  doc.text('Zuwendungsempfänger/', x2, rowY(0))
+  doc.text('- ZBB -', x3, rowY(0), { maxWidth: layout.headerSecondValueWidth - 2 })
+  doc.text('Ausführende Stelle:', x2, rowY(1))
+  doc.text('Zentrum für Bildung und Beruf Saar gGmbH in Burbach', x3, rowY(1), { maxWidth: layout.headerSecondValueWidth - 2 })
+  doc.text('AZ/FKZ:', x2, rowY(2))
+  doc.text('4.5-3444-10/0004', x3, rowY(2), { maxWidth: layout.headerSecondValueWidth - 2 })
+  doc.text('Zeitraum:', x2, rowY(3))
+  doc.text(periodText.value || '', x3, rowY(3), { maxWidth: layout.headerSecondValueWidth - 2 })
 }
 
 const drawPdfTableHeader = (doc, columns, layout) => {
@@ -896,9 +911,56 @@ const drawPdfRows = (doc, columns, rows, page, layout, pdfSignatures) => {
   })
 }
 
+const drawTrainerTable = (doc, layout) => {
+  const daysForTable = selectedDays.value.slice(0, 3)
+  const tableDays = daysForTable.length ? daysForTable : [{ date: '' }]
+  const labelWidth = 44 * layout.widthScale
+  const dayWidth = (layout.tableWidth - labelWidth) / tableDays.length
+  const rowHeights = [10, 10, 15, 22].map((height) => height * layout.rowScale)
+  const labels = [
+    'Datum',
+    'Zeitstunden',
+    'Name/Vorname\nAusbilder/-in',
+    'Unterschrift\nAusbilder/-in',
+  ]
+  let y = layout.tableY + (form.exportFormat === 'A3' ? 8 : 4)
+
+  applyPdfPrintInk(doc)
+  doc.setLineWidth(0.25)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(form.exportFormat === 'A3' ? 9 : 7.5)
+
+  labels.forEach((label, rowIndex) => {
+    const rowHeight = rowHeights[rowIndex]
+    doc.rect(layout.tableX, y, labelWidth, rowHeight)
+    label.split('\n').forEach((line, lineIndex) => {
+      doc.text(line, layout.tableX + (2 * layout.widthScale), y + (4.2 * layout.rowScale) + (lineIndex * 3.6 * layout.rowScale))
+    })
+
+    tableDays.forEach((day, dayIndex) => {
+      const x = layout.tableX + labelWidth + (dayIndex * dayWidth)
+      doc.rect(x, y, dayWidth, rowHeight)
+      if (rowIndex === 0 && day.date) {
+        doc.text(dateLabel(day.date), x + (2 * layout.widthScale), y + (4.2 * layout.rowScale))
+      }
+    })
+
+    y += rowHeight
+  })
+}
+
 const createSignedPdf = async () => {
   if (!selectedDays.value.length) {
     PaSwal.fire('Keine Tage', isPreparationPa.value ? 'Bitte den Vorbereitungstag übernehmen.' : 'Bitte mindestens einen PA-Tag auswählen.', 'warning')
+    return
+  }
+
+  if (!isPreparationPa.value && sheetParticipants.value.length > 34) {
+    PaSwal.fire(
+      'Maximal 34 Teilnehmer/-innen',
+      'Bitte eine einzelne Klasse mit höchstens 34 Teilnehmer/-innen auswählen. So bleiben die Teilnehmer auf Seite 1 und 2 und die Ausbilderliste auf Seite 3.',
+      'warning'
+    )
     return
   }
 
@@ -911,13 +973,22 @@ const createSignedPdf = async () => {
     const columns = pdfColumns(layout)
     const rows = sheetParticipants.value
     const pdfSignatures = await prepareSignaturesForPdf(signatures)
-    const totalPages = Math.max(1, Math.ceil(Math.max(rows.length, 1) / layout.rowsPerPage))
+    const calculatedParticipantPages = Math.max(1, Math.ceil(Math.max(rows.length, 1) / layout.rowsPerPage))
+    const participantPages = isPreparationPa.value ? calculatedParticipantPages : 2
+    const totalPages = participantPages + (isPreparationPa.value ? 0 : 1)
 
-    for (let page = 1; page <= totalPages; page++) {
+    for (let page = 1; page <= participantPages; page++) {
       if (page > 1) doc.addPage()
       drawPdfHeader(doc, page, totalPages, layout)
       drawPdfTableHeader(doc, columns, layout)
       drawPdfRows(doc, columns, rows, page, layout, pdfSignatures)
+      drawBopAttendanceFooter(doc, footerImage)
+    }
+
+    if (!isPreparationPa.value) {
+      doc.addPage()
+      drawPdfHeader(doc, totalPages, totalPages, layout, true)
+      drawTrainerTable(doc, layout)
       drawBopAttendanceFooter(doc, footerImage)
     }
 
