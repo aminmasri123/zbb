@@ -194,18 +194,26 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  raumtypen: {
+    type: Array,
+    default: () => [],
+  },
   raum: Object,     // <-- der Raum, der bearbeitet wird
 });
 
 const emit = defineEmits(['close', 'updated']);
 
-// ENUM-Typen
-const raumtypen = [
-  'Büro', 'Elektroraum', 'Unterrichtsraum', 'Seminarraum', 'Besprechungsraum',
-  'Labor', 'Werkstatt', 'Lager', 'Küche', 'Aufenthaltsraum', 'Sanitärraum',
-  'Empfang', 'Serverraum', 'Archiv', 'Aula', 'Bibliothek', 'Arbeitsplatz',
-  'Copyroom', 'Technikraum', 'Hauswirtschaftsraum', 'Holzbereich', 'Metallbereich'
-];
+const raumtypen = computed(() => {
+  const namen = (props.raumtypen || [])
+    .filter((raumtyp) => raumtyp.aktiv || raumtyp.name === props.raum?.typ)
+    .map((raumtyp) => raumtyp.name);
+
+  if (props.raum?.typ && !namen.includes(props.raum.typ)) {
+    namen.push(props.raum.typ);
+  }
+
+  return namen;
+});
 
 const belegungsarten = [
   { label: 'Frei vergebbar', value: 'frei' },

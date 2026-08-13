@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Gruppe;
 use App\Models\Partner;
 use App\Models\Personen;
+use App\Services\Bop\AttendanceFooterService;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
@@ -17,6 +18,10 @@ use ZipArchive;
 
 class BopGruppeExportController extends Controller
 {
+    public function __construct(private readonly AttendanceFooterService $attendanceFooter)
+    {
+    }
+
     public function namensschilder(Gruppe $gruppe)
     {
         $gruppe = $this->gruppeMitDaten($gruppe);
@@ -92,6 +97,7 @@ class BopGruppeExportController extends Controller
         }
 
         $spreadsheet = SpreadsheetIOFactory::load($templateFile);
+        $this->attendanceFooter->applyToSpreadsheet($spreadsheet);
         $sheet = $spreadsheet->getActiveSheet();
 
         $start = Carbon::parse($gruppe->anfangsdatum);

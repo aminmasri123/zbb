@@ -15,6 +15,7 @@ use App\Models\Partner;
 use App\Models\Personen;
 use App\Models\PersonenIstSchueler;
 use App\Models\Projekt;
+use App\Services\Bop\AttendanceFooterService;
 use App\Services\Bop\PublicAreaSelectionAccess;
 use App\Services\MyDatum;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
@@ -61,8 +62,10 @@ class ProjektBopController extends Controller
         'TA', 'TE', 'TI', 'TO',
     ];
 
-    public function __construct(private readonly PublicAreaSelectionAccess $publicAreaSelection)
-    {
+    public function __construct(
+        private readonly PublicAreaSelectionAccess $publicAreaSelection,
+        private readonly AttendanceFooterService $attendanceFooter,
+    ) {
     }
 
     private function ensurePartnerInActiveProject(int $partnerId): int
@@ -1062,6 +1065,7 @@ class ProjektBopController extends Controller
 
                 File::ensureDirectoryExists(dirname($exportPath));
                 $templateProcessor->saveAs($exportPath);
+                $this->attendanceFooter->applyToWordDocument($exportPath);
                 return response()->download($exportPath)->deleteFileAfterSend(true);
     }
 
@@ -1775,6 +1779,7 @@ class ProjektBopController extends Controller
 
                 File::ensureDirectoryExists(dirname($exportPath));
                 $templateProcessor->saveAs($exportPath);
+                $this->attendanceFooter->applyToWordDocument($exportPath);
             };
 
             if (($validated['exportMode'] ?? 'klasse') === 'alle') {
@@ -1842,6 +1847,7 @@ class ProjektBopController extends Controller
 
                 File::ensureDirectoryExists(dirname($exportPath));
                 $templateProcessor->saveAs($exportPath);
+                $this->attendanceFooter->applyToWordDocument($exportPath);
                 return response()->download($exportPath)->deleteFileAfterSend(true);
     }
 
@@ -1896,6 +1902,7 @@ class ProjektBopController extends Controller
             }
 
             $spreadsheet = IOFactory::load($templateFile);
+            $this->attendanceFooter->applyToSpreadsheet($spreadsheet);
             $sheet = $spreadsheet->getActiveSheet();
 
             $terminDatum = DateTime::createFromFormat('Y-m-d', $termin)->format('d.m.Y');
@@ -1944,6 +1951,7 @@ class ProjektBopController extends Controller
             foreach ($gruppenNachKlassen as $klassenName => $teilnehmerListe) {
 
                 $spreadsheet = IOFactory::load($templateFile);
+                $this->attendanceFooter->applyToSpreadsheet($spreadsheet);
                 $sheet = $spreadsheet->getActiveSheet();
 
                 $terminDatum = DateTime::createFromFormat('Y-m-d', $termin)->format('d.m.Y');
@@ -2036,6 +2044,7 @@ class ProjektBopController extends Controller
 
             for ($i = 0; $i < $anzahlRaeumlichkeiten; $i++) {
                 $spreadsheet = IOFactory::load($templateFile);
+                $this->attendanceFooter->applyToSpreadsheet($spreadsheet);
                 $sheet = $spreadsheet->getActiveSheet();
 
                 // Raumname oder generisch
@@ -2124,6 +2133,7 @@ class ProjektBopController extends Controller
             for ($i = 0; $i < $anzahlRaeumlichkeiten; $i++) {
 
                 $spreadsheet = IOFactory::load($templateFile);
+                $this->attendanceFooter->applyToSpreadsheet($spreadsheet);
                 $sheet = $spreadsheet->getActiveSheet();
 
                 $bereichNameOriginal = $bereiche[$i % count($bereiche)];

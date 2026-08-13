@@ -6,6 +6,11 @@ import Swal from 'sweetalert2'
 import axios from 'axios'
 import { jsPDF } from 'jspdf'
 import SignatureBox from '@/Components/SignatureBox.vue'
+import {
+  bopAttendanceFooterSpace,
+  drawBopAttendanceFooter,
+  loadBopAttendanceFooterImage,
+} from '@/utils/bopAttendanceFooter'
 import { usePermissions } from '@/utils/permissions'
 import { prepareSignaturesForPdf } from '@/utils/signatures'
 
@@ -757,7 +762,7 @@ const pdfLayout = (doc) => {
   const pageHeight = doc.internal.pageSize.getHeight()
   const rowHeight = form.exportFormat === 'A3' ? 10.5 : 9
   const tableY = form.exportFormat === 'A3' ? 42 : 39
-  const bottomMargin = 12
+  const bottomMargin = bopAttendanceFooterSpace()
   const headHeight = 16
   const rowsPerPage = Math.floor((pageHeight - tableY - headHeight - bottomMargin) / rowHeight)
 
@@ -900,6 +905,7 @@ const createSignedPdf = async () => {
   exportingPdf.value = true
 
   try {
+    const footerImage = await loadBopAttendanceFooterImage()
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: pdfFormat() })
     const layout = pdfLayout(doc)
     const columns = pdfColumns(layout)
@@ -912,6 +918,7 @@ const createSignedPdf = async () => {
       drawPdfHeader(doc, page, totalPages, layout)
       drawPdfTableHeader(doc, columns, layout)
       drawPdfRows(doc, columns, rows, page, layout, pdfSignatures)
+      drawBopAttendanceFooter(doc, footerImage)
     }
 
     const school = previewContext.value?.schule?.name || 'Schule'
@@ -1400,6 +1407,13 @@ onBeforeUnmount(() => {
                 </tr>
               </tbody>
             </table>
+          </div>
+          <div class="flex justify-center bg-white px-4 pb-4 pt-5">
+            <img
+              src="/img/bop/kooperationspartner.png"
+              alt="BOP Kooperationspartner und Förderer"
+              class="h-auto w-full max-w-[720px]"
+            >
           </div>
         </div>
       </section>

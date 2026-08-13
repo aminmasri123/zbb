@@ -9,6 +9,7 @@ use App\Models\Standort;
 use App\Models\Personen;
 use App\Models\RaumBuchung;
 use App\Models\RaumMeldung;
+use App\Models\Raumtyp;
 use App\Notifications\ConfiguredEventNotification;
 use App\Services\NotificationRecipientService;
 use App\Services\RaumBelegungService;
@@ -65,6 +66,11 @@ class RaumlichkeitenController extends Controller
         return Inertia::render('Raum/Index', [
             'standorte' => $standorte,
             'personal' => $personal,
+            'raumtypen' => Raumtyp::query()
+                ->withCount('raeume')
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(),
         ]);
     }
 
@@ -297,7 +303,7 @@ class RaumlichkeitenController extends Controller
             'etage' => 'nullable|string|max:60',
             'standort_id' => 'required|exists:standorts,id',
             'parent_id' => 'nullable|integer|exists:raeumes,id',
-            'typ' => ['required', Rule::in($this->raumtypen())],
+            'typ' => ['required', 'string', 'max:100', Rule::exists('raumtypen', 'name')],
             'belegungsart' => ['required', Rule::in(['frei', 'standard', 'teilweise', 'blockiert'])],
             'status' => ['nullable', Rule::in($this->raumStatus())],
             'standard_personen_id' => 'nullable|integer|exists:personens,id',
@@ -385,34 +391,6 @@ class RaumlichkeitenController extends Controller
         }
 
         return false;
-    }
-
-    private function raumtypen(): array
-    {
-        return [
-            'Büro',
-            'Elektroraum',
-            'Unterrichtsraum',
-            'Seminarraum',
-            'Besprechungsraum',
-            'Labor',
-            'Werkstatt',
-            'Lager',
-            'Küche',
-            'Aufenthaltsraum',
-            'Sanitärraum',
-            'Empfang',
-            'Serverraum',
-            'Archiv',
-            'Aula',
-            'Bibliothek',
-            'Arbeitsplatz',
-            'Copyroom',
-            'Technikraum',
-            'Hauswirtschaftsraum',
-            'Holzbereich',
-            'Metallbereich',
-        ];
     }
 
     private function raumStatus(): array

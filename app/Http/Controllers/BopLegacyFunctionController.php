@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Partner;
 use App\Models\PersonenIstSchueler;
+use App\Services\Bop\AttendanceFooterService;
 use App\Services\Bop\PotenzialanalyseReportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
@@ -24,6 +25,10 @@ use ZipArchive;
 
 class BopLegacyFunctionController extends Controller
 {
+    public function __construct(private readonly AttendanceFooterService $attendanceFooter)
+    {
+    }
+
     private function schueler(int $schuleId, string $schuljahr, string $teil)
     {
         return PersonenIstSchueler::with(['person', 'einteilungen'])
@@ -419,6 +424,8 @@ class BopLegacyFunctionController extends Controller
             $row++;
         }
 
+        $this->attendanceFooter->applyToSpreadsheet($spreadsheet);
+
         return $spreadsheet;
     }
 
@@ -459,8 +466,17 @@ class BopLegacyFunctionController extends Controller
 
     public function anwesenheitslisteRechnung(int $idSchule, string $schuljahr, string $teil)
     {
+        $spreadsheet = $this->simpleSpreadsheet(
+            'Anwesenheitsliste Rechnung',
+            $idSchule,
+            $schuljahr,
+            $teil,
+            ['Anwesend', 'Bemerkung']
+        );
+        $this->attendanceFooter->applyToSpreadsheet($spreadsheet);
+
         return $this->downloadSpreadsheet(
-            $this->simpleSpreadsheet('Anwesenheitsliste Rechnung', $idSchule, $schuljahr, $teil, ['Anwesend', 'Bemerkung']),
+            $spreadsheet,
             'Anwesenheitsliste_Rechnung_' . $idSchule . '_' . $this->safeName($schuljahr) . '_Teil_' . $this->safeName($teil) . '.xlsx'
         );
     }

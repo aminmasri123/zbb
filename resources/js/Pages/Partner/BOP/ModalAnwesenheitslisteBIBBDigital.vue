@@ -6,6 +6,7 @@ import Swal from 'sweetalert2'
 import axios from 'axios'
 import { jsPDF } from 'jspdf'
 import SignatureBox from '@/Components/SignatureBox.vue'
+import { drawBopAttendanceFooter, loadBopAttendanceFooterImage } from '@/utils/bopAttendanceFooter'
 import { prepareSignaturesForPdf } from '@/utils/signatures'
 import { usePermissions } from '@/utils/permissions'
 
@@ -60,10 +61,8 @@ const draftDirty = ref(false)
 const draftLastSavedAt = ref(null)
 const draftExpiresAt = ref(null)
 const sheetFullscreen = ref(false)
-const bibbFooterImageSrc = '/img/bibb/logoleiste_bop_2020.jpg'
 const draftAutoSaveDelayMs = 5000
 const draftPollIntervalMs = 12000
-let bibbFooterImagePromise = null
 let draftSaveTimer = null
 let draftPollTimer = null
 let previousBodyOverflow = ''
@@ -535,19 +534,6 @@ const clearDraft = async () => {
   }
 }
 
-const loadBibbFooterImage = () => {
-  if (!bibbFooterImagePromise) {
-    bibbFooterImagePromise = new Promise((resolve, reject) => {
-      const image = new Image()
-      image.onload = () => resolve(image)
-      image.onerror = reject
-      image.src = bibbFooterImageSrc
-    })
-  }
-
-  return bibbFooterImagePromise
-}
-
 const pdfFormat = () => form.exportFormat === 'A3' ? 'a3' : 'a4'
 
 const pdfPrintStyle = {
@@ -618,9 +604,6 @@ const pdfLayout = (doc) => {
     tableHeadBottomHeight: 5.8 * rowScale,
     rowHeight: 7.2 * rowScale,
     rowsPerPage: form.exportFormat === 'A3' ? 17 : 13,
-    footerWidth: 141.7,
-    footerHeight: 24.9,
-    footerBottom: 6,
   }
 }
 
@@ -937,13 +920,6 @@ const drawOriginalTableHeader = (doc, columns, x, y, layout) => {
   })
 }
 
-const drawOriginalFooter = (doc, footerImage, layout) => {
-  const x = (layout.pageWidth - layout.footerWidth) / 2
-  const y = layout.pageHeight - layout.footerHeight - layout.footerBottom
-  doc.addImage(footerImage, 'JPEG', x, y, layout.footerWidth, layout.footerHeight)
-  doc.setTextColor(0, 0, 0)
-}
-
 const storeSignedPdfInFolder = async (pdfBlob, filename) => {
   const formData = new FormData()
   formData.append('schuleIdInputBibb', props.partnerId)
@@ -972,7 +948,7 @@ const createSignedPdf = async () => {
   exportingPdf.value = true
 
   try {
-    const footerImage = await loadBibbFooterImage()
+    const footerImage = await loadBopAttendanceFooterImage()
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: pdfFormat() })
     const layout = pdfLayout(doc)
     const rows = sheetParticipants.value
@@ -1022,7 +998,7 @@ const createSignedPdf = async () => {
         })
       })
 
-      drawOriginalFooter(doc, footerImage, layout)
+      drawBopAttendanceFooter(doc, footerImage)
     }
 
     const school = previewContext.value?.schule?.name || 'Schule'
@@ -1466,6 +1442,13 @@ onBeforeUnmount(() => {
                 </tr>
               </tbody>
             </table>
+          </div>
+          <div class="flex justify-center bg-white px-4 pb-4 pt-5">
+            <img
+              src="/img/bop/kooperationspartner.png"
+              alt="BOP Kooperationspartner und Förderer"
+              class="h-auto w-full max-w-[720px]"
+            >
           </div>
         </div>
       </section>

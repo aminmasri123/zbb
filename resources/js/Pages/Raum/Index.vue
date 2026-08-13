@@ -194,6 +194,94 @@
             </div>
           </div>
 
+          <div v-if="activeTab === 'raumtypen'" class="space-y-5 p-4">
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <div class="mb-4">
+                <h2 class="font-semibold text-slate-950">
+                  {{ editingRaumtypId ? 'Raumtyp bearbeiten' : 'Neuen Raumtyp anlegen' }}
+                </h2>
+                <p class="mt-1 text-sm text-slate-600">
+                  Inaktive Typen bleiben bei bestehenden Räumen erhalten, stehen aber für neue Räume nicht mehr zur Auswahl.
+                </p>
+              </div>
+
+              <form v-if="canUpdateRoom" class="grid gap-3 lg:grid-cols-[1fr_1.5fr_110px_auto]" @submit.prevent="saveRaumtyp">
+                <input
+                  v-model="raumtypForm.name"
+                  maxlength="100"
+                  required
+                  placeholder="Bezeichnung"
+                  class="rounded-md border-slate-300 text-sm focus:border-zbb focus:ring-zbb"
+                />
+                <input
+                  v-model="raumtypForm.beschreibung"
+                  maxlength="500"
+                  placeholder="Beschreibung (optional)"
+                  class="rounded-md border-slate-300 text-sm focus:border-zbb focus:ring-zbb"
+                />
+                <input
+                  v-model.number="raumtypForm.sort_order"
+                  type="number"
+                  min="0"
+                  max="9999"
+                  title="Reihenfolge"
+                  class="rounded-md border-slate-300 text-sm focus:border-zbb focus:ring-zbb"
+                />
+                <div class="flex flex-wrap items-center gap-2">
+                  <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+                    <input v-model="raumtypForm.aktiv" type="checkbox" class="rounded border-slate-300 text-zbb focus:ring-zbb" />
+                    Aktiv
+                  </label>
+                  <button type="submit" :disabled="savingRaumtyp" class="rounded-md bg-zbb px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+                    {{ savingRaumtyp ? 'Speichert …' : (editingRaumtypId ? 'Speichern' : 'Anlegen') }}
+                  </button>
+                  <button v-if="editingRaumtypId" type="button" class="rounded-md border border-slate-300 px-3 py-2 text-sm" @click="resetRaumtypForm">
+                    Abbrechen
+                  </button>
+                </div>
+              </form>
+              <p v-else class="text-sm text-slate-500">Zum Verwalten der Raumtypen wird die Berechtigung „Räumlichkeiten bearbeiten“ benötigt.</p>
+            </div>
+
+            <div class="overflow-x-auto rounded-lg border border-slate-200">
+              <table class="w-full min-w-[700px] text-left text-sm">
+                <thead class="bg-slate-100 text-xs uppercase text-slate-600">
+                  <tr>
+                    <th class="px-4 py-3">Raumtyp</th>
+                    <th class="px-4 py-3">Beschreibung</th>
+                    <th class="px-4 py-3 text-center">Räume</th>
+                    <th class="px-4 py-3 text-center">Status</th>
+                    <th v-if="canUpdateRoom" class="px-4 py-3 text-right">Aktionen</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 bg-white">
+                  <tr v-for="raumtyp in sortedRaumtypen" :key="raumtyp.id">
+                    <td class="px-4 py-3 font-semibold text-slate-900">{{ raumtyp.name }}</td>
+                    <td class="px-4 py-3 text-slate-600">{{ raumtyp.beschreibung || '-' }}</td>
+                    <td class="px-4 py-3 text-center">{{ raumtyp.raeume_count || 0 }}</td>
+                    <td class="px-4 py-3 text-center">
+                      <span class="rounded-full px-2.5 py-1 text-xs font-semibold" :class="raumtyp.aktiv ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'">
+                        {{ raumtyp.aktiv ? 'Aktiv' : 'Inaktiv' }}
+                      </span>
+                    </td>
+                    <td v-if="canUpdateRoom" class="px-4 py-3 text-right">
+                      <button type="button" class="mr-2 rounded border border-slate-300 px-3 py-1.5 text-slate-700 hover:bg-slate-50" @click="editRaumtyp(raumtyp)">Bearbeiten</button>
+                      <button
+                        type="button"
+                        class="rounded border border-red-200 px-3 py-1.5 text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        :disabled="Number(raumtyp.raeume_count || 0) > 0"
+                        :title="Number(raumtyp.raeume_count || 0) > 0 ? 'Verwendete Typen können nur deaktiviert werden.' : 'Raumtyp löschen'"
+                        @click="deleteRaumtyp(raumtyp)"
+                      >
+                        Löschen
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <div v-if="activeTab === 'buchungen'" class="space-y-4 p-4">
             <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <input
@@ -344,6 +432,7 @@
       :visible="isModalCreateOpen"
       :standorte="localStandorte"
       :personal="props.personal"
+      :raumtypen="localRaumtypen"
       @close="isModalCreateOpen = false"
       @added="upsertRoom"
     />
@@ -353,6 +442,7 @@
       :visible="isModalEditOpen"
       :standorte="localStandorte"
       :personal="props.personal"
+      :raumtypen="localRaumtypen"
       :raum="raumToEdit"
       @close="isModalEditOpen = false"
       @updated="upsertRoom"
@@ -414,6 +504,7 @@ import { usePermissions } from '@/utils/permissions';
 const props = defineProps({
   standorte: { type: Array, default: () => [] },
   personal: { type: Array, default: () => [] },
+  raumtypen: { type: Array, default: () => [] },
 });
 
 const seite = 'raeumlichkeiten';
@@ -430,6 +521,7 @@ const canDeleteBooking = computed(() => can('raeumlichkeiten.buchung.destroy'));
 const canManageBooking = computed(() => canUpdateBooking.value || canDeleteBooking.value);
 const tabs = [
   { label: 'Räume', value: 'raeume' },
+  { label: 'Raumtypen', value: 'raumtypen' },
   { label: 'Buchungen', value: 'buchungen' },
   { label: 'Meldungen', value: 'meldungen' },
 ];
@@ -443,6 +535,10 @@ const selectedMeldungStatus = ref('');
 const selectedPrioritaet = ref('');
 const buchungsDatum = ref(localDateInput());
 const localStandorte = ref(JSON.parse(JSON.stringify(props.standorte || [])));
+const localRaumtypen = ref(JSON.parse(JSON.stringify(props.raumtypen || [])));
+const raumtypForm = ref({ name: '', beschreibung: '', aktiv: true, sort_order: 0 });
+const editingRaumtypId = ref(null);
+const savingRaumtyp = ref(false);
 
 const isModalCreateOpen = ref(false);
 const isModalEditOpen = ref(false);
@@ -466,6 +562,90 @@ const allRooms = computed(() =>
     }))
   )
 );
+
+const sortedRaumtypen = computed(() => [...localRaumtypen.value].sort((a, b) =>
+  Number(a.sort_order || 0) - Number(b.sort_order || 0)
+  || String(a.name || '').localeCompare(String(b.name || ''), 'de')
+));
+
+const resetRaumtypForm = () => {
+  editingRaumtypId.value = null;
+  raumtypForm.value = { name: '', beschreibung: '', aktiv: true, sort_order: 0 };
+};
+
+const editRaumtyp = (raumtyp) => {
+  editingRaumtypId.value = raumtyp.id;
+  raumtypForm.value = {
+    name: raumtyp.name || '',
+    beschreibung: raumtyp.beschreibung || '',
+    aktiv: Boolean(raumtyp.aktiv),
+    sort_order: Number(raumtyp.sort_order || 0),
+  };
+};
+
+const saveRaumtyp = async () => {
+  if (!canUpdateRoom.value || !raumtypForm.value.name.trim()) return;
+  savingRaumtyp.value = true;
+
+  try {
+    const current = localRaumtypen.value.find((item) => item.id === editingRaumtypId.value);
+    const oldName = current?.name;
+    const response = editingRaumtypId.value
+      ? await axios.put(route('raeumlichkeiten.typen.update', editingRaumtypId.value), raumtypForm.value)
+      : await axios.post(route('raeumlichkeiten.typen.store'), raumtypForm.value);
+    const saved = response.data.raumtyp;
+    const index = localRaumtypen.value.findIndex((item) => item.id === saved.id);
+
+    if (index === -1) localRaumtypen.value.push(saved);
+    else localRaumtypen.value[index] = saved;
+
+    if (oldName && oldName !== saved.name) {
+      localStandorte.value.forEach((standort) => {
+        (standort.raeume || []).forEach((raum) => {
+          if (raum.typ === oldName) raum.typ = saved.name;
+        });
+      });
+    }
+
+    resetRaumtypForm();
+    Swal.fire('Gespeichert', 'Der Raumtyp wurde gespeichert.', 'success');
+  } catch (error) {
+    Swal.fire('Fehler', validationMessage(error, 'Der Raumtyp konnte nicht gespeichert werden.'), 'error');
+  } finally {
+    savingRaumtyp.value = false;
+  }
+};
+
+const deleteRaumtyp = async (raumtyp) => {
+  if (!canUpdateRoom.value || Number(raumtyp.raeume_count || 0) > 0) return;
+  const result = await Swal.fire({
+    title: 'Raumtyp löschen?',
+    text: raumtyp.name,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Löschen',
+    cancelButtonText: 'Abbrechen',
+  });
+  if (!result.isConfirmed) return;
+
+  try {
+    await axios.delete(route('raeumlichkeiten.typen.destroy', raumtyp.id));
+    localRaumtypen.value = localRaumtypen.value.filter((item) => item.id !== raumtyp.id);
+    if (editingRaumtypId.value === raumtyp.id) resetRaumtypForm();
+    Swal.fire('Gelöscht', 'Der Raumtyp wurde gelöscht.', 'success');
+  } catch (error) {
+    Swal.fire('Fehler', validationMessage(error, 'Der Raumtyp konnte nicht gelöscht werden.'), 'error');
+  }
+};
+
+function validationMessage(error, fallback) {
+  const errors = error.response?.data?.errors;
+  if (errors && typeof errors === 'object') {
+    const first = Object.values(errors).flat()[0];
+    if (first) return first;
+  }
+  return error.response?.data?.message || fallback;
+}
 
 const filteredRooms = computed(() => {
   const q = search.value.trim().toLowerCase();
@@ -619,13 +799,16 @@ const confirmDelete = (raum) => {
 };
 
 const removeRoom = (raumId) => {
+  const removedRoom = allRooms.value.find((raum) => Number(raum.id) === Number(raumId));
   localStandorte.value.forEach((standort) => {
     standort.raeume = (standort.raeume || []).filter((raum) => raum.id !== raumId);
   });
+  adjustRaumtypCount(removedRoom?.typ, -1);
   showModalLoeschen.value = false;
 };
 
 const upsertRoom = (raum) => {
+  const previousRoom = allRooms.value.find((item) => Number(item.id) === Number(raum.id));
   localStandorte.value.forEach((standort) => {
     standort.raeume = (standort.raeume || []).filter((item) => item.id !== raum.id);
   });
@@ -639,6 +822,20 @@ const upsertRoom = (raum) => {
 
   target.raeume.push(raum);
   target.raeume.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+
+  if (!previousRoom) {
+    adjustRaumtypCount(raum.typ, 1);
+  } else if (previousRoom.typ !== raum.typ) {
+    adjustRaumtypCount(previousRoom.typ, -1);
+    adjustRaumtypCount(raum.typ, 1);
+  }
+};
+
+const adjustRaumtypCount = (name, delta) => {
+  if (!name) return;
+  const raumtyp = localRaumtypen.value.find((item) => item.name === name);
+  if (!raumtyp) return;
+  raumtyp.raeume_count = Math.max(0, Number(raumtyp.raeume_count || 0) + delta);
 };
 
 const upsertMeldung = (meldung) => {

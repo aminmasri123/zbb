@@ -57,6 +57,9 @@ class RoutePermissionMap
         'it-service.geraete.update' => ['it.geraet.update', 'geraet.update'],
         'it-service.geraete.destroy' => ['it.geraet.destroy', 'geraet.destroy', 'geraet.delete'],
         'raeumlichkeiten.buchung.store' => ['raeumlichkeiten.buchung.store', 'raeumlichkeiten.update'],
+        'raeumlichkeiten.typen.store' => 'raeumlichkeiten.update',
+        'raeumlichkeiten.typen.update' => 'raeumlichkeiten.update',
+        'raeumlichkeiten.typen.destroy' => 'raeumlichkeiten.update',
         'raeumlichkeiten.buchung.update' => ['raeumlichkeiten.buchung.update', 'raeumlichkeiten.update'],
         'raeumlichkeiten.buchung.destroy' => [
             'raeumlichkeiten.buchung.destroy',

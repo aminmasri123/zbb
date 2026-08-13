@@ -80,6 +80,7 @@ use App\Http\Controllers\ProjektHasPersonenController;
 use App\Http\Controllers\ProjektHasTeilnehmerController;
 use App\Http\Controllers\ProjektHasTeilnehmerLuvController;
 use App\Http\Controllers\RaumlichkeitenController;
+use App\Http\Controllers\RaumtypController;
 use App\Http\Controllers\ModuleSettingsController;
 use App\Http\Controllers\RoleDataAccessController;
 use App\Http\Controllers\RolleController;
@@ -512,6 +513,9 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
         Route::post('/ressourcen/standort/raeumlichkeiten/anlegen', [RaumlichkeitenController::class, 'store'])->name('raeumlichkeiten.store');
         Route::put('/ressourcen/standort/raeumlichkeiten/update/{id}', [RaumlichkeitenController::class, 'update'])->name('raeumlichkeiten.update');
         Route::delete('/ressourcen/standort/raeumlichkeiten/entfernen/{id}', [RaumlichkeitenController::class, 'destroy'])->name('raeumlichkeiten.destroy');
+        Route::post('/ressourcen/standort/raeumlichkeiten/typen', [RaumtypController::class, 'store'])->name('raeumlichkeiten.typen.store');
+        Route::put('/ressourcen/standort/raeumlichkeiten/typen/{raumtyp}', [RaumtypController::class, 'update'])->name('raeumlichkeiten.typen.update');
+        Route::delete('/ressourcen/standort/raeumlichkeiten/typen/{raumtyp}', [RaumtypController::class, 'destroy'])->name('raeumlichkeiten.typen.destroy');
         Route::post('/ressourcen/standort/raeumlichkeiten/{raum}/meldung', [RaumlichkeitenController::class, 'storeMeldung'])->name('raeumlichkeiten.meldung.store');
         Route::put('/ressourcen/standort/raeumlichkeiten/meldung/{meldung}', [RaumlichkeitenController::class, 'updateMeldung'])->name('raeumlichkeiten.meldung.update');
         Route::post('/ressourcen/standort/raeumlichkeiten/buchung', [RaumlichkeitenController::class, 'storeBuchung'])->name('raeumlichkeiten.buchung.store');
