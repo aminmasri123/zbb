@@ -43,6 +43,7 @@ class RoutePermissionMap
         'geraet.edit' => 'geraet.update',
         'getGeraeteID' => 'geraet.index',
         'materialanforderung.genehmigen' => [],
+        'materialanforderung.destroy' => ['materialanforderung.destroy', 'materialanforderung.bestellte.destroy'],
         'materialanforderung.pdf' => 'materialanforderung.show',
         'it-service.index' => [
             'it.service.index',

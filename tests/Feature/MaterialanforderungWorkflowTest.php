@@ -9,7 +9,9 @@ use App\Models\Standort;
 use App\Models\User;
 use App\Notifications\UpdateMaterialanforderungNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class MaterialanforderungWorkflowTest extends TestCase
@@ -264,6 +266,108 @@ class MaterialanforderungWorkflowTest extends TestCase
 
         $this->assertSame('bestellt', $anforderung->fresh()->status);
         $this->assertSame(0, (int) $artikel->fresh()->gelieferte_menge);
+    }
+
+    public function test_authorized_user_can_delete_ordered_request_with_all_related_data_and_audit_log(): void
+    {
+        $project = Projekt::factory()->create(['name' => 'BOP']);
+        $creator = User::factory()->create(['current_team_id' => $project->id]);
+        $deleter = User::factory()->create();
+        $this->grantTestPermission($deleter, 'materialanforderung.bestellte.destroy');
+        $anforderung = $this->anforderung($creator, $project, 'bestellt');
+        $artikel = $anforderung->artikeln()->create([
+            'pos' => 1,
+            'artikel' => 'Schutzbrille',
+            'stueck' => 10,
+            'gelieferte_menge' => 0,
+            'einzelpreis' => 5,
+            'mwst' => 19,
+            'gesamtpreis' => 50,
+        ]);
+        $vergabevermerk = $anforderung->vergabevermerk()->create([
+            'lieferung_art' => 'Lieferleistung',
+            'lieferung_option' => 'per Lieferung',
+            'lieferadresse' => 'Teststraße 1',
+            'bestellnummer' => 'B-2026-99',
+        ]);
+        $genehmigung = $anforderung->genehmigungen()->create([
+            'genehmiger_id' => $deleter->id,
+            'status' => 'kaufmaennisch_genehmigt',
+            'kommentar' => 'Freigegeben',
+        ]);
+        $notificationId = (string) Str::uuid();
+        DB::table('notifications')->insert([
+            'id' => $notificationId,
+            'type' => UpdateMaterialanforderungNotification::class,
+            'notifiable_type' => User::class,
+            'notifiable_id' => $creator->id,
+            'data' => json_encode([
+                'id' => $anforderung->id,
+                'typ' => 'Materialanforderung',
+                'message' => 'Test',
+            ], JSON_THROW_ON_ERROR),
+            'read_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($deleter)
+            ->delete(route('materialanforderung.destroy', $anforderung), [
+                'begruendung' => 'Doppelte Testbestellung wurde irrtümlich angelegt.',
+                'bestaetigung' => "LÖSCHEN #{$anforderung->id}",
+            ])
+            ->assertRedirect(route('materialanforderung.index'));
+
+        $this->assertDatabaseMissing('materialanforderungs', ['id' => $anforderung->id]);
+        $this->assertDatabaseMissing('materialanforderung_artikels', ['id' => $artikel->id]);
+        $this->assertDatabaseMissing('materialanforderung_vergabevermerks', ['id' => $vergabevermerk->id]);
+        $this->assertDatabaseMissing('materialanforderung_genehmigungs', ['id' => $genehmigung->id]);
+        $this->assertDatabaseMissing('notifications', ['id' => $notificationId]);
+        $this->assertDatabaseHas('materialanforderung_loeschprotokolls', [
+            'materialanforderung_id' => $anforderung->id,
+            'projekt_id' => $project->id,
+            'ersteller_id' => $creator->id,
+            'geloescht_von_id' => $deleter->id,
+            'status' => 'bestellt',
+            'bestellnummer' => 'B-2026-99',
+            'begruendung' => 'Doppelte Testbestellung wurde irrtümlich angelegt.',
+        ]);
+
+        $snapshot = DB::table('materialanforderung_loeschprotokolls')
+            ->where('materialanforderung_id', $anforderung->id)
+            ->value('snapshot');
+        $this->assertSame('Schutzbrille', json_decode($snapshot, true, 512, JSON_THROW_ON_ERROR)['artikel'][0]['artikel']);
+    }
+
+    public function test_ordered_deletion_requires_special_permission_and_delivered_requests_remain_protected(): void
+    {
+        $project = Projekt::factory()->create(['name' => 'BOP']);
+        $creator = User::factory()->create(['current_team_id' => $project->id]);
+        $regularUser = User::factory()->create();
+        $specialUser = User::factory()->create();
+        $this->grantTestPermission($regularUser, 'materialanforderung.destroy');
+        $this->grantTestPermission($specialUser, 'materialanforderung.bestellte.destroy');
+        $ordered = $this->anforderung($creator, $project, 'bestellt');
+        $delivered = $this->anforderung($creator, $project, 'geliefert');
+
+        $payload = [
+            'begruendung' => 'Doppelte Testbestellung wurde angelegt.',
+            'bestaetigung' => "LÖSCHEN #{$ordered->id}",
+        ];
+
+        $this->actingAs($regularUser)
+            ->delete(route('materialanforderung.destroy', $ordered), $payload)
+            ->assertForbidden();
+
+        $this->actingAs($specialUser)
+            ->delete(route('materialanforderung.destroy', $delivered), [
+                'begruendung' => 'Dieser Vorgang soll nicht löschbar sein.',
+                'bestaetigung' => "LÖSCHEN #{$delivered->id}",
+            ])
+            ->assertStatus(422);
+
+        $this->assertDatabaseHas('materialanforderungs', ['id' => $ordered->id]);
+        $this->assertDatabaseHas('materialanforderungs', ['id' => $delivered->id]);
     }
 
     private function anforderung(User $creator, Projekt $project, string $status): Materialanforderung

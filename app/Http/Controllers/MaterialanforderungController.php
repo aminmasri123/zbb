@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Materialanforderung;
 use App\Models\MaterialanforderungGenehmigung;
+use App\Models\MaterialanforderungLoeschprotokoll;
 use App\Models\Projekt;
 use App\Notifications\UpdateMaterialanforderungNotification;
 use App\Services\NotificationRecipientService;
@@ -67,6 +68,10 @@ class MaterialanforderungController extends Controller
                 || $user->can('materialanforderung.kaufmännische_freigabe.update')
                 || $user->can('materialanforderung.bestellwesen.update')) {
                 $visibility->orWhereNotIn('status', ['entwurf', 'eingereicht']);
+            }
+
+            if ($user->can('materialanforderung.bestellte.destroy')) {
+                $visibility->orWhereIn('status', ['bestellt', 'teilweise_geliefert']);
             }
         });
 
@@ -163,13 +168,62 @@ class MaterialanforderungController extends Controller
 
     public function destroy(Request $request, Materialanforderung $materialanforderung)
     {
-        abort_unless($request->user()->can('materialanforderung.destroy'), 403);
-        abort_unless((int) $materialanforderung->ersteller_id === (int) $request->user()->id, 403);
-        abort_unless(in_array($materialanforderung->status, ['entwurf', 'zur_ueberarbeitung'], true), 422);
+        $isEditableDraft = in_array($materialanforderung->status, ['entwurf', 'zur_ueberarbeitung'], true);
+        $isOrdered = in_array($materialanforderung->status, ['bestellt', 'teilweise_geliefert'], true);
 
-        $materialanforderung->delete();
+        if ($isEditableDraft) {
+            abort_unless($request->user()->can('materialanforderung.destroy'), 403);
+            abort_unless((int) $materialanforderung->ersteller_id === (int) $request->user()->id, 403);
 
-        return redirect()->route('materialanforderung.index')->with('success', 'Entwurf wurde gelöscht.');
+            DB::transaction(function () use ($materialanforderung) {
+                $this->deleteMaterialanforderungNotifications($materialanforderung->id);
+                $materialanforderung->delete();
+            });
+
+            return redirect()->route('materialanforderung.index')->with('success', 'Entwurf wurde gelöscht.');
+        }
+
+        abort_unless($isOrdered, 422, 'Nur bestellte oder teilweise gelieferte Materialanforderungen können mit dem Sonderrecht endgültig gelöscht werden. Vollständig gelieferte Vorgänge bleiben erhalten.');
+        abort_unless($request->user()->can('materialanforderung.bestellte.destroy'), 403);
+
+        $expectedConfirmation = "LÖSCHEN #{$materialanforderung->id}";
+        $data = $request->validate([
+            'begruendung' => ['required', 'string', 'min:10', 'max:2000'],
+            'bestaetigung' => ['required', 'string', Rule::in([$expectedConfirmation])],
+        ], [
+            'begruendung.required' => 'Eine Löschbegründung ist erforderlich.',
+            'begruendung.min' => 'Die Löschbegründung muss mindestens 10 Zeichen enthalten.',
+            'bestaetigung.in' => "Bitte geben Sie exakt „{$expectedConfirmation}“ ein.",
+        ]);
+
+        DB::transaction(function () use ($request, $materialanforderung, $data) {
+            $materialanforderung->loadMissing([
+                'projekt',
+                'besteller.person',
+                'artikeln',
+                'vergabevermerk',
+                'genehmigungen.genehmiger.person',
+            ]);
+
+            MaterialanforderungLoeschprotokoll::create([
+                'materialanforderung_id' => $materialanforderung->id,
+                'projekt_id' => $materialanforderung->projekt_id,
+                'ersteller_id' => $materialanforderung->ersteller_id,
+                'geloescht_von_id' => $request->user()->id,
+                'status' => $materialanforderung->status,
+                'bestellnummer' => $materialanforderung->vergabevermerk?->bestellnummer,
+                'endsumme' => $materialanforderung->endsumme,
+                'begruendung' => $data['begruendung'],
+                'snapshot' => $this->deletionSnapshot($materialanforderung),
+                'geloescht_am' => now(),
+            ]);
+
+            $this->deleteMaterialanforderungNotifications($materialanforderung->id);
+            $materialanforderung->delete();
+        });
+
+        return redirect()->route('materialanforderung.index')
+            ->with('success', "Materialanforderung #{$materialanforderung->id} und alle zugehörigen Daten wurden endgültig gelöscht. Das Löschprotokoll bleibt erhalten.");
     }
 
     public function show(Request $request, $id)
@@ -201,6 +255,8 @@ class MaterialanforderungController extends Controller
             'canDeleteMaterialanforderung' => $request->user()->can('materialanforderung.destroy')
                 && (int) $anforderung->ersteller_id === (int) $request->user()->id
                 && in_array($anforderung->status, ['entwurf', 'zur_ueberarbeitung'], true),
+            'canDeleteOrderedMaterialanforderung' => $request->user()->can('materialanforderung.bestellte.destroy')
+                && in_array($anforderung->status, ['bestellt', 'teilweise_geliefert'], true),
             'verlauf' => $verlauf,
         ]);
     }
@@ -415,6 +471,11 @@ class MaterialanforderungController extends Controller
             return true;
         }
 
+        if ($user->can('materialanforderung.bestellte.destroy')
+            && in_array($anforderung->status, ['bestellt', 'teilweise_geliefert'], true)) {
+            return true;
+        }
+
         if ($user->can('materialanforderung.sachlische_freigabe.index')
             && $anforderung->status === 'eingereicht'
             && $this->isAssignedToProject($user, $anforderung->projekt_id)) {
@@ -458,5 +519,63 @@ class MaterialanforderungController extends Controller
         };
 
         abort_unless($allowed, 403);
+    }
+
+    private function deleteMaterialanforderungNotifications(int $anforderungId): void
+    {
+        DB::table('notifications')
+            ->where('data->id', $anforderungId)
+            ->where('data->typ', 'Materialanforderung')
+            ->delete();
+    }
+
+    private function deletionSnapshot(Materialanforderung $anforderung): array
+    {
+        return [
+            'id' => $anforderung->id,
+            'projekt' => [
+                'id' => $anforderung->projekt_id,
+                'name' => $anforderung->projekt?->name,
+            ],
+            'antragsteller' => [
+                'user_id' => $anforderung->ersteller_id,
+                'name' => $anforderung->besteller?->name,
+            ],
+            'status' => $anforderung->status,
+            'kostenstelle' => $anforderung->kostenstelle,
+            'benoetigt_am' => $anforderung->benoetigt_am?->toDateString(),
+            'prioritaet' => $anforderung->prioritaet,
+            'bemerkungen' => $anforderung->bemerkungen,
+            'gesamtpreis' => $anforderung->gesamtpreis,
+            'endsumme' => $anforderung->endsumme,
+            'erstellt_am' => $anforderung->created_at?->toDateTimeString(),
+            'artikel' => $anforderung->artikeln->map(fn ($artikel) => [
+                'pos' => $artikel->pos,
+                'artikel' => $artikel->artikel,
+                'stueck' => $artikel->stueck,
+                'gelieferte_menge' => $artikel->gelieferte_menge,
+                'art_nr' => $artikel->art_nr,
+                'einzelpreis' => $artikel->einzelpreis,
+                'mwst' => $artikel->mwst,
+                'gesamtpreis' => $artikel->gesamtpreis,
+            ])->values()->all(),
+            'vergabevermerk' => $anforderung->vergabevermerk ? [
+                'kurzbeschreibung' => $anforderung->vergabevermerk->kurzbeschreibung,
+                'lieferung_art' => $anforderung->vergabevermerk->lieferung_art,
+                'begruendung' => $anforderung->vergabevermerk->begruendung,
+                'begruendung_optionen' => $anforderung->vergabevermerk->begruendung_optionen,
+                'lieferant' => $anforderung->vergabevermerk->lieferant,
+                'lieferung_option' => $anforderung->vergabevermerk->lieferung_option,
+                'lieferadresse' => $anforderung->vergabevermerk->lieferadresse,
+                'bestellnummer' => $anforderung->vergabevermerk->bestellnummer,
+            ] : null,
+            'genehmigungen' => $anforderung->genehmigungen->map(fn ($genehmigung) => [
+                'status' => $genehmigung->status,
+                'genehmiger_id' => $genehmigung->genehmiger_id,
+                'genehmiger' => $genehmigung->genehmiger?->name,
+                'kommentar' => $genehmigung->kommentar,
+                'erstellt_am' => $genehmigung->created_at?->toDateTimeString(),
+            ])->values()->all(),
+        ];
     }
 }

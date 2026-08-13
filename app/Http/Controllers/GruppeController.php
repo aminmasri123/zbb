@@ -1,9 +1,10 @@
-<?php
+﻿<?php
 
 namespace App\Http\Controllers;
 
 use Inertia\Inertia;
 use App\Models\Gruppe;
+use App\Models\Anwesenheitsstatuten;
 use App\Models\Tage;
 use App\Models\Personen;
 use App\Models\ProjektHasPersonen;
@@ -74,11 +75,16 @@ class GruppeController extends Controller
 
         $projekt = $this->projektMitVerfuegbarenRaeumen($activeProject->id);
         $canSeeAllGroups = $this->canSeeAllGroups($user);
+        $anwesendHeuteStatusId = $this->anwesendStatusId('anwesend');
 
         $gruppen = Gruppe::query()
             ->with(['bereich', 'betreuer.user', 'partners', 'raum.parent', 'raum.standort', 'standort'])
             ->withCount([
                 'teilnehmer as teilnehmer_count' => fn ($query) => $query->select(DB::raw('count(distinct personens.id)')),
+                'teilnehmer as anwesend_heute' => $this->anwesendHeuteCount(
+                    Carbon::today(),
+                    $anwesendHeuteStatusId
+                ),
             ])
             ->where('projekt_id', $activeProject->id)
             ->when(!$canSeeAllGroups, fn ($query) => $query->where('personen_id', $this->userPersonId($user)))
@@ -99,6 +105,7 @@ class GruppeController extends Controller
         $user = auth()->user();
         $this->authorizeAny($user, ['gruppe.store']);
         $activeProject = $this->activeProjectContext->currentAvailableFor($user);
+        $anwesendHeuteStatusId = $this->anwesendStatusId('anwesend');
         abort_unless($activeProject, 409, 'Bitte wählen Sie zuerst ein aktives Projekt aus.');
 
         $request->merge([
@@ -183,6 +190,10 @@ class GruppeController extends Controller
             'message' => 'Gruppe erfolgreich erstellt.',
             'gruppe' => $gruppe->load(['bereich', 'betreuer.user', 'partners', 'raum.parent', 'raum.standort', 'standort'])->loadCount([
                 'teilnehmer as teilnehmer_count' => fn ($query) => $query->select(DB::raw('count(distinct personens.id)')),
+                'teilnehmer as anwesend_heute' => $this->anwesendHeuteCount(
+                    Carbon::today(),
+                    $anwesendHeuteStatusId
+                ),
             ]),
         ], 201);
     }
@@ -249,6 +260,7 @@ class GruppeController extends Controller
         $activeProject = $this->activeProjectContext->currentAvailableFor($user);
         abort_unless($activeProject && (int) $gruppe->projekt_id === $activeProject->id, 403);
         abort_unless($this->canManageGroup($user, $gruppe, 'gruppe.update'), 403);
+        $anwesendHeuteStatusId = $this->anwesendStatusId('anwesend');
 
         try {
             $request->merge([
@@ -311,6 +323,10 @@ class GruppeController extends Controller
                 'message' => 'Gruppe erfolgreich aktualisiert.',
                 'projekt' => $gruppe->load(['bereich', 'betreuer.user', 'partners', 'raum.parent', 'raum.standort', 'standort'])->loadCount([
                     'teilnehmer as teilnehmer_count' => fn ($query) => $query->select(DB::raw('count(distinct personens.id)')),
+                    'teilnehmer as anwesend_heute' => $this->anwesendHeuteCount(
+                        Carbon::today(),
+                        $anwesendHeuteStatusId
+                    ),
                 ]),
             ], 200);
         } catch (ValidationException $e) {
@@ -387,6 +403,33 @@ class GruppeController extends Controller
     private function userPersonId($user): ?int
     {
         return $user?->person_id ?? $user?->person?->id;
+    }
+
+    private function anwesendStatusId(string $status): ?int
+    {
+        return Anwesenheitsstatuten::query()
+            ->where('status', $status)
+            ->value('id');
+    }
+
+    private function anwesendHeuteCount(Carbon $today, ?int $anwesendStatusId): callable
+    {
+        return fn ($query) => $query
+            ->select(DB::raw('count(distinct personens.id)'))
+            ->when(
+                $anwesendStatusId !== null,
+                fn ($q) => $q->where('gruppe_has_personens.anwesenheitsstatuten_id', $anwesendStatusId)
+            )
+            ->when(
+                $anwesendStatusId === null,
+                fn ($q) => $q->whereRaw('1 = 0')
+            )
+            ->whereIn(
+                'gruppe_has_personens.tage_id',
+                fn ($q) => $q->from('tages')
+                    ->select('id')
+                    ->whereDate('datum', $today)
+            );
     }
 
     private function projektMitVerfuegbarenRaeumen(int $projektId): Projekt
@@ -701,3 +744,4 @@ class GruppeController extends Controller
         return $validated;
     }
 }
+

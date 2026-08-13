@@ -1322,6 +1322,7 @@ class UserSeeder extends Seeder
             $this->permission('materialanforderung.store', 27, 'Erlaubt das Anlegen neuer Materialanforderungen inklusive Positionen, Kostenstelle und Projektbezug.'),
             $this->permission('materialanforderung.update', 27, 'Erlaubt das Bearbeiten eigener Materialanforderungen im Entwurfs- oder Rueckgabezustand.'),
             $this->permission('materialanforderung.destroy', 27, 'Erlaubt das Loeschen von Materialanforderungen. Diese Berechtigung sollte nur in klar geregelten Rollen vergeben werden.'),
+            $this->permission('materialanforderung.bestellte.destroy', 27, 'Erlaubt das endgueltige Loeschen bestellter oder teilweise gelieferter Materialanforderungen mit Pflichtbegruendung und Loeschprotokoll.'),
             $this->permission('materialanforderung.genehmigen', 27, 'Erlaubt Statuswechsel im Genehmigungsprozess einer Materialanforderung, sofern die fachliche Sonderberechtigung dazu passt.'),
             $this->permission('materialanforderung.sachlich.genehmigen', 27, 'Erlaubt die sachliche Genehmigung einer Materialanforderung ueber die bestehende Genehmigungsroute.'),
             $this->permission('materialanforderung.sachlische_freigabe.index', 27, 'Erlaubt das Einsehen aller eingereichten Materialanforderungen, die im eigenen Projekt- oder Abteilungsbereich sachlich geprueft werden muessen.'),
