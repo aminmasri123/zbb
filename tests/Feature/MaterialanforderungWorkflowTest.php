@@ -44,6 +44,8 @@ class MaterialanforderungWorkflowTest extends TestCase
             $this->grantTestPermission($approver, 'materialanforderung.sachlische_freigabe.index');
         }
         $this->assign($assignedApprover, $project);
+        $this->grantTestPermission($assignedApprover, 'materialanforderung.index');
+        $this->grantTestPermission($assignedApprover, 'materialanforderung.show');
 
         $anforderung = $this->anforderung($creator, $project, 'eingereicht');
 
@@ -63,6 +65,56 @@ class MaterialanforderungWorkflowTest extends TestCase
             'genehmiger_id' => $assignedApprover->id,
             'status' => 'sachlich_genehmigt',
         ]);
+
+        $this->actingAs($assignedApprover)
+            ->get(route('materialanforderung.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('anforderungen', 1)
+                ->where('anforderungen.0.id', $anforderung->id)
+                ->where('anforderungen.0.von_mir_bearbeitet', true));
+
+        $this->actingAs($assignedApprover)
+            ->get(route('materialanforderung.show', $anforderung))
+            ->assertOk();
+    }
+
+    public function test_kaufmaennischer_approver_sees_requests_across_projects_before_and_after_approval(): void
+    {
+        Notification::fake();
+        $requestProject = Projekt::factory()->create(['name' => 'BOP']);
+        $otherProject = Projekt::factory()->create(['name' => 'Anderes Projekt']);
+        $creator = User::factory()->create(['current_team_id' => $requestProject->id]);
+        $approver = User::factory()->create(['current_team_id' => $otherProject->id]);
+        $this->grantTestPermission($approver, 'materialanforderung.index');
+        $this->grantTestPermission($approver, 'materialanforderung.show');
+        $this->grantTestPermission($approver, 'materialanforderung.kaufmännische_freigabe.update');
+        $anforderung = $this->anforderung($creator, $requestProject, 'sachlich_genehmigt');
+
+        $this->actingAs($approver)
+            ->get(route('materialanforderung.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('anforderungen', 1)
+                ->where('anforderungen.0.id', $anforderung->id));
+
+        $this->actingAs($approver)
+            ->put(route('materialanforderung.genehmigen', [$anforderung->id, 'kaufmaennisch_genehmigt']))
+            ->assertRedirect();
+
+        $this->assertSame('kaufmaennisch_genehmigt', $anforderung->fresh()->status);
+
+        $this->actingAs($approver)
+            ->get(route('materialanforderung.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('anforderungen', 1)
+                ->where('anforderungen.0.id', $anforderung->id)
+                ->where('anforderungen.0.von_mir_bearbeitet', true));
+
+        $this->actingAs($approver)
+            ->get(route('materialanforderung.show', $anforderung))
+            ->assertOk();
     }
 
     public function test_creator_can_export_own_materialanforderung_as_pdf(): void

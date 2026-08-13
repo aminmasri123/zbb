@@ -26,7 +26,10 @@ class MaterialanforderungController extends Controller
         $search = trim((string) $request->input('search', ''));
 
         $query = Materialanforderung::with(['projekt', 'besteller.person', 'artikeln', 'vergabevermerk'])
-            ->where('projekt_id', $user->current_team_id);
+            ->withExists([
+                'genehmigungen as von_mir_bearbeitet' => fn ($approval) =>
+                    $approval->where('genehmiger_id', $user->id),
+            ]);
 
         if ($search !== '') {
             $query->where(function ($searchQuery) use ($search) {
@@ -37,8 +40,20 @@ class MaterialanforderungController extends Controller
         }
 
         $assignedProjectIds = $user->projekte()->pluck('projekts.id');
-        $query->where(function ($visibility) use ($user, $assignedProjectIds) {
-            $visibility->where('materialanforderungs.ersteller_id', $user->id);
+        $currentProjectId = $user->current_team_id;
+        $query->where(function ($visibility) use ($user, $assignedProjectIds, $currentProjectId) {
+            $visibility->where(function ($own) use ($user, $currentProjectId) {
+                $own->where('materialanforderungs.ersteller_id', $user->id);
+
+                if ($currentProjectId) {
+                    $own->where('projekt_id', $currentProjectId);
+                }
+            });
+
+            // Anyone who took part in the approval keeps permanent read access.
+            $visibility->orWhereHas('genehmigungen', fn ($approval) =>
+                $approval->where('genehmiger_id', $user->id)
+            );
 
             if ($user->can('materialanforderung.sachlische_freigabe.index')) {
                 $visibility->orWhere(function ($approval) use ($assignedProjectIds) {
@@ -48,6 +63,7 @@ class MaterialanforderungController extends Controller
             }
 
             if ($user->can('materialanforderung.kaufmännische_freigabe.index')
+                || $user->can('materialanforderung.kaufmännische_freigabe.update')
                 || $user->can('materialanforderung.bestellwesen.update')) {
                 $visibility->orWhereNotIn('status', ['entwurf', 'eingereicht']);
             }
@@ -381,6 +397,10 @@ class MaterialanforderungController extends Controller
             return true;
         }
 
+        if ($anforderung->genehmigungen()->where('genehmiger_id', $user->id)->exists()) {
+            return true;
+        }
+
         if ($user->can('materialanforderung.sachlische_freigabe.index')
             && $anforderung->status === 'eingereicht'
             && $this->isAssignedToProject($user, $anforderung->projekt_id)) {
@@ -388,6 +408,7 @@ class MaterialanforderungController extends Controller
         }
 
         return ($user->can('materialanforderung.kaufmännische_freigabe.index')
+                || $user->can('materialanforderung.kaufmännische_freigabe.update')
                 || $user->can('materialanforderung.bestellwesen.update'))
             && ! in_array($anforderung->status, ['entwurf', 'eingereicht'], true);
     }
