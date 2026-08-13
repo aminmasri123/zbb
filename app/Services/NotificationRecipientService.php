@@ -33,6 +33,13 @@ class NotificationRecipientService
                 ),
                 $actor
             ),
+            'zurueckgezogen' => $this->withoutActor(
+                $this->usersWithPermissionInProject(
+                    'materialanforderung.sachlische_freigabe.index',
+                    $this->projectIdForMaterialanforderung($anforderung, $actor)
+                ),
+                $actor
+            ),
             'sachlich_genehmigt' => $this->withoutActor(
                 $this->usersWithPermission('materialanforderung.kaufmännische_freigabe.update'),
                 $actor

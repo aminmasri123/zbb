@@ -192,14 +192,14 @@ class MaterialanforderungController extends Controller
     {
         abort_unless(in_array($status, [
             'eingereicht', 'sachlich_genehmigt', 'kaufmaennisch_genehmigt',
-            'zur_ueberarbeitung', 'storniert', 'bestellt', 'teilweise_geliefert', 'geliefert',
+            'zur_ueberarbeitung', 'zurueckgezogen', 'storniert', 'bestellt', 'teilweise_geliefert', 'geliefert',
         ], true), 422, 'Ungültiger Status.');
 
         $anforderung = DB::transaction(function () use ($request, $id, $status) {
             $anforderung = Materialanforderung::with(['artikeln', 'vergabevermerk'])->whereKey($id)->lockForUpdate()->firstOrFail();
             $this->authorizeTransition($request->user(), $anforderung, $status);
 
-            if (in_array($status, ['zur_ueberarbeitung', 'storniert'], true)) {
+            if (in_array($status, ['zur_ueberarbeitung', 'zurueckgezogen', 'storniert'], true)) {
                 $request->validate(['anmerkung' => ['required', 'string', 'max:2000']]);
             }
 
@@ -240,17 +240,37 @@ class MaterialanforderungController extends Controller
                 'status' => $status,
                 'kommentar' => $request->input('anmerkung'),
             ]);
-            $anforderung->update(['status' => $status]);
+            // A withdrawal is an audit event; the request itself returns to an editable draft.
+            $anforderung->update([
+                'status' => $status === 'zurueckgezogen' ? 'entwurf' : $status,
+            ]);
 
             return $anforderung;
         });
 
+        $recipients = $this->notificationRecipients
+            ->forMaterialanforderung($anforderung, $status, $request->user());
+
+        if ($status === 'zurueckgezogen') {
+            // Remove the now obsolete approval request before sending the withdrawal notice.
+            $recipients->each(function ($recipient) use ($anforderung) {
+                $recipient->unreadNotifications()
+                    ->where('data->id', $anforderung->id)
+                    ->where('data->typ', 'Materialanforderung')
+                    ->delete();
+            });
+        }
+
         Notification::send(
-            $this->notificationRecipients->forMaterialanforderung($anforderung, $status, $request->user()),
+            $recipients,
             new UpdateMaterialanforderungNotification($anforderung, $status)
         );
 
-        return back()->with('success', 'Status wurde aktualisiert.');
+        $message = $status === 'zurueckgezogen'
+            ? 'Die Einreichung wurde zurückgezogen. Die Materialanforderung ist wieder als Entwurf bearbeitbar.'
+            : 'Status wurde aktualisiert.';
+
+        return back()->with('success', $message);
     }
 
     public function exportPdf(Request $request, Materialanforderung $materialanforderung)
@@ -393,6 +413,9 @@ class MaterialanforderungController extends Controller
                     && $this->isAssignedToProject($user, $anforderung->projekt_id)
                     && $anforderung->status === 'eingereicht')
                 || ($user->can('materialanforderung.kaufmännische_freigabe.update') && $anforderung->status === 'sachlich_genehmigt'),
+            'zurueckgezogen' => (int) $anforderung->ersteller_id === (int) $user->id
+                && $user->can('materialanforderung.update')
+                && $anforderung->status === 'eingereicht',
             'storniert' => (int) $anforderung->ersteller_id === (int) $user->id
                 && $user->can('materialanforderung.update')
                 && in_array($anforderung->status, ['entwurf', 'eingereicht', 'zur_ueberarbeitung'], true),

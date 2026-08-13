@@ -26,6 +26,9 @@ class UpdateMaterialanforderungNotification extends Notification
     public function toDatabase($notifiable)
     {
         $ersteller = $this->anforderung->besteller;
+        $link = $this->status === 'zurueckgezogen'
+            ? route('materialanforderung.index')
+            : route('materialanforderung.show', $this->anforderung->id);
 
         switch ($this->status) {
             case 'eingereicht':
@@ -42,6 +45,10 @@ class UpdateMaterialanforderungNotification extends Notification
 
             case 'zur_ueberarbeitung':
                 $message = "Materialanforderung #{$this->anforderung->id} wurde zur Überarbeitung zurückgesendet.";
+                break;
+
+            case 'zurueckgezogen':
+                $message = "Materialanforderung #{$this->anforderung->id} wurde vom Antragsteller zurückgezogen.";
                 break;
 
             case 'storniert':
@@ -66,7 +73,7 @@ class UpdateMaterialanforderungNotification extends Notification
 
         return [
             'message' => $message,
-            'link' => route('materialanforderung.show', $this->anforderung->id),
+            'link' => $link,
             'user_name' => auth()->user()->name,
             'id' => $this->anforderung->id,
             'typ' => 'Materialanforderung',

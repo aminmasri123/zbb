@@ -56,6 +56,7 @@ const statusMeta = {
     teilweise_geliefert: ['Teilweise geliefert', 'bg-amber-100 text-amber-800'],
     geliefert: ['Geliefert', 'bg-green-100 text-green-800'],
     zur_ueberarbeitung: ['Zur Überarbeitung', 'bg-orange-100 text-orange-800'],
+    zurueckgezogen: ['Einreichung zurückgezogen', 'bg-amber-100 text-amber-800'],
     storniert: ['Storniert', 'bg-red-100 text-red-700'],
 }
 const editable = computed(() => props.canEditMaterialanforderung && ['entwurf', 'zur_ueberarbeitung'].includes(props.anforderung.status))
@@ -178,6 +179,7 @@ function submitPartialDelivery() {
 
                 <div v-if="!editing" class="mt-5 flex flex-wrap gap-2 border-t border-gray-100 pt-5">
                     <button v-if="['entwurf', 'zur_ueberarbeitung'].includes(anforderung.status) && canEditMaterialanforderung" class="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white" @click="changeStatus('eingereicht', 'Materialanforderung einreichen?')">Einreichen</button>
+                    <button v-if="anforderung.status === 'eingereicht' && canEditMaterialanforderung" class="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800" @click="changeStatus('zurueckgezogen', 'Einreichung zurückziehen?', true)">Einreichung zurückziehen</button>
                     <button v-if="anforderung.status === 'eingereicht' && canConfirmSachlich" class="rounded-lg bg-violet-700 px-4 py-2 text-sm font-semibold text-white" @click="changeStatus('sachlich_genehmigt', 'Sachlich genehmigen?')">Sachlich genehmigen</button>
                     <button v-if="anforderung.status === 'eingereicht' && canConfirmSachlich" class="rounded-lg border border-orange-300 px-4 py-2 text-sm font-semibold text-orange-700" @click="changeStatus('zur_ueberarbeitung', 'Zur Überarbeitung zurückgeben?', true)">Zurückgeben</button>
                     <button v-if="anforderung.status === 'sachlich_genehmigt' && canConfirmKaufmaenisch" class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white" @click="changeStatus('kaufmaennisch_genehmigt', 'Kaufmännisch genehmigen?')">Kaufmännisch genehmigen</button>

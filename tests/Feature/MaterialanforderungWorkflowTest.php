@@ -85,6 +85,51 @@ class MaterialanforderungWorkflowTest extends TestCase
             ->assertHeader('content-type', 'application/pdf');
     }
 
+    public function test_creator_can_withdraw_submitted_request_before_sachliche_approval(): void
+    {
+        Notification::fake();
+        $project = Projekt::factory()->create(['name' => 'BOP']);
+        $creator = User::factory()->create(['current_team_id' => $project->id]);
+        $this->grantTestPermission($creator, 'materialanforderung.update');
+        $anforderung = $this->anforderung($creator, $project, 'eingereicht');
+
+        $this->actingAs($creator)
+            ->put(route('materialanforderung.genehmigen', [$anforderung->id, 'zurueckgezogen']), [
+                'anmerkung' => 'Preis muss noch korrigiert werden.',
+            ])
+            ->assertRedirect();
+
+        $this->assertSame('entwurf', $anforderung->fresh()->status);
+        $this->assertDatabaseHas('materialanforderung_genehmigungs', [
+            'anforderung_id' => $anforderung->id,
+            'genehmiger_id' => $creator->id,
+            'status' => 'zurueckgezogen',
+            'kommentar' => 'Preis muss noch korrigiert werden.',
+        ]);
+
+        $this->actingAs($creator)
+            ->get(route('materialanforderung.show', $anforderung))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('canEditMaterialanforderung', true));
+    }
+
+    public function test_creator_cannot_withdraw_after_sachliche_approval(): void
+    {
+        Notification::fake();
+        $project = Projekt::factory()->create(['name' => 'BOP']);
+        $creator = User::factory()->create(['current_team_id' => $project->id]);
+        $this->grantTestPermission($creator, 'materialanforderung.update');
+        $anforderung = $this->anforderung($creator, $project, 'sachlich_genehmigt');
+
+        $this->actingAs($creator)
+            ->put(route('materialanforderung.genehmigen', [$anforderung->id, 'zurueckgezogen']), [
+                'anmerkung' => 'Zu spät.',
+            ])
+            ->assertForbidden();
+
+        $this->assertSame('sachlich_genehmigt', $anforderung->fresh()->status);
+    }
+
     public function test_bestellwesen_records_order_number_and_partial_delivery_quantities(): void
     {
         Notification::fake();
