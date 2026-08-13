@@ -11,20 +11,22 @@ return new class extends Migration
 
     public function up(): void
     {
-        Schema::create('materialanforderung_loeschprotokolls', function (Blueprint $table) {
-            $table->id();
-            $table->unsignedBigInteger('materialanforderung_id')->index();
-            $table->unsignedBigInteger('projekt_id')->nullable()->index();
-            $table->unsignedBigInteger('ersteller_id')->nullable()->index();
-            $table->foreignId('geloescht_von_id')->nullable()->constrained('users')->nullOnDelete();
-            $table->string('status', 40);
-            $table->string('bestellnummer')->nullable();
-            $table->decimal('endsumme', 12, 2)->default(0);
-            $table->text('begruendung');
-            $table->json('snapshot');
-            $table->timestamp('geloescht_am');
-            $table->timestamps();
-        });
+        if (! Schema::hasTable('materialanforderung_loeschprotokolls')) {
+            Schema::create('materialanforderung_loeschprotokolls', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('materialanforderung_id')->index();
+                $table->unsignedBigInteger('projekt_id')->nullable()->index();
+                $table->unsignedBigInteger('ersteller_id')->nullable()->index();
+                $table->foreignId('geloescht_von_id')->nullable()->constrained('users')->nullOnDelete();
+                $table->string('status', 40);
+                $table->string('bestellnummer')->nullable();
+                $table->decimal('endsumme', 12, 2)->default(0);
+                $table->text('begruendung');
+                $table->json('snapshot');
+                $table->timestamp('geloescht_am');
+                $table->timestamps();
+            });
+        }
 
         $categoryId = DB::table('berechtigungskategories')
             ->where('name', 'Bestellungen')
