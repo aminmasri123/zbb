@@ -183,7 +183,7 @@
       </form>
     </template>
     <template #footer>
-      <button @click="save" class="bg-zbb text-white px-4 py-2 rounded">Speichern</button>
+      <button @click="save()" class="bg-zbb text-white px-4 py-2 rounded">Speichern</button>
       <button @click="emit('close')" class="border px-4 py-2 rounded">Abbrechen</button>
     </template>
   </Modal>
@@ -200,6 +200,7 @@ import MultiSelect from 'primevue/multiselect'
 import FloatLabel from 'primevue/floatlabel';
 import Swal from 'sweetalert2';
 import axios from 'axios'
+import { confirmRoomOverlap, showRequestError } from './roomConflictDialog'
 
 const props = defineProps({
     visible: Boolean,
@@ -480,9 +481,12 @@ const formatGermanDate = (value) => new Date(`${value}T12:00:00`).toLocaleDateSt
 
 
 
-const save = async () => {
+const save = async (allowRoomOverlap = false) => {
   try {
-    const response = await axios.post(route('gruppe.store'), form);
+    const response = await axios.post(route('gruppe.store'), {
+      ...form.data(),
+      allow_room_overlap: allowRoomOverlap === true,
+    });
     Swal.fire('Erfolg!', 'Gruppe erfolgreich angelegt!', 'success');
 
     // 👇 hier korrekt das Backend-Objekt (mit ID) verwenden
@@ -491,7 +495,17 @@ const save = async () => {
     form.reset();
     emit('close');
   } catch (error) {
-    Swal.fire('Fehler', error.response?.data?.message || 'Speichern fehlgeschlagen', 'error');
+    if (error.response?.data?.code === 'room_conflict') {
+      const confirmed = await confirmRoomOverlap(error.response.data)
+
+      if (confirmed) {
+        await save(true)
+      }
+
+      return
+    }
+
+    await showRequestError(error, 'Die Gruppe konnte nicht gespeichert werden.')
   }
 };
 

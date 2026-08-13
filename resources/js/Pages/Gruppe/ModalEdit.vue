@@ -7,6 +7,7 @@ import Select from 'primevue/select';
 import MultiSelect from 'primevue/multiselect';
 import DatePicker from 'primevue/datepicker';
 import axios from 'axios';
+import { confirmRoomOverlap, showRequestError } from './roomConflictDialog';
 
 const props = defineProps({
   visible: Boolean,
@@ -231,12 +232,13 @@ function normalizeTime(value) {
 }
 
 // 🔹 Speichern
-const save = async () => {
+const save = async (allowRoomOverlap = false) => {
   try {
     const payload = {
       ...form.value,
       anfangsdatum: formatToIso(form.value.anfangsdatum),
       enddatum: formatToIso(form.value.enddatum),
+      allow_room_overlap: allowRoomOverlap === true,
     };
 
     const response = await axios.put(route('gruppe.update', form.value.id), payload);
@@ -244,7 +246,17 @@ const save = async () => {
     emit('updated', response.data.projekt);
     emit('close');
   } catch (error) {
-    Swal.fire('Fehler', error.response?.data?.message || 'Update fehlgeschlagen', 'error');
+    if (error.response?.data?.code === 'room_conflict') {
+      const confirmed = await confirmRoomOverlap(error.response.data);
+
+      if (confirmed) {
+        await save(true);
+      }
+
+      return;
+    }
+
+    await showRequestError(error, 'Die Gruppe konnte nicht aktualisiert werden.');
   }
 };
 </script>
@@ -392,7 +404,7 @@ const save = async () => {
     </template>
 
     <template #footer>
-      <button @click="save" class="bg-zbb text-white px-4 py-2 rounded">Speichern</button>
+      <button @click="save()" class="bg-zbb text-white px-4 py-2 rounded">Speichern</button>
       <button @click="emit('close')" class="border px-4 py-2 rounded">Abbrechen</button>
     </template>
   </Modal>

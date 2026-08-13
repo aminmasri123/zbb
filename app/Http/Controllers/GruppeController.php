@@ -127,6 +127,7 @@ class GruppeController extends Controller
             'bemerkung' => 'nullable|string|max:1000',
             'non_working_dates' => ['nullable', 'array'],
             'non_working_dates.*' => ['date', 'distinct'],
+            'allow_room_overlap' => ['sometimes', 'boolean'],
         ]);
 
         if ($validated['groupType'] !== 'unlimited') {
@@ -150,7 +151,11 @@ class GruppeController extends Controller
         $this->validateProjektZuordnung($projekt, (int) $validated['bereich'], $validated['raum_id'] ?? null);
         $standortId = $this->resolveStandortId($projekt, $validated);
         $this->validateBetreuer($user, $projekt, (int) $validated['betreuer']);
-        $this->validateRaumBelegung($belegungService, $validated);
+        $roomConflicts = $this->validateRaumBelegung($belegungService, $validated);
+
+        if ($roomConflicts !== [] && ! ($validated['allow_room_overlap'] ?? false)) {
+            return $this->roomConflictResponse($roomConflicts);
+        }
 
         $gruppe = Gruppe::create([
             'personen_id' => $validated['betreuer'],
@@ -168,6 +173,10 @@ class GruppeController extends Controller
             'non_working_dates' => $nonWorkingDates,
         ]);
         $gruppe->partners()->sync($validated['partner_ids'] ?? []);
+
+        if ($roomConflicts !== [] && ($validated['allow_room_overlap'] ?? false)) {
+            $this->logConfirmedRoomOverlap($request, $gruppe, $roomConflicts, 'created');
+        }
 
         return response()->json([
             'success' => true,
@@ -265,13 +274,18 @@ class GruppeController extends Controller
                 'startzeit' => 'required|date_format:H:i',
                 'endzeit' => 'required|date_format:H:i|after:startzeit',
                 'bemerkung' => 'nullable|string|max:1000',
+                'allow_room_overlap' => ['sometimes', 'boolean'],
             ]);
 
             $projekt = $this->projektMitVerfuegbarenRaeumen((int) $gruppe->projekt_id);
             $this->validateProjektZuordnung($projekt, (int) $validated['bereich'], $validated['raum_id'] ?? null);
             $standortId = $this->resolveStandortId($projekt, $validated);
             $this->validateBetreuer($user, $projekt, (int) $validated['betreuer']);
-            $this->validateRaumBelegung($belegungService, $validated, $gruppe->id);
+            $roomConflicts = $this->validateRaumBelegung($belegungService, $validated, $gruppe->id);
+
+            if ($roomConflicts !== [] && ! ($validated['allow_room_overlap'] ?? false)) {
+                return $this->roomConflictResponse($roomConflicts);
+            }
 
             $gruppe->update([
                 'bereich_id' => $validated['bereich'],
@@ -288,6 +302,10 @@ class GruppeController extends Controller
             ]);
             $gruppe->partners()->sync($validated['partner_ids'] ?? []);
 
+            if ($roomConflicts !== [] && ($validated['allow_room_overlap'] ?? false)) {
+                $this->logConfirmedRoomOverlap($request, $gruppe, $roomConflicts, 'updated');
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Gruppe erfolgreich aktualisiert.',
@@ -298,7 +316,7 @@ class GruppeController extends Controller
         } catch (ValidationException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Validierungsfehler',
+                'message' => $this->firstValidationMessage($e->errors()),
                 'errors' => $e->errors(),
             ], 422);
         } catch (\Exception $e) {
@@ -559,10 +577,10 @@ class GruppeController extends Controller
         return $standortId;
     }
 
-    private function validateRaumBelegung(RaumBelegungService $belegungService, array $validated, ?int $ignoreGruppeId = null): void
+    private function validateRaumBelegung(RaumBelegungService $belegungService, array $validated, ?int $ignoreGruppeId = null): array
     {
         if (($validated['ort_typ'] ?? 'raum') !== 'raum' || empty($validated['raum_id'])) {
-            return;
+            return [];
         }
 
         $startDate = $validated['startDate'] ?? $validated['anfangsdatum'];
@@ -570,13 +588,63 @@ class GruppeController extends Controller
         $startTime = $validated['startZeit'] ?? $validated['startzeit'];
         $endTime = $validated['endZeit'] ?? $validated['endzeit'];
 
-        $belegungService->assertAvailable(
+        return $belegungService->conflictsForGroup(
             (int) $validated['raum_id'],
             Carbon::parse($startDate . ' ' . $startTime),
             Carbon::parse($endDate . ' ' . $endTime),
-            null,
             $ignoreGruppeId
         );
+    }
+
+    private function roomConflictResponse(array $conflicts)
+    {
+        $first = $conflicts[0];
+        $roomName = $first['room']['name'];
+        $period = $first['overlap']['label'];
+        $occupiedBy = $first['occupied_by']['label'];
+        $message = sprintf(
+            'Der Raum "%s" ist am %s bereits durch "%s" belegt.',
+            $roomName,
+            $period,
+            $occupiedBy,
+        );
+
+        return response()->json([
+            'success' => false,
+            'code' => 'room_conflict',
+            'message' => $message,
+            'question' => 'Waren beide Gruppen tatsächlich gleichzeitig in diesem Raum?',
+            'conflicts' => $conflicts,
+            'errors' => [
+                'raum_id' => [$message],
+            ],
+        ], 409);
+    }
+
+    private function firstValidationMessage(array $errors): string
+    {
+        foreach ($errors as $messages) {
+            if (is_array($messages) && isset($messages[0])) {
+                return (string) $messages[0];
+            }
+        }
+
+        return 'Bitte prüfen Sie die markierten Eingaben.';
+    }
+
+    private function logConfirmedRoomOverlap(Request $request, Gruppe $gruppe, array $conflicts, string $action): void
+    {
+        Log::notice('Doppelbelegung eines Raums wurde ausdruecklich bestaetigt.', [
+            'action' => $action,
+            'user_id' => $request->user()?->id,
+            'gruppe_id' => $gruppe->id,
+            'raum_id' => $gruppe->raum_id,
+            'conflicts' => collect($conflicts)->map(fn (array $conflict) => [
+                'type' => $conflict['type'],
+                'occupied_id' => $conflict['occupied_by']['id'],
+                'overlap' => $conflict['overlap']['label'],
+            ])->values()->all(),
+        ]);
     }
 
     private function validateBetreuer($user, Projekt $projekt, int $betreuerId): void
