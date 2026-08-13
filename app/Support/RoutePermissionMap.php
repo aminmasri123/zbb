@@ -70,6 +70,7 @@ class RoutePermissionMap
         ],
         'responsive' => 'dashboard.index',
         'notifications.index' => 'notifications.readAll',
+        'notifications.unreadFeed' => 'notifications.readAll',
         'notifications.read' => 'notifications.readAll',
         'notifications.unread' => 'notifications.readAll',
         'notifications.destroy' => 'notifications.readAll',

@@ -7,6 +7,22 @@ use Inertia\Inertia;
 
 class NotificationController extends Controller
 {
+    /**
+     * Lightweight feed for the global header. This avoids reloading the
+     * current Inertia page just to refresh the notification bell.
+     */
+    public function unreadFeed(Request $request)
+    {
+        $query = $request->user()->unreadNotifications()->latest();
+
+        return response()->json([
+            'notifications' => (clone $query)
+                ->limit(5)
+                ->get(['id', 'type', 'data', 'read_at', 'created_at']),
+            'unread_count' => $query->count(),
+        ]);
+    }
+
     public function index(Request $request)
     {
         $user = $request->user();

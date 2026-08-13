@@ -159,10 +159,10 @@
                     <!-- Notification Dropdown -->
                     <Dropdown v-if="$page.props.canManageNotifications" align="right" width="80">
                         <template #trigger >
-                            <button class="relative inline-flex items-center rounded-md border border-transparent px-2 py-2 text-sm font-medium leading-4 text-primary transition duration-150 ease-in-out hover:text-buttonPrimary focus:outline-none sm:mx-1">
+                            <button class="relative inline-flex items-center rounded-md border border-transparent px-2 py-2 text-sm font-medium leading-4 text-primary transition duration-150 ease-in-out hover:text-buttonPrimary focus:outline-none sm:mx-1" @click="refreshNotifications">
                                 <i class="las la-bell text-lg"></i>
-                                <span v-if="notifications.length > 0" class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full text-xs w-5 h-5 flex items-center justify-center">
-                                    {{ notifications.length }}
+                                <span v-if="unreadNotificationCount > 0" class="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-xs text-white">
+                                    {{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}
                                 </span>
 
                             </button>
@@ -173,6 +173,10 @@
                                 <a :href="notification.data.link" target="_blank" class="text-decoration-none">
                                     {{ notification.data.message }}
                                 </a>
+                            </li>
+
+                            <li v-if="notifications.length === 0" class="list-none px-4 py-5 text-center text-sm text-gray-500">
+                                Keine ungelesenen Benachrichtigungen
                             </li>
 
 
@@ -354,7 +358,7 @@
 </template>
 
 <script setup>
-    import { computed, ref, watch } from 'vue';
+    import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
     import { Link, router } from '@inertiajs/vue3';
     import ApplicationMark from '@/Components/ApplicationMark.vue';
     import NavLink from '@/Components/NavLink.vue';
@@ -413,8 +417,62 @@ function switchToProjekt(projekt) {
 const page = usePage();
 const { can, canAny } = usePermissions();
 const notifications = ref(page.props.notify?.notifications || []);
+const unreadNotificationCount = ref(page.props.notify?.unreadCount || notifications.value.length);
+let notificationPollTimer = null;
+let notificationRequestRunning = false;
+
 watch(() => page.props.notify?.notifications, (items) => {
     notifications.value = items || [];
+});
+watch(() => page.props.notify?.unreadCount, (count) => {
+    unreadNotificationCount.value = Number(count || 0);
+});
+
+const refreshNotifications = async () => {
+    if (!page.props.canManageNotifications || notificationRequestRunning || document.hidden) {
+        return;
+    }
+
+    notificationRequestRunning = true;
+
+    try {
+        const response = await axios.get(route('notifications.unreadFeed'));
+        notifications.value = response.data.notifications || [];
+        unreadNotificationCount.value = Number(response.data.unread_count || 0);
+    } catch (error) {
+        // A temporary network problem must not disturb the rest of the header.
+        if (error.response?.status !== 401 && error.response?.status !== 403) {
+            console.error('Benachrichtigungen konnten nicht aktualisiert werden:', error);
+        }
+    } finally {
+        notificationRequestRunning = false;
+    }
+};
+
+const refreshNotificationsWhenVisible = () => {
+    if (!document.hidden) {
+        refreshNotifications();
+    }
+};
+
+onMounted(() => {
+    if (!page.props.canManageNotifications) {
+        return;
+    }
+
+    refreshNotifications();
+    notificationPollTimer = window.setInterval(refreshNotifications, 10000);
+    window.addEventListener('focus', refreshNotifications);
+    document.addEventListener('visibilitychange', refreshNotificationsWhenVisible);
+});
+
+onUnmounted(() => {
+    if (notificationPollTimer) {
+        window.clearInterval(notificationPollTimer);
+    }
+
+    window.removeEventListener('focus', refreshNotifications);
+    document.removeEventListener('visibilitychange', refreshNotificationsWhenVisible);
 });
 const assignedProjects = computed(() => page.props.auth?.user?.projekte || []);
 const projectSelectionRequired = computed(() => !page.props.currentProjekt?.id && assignedProjects.value.length > 0);
@@ -487,6 +545,7 @@ const markAllAsRead = async () => {
   try {
     await axios.post(route('notifications.readAll'));
     notifications.value = []; // sofort im Dropdown leeren
+    unreadNotificationCount.value = 0;
   } catch (error) {
     console.error('Fehler beim Markieren:', error);
   }

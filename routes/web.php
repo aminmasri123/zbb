@@ -582,6 +582,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
 
     //Notification
     Route::get('/user/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::get('/notifications/unread-feed', [NotificationController::class, 'unreadFeed'])->name('notifications.unreadFeed');
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead'])->name('notifications.readAll');
     Route::post('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
     Route::post('/notifications/{notification}/unread', [NotificationController::class, 'markAsUnread'])->name('notifications.unread');

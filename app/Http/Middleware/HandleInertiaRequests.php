@@ -58,6 +58,11 @@ class HandleInertiaRequests extends Middleware
                     && $request->user()->can('notifications.readAll')
                     ? $request->user()->unreadNotifications()->take(5)->get()
                     : [],
+
+                'unreadCount' => $request->user()
+                    && $request->user()->can('notifications.readAll')
+                    ? $request->user()->unreadNotifications()->count()
+                    : 0,
             ],
 
 
