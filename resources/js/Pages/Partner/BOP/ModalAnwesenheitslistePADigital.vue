@@ -108,11 +108,21 @@ let draftSaveRequestId = 0
 const selectedDays = computed(() => days.value.filter((day) => day.selected))
 const selectedDay = computed(() => days.value.find((day) => day.id === selectedDayId.value) || selectedDays.value[0] || null)
 const sheetParticipants = computed(() => allParticipants.value)
+const classedParticipants = computed(() => sheetParticipants.value.map((participant, index) => ({
+  participant,
+  index,
+  startsClass: form.exportMode === 'alle'
+    && (index === 0 || String(sheetParticipants.value[index - 1]?.klasse || '') !== String(participant.klasse || '')),
+})))
 const signatureCount = computed(() => Object.values(signatures).filter(Boolean).length)
 const scopeReady = computed(() => props.partnerId
   && props.schuljahr
   && props.teil
   && (form.exportMode === 'alle' || form.klasse))
+const draftScopeReady = computed(() => props.partnerId
+  && props.schuljahr
+  && props.teil
+  && (!isPreparationPa.value || form.klasse))
 const draftStatusText = computed(() => {
   if (draftLoading.value) return 'wird geladen'
   if (draftSaving.value) return 'wird gespeichert'
@@ -199,7 +209,7 @@ const safePdfFilePart = (value, fallback = 'Datei') => {
   return safeValue || fallback
 }
 
-const draftScopePayload = () => ({
+const requestScopePayload = () => ({
   schuleId: props.partnerId,
   schuljahr: props.schuljahr,
   teil: props.teil,
@@ -207,6 +217,19 @@ const draftScopePayload = () => ({
   exportMode: form.exportMode,
   klasse: form.exportMode === 'klasse' ? form.klasse : '',
 })
+
+// Die normale PA-Liste hat einen gemeinsamen Unterschriftenstand fÃ¼r alle Klassen.
+// Die aktuelle Klasse steuert nur den sichtbaren Ausschnitt und den Export.
+const draftScopePayload = () => isPreparationPa.value
+  ? requestScopePayload()
+  : {
+      schuleId: props.partnerId,
+      schuljahr: props.schuljahr,
+      teil: props.teil,
+      listType: normalizedListType.value,
+      exportMode: 'alle',
+      klasse: '',
+    }
 
 const cloneForDraft = (value) => JSON.parse(JSON.stringify(value ?? null))
 
@@ -314,8 +337,6 @@ const applyDraftPayload = (payload) => {
       form.startDate = payload.form.startDate || ''
       form.endDate = payload.form.endDate || ''
       form.feedbackDate = payload.form.feedbackDate || ''
-      form.exportMode = isPreparationPa.value ? 'klasse' : (payload.form.exportMode || form.exportMode)
-      form.klasse = payload.form.klasse || form.klasse || ''
     }
 
     if (Array.isArray(payload.days) && payload.days.length) {
@@ -335,7 +356,7 @@ const applyDraftPayload = (payload) => {
 }
 
 const loadDraft = async ({ silent = true } = {}) => {
-  if (!scopeReady.value) return
+  if (!draftScopeReady.value) return
   if (!silent) draftLoading.value = true
 
   try {
@@ -365,7 +386,7 @@ const loadDraft = async ({ silent = true } = {}) => {
 }
 
 const saveDraft = async ({ silent = true, payload = null, signatureSnapshotGuard = null } = {}) => {
-  if (!scopeReady.value) return
+  if (!draftScopeReady.value) return
 
   const draftPayload = payload || buildDraftPayload()
   const requestSignatureSnapshot = signatureSnapshotGuard ?? signatureSnapshot(signatures)
@@ -443,13 +464,13 @@ const scheduleDraftSave = () => {
   }, draftAutoSaveDelayMs)
 }
 
-const flushDraftSave = () => {
+const flushDraftSave = async () => {
   if (!draftDirty.value || !previewContext.value) return
 
   const payload = buildDraftPayload()
   window.clearTimeout(draftSaveTimer)
   draftSaveTimer = null
-  saveDraft({ silent: true, payload })
+  await saveDraft({ silent: true, payload })
 }
 
 const startDraftPolling = () => {
@@ -488,7 +509,7 @@ const loadPreview = async ({ includeDraft = false } = {}) => {
     }
 
     const response = await axios.post(route('anwesenheitsliste.PA.digital.preview'), {
-      ...draftScopePayload(),
+      ...requestScopePayload(),
       startDate: form.startDate || null,
       endDate: isPreparationPa.value ? null : form.endDate || null,
       feedbackDate: isPreparationPa.value ? null : form.feedbackDate || null,
@@ -630,7 +651,7 @@ const resetDraftMeta = () => {
 const reloadScope = async () => {
   if (!props.visible || draftHydrating.value) return
 
-  flushDraftSave()
+  await flushDraftSave()
   stopDraftTimers()
   draftHydrating.value = true
   days.value = []
@@ -638,6 +659,7 @@ const reloadScope = async () => {
   syncSignatures({}, { removeMissing: true })
   resetDraftMeta()
   draftHydrating.value = false
+  if (!scopeReady.value) return
   await loadPreview({ includeDraft: true })
   startDraftPolling()
 }
@@ -1568,35 +1590,48 @@ onBeforeUnmount(() => {
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(participant, index) in sheetParticipants" :key="participant.person_id || participant.id">
-                  <td class="border border-gray-800 px-2 py-2 align-middle">{{ index + 1 }}</td>
-                  <td class="border border-gray-800 px-2 py-2 align-middle font-medium">{{ participant.nachname }}</td>
-                  <td class="border border-gray-800 px-2 py-2 align-middle">{{ participant.vorname }}</td>
-                  <td class="border border-gray-800 px-2 py-2 align-middle">{{ participant.klasse }}</td>
-                  <td
-                    v-for="day in selectedDays"
-                    :key="`${day.id}-${participant.person_id || participant.id}`"
-                    class="border border-gray-800 p-1 align-middle"
-                    :class="hasSignature(day, participant) ? 'bg-emerald-50' : 'bg-white'"
-                  >
-                    <div class="relative">
-                      <span
-                        v-if="hasSignature(day, participant)"
-                        class="pointer-events-none absolute right-1 top-1 z-10 text-[11px] text-emerald-700"
-                        title="Unterschrieben"
-                      >
-                        <i class="la la-check-circle"></i>
-                      </span>
-                      <SignatureBox
-                        :model-value="signatures[signatureKey(day, participant)] || ''"
-                        :participant-name="[participant.vorname, participant.nachname].filter(Boolean).join(' ')"
-                        compact
-                        @update:model-value="saveCompletedSignature(day, participant, $event)"
-                        @cleared="removeSignature(day, participant)"
-                      />
-                    </div>
-                  </td>
-                </tr>
+                <template
+                  v-for="row in classedParticipants"
+                  :key="row.participant.person_id || row.participant.id"
+                >
+                  <tr v-if="row.startsClass" class="bg-slate-100">
+                    <th
+                      :colspan="4 + selectedDays.length"
+                      class="border border-gray-800 px-3 py-2 text-left text-xs font-bold text-gray-800"
+                    >
+                      Klasse {{ row.participant.klasse || 'ohne Klassenangabe' }}
+                    </th>
+                  </tr>
+                  <tr>
+                    <td class="border border-gray-800 px-2 py-2 align-middle">{{ row.index + 1 }}</td>
+                    <td class="border border-gray-800 px-2 py-2 align-middle font-medium">{{ row.participant.nachname }}</td>
+                    <td class="border border-gray-800 px-2 py-2 align-middle">{{ row.participant.vorname }}</td>
+                    <td class="border border-gray-800 px-2 py-2 align-middle">{{ row.participant.klasse }}</td>
+                    <td
+                      v-for="day in selectedDays"
+                      :key="`${day.id}-${row.participant.person_id || row.participant.id}`"
+                      class="border border-gray-800 p-1 align-middle"
+                      :class="hasSignature(day, row.participant) ? 'bg-emerald-50' : 'bg-white'"
+                    >
+                      <div class="relative">
+                        <span
+                          v-if="hasSignature(day, row.participant)"
+                          class="pointer-events-none absolute right-1 top-1 z-10 text-[11px] text-emerald-700"
+                          title="Unterschrieben"
+                        >
+                          <i class="la la-check-circle"></i>
+                        </span>
+                        <SignatureBox
+                          :model-value="signatures[signatureKey(day, row.participant)] || ''"
+                          :participant-name="[row.participant.vorname, row.participant.nachname].filter(Boolean).join(' ')"
+                          compact
+                          @update:model-value="saveCompletedSignature(day, row.participant, $event)"
+                          @cleared="removeSignature(day, row.participant)"
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                </template>
               </tbody>
             </table>
           </div>

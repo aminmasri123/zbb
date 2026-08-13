@@ -1150,8 +1150,8 @@ class ProjektBopController extends Controller
                 'partner_id' => $scope['partner_id'],
                 'schuljahr' => $scope['schuljahr'],
                 'teil' => $scope['teil'],
-                'export_mode' => $scope['export_mode'],
-                'klasse' => $scope['klasse'],
+                'export_mode' => $scope['draft_export_mode'],
+                'klasse' => $scope['draft_klasse'],
                 'payload' => json_encode([]),
                 'revision' => 0,
                 'user_create' => $userId,
@@ -1411,6 +1411,8 @@ class ProjektBopController extends Controller
         $projektId = $this->ensurePartnerInActiveProject($partnerId);
         $schuljahr = (string) $validated['schuljahr'];
         $teil = (string) $validated['teil'];
+        $draftExportMode = $listType === 'pa' ? 'alle' : $exportMode;
+        $draftKlasse = $listType === 'pa' ? null : $klasse;
 
         return [
             'draft_hash' => hash('sha256', implode('|', [
@@ -1418,8 +1420,8 @@ class ProjektBopController extends Controller
                 $partnerId,
                 $schuljahr,
                 $teil,
-                $exportMode,
-                $klasse ?: '',
+                $draftExportMode,
+                $draftKlasse ?: '',
                 $listType,
                 'pa-attendance-list',
             ])),
@@ -1430,6 +1432,8 @@ class ProjektBopController extends Controller
             'list_type' => $listType,
             'export_mode' => $exportMode,
             'klasse' => $klasse,
+            'draft_export_mode' => $draftExportMode,
+            'draft_klasse' => $draftKlasse,
         ];
     }
 
@@ -1678,21 +1682,9 @@ class ProjektBopController extends Controller
         ?string $klasse,
         string $listType = 'pa'
     ): Collection {
-        $phaseType = $listType === 'pa_preparation' ? 'pa_preparation' : 'pa';
-        $plannedStudentIds = BopRun::query()
-            ->where('projekt_id', auth()->user()?->current_team_id)
-            ->where('partner_id', $schuleId)
-            ->where('schuljahr', $schuljahr)
-            ->whereIn('teil', [$teil, '_all'])
-            ->orderByRaw('CASE WHEN teil = ? THEN 0 ELSE 1 END', [$teil])
-            ->whereHas('phases', fn ($query) => $query->where('phase_type', $phaseType))
-            ->with(['phases' => fn ($query) => $query->where('phase_type', $phaseType)->with('participants')])
-            ->first()?->phases?->first()?->participants?->pluck('personen_ist_schueler_id');
-
         return PersonenIstSchueler::query()
             ->filterSchueler($schuleId, $schuljahr, $teil)
             ->when($exportMode === 'klasse', fn ($query) => $query->where('klasse', $klasse))
-            ->when($plannedStudentIds?->isNotEmpty(), fn ($query) => $query->whereIn('id', $plannedStudentIds))
             ->with('person')
             ->get()
             ->sort(function ($a, $b) {

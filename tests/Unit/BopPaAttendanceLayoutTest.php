@@ -42,6 +42,9 @@ class BopPaAttendanceLayoutTest extends TestCase
         $this->assertStringContainsString("doc.setFontSize(form.exportFormat === 'A3' ? 17 : 12)", $component);
         $this->assertStringContainsString("doc.setFontSize(form.exportFormat === 'A3' ? 14 : 10)", $component);
         $this->assertStringContainsString("doc.setFontSize(form.exportFormat === 'A3' ? 12.5 : 9)", $component);
+        $this->assertStringContainsString("exportMode: 'alle'", $component);
+        $this->assertStringContainsString('const classedParticipants = computed', $component);
+        $this->assertStringContainsString("Klasse {{ row.participant.klasse || 'ohne Klassenangabe' }}", $component);
         $this->assertStringContainsString('const participantPages = isPreparationPa.value ? calculatedParticipantPages : 2', $component);
         $this->assertStringContainsString('drawTrainerTable(doc, layout)', $component);
         $this->assertStringContainsString("doc.text(String(participant?.nachname || '')", $component);
