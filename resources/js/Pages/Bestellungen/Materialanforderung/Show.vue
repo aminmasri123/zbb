@@ -149,7 +149,24 @@ async function markOrdered() {
 function submitPartialDelivery() {
     router.put(route('materialanforderung.genehmigen', { id: props.anforderung.id, status: 'teilweise_geliefert' }), {
         liefermengen: liefermengen.value,
-    }, { preserveScroll: true, onSuccess: () => { deliveryOpen.value = false } })
+    }, {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => { deliveryOpen.value = false },
+        onError: (errors) => {
+            const message = errors.liefermengen
+                || Object.entries(errors).find(([key]) => key.startsWith('liefermengen.'))?.[1]
+                || 'Die Teillieferung konnte nicht gespeichert werden. Bitte prüfen Sie die eingegebenen Mengen.'
+
+            Swal.fire({
+                title: 'Teillieferung nicht möglich',
+                text: message,
+                icon: 'warning',
+                confirmButtonText: 'Eingaben korrigieren',
+                confirmButtonColor: '#d97706',
+            })
+        },
+    })
 }
 </script>
 

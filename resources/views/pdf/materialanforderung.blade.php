@@ -18,10 +18,23 @@
         thead { display: table-header-group; }
         tr { page-break-inside: avoid; }
 
-        .document-header { margin-bottom: 5mm; }
+        .document-header {
+            margin-bottom: 5mm;
+            table-layout: auto;
+        }
         .document-header td { vertical-align: middle; }
         .brand-bar { width: 5px; height: 48px; background: #f47a1f; }
-        .header-copy { padding-left: 12px; }
+        .header-copy {
+            width: auto;
+            padding-left: 12px;
+            text-align: left;
+        }
+        .logo-cell {
+            width: 110px;
+            padding: 0;
+            text-align: right;
+            white-space: nowrap;
+        }
         .eyebrow { color: #f47a1f; font-size: 7.5pt; font-weight: bold; letter-spacing: 1.2px; text-transform: uppercase; }
         .title { margin-top: 1px; color: #13233f; font-size: 19pt; line-height: 1.05; }
         .document-number { margin-top: 5px; color: #687386; font-size: 8.5pt; }
@@ -190,7 +203,7 @@
             <h1 class="title">Materialanforderung</h1>
             <p class="document-number">Vorgang #{{ $anforderung->id }} <span class="status-pill">{{ $status }}</span></p>
         </td>
-        <td style="width:110px;text-align:right"><img class="logo" src="{{ public_path('img/logo/zbb-logo-transparent.png') }}" alt="ZBB"></td>
+        <td class="logo-cell"><img class="logo" src="{{ public_path('img/logo/zbb-logo-transparent.png') }}" alt="ZBB"></td>
     </tr>
     <tr><td colspan="3"><div class="header-rule"></div></td></tr>
 </table>

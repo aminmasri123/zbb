@@ -235,6 +235,37 @@ class MaterialanforderungWorkflowTest extends TestCase
         $this->assertSame(4, (int) $artikel->fresh()->gelieferte_menge);
     }
 
+    public function test_invalid_partial_delivery_returns_validation_errors_instead_of_error_page(): void
+    {
+        Notification::fake();
+        $project = Projekt::factory()->create(['name' => 'BOP']);
+        $creator = User::factory()->create(['current_team_id' => $project->id]);
+        $buyer = User::factory()->create();
+        $this->grantTestPermission($buyer, 'materialanforderung.bestellwesen.update');
+        $anforderung = $this->anforderung($creator, $project, 'bestellt');
+        $artikel = $anforderung->artikeln()->create([
+            'pos' => 1,
+            'artikel' => 'Schutzbrille',
+            'stueck' => 10,
+            'einzelpreis' => 5,
+            'mwst' => 19,
+            'gesamtpreis' => 50,
+        ]);
+
+        $this->actingAs($buyer)
+            ->from(route('materialanforderung.show', $anforderung))
+            ->put(route('materialanforderung.genehmigen', [$anforderung->id, 'teilweise_geliefert']), [
+                'liefermengen' => [$artikel->id => 10],
+            ])
+            ->assertRedirect(route('materialanforderung.show', $anforderung))
+            ->assertSessionHasErrors([
+                'liefermengen' => 'Alle Artikel sind vollständig geliefert. Bitte verwenden Sie stattdessen „Vollständig geliefert“.',
+            ]);
+
+        $this->assertSame('bestellt', $anforderung->fresh()->status);
+        $this->assertSame(0, (int) $artikel->fresh()->gelieferte_menge);
+    }
+
     private function anforderung(User $creator, Projekt $project, string $status): Materialanforderung
     {
         return Materialanforderung::create([

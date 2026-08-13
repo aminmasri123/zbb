@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class MaterialanforderungController extends Controller
@@ -236,12 +237,25 @@ class MaterialanforderungController extends Controller
                 $totalOrdered = 0;
                 foreach ($anforderung->artikeln as $artikel) {
                     $menge = (int) ($data['liefermengen'][$artikel->id] ?? 0);
-                    abort_if($menge > (int) $artikel->stueck, 422, 'Die Liefermenge darf die bestellte Menge nicht überschreiten.');
+                    if ($menge > (int) $artikel->stueck) {
+                        throw ValidationException::withMessages([
+                            "liefermengen.{$artikel->id}" => "Beim Artikel „{$artikel->artikel}“ darf die Liefermenge von {$menge} die bestellte Menge von {$artikel->stueck} nicht überschreiten.",
+                        ]);
+                    }
                     $artikel->update(['gelieferte_menge' => $menge]);
                     $totalDelivered += $menge;
                     $totalOrdered += (int) $artikel->stueck;
                 }
-                abort_if($totalDelivered === 0 || $totalDelivered >= $totalOrdered, 422, 'Für eine Teillieferung muss mindestens eine, aber noch nicht die vollständige Menge geliefert sein.');
+                if ($totalDelivered === 0) {
+                    throw ValidationException::withMessages([
+                        'liefermengen' => 'Für eine Teillieferung muss mindestens ein Artikel als geliefert eingetragen sein.',
+                    ]);
+                }
+                if ($totalDelivered >= $totalOrdered) {
+                    throw ValidationException::withMessages([
+                        'liefermengen' => 'Alle Artikel sind vollständig geliefert. Bitte verwenden Sie stattdessen „Vollständig geliefert“.',
+                    ]);
+                }
             }
 
             if ($status === 'geliefert') {
