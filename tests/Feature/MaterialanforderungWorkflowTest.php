@@ -15,6 +15,21 @@ class MaterialanforderungWorkflowTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_creator_can_open_materialanforderung_overview(): void
+    {
+        $project = Projekt::factory()->create(['name' => 'BOP']);
+        $creator = User::factory()->create(['current_team_id' => $project->id]);
+        $this->grantTestPermission($creator, 'materialanforderung.index');
+        $anforderung = $this->anforderung($creator, $project, 'entwurf');
+
+        $this->actingAs($creator)
+            ->get(route('materialanforderung.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('anforderungen', 1)
+                ->where('anforderungen.0.id', $anforderung->id));
+    }
+
     public function test_only_sachlicher_approver_assigned_to_project_can_approve(): void
     {
         Notification::fake();

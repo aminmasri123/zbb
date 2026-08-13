@@ -30,15 +30,15 @@ class MaterialanforderungController extends Controller
 
         if ($search !== '') {
             $query->where(function ($searchQuery) use ($search) {
-                $searchQuery->where('materialanforderungen.id', 'like', "%{$search}%")
-                    ->orWhere('materialanforderungen.bemerkungen', 'like', "%{$search}%")
+                $searchQuery->where('materialanforderungs.id', 'like', "%{$search}%")
+                    ->orWhere('materialanforderungs.bemerkungen', 'like', "%{$search}%")
                     ->orWhereHas('artikeln', fn ($artikel) => $artikel->where('artikel', 'like', "%{$search}%"));
             });
         }
 
         $assignedProjectIds = $user->projekte()->pluck('projekts.id');
         $query->where(function ($visibility) use ($user, $assignedProjectIds) {
-            $visibility->where('materialanforderungen.ersteller_id', $user->id);
+            $visibility->where('materialanforderungs.ersteller_id', $user->id);
 
             if ($user->can('materialanforderung.sachlische_freigabe.index')) {
                 $visibility->orWhere(function ($approval) use ($assignedProjectIds) {
