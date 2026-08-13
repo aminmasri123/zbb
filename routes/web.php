@@ -39,6 +39,7 @@ use App\Http\Controllers\KontaktController;
 use App\Http\Controllers\KostenstelleController;
 use App\Http\Controllers\LagerController;
 use App\Http\Controllers\MaterialanforderungController;
+use App\Http\Controllers\UserPermissionController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\NotificationRuleController;
 use App\Http\Controllers\NotizController;
@@ -314,6 +315,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::get('/berechtigung/{id?}', [BerechtigungController::class, 'index'])->name('berechtigung.index')->can('berechtigung.index');
     Route::post('/berechtigungZuweisen', [BerechtigungController::class, 'berechtigungZuweisen'])->name('berechtigung.zuweisen')->middleware('canAnyPermission:berechtigung.zuweisen,berechtigung.update');
     Route::post('/berechtigungKategorieZuweisen', [BerechtigungController::class, 'berechtigungKategorieZuweisen'])->name('berechtigung.kategorie.zuweisen')->middleware('canAnyPermission:berechtigung.zuweisen,berechtigung.update');
+    Route::put('/personal/benutzer/{user}/zusatzberechtigungen', [UserPermissionController::class, 'update'])->name('personal.permissions.update')->middleware('canAnyPermission:berechtigung.zuweisen,berechtigung.update');
     Route::put('/rolle/{role}/datenzugriff', [RoleDataAccessController::class, 'update'])->name('rolle.data-access.update')->middleware('canAnyPermission:rolle.data-access.update,berechtigung.update');
     Route::get('/einstellung/benachrichtigungen', [NotificationRuleController::class, 'index'])->name('notification-rules.index')->middleware('canAnyPermission:notification-rules.index,notification-rules.update,berechtigung.update');
     Route::post('/einstellung/benachrichtigungen', [NotificationRuleController::class, 'store'])->name('notification-rules.store')->middleware('canAnyPermission:notification-rules.store,notification-rules.update,berechtigung.update');

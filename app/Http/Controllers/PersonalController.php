@@ -9,6 +9,7 @@ use App\Models\Personen;
 use App\Models\RaumHasPersonen;
 use App\Models\Role;
 use App\Models\Standort;
+use App\Models\Berechtigungskategorie;
 use App\Services\Projects\StaffProjectAssignmentSynchronizer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -49,9 +50,12 @@ class PersonalController extends Controller
         $authUser   = auth()->user();
         $adminRoles = ['Administrator', 'Geschäftsführer', 'Sekretariat'];
 
+        $canManagePermissions = $authUser->can('berechtigung.zuweisen') || $authUser->can('berechtigung.update');
+
        $query = Personen::query()
             ->with([
-                'user.roles',
+                'user.roles.permissions:id,name',
+                'user.permissions:id,name,beschreibung,berechtigungskategorie_id',
                 'projekte',
                 //'projekte.personenStandorte',  // ✔ Standorte pro Person & pro Projekt
                 'projekte.abteilung',
@@ -101,6 +105,13 @@ class PersonalController extends Controller
                 ->get(),
             'rollen'       => $rollen,
             'standorte'    => $standorte,
+            'permissionCategories' => $canManagePermissions
+                ? Berechtigungskategorie::with(['permissions' => fn ($permissions) => $permissions
+                    ->select('id', 'name', 'beschreibung', 'berechtigungskategorie_id')
+                    ->orderBy('name')])
+                    ->orderBy('name')
+                    ->get(['id', 'name', 'beschreibung'])
+                : [],
         ]);
     }
 

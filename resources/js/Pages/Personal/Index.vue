@@ -7,17 +7,18 @@ import ModalDestroy from '@/Components/ModalDestroyForm.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import Swal from 'sweetalert2';
 import ModalProjektZuweisen from "@/Pages/Personal/ModalProjektZuweisen.vue";
+import ModalUserPermissions from '@/Pages/Personal/ModalUserPermissions.vue';
 import { usePermissions } from '@/utils/permissions';
 
 
 
-const { users, authProjekte, rollen, standorte } = defineProps({
+const { users, authProjekte, rollen, standorte, permissionCategories } = defineProps({
     users: Object,
     authProjekte: Array,
     rollen: Array,
     standorte: Array,
+    permissionCategories: { type: Array, default: () => [] },
 });
-console.log(users)
 // Reactive states
 let search = ref('');
 let selectedProject = ref(null);
@@ -31,7 +32,15 @@ const { can } = usePermissions();
 const canEditPersonal = computed(() => can('personal.edit'));
 const canAssignProjects = computed(() => can('benutzer.update'));
 const canDeleteUser = computed(() => can('benutzer.destroy'));
-const canManagePersonal = computed(() => canEditPersonal.value || canAssignProjects.value || canDeleteUser.value);
+const canManagePermissions = computed(() => can('berechtigung.zuweisen') || can('berechtigung.update'));
+const canManagePersonal = computed(() => canEditPersonal.value || canAssignProjects.value || canDeleteUser.value || canManagePermissions.value);
+const showPermissionsModal = ref(false);
+const userForPermissions = ref(null);
+const openPermissions = (user) => {
+    if (!canManagePermissions.value) return;
+    userForPermissions.value = user;
+    showPermissionsModal.value = true;
+};
 const openProjektZuweisen = (user) => {
     if (!canAssignProjects.value) return;
     userForProjekt.value = user;
@@ -176,10 +185,16 @@ const groupProjects = (projekte, standorte) => {
                         </td>
 
                         <td class="px-6 py-3">
-                            <span v-for="rolle in (user?.user?.roles || [])" :key="rolle.id">
-                                {{ rolle?.name}}
-                            </span>
-
+                            <div v-if="user?.user?.roles?.length" class="flex flex-wrap gap-2">
+                                <span
+                                    v-for="rolle in user.user.roles"
+                                    :key="rolle.id"
+                                    class="inline-flex rounded-md bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700"
+                                >
+                                    {{ rolle.name }}
+                                </span>
+                            </div>
+                            <span v-else class="text-gray-400">–</span>
                         </td>
                         <td class="px-6 py-3 flex flex-wrap text-xs">
 
@@ -219,6 +234,11 @@ const groupProjects = (projekte, standorte) => {
                                         Projekte zuweisen <i class="las la-random"></i>
                                     </span>
 
+                                    <span v-if="canManagePermissions" class="block px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                                        @click="openPermissions(user)">
+                                        Zusatzberechtigungen <i class="las la-key"></i>
+                                    </span>
+
                                     <Link v-if="canEditPersonal" :href="route('personal.edit', user.id)" class="block px-4 py-2 hover:bg-gray-100">
                                            {{ $t('Bearbeiten') }} <i class="las la-edit"></i>
                                     </Link>
@@ -239,6 +259,14 @@ const groupProjects = (projekte, standorte) => {
             :standorte="standorte"
             @close="showProjektZuweisenModal = false"
             @saved="router.reload({ only: ['users'] })"
+        />
+
+        <ModalUserPermissions
+            v-if="canManagePermissions"
+            :visible="showPermissionsModal"
+            :person="userForPermissions"
+            :categories="permissionCategories"
+            @close="showPermissionsModal = false; router.reload({ only: ['users'] })"
         />
 
 
