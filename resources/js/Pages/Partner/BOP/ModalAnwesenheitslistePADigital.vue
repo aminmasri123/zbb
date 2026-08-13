@@ -771,13 +771,13 @@ const pdfLayout = (doc) => {
     widthScale,
     rowScale,
     tableX: (pageWidth - tableWidth) / 2,
-    tableY: (isPreparationPa.value ? 48 : 58) * widthScale,
+    tableY: (isPreparationPa.value ? 48 : 62) * widthScale,
     tableWidth,
     headHeight: (isPreparationPa.value ? 13.8 : 18) * rowScale,
-    rowHeight: (isPreparationPa.value ? 6.15 : 7) * rowScale,
+    rowHeight: (isPreparationPa.value ? 6.15 : 6.5) * rowScale,
     rowsPerPage: 17,
-    firstParticipantPageRows: isPreparationPa.value ? 17 : 14,
-    secondParticipantPageRows: isPreparationPa.value ? 17 : 20,
+    firstParticipantPageRows: isPreparationPa.value ? 17 : 13,
+    secondParticipantPageRows: isPreparationPa.value ? 17 : 21,
     secondPageTableY: 25 * widthScale,
     headerX: (isPreparationPa.value ? 7 : 20) * widthScale,
     headerPageY: (isPreparationPa.value ? 7 : 15) * widthScale,
@@ -860,25 +860,25 @@ const drawPdfHeader = (doc, pageNumber, totalPages, layout, trainerPage = false)
   doc.setFont('helvetica', 'bold')
 
   if (trainerPage) {
-    doc.setFontSize(form.exportFormat === 'A3' ? 13 : 10.5)
+    doc.setFontSize(form.exportFormat === 'A3' ? 17 : 12)
     doc.text(title, x0, 36 * layout.widthScale)
     return
   }
 
-  doc.setFontSize(form.exportFormat === 'A3' ? 13 : 10.5)
+  doc.setFontSize(form.exportFormat === 'A3' ? 17 : 12)
   doc.text(title, x0, layout.headerTitleY)
 
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(form.exportFormat === 'A3' ? 9 : 7.2)
+  doc.setFontSize(form.exportFormat === 'A3' ? 14 : 10)
   doc.text('Zeitraum:', layout.headerPeriodX, layout.headerTitleY)
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(form.exportFormat === 'A3' ? 9.5 : 7.5)
+  doc.setFontSize(form.exportFormat === 'A3' ? 14 : 10)
   doc.text(periodText.value || '', layout.headerPeriodValueX, layout.headerTitleY, {
     maxWidth: layout.pageWidth - layout.headerPeriodValueX - (7 * layout.widthScale),
   })
 
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(form.exportFormat === 'A3' ? 9 : 7.2)
+  doc.setFontSize(form.exportFormat === 'A3' ? 12.5 : 9)
   doc.text('Schule:', x0, rowY(0))
   doc.text(String(school), x1, rowY(0), { maxWidth: layout.headerValueWidth - 2 })
   doc.text('Schulform:', x0, rowY(2))
@@ -984,7 +984,9 @@ const drawPdfTableHeader = (doc, columns, layout) => {
 }
 
 const drawPdfRows = (doc, columns, rows, page, layout, pdfSignatures) => {
-  const pageStart = isPreparationPa.value ? (page - 1) * layout.rowsPerPage : (page === 1 ? 0 : 14)
+  const pageStart = isPreparationPa.value
+    ? (page - 1) * layout.rowsPerPage
+    : (page === 1 ? 0 : layout.firstParticipantPageRows)
   const pageRows = isPreparationPa.value
     ? layout.rowsPerPage
     : (page === 1 ? layout.firstParticipantPageRows : layout.secondParticipantPageRows)

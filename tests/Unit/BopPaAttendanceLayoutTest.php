@@ -36,8 +36,12 @@ class BopPaAttendanceLayoutTest extends TestCase
 
         $this->assertIsString($component);
         $this->assertStringContainsString('rowsPerPage: 17', $component);
-        $this->assertStringContainsString('firstParticipantPageRows: isPreparationPa.value ? 17 : 14', $component);
-        $this->assertStringContainsString('secondParticipantPageRows: isPreparationPa.value ? 17 : 20', $component);
+        $this->assertStringContainsString('firstParticipantPageRows: isPreparationPa.value ? 17 : 13', $component);
+        $this->assertStringContainsString('secondParticipantPageRows: isPreparationPa.value ? 17 : 21', $component);
+        $this->assertStringContainsString('tableY: (isPreparationPa.value ? 48 : 62) * widthScale', $component);
+        $this->assertStringContainsString("doc.setFontSize(form.exportFormat === 'A3' ? 17 : 12)", $component);
+        $this->assertStringContainsString("doc.setFontSize(form.exportFormat === 'A3' ? 14 : 10)", $component);
+        $this->assertStringContainsString("doc.setFontSize(form.exportFormat === 'A3' ? 12.5 : 9)", $component);
         $this->assertStringContainsString('const participantPages = isPreparationPa.value ? calculatedParticipantPages : 2', $component);
         $this->assertStringContainsString('drawTrainerTable(doc, layout)', $component);
         $this->assertStringContainsString("doc.text(String(participant?.nachname || '')", $component);
