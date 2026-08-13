@@ -341,8 +341,11 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::post('/benutzer/anlegen', [UserController::class, 'store'])->name('user.store')->can('benutzer.store');
     Route::post('/benutzer/{user}/einladung', [StaffAccountInvitationController::class, 'resend'])->name('user.invitation.store')->can('benutzer.update');
     Route::delete('/benutzer/entfernen/{id}', [UserController::class, 'destroy'])->name('user.destroy')->can('benutzer.destroy');
-    Route::delete('/benutzer/mitarbeiter/{person}/vollstaendig', [UserController::class, 'destroyStaff'])
+    Route::delete('/benutzer/mitarbeiter/{personId}/vollstaendig', [UserController::class, 'destroyStaff'])
         ->name('user.staff.destroy')
+        ->can('benutzer.destroy');
+    Route::get('/benutzer/mitarbeiter/{personId}/loeschstatus', [UserController::class, 'staffDeletionStatus'])
+        ->name('user.staff.deletion-status')
         ->can('benutzer.destroy');
     Route::post('/benutzer/projekt/switch', [UserController::class, 'switch'])->name('projekt.switch');
     Route::get('/benutzer/edit/{id}', [UserController::class, 'edit'])->name('user.edit')->can('benutzer.update');

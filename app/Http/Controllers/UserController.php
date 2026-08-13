@@ -457,7 +457,7 @@ class UserController extends Controller
         }
     }
 
-    public function destroyStaff(Request $request, Personen $person)
+    public function destroyStaff(Request $request, int $personId)
     {
         Validator::make(
             $request->all(),
@@ -467,6 +467,16 @@ class UserController extends Controller
                 'confirmation.in' => 'Die Bestätigung ist nicht korrekt. Bitte geben Sie exakt "delete" ein.',
             ],
         )->validate();
+
+        $person = Personen::find($personId);
+
+        if (! $person) {
+            return response()->json([
+                'message' => 'Der Mitarbeiter war bereits vollständig gelöscht. Die Liste wurde aktualisiert.',
+                'person_id' => $personId,
+                'already_deleted' => true,
+            ]);
+        }
 
         if ($person->typ !== 'mitarbeiter') {
             return response()->json([
@@ -480,7 +490,6 @@ class UserController extends Controller
             ], 403);
         }
 
-        $personId = $person->getKey();
         $name = trim("{$person->vorname} {$person->nachname}");
 
         try {
@@ -506,6 +515,14 @@ class UserController extends Controller
         return response()->json([
             'message' => ($name !== '' ? $name : 'Der Mitarbeiter').' wurde vollständig gelöscht.',
             'person_id' => $personId,
+        ]);
+    }
+
+    public function staffDeletionStatus(int $personId)
+    {
+        return response()->json([
+            'person_id' => $personId,
+            'exists' => Personen::whereKey($personId)->exists(),
         ]);
     }
 

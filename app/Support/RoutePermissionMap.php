@@ -29,6 +29,7 @@ class RoutePermissionMap
         'user.theme.update' => 'dashboard.index',
         'user.invitation.store' => 'benutzer.update',
         'user.staff.destroy' => 'benutzer.destroy',
+        'user.staff.deletion-status' => 'benutzer.destroy',
         'apps.files.owner.update' => [],
         'bereich.indexAjaxFresh' => 'bereich.index',
         'abteilung.indexAjaxFresh' => 'abteilung.index',

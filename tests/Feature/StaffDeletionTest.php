@@ -49,6 +49,43 @@ class StaffDeletionTest extends TestCase
         $this->assertDatabaseMissing('users', ['id' => $target->id]);
     }
 
+    public function test_deleting_an_already_removed_staff_record_is_treated_as_success(): void
+    {
+        $actor = User::factory()->create();
+        $this->grantTestPermission($actor, 'benutzer.destroy');
+        $staff = Personen::factory()->create();
+        $personId = $staff->id;
+        $staff->delete();
+
+        $this->actingAs($actor)->deleteJson(
+            route('user.staff.destroy', $personId),
+            ['confirmation' => 'delete'],
+        )
+            ->assertOk()
+            ->assertJsonPath('person_id', $personId)
+            ->assertJsonPath('already_deleted', true);
+    }
+
+    public function test_staff_deletion_status_reports_whether_the_record_still_exists(): void
+    {
+        $actor = User::factory()->create();
+        $this->grantTestPermission($actor, 'benutzer.destroy');
+        $staff = Personen::factory()->create();
+
+        $this->actingAs($actor)
+            ->getJson(route('user.staff.deletion-status', $staff->id))
+            ->assertOk()
+            ->assertJsonPath('exists', true);
+
+        $personId = $staff->id;
+        $staff->delete();
+
+        $this->actingAs($actor)
+            ->getJson(route('user.staff.deletion-status', $personId))
+            ->assertOk()
+            ->assertJsonPath('exists', false);
+    }
+
     public function test_exact_delete_confirmation_is_required(): void
     {
         $actor = User::factory()->create();

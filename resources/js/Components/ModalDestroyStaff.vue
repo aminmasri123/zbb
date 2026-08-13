@@ -15,6 +15,14 @@ const errorMessage = ref('');
 const deleting = ref(false);
 const confirmed = computed(() => confirmation.value === 'delete');
 
+const finishSuccessfully = (message) => {
+    emit('deleted', {
+        personId: props.person.id,
+        message,
+    });
+    emit('close');
+};
+
 const close = () => {
     if (!deleting.value) emit('close');
 };
@@ -33,15 +41,30 @@ const destroyStaff = async () => {
             data: { confirmation: confirmation.value },
         });
 
-        emit('deleted', {
-            personId: response.data.person_id,
-            message: response.data.message,
-        });
-        emit('close');
+        finishSuccessfully(response.data.message);
     } catch (error) {
-        errorMessage.value = error.response?.data?.message
-            || error.response?.data?.errors?.confirmation?.[0]
-            || 'Der Mitarbeiter konnte nicht vollständig gelöscht werden.';
+        const backendMessage = error.response?.data?.message
+            || error.response?.data?.errors?.confirmation?.[0];
+        const responseStatus = error.response?.status;
+        const responseIsUnclear = !backendMessage || responseStatus === 404 || responseStatus >= 500;
+
+        if (responseIsUnclear) {
+            try {
+                const statusResponse = await axios.get(
+                    route('user.staff.deletion-status', props.person.id),
+                );
+
+                if (statusResponse.data.exists === false) {
+                    finishSuccessfully('Der Mitarbeiter wurde vollständig gelöscht.');
+                    return;
+                }
+            } catch {
+                // Die ursprüngliche Fehlermeldung wird unterhalb des Eingabefelds angezeigt.
+            }
+        }
+
+        errorMessage.value = backendMessage
+            || 'Die Löschung konnte nicht bestätigt werden. Bitte versuchen Sie es erneut.';
     } finally {
         deleting.value = false;
     }
