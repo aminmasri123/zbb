@@ -389,44 +389,102 @@ const filteredPartners = computed(() => {
 });
 
 // Fetch / Compare
+// Der automatische Abgleich ist absichtlich langsam und pausiert in inaktiven Tabs.
+// Die alte 5-Sekunden-Abfrage lud dauerhaft sehr viele Relationen und konnte PHP-FPM
+// auf dem Produktivserver ueberlasten.
+const PARTNER_REFRESH_INTERVAL = 60_000;
+let partnerRefreshTimer = null;
+let partnerRefreshController = null;
+let partnerRefreshRunning = false;
+let partnerRefreshActive = false;
+
 const fetchPartners = async () => {
+    partnerRefreshController?.abort();
+    partnerRefreshController = new AbortController();
+
     try {
         const response = await axios.get(route('partner.indexAjaxFresh'), {
-            params: { search: search.value }
+            params: { search: search.value },
+            signal: partnerRefreshController.signal,
         });
         return response.data.partners;
     } catch (error) {
-        console.error('Fehler beim Abrufen der Partners:', error);
+        if (error.code !== 'ERR_CANCELED') {
+            console.error('Fehler beim Abrufen der Partners:', error);
+        }
         return null;
     }
 };
 
 const compareAndReload = async () => {
-    const newPartners = await fetchPartners();
-    if (newPartners) {
-        const localIds = localPartners.value.map(p => p.id);
-        newPartners.data.forEach(np => {
-            const normalizedPartner = normalizePartner(np);
+    if (partnerRefreshRunning || document.hidden) return;
 
-            if (!localIds.includes(np.id)) {
-                localPartners.value.unshift(normalizedPartner);
-                return;
-            }
+    partnerRefreshRunning = true;
+    try {
+        const newPartners = await fetchPartners();
+        if (newPartners) {
+            const localIds = localPartners.value.map(p => p.id);
+            newPartners.data.forEach(np => {
+                const normalizedPartner = normalizePartner(np);
 
-            const index = localPartners.value.findIndex(lp => lp.id === np.id);
-            if (index !== -1) localPartners.value[index] = normalizedPartner;
-        });
-        localPartners.value = localPartners.value.filter(lp =>
-            newPartners.data.some(np => np.id === lp.id)
-        );
+                if (!localIds.includes(np.id)) {
+                    localPartners.value.unshift(normalizedPartner);
+                    return;
+                }
+
+                const index = localPartners.value.findIndex(lp => lp.id === np.id);
+                if (index !== -1) localPartners.value[index] = normalizedPartner;
+            });
+            localPartners.value = localPartners.value.filter(lp =>
+                newPartners.data.some(np => np.id === lp.id)
+            );
+        }
+    } finally {
+        partnerRefreshRunning = false;
     }
 };
-setInterval(compareAndReload, 5000);
+
+const schedulePartnerRefresh = () => {
+    clearTimeout(partnerRefreshTimer);
+    partnerRefreshTimer = null;
+
+    if (partnerRefreshActive && !document.hidden) {
+        partnerRefreshTimer = window.setTimeout(async () => {
+            await compareAndReload();
+            schedulePartnerRefresh();
+        }, PARTNER_REFRESH_INTERVAL);
+    }
+};
+
+const handlePartnerVisibilityChange = () => {
+    if (document.hidden) {
+        clearTimeout(partnerRefreshTimer);
+        partnerRefreshTimer = null;
+        partnerRefreshController?.abort();
+        return;
+    }
+
+    compareAndReload().finally(schedulePartnerRefresh);
+};
 
 let searchTimeout = null;
 watch(search, () => {
     clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(compareAndReload, 250);
+    searchTimeout = setTimeout(() => compareAndReload().finally(schedulePartnerRefresh), 250);
+});
+
+onMounted(() => {
+    partnerRefreshActive = true;
+    document.addEventListener('visibilitychange', handlePartnerVisibilityChange);
+    schedulePartnerRefresh();
+});
+
+onBeforeUnmount(() => {
+    partnerRefreshActive = false;
+    document.removeEventListener('visibilitychange', handlePartnerVisibilityChange);
+    clearTimeout(partnerRefreshTimer);
+    clearTimeout(searchTimeout);
+    partnerRefreshController?.abort();
 });
 
 // -----------------------------

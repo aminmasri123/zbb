@@ -29,6 +29,9 @@ let search = ref(filters?.search ?? '');
 let searchStandort = ref('');
 let checkBoxListeTeilnehmer = ref(false); //Teilnehmer zur Projekten/Gruppen hinzufügen
 let selectedStandort = ref(filters?.standort ?? null);
+let selectedSchool = ref(filters?.schule ?? null);
+let selectedInstructor = ref(filters?.anleiter ?? null);
+let selectedArea = ref(filters?.bereich ?? null);
 let isModalOpen = ref(false); // Modal-Zustand
 let sortColumn = ref(filters?.sort ?? 'id');  // Spalte zum Sortieren
 let sortDirection = ref(filters?.direction ?? 'desc'); // Sortierrichtung ('asc' oder 'desc')
@@ -41,7 +44,7 @@ const groupModal = ref(null);
 let teilnehmerToDelete = ref(null); // Speichert den Namen der Teilnehmer, die gelöscht werden sollen
 let showModalLöschen = ref(false); // Modal für die Löschung
 
-const { teilnehmers, authProjekte, rollen, gruppen, projekte, standorte, defaultProjekt, filters, overviewPeriods, overviewStats, participantOverviewColumns, participantOverviewColumnDefinitions, participantOverviewShowMetrics, participantSchools  } = defineProps({
+const { teilnehmers, authProjekte, rollen, gruppen, projekte, standorte, anleiter, bereiche, canUseAdvancedGroupFilters, defaultProjekt, filters, overviewPeriods, overviewStats, participantOverviewColumns, participantOverviewColumnDefinitions, participantOverviewShowMetrics, participantSchools  } = defineProps({
     pagination: {
         type: Object,
     },
@@ -66,6 +69,9 @@ const { teilnehmers, authProjekte, rollen, gruppen, projekte, standorte, default
         type: Array,
         default: () => []
     },
+    anleiter: { type: Array, default: () => [] },
+    bereiche: { type: Array, default: () => [] },
+    canUseAdvancedGroupFilters: { type: Boolean, default: false },
      defaultProjekt: { type: Number, default: null },
      overviewPeriods: { type: Array, default: () => [] },
      overviewStats: { type: Object, default: () => ({}) },
@@ -88,7 +94,7 @@ const canUpdateParticipant = computed(() => can('teilnehmer.update'));
 const canDeleteParticipant = computed(() => can('teilnehmer.destroy'));
 const canBulkDeleteParticipant = computed(() => can('teilnehmer.bulkDestroy') || can('teilnehmer.destroy'));
 const canAssignParticipantToGroup = computed(() => can('gruppeHasTeilnehmer.store'));
-const canUseSelectionActions = computed(() => canAssignParticipantToGroup.value || canBulkDeleteParticipant.value);
+const canUseSelectionActions = computed(() => canAssignParticipantToGroup.value || canBulkDeleteParticipant.value || canUpdateParticipant.value);
 const canManageParticipantRows = computed(() => canUpdateParticipant.value || canDeleteParticipant.value);
 
 const importTeilnehmer = () => {
@@ -205,11 +211,14 @@ const deleteTeilnehmer = (id) => {
 };
 
 // Watch fuer Aenderungen in Suche, Standort und Sortierung
-watch([search, selectedStandort, sortColumn, sortDirection, selectedPeriod], () => {
+watch([search, selectedStandort, selectedSchool, selectedInstructor, selectedArea, sortColumn, sortDirection, selectedPeriod], () => {
     router.get(route('teilnehmer.index'),
         {
             search: search.value,
             standort: selectedStandort.value,
+            schule: selectedSchool.value,
+            anleiter: selectedInstructor.value,
+            bereich: selectedArea.value,
             sort: sortColumn.value,
             direction: sortDirection.value
             ,period: selectedPeriod.value
@@ -554,6 +563,62 @@ const deleteSelectedTeilnehmer = async () => {
         });
     }
 };
+
+const swapSelectedParticipantNames = async () => {
+    if (!canUpdateParticipant.value) return;
+
+    if (selected.value.length === 0) {
+        await Swal.fire({
+            title: 'Keine Auswahl',
+            text: 'Bitte markieren Sie zuerst mindestens einen Teilnehmer.',
+            icon: 'warning',
+        });
+        return;
+    }
+
+    const result = await Swal.fire({
+        title: 'Vorname und Nachname tauschen?',
+        html: `Bei <strong>${selected.value.length}</strong> markierten Teilnehmern werden Vorname und Nachname vertauscht. Andere Teilnehmerdaten bleiben unverändert.<br><br>Zur Bestätigung <strong>tauschen</strong> eingeben.`,
+        icon: 'warning',
+        input: 'text',
+        inputPlaceholder: 'tauschen',
+        showCancelButton: true,
+        confirmButtonText: 'Namen tauschen',
+        cancelButtonText: 'Abbrechen',
+        confirmButtonColor: '#ea580c',
+        inputValidator: (value) => String(value || '').trim().toLowerCase() === 'tauschen'
+            ? undefined
+            : 'Bitte tauschen eingeben.',
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+        const response = await axios.patch(route('teilnehmer.names.swap'), {
+            ids: [...selected.value],
+        });
+        const changed = new Map((response.data.participants || []).map((participant) => [participant.id, participant]));
+
+        teilnehmerList.value = teilnehmerList.value.map((participant) => (
+            changed.has(participant.id)
+                ? { ...participant, ...changed.get(participant.id) }
+                : participant
+        ));
+        selected.value = [];
+
+        await Swal.fire({
+            title: 'Gespeichert',
+            text: response.data.message || 'Vorname und Nachname wurden getauscht.',
+            icon: 'success',
+        });
+    } catch (error) {
+        await Swal.fire({
+            title: 'Fehler',
+            text: error.response?.data?.message || 'Die Namen konnten nicht getauscht werden.',
+            icon: 'error',
+        });
+    }
+};
 const selectStandort = (standortId) => {
     selectedStandort.value = standortId;
 };
@@ -648,7 +713,7 @@ const sortByColumn = (column) => {
 
 
         <!-- Suchfeld -->
-        <div class="flex justify-around items-center mb-3">
+        <div class="mb-3 flex flex-wrap items-center gap-2">
             <Dropdown v-if="canUseSelectionActions" align="left">
                 <template #trigger>
                     <button class="bg-white border border-gray-300 rounded-l-md px-5 py-2 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500">
@@ -668,6 +733,10 @@ const sortByColumn = (column) => {
                     <button v-if="canAssignParticipantToGroup" type="button" class="flex w-full justify-between cursor-pointer py-2 px-6 items-center hover:bg-gray-100 text-left" @click="openGroupModal">
                         In Gruppe hinzufügen
                         <span class="ml-4 text-xs text-gray-500">{{ selectedCount }}</span>
+                    </button>
+                    <button v-if="canUpdateParticipant" type="button" class="flex w-full justify-between cursor-pointer py-2 px-6 items-center hover:bg-orange-50 text-left text-orange-700" @click="swapSelectedParticipantNames">
+                        Vor-/Nachname tauschen
+                        <span class="ml-4 text-xs">{{ selectedCount }}</span>
                     </button>
                     <button v-if="canBulkDeleteParticipant" type="button" class="flex w-full justify-between cursor-pointer py-2 px-6 items-center hover:bg-red-50 text-left text-red-600" @click="deleteSelectedTeilnehmer">
                         Markierte löschen
@@ -695,7 +764,7 @@ const sortByColumn = (column) => {
             <input
                 v-model="search"
                 type="text"
-                class="border border-gray-300 text-gray-900 text-sm focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                class="block min-w-60 flex-1 border border-gray-300 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500"
                 :class="!canUseSelectionActions && !canCreateParticipant && !canImportParticipant ? 'rounded-l-md' : ''"
                 placeholder="Suchen ..."
             />
@@ -738,6 +807,38 @@ const sortByColumn = (column) => {
                     </DropdownLink>
                 </template>
             </Dropdown>
+            <select
+                v-model="selectedSchool"
+                class="border border-gray-300 bg-white p-2.5 text-sm text-gray-700 focus:border-zbb focus:ring-zbb"
+                aria-label="Schule oder Partner filtern"
+            >
+                <option :value="null">Alle Schulen / Partner</option>
+                <option v-for="school in participantSchools" :key="school.id" :value="school.id">
+                    {{ school.name }}
+                </option>
+            </select>
+            <select
+                v-if="canUseAdvancedGroupFilters"
+                v-model="selectedInstructor"
+                class="border border-gray-300 bg-white p-2.5 text-sm text-gray-700 focus:border-zbb focus:ring-zbb"
+                aria-label="Anleiter filtern"
+            >
+                <option :value="null">Alle Anleiter</option>
+                <option v-for="instructor in anleiter" :key="instructor.id" :value="instructor.id">
+                    {{ instructor.nachname }}, {{ instructor.vorname }}
+                </option>
+            </select>
+            <select
+                v-if="canUseAdvancedGroupFilters"
+                v-model="selectedArea"
+                class="border border-gray-300 bg-white p-2.5 text-sm text-gray-700 focus:border-zbb focus:ring-zbb"
+                aria-label="Bereich filtern"
+            >
+                <option :value="null">Alle Bereiche</option>
+                <option v-for="area in bereiche" :key="area.id" :value="area.id">
+                    {{ area.name }}
+                </option>
+            </select>
             <Link :href="route('teilnehmer.index')" class="flex items-center">
                 <i class="la la-refresh bg-white border border-gray-300 rounded-r-md px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
             </Link>

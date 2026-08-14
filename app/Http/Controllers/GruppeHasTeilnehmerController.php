@@ -269,6 +269,9 @@ class GruppeHasTeilnehmerController extends Controller
                 return $teilnehmer;
             })
             ->filter()
+            ->sortBy(function (Personen $teilnehmer) {
+                return mb_strtolower(trim((string) $teilnehmer->nachname).'\0'.trim((string) $teilnehmer->vorname));
+            }, SORT_NATURAL)
             ->values();
 
         $gruppe->setRelation('teilnehmer', $gruppenTeilnehmer);

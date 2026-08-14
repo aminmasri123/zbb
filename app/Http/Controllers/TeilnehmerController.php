@@ -86,6 +86,16 @@ class TeilnehmerController extends Controller
 
         $projekte = $benutzer->projekte;
         $standortId = $request->integer('standort') ?: null;
+        $schuleId = $request->integer('schule') ?: null;
+        $anleiterId = $request->integer('anleiter') ?: null;
+        $bereichId = $request->integer('bereich') ?: null;
+        $canUseAdvancedGroupFilters = $benutzer->can('gruppe.view.all')
+            || $benutzer->can('projekt.mitarbeiter.view.all');
+
+        if (($anleiterId || $bereichId) && ! $canUseAdvancedGroupFilters) {
+            abort(403, 'Die Filter nach Anleiter und Bereich sind fuer dieses Konto nicht freigegeben.');
+        }
+
         $standorte = $defaultProjekt
             ? Standort::whereIn('id', ProjektHasPersonen::query()
                 ->where('projekt_id', $defaultProjekt)
@@ -106,6 +116,15 @@ class TeilnehmerController extends Controller
             ->orderBy('anfangsdatum')
             ->orderBy('startzeit')
             ->get();
+        $anleiter = $canUseAdvancedGroupFilters
+            ? $gruppen->pluck('betreuer')->filter()->unique('id')->sortBy([
+                ['nachname', 'asc'],
+                ['vorname', 'asc'],
+            ])->values()
+            : collect();
+        $bereiche = $canUseAdvancedGroupFilters
+            ? $gruppen->pluck('bereich')->filter()->unique('id')->sortBy('name')->values()
+            : collect();
 
         // Mögliche Sortierfelder
         $sortierbareSpalten = [
@@ -132,6 +151,24 @@ class TeilnehmerController extends Controller
                         $query->where('projekt_has_personens.standort_id', $standortId);
                     });
             });
+
+            $abfrage
+                ->when($schuleId, fn ($query) => $query->whereHas(
+                    'schueler',
+                    fn ($schoolQuery) => $schoolQuery->where('schule_id', $schuleId)
+                ))
+                ->when($anleiterId, fn ($query) => $query->whereHas(
+                    'gruppen',
+                    fn ($groupQuery) => $groupQuery
+                        ->where('gruppes.projekt_id', $defaultProjekt)
+                        ->where('gruppes.personen_id', $anleiterId)
+                ))
+                ->when($bereichId, fn ($query) => $query->whereHas(
+                    'gruppen',
+                    fn ($groupQuery) => $groupQuery
+                        ->where('gruppes.projekt_id', $defaultProjekt)
+                        ->where('gruppes.bereich_id', $bereichId)
+                ));
         } else {
             $abfrage->whereRaw('1 = 0');
         }
@@ -162,6 +199,9 @@ class TeilnehmerController extends Controller
             'projekte' => $projekte,
             'standorte' => $standorte,
             'gruppen' => $gruppen,
+            'anleiter' => $anleiter,
+            'bereiche' => $bereiche,
+            'canUseAdvancedGroupFilters' => $canUseAdvancedGroupFilters,
             'defaultProjekt' => $defaultProjekt,
             'overviewPeriods' => $defaultProjekt
                 ? $this->participantOverviewService->availablePeriods($defaultProjekt)
@@ -180,10 +220,61 @@ class TeilnehmerController extends Controller
             'filters' => [
                 'search'    => $suchbegriff,
                 'standort'  => $standortId,
+                'schule'    => $schuleId,
+                'anleiter'  => $anleiterId,
+                'bereich'   => $bereichId,
                 'sort'      => $sortierung,
                 'direction' => $richtung,
                 'period' => $overviewPeriod,
             ],
+        ]);
+    }
+
+    public function swapNames(Request $request)
+    {
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:500'],
+            'ids.*' => ['required', 'integer', 'distinct', 'exists:personens,id'],
+        ]);
+
+        $user = $request->user();
+        $projekt = $this->activeProjectContext->currentAvailableFor($user);
+        abort_unless($projekt, 409, 'Bitte waehlen Sie zuerst ein aktives Projekt aus.');
+
+        $ids = collect($validated['ids'])->map(fn ($id) => (int) $id)->unique()->values();
+        $participants = Personen::query()
+            ->teilnehmer()
+            ->aktiv()
+            ->visibleForUser($user)
+            ->whereIn('id', $ids)
+            ->whereHas('projekte', fn ($query) => $query->where('projekts.id', $projekt->id))
+            ->get(['id', 'vorname', 'nachname']);
+
+        abort_unless(
+            $participants->count() === $ids->count(),
+            403,
+            'Mindestens ein ausgewaehlter Teilnehmer ist in diesem Projekt nicht sichtbar.'
+        );
+
+        DB::transaction(function () use ($participants) {
+            foreach ($participants as $participant) {
+                $vorname = $participant->vorname;
+                $participant->forceFill([
+                    'vorname' => $participant->nachname,
+                    'nachname' => $vorname,
+                ])->save();
+            }
+        });
+
+        return response()->json([
+            'message' => $participants->count() === 1
+                ? 'Vorname und Nachname wurden getauscht.'
+                : "Vorname und Nachname wurden bei {$participants->count()} Teilnehmern getauscht.",
+            'participants' => $participants->map(fn (Personen $participant) => [
+                'id' => $participant->id,
+                'vorname' => $participant->vorname,
+                'nachname' => $participant->nachname,
+            ])->values(),
         ]);
     }
 

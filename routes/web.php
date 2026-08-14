@@ -480,6 +480,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::get('/teilnehmer/anlegen', [TeilnehmerController::class, 'create'])->name('teilnehmer.create')->can('teilnehmer.store');
     Route::post('/teilnehmer/anlegen', [TeilnehmerController::class, 'store'])->name('teilnehmer.store')->can('teilnehmer.store');
     Route::post('/teilnehmer/import', [TeilnehmerController::class, 'import'])->name('teilnehmer.import')->middleware('canAnyPermission:teilnehmer.import,teilnehmer.store');
+    Route::patch('/teilnehmer/namen-tauschen', [TeilnehmerController::class, 'swapNames'])->name('teilnehmer.names.swap')->can('teilnehmer.update');
     Route::delete('/teilnehmer/entfernen', [TeilnehmerController::class, 'bulkDestroy'])->name('teilnehmer.bulkDestroy')->middleware('canAnyPermission:teilnehmer.bulkDestroy,teilnehmer.destroy');
     Route::delete('/teilnehmer/entfernen/{id}', [TeilnehmerController::class, 'destroy'])->name('teilnehmer.destroy')->can('teilnehmer.destroy');
     Route::get('/teilnehmer/bearbeiten/{id}', [TeilnehmerController::class, 'show'])->name('teilnehmer.edit')->can('teilnehmer.update');

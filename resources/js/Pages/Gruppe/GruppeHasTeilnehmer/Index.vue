@@ -231,6 +231,7 @@ const confirmTeilnehmer = async () => {
           }
         }
       });
+      gruppenTeilnehmer.value = sortiereTeilnehmerNachNachname(gruppenTeilnehmer.value);
     }
 
   } catch (error) {
@@ -1737,6 +1738,12 @@ const startBopLegacyExport = async (item) => {
 const gruppenTeilnehmer = ref([])
 console.log(gruppenTeilnehmer);
 const tag = ref([])
+const sortiereTeilnehmerNachNachname = (items) => [...items].sort((a, b) => {
+  const nachname = String(a?.nachname || '').localeCompare(String(b?.nachname || ''), 'de', { sensitivity: 'base' })
+  if (nachname !== 0) return nachname
+
+  return String(a?.vorname || '').localeCompare(String(b?.vorname || ''), 'de', { sensitivity: 'base' })
+})
 
 const statusUebersicht = computed(() => {
   const zaehler = new Map(props.anwesenheitsstatuten.map((status) => [status.status, 0]))
@@ -1763,7 +1770,7 @@ onMounted(() => {
     gruppiert[t.id].push(t)
   })
 
-  gruppenTeilnehmer.value = Object.values(gruppiert).map(teilnehmerGruppe => {
+  gruppenTeilnehmer.value = sortiereTeilnehmerNachNachname(Object.values(gruppiert).map(teilnehmerGruppe => {
     const basis = teilnehmerGruppe[0]
 
     return {
@@ -1780,7 +1787,7 @@ onMounted(() => {
         }
       }),
     }
-  })
+  }))
 
   if (paAktiv.value && gruppenTeilnehmer.value.length) {
     selectedPaTeilnehmerId.value = gruppenTeilnehmer.value[0].id
