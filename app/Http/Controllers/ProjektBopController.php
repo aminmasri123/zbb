@@ -1129,16 +1129,25 @@ class ProjektBopController extends Controller
     {
         $this->purgeExpiredPaDrafts();
         $scope = $this->paDraftScope($request);
-        $validated = $request->validate([
+        $request->validate([
             'payload' => ['required', 'array'],
+            'payload.version' => ['nullable', 'integer', 'min:1', 'max:2'],
             'payload.form' => ['nullable', 'array'],
             'payload.days' => ['nullable', 'array'],
             'payload.selectedDayId' => ['nullable', 'string'],
+            'payload.classSchedules' => ['nullable', 'array'],
+            'payload.classSchedules.*' => ['array'],
+            'payload.classSchedules.*.form' => ['nullable', 'array'],
+            'payload.classSchedules.*.days' => ['nullable', 'array'],
+            'payload.classSchedules.*.selectedDayId' => ['nullable', 'string'],
             'payload.signatures' => ['nullable', 'array'],
             'payload.signatures.*' => ['nullable', 'string'],
         ]);
 
-        $incomingPayload = $this->sanitizePaDraftPayload($validated['payload']);
+        // Die Klassenbezeichnungen können Punkte enthalten (z. B. "7.1").
+        // Nach erfolgreicher Validierung wird deshalb die rohe Payload sanitisiert,
+        // damit Laravel diese Array-Schlüssel nicht als Dot-Notation behandelt.
+        $incomingPayload = $this->sanitizePaDraftPayload((array) $request->input('payload', []));
         $userId = auth()->id();
 
         [$draft, $payload] = DB::transaction(function () use ($scope, $incomingPayload, $userId) {
@@ -1439,17 +1448,6 @@ class ProjektBopController extends Controller
 
     private function sanitizePaDraftPayload(array $payload): array
     {
-        $form = is_array($payload['form'] ?? null) ? $payload['form'] : [];
-        $allowedFormKeys = [
-            'exportFormat',
-            'startDate',
-            'endDate',
-            'feedbackDate',
-            'exportMode',
-            'klasse',
-            'listType',
-        ];
-
         $signatures = [];
         foreach (($payload['signatures'] ?? []) as $key => $value) {
             if (!is_string($key) || (!is_null($value) && !is_string($value))) {
@@ -1468,12 +1466,51 @@ class ProjektBopController extends Controller
             $signatures[$key] = $value;
         }
 
-        return [
-            'version' => 1,
-            'form' => array_intersect_key($form, array_flip($allowedFormKeys)),
-            'days' => is_array($payload['days'] ?? null) ? array_values($payload['days']) : [],
-            'selectedDayId' => is_string($payload['selectedDayId'] ?? null) ? $payload['selectedDayId'] : null,
+        $baseSchedule = $this->sanitizePaDraftSchedule($payload);
+        $sanitized = [
+            'version' => (int) ($payload['version'] ?? 1) >= 2 ? 2 : 1,
+            ...$baseSchedule,
             'signatures' => $signatures,
+        ];
+
+        if (array_key_exists('classSchedules', $payload)) {
+            $classSchedules = [];
+
+            foreach (($payload['classSchedules'] ?? []) as $className => $schedule) {
+                $className = trim((string) $className);
+
+                if ($className === '' || mb_strlen($className) > 100 || !is_array($schedule)) {
+                    continue;
+                }
+
+                $classSchedules[$className] = $this->sanitizePaDraftSchedule($schedule);
+            }
+
+            $sanitized['classSchedules'] = $classSchedules;
+        }
+
+        return $sanitized;
+    }
+
+    private function sanitizePaDraftSchedule(array $schedule): array
+    {
+        $form = is_array($schedule['form'] ?? null) ? $schedule['form'] : [];
+        $allowedFormKeys = [
+            'exportFormat',
+            'startDate',
+            'endDate',
+            'feedbackDate',
+            'exportMode',
+            'klasse',
+            'listType',
+        ];
+
+        return [
+            'form' => array_intersect_key($form, array_flip($allowedFormKeys)),
+            'days' => is_array($schedule['days'] ?? null) ? array_values($schedule['days']) : [],
+            'selectedDayId' => is_string($schedule['selectedDayId'] ?? null)
+                ? $schedule['selectedDayId']
+                : null,
         ];
     }
 
@@ -1481,10 +1518,27 @@ class ProjektBopController extends Controller
     {
         $payload = $existingPayload;
 
-        foreach (['version', 'form', 'days', 'selectedDayId'] as $key) {
+        foreach (['form', 'days', 'selectedDayId'] as $key) {
             if (array_key_exists($key, $incomingPayload)) {
                 $payload[$key] = $incomingPayload[$key];
             }
+        }
+
+        $payload['version'] = max(
+            (int) ($payload['version'] ?? 1),
+            (int) ($incomingPayload['version'] ?? 1)
+        );
+
+        if (array_key_exists('classSchedules', $incomingPayload)) {
+            $classSchedules = is_array($payload['classSchedules'] ?? null)
+                ? $payload['classSchedules']
+                : [];
+
+            foreach ($incomingPayload['classSchedules'] as $className => $schedule) {
+                $classSchedules[$className] = $schedule;
+            }
+
+            $payload['classSchedules'] = $classSchedules;
         }
 
         $signatures = is_array($payload['signatures'] ?? null) ? $payload['signatures'] : [];

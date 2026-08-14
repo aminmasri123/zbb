@@ -43,6 +43,11 @@ class BopPaAttendanceLayoutTest extends TestCase
         $this->assertStringContainsString("doc.setFontSize(form.exportFormat === 'A3' ? 14 : 10)", $component);
         $this->assertStringContainsString("doc.setFontSize(form.exportFormat === 'A3' ? 12.5 : 9)", $component);
         $this->assertStringContainsString("exportMode: 'alle'", $component);
+        $this->assertStringContainsString('const classSchedules = ref({})', $component);
+        $this->assertStringContainsString('mergedScheduleForAllClasses', $component);
+        $this->assertStringContainsString('signature_ids_by_class', $component);
+        $this->assertStringContainsString('isParticipantExpectedOnDay', $component);
+        $this->assertStringContainsString('Zur Bestätigung delete eingeben', $component);
         $this->assertStringContainsString('const classedParticipants = computed', $component);
         $this->assertStringContainsString("Klasse {{ row.participant.klasse || 'ohne Klassenangabe' }}", $component);
         $this->assertStringContainsString('const participantPages = isPreparationPa.value ? calculatedParticipantPages : 2', $component);

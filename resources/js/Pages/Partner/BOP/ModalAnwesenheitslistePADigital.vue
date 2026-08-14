@@ -88,6 +88,9 @@ const exportingWord = ref(false)
 const exportingPdf = ref(false)
 const creatingArchiveFolder = ref(false)
 const signatures = reactive({})
+const baseDraftSchedule = ref({ form: {}, days: [], selectedDayId: null })
+const classSchedules = ref({})
+const activeScheduleClass = ref(null)
 const draftRevision = ref(0)
 const draftSaving = ref(false)
 const draftLoading = ref(false)
@@ -108,6 +111,8 @@ let draftSaveRequestId = 0
 const selectedDays = computed(() => days.value.filter((day) => day.selected))
 const selectedDay = computed(() => days.value.find((day) => day.id === selectedDayId.value) || selectedDays.value[0] || null)
 const sheetParticipants = computed(() => allParticipants.value)
+const hasClassSpecificSchedules = computed(() => !isPreparationPa.value && Object.keys(classSchedules.value).length > 0)
+const classScheduleOverview = computed(() => form.exportMode === 'alle' && hasClassSpecificSchedules.value)
 const classedParticipants = computed(() => sheetParticipants.value.map((participant, index) => ({
   participant,
   index,
@@ -186,7 +191,21 @@ const dayTypeLabel = (day) => {
 
 const dayColumnLabel = (index) => isPreparationPa.value ? 'Termin' : `Tag ${index + 1}`
 
-const signatureKey = (day, participant) => `${day.id}:${participant.person_id || participant.id}`
+const participantClassName = (participant) => String(participant?.klasse || '').trim()
+
+const isParticipantExpectedOnDay = (day, participant) => {
+  if (!day || !participant || !Array.isArray(day.eligible_classes)) return true
+
+  return day.eligible_classes.includes(participantClassName(participant))
+}
+
+const signatureDayId = (day, participant) => {
+  const className = participantClassName(participant)
+
+  return day?.signature_ids_by_class?.[className] || day?.id
+}
+
+const signatureKey = (day, participant) => `${signatureDayId(day, participant)}:${participant.person_id || participant.id}`
 
 const readBlobError = async (error) => {
   let data = error.response?.data
@@ -233,14 +252,60 @@ const draftScopePayload = () => isPreparationPa.value
 
 const cloneForDraft = (value) => JSON.parse(JSON.stringify(value ?? null))
 
-const buildDraftPayload = ({ signaturesPayload = { ...signatures } } = {}) => ({
-  version: 1,
-  listType: normalizedListType.value,
-  form: { ...form },
-  days: cloneForDraft(days.value) || [],
-  selectedDayId: selectedDayId.value,
-  signatures: signaturesPayload,
+const daySnapshotForDraft = (day) => ({
+  id: day?.id || null,
+  date: day?.date || null,
+  type: day?.type || 'pa_day',
+  type_label: day?.type_label || null,
+  source: day?.source || 'manual',
+  selected: day?.selected !== false,
+  note: day?.note || null,
 })
+
+const daysSnapshotForDraft = () => days.value.map(daySnapshotForDraft)
+
+const currentScheduleSnapshot = () => ({
+  form: {
+    exportFormat: form.exportFormat,
+    startDate: form.startDate,
+    endDate: form.endDate,
+    feedbackDate: form.feedbackDate,
+  },
+  days: daysSnapshotForDraft(),
+  selectedDayId: selectedDayId.value,
+})
+
+const buildDraftPayload = ({ signaturesPayload = { ...signatures } } = {}) => {
+  if (isPreparationPa.value) {
+    return {
+      version: 1,
+      listType: normalizedListType.value,
+      form: { ...form },
+      days: daysSnapshotForDraft(),
+      selectedDayId: selectedDayId.value,
+      signatures: signaturesPayload,
+    }
+  }
+
+  const baseSchedule = form.exportMode === 'alle' && !hasClassSpecificSchedules.value
+    ? currentScheduleSnapshot()
+    : cloneForDraft(baseDraftSchedule.value)
+  const classSchedulePatch = {}
+
+  if (activeScheduleClass.value) {
+    classSchedulePatch[activeScheduleClass.value] = currentScheduleSnapshot()
+  }
+
+  return {
+    version: 2,
+    listType: normalizedListType.value,
+    form: baseSchedule?.form || {},
+    days: baseSchedule?.days || [],
+    selectedDayId: baseSchedule?.selectedDayId || null,
+    classSchedules: classSchedulePatch,
+    signatures: signaturesPayload,
+  }
+}
 
 const signatureSnapshot = (signaturePayload = {}) => JSON.stringify(
   Object.entries(signaturePayload || {})
@@ -248,10 +313,19 @@ const signatureSnapshot = (signaturePayload = {}) => JSON.stringify(
     .sort(([left], [right]) => left.localeCompare(right))
 )
 
-const hasSignature = (day, participant) => Boolean(day && participant && signatures[signatureKey(day, participant)])
+const hasSignature = (day, participant) => Boolean(
+  day
+  && participant
+  && isParticipantExpectedOnDay(day, participant)
+  && signatures[signatureKey(day, participant)]
+)
+
+const expectedSignatureCountForDay = (day) => sheetParticipants.value
+  .filter((participant) => isParticipantExpectedOnDay(day, participant))
+  .length
 
 const signedCountForDay = (day) => sheetParticipants.value
-  .filter((participant) => hasSignature(day, participant))
+  .filter((participant) => isParticipantExpectedOnDay(day, participant) && hasSignature(day, participant))
   .length
 
 const selectedDaysPayload = () => selectedDays.value.map((day) => ({
@@ -296,18 +370,88 @@ const syncSignatures = (nextSignatures = {}, { removeMissing = true } = {}) => {
   })
 }
 
-const dayWithGroups = (day) => ({
-  ...day,
-  groups: [{
-    id: `pa-all-${day.date}`,
-    label: 'Alle Teilnehmer',
-    bereich: null,
-    runde: null,
-    participants: allParticipants.value,
-    participants_count: allParticipants.value.length,
-  }],
-  participants_count: allParticipants.value.length,
+const normalizeDraftSchedule = (schedule = {}) => ({
+  form: cloneForDraft(schedule?.form) || {},
+  days: Array.isArray(schedule?.days) ? cloneForDraft(schedule.days) : [],
+  selectedDayId: typeof schedule?.selectedDayId === 'string' ? schedule.selectedDayId : null,
 })
+
+const dayWithGroups = (day) => {
+  const expectedParticipants = allParticipants.value
+    .filter((participant) => isParticipantExpectedOnDay(day, participant))
+
+  return {
+    ...day,
+    groups: [{
+      id: `pa-all-${day.date}`,
+      label: 'Alle Teilnehmer',
+      bereich: null,
+      runde: null,
+      participants: expectedParticipants,
+      participants_count: expectedParticipants.length,
+    }],
+    participants_count: expectedParticipants.length,
+  }
+}
+
+const mergedScheduleForAllClasses = () => {
+  const classNames = [...new Set(allParticipants.value.map(participantClassName))]
+  const mergedDays = new Map()
+
+  classNames.forEach((className) => {
+    const schedule = normalizeDraftSchedule(
+      classSchedules.value[className] || baseDraftSchedule.value
+    )
+
+    schedule.days
+      .filter((day) => day?.date && day.selected !== false)
+      .forEach((day) => {
+        const type = day.type || 'pa_day'
+        const mergeKey = `${day.date}|${type}`
+        const existing = mergedDays.get(mergeKey) || {
+          ...cloneForDraft(day),
+          id: `all-${type}-${day.date}`,
+          type,
+          source: 'class-schedule',
+          selected: true,
+          eligible_classes: [],
+          signature_ids_by_class: {},
+        }
+
+        if (!existing.eligible_classes.includes(className)) {
+          existing.eligible_classes.push(className)
+        }
+        existing.signature_ids_by_class[className] = day.id
+        mergedDays.set(mergeKey, existing)
+      })
+  })
+
+  const merged = [...mergedDays.values()]
+    .map((day) => ({
+      ...day,
+      eligible_classes: [...day.eligible_classes].sort((left, right) => left.localeCompare(right, 'de')),
+    }))
+    .sort((left, right) => left.date.localeCompare(right.date) || left.type.localeCompare(right.type))
+
+  return {
+    form: cloneForDraft(baseDraftSchedule.value.form) || {},
+    days: merged,
+    selectedDayId: merged[0]?.id || null,
+  }
+}
+
+const applyScheduleToView = (schedule) => {
+  const normalized = normalizeDraftSchedule(schedule)
+
+  form.exportFormat = normalized.form.exportFormat || form.exportFormat
+  form.startDate = normalized.form.startDate || ''
+  form.endDate = normalized.form.endDate || ''
+  form.feedbackDate = normalized.form.feedbackDate || ''
+  days.value = normalized.days.map(dayWithGroups)
+  selectedDayId.value = normalized.selectedDayId && days.value.some((day) => day.id === normalized.selectedDayId)
+    ? normalized.selectedDayId
+    : selectedDays.value[0]?.id || days.value[0]?.id || null
+}
 
 const hydrateDays = (payloadDays) => {
   const previous = new Map(days.value.map((day) => [day.id, day]))
@@ -332,20 +476,28 @@ const applyDraftPayload = (payload) => {
   draftHydrating.value = true
 
   try {
-    if (payload.form) {
-      form.exportFormat = payload.form.exportFormat || form.exportFormat
-      form.startDate = payload.form.startDate || ''
-      form.endDate = payload.form.endDate || ''
-      form.feedbackDate = payload.form.feedbackDate || ''
-    }
+    baseDraftSchedule.value = normalizeDraftSchedule(payload)
+    classSchedules.value = Object.fromEntries(
+      Object.entries(payload.classSchedules || {})
+        .filter(([className, schedule]) => className && schedule && typeof schedule === 'object')
+        .map(([className, schedule]) => [className, normalizeDraftSchedule(schedule)])
+    )
 
-    if (Array.isArray(payload.days) && payload.days.length) {
-      days.value = payload.days.map(dayWithGroups)
-      selectedDayId.value = payload.selectedDayId && days.value.some((day) => day.id === payload.selectedDayId)
-        ? payload.selectedDayId
-        : selectedDays.value[0]?.id || days.value[0]?.id || null
-    } else if (payload.selectedDayId) {
-      selectedDayId.value = payload.selectedDayId
+    if (isPreparationPa.value) {
+      activeScheduleClass.value = null
+      applyScheduleToView(baseDraftSchedule.value)
+    } else if (form.exportMode === 'klasse' && form.klasse) {
+      activeScheduleClass.value = String(form.klasse).trim()
+      applyScheduleToView(
+        classSchedules.value[activeScheduleClass.value] || baseDraftSchedule.value
+      )
+    } else {
+      activeScheduleClass.value = null
+      applyScheduleToView(
+        hasClassSpecificSchedules.value
+          ? mergedScheduleForAllClasses()
+          : baseDraftSchedule.value
+      )
     }
 
     syncSignatures(payload.signatures || {}, { removeMissing: true })
@@ -367,6 +519,11 @@ const loadDraft = async ({ silent = true } = {}) => {
         applyDraftPayload(response.data.payload)
       } else if (!response.data.exists) {
         draftHydrating.value = true
+        baseDraftSchedule.value = normalizeDraftSchedule(currentScheduleSnapshot())
+        classSchedules.value = {}
+        activeScheduleClass.value = !isPreparationPa.value && form.exportMode === 'klasse' && form.klasse
+          ? String(form.klasse).trim()
+          : null
         syncSignatures({}, { removeMissing: true })
         draftHydrating.value = false
       }
@@ -423,6 +580,7 @@ const saveDraft = async ({ silent = true, payload = null, signatureSnapshotGuard
 
 const saveCompletedSignature = (day, participant, value) => {
   if (!day || !participant || !previewContext.value || draftHydrating.value) return
+  if (!isParticipantExpectedOnDay(day, participant)) return
   if (!value) return
 
   const key = signatureKey(day, participant)
@@ -519,7 +677,16 @@ const loadPreview = async ({ includeDraft = false } = {}) => {
     previewContext.value = response.data.context
     allParticipants.value = response.data.participants || []
     const responseDays = response.data.days || []
-    hydrateDays(responseDays.length ? responseDays : days.value)
+    if (classScheduleOverview.value) {
+      draftHydrating.value = true
+      try {
+        applyScheduleToView(mergedScheduleForAllClasses())
+      } finally {
+        draftHydrating.value = false
+      }
+    } else {
+      hydrateDays(responseDays.length ? responseDays : days.value)
+    }
     if (includeDraft) await loadDraft({ silent: true })
   } catch (error) {
     PaSwal.fire('Fehler', await readBlobError(error), 'error')
@@ -656,7 +823,9 @@ const reloadScope = async () => {
   draftHydrating.value = true
   days.value = []
   selectedDayId.value = null
-  syncSignatures({}, { removeMissing: true })
+  if (isPreparationPa.value) {
+    syncSignatures({}, { removeMissing: true })
+  }
   resetDraftMeta()
   draftHydrating.value = false
   if (!scopeReady.value) return
@@ -666,6 +835,15 @@ const reloadScope = async () => {
 
 const handleWordExport = async () => {
   if (isPreparationPa.value) return
+
+  if (classScheduleOverview.value) {
+    PaSwal.fire(
+      'Klasse auswählen',
+      'Bei getrennten Klassenterminen bitte zuerst „Eine Klasse“ auswählen und diese Klasse exportieren.',
+      'info'
+    )
+    return
+  }
 
   if (!form.startDate || !form.endDate || (form.exportMode === 'klasse' && !form.klasse)) {
     PaSwal.fire('Angaben fehlen', 'Bitte PA-Tag 1, PA-Tag 2 und Klasse prüfen.', 'warning')
@@ -1038,7 +1216,7 @@ const drawPdfRows = (doc, columns, rows, page, layout, pdfSignatures) => {
         doc.text(String(participant?.vorname || ''), cursorX + 1.2, textY, { maxWidth: column.width - 2.4 })
       } else if (column.key === 'klasse') {
         doc.text(String(participant?.klasse || ''), cursorX + 1.2, textY, { maxWidth: column.width - 2.4 })
-      } else if (column.day && participant) {
+      } else if (column.day && participant && isParticipantExpectedOnDay(column.day, participant)) {
         const signature = pdfSignatures[signatureKey(column.day, participant)]
         if (signature) {
           drawPdfSignature(doc, signature, cursorX + 1, y + 0.5, column.width - 2, layout.rowHeight - 1)
@@ -1091,6 +1269,15 @@ const drawTrainerTable = (doc, layout) => {
 const createSignedPdf = async () => {
   if (!selectedDays.value.length) {
     PaSwal.fire('Keine Tage', isPreparationPa.value ? 'Bitte den Vorbereitungstag übernehmen.' : 'Bitte mindestens einen PA-Tag auswählen.', 'warning')
+    return
+  }
+
+  if (!isPreparationPa.value && classScheduleOverview.value) {
+    PaSwal.fire(
+      'Klasse auswählen',
+      'Die Übersicht enthält unterschiedliche Klassentermine. Bitte für die PDF jeweils „Eine Klasse“ auswählen.',
+      'info'
+    )
     return
   }
 
@@ -1173,11 +1360,22 @@ const createSignedPdf = async () => {
 const clearDraft = async () => {
   const result = await PaSwal.fire({
     title: 'Entwurf leeren?',
-    text: `Der zentrale Zwischenstand dieser ${modalTitle.value} wird gelöscht.`,
+    text: `Alle Klassentermine und Unterschriften dieser ${modalTitle.value} werden unwiderruflich gelöscht.`,
     icon: 'warning',
+    input: 'text',
+    inputLabel: 'Zur Bestätigung delete eingeben',
+    inputPlaceholder: 'delete',
     showCancelButton: true,
-    confirmButtonText: 'Ja, leeren',
+    confirmButtonText: 'Endgültig leeren',
     cancelButtonText: 'Abbrechen',
+    preConfirm: (value) => {
+      if (String(value || '').trim().toLowerCase() !== 'delete') {
+        PaSwal.showValidationMessage('Bitte delete eingeben.')
+        return false
+      }
+
+      return true
+    },
   })
 
   if (!result.isConfirmed) return
@@ -1196,6 +1394,9 @@ const clearDraft = async () => {
     allParticipants.value = []
     days.value = []
     selectedDayId.value = null
+    baseDraftSchedule.value = { form: {}, days: [], selectedDayId: null }
+    classSchedules.value = {}
+    activeScheduleClass.value = null
     manualDate.value = ''
     manualNote.value = ''
     syncSignatures({}, { removeMissing: true })
@@ -1237,6 +1438,9 @@ const resetState = () => {
   allParticipants.value = []
   days.value = []
   selectedDayId.value = null
+  baseDraftSchedule.value = { form: {}, days: [], selectedDayId: null }
+  classSchedules.value = {}
+  activeScheduleClass.value = null
   manualDate.value = ''
   manualNote.value = ''
   Object.keys(signatures).forEach((key) => delete signatures[key])
@@ -1366,12 +1570,25 @@ onBeforeUnmount(() => {
           <select v-model="form.klasse" class="w-full rounded border-gray-300 text-sm" @change="reloadScope">
             <option value="" disabled>Klasse auswählen</option>
             <option v-for="klasseOption in klassen" :key="klasseOption" :value="klasseOption">
-              {{ klasseOption }}
+              {{ klasseOption }}{{ classSchedules[String(klasseOption).trim()] ? ' – eigene Termine' : '' }}
             </option>
           </select>
         </label>
 
-        <div class="rounded border border-gray-200 p-3">
+        <div
+          v-if="!isPreparationPa && form.exportMode === 'klasse' && form.klasse"
+          class="rounded border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900"
+        >
+          <strong class="block">Eigener Terminplan für Klasse {{ form.klasse }}</strong>
+          Änderungen an den PA-Daten gelten nur für diese Klasse. Bereits gespeicherte Unterschriften bleiben zentral erhalten.
+        </div>
+
+        <div v-if="classScheduleOverview" class="rounded border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
+          <strong class="block">Getrennte Klassentermine aktiv</strong>
+          In dieser Ansicht werden alle Klassentermine zusammengeführt. Zum Ändern der Daten bitte „Eine Klasse“ auswählen.
+        </div>
+
+        <div v-if="!classScheduleOverview" class="rounded border border-gray-200 p-3">
           <p class="mb-3 text-sm font-semibold text-gray-700">{{ dateConfigTitle }}</p>
           <div class="grid gap-3" :class="isPreparationPa ? 'grid-cols-1' : 'grid-cols-2'">
             <label class="text-xs font-semibold text-gray-600">
@@ -1394,7 +1611,7 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
-        <label v-if="!isPreparationPa" class="block text-sm font-semibold text-gray-700">
+        <label v-if="!isPreparationPa && !classScheduleOverview" class="block text-sm font-semibold text-gray-700">
           <span class="mb-1 block">Feedbackgespräch</span>
           <input v-model="form.feedbackDate" type="date" class="w-full rounded border-gray-300 text-sm" />
         </label>
@@ -1404,7 +1621,7 @@ onBeforeUnmount(() => {
           <span><strong class="block">Anwesenheitsgruppen erzeugen</strong>Beim Laden der Liste werden die im BOP-Ablauf gespeicherte Teilnehmerauswahl, Gruppenart und Termine verwendet.</span>
         </label>
 
-        <div v-if="!isPreparationPa" class="rounded border border-gray-200 p-3">
+        <div v-if="!isPreparationPa && !classScheduleOverview" class="rounded border border-gray-200 p-3">
           <p class="mb-3 text-sm font-semibold text-gray-700">Sondertag</p>
           <div class="grid gap-2">
             <input v-model="manualDate" type="date" class="w-full rounded border-gray-300 text-sm" />
@@ -1521,7 +1738,7 @@ onBeforeUnmount(() => {
             >
               <div class="flex items-start justify-between gap-3">
                 <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-900" @click.stop>
-                  <input v-model="day.selected" type="checkbox" class="rounded border-gray-300 text-zbb" />
+                  <input v-model="day.selected" type="checkbox" class="rounded border-gray-300 text-zbb" :disabled="classScheduleOverview" />
                   <span>{{ dateLabel(day.date) }}</span>
                 </label>
                 <span class="rounded bg-gray-100 px-2 py-1 text-[11px] font-semibold text-gray-700">
@@ -1531,7 +1748,11 @@ onBeforeUnmount(() => {
 
               <p class="mt-1 text-xs text-gray-500">
                 {{ weekdayLabel(day.date) }} / {{ day.participants_count }} Teilnehmer /
-                {{ signedCountForDay(day) }}/{{ sheetParticipants.length }} unterschrieben
+                {{ signedCountForDay(day) }}/{{ expectedSignatureCountForDay(day) }} unterschrieben
+              </p>
+
+              <p v-if="classScheduleOverview && day.eligible_classes?.length" class="mt-1 text-[11px] font-semibold text-blue-700">
+                Klassen: {{ day.eligible_classes.join(', ') }}
               </p>
 
               <input
@@ -1539,6 +1760,7 @@ onBeforeUnmount(() => {
                 type="text"
                 class="mt-3 w-full rounded border-gray-300 text-xs"
                 placeholder="Notiz"
+                :disabled="classScheduleOverview"
                 @click.stop
               />
             </button>
@@ -1584,7 +1806,7 @@ onBeforeUnmount(() => {
                     <span class="block font-normal">{{ dayTypeLabel(day) }}</span>
                     <span class="block font-normal">Unterschrift Schüler/-in</span>
                     <span class="mt-1 block text-[10px] font-semibold text-emerald-700">
-                      {{ signedCountForDay(day) }}/{{ sheetParticipants.length }}
+                      {{ signedCountForDay(day) }}/{{ expectedSignatureCountForDay(day) }}
                     </span>
                   </th>
                 </tr>
@@ -1611,9 +1833,11 @@ onBeforeUnmount(() => {
                       v-for="day in selectedDays"
                       :key="`${day.id}-${row.participant.person_id || row.participant.id}`"
                       class="border border-gray-800 p-1 align-middle"
-                      :class="hasSignature(day, row.participant) ? 'bg-emerald-50' : 'bg-white'"
+                      :class="isParticipantExpectedOnDay(day, row.participant)
+                        ? (hasSignature(day, row.participant) ? 'bg-emerald-50' : 'bg-white')
+                        : 'bg-gray-100 text-gray-400'"
                     >
-                      <div class="relative">
+                      <div v-if="isParticipantExpectedOnDay(day, row.participant)" class="relative">
                         <span
                           v-if="hasSignature(day, row.participant)"
                           class="pointer-events-none absolute right-1 top-1 z-10 text-[11px] text-emerald-700"
@@ -1628,6 +1852,9 @@ onBeforeUnmount(() => {
                           @update:model-value="saveCompletedSignature(day, row.participant, $event)"
                           @cleared="removeSignature(day, row.participant)"
                         />
+                      </div>
+                      <div v-else class="px-2 py-3 text-center text-[10px] font-semibold uppercase tracking-wide">
+                        Nicht vorgesehen
                       </div>
                     </td>
                   </tr>

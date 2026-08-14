@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Partner;
+use App\Models\PaAttendanceListDraft;
 use App\Models\Personen;
 use App\Models\PersonenIstSchueler;
 use App\Models\Projekt;
@@ -102,6 +103,107 @@ class PaPreparationAttendanceClassTest extends TestCase
             ->postJson(route('anwesenheitsliste.PA.digital.preview'), $allScope)
             ->assertOk()
             ->assertJsonCount(2, 'participants');
+    }
+
+    public function test_pa_merges_class_schedules_without_losing_legacy_dates_or_signatures(): void
+    {
+        $user = User::factory()->create();
+        $this->grantTestPermission($user, 'anwesenheit.abrechnung');
+
+        $project = Projekt::factory()->create();
+        $school = Partner::query()->create(['name' => 'Testschule Klassentermine']);
+
+        DB::table('projekt_has_partners')->insert([
+            'projekt_id' => $project->id,
+            'partner_id' => $school->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $user->update(['current_team_id' => $project->id]);
+
+        $scope = [
+            'schuleId' => $school->id,
+            'schuljahr' => '2026/2027',
+            'teil' => '1',
+            'listType' => 'pa',
+            'exportMode' => 'alle',
+        ];
+        $signature = 'data:image/png;base64,aGVsbG8=';
+        $legacyDay = [
+            'id' => 'pa-tag-1-2026-08-12',
+            'date' => '2026-08-12',
+            'type' => 'pa_day',
+            'selected' => true,
+        ];
+
+        $this->actingAs($user)->putJson(route('anwesenheitsliste.PA.digital.draft.store'), $scope + [
+            'payload' => [
+                'version' => 1,
+                'form' => ['startDate' => '2026-08-12'],
+                'days' => [$legacyDay],
+                'selectedDayId' => $legacyDay['id'],
+                'signatures' => ['legacy:1' => $signature],
+            ],
+        ])->assertOk();
+
+        foreach ([
+            '7.1' => ['2026-08-15', 'class-71:2'],
+            '7.2' => ['2026-08-18', 'class-72:3'],
+        ] as $className => [$date, $signatureKey]) {
+            $day = [
+                'id' => 'pa-' . $date,
+                'date' => $date,
+                'type' => 'pa_day',
+                'selected' => true,
+            ];
+
+            $this->actingAs($user->fresh())->putJson(route('anwesenheitsliste.PA.digital.draft.store'), $scope + [
+                'payload' => [
+                    'version' => 2,
+                    'form' => ['startDate' => '2026-08-12'],
+                    'days' => [$legacyDay],
+                    'selectedDayId' => $legacyDay['id'],
+                    'classSchedules' => [
+                        $className => [
+                            'form' => ['startDate' => $date],
+                            'days' => [$day],
+                            'selectedDayId' => $day['id'],
+                        ],
+                    ],
+                    'signatures' => [$signatureKey => $signature],
+                ],
+            ])->assertOk();
+        }
+
+        // Ein noch geöffnetes altes Browserfenster darf die neuen Klassenpläne
+        // und bereits gespeicherten Unterschriften nicht wieder entfernen.
+        $this->actingAs($user->fresh())->putJson(route('anwesenheitsliste.PA.digital.draft.store'), $scope + [
+            'payload' => [
+                'version' => 1,
+                'form' => ['startDate' => '2026-08-12'],
+                'days' => [$legacyDay],
+                'selectedDayId' => $legacyDay['id'],
+                'signatures' => [],
+            ],
+        ])->assertOk();
+
+        $response = $this->actingAs($user->fresh())
+            ->postJson(route('anwesenheitsliste.PA.digital.draft.show'), $scope)
+            ->assertOk();
+        $payload = $response->json('payload');
+
+        $this->assertSame(2, $payload['version']);
+        $this->assertSame('2026-08-12', $payload['form']['startDate']);
+        $this->assertSame($legacyDay['id'], $payload['days'][0]['id']);
+        $this->assertSame('2026-08-15', $payload['classSchedules']['7.1']['form']['startDate']);
+        $this->assertSame('2026-08-18', $payload['classSchedules']['7.2']['form']['startDate']);
+        $this->assertSame($signature, $payload['signatures']['legacy:1']);
+        $this->assertSame($signature, $payload['signatures']['class-71:2']);
+        $this->assertSame($signature, $payload['signatures']['class-72:3']);
+
+        $storedPayload = PaAttendanceListDraft::query()->firstOrFail()->payload;
+        $this->assertStringStartsWith('enc:v1:', $storedPayload['signatures']['legacy:1']);
+        $this->assertSame('2026-08-15', $storedPayload['classSchedules']['7.1']['form']['startDate']);
     }
 
     public function test_pa_preparation_supports_the_whole_school_or_one_class(): void
