@@ -26,6 +26,11 @@ class MaterialanforderungArtikel extends Model
         return $this->belongsTo(Materialanforderung::class, 'anforderung_id');
     }
 
+    public function kommentare()
+    {
+        return $this->hasMany(MaterialanforderungKommentar::class, 'artikel_id');
+    }
+
     // Berechne Gesamtpreis inkl. MwSt
     public function gesamtMitMwst(): float
     {

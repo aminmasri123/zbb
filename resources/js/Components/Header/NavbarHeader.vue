@@ -40,6 +40,7 @@
                             || route().current('projekt.*')
                             || route().current('bereich.*')
                             || route().current('klassenbuch.*')
+                            || route().current('program-feedback.*')
                             "
                     class="text-[17px] text-[var(--primary)]">
                         {{ $t('dashboard') }}
@@ -114,6 +115,15 @@
                             </div>
                         </template>
                     </Dropdown>
+
+                    <Link
+                        :href="route('program-feedback.index', { from: $page.url })"
+                        class="inline-flex items-center gap-2 rounded-md border border-transparent px-2 py-2 text-sm font-medium leading-4 text-primary transition duration-150 ease-in-out hover:text-buttonPrimary focus:outline-none sm:px-3"
+                        title="Verbesserungsvorschlag oder Programmfehler melden"
+                    >
+                        <i class="las la-lightbulb text-lg"></i>
+                        <span class="hidden xl:inline">Feedback</span>
+                    </Link>
 
                     <!-- Sprache Dropdown -->
                     <Dropdown align="right" width="48">

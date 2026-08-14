@@ -10,6 +10,7 @@ use App\Models\ProjektHasPersonen;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -90,6 +91,8 @@ class HandleInertiaRequests extends Middleware
             'canManageProfile' => fn () => (bool) $request->user()?->can('user.profil'),
 
             'canManageNotifications' => fn () => (bool) $request->user()?->can('notifications.readAll'),
+
+            'staffChatUnreadCount' => fn () => $this->staffChatUnreadCount($request),
 
             'participantPortalNavigation' => fn () => $this->participantPortalNavigation($request),
 
@@ -203,5 +206,25 @@ class HandleInertiaRequests extends Middleware
             'messaging' => $enabled('messaging'),
             'consents' => $enabled('consents_and_approvals'),
         ];
+    }
+
+    private function staffChatUnreadCount(Request $request): int
+    {
+        $user = $request->user();
+        if (! $user || ! $user->can('chat.use') || ! Schema::hasTable('staff_messages')) {
+            return 0;
+        }
+
+        return DB::table('staff_messages as messages')
+            ->join('staff_conversation_members as membership', function ($join) use ($user) {
+                $join->on('membership.conversation_id', '=', 'messages.conversation_id')
+                    ->where('membership.user_id', '=', $user->id);
+            })
+            ->where(function ($query) use ($user) {
+                $query->whereNull('messages.sender_user_id')
+                    ->orWhere('messages.sender_user_id', '!=', $user->id);
+            })
+            ->whereRaw('messages.created_at > COALESCE(membership.last_read_at, membership.joined_at)')
+            ->count();
     }
 }

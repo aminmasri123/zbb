@@ -262,6 +262,16 @@ class MaterialanforderungController extends Controller
             ->latest()
             ->get();
 
+        $kommentare = $anforderung->kommentare()
+            ->with([
+                'user.person:id,vorname,nachname',
+                'artikel:id,anforderung_id,pos,artikel',
+                'attachments',
+                'geklaertVon.person:id,vorname,nachname',
+            ])
+            ->oldest()
+            ->get();
+
         $notification = $request->user()->notifications()
             ->where('data->id', $id)
             ->where('data->typ', 'Materialanforderung')
@@ -283,6 +293,13 @@ class MaterialanforderungController extends Controller
             'canDeleteFinalizedMaterialanforderung' => $request->user()->can('materialanforderung.bestellte.destroy')
                 && in_array($anforderung->status, ['bestellt', 'teilweise_geliefert', 'geliefert'], true),
             'verlauf' => $verlauf,
+            'kommentare' => $kommentare,
+            'kommentarGruende' => collect(MaterialanforderungKommentarController::REASONS)
+                ->map(fn ($label, $value) => ['value' => $value, 'label' => $label])
+                ->values(),
+            'currentUserId' => $request->user()->id,
+            'canUseChat' => $request->user()->can('chat.use')
+                && $request->user()->person?->typ === 'mitarbeiter',
         ]);
     }
 
@@ -296,6 +313,15 @@ class MaterialanforderungController extends Controller
         $anforderung = DB::transaction(function () use ($request, $id, $status) {
             $anforderung = Materialanforderung::with(['artikeln', 'vergabevermerk'])->whereKey($id)->lockForUpdate()->firstOrFail();
             $this->authorizeTransition($request->user(), $anforderung, $status);
+
+            if ($status === 'bestellt' && $anforderung->kommentare()
+                ->where('antwort_erforderlich', true)
+                ->whereNull('geklaert_am')
+                ->exists()) {
+                throw ValidationException::withMessages([
+                    'status' => 'Die Bestellung ist gesperrt, solange noch eine Rückfrage offen ist.',
+                ]);
+            }
 
             if (in_array($status, ['zur_ueberarbeitung', 'zurueckgezogen', 'storniert'], true)) {
                 $request->validate(['anmerkung' => ['required', 'string', 'max:2000']]);
@@ -548,7 +574,8 @@ class MaterialanforderungController extends Controller
             'zur_ueberarbeitung' => ($user->can('materialanforderung.sachlische_freigabe.update')
                     && $this->isAssignedToProject($user, $anforderung->projekt_id)
                     && $anforderung->status === 'eingereicht')
-                || ($user->can('materialanforderung.kaufmännische_freigabe.update') && $anforderung->status === 'sachlich_genehmigt'),
+                || ($user->can('materialanforderung.kaufmännische_freigabe.update') && $anforderung->status === 'sachlich_genehmigt')
+                || ($user->can('materialanforderung.bestellwesen.update') && $anforderung->status === 'kaufmaennisch_genehmigt'),
             'zurueckgezogen' => (int) $anforderung->ersteller_id === (int) $user->id
                 && $user->can('materialanforderung.update')
                 && $anforderung->status === 'eingereicht',

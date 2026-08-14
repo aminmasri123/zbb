@@ -17,6 +17,17 @@
                 </ul>
             </li>
 
+            <li class="submenu">
+                <Link
+                    :href="route('program-feedback.index')"
+                    class="flex items-center text-white transition duration-200 hover:bg-gray-700"
+                    :class="{ 'text-zbb': $page.component.startsWith('ProgramFeedback') }"
+                >
+                    <i class="las la-lightbulb la-lg mr-2"></i>
+                    <span v-if="!displayHideTextSidebar">Programm-Feedback</span>
+                </Link>
+            </li>
+
             <!-- Admin Submenu -->
             <li v-if="canAny(adminPermissions) || $page.component.startsWith('Einstellung') || $page.component.startsWith('Dokumente')" class="submenu">
                 <a href="#" @click.prevent="toggleMenu('admin')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
@@ -64,6 +75,16 @@
                     <li v-if="can('apps.tasks')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('apps.tasks')">Taskmanager</Link></li>
                     <li v-if="can('apps.popups')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('apps.popups')">Popups</Link></li>
                 </ul>
+            </li>
+
+            <li v-if="can('chat.use')" class="submenu">
+                <Link :href="route('chat.index')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
+                    <i class="las la-comments la-lg mr-2"></i>
+                    <span v-if="!displayHideTextSidebar">Interner Chat</span>
+                    <span v-if="$page.props.staffChatUnreadCount" class="ml-auto rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
+                        {{ $page.props.staffChatUnreadCount > 99 ? '99+' : $page.props.staffChatUnreadCount }}
+                    </span>
+                </Link>
             </li>
 
             <!-- Benutzer Submenu -->

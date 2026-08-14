@@ -26,6 +26,10 @@ class Kernel extends ConsoleKernel
         $schedule->command('participant-portal:send-reminder-digests')
             ->dailyAt('07:00')
             ->withoutOverlapping();
+
+        $schedule->command('chat:purge-expired')
+            ->dailyAt('02:45')
+            ->withoutOverlapping();
     }
 
     /**

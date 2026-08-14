@@ -39,6 +39,8 @@ use App\Http\Controllers\KontaktController;
 use App\Http\Controllers\KostenstelleController;
 use App\Http\Controllers\LagerController;
 use App\Http\Controllers\MaterialanforderungController;
+use App\Http\Controllers\MaterialanforderungKommentarController;
+use App\Http\Controllers\StaffChatController;
 use App\Http\Controllers\UserPermissionController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\NotificationRuleController;
@@ -47,6 +49,7 @@ use App\Http\Controllers\PartnerController;
 use App\Http\Controllers\ParticipationTaskController;
 use App\Http\Controllers\ParticipantPortalController;
 use App\Http\Controllers\PortalJobController;
+use App\Http\Controllers\ProgramFeedbackController;
 use App\Http\Controllers\ParticipationApplicationController;
 use App\Http\Controllers\ProjectCourseController;
 use App\Http\Controllers\PortalLearningController;
@@ -227,6 +230,15 @@ Route::middleware('throttle:10,1')->group(function () {
 
 Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'routePermission', 'configuredNotifications'])->group(function() {
 
+    Route::prefix('chat')->name('chat.')->group(function () {
+        Route::get('/', [StaffChatController::class, 'index'])->name('index');
+        Route::post('/unterhaltungen', [StaffChatController::class, 'storeConversation'])->name('conversations.store')->middleware('throttle:20,1');
+        Route::post('/unterhaltungen/{conversation}/nachrichten', [StaffChatController::class, 'storeMessage'])->name('messages.store')->middleware('throttle:60,1');
+        Route::delete('/nachrichten/{message}', [StaffChatController::class, 'destroyMessage'])->name('messages.destroy');
+        Route::get('/anhaenge/{attachment}', [StaffChatController::class, 'downloadAttachment'])->name('attachments.download');
+        Route::get('/export/meine-daten', [StaffChatController::class, 'export'])->name('export');
+    });
+
     Route::post('/benutzer/theme', function () {
         $data = request()->validate([
             'theme' => ['required', 'string', 'in:air,dark,womanly,champion,sprint,arena,pulse,trail,bazaar,vital'],
@@ -247,6 +259,15 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
 
     Route::get('/dashboard', [DashbaordController::class, 'dashboard'])->name('dashboard');
     Route::put('/dashboard/einstellungen', [DashbaordController::class, 'updatePreferences'])->name('dashboard.preferences.update');
+
+    Route::prefix('programm-feedback')->name('program-feedback.')->group(function () {
+        Route::get('/', [ProgramFeedbackController::class, 'index'])->name('index');
+        Route::post('/', [ProgramFeedbackController::class, 'store'])->name('store')->middleware('throttle:10,1');
+        Route::put('/{feedback}', [ProgramFeedbackController::class, 'update'])->name('update');
+        Route::delete('/{feedback}', [ProgramFeedbackController::class, 'destroy'])->name('destroy');
+        Route::post('/{feedback}/kommentare', [ProgramFeedbackController::class, 'storeComment'])->name('comments.store');
+        Route::get('/anhaenge/{attachment}', [ProgramFeedbackController::class, 'downloadAttachment'])->name('attachments.download');
+    });
     Route::get('/fw/{id}', [DienstwagenfahrtenbuchController::class, 'scan'])
         ->name('dienstwagen.fahrtenbuch.scan')
         ->can('dienstwagen.fahrtenbuch.index');
@@ -758,6 +779,9 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::post('/Bestellungen/senden', [MaterialanforderungController::class,'store'])->name('materialanforderung.store');
     Route::put('/Bestellungen/update', [MaterialanforderungController::class,'update'])->name('materialanforderung.update');
     Route::delete('/Materialanforderung/{materialanforderung}', [MaterialanforderungController::class, 'destroy'])->name('materialanforderung.destroy');
+    Route::post('/Materialanforderung/{materialanforderung}/kommentare', [MaterialanforderungKommentarController::class, 'store'])->name('materialanforderung.kommentare.store')->middleware('throttle:30,1');
+    Route::put('/Materialanforderung/kommentare/{kommentar}/klaeren', [MaterialanforderungKommentarController::class, 'resolve'])->name('materialanforderung.kommentare.resolve');
+    Route::get('/Materialanforderung/kommentar-anhaenge/{attachment}', [MaterialanforderungKommentarController::class, 'downloadAttachment'])->name('materialanforderung.kommentare.anhaenge.download');
 
 
     Route::put('/materialanforderung/{id}/{status}/genehmigen', [MaterialanforderungController::class, 'genehmigen'])->name('materialanforderung.genehmigen');

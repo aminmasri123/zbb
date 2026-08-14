@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\Projekt;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
 
 class Materialanforderung extends Model
 {
@@ -30,6 +31,19 @@ class Materialanforderung extends Model
         'gesamtpreis' => 'decimal:2',
         'endsumme' => 'decimal:2',
     ];
+
+    protected static function booted(): void
+    {
+        static::deleting(function (Materialanforderung $anforderung) {
+            $anforderung->loadMissing('kommentare.attachments');
+            foreach ($anforderung->kommentare as $kommentar) {
+                foreach ($kommentar->attachments as $attachment) {
+                    Storage::disk('local')->delete($attachment->path);
+                }
+            }
+            Storage::disk('local')->deleteDirectory("materialanforderungen/{$anforderung->id}/kommentare");
+        });
+    }
 
     public function vergabevermerke()
     {
@@ -56,6 +70,11 @@ class Materialanforderung extends Model
     public function genehmigungen()
     {
         return $this->hasMany(MaterialanforderungGenehmigung::class, 'anforderung_id');
+    }
+
+    public function kommentare()
+    {
+        return $this->hasMany(MaterialanforderungKommentar::class, 'anforderung_id');
     }
 
     // Berechne Gesamtsumme inkl. MwSt

@@ -784,6 +784,28 @@ class UserSeeder extends Seeder
             }
         }
 
+        $chatPermissionId = DB::table('permissions')
+            ->where('name', 'chat.use')
+            ->where('guard_name', 'web')
+            ->value('id');
+        $chatCategoryId = $this->permissionCategoryIds[33] ?? null;
+
+        if ($chatPermissionId) {
+            DB::table('roles')->where('guard_name', 'web')->pluck('id')->each(function ($roleId) use ($chatPermissionId, $chatCategoryId) {
+                DB::table('role_has_permissions')->insertOrIgnore([
+                    'permission_id' => $chatPermissionId,
+                    'role_id' => $roleId,
+                ]);
+
+                if ($chatCategoryId) {
+                    DB::table('role_berechtigungskategories')->insertOrIgnore([
+                        'role_id' => $roleId,
+                        'berechtigungskategorie_id' => $chatCategoryId,
+                    ]);
+                }
+            });
+        }
+
         $calendarLeadPermissionIds = DB::table('permissions')
             ->whereIn('name', [
                 'apps.calendar.project.view.all',
@@ -968,6 +990,8 @@ class UserSeeder extends Seeder
             29 => ['name' => 'IT-Service', 'beschreibung' => 'Helpdesk, IT-Tickets und IT-Geraeteverwaltung.'],
             30 => ['name' => 'Dokumentenexporte', 'beschreibung' => 'Einzelberechtigungen fuer den Export bestimmter Dokumentvorlagen.'],
             31 => ['name' => 'Potenzialanalyse', 'beschreibung' => 'Potenzialanalyse, PA-Uebungen, Bewertungen und PA-Berichte.'],
+            32 => ['name' => 'Programm-Feedback', 'beschreibung' => 'Verbesserungsvorschlaege und Fehlermeldungen zum Programm.'],
+            33 => ['name' => 'Interne Kommunikation', 'beschreibung' => 'Datenschutzgeschuetzte interne Einzel-, Gruppen- und Projektkommunikation.'],
         ];
     }
 
@@ -1003,6 +1027,7 @@ class UserSeeder extends Seeder
             $this->permission('finanzen.index', 10, 'Erlaubt den Zugriff auf den Finanzbereich als Einstieg fuer Fahrtarten, Fahrtkostensaetze, Abrechnungen und finanzbezogene Auswertungen.'),
             $this->permission('apps.index', 1, 'Erlaubt den Zugriff auf die interne Apps-Uebersicht mit Dateimanager, Kalender, Kontakten, Aufgaben und Popups.'),
             $this->permission('notifications.readAll', 1, 'Erlaubt das Markieren eigener Benachrichtigungen als gelesen. Diese Berechtigung betrifft keine fremden Benachrichtigungen.'),
+            $this->permission('chat.use', 33, 'Erlaubt Mitarbeitenden die Nutzung des internen Chats. Unterhaltungen bleiben auf explizit zugeordnete Mitglieder begrenzt.'),
 
             // Berechtigungen / Rollen
             $this->permission('berechtigung.index', 8, 'Erlaubt das Oeffnen der Berechtigungsverwaltung und das Einsehen von Rollen, Kategorien, Datenzugriffen und zugewiesenen Permissions.'),
@@ -1225,6 +1250,9 @@ class UserSeeder extends Seeder
             $this->permission('it.geraet.store', 29, 'Erlaubt das Anlegen neuer IT-Geraete im IT-Service.'),
             $this->permission('it.geraet.update', 29, 'Erlaubt das Bearbeiten von IT-Geraeten inklusive Standort, Verantwortlichkeit und Wartungsdaten.'),
             $this->permission('it.geraet.destroy', 29, 'Erlaubt das Loeschen oder Aussondern von IT-Geraeten.'),
+
+            // Programm-Feedback
+            $this->permission('program-feedback.manage', 32, 'Erlaubt das Einsehen und Bearbeiten aller Programm-Meldungen inklusive interner Notizen.'),
 
             // Raeume
             $this->permission('raeumlichkeiten.index', 24, 'Erlaubt das Einsehen der Raumuebersicht inklusive Standorten, Unterraeumen, Standardbelegung und Raummeldungen.'),

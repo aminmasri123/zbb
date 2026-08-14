@@ -14,13 +14,19 @@ const props = defineProps({
     canDeleteMaterialanforderung: Boolean,
     canDeleteFinalizedMaterialanforderung: Boolean,
     verlauf: { type: Array, default: () => [] },
+    kommentare: { type: Array, default: () => [] },
+    kommentarGruende: { type: Array, default: () => [] },
+    currentUserId: Number,
+    canUseChat: Boolean,
 })
 
 const editing = ref(new URLSearchParams(window.location.search).get('edit') === '1')
 const deliveryOpen = ref(false)
 const deleting = ref(false)
+const commentOpen = ref(false)
 const liefermengen = ref(Object.fromEntries(props.anforderung.artikeln.map((item) => [item.id, Number(item.gelieferte_menge || 0)])))
 const vergabe = props.anforderung.vergabevermerk || {}
+const offeneRueckfragen = computed(() => props.kommentare.filter((item) => item.antwort_erforderlich && !item.geklaert_am))
 const form = useForm({
     id: props.anforderung.id,
     kostenstelle: props.anforderung.kostenstelle,
@@ -47,6 +53,17 @@ const form = useForm({
         lieferadresse: vergabe.lieferadresse || '',
         bestellnummer: vergabe.bestellnummer || '',
     },
+})
+
+const commentForm = useForm({
+    artikel_id: '',
+    parent_id: null,
+    grund: 'allgemein',
+    body: '',
+    vorgeschlagener_preis: '',
+    vorgeschlagener_link: '',
+    antwort_erforderlich: false,
+    attachments: [],
 })
 
 const statusMeta = {
@@ -96,6 +113,43 @@ function save() {
         preserveScroll: true,
         onSuccess: () => { editing.value = false },
     })
+}
+
+function openComment(parent = null) {
+    commentForm.reset()
+    commentForm.grund = parent ? 'entscheidung' : 'allgemein'
+    commentForm.parent_id = parent?.id || null
+    commentForm.artikel_id = parent?.artikel_id || ''
+    commentOpen.value = true
+}
+
+function chooseCommentFiles(event) {
+    commentForm.attachments = Array.from(event.target.files || []).slice(0, 5)
+}
+
+function submitComment() {
+    commentForm.post(route('materialanforderung.kommentare.store', props.anforderung.id), {
+        forceFormData: true,
+        preserveScroll: true,
+        onSuccess: () => {
+            commentOpen.value = false
+            commentForm.reset()
+        },
+    })
+}
+
+function resolveComment(comment) {
+    router.put(route('materialanforderung.kommentare.resolve', comment.id), {}, { preserveScroll: true })
+}
+
+function commentReason(value) {
+    return props.kommentarGruende.find((item) => item.value === value)?.label || value
+}
+
+function canResolveComment(comment) {
+    return comment.antwort_erforderlich
+        && !comment.geklaert_am
+        && (props.canBestellen || Number(comment.user_id) === Number(props.currentUserId) || Number(props.anforderung.ersteller_id) === Number(props.currentUserId))
 }
 
 async function changeStatus(status, label, requireComment = false) {
@@ -242,7 +296,15 @@ async function markOrdered() {
     if (!result.isConfirmed) return
     router.put(route('materialanforderung.genehmigen', { id: props.anforderung.id, status: 'bestellt' }), {
         bestellnummer: result.value.trim(),
-    }, { preserveScroll: true })
+    }, {
+        preserveScroll: true,
+        onError: (errors) => Swal.fire({
+            title: 'Bestellung noch nicht möglich',
+            text: errors.status || Object.values(errors)[0] || 'Bitte offene Rückfragen zuerst klären.',
+            icon: 'warning',
+            confirmButtonText: 'Verstanden',
+        }),
+    })
 }
 
 function submitPartialDelivery() {
@@ -286,6 +348,7 @@ function submitPartialDelivery() {
                         <p class="mt-1 text-sm text-gray-500">Erstellt am {{ date(anforderung.created_at) }} · benötigt am {{ date(anforderung.benoetigt_am) }}</p>
                     </div>
                     <div class="flex flex-wrap gap-2">
+                        <Link v-if="canUseChat" :href="route('chat.index', { materialanforderung: anforderung.id })" class="inline-flex items-center gap-2 rounded-lg border border-cyan-300 bg-cyan-50 px-3 py-2 text-sm font-semibold text-cyan-800"><i class="las la-comments"></i> Im Chat besprechen</Link>
                         <a :href="route('materialanforderung.pdf', anforderung.id)" class="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700"><i class="las la-file-pdf text-red-600"></i> PDF</a>
                         <button v-if="editable && !editing" type="button" class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold" @click="editing = true"><i class="las la-edit mr-1"></i> Bearbeiten</button>
                         <button v-if="canDeleteMaterialanforderung && !editing" type="button" :disabled="deleting" class="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 disabled:cursor-wait disabled:opacity-60" @click="deleteDraft">{{ deleting ? 'Wird gelöscht …' : 'Löschen' }}</button>
@@ -302,7 +365,8 @@ function submitPartialDelivery() {
                     <button v-if="anforderung.status === 'sachlich_genehmigt' && canConfirmKaufmaenisch" class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white" @click="changeStatus('kaufmaennisch_genehmigt', 'Kaufmännisch genehmigen?')">Kaufmännisch genehmigen</button>
                     <button v-if="anforderung.status === 'sachlich_genehmigt' && canConfirmKaufmaenisch" class="rounded-lg border border-orange-300 px-4 py-2 text-sm font-semibold text-orange-700" @click="changeStatus('zur_ueberarbeitung', 'Zur Überarbeitung zurückgeben?', true)">Zurückgeben</button>
                     <template v-if="canBestellen && ['kaufmaennisch_genehmigt', 'bestellt', 'teilweise_geliefert'].includes(anforderung.status)">
-                        <button v-if="anforderung.status === 'kaufmaennisch_genehmigt'" class="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white" @click="markOrdered">Als bestellt markieren</button>
+                        <button v-if="anforderung.status === 'kaufmaennisch_genehmigt'" class="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50" :disabled="offeneRueckfragen.length > 0" :title="offeneRueckfragen.length ? 'Offene Rückfragen zuerst klären' : ''" @click="markOrdered">Als bestellt markieren</button>
+                        <button v-if="anforderung.status === 'kaufmaennisch_genehmigt'" class="rounded-lg border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-800" @click="changeStatus('zur_ueberarbeitung', 'Zur Überarbeitung an den Antragsteller zurückgeben?', true)">Zur Überarbeitung</button>
                         <button v-if="['bestellt', 'teilweise_geliefert'].includes(anforderung.status)" class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white" @click="deliveryOpen = true">Teillieferung erfassen</button>
                         <button v-if="['bestellt', 'teilweise_geliefert'].includes(anforderung.status)" class="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white" @click="changeStatus('geliefert', 'Als vollständig geliefert markieren?')">Vollständig geliefert</button>
                     </template>
@@ -350,6 +414,52 @@ function submitPartialDelivery() {
                 <div class="sticky bottom-3 flex flex-col gap-3 rounded-xl border border-gray-200 bg-white/95 p-4 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between"><div class="text-sm"><span class="text-gray-500">Endsumme:</span> <strong class="text-lg text-orange-600">{{ euro(netto + mwst) }}</strong></div><div class="flex gap-2"><button type="button" class="flex-1 rounded-lg border border-gray-300 px-4 py-2 font-semibold" @click="editing = false">Abbrechen</button><button type="submit" :disabled="form.processing" class="flex-1 rounded-lg bg-orange-600 px-4 py-2 font-semibold text-white">Speichern</button></div></div>
             </form>
 
+            <section id="kommunikation" class="scroll-mt-24 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 class="text-lg font-semibold">Rückfragen und Kommentare</h2>
+                        <p class="mt-1 text-sm text-slate-500">Verbindlicher, vorgangsbezogener Verlauf. Preisänderungen und Alternativen ersetzen keine Freigabe.</p>
+                    </div>
+                    <button type="button" class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white" @click="openComment()"><i class="las la-plus mr-1"></i> Kommentar / Rückfrage</button>
+                </div>
+
+                <div v-if="offeneRueckfragen.length" class="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                    <p class="font-semibold"><i class="las la-exclamation-circle mr-1"></i>{{ offeneRueckfragen.length }} offene {{ offeneRueckfragen.length === 1 ? 'Rückfrage' : 'Rückfragen' }}</p>
+                    <p class="mt-1">Die Anforderung kann erst als bestellt markiert werden, wenn alle Rückfragen geklärt sind.</p>
+                </div>
+
+                <ol v-if="kommentare.length" class="mt-5 space-y-4">
+                    <li v-for="item in kommentare" :key="item.id" class="rounded-xl border p-4" :class="item.antwort_erforderlich && !item.geklaert_am ? 'border-amber-300 bg-amber-50/50' : 'border-slate-200 bg-white'">
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span class="font-semibold text-slate-900">{{ item.user?.name || 'Ehemalige Person' }}</span>
+                                    <span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{{ commentReason(item.grund) }}</span>
+                                    <span v-if="item.artikel" class="rounded-full bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-800">Pos. {{ item.artikel.pos }} · {{ item.artikel.artikel }}</span>
+                                    <span v-if="item.antwort_erforderlich" class="rounded-full px-2 py-1 text-xs font-semibold" :class="item.geklaert_am ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-900'">{{ item.geklaert_am ? 'Geklärt' : 'Antwort erforderlich' }}</span>
+                                </div>
+                                <p class="mt-1 text-xs text-slate-500">{{ new Date(item.created_at).toLocaleString('de-DE') }}<span v-if="item.parent_id"> · Antwort auf #{{ item.parent_id }}</span></p>
+                            </div>
+                            <div class="flex gap-2">
+                                <button type="button" class="text-sm font-semibold text-cyan-700 hover:underline" @click="openComment(item)">Antworten</button>
+                                <button v-if="canResolveComment(item)" type="button" class="rounded-lg bg-green-700 px-3 py-1.5 text-xs font-semibold text-white" @click="resolveComment(item)">Als geklärt markieren</button>
+                            </div>
+                        </div>
+
+                        <p class="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-slate-800">{{ item.body }}</p>
+                        <div v-if="item.vorgeschlagener_preis !== null || item.vorgeschlagener_link" class="mt-3 grid gap-2 rounded-lg border border-cyan-200 bg-cyan-50 p-3 text-sm sm:grid-cols-2">
+                            <div v-if="item.vorgeschlagener_preis !== null"><span class="text-cyan-700">Vorgeschlagener Preis:</span> <strong>{{ euro(item.vorgeschlagener_preis) }}</strong></div>
+                            <div v-if="item.vorgeschlagener_link"><a :href="item.vorgeschlagener_link" target="_blank" rel="noopener noreferrer" class="font-semibold text-cyan-800 underline">Vorgeschlagenes Produkt öffnen</a></div>
+                        </div>
+                        <div v-if="item.attachments?.length" class="mt-3 flex flex-wrap gap-2">
+                            <a v-for="attachment in item.attachments" :key="attachment.id" :href="route('materialanforderung.kommentare.anhaenge.download', attachment.id)" class="rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700"><i class="las la-paperclip mr-1"></i>{{ attachment.original_name }}</a>
+                        </div>
+                        <p v-if="item.geklaert_am" class="mt-3 text-xs font-medium text-green-700">Geklärt am {{ new Date(item.geklaert_am).toLocaleString('de-DE') }} durch {{ item.geklaert_von?.name || 'Ehemalige Person' }}</p>
+                    </li>
+                </ol>
+                <p v-else class="mt-5 rounded-lg bg-slate-50 p-8 text-center text-sm text-slate-500">Noch keine Rückfragen oder Kommentare vorhanden.</p>
+            </section>
+
             <section class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
                 <h2 class="mb-4 text-lg font-semibold">Bearbeitungsverlauf</h2>
                 <ol v-if="verlauf.length" class="space-y-4"><li v-for="item in verlauf" :key="item.id" class="flex gap-3"><span class="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-orange-500"></span><div><p class="text-sm font-medium">{{ item.genehmiger?.name || 'Unbekannt' }} · {{ statusMeta[item.status]?.[0] || item.status }}</p><p class="text-xs text-gray-500">{{ new Date(item.created_at).toLocaleString('de-DE') }}</p><p v-if="item.kommentar" class="mt-1 whitespace-pre-wrap text-sm text-gray-700">{{ item.kommentar }}</p></div></li></ol>
@@ -361,6 +471,50 @@ function submitPartialDelivery() {
                     <div class="sticky top-0 flex items-center justify-between border-b bg-white p-5"><div><h2 class="text-lg font-semibold">Teillieferung erfassen</h2><p class="text-sm text-gray-500">Kumulierte gelieferte Menge je Position</p></div><button type="button" class="rounded-lg p-2 text-gray-500 hover:bg-gray-100" @click="deliveryOpen = false"><i class="las la-times text-xl"></i></button></div>
                     <div class="space-y-3 p-5"><label v-for="item in anforderung.artikeln" :key="item.id" class="grid grid-cols-[1fr_120px] items-center gap-4 rounded-lg border border-gray-200 p-3"><span><strong class="block">{{ item.pos }}. {{ item.artikel }}</strong><small class="text-gray-500">Bestellt: {{ item.stueck }}</small></span><input v-model.number="liefermengen[item.id]" type="number" min="0" :max="item.stueck" class="w-full rounded-lg border-gray-300" /></label></div>
                     <div class="sticky bottom-0 flex justify-end gap-2 border-t bg-white p-4"><button type="button" class="rounded-lg border border-gray-300 px-4 py-2 font-semibold" @click="deliveryOpen = false">Abbrechen</button><button type="submit" class="rounded-lg bg-amber-600 px-4 py-2 font-semibold text-white">Teillieferung speichern</button></div>
+                </form>
+            </div>
+
+            <div v-if="commentOpen" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" @click.self="commentOpen = false">
+                <form class="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl" @submit.prevent="submitComment">
+                    <header class="sticky top-0 z-10 flex items-start justify-between border-b border-slate-200 bg-white p-5">
+                        <div><h2 class="text-lg font-semibold">{{ commentForm.parent_id ? 'Antwort verfassen' : 'Kommentar oder Rückfrage' }}</h2><p class="text-sm text-slate-500">Materialanforderung #{{ anforderung.id }}</p></div>
+                        <button type="button" class="text-2xl text-slate-400" @click="commentOpen = false">&times;</button>
+                    </header>
+                    <div class="grid gap-4 p-5 sm:grid-cols-2">
+                        <label class="text-sm font-semibold">Grund
+                            <select v-model="commentForm.grund" class="mt-1 w-full rounded-lg border-slate-300">
+                                <option v-for="reason in kommentarGruende" :key="reason.value" :value="reason.value">{{ reason.label }}</option>
+                            </select>
+                        </label>
+                        <label class="text-sm font-semibold">Betroffener Artikel
+                            <select v-model="commentForm.artikel_id" class="mt-1 w-full rounded-lg border-slate-300">
+                                <option value="">Gesamte Anforderung</option>
+                                <option v-for="item in anforderung.artikeln" :key="item.id" :value="item.id">Pos. {{ item.pos }} · {{ item.artikel }}</option>
+                            </select>
+                        </label>
+                        <label class="text-sm font-semibold sm:col-span-2">Nachricht *
+                            <textarea v-model="commentForm.body" maxlength="5000" rows="5" required class="mt-1 w-full rounded-lg border-slate-300" placeholder="Sachliche Rückfrage, Begründung oder Entscheidung …"></textarea>
+                        </label>
+                        <label class="text-sm font-semibold">Vorgeschlagener Preis
+                            <input v-model="commentForm.vorgeschlagener_preis" type="number" min="0" step="0.01" class="mt-1 w-full rounded-lg border-slate-300" />
+                        </label>
+                        <label class="text-sm font-semibold">Link zur Alternative
+                            <input v-model="commentForm.vorgeschlagener_link" type="url" maxlength="2000" class="mt-1 w-full rounded-lg border-slate-300" />
+                        </label>
+                        <label class="sm:col-span-2 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
+                            <input v-model="commentForm.antwort_erforderlich" type="checkbox" class="mt-1 rounded border-amber-400 text-amber-700" />
+                            <span><strong class="block text-amber-900">Antwort erforderlich</strong><span class="text-amber-800">Blockiert „Als bestellt markieren“, bis die Rückfrage geklärt wurde.</span></span>
+                        </label>
+                        <label class="text-sm font-semibold sm:col-span-2">Anhänge (maximal 5)
+                            <input type="file" multiple class="mt-1 block w-full rounded-lg border border-slate-300 p-2 text-sm" @change="chooseCommentFiles" />
+                            <span v-if="commentForm.attachments.length" class="mt-1 block text-xs font-normal text-slate-500">{{ commentForm.attachments.map(file => file.name).join(', ') }}</span>
+                        </label>
+                        <p v-if="commentForm.hasErrors" class="rounded-lg bg-red-50 p-3 text-sm text-red-700 sm:col-span-2">{{ Object.values(commentForm.errors)[0] }}</p>
+                    </div>
+                    <footer class="sticky bottom-0 flex justify-end gap-2 border-t border-slate-200 bg-slate-50 p-4">
+                        <button type="button" class="rounded-lg border border-slate-300 bg-white px-4 py-2 font-semibold" @click="commentOpen = false">Abbrechen</button>
+                        <button class="rounded-lg bg-slate-900 px-4 py-2 font-semibold text-white" :disabled="commentForm.processing">{{ commentForm.processing ? 'Speichert …' : 'Speichern' }}</button>
+                    </footer>
                 </form>
             </div>
         </div>
