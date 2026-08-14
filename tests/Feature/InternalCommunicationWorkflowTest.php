@@ -63,13 +63,13 @@ class InternalCommunicationWorkflowTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_participant_account_cannot_use_staff_chat_even_with_permission(): void
+    public function test_chat_access_depends_only_on_chat_use_permission(): void
     {
         $participant = User::factory()->create();
-        $participant->person->update(['typ' => 'teilnehmer']);
+        $participant->person->update(['typ' => 'teilnehmer', 'aktiv' => false]);
         $this->grantTestPermission($participant, 'chat.use');
 
-        $this->actingAs($participant)->get(route('chat.index'))->assertForbidden();
+        $this->actingAs($participant)->get(route('chat.index'))->assertOk();
     }
 
     public function test_material_request_link_is_rejected_when_any_chat_member_lacks_access(): void

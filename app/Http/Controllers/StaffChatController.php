@@ -22,7 +22,7 @@ class StaffChatController extends Controller
 {
     public function index(Request $request)
     {
-        $this->ensureStaff($request);
+        $this->ensureCanUseChat($request);
         $user = $request->user();
         $search = trim((string) $request->query('search', ''));
 
@@ -102,7 +102,7 @@ class StaffChatController extends Controller
 
     public function storeConversation(Request $request)
     {
-        $this->ensureStaff($request);
+        $this->ensureCanUseChat($request);
         $validated = $request->validate([
             'type' => ['required', Rule::in(['direct', 'group', 'project'])],
             'name' => ['nullable', 'string', 'max:160'],
@@ -193,7 +193,7 @@ class StaffChatController extends Controller
 
     public function storeMessage(Request $request, StaffConversation $conversation)
     {
-        $this->ensureStaff($request);
+        $this->ensureCanUseChat($request);
         $this->ensureMember($request, $conversation);
 
         $validated = $request->validate([
@@ -265,7 +265,7 @@ class StaffChatController extends Controller
 
     public function destroyMessage(Request $request, StaffMessage $message)
     {
-        $this->ensureStaff($request);
+        $this->ensureCanUseChat($request);
         $this->ensureMember($request, $message->conversation);
         abort_unless((int) $message->sender_user_id === (int) $request->user()->id, 403);
 
@@ -282,7 +282,7 @@ class StaffChatController extends Controller
 
     public function downloadAttachment(Request $request, StaffMessageAttachment $attachment)
     {
-        $this->ensureStaff($request);
+        $this->ensureCanUseChat($request);
         $attachment->load('message.conversation');
         $this->ensureMember($request, $attachment->message->conversation);
         abort_unless(Storage::disk('local')->exists($attachment->path), 404);
@@ -292,7 +292,7 @@ class StaffChatController extends Controller
 
     public function export(Request $request)
     {
-        $this->ensureStaff($request);
+        $this->ensureCanUseChat($request);
         $user = $request->user();
         $conversations = StaffConversation::query()
             ->whereHas('members', fn ($members) => $members->where('users.id', $user->id))
@@ -386,14 +386,9 @@ class StaffChatController extends Controller
         return ['id' => $user->id, 'name' => $user->name ?: 'Ehemalige Person'];
     }
 
-    private function ensureStaff(Request $request): void
+    private function ensureCanUseChat(Request $request): void
     {
-        abort_unless(
-            $request->user()?->can('chat.use')
-            && $request->user()?->person?->typ === 'mitarbeiter'
-            && (bool) $request->user()?->person?->aktiv,
-            403
-        );
+        abort_unless($request->user()?->can('chat.use'), 403);
     }
 
     private function ensureMember(Request $request, StaffConversation $conversation): void
