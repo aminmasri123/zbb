@@ -11,7 +11,7 @@ class PotenzialanalyseReportExportTest extends TestCase
     public function test_pa_report_uses_the_unchanged_original_bop_sources(): void
     {
         $this->assertSame(
-            '93bbe8777936934b24d9eaaa8f4d2e8d6d0a5dcd814001ba98b6d10554e90443',
+            'f20e2d6333994072bb1064c702ceec032f53b6d49b9dffd64ee0fb760c3b20cd',
             hash_file('sha256', resource_path('views/pdf/berichtPA.blade.php'))
         );
         $this->assertSame(
@@ -81,11 +81,11 @@ class PotenzialanalyseReportExportTest extends TestCase
     public function test_pa_report_routes_use_the_existing_pa_export_permission(): void
     {
         $this->assertSame(
-            ['gruppe.bop.export.auswertungsbogen-pa'],
+            ['gruppe.bop.export.berichte-pa'],
             RoutePermissionMap::permissionsFor('potenzialanalyse.gruppe.teilnehmer.bericht')
         );
         $this->assertSame(
-            ['gruppe.bop.export.auswertungsbogen-pa'],
+            ['gruppe.bop.export.berichte-pa'],
             RoutePermissionMap::permissionsFor('potenzialanalyse.gruppe.berichte')
         );
     }

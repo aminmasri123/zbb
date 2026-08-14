@@ -12,15 +12,20 @@ use App\Models\PotenzialanalyseBeurteilung;
 use App\Models\PotenzialanalyseKompetenzbewertung;
 use App\Models\PotenzialanalyseSelbsteinschaetzung;
 use App\Models\PotenzialanalyseUebungErgebnis;
+use App\Services\Documents\HtmlPdfDocumentCombiner;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
-use ZipArchive;
 
 class PotenzialanalyseReportService
 {
+    public function __construct(
+        private readonly HtmlPdfDocumentCombiner $htmlCombiner,
+    ) {
+    }
+
     private const MERKMALE = [
         ['key' => 'feinmotorik', 'bereich' => 'Berufsübergreifende Kompetenzen', 'label' => 'Feinmotorik'],
         ['key' => 'grobmotorik', 'bereich' => 'Berufsübergreifende Kompetenzen', 'label' => 'Grobmotorik'],
@@ -226,37 +231,54 @@ class PotenzialanalyseReportService
         return $path;
     }
 
-    public function createGroupZip(Gruppe $gruppe): array
+    public function createGroupPdf(Gruppe $gruppe): array
     {
-        $gruppe->loadMissing(['teilnehmer', 'bereich']);
-        $people = $gruppe->teilnehmer
-            ->unique('id')
-            ->sortBy(fn (Personen $person) => mb_strtolower(($person->nachname ?? '') . ' ' . ($person->vorname ?? '')))
-            ->values();
+        $gruppe->loadMissing('bereich');
+        $people = $this->orderedParticipants($gruppe);
 
         abort_if($people->isEmpty(), 422, 'Die Gruppe verfügt über keine Teilnehmer.');
 
-        $directory = storage_path('app/tmp/pa_berichte_' . Str::uuid());
-        File::ensureDirectoryExists($directory);
+        $documents = $people->map(
+            fn (Personen $person) => view('pdf.berichtPA', $this->originalBopReportData($gruppe, $person))->render()
+        );
+        $pdf = Pdf::loadHTML($this->htmlCombiner->combine($documents))
+            ->setOption('isHtml5ParserEnabled', true)
+            ->setOption('isRemoteEnabled', true)
+            ->setPaper('a4', 'portrait')
+            ->output();
 
-        $zipName = $this->safeName('PA_Berichte_Gruppe_' . ($gruppe->bereich?->name ?: $gruppe->id)) . '.zip';
-        $zipPath = storage_path('app/tmp/' . Str::uuid() . '_' . $zipName);
-        $zip = new ZipArchive();
+        $name = $this->safeName('PA_Berichte_Gruppe_' . ($gruppe->bereich?->name ?: $gruppe->id)) . '.pdf';
+        $path = storage_path('app/tmp/' . Str::uuid() . '_' . $name);
+        File::ensureDirectoryExists(dirname($path));
+        File::put($path, $pdf);
 
-        if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
-            File::deleteDirectory($directory);
-            throw new \RuntimeException('Das ZIP-Archiv für die PA-Berichte konnte nicht erstellt werden.');
-        }
+        return ['path' => $path, 'name' => $name, 'count' => $people->count()];
+    }
 
-        foreach ($people as $person) {
-            $path = $this->writePdf($gruppe, $person, $directory);
-            $zip->addFile($path, basename($path));
-        }
+    public function orderedParticipants(Gruppe $gruppe): Collection
+    {
+        $gruppe->loadMissing('teilnehmer');
 
-        $zip->close();
-        File::deleteDirectory($directory);
+        return $gruppe->teilnehmer
+            ->unique('id')
+            ->sort(function (Personen $left, Personen $right): int {
+                $lastName = strnatcasecmp(
+                    Str::ascii((string) $left->nachname),
+                    Str::ascii((string) $right->nachname),
+                );
 
-        return ['path' => $zipPath, 'name' => $zipName, 'count' => $people->count()];
+                if ($lastName !== 0) {
+                    return $lastName;
+                }
+
+                $firstName = strnatcasecmp(
+                    Str::ascii((string) $left->vorname),
+                    Str::ascii((string) $right->vorname),
+                );
+
+                return $firstName !== 0 ? $firstName : ((int) $left->id <=> (int) $right->id);
+            })
+            ->values();
     }
 
     public function schoolAssignments(int $schoolId, string $schoolYear, string $part, int $projectId): Collection

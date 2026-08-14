@@ -807,7 +807,7 @@ class GruppeHasTeilnehmerController extends Controller
             [
                 'id' => 'bop-pa-berichte-gruppe',
                 'name' => 'PA-Berichte Gruppe',
-                'format' => 'ZIP / PDF',
+                'format' => 'PDF',
                 'typ' => 'Potenzialanalyse',
                 'method' => 'get',
                 'url' => route('potenzialanalyse.gruppe.berichte', $gruppe->id),

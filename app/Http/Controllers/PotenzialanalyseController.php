@@ -402,7 +402,7 @@ class PotenzialanalyseController extends Controller
         abort_unless($this->canUseGroup(auth()->user(), $gruppe), 403);
         $this->ensureProjektUsesPotenzialanalyse($gruppe->projekt);
 
-        $archive = $reports->createGroupZip($gruppe);
+        $archive = $reports->createGroupPdf($gruppe);
 
         return response()->download($archive['path'], $archive['name'])->deleteFileAfterSend(true);
     }
