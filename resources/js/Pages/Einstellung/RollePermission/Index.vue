@@ -9,6 +9,7 @@
     import Dropdown from '@/Components/Dropdown.vue';
     import DropdownLink from '@/Components/DropdownLink.vue';
     import ModalCreate from './ModalCreate.vue';
+    import ModalCreatePermission from './ModalCreatePermission.vue';
     import { usePermissions } from '@/utils/permissions';
     // Search input state
     let seite = 'rolle';
@@ -16,22 +17,27 @@
     let rolleToDelete = ref(null); // Speichert den Namen der User, die gelöscht werden soll
     let showModalLöschen = ref(false); // Modal für die Löschung
     let isModalCreateOpen = ref(false);
+    let isPermissionModalOpen = ref(false);
     const openModalCreate = () => { isModalCreateOpen.value = true; };
     const closeModalCreate = () => { isModalCreateOpen.value = false; };
+    const openPermissionModal = () => { isPermissionModalOpen.value = true; };
+    const closePermissionModal = () => { isPermissionModalOpen.value = false; };
     const props = defineProps({
         rollen: {type: Array, default: () => [] }, // Setzt einen leeren Array als Standardwert
         berechtigungskategorien: { type: Array, default: () => [] }, // Setzt einen leeren Array als Standardwert
         kategorienDerUser:{ type: Array, default: () => [] },
         alleZugewiesenePermission:{ type:Array, default:()=> []},
         roleId:{ type:Number , default:()=> []},
+        roleSearched:{ type:Object, default:()=> ({})},
         dataAccess:{ type:Object, default:()=> ({})},
         dataAccessOptions:{ type:Object, default:()=> ({ team: {}, participant: {} })},
     });
 
-    const { canAny } = usePermissions();
+    const { can, canAny } = usePermissions();
     const canManagePermissions = computed(() => canAny(['berechtigung.zuweisen', 'berechtigung.update']));
     const canManageDataAccess = computed(() => canAny(['rolle.data-access.update', 'berechtigung.update']));
     const canCreateRole = computed(() => canAny(['rolle.store', 'berechtigung.store', 'berechtigung.update']));
+    const canCreatePermission = computed(() => can('berechtigung.store'));
     const canDeleteRole = computed(() => canAny(['rolle.destroy', 'berechtigung.update']));
 
     const dataAccessForm = ref({
@@ -81,6 +87,12 @@
     const addRolle = (rolle) => {
     localRollen.value.push(rolle);
 };
+    const refreshPermissions = () => {
+        router.reload({
+            only: ['berechtigungskategorien', 'kategorienDerUser', 'alleZugewiesenePermission'],
+            preserveScroll: true,
+        });
+    };
     // Löschbestätigung anzeigen und Abteilungsnamen speichern
     const confirmDelete = (rolle) => {
         rolleToDelete.value = {
@@ -378,10 +390,13 @@
                 <div class="flex flex-col sm:flex-row">
                     <div class="mb-5 sm:w-1/4 sm:pr-4">
                         <div class="hidden sm:sticky sm:top-6 sm:block">
-                            <div v-if="canCreateRole" @click="openModalCreate" class="w-full bg-orange-500 py-2 rounded-md text-center">
-                                <a href="#" class="text-white">
+                            <div class="space-y-2">
+                                <button v-if="canCreateRole" type="button" @click="openModalCreate" class="w-full rounded-md bg-orange-500 py-2 text-center text-white">
                                     <i class="fa fa-plus"></i> {{ $t('rolle_anlegen') }}
-                                </a>
+                                </button>
+                                <button v-if="canCreatePermission" type="button" @click="openPermissionModal" class="w-full rounded-md bg-zbb py-2 text-center text-white">
+                                    <i class="fa fa-key"></i> Berechtigung anlegen
+                                </button>
                             </div>
                             <div class="mt-5 max-h-[calc(100vh-9rem)] overflow-y-auto overscroll-contain border bg-white">
                                 <ul>
@@ -546,5 +561,13 @@
                  :visible="isModalCreateOpen"
                  @close="closeModalCreate"
                  @added="addRolle" />
+        <ModalCreatePermission
+                 v-if="canCreatePermission"
+                 :visible="isPermissionModalOpen"
+                 :categories="kategorienDerUser"
+                 :role-id="roleId"
+                 :role-name="roleSearched?.name || ''"
+                 @close="closePermissionModal"
+                 @added="refreshPermissions" />
     </app-layout>
 </template>

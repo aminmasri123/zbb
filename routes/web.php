@@ -342,6 +342,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
 
     //Einstellung -- Rolle
     Route::get('/berechtigung/{id?}', [BerechtigungController::class, 'index'])->name('berechtigung.index')->can('berechtigung.index');
+    Route::post('/berechtigung/anlegen', [BerechtigungController::class, 'store'])->name('berechtigung.store')->can('berechtigung.store');
     Route::post('/berechtigungZuweisen', [BerechtigungController::class, 'berechtigungZuweisen'])->name('berechtigung.zuweisen')->middleware('canAnyPermission:berechtigung.zuweisen,berechtigung.update');
     Route::post('/berechtigungKategorieZuweisen', [BerechtigungController::class, 'berechtigungKategorieZuweisen'])->name('berechtigung.kategorie.zuweisen')->middleware('canAnyPermission:berechtigung.zuweisen,berechtigung.update');
     Route::put('/personal/benutzer/{user}/zusatzberechtigungen', [UserPermissionController::class, 'update'])->name('personal.permissions.update')->middleware('canAnyPermission:berechtigung.zuweisen,berechtigung.update');

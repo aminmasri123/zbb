@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use App\Models\Berechtigungskategorie;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -40,7 +41,7 @@ class BerechtigungController extends Controller
 
         // Berechtigungskategorien abrufen, die den Benutzerrollen zugeordnet sind
         $berechtigungskategorien = Berechtigungskategorie::with(['permissions' => function($query) {
-            $query->select('id', 'name', 'beschreibung', 'berechtigungskategorie_id');
+            $query->select('id', 'name', 'display_name', 'beschreibung', 'berechtigungskategorie_id');
         }])
         ->whereHas('roles', function($query) use ($userRoleIds) {
             $query->whereIn('role_id', $userRoleIds); // Filtere nach den Rollen des Benutzers
@@ -96,7 +97,8 @@ class BerechtigungController extends Controller
 
         $categories->each(function ($category) use ($documentNames): void {
             $category->permissions->each(function ($permission) use ($documentNames): void {
-                $permission->display_name = $documentNames[$permission->name] ?? $permission->name;
+                $permission->display_name = $permission->display_name
+                    ?: ($documentNames[$permission->name] ?? $permission->name);
                 $permission->technical_name = $permission->name;
             });
         });
@@ -245,7 +247,69 @@ class BerechtigungController extends Controller
      */
     public function store(Request $request)
     {
-        //
+        $data = $request->validate([
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                'regex:/^[\pL\pN][\pL\pN._:-]*$/u',
+                Rule::unique('permissions', 'name')->where('guard_name', 'web'),
+            ],
+            'display_name' => ['required', 'string', 'max:255'],
+            'beschreibung' => ['nullable', 'string', 'max:5000'],
+            'berechtigungskategorie_id' => ['required', 'integer', 'exists:berechtigungskategories,id'],
+            'assign_to_role' => ['sometimes', 'boolean'],
+            'role_id' => ['nullable', 'required_if:assign_to_role,true', 'integer', 'exists:roles,id'],
+        ], [
+            'name.regex' => 'Der technische Name darf nur Buchstaben, Zahlen, Punkte, Doppelpunkte, Unterstriche und Bindestriche enthalten.',
+        ]);
+
+        $category = Berechtigungskategorie::query()
+            ->whereKey($data['berechtigungskategorie_id'])
+            ->whereHas('roles', fn ($roles) => $roles->whereIn('roles.id', $request->user()->roles()->pluck('roles.id')))
+            ->firstOrFail();
+
+        $permission = DB::transaction(function () use ($category, $data) {
+            $permission = Permission::create([
+                'name' => $data['name'],
+                'display_name' => $data['display_name'],
+                'guard_name' => 'web',
+                'berechtigungskategorie_id' => $category->id,
+                'beschreibung' => $data['beschreibung'] ?? null,
+            ]);
+
+            $roles = Role::query()
+                ->where('guard_name', 'web')
+                ->where(function ($query) use ($data) {
+                    $query->where('name', 'Administrator');
+
+                    if (($data['assign_to_role'] ?? false) && isset($data['role_id'])) {
+                        $query->orWhere('id', $data['role_id']);
+                    }
+                })
+                ->get();
+
+            foreach ($roles as $role) {
+                $role->berechtigungskategories()->syncWithoutDetaching([$category->id]);
+                $role->givePermissionTo($permission);
+            }
+
+            return $permission;
+        });
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        return response()->json([
+            'success' => true,
+            'permission' => [
+                'id' => $permission->id,
+                'name' => $permission->name,
+                'technical_name' => $permission->name,
+                'display_name' => $permission->display_name,
+                'beschreibung' => $permission->beschreibung,
+                'berechtigungskategorie_id' => $permission->berechtigungskategorie_id,
+            ],
+        ], 201);
     }
 
     /**
