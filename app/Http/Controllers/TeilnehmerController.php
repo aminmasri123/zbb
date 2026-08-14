@@ -890,6 +890,44 @@ class TeilnehmerController extends Controller
                         'typ' => 'teilnehmer',
                     ];
 
+                    $addressData = [
+                        'strasse' => $this->cleanImportValue($row[12] ?? null),
+                        'hausnummer' => $this->cleanImportValue($row[13] ?? null),
+                        'plz' => $this->cleanImportValue($row[14] ?? null),
+                        'stadt' => $this->cleanImportValue($row[15] ?? null),
+                        'land' => $this->cleanImportValue($row[16] ?? null),
+                        'zusatzinfo' => $this->cleanImportValue($row[17] ?? null),
+                    ];
+                    $hasAddress = collect($addressData)->contains(
+                        static fn ($value) => $value !== null
+                    );
+
+                    if ($hasAddress) {
+                        $addressData['land'] ??= 'Deutschland';
+
+                        $addressValidator = Validator::make($addressData, [
+                            'strasse' => ['required', 'string', 'max:255'],
+                            'hausnummer' => ['required', 'string', 'max:10'],
+                            'plz' => ['required', 'string', 'max:10'],
+                            'stadt' => ['required', 'string', 'max:255'],
+                            'land' => ['required', 'string', 'max:255'],
+                            'zusatzinfo' => ['nullable', 'string', 'max:255'],
+                        ], [], [
+                            'strasse' => 'Straße',
+                            'hausnummer' => 'Hausnummer',
+                            'plz' => 'PLZ',
+                            'stadt' => 'Stadt',
+                            'land' => 'Land',
+                            'zusatzinfo' => 'Zusatzinfo',
+                        ]);
+
+                        if ($addressValidator->fails()) {
+                            $errors[] = 'Zeile ' . $rowNumber . ' (Adresse): '
+                                . implode(' ', $addressValidator->errors()->all());
+                            continue;
+                        }
+                    }
+
                     $participantValidator = Validator::make(
                         $teilnehmerData,
                         $this->participantCoreRules($activeProject)
@@ -914,6 +952,7 @@ class TeilnehmerController extends Controller
                         'schuljahr' => $schuljahr,
                         'teil' => $teil,
                         'klasse' => $klasse,
+                        'addressData' => $hasAddress ? $addressData : null,
                     ];
 
                     continue;
@@ -1000,6 +1039,10 @@ class TeilnehmerController extends Controller
 
                 foreach ($validRows as $validRow) {
                     $teilnehmer = Personen::create($validRow['teilnehmerData']);
+
+                    if ($validRow['addressData']) {
+                        $teilnehmer->adresses()->create($validRow['addressData']);
+                    }
 
                     if ($validRow['projektId']) {
                         $teilnehmer->projekte()->attach(
