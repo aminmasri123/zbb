@@ -36,6 +36,8 @@ const selectedWorkflowTemplate = ref(null);
 const selectedOwnerTransfer = ref(null);
 const deleteTarget = ref(null);
 const deleteProcessing = ref(false);
+const showTaskCreateModal = ref(false);
+const showWorkflowTemplateCreateModal = ref(false);
 const showFolderModal = ref(false);
 const showUploadModal = ref(false);
 const uploadMenuOpen = ref(false);
@@ -324,6 +326,31 @@ function submitWorkflowTemplate() {
         onSuccess: () => {
             forms.workflowTemplate.reset();
             forms.workflowTemplate.steps = [{ title: '', description: '', assignee_person_id: '', status: 'open', priority: 'normal', due_offset_days: '' }];
+            showWorkflowTemplateCreateModal.value = false;
+        },
+    });
+}
+
+function openTaskCreateModal() {
+    forms.task.reset();
+    forms.task.status = 'open';
+    forms.task.priority = 'normal';
+    showTaskCreateModal.value = true;
+}
+
+function openWorkflowTemplateCreateModal() {
+    forms.workflowTemplate.clearErrors();
+    forms.workflowTemplate.reset();
+    forms.workflowTemplate.steps = [{ title: '', description: '', assignee_person_id: '', status: 'open', priority: 'normal', due_offset_days: '' }];
+    showWorkflowTemplateCreateModal.value = true;
+}
+
+function submitTaskCreate() {
+    forms.task.post(route('apps.tasks.store'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            showTaskCreateModal.value = false;
+            forms.task.reset();
         },
     });
 }
@@ -585,110 +612,80 @@ function ownerLabel(item) {
 
                 <div :class="section === 'files' ? 'grid grid-cols-1 gap-5' : 'grid grid-cols-1 gap-5 lg:grid-cols-[360px_1fr]'">
                     <aside v-if="section !== 'files'" class="rounded border border-gray-200 bg-white p-4 shadow-sm">
-                        <h2 class="mb-4 text-lg font-semibold text-gray-900">Neu anlegen</h2>
-
-                        <form v-if="section === 'calendar'" class="space-y-3" @submit.prevent="submitForm('calendar', 'apps.calendar.store')">
-                            <input v-model="forms.calendar.title" class="w-full rounded border-gray-300 text-sm" placeholder="Titel" />
-                            <input v-model="forms.calendar.starts_at" type="datetime-local" class="w-full rounded border-gray-300 text-sm" />
-                            <input v-model="forms.calendar.ends_at" type="datetime-local" class="w-full rounded border-gray-300 text-sm" />
-                            <input v-model="forms.calendar.location" class="w-full rounded border-gray-300 text-sm" placeholder="Ort" />
-                            <textarea v-model="forms.calendar.description" class="w-full rounded border-gray-300 text-sm" rows="3" placeholder="Beschreibung"></textarea>
-                            <VisibilityFields :form="forms.calendar" :projects="projects" :options="visibilityOptions" />
-                            <button class="w-full rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white">Termin speichern</button>
-                        </form>
-
-                        <form v-if="section === 'contacts'" class="space-y-3" @submit.prevent="submitForm('contact', 'apps.contacts.store')">
-                            <input v-model="forms.contact.name" class="w-full rounded border-gray-300 text-sm" placeholder="Name" />
-                            <input v-model="forms.contact.organization" class="w-full rounded border-gray-300 text-sm" placeholder="Organisation" />
-                            <input v-model="forms.contact.role" class="w-full rounded border-gray-300 text-sm" placeholder="Rolle / Funktion" />
-                            <input v-model="forms.contact.email" class="w-full rounded border-gray-300 text-sm" placeholder="E-Mail" />
-                            <input v-model="forms.contact.phone" class="w-full rounded border-gray-300 text-sm" placeholder="Telefon" />
-                            <textarea v-model="forms.contact.notes" class="w-full rounded border-gray-300 text-sm" rows="3" placeholder="Notizen"></textarea>
-                            <VisibilityFields :form="forms.contact" :projects="projects" :options="visibilityOptions" />
-                            <button class="w-full rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white">Kontakt speichern</button>
-                        </form>
-
-                        <form v-if="section === 'tasks'" class="space-y-3" @submit.prevent="submitForm('task', 'apps.tasks.store')">
-                            <h3 class="text-sm font-semibold text-gray-700">Aufgabe</h3>
-                            <input v-model="forms.task.title" class="w-full rounded border-gray-300 text-sm" placeholder="Aufgabe" />
-                            <select v-model="forms.task.assignee_person_id" class="w-full rounded border-gray-300 text-sm">
-                                <option value="">Keine Zuweisung</option>
-                                <option v-for="person in people" :key="person.id" :value="person.id">{{ person.nachname }}, {{ person.vorname }}</option>
-                            </select>
-                            <div class="grid grid-cols-2 gap-2">
-                                <select v-model="forms.task.status" class="rounded border-gray-300 text-sm">
-                                    <option value="open">Offen</option>
-                                    <option value="progress">In Arbeit</option>
-                                    <option value="done">Erledigt</option>
-                                </select>
-                                <select v-model="forms.task.priority" class="rounded border-gray-300 text-sm">
-                                    <option value="low">Niedrig</option>
-                                    <option value="normal">Normal</option>
-                                    <option value="high">Hoch</option>
-                                </select>
-                            </div>
-                            <input v-model="forms.task.due_at" type="date" class="w-full rounded border-gray-300 text-sm" />
-                            <textarea v-model="forms.task.description" class="w-full rounded border-gray-300 text-sm" rows="3" placeholder="Beschreibung"></textarea>
-                            <VisibilityFields :form="forms.task" :projects="projects" :options="visibilityOptions" />
-                            <button class="w-full rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white">Aufgabe speichern</button>
-                        </form>
-
-                        <form v-if="section === 'tasks'" class="mt-6 space-y-3 border-t pt-4" @submit.prevent="submitWorkflowTemplate">
-                            <h3 class="text-sm font-semibold text-gray-700">Workflow-Vorlage</h3>
-                            <input v-model="forms.workflowTemplate.name" class="w-full rounded border-gray-300 text-sm" placeholder="Vorlagenname" />
-                            <textarea v-model="forms.workflowTemplate.description" class="w-full rounded border-gray-300 text-sm" rows="2" placeholder="Beschreibung"></textarea>
+                        <template v-if="section === 'tasks'">
+                            <h2 class="mb-4 text-lg font-semibold text-gray-900">Taskmanager</h2>
+                            <p class="mb-4 text-sm text-gray-600">Schnellzugriff auf alle Erstellungsaktionen. Dialoge öffnen per Add-Button.</p>
 
                             <div class="space-y-3">
-                                <div v-for="(step, index) in forms.workflowTemplate.steps" :key="index" class="rounded border border-gray-200 bg-gray-50 p-3">
-                                    <div class="mb-2 flex items-center justify-between">
-                                        <span class="text-xs font-semibold uppercase text-gray-500">Schritt {{ index + 1 }}</span>
-                                        <button type="button" class="text-xs text-red-600 disabled:text-gray-300" :disabled="forms.workflowTemplate.steps.length === 1" @click="removeWorkflowStep(index)">Entfernen</button>
-                                    </div>
-                                    <input v-model="step.title" class="mb-2 w-full rounded border-gray-300 text-sm" placeholder="Aufgabe" />
-                                    <textarea v-model="step.description" class="mb-2 w-full rounded border-gray-300 text-sm" rows="2" placeholder="Beschreibung"></textarea>
-                                    <select v-model="step.assignee_person_id" class="mb-2 w-full rounded border-gray-300 text-sm">
-                                        <option value="">Zuweisung spaeter festlegen</option>
-                                        <option v-for="person in people" :key="person.id" :value="person.id">{{ person.nachname }}, {{ person.vorname }}</option>
-                                    </select>
-                                    <div class="grid grid-cols-3 gap-2">
-                                        <select v-model="step.status" class="rounded border-gray-300 text-sm">
-                                            <option value="open">Offen</option>
-                                            <option value="progress">In Arbeit</option>
-                                            <option value="done">Erledigt</option>
-                                        </select>
-                                        <select v-model="step.priority" class="rounded border-gray-300 text-sm">
-                                            <option value="low">Niedrig</option>
-                                            <option value="normal">Normal</option>
-                                            <option value="high">Hoch</option>
-                                        </select>
-                                        <input v-model="step.due_offset_days" type="number" min="0" class="rounded border-gray-300 text-sm" placeholder="+ Tage" />
-                                    </div>
-                                </div>
+                                <button
+                                    type="button"
+                                    class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-zbb px-3 py-3 text-sm font-semibold text-white shadow-sm hover:opacity-95"
+                                    @click="openTaskCreateModal"
+                                >
+                                    <i class="la la-plus"></i>
+                                    Neue Aufgabe
+                                </button>
+                                <button
+                                    type="button"
+                                    class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-3 text-sm font-semibold text-gray-700 hover:border-orange-300 hover:text-orange-700"
+                                    @click="openWorkflowTemplateCreateModal"
+                                >
+                                    <i class="la la-layer-group"></i>
+                                    Neue Workflow-Vorlage
+                                </button>
                             </div>
 
-                            <button type="button" class="w-full rounded border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700" @click="addWorkflowStep">Schritt hinzufÃ¼gen</button>
-                            <VisibilityFields :form="forms.workflowTemplate" :projects="projects" :options="visibilityOptions" />
-                            <button class="w-full rounded bg-gray-900 px-3 py-2 text-sm font-semibold text-white">Vorlage speichern</button>
-                        </form>
+                            <div class="mt-5 rounded border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+                                <p class="font-semibold text-gray-900">Taskmanager auf einen Blick</p>
+                                <ul class="mt-2 space-y-1.5 text-xs">
+                                    <li>• Aufgaben direkt im Board nach Status verschieben</li>
+                                    <li>• Vorlagen direkt ins Projekt übernehmen</li>
+                                    <li>• Aufgaben teilen, anpassen, archivieren</li>
+                                </ul>
+                            </div>
+                        </template>
 
-                        <form v-if="section === 'popups'" class="space-y-3" @submit.prevent="submitForm('popup', 'apps.popups.store')">
-                            <input v-model="forms.popup.title" class="w-full rounded border-gray-300 text-sm" placeholder="Titel" />
-                            <select v-model="forms.popup.level" class="w-full rounded border-gray-300 text-sm">
-                                <option value="info">Info</option>
-                                <option value="success">Erfolg</option>
-                                <option value="warning">Warnung</option>
-                                <option value="danger">Wichtig</option>
-                            </select>
-                            <textarea v-model="forms.popup.message" class="w-full rounded border-gray-300 text-sm" rows="4" placeholder="Nachricht"></textarea>
-                            <input v-model="forms.popup.starts_at" type="datetime-local" class="w-full rounded border-gray-300 text-sm" />
-                            <input v-model="forms.popup.ends_at" type="datetime-local" class="w-full rounded border-gray-300 text-sm" />
-                            <label class="flex items-center gap-2 text-sm"><input v-model="forms.popup.active" type="checkbox" /> Aktiv</label>
-                            <VisibilityFields :form="forms.popup" :projects="projects" :options="visibilityOptions" />
-                            <button class="w-full rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white">Popup speichern</button>
-                        </form>
-                    </aside>
+                        <template v-else>
+                            <h2 class="mb-4 text-lg font-semibold text-gray-900">Neu anlegen</h2>
 
-                    <section v-if="section === 'files'" class="overflow-hidden rounded border border-gray-200 bg-white shadow-sm">
+                            <form v-if="section === 'calendar'" class="space-y-3" @submit.prevent="submitForm('calendar', 'apps.calendar.store')">
+                                <input v-model="forms.calendar.title" class="w-full rounded border-gray-300 text-sm" placeholder="Titel" />
+                                <input v-model="forms.calendar.starts_at" type="datetime-local" class="w-full rounded border-gray-300 text-sm" />
+                                <input v-model="forms.calendar.ends_at" type="datetime-local" class="w-full rounded border-gray-300 text-sm" />
+                                <input v-model="forms.calendar.location" class="w-full rounded border-gray-300 text-sm" placeholder="Ort" />
+                                <textarea v-model="forms.calendar.description" class="w-full rounded border-gray-300 text-sm" rows="3" placeholder="Beschreibung"></textarea>
+                                <VisibilityFields :form="forms.calendar" :projects="projects" :options="visibilityOptions" />
+                                <button class="w-full rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white">Termin speichern</button>
+                            </form>
+
+                            <form v-if="section === 'contacts'" class="space-y-3" @submit.prevent="submitForm('contact', 'apps.contacts.store')">
+                                <input v-model="forms.contact.name" class="w-full rounded border-gray-300 text-sm" placeholder="Name" />
+                                <input v-model="forms.contact.organization" class="w-full rounded border-gray-300 text-sm" placeholder="Organisation" />
+                                <input v-model="forms.contact.role" class="w-full rounded border-gray-300 text-sm" placeholder="Rolle / Funktion" />
+                                <input v-model="forms.contact.email" class="w-full rounded border-gray-300 text-sm" placeholder="E-Mail" />
+                                <input v-model="forms.contact.phone" class="w-full rounded border-gray-300 text-sm" placeholder="Telefon" />
+                                <textarea v-model="forms.contact.notes" class="w-full rounded border-gray-300 text-sm" rows="3" placeholder="Notizen"></textarea>
+                                <VisibilityFields :form="forms.contact" :projects="projects" :options="visibilityOptions" />
+                                <button class="w-full rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white">Kontakt speichern</button>
+                            </form>
+
+                            <form v-if="section === 'popups'" class="space-y-3" @submit.prevent="submitForm('popup', 'apps.popups.store')">
+                                <input v-model="forms.popup.title" class="w-full rounded border-gray-300 text-sm" placeholder="Titel" />
+                                <select v-model="forms.popup.level" class="w-full rounded border-gray-300 text-sm">
+                                    <option value="info">Info</option>
+                                    <option value="success">Erfolg</option>
+                                    <option value="warning">Warnung</option>
+                                    <option value="danger">Wichtig</option>
+                                </select>
+                                <textarea v-model="forms.popup.message" class="w-full rounded border-gray-300 text-sm" rows="4" placeholder="Nachricht"></textarea>
+                                <input v-model="forms.popup.starts_at" type="datetime-local" class="w-full rounded border-gray-300 text-sm" />
+                                <input v-model="forms.popup.ends_at" type="datetime-local" class="w-full rounded border-gray-300 text-sm" />
+                                <label class="flex items-center gap-2 text-sm"><input v-model="forms.popup.active" type="checkbox" /> Aktiv</label>
+                                <VisibilityFields :form="forms.popup" :projects="projects" :options="visibilityOptions" />
+                                <button class="w-full rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white">Popup speichern</button>
+                            </form>
+                        </template>
+                    </aside>                    <section v-if="section === 'files'" class="overflow-hidden rounded border border-gray-200 bg-white shadow-sm">
                         <div class="border-b bg-white px-4 py-4">
                             <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                                 <div>
@@ -1258,6 +1255,145 @@ function ownerLabel(item) {
             </div>
         </div>
 
+        <div v-if="showTaskCreateModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div class="w-full max-w-xl rounded bg-white shadow-xl">
+                <div class="flex items-center justify-between border-b px-5 py-4">
+                    <div>
+                        <h2 class="text-xl font-semibold text-gray-950">Neue Aufgabe erstellen</h2>
+                        <p class="mt-1 text-sm text-gray-500">Schnelle, strukturierte Erfassung mit klarer Priorisierung.</p>
+                    </div>
+                    <button class="rounded p-1 text-2xl leading-none text-gray-500 hover:bg-gray-100" @click="showTaskCreateModal = false">&times;</button>
+                </div>
+
+                <form class="space-y-4 p-5" @submit.prevent="submitTaskCreate">
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Titel</label>
+                        <input v-model="forms.task.title" class="w-full rounded border-gray-300 text-sm" placeholder="Kurze Aufgabe" />
+                        <p v-if="forms.task.errors.title" class="mt-1 text-xs text-red-600">{{ forms.task.errors.title }}</p>
+                    </div>
+
+                    <label class="mb-1 block text-sm font-semibold text-gray-700">Beschreibung</label>
+                    <textarea v-model="forms.task.description" rows="4" class="w-full rounded border-gray-300 text-sm" placeholder="Was ist zu tun?"></textarea>
+                    <p v-if="forms.task.errors.description" class="mt-1 text-xs text-red-600">{{ forms.task.errors.description }}</p>
+
+                    <div class="grid gap-3 md:grid-cols-2">
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">Zugewiesen an</label>
+                            <select v-model="forms.task.assignee_person_id" class="w-full rounded border-gray-300 text-sm">
+                                <option value="">Nicht zuweisen</option>
+                                <option v-for="person in people" :key="person.id" :value="person.id">{{ person.nachname }}, {{ person.vorname }}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">Fälligkeitsdatum</label>
+                            <input v-model="forms.task.due_at" type="date" class="w-full rounded border-gray-300 text-sm" />
+                        </div>
+                    </div>
+
+                    <div class="grid gap-3 md:grid-cols-3">
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">Status</label>
+                            <select v-model="forms.task.status" class="w-full rounded border-gray-300 text-sm">
+                                <option value="open">Offen</option>
+                                <option value="in_progress">In Arbeit</option>
+                                <option value="done">Erledigt</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">Priorität</label>
+                            <select v-model="forms.task.priority" class="w-full rounded border-gray-300 text-sm">
+                                <option value="low">Niedrig</option>
+                                <option value="normal">Normal</option>
+                                <option value="high">Hoch</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">Sichtbarkeit</label>
+                            <VisibilityFields :form="forms.task" :projects="projects" :options="visibilityOptions" />
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end gap-2 border-t pt-4">
+                        <button type="button" class="rounded border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700" @click="showTaskCreateModal = false">Abbrechen</button>
+                        <button class="inline-flex items-center gap-2 rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="forms.task.processing">
+                            <i class="la la-save"></i>
+                            Aufgabe speichern
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div v-if="showWorkflowTemplateCreateModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div class="w-full max-w-3xl rounded bg-white shadow-xl">
+                <div class="flex items-center justify-between border-b px-5 py-4">
+                    <div>
+                        <h2 class="text-xl font-semibold text-gray-950">Neue Workflow-Vorlage</h2>
+                        <p class="mt-1 text-sm text-gray-500">Lege mehrere Schritte an und nutze die Vorlage direkt im Taskmanager.</p>
+                    </div>
+                    <button class="rounded p-1 text-2xl leading-none text-gray-500 hover:bg-gray-100" @click="showWorkflowTemplateCreateModal = false">&times;</button>
+                </div>
+
+                <form class="space-y-4 p-5" @submit.prevent="submitWorkflowTemplate">
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Name</label>
+                        <input v-model="forms.workflowTemplate.name" class="w-full rounded border-gray-300 text-sm" placeholder="z. B. Website-Launch" />
+                        <p v-if="forms.workflowTemplate.errors.name" class="mt-1 text-xs text-red-600">{{ forms.workflowTemplate.errors.name }}</p>
+                    </div>
+
+                    <textarea v-model="forms.workflowTemplate.description" rows="3" class="w-full rounded border-gray-300 text-sm" placeholder="Kurze Beschreibung der Vorlage"></textarea>
+
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-sm font-semibold text-gray-900">Schritte</h3>
+                        <button type="button" class="inline-flex items-center gap-2 rounded border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700" @click="addWorkflowStep">
+                            <i class="la la-plus"></i>
+                            Schritt hinzufügen
+                        </button>
+                    </div>
+
+                    <div v-for="(step, index) in forms.workflowTemplate.steps" :key="index" class="grid gap-2 rounded border border-gray-200 bg-gray-50 p-3">
+                        <div class="grid gap-2 md:grid-cols-2">
+                            <input v-model="step.title" class="w-full rounded border-gray-300 text-sm" placeholder="Schritt Titel" />
+                            <input v-model="step.due_offset_days" type="number" min="0" class="w-full rounded border-gray-300 text-sm" placeholder="Fällig in Tagen" />
+                        </div>
+                        <textarea v-model="step.description" rows="2" class="w-full rounded border-gray-300 text-sm" placeholder="Beschreibung"></textarea>
+
+                        <div class="grid gap-2 md:grid-cols-3">
+                            <select v-model="step.assignee_person_id" class="w-full rounded border-gray-300 text-sm">
+                                <option value="">Unassigned</option>
+                                <option v-for="person in people" :key="person.id" :value="person.id">{{ person.nachname }}, {{ person.vorname }}</option>
+                            </select>
+                            <select v-model="step.status" class="w-full rounded border-gray-300 text-sm">
+                                <option value="open">Offen</option>
+                                <option value="in_progress">In Arbeit</option>
+                                <option value="done">Erledigt</option>
+                            </select>
+                            <select v-model="step.priority" class="w-full rounded border-gray-300 text-sm">
+                                <option value="low">Niedrig</option>
+                                <option value="normal">Normal</option>
+                                <option value="high">Hoch</option>
+                            </select>
+                        </div>
+
+                        <div class="flex justify-end">
+                            <button type="button" class="rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50" @click="removeWorkflowStep(index)">
+                                Schritt entfernen
+                            </button>
+                        </div>
+                    </div>
+
+                    <VisibilityFields :form="forms.workflowTemplate" :projects="projects" :options="visibilityOptions" />
+
+                    <div class="flex justify-end gap-2 border-t pt-4">
+                        <button type="button" class="rounded border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700" @click="showWorkflowTemplateCreateModal = false">Abbrechen</button>
+                        <button class="inline-flex items-center gap-2 rounded bg-orange-500 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="forms.workflowTemplate.processing">
+                            <i class="la la-layer-group"></i>
+                            Vorlage speichern
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
         <div v-if="selectedShare" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
             <div class="w-full max-w-4xl rounded bg-white p-5 shadow-xl">
                 <div class="mb-4 flex items-center justify-between">
@@ -1376,3 +1512,4 @@ export default {
     components: { VisibilityFields },
 };
 </script>
+

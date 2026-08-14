@@ -19,12 +19,30 @@ const cardMeta = {
     rooms: { icon: 'la-building', color: 'bg-yellow-100 text-yellow-800', module: 'room_management' },
     vehicles: { icon: 'la-car', color: 'bg-red-100 text-red-800', module: 'vehicle_management' },
     devices: { icon: 'la-laptop', color: 'bg-purple-100 text-purple-800', module: 'it_management' },
+    partners: { icon: 'la-school', color: 'bg-cyan-100 text-cyan-800' },
+    groups: { icon: 'la-users', color: 'bg-orange-100 text-orange-800' },
+    recent_participants: { icon: 'la-user-clock', color: 'bg-emerald-100 text-emerald-800' },
 };
+
 const allowedCards = computed(() => Object.entries(props.dashboardCards || {})
-    .filter(([key, card]) => card.visible && (!cardMeta[key]?.module || moduleEnabled(cardMeta[key].module)))
+    .filter(([key]) => !cardMeta[key]?.module || moduleEnabled(cardMeta[key].module))
     .map(([key, card]) => ({ key, ...card, ...cardMeta[key] })));
 const shownCards = computed(() => allowedCards.value.filter(card => !hidden.value.includes(card.key)));
-const toggleCard = key => hidden.value = hidden.value.includes(key) ? hidden.value.filter(item => item !== key) : [...hidden.value, key];
+const shownStatCards = computed(() => shownCards.value.filter(card => card.type !== 'list'));
+const shownListCards = computed(() => shownCards.value.filter(card => card.type === 'list'));
+const toggleCard = key => hidden.value = hidden.value.includes(key)
+    ? hidden.value.filter(item => item !== key)
+    : [...hidden.value, key];
+
+const cardItemHref = (card, item) => {
+    if (!card.can_open) return null;
+    if (card.key === 'partners') return route('gruppe.index', { partner_id: item.id });
+    if (card.key === 'groups') return route('gruppeHasTeilnehmer.show', item.id);
+    if (card.key === 'recent_participants') return route('teilnehmer.edit', item.id);
+
+    return null;
+};
+
 const save = () => {
     saving.value = true;
     router.put(route('dashboard.preferences.update'), { hidden_cards: hidden.value }, {
@@ -33,6 +51,7 @@ const save = () => {
         onFinish: () => saving.value = false,
     });
 };
+
 const apps = computed(() => [
     { title: 'Kalender', text: 'Termine und Freigaben', route: 'apps.calendar', icon: 'la-calendar', count: 'events', allowed: can('apps.calendar') },
     { title: 'Kontakte', text: 'Ansprechpartner verwalten', route: 'apps.contacts', icon: 'la-address-book', count: 'contacts', allowed: can('apps.contacts') },
@@ -58,18 +77,49 @@ const apps = computed(() => [
 
             <div v-if="editing" class="mx-auto mb-6 max-w-7xl px-4">
                 <section class="rounded-lg border border-[var(--border)] bg-[var(--card)] p-5 shadow-sm">
-                    <h2 class="font-semibold">Karten ein- oder ausblenden</h2><p class="mt-1 text-sm text-[var(--secondary)]">Es werden nur Karten angeboten, für die Sie berechtigt sind.</p>
-                    <div class="mt-4 flex flex-wrap gap-3"><label v-for="card in allowedCards" :key="card.key" class="flex cursor-pointer items-center gap-2 rounded-md border border-[var(--border)] px-3 py-2"><input type="checkbox" :checked="!hidden.includes(card.key)" @change="toggleCard(card.key)"><span>{{ card.label }}</span></label></div>
+                    <h2 class="font-semibold">Karten ein- oder ausblenden</h2>
+                    <p class="mt-1 text-sm text-[var(--secondary)]">Es werden nur Karten angeboten, für die Sie berechtigt sind.</p>
+                    <div class="mt-4 flex flex-wrap gap-3">
+                        <label v-for="card in allowedCards" :key="card.key" class="flex cursor-pointer items-center gap-2 rounded-md border border-[var(--border)] px-3 py-2">
+                            <input type="checkbox" :checked="!hidden.includes(card.key)" @change="toggleCard(card.key)">
+                            <span>{{ card.label }}</span>
+                        </label>
+                    </div>
                     <div class="mt-4 flex gap-3"><button type="button" class="rounded bg-[var(--buttonPrimary)] px-4 py-2 text-sm font-semibold text-[var(--buttonTextPrimary)] disabled:opacity-50" :disabled="saving" @click="save">{{ saving ? 'Speichert …' : 'Auswahl speichern' }}</button><button type="button" class="px-3 py-2 text-sm" @click="editing = false">Abbrechen</button></div>
                 </section>
             </div>
 
-            <div v-if="shownCards.length" class="mx-auto mb-10 grid max-w-7xl grid-cols-1 gap-6 px-4 sm:grid-cols-2" :class="shownCards.length >= 5 ? 'md:grid-cols-5' : 'lg:grid-cols-4'">
-                <div v-for="card in shownCards" :key="card.key" :class="['flex items-center gap-4 rounded-lg p-6 shadow', card.color]">
+            <div v-if="shownStatCards.length" class="mx-auto mb-10 grid max-w-7xl grid-cols-1 gap-6 px-4 sm:grid-cols-2" :class="shownStatCards.length >= 5 ? 'md:grid-cols-5' : 'lg:grid-cols-4'">
+                <div v-for="card in shownStatCards" :key="card.key" :class="['flex items-center gap-4 rounded-lg p-6 shadow', card.color]">
                     <i :class="['la la-2x', card.icon]"></i><div><div class="text-2xl font-bold">{{ card.value }}</div><div class="text-sm font-semibold">{{ card.label }}</div><div class="mt-1 text-xs opacity-75">{{ card.scope }}</div></div>
                 </div>
             </div>
-            <p v-else class="mx-auto mb-10 max-w-7xl px-4 text-sm text-[var(--secondary)]">Sie haben alle verfügbaren Karten ausgeblendet. Über „Dashboard anpassen“ können Sie Karten wieder einblenden.</p>
+
+            <div v-if="shownListCards.length" class="mx-auto mb-10 grid max-w-7xl grid-cols-1 gap-6 px-4 lg:grid-cols-3">
+                <section v-for="card in shownListCards" :key="card.key" class="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-sm">
+                    <header class="flex items-start justify-between gap-3 border-b border-[var(--border)] p-4">
+                        <div class="flex min-w-0 items-start gap-3">
+                            <span :class="['grid h-10 w-10 shrink-0 place-items-center rounded-lg', card.color]"><i :class="['la text-xl', card.icon]"></i></span>
+                            <div class="min-w-0"><h2 class="font-semibold">{{ card.label }}</h2><p class="mt-0.5 truncate text-xs text-[var(--secondary)]">{{ card.scope }}</p></div>
+                        </div>
+                        <span class="rounded-full bg-[var(--muted)] px-2.5 py-1 text-xs font-semibold">{{ card.items?.length || 0 }}</span>
+                    </header>
+                    <div v-if="card.items?.length" class="max-h-96 divide-y divide-[var(--border)] overflow-y-auto">
+                        <template v-for="item in card.items" :key="item.id">
+                            <Link v-if="cardItemHref(card, item)" :href="cardItemHref(card, item)" class="flex items-center justify-between gap-3 px-4 py-3 transition hover:bg-[var(--muted)]">
+                                <span class="min-w-0"><span class="block truncate text-sm font-medium">{{ item.label }}</span><span v-if="item.meta" class="mt-0.5 block truncate text-xs text-[var(--secondary)]">{{ item.meta }}</span></span>
+                                <i class="la la-angle-right shrink-0 text-[var(--secondary)]"></i>
+                            </Link>
+                            <div v-else class="px-4 py-3">
+                                <span class="block truncate text-sm font-medium">{{ item.label }}</span><span v-if="item.meta" class="mt-0.5 block truncate text-xs text-[var(--secondary)]">{{ item.meta }}</span>
+                            </div>
+                        </template>
+                    </div>
+                    <p v-else class="p-6 text-center text-sm text-[var(--secondary)]">Keine Einträge im aktuellen Zugriffsbereich.</p>
+                </section>
+            </div>
+
+            <p v-if="shownCards.length === 0" class="mx-auto mb-10 max-w-7xl px-4 text-sm text-[var(--secondary)]">Sie haben alle verfügbaren Karten ausgeblendet. Über „Dashboard anpassen“ können Sie Karten wieder einblenden.</p>
 
             <div v-if="apps.length" class="mx-auto mb-10 max-w-7xl px-4">
                 <div class="mb-3 flex items-center justify-between border-b border-gray-200 pb-2"><h2 class="text-lg font-semibold">Apps</h2><Link v-if="can('apps.index')" :href="route('apps.index')" class="text-sm font-medium text-[var(--buttonPrimary)]">Alle Apps</Link></div>

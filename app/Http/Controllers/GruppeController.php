@@ -76,6 +76,12 @@ class GruppeController extends Controller
         $projekt = $this->projektMitVerfuegbarenRaeumen($activeProject->id);
         $canSeeAllGroups = $this->canSeeAllGroups($user);
         $anwesendHeuteStatusId = $this->anwesendStatusId('anwesend');
+        $partnerId = $request->integer('partner_id') ?: null;
+        $selectedPartner = $partnerId
+            ? $activeProject->partners()->whereKey($partnerId)->first(['partners.id', 'partners.name'])
+            : null;
+
+        abort_if($partnerId && ! $selectedPartner, 404);
 
         $gruppen = Gruppe::query()
             ->with(['bereich', 'betreuer.user', 'partners', 'raum.parent', 'raum.standort', 'standort'])
@@ -87,6 +93,10 @@ class GruppeController extends Controller
                 ),
             ])
             ->where('projekt_id', $activeProject->id)
+            ->when($partnerId, fn ($query) => $query->whereHas(
+                'partners',
+                fn ($partnerQuery) => $partnerQuery->where('partners.id', $partnerId),
+            ))
             ->when(!$canSeeAllGroups, fn ($query) => $query->where('personen_id', $this->userPersonId($user)))
             ->orderByDesc('anfangsdatum')
             ->orderByDesc('startzeit')
@@ -98,6 +108,10 @@ class GruppeController extends Controller
             'projekt' => $projekt,
             'betreuer' => $this->betreuerOptions($projekt, $user, $canSeeAllGroups),
             'canSeeAllGroups' => $canSeeAllGroups,
+            'filters' => [
+                'partner_id' => $partnerId,
+                'partner' => $selectedPartner,
+            ],
         ]);
     }
 

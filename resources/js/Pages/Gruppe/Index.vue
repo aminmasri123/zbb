@@ -59,6 +59,10 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    filters: {
+        type: Object,
+        default: () => ({}),
+    },
 });
 const sortiereGruppenNachDatum = (gruppen) => [...gruppen].sort((a, b) => {
   const datumVergleich = String(b?.anfangsdatum || '').localeCompare(String(a?.anfangsdatum || ''));
@@ -192,7 +196,10 @@ const applySearchFilter = () => {
 };
 
 watch(search, () => {
-  router.get('/gruppe', { search: search.value }, { preserveState: true, replace: true });
+  router.get('/gruppe', {
+    search: search.value,
+    partner_id: props.filters.partner_id || undefined,
+  }, { preserveState: true, replace: true });
   applySearchFilter();
 });
 </script>
@@ -218,7 +225,7 @@ watch(search, () => {
                          class="min-w-0 flex-1 border-0 text-sm px-3 py-2.5 focus:ring-2 focus:ring-orange-400 focus:ring-inset"
                          placeholder="Suchen ..." />
             <Link
-                :href="route('gruppe.index')"
+                :href="route('gruppe.index', props.filters.partner_id ? { partner_id: props.filters.partner_id } : {})"
                 class="flex w-14 items-center justify-center border-l border-gray-300 text-zbb transition hover:bg-zbb hover:text-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-inset"
                 title="Aktualisieren"
             >
@@ -229,7 +236,18 @@ watch(search, () => {
         <!-- Tabelle -->
         <!-- Gruppenübersicht -->
         <div class="bg-white rounded-2xl shadow-md mt-8 p-8 w-3/4 mx-auto">
-            <h2 class="text-lg font-semibold text-gray-800 mb-5">{{ props.canSeeAllGroups ? 'Projektgruppen' : 'Meine Gruppen' }}</h2>
+            <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+                <h2 class="text-lg font-semibold text-gray-800">
+                    {{ props.filters.partner ? `Gruppen für ${props.filters.partner.name}` : (props.canSeeAllGroups ? 'Projektgruppen' : 'Meine Gruppen') }}
+                </h2>
+                <Link
+                    v-if="props.filters.partner"
+                    :href="route('gruppe.index')"
+                    class="rounded-full border border-zbb px-3 py-1 text-sm font-medium text-zbb hover:bg-zbb hover:text-white"
+                >
+                    Schulfilter entfernen
+                </Link>
+            </div>
 
         <!-- Wenn keine Gruppen -->
             <div v-if="filteredGruppen.length === 0" class="text-gray-500 italic text-sm">

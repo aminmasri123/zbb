@@ -71,6 +71,46 @@ class MaterialanforderungProjectlessAccessTest extends TestCase
             );
     }
 
+    public function test_material_requests_can_be_searched_by_project_name(): void
+    {
+        $administration = User::factory()->create([
+            'current_team_id' => null,
+            'default_projekt_id' => null,
+        ]);
+        $this->givePermission($administration, 'materialanforderung.kaufmännische_freigabe.index');
+
+        $requester = User::factory()->create();
+        $selectedProject = Projekt::factory()->create(['name' => 'Projekt Aurora']);
+        $otherProject = Projekt::factory()->create(['name' => 'Projekt Borealis']);
+
+        $selectedRequest = Materialanforderung::query()->create([
+            'projekt_id' => $selectedProject->id,
+            'kostenstelle' => '14473',
+            'status' => 'sachlich_genehmigt',
+            'gesamtpreis' => 100,
+            'endsumme' => 119,
+            'ersteller_id' => $requester->id,
+        ]);
+        Materialanforderung::query()->create([
+            'projekt_id' => $otherProject->id,
+            'kostenstelle' => '14474',
+            'status' => 'sachlich_genehmigt',
+            'gesamtpreis' => 200,
+            'endsumme' => 238,
+            'ersteller_id' => $requester->id,
+        ]);
+
+        $this->actingAs($administration)
+            ->get(route('materialanforderung.index', ['search' => 'Aurora']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('anforderungen', 1)
+                ->where('anforderungen.0.id', $selectedRequest->id)
+                ->where('anforderungen.0.projekt.name', 'Projekt Aurora')
+                ->where('filters.search', 'Aurora')
+            );
+    }
+
     public function test_creating_request_without_project_returns_clear_conflict(): void
     {
         $user = User::factory()->create([
