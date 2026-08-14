@@ -14,6 +14,8 @@ const props = defineProps({
 const search = ref(props.filters.search || '')
 const statusFilter = ref('alle')
 const projectFilter = ref('alle')
+const yearFilter = ref('alle')
+const costCenterFilter = ref('alle')
 const statusMeta = {
     entwurf: ['Entwurf', 'bg-gray-100 text-gray-700'],
     eingereicht: ['Eingereicht', 'bg-blue-100 text-blue-700'],
@@ -38,37 +40,62 @@ const projectSummaries = computed(() => {
                 id,
                 name: item.projekt?.name || `Projekt ${id}`,
                 count: 0,
-                open: 0,
-                total: 0,
             })
         }
 
         const summary = summaries.get(id)
         summary.count += 1
-        summary.total += Number(item.endsumme || 0)
-        if (!['geliefert', 'storniert'].includes(item.status)) summary.open += 1
     })
 
     return [...summaries.values()].sort((left, right) => left.name.localeCompare(right.name, 'de'))
 })
 
-const projectRequests = computed(() => {
-    if (projectFilter.value === 'alle') return props.anforderungen
+const yearOptions = computed(() => [...new Set(
+    props.anforderungen
+        .map((item) => yearOf(item.created_at))
+        .filter(Boolean)
+)].sort((left, right) => right - left))
 
-    return props.anforderungen.filter((item) => String(item.projekt?.id ?? item.projekt_id) === projectFilter.value)
+const costCenterOptions = computed(() => [...new Set(
+    props.anforderungen
+        .map((item) => String(item.kostenstelle || '').trim())
+        .filter(Boolean)
+)].sort((left, right) => left.localeCompare(right, 'de', { numeric: true })))
+
+const contextRequests = computed(() => {
+    return props.anforderungen.filter((item) => {
+        const matchesProject = projectFilter.value === 'alle'
+            || String(item.projekt?.id ?? item.projekt_id) === projectFilter.value
+        const matchesYear = yearFilter.value === 'alle'
+            || String(yearOf(item.created_at)) === yearFilter.value
+        const matchesCostCenter = costCenterFilter.value === 'alle'
+            || String(item.kostenstelle || '').trim() === costCenterFilter.value
+
+        return matchesProject && matchesYear && matchesCostCenter
+    })
 })
 
 const filtered = computed(() => statusFilter.value === 'alle'
-    ? projectRequests.value
-    : projectRequests.value.filter((item) => item.status === statusFilter.value))
+    ? contextRequests.value
+    : contextRequests.value.filter((item) => item.status === statusFilter.value))
 const selectedProject = computed(() => projectSummaries.value.find((project) => String(project.id) === projectFilter.value))
-const contextLabel = computed(() => selectedProject.value?.name || 'Alle Projekte')
-const openCount = computed(() => projectRequests.value.filter((item) => !['geliefert', 'storniert'].includes(item.status)).length)
-const approvalCount = computed(() => projectRequests.value.filter((item) => ['eingereicht', 'sachlich_genehmigt'].includes(item.status)).length)
-const total = computed(() => projectRequests.value.reduce((sum, item) => sum + Number(item.endsumme || 0), 0))
+const activeFilterCount = computed(() => [projectFilter.value, yearFilter.value, costCenterFilter.value]
+    .filter((value) => value !== 'alle').length)
+const contextLabel = computed(() => {
+    const labels = []
+    if (selectedProject.value) labels.push(selectedProject.value.name)
+    if (yearFilter.value !== 'alle') labels.push(`Jahr ${yearFilter.value}`)
+    if (costCenterFilter.value !== 'alle') labels.push(`Kostenstelle ${costCenterFilter.value}`)
+    return labels.join(' · ') || 'Alle Anforderungen'
+})
+const openCount = computed(() => contextRequests.value.filter((item) => !['geliefert', 'storniert'].includes(item.status)).length)
+const approvalCount = computed(() => contextRequests.value.filter((item) => ['eingereicht', 'sachlich_genehmigt'].includes(item.status)).length)
+const total = computed(() => contextRequests.value.reduce((sum, item) => sum + Number(item.endsumme || 0), 0))
 
-function selectProject(projectId) {
-    projectFilter.value = projectId === 'alle' ? 'alle' : String(projectId)
+function resetContextFilters() {
+    projectFilter.value = 'alle'
+    yearFilter.value = 'alle'
+    costCenterFilter.value = 'alle'
 }
 
 function runSearch() {
@@ -82,6 +109,12 @@ function euro(value) {
 function date(value) {
     return value ? new Intl.DateTimeFormat('de-DE').format(new Date(value)) : '–'
 }
+
+function yearOf(value) {
+    if (!value) return null
+    const parsed = new Date(value)
+    return Number.isNaN(parsed.getTime()) ? null : parsed.getFullYear()
+}
 </script>
 
 <template>
@@ -90,59 +123,72 @@ function date(value) {
         <template #header>Materialanforderungen</template>
 
         <div class="space-y-5">
-            <div v-if="!hasActiveProject" class="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+            <div v-if="!hasActiveProject" class="rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
                 Sie arbeiten ohne Projektzuweisung. Die Übersicht und Ihre Verwaltungsfunktionen stehen trotzdem zur Verfügung. Eine neue Materialanforderung kann nur innerhalb eines Projekts angelegt werden.
             </div>
 
-            <section class="overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-orange-900 text-white shadow-lg">
-                <div class="grid gap-6 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,420px)] lg:items-end">
+            <section class="overflow-hidden rounded border border-gray-200 bg-white shadow-sm">
+                <div class="flex flex-col gap-3 border-b border-gray-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <div class="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15">
-                            <i class="las la-project-diagram text-2xl text-orange-300"></i>
-                        </div>
-                        <p class="text-xs font-bold uppercase tracking-[0.18em] text-orange-300">Projektansicht</p>
-                        <h2 class="mt-2 text-2xl font-bold tracking-tight">Materialbedarf gezielt nach Projekt</h2>
-                        <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-300">Wählen Sie ein Projekt aus und sehen Sie sofort die zugehörigen Anforderungen, offenen Vorgänge und das Bestellvolumen.</p>
+                        <h2 class="flex items-center gap-2 text-lg font-semibold text-gray-900"><i class="las la-filter text-orange-500"></i>Filter und Auswertung</h2>
+                        <p class="mt-1 text-sm text-gray-600">Materialanforderungen nach Projekt, Erstellungsjahr und Kostenstelle eingrenzen.</p>
                     </div>
+                    <button v-if="activeFilterCount" type="button" class="inline-flex items-center gap-1.5 self-start rounded border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:border-orange-300 hover:text-orange-700" @click="resetContextFilters">
+                        <i class="las la-undo"></i> Auswahl zurücksetzen
+                    </button>
+                </div>
 
-                    <div class="rounded-xl bg-white/10 p-4 ring-1 ring-white/15 backdrop-blur-sm">
-                        <label for="project-filter" class="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-300">Projekt auswählen</label>
-                        <div class="flex gap-2">
-                            <select id="project-filter" v-model="projectFilter" class="min-w-0 flex-1 rounded-lg border-white/20 bg-white py-2.5 text-sm font-semibold text-slate-900 focus:border-orange-400 focus:ring-orange-400">
-                                <option value="alle">Alle Projekte ({{ anforderungen.length }})</option>
-                                <option v-for="project in projectSummaries" :key="project.id" :value="String(project.id)">{{ project.name }} ({{ project.count }})</option>
-                            </select>
-                            <button v-if="projectFilter !== 'alle'" type="button" class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white/10 text-white transition hover:bg-white/20" title="Projektfilter zurücksetzen" @click="selectProject('alle')">
-                                <i class="las la-times text-lg"></i>
-                            </button>
-                        </div>
-                        <div class="mt-3 flex items-center justify-between gap-3 text-xs text-slate-300">
-                            <span class="truncate"><i class="las la-folder-open mr-1 text-orange-300"></i>{{ contextLabel }}</span>
-                            <span class="shrink-0 font-semibold text-white">{{ projectRequests.length }} Anforderungen</span>
-                        </div>
-                    </div>
+                <div class="grid grid-cols-1 gap-4 p-4 md:grid-cols-3">
+                    <label class="block">
+                        <span class="mb-1.5 block text-sm font-medium text-gray-700">Projekt</span>
+                        <select v-model="projectFilter" class="w-full rounded border-gray-300 text-sm focus:border-orange-500 focus:ring-orange-500">
+                            <option value="alle">Alle Projekte ({{ anforderungen.length }})</option>
+                            <option v-for="project in projectSummaries" :key="project.id" :value="String(project.id)">{{ project.name }} ({{ project.count }})</option>
+                        </select>
+                    </label>
+
+                    <label class="block">
+                        <span class="mb-1.5 block text-sm font-medium text-gray-700">Erstellungsjahr</span>
+                        <select v-model="yearFilter" class="w-full rounded border-gray-300 text-sm focus:border-orange-500 focus:ring-orange-500">
+                            <option value="alle">Alle Jahre</option>
+                            <option v-for="year in yearOptions" :key="year" :value="String(year)">{{ year }}</option>
+                        </select>
+                    </label>
+
+                    <label class="block">
+                        <span class="mb-1.5 block text-sm font-medium text-gray-700">Kostenstelle</span>
+                        <select v-model="costCenterFilter" class="w-full rounded border-gray-300 text-sm focus:border-orange-500 focus:ring-orange-500">
+                            <option value="alle">Alle Kostenstellen</option>
+                            <option v-for="costCenter in costCenterOptions" :key="costCenter" :value="costCenter">{{ costCenter }}</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-2 border-t border-gray-200 bg-gray-50 px-4 py-3 text-sm">
+                    <span class="min-w-0 truncate text-gray-600"><i class="las la-list-alt mr-1 text-orange-500"></i>{{ contextLabel }}</span>
+                    <span class="shrink-0 font-semibold text-gray-900">{{ contextRequests.length }} Anforderungen</span>
                 </div>
             </section>
 
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                    <div class="flex items-center justify-between"><p class="text-sm text-gray-500">Offene Vorgänge</p><span class="rounded-lg bg-slate-100 p-2 text-slate-600"><i class="las la-clipboard-list"></i></span></div>
+                <div class="rounded border border-gray-200 bg-white p-4 shadow-sm">
+                    <p class="text-sm text-gray-500">Offene Vorgänge</p>
                     <p class="mt-1 text-2xl font-bold text-gray-900">{{ openCount }}</p>
                     <p class="mt-1 truncate text-xs text-gray-400">{{ contextLabel }}</p>
                 </div>
-                <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                    <div class="flex items-center justify-between"><p class="text-sm text-gray-500">In Freigabe</p><span class="rounded-lg bg-violet-50 p-2 text-violet-600"><i class="las la-user-check"></i></span></div>
+                <div class="rounded border border-gray-200 bg-white p-4 shadow-sm">
+                    <p class="text-sm text-gray-500">In Freigabe</p>
                     <p class="mt-1 text-2xl font-bold text-violet-700">{{ approvalCount }}</p>
                     <p class="mt-1 truncate text-xs text-gray-400">{{ contextLabel }}</p>
                 </div>
-                <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                    <div class="flex items-center justify-between"><p class="text-sm text-gray-500">Bestellvolumen</p><span class="rounded-lg bg-orange-50 p-2 text-orange-600"><i class="las la-euro-sign"></i></span></div>
+                <div class="rounded border border-gray-200 bg-white p-4 shadow-sm">
+                    <p class="text-sm text-gray-500">Bestellvolumen</p>
                     <p class="mt-1 text-2xl font-bold text-orange-600">{{ euro(total) }}</p>
                     <p class="mt-1 truncate text-xs text-gray-400">{{ contextLabel }}</p>
                 </div>
             </div>
 
-            <section class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+            <section class="overflow-hidden rounded border border-gray-200 bg-white shadow-sm">
                 <div class="flex flex-col gap-3 border-b border-gray-200 p-4 lg:flex-row lg:items-center lg:justify-between">
                     <form class="flex min-w-0 flex-1 gap-2" @submit.prevent="runSearch">
                         <div class="relative min-w-0 flex-1">
@@ -163,7 +209,7 @@ function date(value) {
                 </div>
 
                 <div class="flex flex-wrap items-center justify-between gap-2 bg-gray-50/80 px-4 py-2.5 text-xs text-gray-500">
-                    <span><strong class="text-gray-700">{{ filtered.length }}</strong> von {{ projectRequests.length }} Vorgängen angezeigt</span>
+                    <span><strong class="text-gray-700">{{ filtered.length }}</strong> von {{ contextRequests.length }} Vorgängen angezeigt</span>
                     <button v-if="statusFilter !== 'alle'" type="button" class="font-semibold text-orange-700 hover:text-orange-800" @click="statusFilter = 'alle'">Statusfilter aufheben</button>
                 </div>
 

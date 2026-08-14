@@ -41,6 +41,7 @@ class MaterialanforderungController extends Controller
             $query->where(function ($searchQuery) use ($search) {
                 $searchQuery->where('materialanforderungs.id', 'like', "%{$search}%")
                     ->orWhere('materialanforderungs.bemerkungen', 'like', "%{$search}%")
+                    ->orWhere('materialanforderungs.kostenstelle', 'like', "%{$search}%")
                     ->orWhereHas('projekt', fn ($projekt) => $projekt->where('name', 'like', "%{$search}%"))
                     ->orWhereHas('artikeln', fn ($artikel) => $artikel->where('artikel', 'like', "%{$search}%"));
             });

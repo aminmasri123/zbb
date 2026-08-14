@@ -89,6 +89,11 @@ const apps = computed(() => [
                 </section>
             </div>
 
+            <div v-if="apps.length" class="mx-auto mb-10 max-w-7xl px-4">
+                <div class="mb-3 flex items-center justify-between border-b border-gray-200 pb-2"><h2 class="text-lg font-semibold">Apps</h2><Link v-if="can('apps.index')" :href="route('apps.index')" class="text-sm font-medium text-[var(--buttonPrimary)]">Alle Apps</Link></div>
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"><Link v-for="app in apps" :key="app.title" :href="route(app.route)" class="rounded border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm transition hover:border-[var(--borderHover)] hover:shadow"><div class="mb-3 flex items-center justify-between"><i :class="['la la-2x text-[var(--buttonPrimary)]', app.icon]"></i><span class="rounded bg-[var(--muted)] px-2 py-1 text-xs font-semibold">{{ props.apps?.[app.count] ?? 0 }}</span></div><h3 class="text-sm font-semibold">{{ app.title }}</h3><p class="mt-1 text-xs leading-5 text-[var(--secondary)]">{{ app.text }}</p></Link></div>
+            </div>
+
             <div v-if="shownStatCards.length" class="mx-auto mb-10 grid max-w-7xl grid-cols-1 gap-6 px-4 sm:grid-cols-2" :class="shownStatCards.length >= 5 ? 'md:grid-cols-5' : 'lg:grid-cols-4'">
                 <div v-for="card in shownStatCards" :key="card.key" :class="['flex items-center gap-4 rounded-lg p-6 shadow', card.color]">
                     <i :class="['la la-2x', card.icon]"></i><div><div class="text-2xl font-bold">{{ card.value }}</div><div class="text-sm font-semibold">{{ card.label }}</div><div class="mt-1 text-xs opacity-75">{{ card.scope }}</div></div>
@@ -121,10 +126,6 @@ const apps = computed(() => [
 
             <p v-if="shownCards.length === 0" class="mx-auto mb-10 max-w-7xl px-4 text-sm text-[var(--secondary)]">Sie haben alle verfügbaren Karten ausgeblendet. Über „Dashboard anpassen“ können Sie Karten wieder einblenden.</p>
 
-            <div v-if="apps.length" class="mx-auto mb-10 max-w-7xl px-4">
-                <div class="mb-3 flex items-center justify-between border-b border-gray-200 pb-2"><h2 class="text-lg font-semibold">Apps</h2><Link v-if="can('apps.index')" :href="route('apps.index')" class="text-sm font-medium text-[var(--buttonPrimary)]">Alle Apps</Link></div>
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"><Link v-for="app in apps" :key="app.title" :href="route(app.route)" class="rounded border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm transition hover:border-[var(--borderHover)] hover:shadow"><div class="mb-3 flex items-center justify-between"><i :class="['la la-2x text-[var(--buttonPrimary)]', app.icon]"></i><span class="rounded bg-[var(--muted)] px-2 py-1 text-xs font-semibold">{{ props.apps?.[app.count] ?? 0 }}</span></div><h3 class="text-sm font-semibold">{{ app.title }}</h3><p class="mt-1 text-xs leading-5 text-[var(--secondary)]">{{ app.text }}</p></Link></div>
-            </div>
         </div>
     </AppLayout>
 </template>

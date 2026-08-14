@@ -75,7 +75,7 @@ class HandleInertiaRequests extends Middleware
                 'warning' => fn () => $request->session()->get('warning'),
             ],
 
-            'appPopups' => fn () => $request->user()
+            'appPopups' => fn () => $request->user()?->can('apps.popups')
                 ? $this->visiblePopupsFor($request)->take(3)->get(['id', 'title', 'message', 'level'])
                 : [],
 

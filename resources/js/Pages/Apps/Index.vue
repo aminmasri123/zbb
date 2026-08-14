@@ -1,19 +1,22 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { usePermissions } from '@/utils/permissions';
 import { Link } from '@inertiajs/vue3';
+import { computed } from 'vue';
 
 const props = defineProps({
     stats: Object,
 });
 
-const apps = [
+const { can } = usePermissions();
+const apps = computed(() => [
     { title: 'Kalender', text: 'Termine mit Projekt-, Team- und Personenfreigaben.', route: 'apps.calendar', icon: 'la-calendar', count: 'events' },
     { title: 'Kontakte', text: 'Gemeinsame und private Ansprechpartner sauber pflegen.', route: 'apps.contacts', icon: 'la-address-book', count: 'contacts' },
     { title: 'Dateimanager', text: 'Dateien und Ordner privat, im Team, projektbezogen oder offen teilen.', route: 'apps.files', icon: 'la-folder-open', count: 'files' },
     { title: 'Teilnehmer', text: 'Teilnehmerliste, Import und Projektzuweisungen verwalten.', route: 'teilnehmer.index', icon: 'la-user-graduate', count: 'participants' },
     { title: 'Taskmanager', text: 'Aufgaben nach Status, Priorität und Verantwortlichen steuern.', route: 'apps.tasks', icon: 'la-tasks', count: 'tasks' },
-    { title: 'Popups', text: 'Hinweise gezielt für Personen, Teams oder Projekte ausspielen.', route: 'apps.popups', icon: 'la-bullhorn', count: 'popups' },
-];
+    { title: 'Popups', text: 'Hinweise gezielt für Personen, Teams oder Projekte ausspielen.', route: 'apps.popups', icon: 'la-bullhorn', count: 'popups', permission: 'apps.popups' },
+].filter((app) => !app.permission || can(app.permission)));
 </script>
 
 <template>
@@ -24,7 +27,7 @@ const apps = [
             <div class="mx-auto max-w-7xl px-4">
                 <div class="mb-6 border-b border-gray-200 pb-4">
                     <h1 class="text-2xl font-semibold text-gray-900">Apps</h1>
-                    <p class="mt-1 text-sm text-gray-600">Kalender, Kontakte, Dateien, Aufgaben und Popups an einem Ort.</p>
+                    <p class="mt-1 text-sm text-gray-600">Ihre freigeschalteten Werkzeuge an einem Ort.</p>
                 </div>
 
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">

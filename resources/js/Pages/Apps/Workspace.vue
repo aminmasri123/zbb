@@ -1,5 +1,6 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
+import { usePermissions } from '@/utils/permissions';
 import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, ref, watch } from 'vue';
 
@@ -20,15 +21,16 @@ const props = defineProps({
 });
 
 const page = usePage();
-const nav = [
+const { can } = usePermissions();
+const nav = computed(() => [
     { key: 'calendar', label: 'Kalender', route: 'apps.calendar', icon: 'la-calendar' },
     { key: 'contacts', label: 'Kontakte', route: 'apps.contacts', icon: 'la-address-book' },
     { key: 'files', label: 'Dateimanager', route: 'apps.files', icon: 'la-folder-open' },
     { key: 'tasks', label: 'Taskmanager', route: 'apps.tasks', icon: 'la-tasks' },
-    { key: 'popups', label: 'Popups', route: 'apps.popups', icon: 'la-bullhorn' },
-];
+    { key: 'popups', label: 'Popups', route: 'apps.popups', icon: 'la-bullhorn', permission: 'apps.popups' },
+].filter((item) => !item.permission || can(item.permission)));
 
-const title = computed(() => nav.find((item) => item.key === props.section)?.label || 'Apps');
+const title = computed(() => nav.value.find((item) => item.key === props.section)?.label || 'Apps');
 const selectedShare = ref(null);
 const selectedEdit = ref(null);
 const selectedFile = ref(null);
@@ -614,7 +616,7 @@ function ownerLabel(item) {
                     <aside v-if="section !== 'files'" class="rounded border border-gray-200 bg-white p-4 shadow-sm">
                         <template v-if="section === 'tasks'">
                             <h2 class="mb-4 text-lg font-semibold text-gray-900">Taskmanager</h2>
-                            <p class="mb-4 text-sm text-gray-600">Schnellzugriff auf alle Erstellungsaktionen. Dialoge öffnen per Add-Button.</p>
+                            <p class="mb-4 text-sm text-gray-600">Schnellzugriff auf alle Erstellungsaktionen. Dialoge Ã¶ffnen per Add-Button.</p>
 
                             <div class="space-y-3">
                                 <button
@@ -638,9 +640,9 @@ function ownerLabel(item) {
                             <div class="mt-5 rounded border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
                                 <p class="font-semibold text-gray-900">Taskmanager auf einen Blick</p>
                                 <ul class="mt-2 space-y-1.5 text-xs">
-                                    <li>• Aufgaben direkt im Board nach Status verschieben</li>
-                                    <li>• Vorlagen direkt ins Projekt übernehmen</li>
-                                    <li>• Aufgaben teilen, anpassen, archivieren</li>
+                                    <li>â€¢ Aufgaben direkt im Board nach Status verschieben</li>
+                                    <li>â€¢ Vorlagen direkt ins Projekt Ã¼bernehmen</li>
+                                    <li>â€¢ Aufgaben teilen, anpassen, archivieren</li>
                                 </ul>
                             </div>
                         </template>
@@ -1285,7 +1287,7 @@ function ownerLabel(item) {
                             </select>
                         </div>
                         <div>
-                            <label class="mb-1 block text-sm font-semibold text-gray-700">Fälligkeitsdatum</label>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">FÃ¤lligkeitsdatum</label>
                             <input v-model="forms.task.due_at" type="date" class="w-full rounded border-gray-300 text-sm" />
                         </div>
                     </div>
@@ -1300,7 +1302,7 @@ function ownerLabel(item) {
                             </select>
                         </div>
                         <div>
-                            <label class="mb-1 block text-sm font-semibold text-gray-700">Priorität</label>
+                            <label class="mb-1 block text-sm font-semibold text-gray-700">PrioritÃ¤t</label>
                             <select v-model="forms.task.priority" class="w-full rounded border-gray-300 text-sm">
                                 <option value="low">Niedrig</option>
                                 <option value="normal">Normal</option>
@@ -1347,14 +1349,14 @@ function ownerLabel(item) {
                         <h3 class="text-sm font-semibold text-gray-900">Schritte</h3>
                         <button type="button" class="inline-flex items-center gap-2 rounded border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700" @click="addWorkflowStep">
                             <i class="la la-plus"></i>
-                            Schritt hinzufügen
+                            Schritt hinzufÃ¼gen
                         </button>
                     </div>
 
                     <div v-for="(step, index) in forms.workflowTemplate.steps" :key="index" class="grid gap-2 rounded border border-gray-200 bg-gray-50 p-3">
                         <div class="grid gap-2 md:grid-cols-2">
                             <input v-model="step.title" class="w-full rounded border-gray-300 text-sm" placeholder="Schritt Titel" />
-                            <input v-model="step.due_offset_days" type="number" min="0" class="w-full rounded border-gray-300 text-sm" placeholder="Fällig in Tagen" />
+                            <input v-model="step.due_offset_days" type="number" min="0" class="w-full rounded border-gray-300 text-sm" placeholder="FÃ¤llig in Tagen" />
                         </div>
                         <textarea v-model="step.description" rows="2" class="w-full rounded border-gray-300 text-sm" placeholder="Beschreibung"></textarea>
 
