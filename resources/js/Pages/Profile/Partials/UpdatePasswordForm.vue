@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue';
 import { useForm } from '@inertiajs/vue3';
-import ActionMessage from '@/Components/ActionMessage.vue';
+import Swal from 'sweetalert2';
 import FormSection from '@/Components/FormSection.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
@@ -21,7 +21,17 @@ const updatePassword = () => {
     form.put(route('user-password.update'), {
         errorBag: 'updatePassword',
         preserveScroll: true,
-        onSuccess: () => form.reset(),
+        onSuccess: () => {
+            form.reset();
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Kennwort geändert',
+                text: 'Ihr Kennwort wurde erfolgreich aktualisiert.',
+                confirmButtonText: 'OK',
+                confirmButtonColor: '#f97316',
+            });
+        },
         onError: () => {
             if (form.errors.password) {
                 form.reset('password', 'password_confirmation');
@@ -88,10 +98,6 @@ const updatePassword = () => {
         </template>
 
         <template #actions>
-            <ActionMessage :on="form.recentlySuccessful" class="mr-3">
-                {{ $t('Gespeichert.') }}
-            </ActionMessage>
-
             <PrimaryButton :class="{ 'opacity-25': form.processing }" :disabled="form.processing">
                 {{ $t('Speichern') }}
             </PrimaryButton>
