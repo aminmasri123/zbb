@@ -12,7 +12,7 @@ const props = defineProps({
     canConfirmSachlich: Boolean,
     canBestellen: Boolean,
     canDeleteMaterialanforderung: Boolean,
-    canDeleteOrderedMaterialanforderung: Boolean,
+    canDeleteFinalizedMaterialanforderung: Boolean,
     verlauf: { type: Array, default: () => [] },
 })
 
@@ -175,11 +175,11 @@ function escapeHtml(value) {
     return element.innerHTML
 }
 
-async function deleteOrderedMaterialanforderung() {
+async function deleteFinalizedMaterialanforderung() {
     const expectedConfirmation = `LÖSCHEN #${props.anforderung.id}`
     const statusLabel = statusMeta[props.anforderung.status]?.[0] || props.anforderung.status
     const result = await Swal.fire({
-        title: 'Bestellten Vorgang endgültig löschen?',
+        title: 'Materialanforderung endgültig löschen?',
         icon: 'warning',
         width: 680,
         html: `
@@ -289,7 +289,7 @@ function submitPartialDelivery() {
                         <a :href="route('materialanforderung.pdf', anforderung.id)" class="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700"><i class="las la-file-pdf text-red-600"></i> PDF</a>
                         <button v-if="editable && !editing" type="button" class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold" @click="editing = true"><i class="las la-edit mr-1"></i> Bearbeiten</button>
                         <button v-if="canDeleteMaterialanforderung && !editing" type="button" :disabled="deleting" class="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 disabled:cursor-wait disabled:opacity-60" @click="deleteDraft">{{ deleting ? 'Wird gelöscht …' : 'Löschen' }}</button>
-                        <button v-if="canDeleteOrderedMaterialanforderung && !editing" type="button" :disabled="deleting" class="rounded-lg border border-red-600 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-600 hover:text-white disabled:cursor-wait disabled:opacity-60" @click="deleteOrderedMaterialanforderung"><i class="las la-trash mr-1"></i> {{ deleting ? 'Wird gelöscht …' : 'Bestellten Vorgang löschen' }}</button>
+                        <button v-if="canDeleteFinalizedMaterialanforderung && !editing" type="button" :disabled="deleting" class="rounded-lg border border-red-600 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-600 hover:text-white disabled:cursor-wait disabled:opacity-60" @click="deleteFinalizedMaterialanforderung"><i class="las la-trash mr-1"></i> {{ deleting ? 'Wird gelöscht …' : 'Vorgang endgültig löschen' }}</button>
                         <Link :href="route('materialanforderung.index')" class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold">Zur Übersicht</Link>
                     </div>
                 </div>

@@ -352,10 +352,10 @@ class MaterialanforderungWorkflowTest extends TestCase
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('anforderung.id', $anforderung->id)
-                ->where('canDeleteOrderedMaterialanforderung', true));
+                ->where('canDeleteFinalizedMaterialanforderung', true));
     }
 
-    public function test_ordered_deletion_requires_special_permission_and_delivered_requests_remain_protected(): void
+    public function test_ordered_and_delivered_deletion_requires_special_permission(): void
     {
         $project = Projekt::factory()->create(['name' => 'BOP']);
         $creator = User::factory()->create(['current_team_id' => $project->id]);
@@ -377,13 +377,18 @@ class MaterialanforderungWorkflowTest extends TestCase
 
         $this->actingAs($specialUser)
             ->delete(route('materialanforderung.destroy', $delivered), [
-                'begruendung' => 'Dieser Vorgang soll nicht löschbar sein.',
+                'begruendung' => 'Vollständig gelieferter Testvorgang wird entfernt.',
                 'bestaetigung' => "LÖSCHEN #{$delivered->id}",
             ])
-            ->assertStatus(422);
+            ->assertRedirect(route('materialanforderung.index'));
 
         $this->assertDatabaseHas('materialanforderungs', ['id' => $ordered->id]);
-        $this->assertDatabaseHas('materialanforderungs', ['id' => $delivered->id]);
+        $this->assertDatabaseMissing('materialanforderungs', ['id' => $delivered->id]);
+        $this->assertDatabaseHas('materialanforderung_loeschprotokolls', [
+            'materialanforderung_id' => $delivered->id,
+            'geloescht_von_id' => $specialUser->id,
+            'status' => 'geliefert',
+        ]);
     }
 
     private function anforderung(User $creator, Projekt $project, string $status): Materialanforderung

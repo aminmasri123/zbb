@@ -119,6 +119,23 @@ const confirmCompleteDelete = (user) => {
     showCompleteDeleteModal.value = true;
 };
 
+const handleAccountDeleted = (accountId) => {
+    const userIndex = userList.value.findIndex((user) => Number(user.id) === Number(accountId));
+
+    if (userIndex === -1) return;
+
+    userList.value[userIndex] = {
+        ...userList.value[userIndex],
+        id: null,
+        username: null,
+        email: null,
+        has_login: false,
+        invitation_status: null,
+        invitation_expires_at: null,
+        roles: [],
+    };
+};
+
 const handleStaffDeleted = ({ personId, message }) => {
     userList.value = userList.value.filter((user) => Number(user.person_id) !== Number(personId));
     Swal.fire('Gelöscht', message, 'success');
@@ -238,8 +255,8 @@ const handleProjektZuweisungRemoved = ({ user_id, projekt_id }) => {
         <template #header>Team</template>
 
         <!-- Suchzeile -->
-        <div class="flex justify-between items-center mb-4">
-            <div class="flex items-center">
+        <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div class="flex min-w-0 flex-1 items-center">
                 <button
                     v-if="can('benutzer.store')"
                     type="button"
@@ -251,13 +268,13 @@ const handleProjektZuweisungRemoved = ({ user_id, projekt_id }) => {
                 </button>
                 <input
                     v-model="search"
-                    class="border border-gray-300 text-gray-900 text-sm p-2.5"
+                    class="min-w-0 flex-1 border border-gray-300 p-2.5 text-sm text-gray-900"
                     placeholder="Suchen ..."
                 />
             </div>
 
             <!-- Projekt dropdown -->
-            <Dropdown align="right">
+            <Dropdown align="right" class="shrink-0">
                 <template #trigger>
                     <button class="border px-3 py-2 bg-white">Projekte ▾</button>
                 </template>
@@ -411,6 +428,7 @@ const handleProjektZuweisungRemoved = ({ user_id, projekt_id }) => {
             v-if="showModalLöschen"
             :toDelete="userToDelete"
             seite="user"
+            @delete="handleAccountDeleted"
             @close="showModalLöschen = false"
         />
         <ModalDestroyStaff

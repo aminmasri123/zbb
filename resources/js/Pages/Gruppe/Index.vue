@@ -60,11 +60,20 @@ const props = defineProps({
         default: false,
     },
 });
+const sortiereGruppenNachDatum = (gruppen) => [...gruppen].sort((a, b) => {
+  const datumVergleich = String(b?.anfangsdatum || '').localeCompare(String(a?.anfangsdatum || ''));
+  if (datumVergleich !== 0) return datumVergleich;
+
+  const zeitVergleich = String(b?.startzeit || '').localeCompare(String(a?.startzeit || ''));
+  if (zeitVergleich !== 0) return zeitVergleich;
+
+  return Number(b?.id || 0) - Number(a?.id || 0);
+});
 // ✅ Lokale Liste – unterstützt Array ODER paginierte Daten
 let localGruppen = ref(
-  Array.isArray(props.gruppen)
+  sortiereGruppenNachDatum(Array.isArray(props.gruppen)
     ? [...props.gruppen]
-    : [...(props.gruppen.data || [])]
+    : [...(props.gruppen.data || [])])
 );
 
 let filteredGruppen = ref([...localGruppen.value]);
@@ -98,7 +107,7 @@ const closeMeldungModal = () => {
 
 // 🔹 CRUD
 const addGruppe = (gruppe) => {
-  localGruppen.value.unshift(gruppe);
+  localGruppen.value = sortiereGruppenNachDatum([...localGruppen.value, gruppe]);
   applySearchFilter();
 };
 
@@ -107,6 +116,7 @@ const updateGruppe = (updatedGruppe) => {
   if (index !== -1) {
     localGruppen.value[index] = updatedGruppe;
   }
+  localGruppen.value = sortiereGruppenNachDatum(localGruppen.value);
   applySearchFilter();
 };
 

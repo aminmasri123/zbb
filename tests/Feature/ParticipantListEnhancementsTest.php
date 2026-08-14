@@ -150,6 +150,43 @@ class ParticipantListEnhancementsTest extends TestCase
             );
     }
 
+    public function test_group_overview_orders_newest_start_date_first(): void
+    {
+        $user = $this->userWithParticipantAccess(['gruppe.index', 'gruppe.view.all']);
+        $project = Projekt::factory()->create();
+        $this->assignToProject($user->person, $project);
+        $user->update(['current_team_id' => $project->id]);
+
+        $oldest = $this->group(
+            $project,
+            $user->person,
+            Bereich::query()->create(['name' => 'Alt']),
+            '2026-08-12'
+        );
+        $newest = $this->group(
+            $project,
+            $user->person,
+            Bereich::query()->create(['name' => 'Neu']),
+            '2026-08-14'
+        );
+        $middle = $this->group(
+            $project,
+            $user->person,
+            Bereich::query()->create(['name' => 'Mitte']),
+            '2026-08-13'
+        );
+
+        $this->actingAs($user)
+            ->get(route('gruppe.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('gruppen', 3)
+                ->where('gruppen.0.id', $newest->id)
+                ->where('gruppen.1.id', $middle->id)
+                ->where('gruppen.2.id', $oldest->id)
+            );
+    }
+
     public function test_name_swap_is_atomic_when_selection_contains_foreign_project_participant(): void
     {
         $user = $this->userWithParticipantAccess(['teilnehmer.update']);
@@ -232,7 +269,13 @@ class ParticipantListEnhancementsTest extends TestCase
         ]);
     }
 
-    private function group(Projekt $project, Personen $instructor, Bereich $area): Gruppe
+    private function group(
+        Projekt $project,
+        Personen $instructor,
+        Bereich $area,
+        string $startDate = '2026-08-14',
+        string $startTime = '08:00'
+    ): Gruppe
     {
         $location = Standort::factory()->create();
         $room = Raeume::query()->create([
@@ -247,9 +290,9 @@ class ParticipantListEnhancementsTest extends TestCase
             'bereich_id' => $area->id,
             'raum_id' => $room->id,
             'standort_id' => $location->id,
-            'anfangsdatum' => '2026-08-14',
-            'enddatum' => '2026-08-14',
-            'startzeit' => '08:00',
+            'anfangsdatum' => $startDate,
+            'enddatum' => $startDate,
+            'startzeit' => $startTime,
             'endzeit' => '12:00',
         ]);
     }

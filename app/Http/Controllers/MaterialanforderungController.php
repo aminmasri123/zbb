@@ -8,6 +8,7 @@ use App\Models\MaterialanforderungLoeschprotokoll;
 use App\Models\Projekt;
 use App\Notifications\UpdateMaterialanforderungNotification;
 use App\Services\NotificationRecipientService;
+use App\Services\Projects\ActiveProjectContext;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -18,14 +19,17 @@ use Inertia\Inertia;
 
 class MaterialanforderungController extends Controller
 {
-    public function __construct(private readonly NotificationRecipientService $notificationRecipients)
-    {
+    public function __construct(
+        private readonly NotificationRecipientService $notificationRecipients,
+        private readonly ActiveProjectContext $activeProjectContext,
+    ) {
     }
 
     public function index(Request $request)
     {
         $user = $request->user();
         $search = trim((string) $request->input('search', ''));
+        $activeProject = $this->activeProjectContext->currentAvailableFor($user);
 
         $query = Materialanforderung::with(['projekt', 'besteller.person', 'artikeln', 'vergabevermerk'])
             ->withExists([
@@ -78,12 +82,17 @@ class MaterialanforderungController extends Controller
         return Inertia::render('Bestellungen/Materialanforderung/Index', [
             'anforderungen' => $query->latest()->get(),
             'filters' => ['search' => $search],
+            'canCreateRequest' => $user->can('materialanforderung.create')
+                && $activeProject !== null,
+            'canOpenRequest' => $this->canOpenMaterialRequest($user),
+            'hasActiveProject' => $activeProject !== null,
         ]);
     }
 
     public function create(Request $request)
     {
-        $projekt = Projekt::findOrFail($request->user()->current_team_id);
+        $projekt = $this->activeProjectContext->currentAvailableFor($request->user());
+        abort_unless($projekt, 409, 'Zum Anlegen einer Materialanforderung muss ein Projekt zugewiesen und ausgewählt sein.');
 
         return Inertia::render('Bestellungen/Materialanforderung/Create', [
             'user' => $request->user()->person,
@@ -94,7 +103,8 @@ class MaterialanforderungController extends Controller
 
     public function store(Request $request)
     {
-        $projekt = Projekt::findOrFail($request->user()->current_team_id);
+        $projekt = $this->activeProjectContext->currentAvailableFor($request->user());
+        abort_unless($projekt, 409, 'Zum Anlegen einer Materialanforderung muss ein Projekt zugewiesen und ausgewählt sein.');
         $data = $request->validate($this->requestRules($projekt));
 
         $anforderung = DB::transaction(function () use ($request, $projekt, $data) {
@@ -169,7 +179,7 @@ class MaterialanforderungController extends Controller
     public function destroy(Request $request, Materialanforderung $materialanforderung)
     {
         $isEditableDraft = in_array($materialanforderung->status, ['entwurf', 'zur_ueberarbeitung'], true);
-        $isOrdered = in_array($materialanforderung->status, ['bestellt', 'teilweise_geliefert'], true);
+        $isFinalized = in_array($materialanforderung->status, ['bestellt', 'teilweise_geliefert', 'geliefert'], true);
 
         if ($isEditableDraft) {
             abort_unless($request->user()->can('materialanforderung.destroy'), 403);
@@ -190,7 +200,7 @@ class MaterialanforderungController extends Controller
                 ->with('success', "Materialanforderung #{$materialanforderung->id} wurde erfolgreich gelöscht.");
         }
 
-        abort_unless($isOrdered, 422, 'Nur bestellte oder teilweise gelieferte Materialanforderungen können mit dem Sonderrecht endgültig gelöscht werden. Vollständig gelieferte Vorgänge bleiben erhalten.');
+        abort_unless($isFinalized, 422, 'Nur bestellte oder gelieferte Materialanforderungen können mit dem Sonderrecht endgültig gelöscht werden.');
         abort_unless($request->user()->can('materialanforderung.bestellte.destroy'), 403);
 
         $expectedConfirmation = "LÖSCHEN #{$materialanforderung->id}";
@@ -268,8 +278,8 @@ class MaterialanforderungController extends Controller
             'canDeleteMaterialanforderung' => $request->user()->can('materialanforderung.destroy')
                 && (int) $anforderung->ersteller_id === (int) $request->user()->id
                 && in_array($anforderung->status, ['entwurf', 'zur_ueberarbeitung'], true),
-            'canDeleteOrderedMaterialanforderung' => $request->user()->can('materialanforderung.bestellte.destroy')
-                && in_array($anforderung->status, ['bestellt', 'teilweise_geliefert'], true),
+            'canDeleteFinalizedMaterialanforderung' => $request->user()->can('materialanforderung.bestellte.destroy')
+                && in_array($anforderung->status, ['bestellt', 'teilweise_geliefert', 'geliefert'], true),
             'verlauf' => $verlauf,
         ]);
     }
@@ -374,7 +384,7 @@ class MaterialanforderungController extends Controller
 
     public function exportPdf(Request $request, Materialanforderung $materialanforderung)
     {
-        abort_unless($request->user()->can('materialanforderung.show'), 403);
+        abort_unless($this->canOpenMaterialRequest($request->user()), 403);
         abort_unless($this->mayView($request->user(), $materialanforderung), 403);
 
         $materialanforderung->load([
@@ -499,6 +509,21 @@ class MaterialanforderungController extends Controller
                 || $user->can('materialanforderung.kaufmännische_freigabe.update')
                 || $user->can('materialanforderung.bestellwesen.update'))
             && ! in_array($anforderung->status, ['entwurf', 'eingereicht'], true);
+    }
+
+    private function canOpenMaterialRequest($user): bool
+    {
+        return collect([
+            'materialanforderung.show',
+            'materialanforderung.sachlische_freigabe.show',
+            'materialanforderung.sachlische_freigabe.index',
+            'materialanforderung.sachlische_freigabe.update',
+            'materialanforderung.kaufmännische_freigabe.show',
+            'materialanforderung.kaufmännische_freigabe.index',
+            'materialanforderung.kaufmännische_freigabe.update',
+            'materialanforderung.bestellwesen.update',
+            'materialanforderung.bestellte.destroy',
+        ])->contains(fn (string $permission) => $user->can($permission));
     }
 
     private function authorizeTransition($user, Materialanforderung $anforderung, string $targetStatus): void

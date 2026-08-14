@@ -27,8 +27,8 @@
         </div>
         <div class="m-4 flex justify-end">
             <div class="flex w-full flex-col-reverse justify-center gap-2 sm:flex-row">
-                <button @click="deleteItem" class="rounded bg-zbb px-4 py-2 text-white">{{ $t('Löschen') }}</button>
-                <button @click="$emit('close')" class="rounded border border-zbb px-4 py-2 text-zbb">{{ $t('Abbrechen') }}</button>
+                <button @click="deleteItem" :disabled="deleting" class="rounded bg-zbb px-4 py-2 text-white disabled:cursor-wait disabled:opacity-60">{{ deleting ? $t('Wird gelöscht …') : $t('Löschen') }}</button>
+                <button @click="$emit('close')" :disabled="deleting" class="rounded border border-zbb px-4 py-2 text-zbb disabled:cursor-wait disabled:opacity-60">{{ $t('Abbrechen') }}</button>
             </div>
             <slot name="footer"></slot>
         </div>
@@ -43,7 +43,7 @@
     import Swal from 'sweetalert2';
 
     let deleteInput = ref(''); // Speichert den Text des Eingabefelds für die Löschung
-    let toDelete = ref(null); // Speichert den Namen der User, die gelöscht werden soll
+    const deleting = ref(false);
     // Define emit
     const emitDelete = defineEmits(['delete', 'close']);  // Define the event 'delete'
 
@@ -61,7 +61,7 @@
         },
     });
 
-    const deleteItem = () => {
+    const deleteItem = async () => {
     if (deleteInput.value !== 'delete') {
         Swal.fire({
             title: 'Fehler!',
@@ -73,32 +73,39 @@
         return; // Stoppe die Funktion, wenn die Eingabe nicht stimmt
     }            
  
-    axios.delete(route(props.seite + '.destroy',  props.toDelete.id))
-        .then(response => {
-            emitDelete('delete', props.toDelete.id);
-            deleteInput.value = '';
-            
-            Swal.fire({
-                title: 'Erfolg!',
-                text: props.toDelete.name + ' \'s Konto wurde erfolgreich gelöscht!',
-                icon: 'success',
-                timer: 3000,
-                timerProgressBar: true,
-            });
-            emitDelete('close');
+    deleting.value = true;
+    let response;
 
+    try {
+        response = await axios.delete(route(props.seite + '.destroy', props.toDelete.id));
+    } catch (error) {
+        deleting.value = false;
+        await Swal.fire({
+            title: 'Nicht gelöscht',
+            text: error.response?.data?.message || 'Der Eintrag konnte nicht gelöscht werden. Bitte versuchen Sie es erneut.',
+            icon: 'error',
+            confirmButtonText: 'OK',
+        });
+        return;
+    }
 
-            //Inertia.reload();
-        })
-        .catch(error => {
-            Swal.fire({
-                title: 'Error!',
-                text: 'Beim Löschen des Kontos ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.',
-                icon: 'error',
-                timer: 3000,
-                timerProgressBar: true,
-            });
-        })
+    const deletedId = props.toDelete.id;
+    const deletedName = props.toDelete.name || 'Der Eintrag';
+    deleteInput.value = '';
+    deleting.value = false;
+
+    await Swal.fire({
+        title: 'Erfolgreich gelöscht',
+        text: response.data?.message || `${deletedName} wurde erfolgreich gelöscht.`,
+        icon: 'success',
+        timer: 3000,
+        timerProgressBar: true,
+    });
+
+    // Erst nach bestätigter Serverantwort die lokale Liste und das Modal aktualisieren.
+    // Fehler in einem übergeordneten Event-Handler dürfen keinen falschen Serverfehler auslösen.
+    emitDelete('delete', deletedId);
+    emitDelete('close');
 
 };
 

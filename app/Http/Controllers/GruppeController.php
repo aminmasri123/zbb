@@ -88,8 +88,9 @@ class GruppeController extends Controller
             ])
             ->where('projekt_id', $activeProject->id)
             ->when(!$canSeeAllGroups, fn ($query) => $query->where('personen_id', $this->userPersonId($user)))
-            ->latest('created_at')
-            ->latest('id')
+            ->orderByDesc('anfangsdatum')
+            ->orderByDesc('startzeit')
+            ->orderByDesc('id')
             ->get();
 
         return Inertia::render('Gruppe/Index', [
