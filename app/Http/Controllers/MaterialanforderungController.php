@@ -298,7 +298,7 @@ class MaterialanforderungController extends Controller
                 ->map(fn ($label, $value) => ['value' => $value, 'label' => $label])
                 ->values(),
             'currentUserId' => $request->user()->id,
-            'canUseChat' => $request->user()->can('chat.use')
+            'canUseChat' => $request->user()->hasStoredPermission('chat.use')
                 && $request->user()->person?->typ === 'mitarbeiter',
         ]);
     }

@@ -388,7 +388,7 @@ class StaffChatController extends Controller
 
     private function ensureCanUseChat(Request $request): void
     {
-        abort_unless($request->user()?->can('chat.use'), 403);
+        abort_unless($request->user()?->hasStoredPermission('chat.use'), 403);
     }
 
     private function ensureMember(Request $request, StaffConversation $conversation): void

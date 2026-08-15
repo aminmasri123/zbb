@@ -77,16 +77,6 @@
                 </ul>
             </li>
 
-            <li v-if="can('chat.use')" class="submenu">
-                <Link :href="route('chat.index')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
-                    <i class="las la-comments la-lg mr-2"></i>
-                    <span v-if="!displayHideTextSidebar">Interner Chat</span>
-                    <span v-if="$page.props.staffChatUnreadCount" class="ml-auto rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
-                        {{ $page.props.staffChatUnreadCount > 99 ? '99+' : $page.props.staffChatUnreadCount }}
-                    </span>
-                </Link>
-            </li>
-
             <!-- Benutzer Submenu -->
             <li v-if="canAny(['benutzer.index', 'benutzer.store'])" class="submenu">
                 <a href="#" @click.prevent="toggleMenu('benutzer')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">

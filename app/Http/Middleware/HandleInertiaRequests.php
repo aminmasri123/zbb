@@ -92,6 +92,8 @@ class HandleInertiaRequests extends Middleware
 
             'canManageNotifications' => fn () => (bool) $request->user()?->can('notifications.readAll'),
 
+            'canUseStaffChat' => fn () => (bool) $request->user()?->hasStoredPermission('chat.use'),
+
             'staffChatUnreadCount' => fn () => $this->staffChatUnreadCount($request),
 
             'participantPortalNavigation' => fn () => $this->participantPortalNavigation($request),
@@ -211,7 +213,7 @@ class HandleInertiaRequests extends Middleware
     private function staffChatUnreadCount(Request $request): int
     {
         $user = $request->user();
-        if (! $user || ! $user->can('chat.use') || ! Schema::hasTable('staff_messages')) {
+        if (! $user || ! $user->hasStoredPermission('chat.use') || ! Schema::hasTable('staff_messages')) {
             return 0;
         }
 

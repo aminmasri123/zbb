@@ -199,6 +199,20 @@
                         <!-- Dropdown content -->
                     </Dropdown>
 
+                    <Link
+                        v-if="$page.props.canUseStaffChat"
+                        :href="route('chat.index')"
+                        class="relative inline-flex items-center rounded-md border border-transparent px-2 py-2 text-sm font-medium leading-4 text-primary transition duration-150 ease-in-out hover:text-buttonPrimary focus:outline-none sm:mx-1"
+                        :class="{ 'text-buttonPrimary': route().current('chat.*') }"
+                        title="Interner Chat"
+                        aria-label="Interner Chat"
+                    >
+                        <i class="las la-comments text-xl" aria-hidden="true"></i>
+                        <span v-if="$page.props.staffChatUnreadCount > 0" class="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-xs text-white">
+                            {{ $page.props.staffChatUnreadCount > 99 ? '99+' : $page.props.staffChatUnreadCount }}
+                        </span>
+                    </Link>
+
                     <!-- Settings Dropdown -->
                     <Dropdown align="right" width="48">
                         <template #trigger>
@@ -307,6 +321,10 @@
 
                     <ResponsiveNavLink v-if="$page.props.canManageNotifications" :href="route('notifications.index')">
                         {{ $t('Benachrichtigungen') }}
+                    </ResponsiveNavLink>
+
+                    <ResponsiveNavLink v-if="$page.props.canUseStaffChat" :href="route('chat.index')" :active="route().current('chat.*')">
+                        Interner Chat<span v-if="$page.props.staffChatUnreadCount > 0"> ({{ $page.props.staffChatUnreadCount }})</span>
                     </ResponsiveNavLink>
 
                     <!-- Logout -->

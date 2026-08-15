@@ -4,12 +4,15 @@ namespace Tests\Feature;
 
 use App\Models\Materialanforderung;
 use App\Models\Projekt;
+use App\Models\Role;
 use App\Models\StaffConversation;
 use App\Models\StaffMessage;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 class InternalCommunicationWorkflowTest extends TestCase
@@ -70,6 +73,33 @@ class InternalCommunicationWorkflowTest extends TestCase
         $this->grantTestPermission($participant, 'chat.use');
 
         $this->actingAs($participant)->get(route('chat.index'))->assertOk();
+    }
+
+    public function test_role_permission_is_read_directly_from_database_for_chat_access(): void
+    {
+        $user = User::factory()->create();
+        $role = Role::create(['name' => 'Chat-Rolle', 'guard_name' => 'web', 'color' => '#000000']);
+        $user->assignRole($role);
+        $permission = Permission::findByName('chat.use', 'web');
+
+        DB::table('role_has_permissions')->insert([
+            'permission_id' => $permission->id,
+            'role_id' => $role->id,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('chat.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('canUseStaffChat', true)
+                ->where('staffChatUnreadCount', 0));
+    }
+
+    public function test_user_without_chat_use_permission_is_denied(): void
+    {
+        $this->actingAs(User::factory()->create())
+            ->get(route('chat.index'))
+            ->assertForbidden();
     }
 
     public function test_material_request_link_is_rejected_when_any_chat_member_lacks_access(): void

@@ -106,6 +106,31 @@ class User extends Authenticatable
         return $fullName !== '' ? $fullName : ($this->username ?? $this->email ?? '');
     }
 
+    /**
+     * Check an effective permission directly in the assignment tables.
+     *
+     * This intentionally bypasses Spatie's permission cache so navigation and
+     * access checks reflect role changes immediately.
+     */
+    public function hasStoredPermission(string $permission): bool
+    {
+        $directlyAssigned = $this->permissions()
+            ->where('permissions.name', $permission)
+            ->where('permissions.guard_name', 'web')
+            ->exists();
+
+        if ($directlyAssigned) {
+            return true;
+        }
+
+        return $this->roles()
+            ->where('roles.guard_name', 'web')
+            ->whereHas('permissions', fn ($permissions) => $permissions
+                ->where('permissions.name', $permission)
+                ->where('permissions.guard_name', 'web'))
+            ->exists();
+    }
+
 
      /**
      * Freigaben, die dieser Benutzer erhalten hat
