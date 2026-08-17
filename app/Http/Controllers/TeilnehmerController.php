@@ -488,7 +488,8 @@ class TeilnehmerController extends Controller
                 'projektTeilnahme',
                 fn ($participation) => $participation->where('projekt_id', $user->current_team_id)
             )->whereNull('archived_at')->with([
-                'statusHistory.changer:id,name',
+                'statusHistory.changer:id,person_id,username,email',
+                'statusHistory.changer.person:id,vorname,nachname',
                 'hostProject:id,name',
                 'supervisor:id,vorname,nachname',
             ]),
@@ -574,7 +575,11 @@ class TeilnehmerController extends Controller
                 ->orderBy('personens.nachname')
                 ->orderBy('personens.vorname')])
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['id', 'name'])
+            ->each(fn (Projekt $hostProject) => $hostProject->setRelation(
+                'mitarbeiter',
+                $hostProject->mitarbeiter->unique('id')->values()
+            ));
         $gruppen = Gruppe::where('projekt_id', Auth()->user()->current_team_id)->with('bereich', 'betreuer')->get();
 
         $aktuelleStandortIds = $personen->projekte

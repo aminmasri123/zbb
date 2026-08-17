@@ -21,7 +21,19 @@ class ParticipantDataExportService
 {
     public function build(Personen $person): array
     {
-        $person->load(['adresses', 'kontaktes', 'baenke', 'sozialedaten', 'portalProfile', 'abschluesse', 'praktika.statusHistory.changer:id,name', 'notizen', 'fahrtabrechnungen', 'zielgruppen']);
+        $person->load([
+            'adresses',
+            'kontaktes',
+            'baenke',
+            'sozialedaten',
+            'portalProfile',
+            'abschluesse',
+            'praktika.statusHistory.changer:id,person_id,username,email',
+            'praktika.statusHistory.changer.person:id,vorname,nachname',
+            'notizen',
+            'fahrtabrechnungen',
+            'zielgruppen',
+        ]);
         $participations = ProjektHasPersonen::query()->where('personen_id', $person->id)->with(['projekt:id,name', 'standort:id,name'])->get();
         $participationIds = $participations->pluck('id');
         $portalUser = User::query()->where('person_id', $person->id)->first(['id', 'email', 'email_verified_at', 'created_at']);

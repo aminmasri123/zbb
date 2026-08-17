@@ -28,6 +28,8 @@ class EducationMeasureWorkflowTest extends TestCase
         $response = $this->actingAs($user)->postJson(route('teilnehmer.praktikum.store'), $payload)->assertCreated()->assertJsonPath('data.contact_name', 'Frau Beispiel')->assertJsonCount(1, 'data.status_history');
         $measure = PersonenHasBildungsmassnahmen::findOrFail($response->json('data.id'));
 
+        $this->actingAs($user)->get(route('teilnehmer.edit', $participant))->assertOk();
+
         $this->actingAs($user)->putJson(route('teilnehmer.praktikum.update', $measure), [...$payload, 'status' => 'laufend', 'status_note' => 'Angetreten'])->assertOk()->assertJsonCount(2, 'data.status_history');
         $this->actingAs($user)->putJson(route('teilnehmer.praktikum.update', $measure), [...$payload, 'status' => 'abgeschlossen', 'result' => null])->assertUnprocessable()->assertJsonValidationErrors('result');
         $this->actingAs($user)->putJson(route('teilnehmer.praktikum.update', $measure), [...$payload, 'status' => 'abgeschlossen', 'result' => 'Ziel erreicht', 'status_note' => 'Abschlussgespräch erfolgt'])->assertOk();
@@ -77,13 +79,24 @@ class EducationMeasureWorkflowTest extends TestCase
             ->assertJsonPath('data.host_project.name', 'Digitalwerkstatt')
             ->assertJsonPath('data.supervisor.nachname', 'Masri');
 
+        // Historische Mehrfachzuordnungen dürfen dieselbe Betreuungsperson
+        // in der Auswahlliste nicht doppelt anzeigen.
+        $this->assign($hostProject, $supervisor, $location);
+
         $this->actingAs($user)->get(route('internships.index'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Praktikum/Index')
                 ->where('stats.internal', 1)
                 ->has('internships.data', 1)
-                ->where('internships.data.0.host_project.name', 'Digitalwerkstatt'));
+                ->where('internships.data.0.host_project.name', 'Digitalwerkstatt')
+                ->where('hostProjects', function ($projects) use ($hostProject, $supervisor) {
+                    $project = collect($projects)->firstWhere('id', $hostProject->id);
+
+                    return collect($project['mitarbeiter'] ?? [])
+                        ->where('id', $supervisor->id)
+                        ->count() === 1;
+                }));
     }
 
     public function test_internal_supervisor_must_belong_to_host_project(): void

@@ -160,7 +160,8 @@ class PersonenHasBildungsmassnahmenController extends Controller
     private function load(PersonenHasBildungsmassnahmen $measure): PersonenHasBildungsmassnahmen
     {
         return $measure->load([
-            'statusHistory.changer:id,name',
+            'statusHistory.changer:id,person_id,username,email',
+            'statusHistory.changer.person:id,vorname,nachname',
             'hostProject:id,name',
             'supervisor:id,vorname,nachname',
         ]);

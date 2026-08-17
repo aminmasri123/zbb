@@ -69,6 +69,19 @@ class InternshipController extends Controller
             ->orderBy('next_follow_up_at')
             ->orderByDesc('start');
 
+        $hostProjects = Projekt::query()
+            ->where('aktiv', true)
+            ->with(['mitarbeiter' => fn ($query) => $query
+                ->select('personens.id', 'personens.vorname', 'personens.nachname')
+                ->orderBy('personens.nachname')
+                ->orderBy('personens.vorname')])
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->each(fn (Projekt $hostProject) => $hostProject->setRelation(
+                'mitarbeiter',
+                $hostProject->mitarbeiter->unique('id')->values()
+            ));
+
         return Inertia::render('Praktikum/Index', [
             'internships' => $query->paginate(25)->withQueryString(),
             'filters' => $filters,
@@ -80,14 +93,7 @@ class InternshipController extends Controller
                 'overdue' => (clone $baseQuery)->whereIn('status', ['geplant', 'laufend'])
                     ->whereDate('next_follow_up_at', '<', today())->count(),
             ],
-            'hostProjects' => Projekt::query()
-                ->where('aktiv', true)
-                ->with(['mitarbeiter' => fn ($query) => $query
-                    ->select('personens.id', 'personens.vorname', 'personens.nachname')
-                    ->orderBy('personens.nachname')
-                    ->orderBy('personens.vorname')])
-                ->orderBy('name')
-                ->get(['id', 'name']),
+            'hostProjects' => $hostProjects,
             'supervisors' => Personen::query()->mitarbeiter()->orderBy('nachname')->orderBy('vorname')
                 ->get(['id', 'vorname', 'nachname']),
             'canCreate' => $request->user()->can('teilnehmer.update'),
