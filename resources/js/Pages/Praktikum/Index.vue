@@ -1,8 +1,9 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
 import Pagination from '@/Components/Pagination.vue';
+import InternshipCreateModal from './InternshipCreateModal.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { reactive } from 'vue';
+import { reactive, ref } from 'vue';
 
 const props = defineProps({
     internships: { type: Object, required: true },
@@ -10,7 +11,11 @@ const props = defineProps({
     stats: { type: Object, default: () => ({}) },
     hostProjects: { type: Array, default: () => [] },
     supervisors: { type: Array, default: () => [] },
+    locations: { type: Array, default: () => [] },
+    canCreate: { type: Boolean, default: false },
 });
+
+const showCreateModal = ref(false);
 
 const filter = reactive({
     search: props.filters.search || '',
@@ -48,7 +53,10 @@ const isOverdue = (item) => Boolean(item.next_follow_up_at && ['geplant', 'laufe
                     <h1 class="text-2xl font-semibold text-gray-900">Praktikumsverwaltung</h1>
                     <p class="text-sm text-gray-500">Interne und externe Praktika des aktiven Projekts gemeinsam verwalten.</p>
                 </div>
-                <Link :href="route('teilnehmer.index')" class="rounded-lg border bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:border-zbb hover:text-zbb">Zur Teilnehmerübersicht</Link>
+                <div class="flex flex-wrap gap-2">
+                    <button v-if="canCreate" type="button" class="rounded-lg bg-zbb px-4 py-2 text-sm font-semibold text-white hover:bg-zbb-dark" @click="showCreateModal = true">Praktikant:in anlegen</button>
+                    <Link :href="route('teilnehmer.index')" class="rounded-lg border bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:border-zbb hover:text-zbb">Zur Teilnehmerübersicht</Link>
+                </div>
             </div>
 
             <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Praktikumskennzahlen">
@@ -88,6 +96,13 @@ const isOverdue = (item) => Boolean(item.next_follow_up_at && ['geplant', 'laufe
                 </div>
                 <div v-if="internships.links?.length > 3" class="border-t p-4"><Pagination :links="internships.links" /></div>
             </div>
+
+            <InternshipCreateModal
+                :visible="showCreateModal"
+                :locations="locations"
+                :host-projects="hostProjects"
+                @close="showCreateModal = false"
+            />
         </div>
     </AppLayout>
 </template>

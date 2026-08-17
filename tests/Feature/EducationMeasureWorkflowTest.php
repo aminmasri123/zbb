@@ -104,6 +104,47 @@ class EducationMeasureWorkflowTest extends TestCase
         ])->assertUnprocessable();
     }
 
+    public function test_intern_can_be_created_from_bop_project_without_school_assignment(): void
+    {
+        [$user, $project, $existingParticipant, $location] = $this->context();
+        $project->update(['name' => 'BOP Saar']);
+
+        $response = $this->actingAs($user)->post(route('internships.store'), [
+            'vorname' => 'Nora',
+            'nachname' => 'Praktikum',
+            'geschlecht' => 'w',
+            'geburtsdatum' => '2004-05-06',
+            'standort_id' => $location->id,
+            'strasse' => 'Beispielstraße',
+            'hausnummer' => '12',
+            'plz' => '66111',
+            'stadt' => 'Saarbrücken',
+            'land' => 'Deutschland',
+            'placement_type' => 'external',
+            'traeger' => 'Praxisbetrieb GmbH',
+            'host_address' => 'Werkstraße 2, 66115 Saarbrücken',
+            'start' => '2026-09-01',
+            'end' => '2026-09-30',
+            'weekly_hours' => 35,
+            'status' => 'geplant',
+        ]);
+
+        $participant = Personen::query()->where('vorname', 'Nora')->where('nachname', 'Praktikum')->firstOrFail();
+        $response->assertRedirect(route('teilnehmer.edit', $participant));
+        $this->assertDatabaseHas('projekt_has_personens', [
+            'projekt_id' => $project->id,
+            'personen_id' => $participant->id,
+            'standort_id' => $location->id,
+        ]);
+        $this->assertDatabaseMissing('personen_ist_schuelers', ['person_id' => $participant->id]);
+        $this->assertDatabaseHas('personen_has_bildungsmassnahmens', [
+            'person_id' => $participant->id,
+            'typ' => 'Praktikum',
+            'placement_type' => 'external',
+            'traeger' => 'Praxisbetrieb GmbH',
+        ]);
+    }
+
     public function test_contract_and_completed_certificate_can_be_downloaded(): void
     {
         [$user, $project, $participant, $location] = $this->context();

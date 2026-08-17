@@ -544,6 +544,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
 
         // Personen Has Praktikum
         Route::get('/praktikanten', [InternshipController::class, 'index'])->name('internships.index')->can('teilnehmer.index')->middleware('projectFeature:internship_management');
+        Route::post('/praktikanten', [InternshipController::class, 'store'])->name('internships.store')->can('teilnehmer.update')->middleware('projectFeature:internship_management');
         Route::post('/teilnehmer/praktikum/anlegen', [PersonenHasBildungsmassnahmenController::class, 'store'])->name('teilnehmer.praktikum.store')->can('teilnehmer.update')->middleware('projectFeature:internship_management');
         Route::put('/teilnehmer/praktikum/{measure}', [PersonenHasBildungsmassnahmenController::class, 'update'])->name('teilnehmer.praktikum.update')->can('teilnehmer.update')->middleware('projectFeature:internship_management');
         Route::delete('/teilnehmer/praktikum/{measure}', [PersonenHasBildungsmassnahmenController::class, 'destroy'])->name('teilnehmer.praktikum.destroy')->can('teilnehmer.update')->middleware('projectFeature:internship_management');

@@ -3,14 +3,21 @@
 namespace App\Http\Controllers;
 
 use App\Models\Adresse;
+use App\Models\EducationMeasureStatusHistory;
+use App\Models\Kontakttypen;
 use App\Models\Personen;
 use App\Models\PersonenHasBildungsmassnahmen;
 use App\Models\Projekt;
+use App\Models\ProjektHasPersonen;
+use App\Models\Standort;
 use App\Services\Projects\ActiveProjectContext;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use PhpOffice\PhpWord\TemplateProcessor;
 use ZipArchive;
@@ -73,10 +80,153 @@ class InternshipController extends Controller
                 'overdue' => (clone $baseQuery)->whereIn('status', ['geplant', 'laufend'])
                     ->whereDate('next_follow_up_at', '<', today())->count(),
             ],
-            'hostProjects' => Projekt::query()->where('aktiv', true)->orderBy('name')->get(['id', 'name']),
+            'hostProjects' => Projekt::query()
+                ->where('aktiv', true)
+                ->with(['mitarbeiter' => fn ($query) => $query
+                    ->select('personens.id', 'personens.vorname', 'personens.nachname')
+                    ->orderBy('personens.nachname')
+                    ->orderBy('personens.vorname')])
+                ->orderBy('name')
+                ->get(['id', 'name']),
             'supervisors' => Personen::query()->mitarbeiter()->orderBy('nachname')->orderBy('vorname')
                 ->get(['id', 'vorname', 'nachname']),
+            'canCreate' => $request->user()->can('teilnehmer.update'),
+            'locations' => Standort::query()
+                ->whereIn('id', ProjektHasPersonen::query()
+                    ->where('projekt_id', $project->id)
+                    ->whereNotNull('standort_id')
+                    ->select('standort_id'))
+                ->orderBy('name')
+                ->get(['id', 'name']),
         ]);
+    }
+
+    public function store(Request $request)
+    {
+        $project = $this->activeProject($request);
+        $data = $request->validate([
+            'vorname' => ['required', 'string', 'max:255'],
+            'nachname' => ['required', 'string', 'max:255'],
+            'geschlecht' => ['required', Rule::in(['w', 'm', 'd'])],
+            'geburtsdatum' => ['required', 'date', 'before_or_equal:today'],
+            'standort_id' => ['required', 'integer', 'exists:standorts,id'],
+            'strasse' => ['required', 'string', 'max:255'],
+            'hausnummer' => ['required', 'string', 'max:10'],
+            'plz' => ['required', 'string', 'max:10'],
+            'stadt' => ['required', 'string', 'max:255'],
+            'land' => ['nullable', 'string', 'max:255'],
+            'telefon' => ['nullable', 'string', 'max:100'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'placement_type' => ['required', Rule::in(['internal', 'external'])],
+            'traeger' => ['nullable', 'required_if:placement_type,external', 'string', 'max:255'],
+            'host_project_id' => ['nullable', 'required_if:placement_type,internal', 'integer', 'exists:projekts,id'],
+            'supervisor_person_id' => ['nullable', 'required_if:placement_type,internal', 'integer', 'exists:personens,id'],
+            'host_address' => ['nullable', 'string', 'max:255'],
+            'department' => ['nullable', 'string', 'max:255'],
+            'internship_kind' => ['nullable', Rule::in(['orientation', 'qualification', 'integration'])],
+            'occupation' => ['nullable', 'string', 'max:255'],
+            'attendance_weekday' => ['nullable', 'string', 'max:30'],
+            'contact_name' => ['nullable', 'string', 'max:255'],
+            'contact_email' => ['nullable', 'email', 'max:255'],
+            'contact_phone' => ['nullable', 'string', 'max:50'],
+            'weekly_hours' => ['nullable', 'integer', 'min:1', 'max:168'],
+            'start' => ['required', 'date'],
+            'end' => ['required', 'date', 'after_or_equal:start'],
+            'next_follow_up_at' => ['nullable', 'date'],
+            'objective' => ['nullable', 'string', 'max:10000'],
+            'bemerkung' => ['nullable', 'string', 'max:10000'],
+            'status' => ['required', Rule::in(['geplant', 'laufend'])],
+        ]);
+
+        $locationBelongsToProject = ProjektHasPersonen::query()
+            ->where('projekt_id', $project->id)
+            ->where('standort_id', $data['standort_id'])
+            ->exists();
+        if (! $locationBelongsToProject) {
+            throw ValidationException::withMessages([
+                'standort_id' => 'Der Standort gehört nicht zum aktiven Projekt.',
+            ]);
+        }
+
+        $hostProject = null;
+        if ($data['placement_type'] === 'internal') {
+            $hostProject = Projekt::query()->where('aktiv', true)->findOrFail($data['host_project_id']);
+            $supervisorAssigned = $hostProject->mitarbeiter()->whereKey($data['supervisor_person_id'])->exists();
+            if (! $supervisorAssigned) {
+                throw ValidationException::withMessages([
+                    'supervisor_person_id' => 'Die fachliche Betreuung muss dem internen Einsatzprojekt zugeordnet sein.',
+                ]);
+            }
+        }
+
+        $participant = DB::transaction(function () use ($request, $project, $hostProject, $data) {
+            $participant = Personen::query()->create([
+                'vorname' => $data['vorname'],
+                'nachname' => $data['nachname'],
+                'geschlecht' => $data['geschlecht'],
+                'geburtsdatum' => $data['geburtsdatum'],
+                'typ' => 'teilnehmer',
+                'aktiv' => true,
+            ]);
+
+            $participant->adresses()->create([
+                'strasse' => $data['strasse'],
+                'hausnummer' => $data['hausnummer'],
+                'plz' => $data['plz'],
+                'stadt' => $data['stadt'],
+                'land' => ($data['land'] ?? null) ?: 'Deutschland',
+            ]);
+
+            $this->storeParticipantContact($participant, 'Telefon', $data['telefon'] ?? null);
+            $this->storeParticipantContact($participant, 'Email', $data['email'] ?? null);
+
+            $participation = ProjektHasPersonen::query()->create([
+                'projekt_id' => $project->id,
+                'personen_id' => $participant->id,
+                'standort_id' => $data['standort_id'],
+                'status' => $project->rule('participation_initial_status', 'aktiv'),
+                'bemerkung' => 'Als Praktikant:in direkt über die Praktikumsverwaltung angelegt.',
+            ]);
+
+            $measure = PersonenHasBildungsmassnahmen::query()->create([
+                'person_id' => $participant->id,
+                'projekt_person_id' => $participation->id,
+                'typ' => 'Praktikum',
+                'placement_type' => $data['placement_type'],
+                'traeger' => $data['placement_type'] === 'internal' ? $hostProject->name : $data['traeger'],
+                'host_project_id' => $data['placement_type'] === 'internal' ? $hostProject->id : null,
+                'supervisor_person_id' => $data['placement_type'] === 'internal' ? $data['supervisor_person_id'] : null,
+                'host_address' => $data['host_address'] ?? null,
+                'department' => $data['department'] ?? null,
+                'internship_kind' => $data['internship_kind'] ?? null,
+                'occupation' => $data['occupation'] ?? null,
+                'attendance_weekday' => $data['attendance_weekday'] ?? null,
+                'contact_name' => $data['placement_type'] === 'external' ? ($data['contact_name'] ?? null) : null,
+                'contact_email' => $data['placement_type'] === 'external' ? ($data['contact_email'] ?? null) : null,
+                'contact_phone' => $data['placement_type'] === 'external' ? ($data['contact_phone'] ?? null) : null,
+                'weekly_hours' => $data['weekly_hours'] ?? null,
+                'start' => $data['start'],
+                'end' => $data['end'],
+                'next_follow_up_at' => $data['next_follow_up_at'] ?? null,
+                'objective' => $data['objective'] ?? null,
+                'bemerkung' => $data['bemerkung'] ?? null,
+                'status' => $data['status'],
+            ]);
+
+            EducationMeasureStatusHistory::query()->create([
+                'education_measure_id' => $measure->id,
+                'from_status' => null,
+                'to_status' => $measure->status,
+                'note' => 'Praktikant:in und Praktikum gemeinsam angelegt',
+                'changed_by_user_id' => $request->user()->id,
+            ]);
+
+            return $participant;
+        });
+
+        return redirect()
+            ->route('teilnehmer.edit', $participant)
+            ->with('success', 'Praktikant:in und Praktikum wurden ohne Schulzuordnung angelegt.');
     }
 
     public function contract(Request $request, PersonenHasBildungsmassnahmen $measure)
@@ -286,6 +436,21 @@ class InternshipController extends Controller
         $contact = $this->contactValue($person, ['e-mail', 'email']);
 
         return $contact ?: trim((string) $person?->user?->email);
+    }
+
+    private function storeParticipantContact(Personen $participant, string $typeName, ?string $value): void
+    {
+        if (blank($value)) {
+            return;
+        }
+
+        $contactTypeId = Kontakttypen::query()->where('name', $typeName)->value('id');
+        if ($contactTypeId) {
+            $participant->kontaktes()->create([
+                'kontakttyp_id' => $contactTypeId,
+                'wert' => trim($value),
+            ]);
+        }
     }
 
     private function download(TemplateProcessor $processor, string $documentType, string $participantName, bool $removeEmptyParagraphs = false)
