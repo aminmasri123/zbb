@@ -162,6 +162,7 @@ class PersonenHasBildungsmassnahmenController extends Controller
         return $measure->load([
             'statusHistory.changer:id,person_id,username,email',
             'statusHistory.changer.person:id,vorname,nachname',
+            'attendances',
             'hostProject:id,name',
             'supervisor:id,vorname,nachname',
         ]);

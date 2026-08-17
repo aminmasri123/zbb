@@ -58,6 +58,12 @@ class PersonenHasBildungsmassnahmen extends Model
         return $this->belongsTo(Personen::class, 'supervisor_person_id');
     }
 
+    public function attendances()
+    {
+        return $this->hasMany(InternshipAttendance::class, 'education_measure_id')
+            ->orderBy('attendance_date');
+    }
+
     protected $date = [
         'start',
         'end',

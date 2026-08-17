@@ -35,6 +35,7 @@ use App\Http\Controllers\GeraetrueckgabeController;
 use App\Http\Controllers\GruppeController;
 use App\Http\Controllers\GruppeHasTeilnehmerController;
 use App\Http\Controllers\IntakeChecklistController;
+use App\Http\Controllers\InternshipAttendanceController;
 use App\Http\Controllers\InternshipController;
 use App\Http\Controllers\ItServiceController;
 use App\Http\Controllers\KlassenbuchController;
@@ -550,6 +551,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
         Route::delete('/teilnehmer/praktikum/{measure}', [PersonenHasBildungsmassnahmenController::class, 'destroy'])->name('teilnehmer.praktikum.destroy')->can('teilnehmer.update')->middleware('projectFeature:internship_management');
         Route::get('/teilnehmer/praktikum/{measure}/vertrag', [InternshipController::class, 'contract'])->name('teilnehmer.praktikum.contract')->can('teilnehmer.index')->middleware('projectFeature:internship_management');
         Route::get('/teilnehmer/praktikum/{measure}/bescheinigung', [InternshipController::class, 'certificate'])->name('teilnehmer.praktikum.certificate')->can('teilnehmer.index')->middleware('projectFeature:internship_management');
+        Route::put('/teilnehmer/praktikum/{measure}/anwesenheitswoche', [InternshipAttendanceController::class, 'updateWeek'])->name('teilnehmer.praktikum.attendance.week')->can('teilnehmer.update')->middleware('projectFeature:internship_management');
     });
 
     // Räumlichkeiten

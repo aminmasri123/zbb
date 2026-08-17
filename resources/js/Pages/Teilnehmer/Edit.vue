@@ -478,6 +478,7 @@
                         <h3 class="font-semibold text-amber-900">Korrekturanfragen</h3>
                         <div class="mt-3 space-y-3"><article v-for="correction in attendanceCorrectionItems" :key="correction.id" class="rounded border bg-white p-3"><p class="text-sm font-semibold">{{ formatDate(correction.attendance?.tag?.datum) }} · {{ correction.attendance?.status?.status }}</p><p class="mt-1 text-sm text-gray-600">{{ correction.message }}</p><div v-if="correction.status==='open'" class="mt-2 flex flex-wrap gap-2"><input v-model="correction.resolution_note" placeholder="Antwort / Begründung" class="min-w-64 flex-1 rounded border-gray-300 text-sm"/><button class="rounded bg-green-600 px-3 py-2 text-xs text-white" @click="resolveAttendanceCorrection(correction,'accepted')">Annehmen</button><button class="rounded bg-red-600 px-3 py-2 text-xs text-white" @click="resolveAttendanceCorrection(correction,'rejected')">Ablehnen</button></div><p v-else class="mt-2 text-xs" :class="correction.status==='accepted'?'text-green-700':'text-red-700'">{{ correction.status==='accepted'?'Angenommen':'Abgelehnt' }} · {{ correction.resolution_note }}</p></article></div>
                     </div>
+                    <WeeklyAttendance :internships="teilnehmer.praktika" :can-edit="can('teilnehmer.update')" />
                     <!-- Anwesenheit hinzufügen -->
                     <div class="flex gap-4 text-center justify-center">
                         <button v-if="can('anwesenheit.manage')" @click="showModalAnwesenheit = true" class="bg-zbb w-4/6 text-white px-4 mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition" >
@@ -2080,6 +2081,7 @@
     import Modal from '@/Components/ModalForm.vue';
     import ModalLuvCreate from '@/Pages/Teilnehmer/Tabs/LuV/LuVModalCreate.vue';
     import ModalPraktikumCreate from '@/Pages/Teilnehmer/Tabs/Praktikum/PraktikumModalCreate.vue';
+    import WeeklyAttendance from '@/Pages/Praktikum/WeeklyAttendance.vue';
     import { timeToMinutes, istAnwesend, berechneAbweichungMinuten, formatMinutes, abweichungsIcon, abweichungsClass} from "@/utils/arbeitszeit.js";
     import { usePermissions } from '@/utils/permissions';
 

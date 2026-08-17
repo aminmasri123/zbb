@@ -158,6 +158,58 @@ class EducationMeasureWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_internship_attendance_can_be_recorded_weekly(): void
+    {
+        [$user, $project, $participant] = $this->context();
+        $participationId = ProjektHasPersonen::query()
+            ->where('projekt_id', $project->id)
+            ->where('personen_id', $participant->id)
+            ->value('id');
+        $measure = PersonenHasBildungsmassnahmen::query()->create([
+            'person_id' => $participant->id,
+            'projekt_person_id' => $participationId,
+            'typ' => 'Praktikum',
+            'placement_type' => 'external',
+            'traeger' => 'Praxisbetrieb GmbH',
+            'start' => '2026-08-01',
+            'end' => '2026-08-31',
+            'weekly_hours' => 35,
+            'status' => 'laufend',
+        ]);
+
+        $this->actingAs($user)->putJson(route('teilnehmer.praktikum.attendance.week', $measure), [
+            'week_start' => '2026-08-03',
+            'days' => [
+                ['date' => '2026-08-03', 'status' => 'present', 'planned_hours' => 7, 'actual_hours' => 7.5, 'note' => 'Pünktlich'],
+                ['date' => '2026-08-04', 'status' => 'sick', 'planned_hours' => 7, 'actual_hours' => null, 'note' => 'Krankmeldung liegt vor'],
+            ],
+        ])->assertOk()->assertJsonCount(2, 'attendances');
+
+        $this->assertDatabaseHas('internship_attendances', [
+            'education_measure_id' => $measure->id,
+            'attendance_date' => '2026-08-03',
+            'status' => 'present',
+            'planned_minutes' => 420,
+            'actual_minutes' => 450,
+        ]);
+        $this->assertDatabaseHas('internship_attendances', [
+            'education_measure_id' => $measure->id,
+            'status' => 'sick',
+            'actual_minutes' => null,
+        ]);
+
+        $this->actingAs($user)->putJson(route('teilnehmer.praktikum.attendance.week', $measure), [
+            'week_start' => '2026-08-03',
+            'days' => [
+                ['date' => '2026-08-03', 'status' => null, 'planned_hours' => 7, 'actual_hours' => null, 'note' => null],
+            ],
+        ])->assertOk()->assertJsonCount(1, 'attendances');
+        $this->assertDatabaseMissing('internship_attendances', [
+            'education_measure_id' => $measure->id,
+            'attendance_date' => '2026-08-03',
+        ]);
+    }
+
     public function test_contract_and_completed_certificate_can_be_downloaded(): void
     {
         [$user, $project, $participant, $location] = $this->context();

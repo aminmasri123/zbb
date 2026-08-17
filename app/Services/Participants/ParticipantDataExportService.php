@@ -30,6 +30,7 @@ class ParticipantDataExportService
             'abschluesse',
             'praktika.statusHistory.changer:id,person_id,username,email',
             'praktika.statusHistory.changer.person:id,vorname,nachname',
+            'praktika.attendances',
             'notizen',
             'fahrtabrechnungen',
             'zielgruppen',

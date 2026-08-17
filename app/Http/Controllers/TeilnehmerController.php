@@ -490,6 +490,7 @@ class TeilnehmerController extends Controller
             )->whereNull('archived_at')->with([
                 'statusHistory.changer:id,person_id,username,email',
                 'statusHistory.changer.person:id,vorname,nachname',
+                'attendances',
                 'hostProject:id,name',
                 'supervisor:id,vorname,nachname',
             ]),
