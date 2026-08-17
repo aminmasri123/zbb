@@ -348,7 +348,7 @@ const paZuordnungen = (entries = []) => paKompetenzen.map((kompetenz) => {
     return {
         merkmal: kompetenz.key,
         label: kompetenz.label,
-        aktiv: Boolean(found),
+        aktiv: Boolean(found && (found.aktiv ?? true)),
         gewichtung: Number(found?.gewichtung ?? 100),
     };
 });
@@ -386,6 +386,42 @@ const paAuswertungConfig = reactive(JSON.parse(JSON.stringify({
 })));
 
 const paAktiv = computed(() => Boolean(props.projekt.potenzialanalyse_aktiv));
+const paMatrixEntry = (uebung, merkmal) => uebung.kompetenzen.find((entry) => entry.merkmal === merkmal);
+const paMatrixCellValue = (uebung, merkmal) => {
+    const entry = paMatrixEntry(uebung, merkmal);
+    return entry?.aktiv ? entry.gewichtung : '';
+};
+const updatePaMatrixCell = (uebung, merkmal, value) => {
+    const entry = paMatrixEntry(uebung, merkmal);
+    if (!entry) return;
+
+    const normalized = String(value).replace(',', '.').trim();
+    const weight = normalized === '' ? 0 : Number(normalized);
+    if (!Number.isFinite(weight)) return;
+
+    entry.aktiv = weight > 0;
+    entry.gewichtung = weight > 0 ? Math.min(100, weight) : 0;
+};
+const paMatrixTotals = computed(() => Object.fromEntries(paKompetenzen.map((kompetenz) => [
+    kompetenz.key,
+    paUebungen.value
+        .filter((uebung) => uebung.aktiv)
+        .reduce((sum, uebung) => {
+            const entry = paMatrixEntry(uebung, kompetenz.key);
+            return sum + (entry?.aktiv ? Number(entry.gewichtung || 0) : 0);
+        }, 0),
+])));
+const paMatrixInvalidCompetencies = computed(() => paKompetenzen.filter((kompetenz) => {
+    const total = paMatrixTotals.value[kompetenz.key];
+    return total > 0 && Math.abs(total - 100) > 0.01;
+}));
+const paMatrixTotalClass = (merkmal) => {
+    const total = paMatrixTotals.value[merkmal];
+    if (total === 0) return 'bg-gray-100 text-gray-500';
+    return Math.abs(total - 100) <= 0.01
+        ? 'bg-green-100 text-green-700'
+        : 'bg-red-100 text-red-700';
+};
 
 const standortById = computed(() => {
     return new Map((props.alleStandorte || []).map((standort) => [standort.id, standort]));
@@ -499,6 +535,45 @@ const savePaAuswertungConfig = async () => {
         const errors = error.response?.data?.errors;
         const message = errors ? Object.values(errors).flat()[0] : error.response?.data?.message;
         Swal.fire('Fehler', message || 'Auswertungseinstellungen konnten nicht gespeichert werden.', 'error');
+    } finally {
+        savingPa.value = false;
+    }
+};
+
+const savePaGewichtungsmatrix = async () => {
+    if (!canManagePotenzialanalyse.value || !paUebungen.value.length) return;
+
+    if (paMatrixInvalidCompetencies.value.length) {
+        Swal.fire(
+            'Gewichtung prüfen',
+            `Diese Kompetenzspalten ergeben noch nicht 100 %: ${paMatrixInvalidCompetencies.value.map((item) => item.label).join(', ')}.`,
+            'warning',
+        );
+        return;
+    }
+
+    savingPa.value = true;
+    try {
+        const response = await axios.put(
+            route('potenzialanalyse.projekt.gewichtungsmatrix.update', props.projekt.id),
+            {
+                uebungen: paUebungen.value.map((uebung) => ({
+                    id: uebung.id,
+                    kompetenzen: uebung.kompetenzen
+                        .filter((entry) => entry.aktiv && Number(entry.gewichtung) > 0)
+                        .map((entry) => ({
+                            merkmal: entry.merkmal,
+                            gewichtung: Number(entry.gewichtung),
+                        })),
+                })),
+            },
+        );
+        updatePaUebungen(response.data.uebungen);
+        Swal.fire('Gespeichert', response.data.message || 'Gewichtungsmatrix wurde gespeichert.', 'success');
+    } catch (error) {
+        const errors = error.response?.data?.errors;
+        const message = errors ? Object.values(errors).flat()[0] : error.response?.data?.message;
+        Swal.fire('Fehler', message || 'Gewichtungsmatrix konnte nicht gespeichert werden.', 'error');
     } finally {
         savingPa.value = false;
     }
@@ -1174,6 +1249,106 @@ const addMitarbeiter = (person) => {
                             </label>
                         </div>
                     </div>
+
+                    <div class="rounded border border-gray-200 bg-white">
+                        <div class="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 p-4">
+                            <div>
+                                <h3 class="text-sm font-semibold text-gray-800">Gewichtungsmatrix</h3>
+                                <p class="mt-1 text-xs text-gray-500">
+                                    Tragen Sie ein, zu wie viel Prozent eine Übung in die jeweilige Kompetenz einfließt. Leere Felder werden nicht gewertet.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                class="rounded bg-zbb px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-60"
+                                :disabled="savingPa || !paUebungen.length"
+                                @click="savePaGewichtungsmatrix"
+                            >
+                                {{ savingPa ? 'Speichert …' : 'Matrix speichern' }}
+                            </button>
+                        </div>
+
+                        <div v-if="paUebungen.length" class="overflow-x-auto">
+                            <table class="min-w-max border-separate border-spacing-0 text-sm">
+                                <thead>
+                                    <tr class="bg-gray-50 text-xs text-gray-600">
+                                        <th class="sticky left-0 z-20 min-w-56 border-b border-r border-gray-200 bg-gray-50 px-3 py-3 text-left font-semibold">
+                                            Übung
+                                        </th>
+                                        <th
+                                            v-for="kompetenz in paKompetenzen"
+                                            :key="kompetenz.key"
+                                            class="min-w-36 border-b border-r border-gray-200 px-3 py-3 text-center font-semibold"
+                                        >
+                                            {{ kompetenz.label }}
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr
+                                        v-for="uebung in paUebungen"
+                                        :key="uebung.id"
+                                        :class="uebung.aktiv ? 'bg-white' : 'bg-gray-50 text-gray-400'"
+                                    >
+                                        <th
+                                            class="sticky left-0 z-10 border-b border-r border-gray-200 px-3 py-2 text-left font-medium"
+                                            :class="uebung.aktiv ? 'bg-white text-gray-800' : 'bg-gray-50 text-gray-400'"
+                                        >
+                                            <span class="block">{{ uebung.name }}</span>
+                                            <span class="mt-0.5 block text-xs font-normal text-gray-400">
+                                                {{ uebung.tag ? `Tag ${uebung.tag}` : 'Ohne PA-Tag' }}{{ uebung.aktiv ? '' : ' · Inaktiv' }}
+                                            </span>
+                                        </th>
+                                        <td
+                                            v-for="kompetenz in paKompetenzen"
+                                            :key="kompetenz.key"
+                                            class="border-b border-r border-gray-200 p-2 text-center"
+                                        >
+                                            <div class="relative mx-auto w-24">
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max="100"
+                                                    step="0.01"
+                                                    :value="paMatrixCellValue(uebung, kompetenz.key)"
+                                                    :disabled="!uebung.aktiv || savingPa"
+                                                    placeholder="–"
+                                                    class="w-full rounded border-gray-300 py-1.5 pr-7 text-right text-sm disabled:bg-gray-100"
+                                                    :aria-label="`${uebung.name}: ${kompetenz.label}`"
+                                                    @input="updatePaMatrixCell(uebung, kompetenz.key, $event.target.value)"
+                                                />
+                                                <span class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                                <tfoot>
+                                    <tr class="font-semibold">
+                                        <th class="sticky left-0 z-20 border-r border-gray-200 bg-gray-100 px-3 py-3 text-left text-gray-700">
+                                            Summe
+                                        </th>
+                                        <td
+                                            v-for="kompetenz in paKompetenzen"
+                                            :key="kompetenz.key"
+                                            class="border-r border-gray-200 px-3 py-3 text-center"
+                                            :class="paMatrixTotalClass(kompetenz.key)"
+                                        >
+                                            {{ Number(paMatrixTotals[kompetenz.key].toFixed(2)) }} %
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                        <div v-else class="p-6 text-center text-sm text-gray-500">
+                            Legen Sie zuerst mindestens eine Übung an, um die Gewichtungsmatrix zu bearbeiten.
+                        </div>
+                        <div class="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-600">
+                            <span><span class="mr-1 inline-block h-2.5 w-2.5 rounded-full bg-green-500"></span>100 % – vollständig</span>
+                            <span><span class="mr-1 inline-block h-2.5 w-2.5 rounded-full bg-red-500"></span>Abweichung – bitte prüfen</span>
+                            <span><span class="mr-1 inline-block h-2.5 w-2.5 rounded-full bg-gray-400"></span>0 % – Kompetenz wird nicht verwendet</span>
+                        </div>
+                    </div>
+
                     <div class="rounded border border-gray-200 bg-gray-50 p-4">
                         <h3 class="mb-3 text-sm font-semibold text-gray-700">Übung anlegen</h3>
                         <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-6">
@@ -1211,17 +1386,9 @@ const addMitarbeiter = (person) => {
                             Beschreibung
                             <textarea v-model="paUebungForm.beschreibung" rows="2" class="mt-1 w-full rounded border-gray-300 text-sm"></textarea>
                         </label>
-                        <details class="mt-3 rounded border border-gray-200 bg-white p-3">
-                            <summary class="cursor-pointer text-sm font-semibold text-gray-700">Kompetenzen und Gewichtung zuordnen</summary>
-                            <p class="mt-2 text-xs text-gray-500">Eine Übung kann mehrere Kompetenzen beeinflussen. 100 ist die normale Gewichtung; 200 zählt doppelt so stark wie 100.</p>
-                            <div class="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                                <div v-for="entry in paUebungForm.kompetenzen" :key="entry.merkmal" class="flex items-center gap-2 rounded border bg-gray-50 px-3 py-2">
-                                    <input v-model="entry.aktiv" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
-                                    <span class="min-w-0 flex-1 text-sm">{{ entry.label }}</span>
-                                    <input v-model.number="entry.gewichtung" type="number" min="1" max="1000" :disabled="!entry.aktiv" class="w-20 rounded border-gray-300 text-sm disabled:bg-gray-100" title="Gewichtung" />
-                                </div>
-                            </div>
-                        </details>
+                        <p class="mt-3 rounded border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                            Die Kompetenz-Zuordnung erfolgt nach dem Anlegen zentral in der Gewichtungsmatrix.
+                        </p>
                         <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
                             <label class="flex items-center gap-2 text-sm text-gray-600">
                                 <input v-model="paUebungForm.auswertbar" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
@@ -1290,16 +1457,9 @@ const addMitarbeiter = (person) => {
                             Beschreibung
                             <textarea v-model="uebung.beschreibung" rows="2" class="mt-1 w-full rounded border-gray-300 text-sm"></textarea>
                         </label>
-                        <details class="mt-3 rounded border border-gray-200 bg-gray-50 p-3">
-                            <summary class="cursor-pointer text-sm font-semibold text-gray-700">Kompetenz-Zuordnung ({{ uebung.kompetenzen.filter((entry) => entry.aktiv).length }})</summary>
-                            <div class="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                                <div v-for="entry in uebung.kompetenzen" :key="entry.merkmal" class="flex items-center gap-2 rounded border bg-white px-3 py-2">
-                                    <input v-model="entry.aktiv" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
-                                    <span class="min-w-0 flex-1 text-sm">{{ entry.label }}</span>
-                                    <input v-model.number="entry.gewichtung" type="number" min="1" max="1000" :disabled="!entry.aktiv" class="w-20 rounded border-gray-300 text-sm disabled:bg-gray-100" title="Gewichtung" />
-                                </div>
-                            </div>
-                        </details>
+                        <p class="mt-3 text-xs text-gray-500">
+                            Kompetenz-Zuordnungen und Gewichtungen werden zentral in der Matrix oben gepflegt.
+                        </p>
                         <div class="mt-3 flex flex-wrap justify-end gap-2">
                             <button
                                 type="button"

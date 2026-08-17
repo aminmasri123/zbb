@@ -118,7 +118,7 @@ onMounted(() => {
     pollTimer = window.setInterval(() => {
         if (document.hidden || messageForm.processing || conversationForm.processing) return
         router.reload({
-            only: ['conversations', 'selectedConversationId', 'messages', 'staffChatUnreadCount'],
+            only: ['conversations', 'selectedConversationId', 'messages', 'staffChatUnreadCount', 'flash'],
             preserveState: true,
             preserveScroll: true,
         })

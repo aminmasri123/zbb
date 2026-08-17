@@ -1,214 +1,219 @@
 <template>
   <Modal v-if="visible" @close="emit('close')">
-    <template #header>📘 Neues Praktikum hinzufügen</template>
+    <template #header>Neues Praktikum oder neue Bildungsmaßnahme</template>
 
     <template #body>
-      <div class="grid grid-cols-2 gap-6">
-
-        <!-- TYPO -->
+      <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
         <div>
           <label class="text-sm text-gray-600">Typ <span class="text-red-500">*</span></label>
-          <Select
-            v-model="neuesPraktikum.typ"
-            :options="typen"
-            optionLabel="label"
-            optionValue="value"
-            placeholder="-- auswählen --"
-            class="w-full mt-1"
-          />
+          <Select v-model="form.typ" :options="typen" optionLabel="label" optionValue="value" class="mt-1 w-full" />
         </div>
 
-        <!-- TRÄGER -->
+        <div v-if="isInternship">
+          <label class="text-sm text-gray-600">Praktikumsart <span class="text-red-500">*</span></label>
+          <Select v-model="form.placement_type" :options="placementTypes" optionLabel="label" optionValue="value" class="mt-1 w-full" />
+        </div>
+
+        <template v-if="isInternship && form.placement_type === 'internal'">
+          <div>
+            <label class="text-sm text-gray-600">Internes Einsatzprojekt <span class="text-red-500">*</span></label>
+            <Select v-model="form.host_project_id" :options="hostProjects" optionLabel="name" optionValue="id" filter class="mt-1 w-full" />
+          </div>
+          <div>
+            <label class="text-sm text-gray-600">Fachliche Betreuung <span class="text-red-500">*</span></label>
+            <Select v-model="form.supervisor_person_id" :options="availableSupervisors" optionLabel="label" optionValue="id" filter class="mt-1 w-full" />
+          </div>
+        </template>
+
+        <template v-else>
+          <div>
+            <label class="text-sm text-gray-600">Träger / Praktikumsbetrieb <span v-if="isInternship" class="text-red-500">*</span></label>
+            <InputText v-model="form.traeger" class="mt-1 w-full" placeholder="Unternehmen, Schule oder Bildungsträger" />
+          </div>
+          <div>
+            <label class="text-sm text-gray-600">Ansprechpartner:in</label>
+            <InputText v-model="form.contact_name" class="mt-1 w-full" />
+          </div>
+          <div>
+            <label class="text-sm text-gray-600">E-Mail</label>
+            <InputText v-model="form.contact_email" type="email" class="mt-1 w-full" />
+          </div>
+          <div>
+            <label class="text-sm text-gray-600">Telefon</label>
+            <InputText v-model="form.contact_phone" class="mt-1 w-full" />
+          </div>
+        </template>
+
+        <template v-if="isInternship">
+          <div>
+            <label class="text-sm text-gray-600">Anschrift der Einsatzstelle</label>
+            <InputText v-model="form.host_address" class="mt-1 w-full" placeholder="Straße, PLZ Ort" />
+          </div>
+          <div>
+            <label class="text-sm text-gray-600">Einsatzbereich / Abteilung</label>
+            <InputText v-model="form.department" class="mt-1 w-full" />
+          </div>
+          <div>
+            <label class="text-sm text-gray-600">Beruf / Tätigkeitsbereich</label>
+            <InputText v-model="form.occupation" class="mt-1 w-full" />
+          </div>
+          <div>
+            <label class="text-sm text-gray-600">Art des Praktikums</label>
+            <Select v-model="form.internship_kind" :options="internshipKinds" optionLabel="label" optionValue="value" showClear class="mt-1 w-full" />
+          </div>
+          <div>
+            <label class="text-sm text-gray-600">Interner Betreuungs-/Beschulungstag</label>
+            <InputText v-model="form.attendance_weekday" class="mt-1 w-full" placeholder="z. B. Mittwoch" />
+          </div>
+        </template>
+
         <div>
-          <label class="text-sm text-gray-600">Träger</label>
-          <InputText
-            v-model="neuesPraktikum.traeger"
-            class="w-full mt-1"
-            placeholder="z.B. Unternehmen, Schule..."
-          />
+          <label class="text-sm text-gray-600">Wochenstunden</label>
+          <InputText v-model.number="form.weekly_hours" type="number" min="1" max="168" class="mt-1 w-full" />
         </div>
-
-        <!-- STARTDATUM -->
-        <div><label class="text-sm text-gray-600">Ansprechpartner</label><InputText v-model="neuesPraktikum.contact_name" class="w-full mt-1" /></div>
-        <div><label class="text-sm text-gray-600">E-Mail</label><InputText v-model="neuesPraktikum.contact_email" type="email" class="w-full mt-1" /></div>
-        <div><label class="text-sm text-gray-600">Telefon</label><InputText v-model="neuesPraktikum.contact_phone" class="w-full mt-1" /></div>
-        <div><label class="text-sm text-gray-600">Wochenstunden</label><InputText v-model.number="neuesPraktikum.weekly_hours" type="number" min="1" max="168" class="w-full mt-1" /></div>
-
-        <!-- STARTDATUM -->
         <div>
           <label class="text-sm text-gray-600">Startdatum <span class="text-red-500">*</span></label>
-          <DatePicker
-            v-model="neuesPraktikum.start"
-            dateFormat="yy-mm-dd"
-            class="w-full mt-1"
-            inputClass="w-full"
-          />
+          <DatePicker v-model="form.start" dateFormat="dd.mm.yy" class="mt-1 w-full" inputClass="w-full" />
         </div>
-
-        <!-- ENDDATUM -->
         <div>
           <label class="text-sm text-gray-600">Enddatum <span class="text-red-500">*</span></label>
-          <DatePicker
-            v-model="neuesPraktikum.end"
-            dateFormat="yy-mm-dd"
-            class="w-full mt-1"
-            inputClass="w-full"
-          />
+          <DatePicker v-model="form.end" dateFormat="dd.mm.yy" class="mt-1 w-full" inputClass="w-full" />
         </div>
-
-        <!-- STATUS -->
         <div>
           <label class="text-sm text-gray-600">Status</label>
-          <Select
-            v-model="neuesPraktikum.status"
-            :options="statusOptionen"
-            optionLabel="label"
-            optionValue="value"
-            class="w-full mt-1"
-          />
+          <Select v-model="form.status" :options="statusOptions" optionLabel="label" optionValue="value" class="mt-1 w-full" />
         </div>
-
-        <!-- BEMERKUNG -->
-        <div><label class="text-sm text-gray-600">Nächste Nachverfolgung</label><DatePicker v-model="neuesPraktikum.next_follow_up_at" dateFormat="yy-mm-dd" class="w-full mt-1" inputClass="w-full" /></div>
-        <div class="col-span-2"><label class="text-sm text-gray-600">Ziel</label><Textarea v-model="neuesPraktikum.objective" class="w-full mt-1" rows="3" /></div>
-        <div v-if="['abgeschlossen','abgebrochen'].includes(neuesPraktikum.status)" class="col-span-2"><label class="text-sm text-gray-600">Ergebnis <span class="text-red-500">*</span></label><Textarea v-model="neuesPraktikum.result" class="w-full mt-1" rows="3" /></div>
-
-        <!-- BEMERKUNG -->
         <div>
-          <label class="text-sm text-gray-600">Bemerkung</label>
-          <Textarea
-            v-model="neuesPraktikum.bemerkung"
-            class="w-full mt-1"
-            rows="3"
-          />
+          <label class="text-sm text-gray-600">Nächste Nachverfolgung</label>
+          <DatePicker v-model="form.next_follow_up_at" dateFormat="dd.mm.yy" class="mt-1 w-full" inputClass="w-full" showClear />
         </div>
 
+        <div class="md:col-span-2">
+          <label class="text-sm text-gray-600">Ziel</label>
+          <Textarea v-model="form.objective" class="mt-1 w-full" rows="3" />
+        </div>
+        <div v-if="isInternship" class="md:col-span-2">
+          <label class="text-sm text-gray-600">Tätigkeiten für die Bescheinigung</label>
+          <Textarea v-model="form.activities" class="mt-1 w-full" rows="4" placeholder="Eine Tätigkeit pro Zeile, maximal sechs Zeilen" />
+        </div>
+        <div v-if="isInternship" class="md:col-span-2">
+          <label class="text-sm text-gray-600">Beurteilung und soziale Kompetenzen</label>
+          <Textarea v-model="form.assessment" class="mt-1 w-full" rows="5" placeholder="Bis zu vier kurze Absätze, jeweils eine Zeile" />
+        </div>
+        <div v-if="['abgeschlossen','abgebrochen'].includes(form.status)" class="md:col-span-2">
+          <label class="text-sm text-gray-600">Ergebnis <span class="text-red-500">*</span></label>
+          <Textarea v-model="form.result" class="mt-1 w-full" rows="3" />
+        </div>
+        <div class="md:col-span-2">
+          <label class="text-sm text-gray-600">Bemerkung / weiterführende Vereinbarung</label>
+          <Textarea v-model="form.bemerkung" class="mt-1 w-full" rows="3" />
+        </div>
       </div>
     </template>
 
     <template #footer>
-      <button
-        @click="save"
-        class="bg-zbb text-white px-4 py-2 rounded hover:bg-zbb-dark transition"
-      >
-        Speichern
+      <button type="button" :disabled="saving" @click="save" class="rounded bg-zbb px-4 py-2 text-white transition hover:bg-zbb-dark disabled:opacity-50">
+        {{ saving ? 'Speichert …' : 'Speichern' }}
       </button>
-
-      <button
-        @click="emit('close')"
-        class="border px-4 py-2 rounded hover:bg-gray-100 transition"
-      >
-        Abbrechen
-      </button>
+      <button type="button" :disabled="saving" @click="emit('close')" class="rounded border px-4 py-2 transition hover:bg-gray-100">Abbrechen</button>
     </template>
   </Modal>
 </template>
 
 <script setup>
 import Modal from '@/Components/ModalForm.vue';
-import { ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import Swal from 'sweetalert2';
 import Textarea from 'primevue/textarea';
 import DatePicker from 'primevue/datepicker';
 import InputText from 'primevue/inputtext';
 import Select from 'primevue/select';
-import { router } from '@inertiajs/vue3';
 import { formatDate } from '@/utils/dateFormat.js';
 
 const props = defineProps({
   visible: Boolean,
-  teilnehmer: { Object, required: true },
+  teilnehmer: { type: Object, required: true },
+  hostProjects: { type: Array, default: () => [] },
 });
-
 const emit = defineEmits(['close', 'added']);
+const saving = ref(false);
 
-let neuesPraktikum = ref({
+const emptyForm = () => ({
   teilnehmer_id: props.teilnehmer?.id ?? null,
-  typ: '',
+  typ: 'Praktikum',
+  placement_type: 'external',
   traeger: '',
-  contact_name: '', contact_email: '', contact_phone: '', weekly_hours: null,
+  host_project_id: null,
+  supervisor_person_id: null,
+  host_address: '',
+  department: '',
+  internship_kind: null,
+  occupation: '',
+  attendance_weekday: '',
+  contact_name: '',
+  contact_email: '',
+  contact_phone: '',
+  weekly_hours: null,
   start: '',
   end: '',
+  next_follow_up_at: '',
+  objective: '',
+  activities: '',
+  assessment: '',
+  result: '',
   bemerkung: '',
-  objective: '', result: '', next_follow_up_at: '',
   status: 'geplant',
 });
+const form = ref(emptyForm());
+const isInternship = computed(() => form.value.typ === 'Praktikum');
+const selectedHostProject = computed(() => props.hostProjects.find((project) => project.id === form.value.host_project_id));
+const availableSupervisors = computed(() => (selectedHostProject.value?.mitarbeiter || []).map((person) => ({
+  ...person,
+  label: `${person.vorname} ${person.nachname}`.trim(),
+})));
 
-const resetForm = () => {
-  neuesPraktikum.value = {
-    teilnehmer_id: props.teilnehmer.id,
-    typ: '',
-    traeger: '',
-    contact_name: '', contact_email: '', contact_phone: '', weekly_hours: null,
-    start: '',
-    end: '',
-    bemerkung: '',
-    objective: '', result: '', next_follow_up_at: '',
-    status: 'geplant',
-  };
-};
+watch(() => form.value.host_project_id, () => {
+  if (!availableSupervisors.value.some((person) => person.id === form.value.supervisor_person_id)) {
+    form.value.supervisor_person_id = null;
+  }
+});
+
+watch(() => form.value.typ, (type) => {
+  if (type !== 'Praktikum') {
+    form.value.placement_type = null;
+    form.value.host_project_id = null;
+    form.value.supervisor_person_id = null;
+  } else if (!form.value.placement_type) {
+    form.value.placement_type = 'external';
+  }
+});
 
 const save = async () => {
+  saving.value = true;
   try {
     const payload = {
+      ...form.value,
       teilnehmer_id: props.teilnehmer.id,
-      typ: neuesPraktikum.value.typ,
-      traeger: neuesPraktikum.value.traeger,
-      contact_name: neuesPraktikum.value.contact_name,
-      contact_email: neuesPraktikum.value.contact_email,
-      contact_phone: neuesPraktikum.value.contact_phone,
-      weekly_hours: neuesPraktikum.value.weekly_hours,
-      start: formatDate(neuesPraktikum.value.start),
-      end: formatDate(neuesPraktikum.value.end),
-      bemerkung: neuesPraktikum.value.bemerkung,
-      objective: neuesPraktikum.value.objective,
-      result: neuesPraktikum.value.result,
-      next_follow_up_at: neuesPraktikum.value.next_follow_up_at ? formatDate(neuesPraktikum.value.next_follow_up_at) : null,
-      status: neuesPraktikum.value.status,
+      start: formatDate(form.value.start),
+      end: formatDate(form.value.end),
+      next_follow_up_at: form.value.next_follow_up_at ? formatDate(form.value.next_follow_up_at) : null,
     };
-
     const response = await axios.post(route('teilnehmer.praktikum.store'), payload);
-
-    // Erfolgsmeldung
-    Swal.fire({
-      icon: "success",
-      title: "Erfolg!",
-      text: "Eintrag erfolgreich gespeichert!",
-      timer: 2500,
-      showConfirmButton: false,
-      toast: true,
-      position: "center"
-    });
-
-    // Neuen Datensatz an Eltern-Komponente senden
     emit('added', response.data.data);
-    console.log(response.data.data)
-    resetForm();
+    form.value = emptyForm();
     emit('close');
-
+    Swal.fire({ icon: 'success', title: 'Gespeichert', text: response.data.message, timer: 2200, showConfirmButton: false, toast: true, position: 'top-end' });
   } catch (error) {
-
-    console.error("Axios Fehler:", error.response?.data ?? error);
-
-    // Laravel-Validation Fehler (422)
-    if (error.response?.status === 422) {
-      Swal.fire({
-        icon: "error",
-        title: "Validierungsfehler",
-        html: Object.values(error.response.data.errors).join("<br>"),
-      });
-      return;
-    }
-
-    // Allgemeiner Fehler
+    const errors = error.response?.data?.errors;
     Swal.fire({
-      icon: "error",
-      title: "Fehler",
-      text: error.response?.data?.message || "Es ist ein unerwarteter Fehler aufgetreten.",
+      icon: 'error',
+      title: 'Speichern nicht möglich',
+      html: errors ? Object.values(errors).flat().join('<br>') : (error.response?.data?.message || 'Es ist ein unerwarteter Fehler aufgetreten.'),
     });
+  } finally {
+    saving.value = false;
   }
 };
-
 
 const typen = [
   { label: 'Praktikum', value: 'Praktikum' },
@@ -218,8 +223,16 @@ const typen = [
   { label: 'Sprachkurs', value: 'Sprachkurs' },
   { label: 'Integrationskurs', value: 'Integrationskurs' },
 ];
-
-const statusOptionen = [
+const placementTypes = [
+  { label: 'Externes Praktikum', value: 'external' },
+  { label: 'Internes Praktikum', value: 'internal' },
+];
+const internshipKinds = [
+  { label: 'Orientierungspraktikum', value: 'orientation' },
+  { label: 'Qualifizierungspraktikum', value: 'qualification' },
+  { label: 'Eingliederungspraktikum', value: 'integration' },
+];
+const statusOptions = [
   { label: 'Geplant', value: 'geplant' },
   { label: 'Laufend', value: 'laufend' },
   { label: 'Abgeschlossen', value: 'abgeschlossen' },

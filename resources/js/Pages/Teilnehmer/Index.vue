@@ -759,6 +759,14 @@ const sortByColumn = (column) => {
                 ></i>
             </div>
 
+            <Link
+                v-if="$page.props.currentProjekt?.features?.internship_management !== false"
+                :href="route('internships.index')"
+                class="border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-zbb hover:border-orange-500 hover:bg-zbb hover:text-white"
+            >
+                Praktikant:innen
+            </Link>
+
 
             <label for="simple-search" class="sr-only">Search</label>
             <input

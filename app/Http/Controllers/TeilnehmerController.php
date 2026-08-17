@@ -3,48 +3,45 @@
 namespace App\Http\Controllers;
 
 use App\Models\Abschluesse;
-use App\Models\AppTask;
-use App\Models\ParticipantApplication;
-use App\Models\AttendanceCorrectionRequest;
-use App\Models\ParticipantPortalDocument;
-use App\Models\ParticipantPortalMessage;
-use App\Models\ParticipantConsentEvent;
-use App\Models\ProjectConsentDefinition;
-use App\Models\ParticipantDataRequest;
-use App\Models\ParticipantJobRecommendation;
-use App\Models\ParticipantPortalProfile;
-use App\Models\ParticipantCvEntry;
-use App\Models\ParticipantCvVersion;
 use App\Models\Anwesenheitsstatuten;
+use App\Models\AppTask;
+use App\Models\AttendanceCorrectionRequest;
 use App\Models\Bereich;
-use App\Models\BereichHasPersonen;
-use App\Models\Brief;
 use App\Models\Fahrtarten;
 use App\Models\Gruppe;
 use App\Models\Kontakttypen;
 use App\Models\Leistungsbezuege;
 use App\Models\Notizvarianten;
+use App\Models\ParticipantApplication;
+use App\Models\ParticipantConsentEvent;
+use App\Models\ParticipantCvEntry;
+use App\Models\ParticipantCvVersion;
+use App\Models\ParticipantDataRequest;
+use App\Models\ParticipantJobRecommendation;
+use App\Models\ParticipantPortalDocument;
+use App\Models\ParticipantPortalMessage;
+use App\Models\ParticipantPortalProfile;
+use App\Models\ParticipationCompletionReport;
 use App\Models\Partner;
 use App\Models\Personen;
 use App\Models\PersonenHasSozialedaten;
 use App\Models\PersonenIstSchueler;
+use App\Models\ProjectCompletionChecklistItem;
+use App\Models\ProjectConsentDefinition;
+use App\Models\ProjectIntakeChecklistItem;
 use App\Models\Projekt;
 use App\Models\ProjektHasPersonen;
-use App\Models\ProjectIntakeChecklistItem;
-use App\Models\ProjectCompletionChecklistItem;
-use App\Models\ParticipationCompletionReport;
-use App\Models\SozialeDaten;
-use App\Models\Standort;
-use App\Models\Teilnehmer;
-use App\Models\User;
 use App\Models\RoleDataAccessSetting;
+use App\Models\Standort;
+use App\Models\User;
 use App\Notifications\ConfiguredEventNotification;
 use App\Services\NotificationRecipientService;
-use App\Services\Projects\ActiveProjectContext;
 use App\Services\Participants\ParticipantOverviewService;
+use App\Services\Projects\ActiveProjectContext;
+use Carbon\Carbon;
 use Exception;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
@@ -53,28 +50,24 @@ use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
-use Carbon\Carbon;
 
 class TeilnehmerController extends Controller
 {
     public function __construct(
         private readonly ActiveProjectContext $activeProjectContext,
         private readonly ParticipantOverviewService $participantOverviewService,
-    )
-    {
-    }
+    ) {}
 
     public function index(Request $request)
     {
         $suchbegriff = $request->input('search');
-        $sortierung  = $request->input('sort', 'id');
-        $richtung    = strtolower($request->input('direction', 'desc'));
+        $sortierung = $request->input('sort', 'id');
+        $richtung = strtolower($request->input('direction', 'desc'));
         $overviewPeriod = $request->input('period', now()->format('Y-m'));
 
-        if (!is_string($overviewPeriod) || !preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $overviewPeriod)) {
+        if (! is_string($overviewPeriod) || ! preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $overviewPeriod)) {
             $overviewPeriod = now()->format('Y-m');
         }
-
 
         $benutzer = auth()->user();
         $projekt = $this->activeProjectContext->currentAvailableFor($benutzer);
@@ -110,7 +103,7 @@ class TeilnehmerController extends Controller
             ])
             ->where('projekt_id', $defaultProjekt)
             ->when(
-                !$benutzer->can('gruppe.view.all') && !$benutzer->can('projekt.mitarbeiter.view.all'),
+                ! $benutzer->can('gruppe.view.all') && ! $benutzer->can('projekt.mitarbeiter.view.all'),
                 fn ($query) => $query->where('personen_id', $this->userPersonId($benutzer))
             )
             ->orderBy('anfangsdatum')
@@ -128,9 +121,9 @@ class TeilnehmerController extends Controller
 
         // Mögliche Sortierfelder
         $sortierbareSpalten = [
-            'id'         => 'id',
-            'vorname'    => 'vorname',
-            'nachname'   => 'nachname',
+            'id' => 'id',
+            'vorname' => 'vorname',
+            'nachname' => 'nachname',
             'geschlecht' => 'geschlecht',
         ];
 
@@ -177,12 +170,11 @@ class TeilnehmerController extends Controller
         if ($suchbegriff) {
             $abfrage->where(function ($q) use ($suchbegriff) {
                 $q->where(DB::raw("CONCAT(vorname, ' ', nachname)"), 'like', "%{$suchbegriff}%")
-                ->orWhere(DB::raw("CONCAT(nachname, ' ', vorname)"), 'like', "%{$suchbegriff}%")
-                ->orWhere('vorname', 'like', "%{$suchbegriff}%")
-                ->orWhere('nachname', 'like', "%{$suchbegriff}%");
+                    ->orWhere(DB::raw("CONCAT(nachname, ' ', vorname)"), 'like', "%{$suchbegriff}%")
+                    ->orWhere('vorname', 'like', "%{$suchbegriff}%")
+                    ->orWhere('nachname', 'like', "%{$suchbegriff}%");
             });
         }
-
 
         $overviewParticipantIds = (clone $abfrage)->pluck('personens.id');
 
@@ -218,12 +210,12 @@ class TeilnehmerController extends Controller
                 ? $projekt->partners()->orderBy('name')->get(['partners.id', 'partners.name'])
                 : [],
             'filters' => [
-                'search'    => $suchbegriff,
-                'standort'  => $standortId,
-                'schule'    => $schuleId,
-                'anleiter'  => $anleiterId,
-                'bereich'   => $bereichId,
-                'sort'      => $sortierung,
+                'search' => $suchbegriff,
+                'standort' => $standortId,
+                'schule' => $schuleId,
+                'anleiter' => $anleiterId,
+                'bereich' => $bereichId,
+                'sort' => $sortierung,
                 'direction' => $richtung,
                 'period' => $overviewPeriod,
             ],
@@ -335,14 +327,13 @@ class TeilnehmerController extends Controller
                 'classes' => $schoolRows->pluck('klasse')->filter()->unique()->values(),
                 'schools' => $schoolRows->pluck('schule.name')->filter()->unique()->values(),
                 'contexts' => $schoolRows
-                    ->map(fn ($row) => trim(($row->schuljahr ?? '') . ' Teil ' . ($row->teil ?? '')))
+                    ->map(fn ($row) => trim(($row->schuljahr ?? '').' Teil '.($row->teil ?? '')))
                     ->filter()
                     ->unique()
                     ->values(),
             ],
         ]);
     }
-
 
     public function create()
     {
@@ -367,8 +358,8 @@ class TeilnehmerController extends Controller
 
             // Daten validieren
             $validatedData = $request->validate(array_merge($this->participantCoreRules($activeProject), [
-                'projekt'   => ['required', 'integer', 'exists:projekts,id'],
-                'standort'  => ['required', 'integer', 'exists:standorts,id'],
+                'projekt' => ['required', 'integer', 'exists:projekts,id'],
+                'standort' => ['required', 'integer', 'exists:standorts,id'],
             ], $this->participantAddressRules($activeProject), $this->participantSchoolContextRules($activeProject)));
 
             if ($this->participantSchoolContextEnabled($activeProject)) {
@@ -376,7 +367,7 @@ class TeilnehmerController extends Controller
                     ->whereKey($validatedData['schulzuordnung']['schule_id'])
                     ->exists();
 
-                if (!$schoolBelongsToProject) {
+                if (! $schoolBelongsToProject) {
                     throw ValidationException::withMessages([
                         'schulzuordnung.schule_id' => 'Die ausgewählte Schule gehört nicht zum aktiven Projekt.',
                     ]);
@@ -385,15 +376,15 @@ class TeilnehmerController extends Controller
 
             $teilnehmer = DB::transaction(function () use ($validatedData, $activeProject) {
                 $teilnehmer = Personen::create([
-                    'vorname'   => $validatedData['vorname'],
-                    'nachname'  => $validatedData['nachname'],
-                    'geschlecht'=> $validatedData['geschlecht'],
+                    'vorname' => $validatedData['vorname'],
+                    'nachname' => $validatedData['nachname'],
+                    'geschlecht' => $validatedData['geschlecht'],
                     'geburtsdatum' => $validatedData['geburtsdatum'] ?? null,
-                    'typ'       => 'teilnehmer',
-                    'aktiv'=> 1,
+                    'typ' => 'teilnehmer',
+                    'aktiv' => 1,
                 ]);
 
-                if (!$teilnehmer) {
+                if (! $teilnehmer) {
                     throw new Exception('Teilnehmer konnte nicht erstellt werden.');
                 }
 
@@ -435,35 +426,33 @@ class TeilnehmerController extends Controller
                 ]),
                 new ConfiguredEventNotification([
                     'event_key' => 'teilnehmer.created',
-                    'message' => 'Neuer Teilnehmer "' . $teilnehmer->vorname . ' ' . $teilnehmer->nachname . '" wurde erstellt.',
+                    'message' => 'Neuer Teilnehmer "'.$teilnehmer->vorname.' '.$teilnehmer->nachname.'" wurde erstellt.',
                     'link' => route('teilnehmer.edit', $teilnehmer->id),
                     'id' => $teilnehmer->id,
                     'typ' => 'Teilnehmer',
                 ])
             );
 
-
             return response()->json([
-                'message'    => 'Benutzer erfolgreich erstellt!',
-                'teilnehmer' => $teilnehmer
+                'message' => 'Benutzer erfolgreich erstellt!',
+                'teilnehmer' => $teilnehmer,
             ], 201);
 
         } catch (ValidationException $e) {
 
             return response()->json([
                 'message' => 'Validation Error',
-                'errors'  => $e->errors(),
+                'errors' => $e->errors(),
             ], 422);
 
         } catch (Exception $e) {
 
             return response()->json([
                 'message' => 'Ein Fehler ist aufgetreten.',
-                'error'   => $e->getMessage(),
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
-
 
     public function show($id)
     {
@@ -481,9 +470,11 @@ class TeilnehmerController extends Controller
             ->whereKey($id)
             ->exists();
 
-        if(!$berechtigt) abort(403, "Sie sind nicht berechtigt, die Daten des Teilnehmers zu sehen.");
+        if (! $berechtigt) {
+            abort(403, 'Sie sind nicht berechtigt, die Daten des Teilnehmers zu sehen.');
+        }
 
-        $personen = personen::Teilnehmer()->with([
+        $personen = Personen::Teilnehmer()->with([
             'adresses',
             'anwesenheiten' => fn ($query) => $query->whereHas(
                 'gruppe',
@@ -496,7 +487,11 @@ class TeilnehmerController extends Controller
             'praktika' => fn ($query) => $query->whereHas(
                 'projektTeilnahme',
                 fn ($participation) => $participation->where('projekt_id', $user->current_team_id)
-            )->whereNull('archived_at')->with('statusHistory.changer:id,name'),
+            )->whereNull('archived_at')->with([
+                'statusHistory.changer:id,name',
+                'hostProject:id,name',
+                'supervisor:id,vorname,nachname',
+            ]),
             'projekte' => fn ($query) => $query->where('projekts.id', $user->current_team_id),
             'baenke',
             'fahrtabrechnungen.fahrtarten',
@@ -536,15 +531,14 @@ class TeilnehmerController extends Controller
         $personen->projekte->each(function ($projekt) {
             $projekt->pivotModel->load('zeitraume', 'meta', 'luv', 'standort');
         });
-        //dd($personen);
+        // dd($personen);
 
         $arbeitsvermittler = Personen::arbeitsvermittler()->get();
         $bereiche = Bereich::all();
         $anwesenheitsstatuten = $canViewAttendance ? Anwesenheitsstatuten::all() : collect();
         $abschluesse = Abschluesse::all();
 
-
-        //dd($personen);
+        // dd($personen);
 
         $notiztypen = Notizvarianten::where('typ', 'typ')->get();
         $notizkategorie = Notizvarianten::where('typ', 'kategorie')->get();
@@ -558,11 +552,11 @@ class TeilnehmerController extends Controller
         $meineBriefe = auth()->user()->ownLetters();
 
         // Jetzt manuell umwandeln für Inertia:
-         $teilnehmerData = $personen->toArray();
+        $teilnehmerData = $personen->toArray();
 
-        //$betreuer = Personen::where('typ', 'mitarbeiter')->orderBy('nachname')->select('nachname', 'vorname')->get();
+        // $betreuer = Personen::where('typ', 'mitarbeiter')->orderBy('nachname')->select('nachname', 'vorname')->get();
         $betreuer = Personen::mitarbeiter()
-            ->whereHas('projekte', function($query) use ($personen) {
+            ->whereHas('projekte', function ($query) {
                 $query->where('projekts.id', auth()->user()->current_team_id);
             })
             ->orderBy('nachname')
@@ -572,6 +566,15 @@ class TeilnehmerController extends Controller
         $projekte = Projekt::query()
             ->whereKey($user->current_team_id)
             ->get();
+
+        $internshipHostProjects = Projekt::query()
+            ->where('aktiv', true)
+            ->with(['mitarbeiter' => fn ($query) => $query
+                ->select('personens.id', 'personens.vorname', 'personens.nachname')
+                ->orderBy('personens.nachname')
+                ->orderBy('personens.vorname')])
+            ->orderBy('name')
+            ->get(['id', 'name']);
         $gruppen = Gruppe::where('projekt_id', Auth()->user()->current_team_id)->with('bereich', 'betreuer')->get();
 
         $aktuelleStandortIds = $personen->projekte
@@ -650,11 +653,11 @@ class TeilnehmerController extends Controller
         $attendanceCorrections = $portalAttendanceEnabled ? AttendanceCorrectionRequest::query()
             ->where('person_id', $personen->id)
             ->whereHas('attendance.gruppe', fn ($query) => $query->where('projekt_id', $user->current_team_id))
-            ->with(['attendance.tag:id,datum','attendance.status:id,status','resolver:id,username'])
+            ->with(['attendance.tag:id,datum', 'attendance.status:id,status', 'resolver:id,username'])
             ->latest()->get() : collect();
         $portalDocuments = $activeParticipation && $portalProfileEnabled
-            ? ParticipantPortalDocument::query()->where('project_person_id',$activeParticipation->id)
-                ->with(['uploader:id,username','reviewer:id,username'])->latest()->get()
+            ? ParticipantPortalDocument::query()->where('project_person_id', $activeParticipation->id)
+                ->with(['uploader:id,username', 'reviewer:id,username'])->latest()->get()
             : collect();
         $portalMessages = $activeParticipation && $activeParticipation->projekt->portalFeatureEnabled('messaging')
             ? ParticipantPortalMessage::query()
@@ -686,7 +689,7 @@ class TeilnehmerController extends Controller
             'visible' => (bool) $cvProfile?->profile_visible_to_project_staff,
             'profile' => $cvProfile?->only(['professional_headline', 'career_goal', 'skills', 'interests']),
             'entries' => $cvProfile?->profile_visible_to_project_staff ? ParticipantCvEntry::query()->where('person_id', $personen->id)->orderBy('type')->orderBy('sort_order')->get() : collect(),
-            'versions' => $cvProfile?->profile_visible_to_project_staff ? ParticipantCvVersion::query()->where('person_id', $personen->id)->latest('version')->get(['id','version','label','snapshot_sha256','created_at']) : collect(),
+            'versions' => $cvProfile?->profile_visible_to_project_staff ? ParticipantCvVersion::query()->where('person_id', $personen->id)->latest('version')->get(['id', 'version', 'label', 'snapshot_sha256', 'created_at']) : collect(),
         ];
         $kontakttypen = Kontakttypen::all();
 
@@ -695,6 +698,7 @@ class TeilnehmerController extends Controller
             'kontakttypen' => $kontakttypen,
             'projekte' => $projekte,
             'betreuer' => $betreuer,
+            'internshipHostProjects' => $internshipHostProjects,
             'erhalteneBriefe' => $erhalteneBriefe,
             'meineBriefe' => $meineBriefe,
             'anwesenheitsstatuten' => $anwesenheitsstatuten,
@@ -733,7 +737,7 @@ class TeilnehmerController extends Controller
                 ]),
                 'definitions' => Projekt::participantProfileTabDefinitions(),
             ],
-            ],
+        ],
         );
     }
 
@@ -764,7 +768,7 @@ class TeilnehmerController extends Controller
         } catch (Exception $e) {
             return response()->json([
                 'message' => 'Ein Fehler ist aufgetreten.',
-                'error'   => $e->getMessage(),
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -774,33 +778,33 @@ class TeilnehmerController extends Controller
         // 1) Validierung
         $validated = $request->validate([
             'ist_drittstaatsangehoerig' => ['required', 'boolean'],
-            'ist_gefluechtet'           => ['required', 'boolean'],
+            'ist_gefluechtet' => ['required', 'boolean'],
             'hat_migrationshintergrund' => ['required', 'boolean'],
-            'hat_behinderung'           => ['required', 'boolean'],
-            'leistungsbezug_id'         => ['nullable', 'exists:leistungsbezueges,id'],
-            'ist_wohnsitz_stabil'       => ['required', 'boolean'],
-            'teilnehmer_id'             => ['required', 'exists:personens,id'],
-            'kundennummer'              => ['string', 'nullable'],
+            'hat_behinderung' => ['required', 'boolean'],
+            'leistungsbezug_id' => ['nullable', 'exists:leistungsbezueges,id'],
+            'ist_wohnsitz_stabil' => ['required', 'boolean'],
+            'teilnehmer_id' => ['required', 'exists:personens,id'],
+            'kundennummer' => ['string', 'nullable'],
         ]);
         // 2) Speichern (create/update anhand person_id)
-       PersonenHasSozialedaten::updateOrCreate(
+        PersonenHasSozialedaten::updateOrCreate(
             ['person_id' => $validated['teilnehmer_id']],
             [
-            'wohnsitz_stabil' => $validated['ist_wohnsitz_stabil'],
-            'leistungsbezug_id' => $validated['leistungsbezug_id'] ?? null,
-            'behinderung' => $validated['hat_behinderung']  ,
-            'migrationshintergrund' => $validated['hat_migrationshintergrund'],
-            'gefluechtet' => $validated['ist_gefluechtet'],
-            'drittstaatsangehoerig' => $validated['ist_drittstaatsangehoerig'],
-            'kundennummer' =>  $validated['kundennummer'],
+                'wohnsitz_stabil' => $validated['ist_wohnsitz_stabil'],
+                'leistungsbezug_id' => $validated['leistungsbezug_id'] ?? null,
+                'behinderung' => $validated['hat_behinderung'],
+                'migrationshintergrund' => $validated['hat_migrationshintergrund'],
+                'gefluechtet' => $validated['ist_gefluechtet'],
+                'drittstaatsangehoerig' => $validated['ist_drittstaatsangehoerig'],
+                'kundennummer' => $validated['kundennummer'],
             ]
         );
 
         // ↙️ hier kommt die Swal-Nachricht rein
         return back()->with('swal', [
-            'icon'  => 'success',
+            'icon' => 'success',
             'title' => 'Gespeichert',
-            'text'  => 'Die Sozialdaten wurden erfolgreich gespeichert.',
+            'text' => 'Die Sozialdaten wurden erfolgreich gespeichert.',
             'timer' => 1600,
             'showConfirmButton' => false,
         ]);
@@ -813,11 +817,11 @@ class TeilnehmerController extends Controller
             $teilnehmer = Personen::findOrFail($id); // Suche die Abteilung
             $teilnehmer->delete(); // Lösche die Abteilung
 
-            return response()->json(['message' => 'die Daten von ' . $teilnehmer->vorname . ' ' . $teilnehmer->nachname . ' wurde  erfolgreich gelöscht!'], 200);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['message' => 'die Daten von '.$teilnehmer->vorname.' '.$teilnehmer->nachname.' wurde  erfolgreich gelöscht!'], 200);
+        } catch (ModelNotFoundException $e) {
             return response()->json(['message' => 'Die Daten konnte nicht gefunden werden.'], 404);
-        } catch (\Exception $e) {
-            return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
+        } catch (Exception $e) {
+            return response()->json(['message' => 'Ein Fehler ist aufgetreten: '.$e->getMessage()], 500);
         }
     }
 
@@ -834,14 +838,15 @@ class TeilnehmerController extends Controller
                 ->delete();
 
             return response()->json([
-                'message' => $deleted . ' Teilnehmer wurden erfolgreich geloescht.',
+                'message' => $deleted.' Teilnehmer wurden erfolgreich geloescht.',
                 'deleted' => $deleted,
             ], 200);
-        } catch (\Exception $e) {
-            return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
+        } catch (Exception $e) {
+            return response()->json(['message' => 'Ein Fehler ist aufgetreten: '.$e->getMessage()], 500);
         }
     }
-       public function import(Request $request)
+
+    public function import(Request $request)
     {
 
         try {
@@ -849,19 +854,20 @@ class TeilnehmerController extends Controller
             abort_unless($activeProject, 409, 'Bitte wählen Sie zuerst ein aktives Projekt aus.');
 
             // Überprüfen, ob eine Datei hochgeladen wurde
-            if (!$request->hasFile('file')) {
+            if (! $request->hasFile('file')) {
                 return response()->json(['error' => true, 'message' => 'Es wurde keine Datei hochgeladen.']);
             }
 
             $file = $request->file('file');
-            if (!$file->isValid()) {
+            if (! $file->isValid()) {
                 return response()->json(['error' => true, 'message' => 'Fehler beim Hochladen der Datei.']);
             }
 
             try {
                 $spreadsheet = IOFactory::load($file->getRealPath());
             } catch (Exception $e) {
-                Log::error("Excel konnte nicht geladen werden: " . $e->getMessage());
+                Log::error('Excel konnte nicht geladen werden: '.$e->getMessage());
+
                 return response()->json(['error' => true, 'message' => 'Die Datei konnte nicht gelesen werden.']);
             }
 
@@ -884,7 +890,7 @@ class TeilnehmerController extends Controller
                     $rowData[] = $cell->getValue();
                 }
 
-                if (!$headerFound) {
+                if (! $headerFound) {
                     $firstColumn = strtolower((string) $this->cleanImportValue($rowData[0] ?? null));
                     $secondColumn = strtolower((string) $this->cleanImportValue($rowData[1] ?? null));
 
@@ -898,9 +904,10 @@ class TeilnehmerController extends Controller
                 if (count(array_filter($rowData)) === 0) {
                     $emptyRowCount++;
                     if ($emptyRowCount >= 3) {
-                        Log::info("Import beendet nach " . $emptyRowCount . " aufeinanderfolgenden leeren Zeilen.");
+                        Log::info('Import beendet nach '.$emptyRowCount.' aufeinanderfolgenden leeren Zeilen.');
                         break; // Import abbrechen
                     }
+
                     continue; // Leere Zeile überspringen
                 } else {
                     $emptyRowCount = 0; // Reset, sobald wieder eine gefüllte Zeile gefunden wurde
@@ -911,8 +918,8 @@ class TeilnehmerController extends Controller
                     'values' => $rowData,
                 ];
             }
-           // Log::info('Importierte Zeilen:', $data);
-            if (!$headerFound) {
+            // Log::info('Importierte Zeilen:', $data);
+            if (! $headerFound) {
                 return response()->json([
                     'error' => true,
                     'message' => 'Die Kopfzeile wurde nicht gefunden. Erwartet wird eine Zeile mit Vorname und Nachname.',
@@ -935,12 +942,12 @@ class TeilnehmerController extends Controller
                     $projektId = $activeProject->id;
                     $standortId = $this->cleanImportValue($row[5] ?? null);
 
-                    if (!$isBopImport) {
+                    if (! $isBopImport) {
                         $schuleId = null;
                         $schuljahr = null;
                         $teil = null;
                         $klasse = null;
-                    } elseif (!$activeProject->rule('participant_parts_enabled', false)) {
+                    } elseif (! $activeProject->rule('participant_parts_enabled', false)) {
                         $teil = '1';
                     }
 
@@ -948,22 +955,26 @@ class TeilnehmerController extends Controller
                         $requiredSchoolColumns = $activeProject->rule('participant_parts_enabled', false)
                             ? 'Schule_ID, Schuljahr, Teil oder Klasse'
                             : 'Schule_ID, Schuljahr oder Klasse';
-                        $errors[] = "Zeile " . $rowNumber . " ist BOP, aber {$requiredSchoolColumns} fehlt.";
+                        $errors[] = 'Zeile '.$rowNumber." ist BOP, aber {$requiredSchoolColumns} fehlt.";
+
                         continue;
                     }
 
                     if ($spreadsheetProjectId && (int) $spreadsheetProjectId !== (int) $activeProject->id) {
-                        $errors[] = "Zeile " . $rowNumber . ": Projekt_ID muss dem aktiven Header-Projekt entsprechen.";
+                        $errors[] = 'Zeile '.$rowNumber.': Projekt_ID muss dem aktiven Header-Projekt entsprechen.';
+
                         continue;
                     }
 
-                    if ($standortId && !Standort::whereKey($standortId)->exists()) {
-                        $errors[] = "Zeile " . $rowNumber . ": Standort_ID " . $standortId . " existiert nicht.";
+                    if ($standortId && ! Standort::whereKey($standortId)->exists()) {
+                        $errors[] = 'Zeile '.$rowNumber.': Standort_ID '.$standortId.' existiert nicht.';
+
                         continue;
                     }
 
-                    if ($isBopImport && !Partner::whereKey($schuleId)->exists()) {
-                        $errors[] = "Zeile " . $rowNumber . ": Schule_id " . $schuleId . " existiert nicht.";
+                    if ($isBopImport && ! Partner::whereKey($schuleId)->exists()) {
+                        $errors[] = 'Zeile '.$rowNumber.': Schule_id '.$schuleId.' existiert nicht.';
+
                         continue;
                     }
 
@@ -1013,8 +1024,9 @@ class TeilnehmerController extends Controller
                         ]);
 
                         if ($addressValidator->fails()) {
-                            $errors[] = 'Zeile ' . $rowNumber . ' (Adresse): '
-                                . implode(' ', $addressValidator->errors()->all());
+                            $errors[] = 'Zeile '.$rowNumber.' (Adresse): '
+                                .implode(' ', $addressValidator->errors()->all());
+
                             continue;
                         }
                     }
@@ -1025,12 +1037,14 @@ class TeilnehmerController extends Controller
                     );
 
                     if ($participantValidator->fails()) {
-                        $errors[] = 'Zeile ' . $rowNumber . ': ' . implode(' ', $participantValidator->errors()->all());
+                        $errors[] = 'Zeile '.$rowNumber.': '.implode(' ', $participantValidator->errors()->all());
+
                         continue;
                     }
 
                     if (empty($teilnehmerData['vorname']) || empty($teilnehmerData['nachname'])) {
-                        $errors[] = "Zeile " . $rowNumber . " fehlt Vorname oder Nachname.";
+                        $errors[] = 'Zeile '.$rowNumber.' fehlt Vorname oder Nachname.';
+
                         continue;
                     }
 
@@ -1054,22 +1068,21 @@ class TeilnehmerController extends Controller
                     } */
 
                     $teilnehmerData = [
-                        'vorname'        => $row[0] ?? null,
-                        'nachname'       => $row[1] ?? null,
-                        'geschlecht'     => match (strtolower(trim($row[2] ?? ''))) {
-                            'männlich'  => 'm',
-                            'weiblich'  => 'w',
-                            'divers'    => 'd',
-                            'm'  => 'm',
-                            'w'  => 'w',
-                            'd'    => 'd',
-                            default     => null,
-                        }, 
-                        'geburtsdatum'   => !empty($row[3]) ? Date::excelToDateTimeObject($row[3])->format('Y-m-d') : null,
-                        'aktiv'         => 1,
-                        'typ'           => 'teilnehmer',
+                        'vorname' => $row[0] ?? null,
+                        'nachname' => $row[1] ?? null,
+                        'geschlecht' => match (strtolower(trim($row[2] ?? ''))) {
+                            'männlich' => 'm',
+                            'weiblich' => 'w',
+                            'divers' => 'd',
+                            'm' => 'm',
+                            'w' => 'w',
+                            'd' => 'd',
+                            default => null,
+                        },
+                        'geburtsdatum' => ! empty($row[3]) ? Date::excelToDateTimeObject($row[3])->format('Y-m-d') : null,
+                        'aktiv' => 1,
+                        'typ' => 'teilnehmer',
 
-                        
                         /* 'klasse'         => $row[3] ?? null,
                         'schule_id'      => $row[4] ?? null,
                         'foerderschueler'=> match (strtolower(trim($row[5] ?? ''))) {
@@ -1085,37 +1098,37 @@ class TeilnehmerController extends Controller
                     ];
 
                     if (empty($teilnehmerData['vorname']) || empty($teilnehmerData['nachname'])) {
-                        $errors[] = "Zeile " . ($index + 2) . " fehlt Vorname oder Nachname.";
+                        $errors[] = 'Zeile '.($index + 2).' fehlt Vorname oder Nachname.';
+
                         continue;
                     }
 
                     $teilnehmer = Personen::create($teilnehmerData);
 
-
                     if ($teilnehmer) {
                         // Projekt zuordnen
-                        if (!empty($row[4])) {
+                        if (! empty($row[4])) {
 
                             $teilnehmer->projekte()->attach(
                                 $row[4],
                                 [
-                                    'standort_id' => $row[5] ?? null
+                                    'standort_id' => $row[5] ?? null,
                                 ]
                             );
                         }
 
                         $createdCount++;
                     } else {
-                        $errors[] = "Zeile " . ($index + 2) . " konnte nicht gespeichert werden.";
+                        $errors[] = 'Zeile '.($index + 2).' konnte nicht gespeichert werden.';
                     }
 
                 } catch (Exception $e) {
-                    $errors[] = "Fehler in Zeile " . ($rowNumber ?? ($index + 2)) . ": " . $e->getMessage();
-                    Log::error("Import Fehler Zeile " . ($rowNumber ?? ($index + 2)) . ": " . $e->getMessage());
+                    $errors[] = 'Fehler in Zeile '.($rowNumber ?? ($index + 2)).': '.$e->getMessage();
+                    Log::error('Import Fehler Zeile '.($rowNumber ?? ($index + 2)).': '.$e->getMessage());
                 }
             }
 
-            if (!empty($errors)) {
+            if (! empty($errors)) {
                 Log::info('Import abgebrochen wegen Validierungsfehlern:', $errors);
 
                 return response()->json([
@@ -1163,19 +1176,19 @@ class TeilnehmerController extends Controller
                 return $createdCount;
             });
 
-             Log::info('Importierte Zeilen:', $errors);
+            Log::info('Importierte Zeilen:', $errors);
             if ($createdCount > 0) {
-               /*  $rollen = Role::whereIn('name', ['Administrator', 'Abteilungsleiter', 'Anleiter'])->get();
-                foreach ($rollen as $role) {
-                    foreach ($role->users as $user) {
-                        $user->notify(new ImportTeilnehmerNotification($createdCount));
-                    }
-                } */
+                /*  $rollen = Role::whereIn('name', ['Administrator', 'Abteilungsleiter', 'Anleiter'])->get();
+                 foreach ($rollen as $role) {
+                     foreach ($role->users as $user) {
+                         $user->notify(new ImportTeilnehmerNotification($createdCount));
+                     }
+                 } */
 
                 return response()->json([
                     'success' => true,
                     'message' => "Import erfolgreich: $createdCount Teilnehmer angelegt.",
-                    'errors'  => $errors,
+                    'errors' => $errors,
                 ]);
             } else {
                 return response()->json([
@@ -1186,7 +1199,8 @@ class TeilnehmerController extends Controller
             }
 
         } catch (Exception $e) {
-            Log::error("Allgemeiner Importfehler: " . $e->getMessage());
+            Log::error('Allgemeiner Importfehler: '.$e->getMessage());
+
             return response()->json(['error' => true, 'message' => 'Ein unerwarteter Fehler ist aufgetreten.']);
         }
     }
@@ -1202,13 +1216,13 @@ class TeilnehmerController extends Controller
         $maximumAge = $project->rule('participant_max_age');
 
         if ($minimumAge !== null) {
-            $birthdateRules[] = 'before_or_equal:' . Carbon::today()
+            $birthdateRules[] = 'before_or_equal:'.Carbon::today()
                 ->subYears((int) $minimumAge)
                 ->format('Y-m-d');
         }
 
         if ($maximumAge !== null) {
-            $birthdateRules[] = 'after_or_equal:' . Carbon::today()
+            $birthdateRules[] = 'after_or_equal:'.Carbon::today()
                 ->subYears((int) $maximumAge + 1)
                 ->addDay()
                 ->format('Y-m-d');
@@ -1224,7 +1238,7 @@ class TeilnehmerController extends Controller
 
     private function participantAddressRules(Projekt $project): array
     {
-        if (!$project->rule('participant_address_enabled', false)) {
+        if (! $project->rule('participant_address_enabled', false)) {
             return [];
         }
 
@@ -1241,7 +1255,7 @@ class TeilnehmerController extends Controller
 
     private function participantSchoolContextRules(Projekt $project): array
     {
-        if (!$this->participantSchoolContextEnabled($project)) {
+        if (! $this->participantSchoolContextEnabled($project)) {
             return [];
         }
 
@@ -1314,5 +1328,4 @@ class TeilnehmerController extends Controller
     {
         return $user?->person_id ?? $user?->person?->id;
     }
-
 }

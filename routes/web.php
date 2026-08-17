@@ -1,20 +1,22 @@
 <?php
 
 use App\Http\Controllers\AbschlusseController;
-use App\Http\Controllers\AccountDeletionRequestController;
 use App\Http\Controllers\AbteilungController;
+use App\Http\Controllers\AccountDeletionRequestController;
 use App\Http\Controllers\AdresseController;
 use App\Http\Controllers\AnwesenheitController;
 use App\Http\Controllers\AppsController;
+use App\Http\Controllers\AttendanceCorrectionController;
 use App\Http\Controllers\BaenkeController;
 use App\Http\Controllers\BerechtigungController;
 use App\Http\Controllers\BereichController;
 use App\Http\Controllers\BopGruppeExportController;
 use App\Http\Controllers\BopLegacyFunctionController;
+use App\Http\Controllers\BopRunController;
 use App\Http\Controllers\BriefController;
 use App\Http\Controllers\DashbaordController;
-use App\Http\Controllers\DienstwagenController;
 use App\Http\Controllers\DienstwagenBuchungController;
+use App\Http\Controllers\DienstwagenController;
 use App\Http\Controllers\DienstwagenfahrtenbuchController;
 use App\Http\Controllers\DienstwagenkostenController;
 use App\Http\Controllers\DienstwagenMeldungController;
@@ -32,52 +34,50 @@ use App\Http\Controllers\GeraetController;
 use App\Http\Controllers\GeraetrueckgabeController;
 use App\Http\Controllers\GruppeController;
 use App\Http\Controllers\GruppeHasTeilnehmerController;
-use App\Http\Controllers\ItServiceController;
 use App\Http\Controllers\IntakeChecklistController;
+use App\Http\Controllers\InternshipController;
+use App\Http\Controllers\ItServiceController;
 use App\Http\Controllers\KlassenbuchController;
 use App\Http\Controllers\KontaktController;
 use App\Http\Controllers\KostenstelleController;
 use App\Http\Controllers\LagerController;
 use App\Http\Controllers\MaterialanforderungController;
 use App\Http\Controllers\MaterialanforderungKommentarController;
-use App\Http\Controllers\StaffChatController;
-use App\Http\Controllers\UserPermissionController;
+use App\Http\Controllers\ModuleSettingsController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\NotificationRuleController;
 use App\Http\Controllers\NotizController;
-use App\Http\Controllers\PartnerController;
-use App\Http\Controllers\ParticipationTaskController;
-use App\Http\Controllers\ParticipantPortalController;
-use App\Http\Controllers\PortalJobController;
-use App\Http\Controllers\ProgramFeedbackController;
-use App\Http\Controllers\ParticipationApplicationController;
-use App\Http\Controllers\ProjectCourseController;
-use App\Http\Controllers\PortalLearningController;
-use App\Http\Controllers\PortalSelfServiceController;
-use App\Http\Controllers\AttendanceCorrectionController;
-use App\Http\Controllers\PortalDocumentController;
-use App\Http\Controllers\ParticipantDocumentController;
-use App\Http\Controllers\ParticipantMessageController;
-use App\Http\Controllers\ProjectConsentController;
-use App\Http\Controllers\PortalConsentController;
-use App\Http\Controllers\ParticipantDataRequestController;
-use App\Http\Controllers\ParticipantJobRecommendationController;
+use App\Http\Controllers\ParticipantApplicationDispatchController;
 use App\Http\Controllers\ParticipantApplicationPackageController;
-use App\Http\Controllers\ProjectCourseContentController;
-use App\Http\Controllers\PortalLearningContentController;
-use App\Http\Controllers\ProjectCourseQuizController;
-use App\Http\Controllers\PortalCourseQuizController;
+use App\Http\Controllers\ParticipantCareerStudioController;
 use App\Http\Controllers\ParticipantContactController;
 use App\Http\Controllers\ParticipantCvController;
-use App\Http\Controllers\ParticipantCareerStudioController;
-use App\Http\Controllers\ParticipantApplicationDispatchController;
-use App\Http\Controllers\ProjectCourseSessionController;
-use App\Http\Controllers\ParticipationCompletionController;
+use App\Http\Controllers\ParticipantDataRequestController;
+use App\Http\Controllers\ParticipantDocumentController;
+use App\Http\Controllers\ParticipantJobRecommendationController;
+use App\Http\Controllers\ParticipantMessageController;
 use App\Http\Controllers\ParticipantNotificationPreferenceController;
+use App\Http\Controllers\ParticipantPortalController;
+use App\Http\Controllers\ParticipationApplicationController;
+use App\Http\Controllers\ParticipationCompletionController;
+use App\Http\Controllers\ParticipationTaskController;
+use App\Http\Controllers\PartnerController;
 use App\Http\Controllers\PersonalController;
 use App\Http\Controllers\PersonenHasBildungsmassnahmenController;
+use App\Http\Controllers\PortalConsentController;
+use App\Http\Controllers\PortalCourseQuizController;
+use App\Http\Controllers\PortalDocumentController;
+use App\Http\Controllers\PortalJobController;
+use App\Http\Controllers\PortalLearningContentController;
+use App\Http\Controllers\PortalLearningController;
+use App\Http\Controllers\PortalSelfServiceController;
 use App\Http\Controllers\PotenzialanalyseController;
-use App\Http\Controllers\BopRunController;
+use App\Http\Controllers\ProgramFeedbackController;
+use App\Http\Controllers\ProjectConsentController;
+use App\Http\Controllers\ProjectCourseContentController;
+use App\Http\Controllers\ProjectCourseController;
+use App\Http\Controllers\ProjectCourseQuizController;
+use App\Http\Controllers\ProjectCourseSessionController;
 use App\Http\Controllers\ProjektBopController;
 use App\Http\Controllers\ProjektController;
 use App\Http\Controllers\ProjektHasPersonenController;
@@ -85,18 +85,18 @@ use App\Http\Controllers\ProjektHasTeilnehmerController;
 use App\Http\Controllers\ProjektHasTeilnehmerLuvController;
 use App\Http\Controllers\RaumlichkeitenController;
 use App\Http\Controllers\RaumtypController;
-use App\Http\Controllers\ModuleSettingsController;
 use App\Http\Controllers\RoleDataAccessController;
 use App\Http\Controllers\RolleController;
 use App\Http\Controllers\SchuleController;
-use App\Http\Controllers\StandortController;
 use App\Http\Controllers\StaffAccountInvitationController;
+use App\Http\Controllers\StaffChatController;
+use App\Http\Controllers\StandortController;
 use App\Http\Controllers\TeilnehmerController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\UserPermissionController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
-
 
 /*
 |--------------------------------------------------------------------------
@@ -203,17 +203,12 @@ Route::middleware(['module:participant_portal', 'auth', 'participantPortalUser']
     Route::get('/portal/lebenslauf/versionen/{version}/druck', [ParticipantCvController::class, 'print'])->name('participant-portal.resume.versions.print');
 });
 
-
-
-
 Route::post('/set-locale', function () {
     request()->validate(['locale' => 'required|string']);
     session(['locale' => request('locale')]);
+
     return response()->json(['success' => true]);
 });
-
-
-
 
 // Geschützte Routen
 Route::middleware('throttle:60,1')->group(function () {
@@ -226,9 +221,9 @@ Route::middleware('throttle:10,1')->group(function () {
     Route::post('/bereichsauswahl/zugang/{token}', [ProjektBopController::class, 'bereichsauswahlSelfStore'])->name('bereichsauswahl.self.store');
 });
 
-//Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProjekte'])->group(function() {
+// Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProjekte'])->group(function() {
 
-Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'routePermission', 'configuredNotifications'])->group(function() {
+Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'routePermission', 'configuredNotifications'])->group(function () {
 
     Route::prefix('chat')->name('chat.')->group(function () {
         Route::get('/', [StaffChatController::class, 'index'])->name('index');
@@ -321,13 +316,17 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::get('/organisation', function () {
         return Inertia::render('Dashboards/Organisation');
     })->name('organisation.index')->can('organisation.index');
-    Route::get('/ressourcen', function () {return Inertia::render('Dashboards/Ressourcen');})->name('ressourcen.index');
-    Route::get('/finanzen', function () { return Inertia::render('Dashboards/Finanzen');})->name('finanzen.index');
+    Route::get('/ressourcen', function () {
+        return Inertia::render('Dashboards/Ressourcen');
+    })->name('ressourcen.index');
+    Route::get('/finanzen', function () {
+        return Inertia::render('Dashboards/Finanzen');
+    })->name('finanzen.index');
 
-    //Schuld
+    // Schuld
     Route::get('/schule', [SchuleController::class, 'index'])->name('schule.index');
 
-    //Standort
+    // Standort
     Route::get('/standort', [StandortController::class, 'index'])->name('standort.index');
     Route::post('/standort/anlegen', [StandortController::class, 'store'])->name('standort.store');
     Route::delete('/standort/{id}', [StandortController::class, 'destroy'])->name('standort.destroy');
@@ -340,7 +339,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
 
     Route::post('/toggleCheck', [UserController::class, 'check'])->name('user.check');
 
-    //Einstellung -- Rolle
+    // Einstellung -- Rolle
     Route::get('/berechtigung/{id?}', [BerechtigungController::class, 'index'])->name('berechtigung.index')->can('berechtigung.index');
     Route::post('/berechtigung/anlegen', [BerechtigungController::class, 'store'])->name('berechtigung.store')->can('berechtigung.store');
     Route::post('/berechtigungZuweisen', [BerechtigungController::class, 'berechtigungZuweisen'])->name('berechtigung.zuweisen')->middleware('canAnyPermission:berechtigung.zuweisen,berechtigung.update');
@@ -357,7 +356,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::get('/einstellung/module', [ModuleSettingsController::class, 'index'])->name('module-settings.index')->can('berechtigung.update');
     Route::put('/einstellung/module/{module}', [ModuleSettingsController::class, 'update'])->name('module-settings.update')->can('berechtigung.update');
 
-    //Benutzer
+    // Benutzer
     Route::get('/benutzer', [UserController::class, 'index'])->name('user.index')->can('benutzer.index');
     Route::get('/benutzer/anlegen', [UserController::class, 'create'])->name('user.create')->can('benutzer.store');
     Route::post('/benutzer/anlegen', [UserController::class, 'store'])->name('user.store')->can('benutzer.store');
@@ -373,24 +372,24 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::get('/benutzer/edit/{id}', [UserController::class, 'edit'])->name('user.edit')->can('benutzer.update');
     Route::put('/benutzer/update/{user}', [UserController::class, 'update'])->name('user.update')->can('benutzer.update');
 
-    //Profile-Benutzer
+    // Profile-Benutzer
     Route::get('/user/profile/{id}', [UserController::class, 'show'])->name('user.profil')->can('user.profil');
 
-    //Bereiche
+    // Bereiche
     Route::get('/bereich', [BereichController::class, 'index'])->name('bereich.index');
     Route::get('/bereich/ajaxFresh', [BereichController::class, 'indexAjaxFresh'])->name('bereich.indexAjaxFresh');
     Route::put('/bereich/{id}', [BereichController::class, 'update'])->name('bereich.update');
     Route::post('/bereich/anlegen', [BereichController::class, 'store'])->name('bereich.store');
     Route::delete('/bereiche/{id}', [BereichController::class, 'destroy'])->name('bereich.destroy');
 
-    //Abteilungen
+    // Abteilungen
     Route::get('/abteilung', [AbteilungController::class, 'index'])->name('abteilung.index');
     Route::get('/abteilung/ajaxFresh', [AbteilungController::class, 'indexAjaxFresh'])->name('abteilung.indexAjaxFresh');
     Route::post('/abteilung/anlegen', [AbteilungController::class, 'store'])->name('abteilung.store');
     Route::delete('/abteilungen/{id}', [AbteilungController::class, 'destroy'])->name('abteilung.destroy');
     Route::put('/abteilung/update/{abteilung}', [AbteilungController::class, 'update'])->name('abteilung.update');
 
-    //Projekte
+    // Projekte
     Route::get('/projekt', [ProjektController::class, 'index'])->name('projekt.index');
     Route::get('/projekt/ajaxFresh', [ProjektController::class, 'indexAjaxFresh'])->name('projekt.indexAjaxFresh');
     Route::get('/projekt/{id}', [ProjektController::class, 'show'])->name('projekt.show');
@@ -432,6 +431,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::delete('/projekt/{id}', [ProjektController::class, 'destroy'])->name('projekt.destroy');
     Route::middleware(['projectFeature:potential_analysis', 'can:potenzialanalyse.manage'])->group(function () {
         Route::put('/projekt/{projekt}/potenzialanalyse/auswertung-config', [PotenzialanalyseController::class, 'updateAuswertungConfig'])->name('potenzialanalyse.projekt.auswertung-config.update');
+        Route::put('/projekt/{projekt}/potenzialanalyse/gewichtungsmatrix', [PotenzialanalyseController::class, 'updateGewichtungsmatrix'])->name('potenzialanalyse.projekt.gewichtungsmatrix.update');
         Route::post('/projekt/{projekt}/potenzialanalyse/uebungen', [PotenzialanalyseController::class, 'storeUebung'])->name('potenzialanalyse.projekt.uebungen.store');
         Route::put('/potenzialanalyse/uebungen/{uebung}', [PotenzialanalyseController::class, 'updateUebung'])->name('potenzialanalyse.projekt.uebungen.update');
         Route::delete('/potenzialanalyse/uebungen/{uebung}', [PotenzialanalyseController::class, 'destroyUebung'])->name('potenzialanalyse.projekt.uebungen.destroy');
@@ -448,107 +448,110 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::post('/dokumente/kategorien', [DokumenteController::class, 'storeKategorie'])->name('dokumente.kategorien.store');
     Route::put('/dokumente/projekt-kategorien/{projekt}', [DokumenteController::class, 'updateProjektKategorien'])->name('dokumente.projekt-kategorien.update');
 
-    //Gruppe
+    // Gruppe
     Route::middleware('projectFeature:group_management')->group(function () {
-    Route::get('/gruppe', [GruppeController::class, 'index'])->name('gruppe.index');
-    Route::post('/gruppe/arbeitstage-vorschau', [GruppeController::class, 'workdayPreview'])->name('gruppe.workday-preview')->can('gruppe.store');
-    Route::post('/gruppe/{gruppe}/arbeitstag-ausnahme', [GruppeController::class, 'updateNonWorkingDate'])->name('gruppe.non-working-date.update')->can('anwesenheit.manage');
-    Route::put('/gruppe/{id}', [GruppeController::class, 'update'])->name('gruppe.update');
-    Route::delete('/gruppe/{id}', [GruppeController::class, 'destroy'])->name('gruppe.destroy');
-    Route::post('/gruppe/anlegen', [GruppeController::class, 'store'])->name('gruppe.store');
-    Route::get('/gruppe/{gruppe}/export/serienbrief/{dokument}', [ExportWordController::class, 'gruppeSerienbrief'])->name('gruppe.export.serienbrief');
-    Route::get('/gruppe/{gruppe}/bop-export/namensschilder', [BopGruppeExportController::class, 'namensschilder'])->name('gruppe.bop.export.namensschilder')->can('gruppe.bop.export.namensschilder');
-    Route::get('/gruppe/{gruppe}/bop-export/anwesenheitsliste', [BopGruppeExportController::class, 'anwesenheitsliste'])->name('gruppe.bop.export.anwesenheitsliste')->can('anwesenheit.export');
-    Route::get('/gruppe/{gruppe}/bop-export/hausordnung', [BopGruppeExportController::class, 'hausordnung'])->name('gruppe.bop.export.hausordnung')->can('gruppe.bop.export.hausordnung');
-    Route::get('/gruppe/{gruppe}/bop-export/berufsfelderprobung', [BopGruppeExportController::class, 'berufsfelderprobung'])->name('gruppe.bop.export.berufsfelderprobung')->can('gruppe.bop.export.berufsfelderprobung');
-    Route::get('/gruppe/{gruppe}/bop-export/auswertungsbogen-bop', [BopGruppeExportController::class, 'auswertungsbogenBop'])->name('gruppe.bop.export.auswertungsbogen-bop')->can('gruppe.bop.export.auswertungsbogen-bop');
-    Route::get('/gruppe/{gruppe}/bop-export/toilettennutzungsliste', [BopGruppeExportController::class, 'toilettennutzungsliste'])->name('gruppe.bop.export.toilettennutzungsliste')->can('gruppe.bop.export.toilettennutzungsliste');
-    Route::get('/gruppe/{gruppe}/bop-export/zertifikat-pobo', [BopGruppeExportController::class, 'zertifikatPobo'])->name('gruppe.bop.export.zertifikat-pobo')->can('gruppe.bop.export.zertifikat-pobo');
-    Route::get('/gruppe/{gruppe}/bop-export/teilnahme-pobo', [BopGruppeExportController::class, 'teilnahmePobo'])->name('gruppe.bop.export.teilnahme-pobo')->can('gruppe.bop.export.teilnahme-pobo');
-    Route::get('/gruppe/{gruppe}/bop-export/zertifikat-pa', [BopGruppeExportController::class, 'zertifikatPa'])->name('gruppe.bop.export.zertifikat-pa')->can('gruppe.bop.export.zertifikat-pa')->middleware('canAnyPermission:potenzialanalyse.index,potenzialanalyse.update,potenzialanalyse.manage');
-    Route::get('/gruppe/{gruppe}/bop-export/teilnahme-pa', [BopGruppeExportController::class, 'teilnahmePa'])->name('gruppe.bop.export.teilnahme-pa')->can('gruppe.bop.export.teilnahme-pa')->middleware('canAnyPermission:potenzialanalyse.index,potenzialanalyse.update,potenzialanalyse.manage');
-    Route::get('/gruppe/{gruppe}/bop-export/auswertungsbogen-pa', [BopGruppeExportController::class, 'auswertungsbogenPa'])->name('gruppe.bop.export.auswertungsbogen-pa')->can('gruppe.bop.export.auswertungsbogen-pa')->middleware('canAnyPermission:potenzialanalyse.index,potenzialanalyse.update,potenzialanalyse.manage');
-    Route::get('/gruppe/{gruppe}/potenzialanalyse/teilnehmer/{personen}/bericht', [PotenzialanalyseController::class, 'downloadTeilnehmerBericht'])->name('potenzialanalyse.gruppe.teilnehmer.bericht')->can('gruppe.bop.export.berichte-pa')->middleware(['module:participant_management', 'projectFeature:participant_management', 'projectFeature:potential_analysis', 'canAnyPermission:potenzialanalyse.index,potenzialanalyse.update,potenzialanalyse.manage']);
-    Route::get('/gruppe/{gruppe}/potenzialanalyse/berichte', [PotenzialanalyseController::class, 'downloadGruppenBerichte'])->name('potenzialanalyse.gruppe.berichte')->can('gruppe.bop.export.berichte-pa')->middleware(['module:participant_management', 'projectFeature:participant_management', 'projectFeature:potential_analysis', 'canAnyPermission:potenzialanalyse.index,potenzialanalyse.update,potenzialanalyse.manage']);
-    Route::put('/gruppe/{gruppe}/potenzialanalyse/teilnehmer/{personen}', [PotenzialanalyseController::class, 'updateTeilnehmer'])->name('potenzialanalyse.gruppe.teilnehmer.update')->middleware(['module:participant_management', 'projectFeature:participant_management', 'projectFeature:potential_analysis', 'can:potenzialanalyse.update']);
-    Route::post('/gruppe/{gruppe}/potenzialanalyse/teilnehmer/{personen}/vorschlag', [PotenzialanalyseController::class, 'generateSuggestions'])->name('potenzialanalyse.gruppe.teilnehmer.vorschlag')->middleware(['module:participant_management', 'projectFeature:participant_management', 'projectFeature:potential_analysis', 'can:potenzialanalyse.update']);
-    Route::delete('/gruppe/{gruppe}/potenzialanalyse/teilnehmer/{personen}/daten', [PotenzialanalyseController::class, 'destroyTeilnehmerDaten'])->name('potenzialanalyse.gruppe.teilnehmer.daten.destroy')->middleware(['module:participant_management', 'projectFeature:participant_management', 'projectFeature:potential_analysis', 'can:potenzialanalyse.update']);
+        Route::get('/gruppe', [GruppeController::class, 'index'])->name('gruppe.index');
+        Route::post('/gruppe/arbeitstage-vorschau', [GruppeController::class, 'workdayPreview'])->name('gruppe.workday-preview')->can('gruppe.store');
+        Route::post('/gruppe/{gruppe}/arbeitstag-ausnahme', [GruppeController::class, 'updateNonWorkingDate'])->name('gruppe.non-working-date.update')->can('anwesenheit.manage');
+        Route::put('/gruppe/{id}', [GruppeController::class, 'update'])->name('gruppe.update');
+        Route::delete('/gruppe/{id}', [GruppeController::class, 'destroy'])->name('gruppe.destroy');
+        Route::post('/gruppe/anlegen', [GruppeController::class, 'store'])->name('gruppe.store');
+        Route::get('/gruppe/{gruppe}/export/serienbrief/{dokument}', [ExportWordController::class, 'gruppeSerienbrief'])->name('gruppe.export.serienbrief');
+        Route::get('/gruppe/{gruppe}/bop-export/namensschilder', [BopGruppeExportController::class, 'namensschilder'])->name('gruppe.bop.export.namensschilder')->can('gruppe.bop.export.namensschilder');
+        Route::get('/gruppe/{gruppe}/bop-export/anwesenheitsliste', [BopGruppeExportController::class, 'anwesenheitsliste'])->name('gruppe.bop.export.anwesenheitsliste')->can('anwesenheit.export');
+        Route::get('/gruppe/{gruppe}/bop-export/hausordnung', [BopGruppeExportController::class, 'hausordnung'])->name('gruppe.bop.export.hausordnung')->can('gruppe.bop.export.hausordnung');
+        Route::get('/gruppe/{gruppe}/bop-export/berufsfelderprobung', [BopGruppeExportController::class, 'berufsfelderprobung'])->name('gruppe.bop.export.berufsfelderprobung')->can('gruppe.bop.export.berufsfelderprobung');
+        Route::get('/gruppe/{gruppe}/bop-export/auswertungsbogen-bop', [BopGruppeExportController::class, 'auswertungsbogenBop'])->name('gruppe.bop.export.auswertungsbogen-bop')->can('gruppe.bop.export.auswertungsbogen-bop');
+        Route::get('/gruppe/{gruppe}/bop-export/toilettennutzungsliste', [BopGruppeExportController::class, 'toilettennutzungsliste'])->name('gruppe.bop.export.toilettennutzungsliste')->can('gruppe.bop.export.toilettennutzungsliste');
+        Route::get('/gruppe/{gruppe}/bop-export/zertifikat-pobo', [BopGruppeExportController::class, 'zertifikatPobo'])->name('gruppe.bop.export.zertifikat-pobo')->can('gruppe.bop.export.zertifikat-pobo');
+        Route::get('/gruppe/{gruppe}/bop-export/teilnahme-pobo', [BopGruppeExportController::class, 'teilnahmePobo'])->name('gruppe.bop.export.teilnahme-pobo')->can('gruppe.bop.export.teilnahme-pobo');
+        Route::get('/gruppe/{gruppe}/bop-export/zertifikat-pa', [BopGruppeExportController::class, 'zertifikatPa'])->name('gruppe.bop.export.zertifikat-pa')->can('gruppe.bop.export.zertifikat-pa')->middleware('canAnyPermission:potenzialanalyse.index,potenzialanalyse.update,potenzialanalyse.manage');
+        Route::get('/gruppe/{gruppe}/bop-export/teilnahme-pa', [BopGruppeExportController::class, 'teilnahmePa'])->name('gruppe.bop.export.teilnahme-pa')->can('gruppe.bop.export.teilnahme-pa')->middleware('canAnyPermission:potenzialanalyse.index,potenzialanalyse.update,potenzialanalyse.manage');
+        Route::get('/gruppe/{gruppe}/bop-export/auswertungsbogen-pa', [BopGruppeExportController::class, 'auswertungsbogenPa'])->name('gruppe.bop.export.auswertungsbogen-pa')->can('gruppe.bop.export.auswertungsbogen-pa')->middleware('canAnyPermission:potenzialanalyse.index,potenzialanalyse.update,potenzialanalyse.manage');
+        Route::get('/gruppe/{gruppe}/potenzialanalyse/teilnehmer/{personen}/bericht', [PotenzialanalyseController::class, 'downloadTeilnehmerBericht'])->name('potenzialanalyse.gruppe.teilnehmer.bericht')->can('gruppe.bop.export.berichte-pa')->middleware(['module:participant_management', 'projectFeature:participant_management', 'projectFeature:potential_analysis', 'canAnyPermission:potenzialanalyse.index,potenzialanalyse.update,potenzialanalyse.manage']);
+        Route::get('/gruppe/{gruppe}/potenzialanalyse/berichte', [PotenzialanalyseController::class, 'downloadGruppenBerichte'])->name('potenzialanalyse.gruppe.berichte')->can('gruppe.bop.export.berichte-pa')->middleware(['module:participant_management', 'projectFeature:participant_management', 'projectFeature:potential_analysis', 'canAnyPermission:potenzialanalyse.index,potenzialanalyse.update,potenzialanalyse.manage']);
+        Route::put('/gruppe/{gruppe}/potenzialanalyse/teilnehmer/{personen}', [PotenzialanalyseController::class, 'updateTeilnehmer'])->name('potenzialanalyse.gruppe.teilnehmer.update')->middleware(['module:participant_management', 'projectFeature:participant_management', 'projectFeature:potential_analysis', 'can:potenzialanalyse.update']);
+        Route::post('/gruppe/{gruppe}/potenzialanalyse/teilnehmer/{personen}/vorschlag', [PotenzialanalyseController::class, 'generateSuggestions'])->name('potenzialanalyse.gruppe.teilnehmer.vorschlag')->middleware(['module:participant_management', 'projectFeature:participant_management', 'projectFeature:potential_analysis', 'can:potenzialanalyse.update']);
+        Route::delete('/gruppe/{gruppe}/potenzialanalyse/teilnehmer/{personen}/daten', [PotenzialanalyseController::class, 'destroyTeilnehmerDaten'])->name('potenzialanalyse.gruppe.teilnehmer.daten.destroy')->middleware(['module:participant_management', 'projectFeature:participant_management', 'projectFeature:potential_analysis', 'can:potenzialanalyse.update']);
 
-    //GruppeHasTeilnehmer
-    Route::get('/gruppehasteilnehmer/{id}', [GruppeHasTeilnehmerController::class, 'show'])->name('gruppeHasTeilnehmer.show')->middleware(['module:participant_management', 'projectFeature:participant_management']);
-    Route::post('/gruppehasteilnehmer/anlegen', [GruppeHasTeilnehmerController::class, 'store'])->name('gruppeHasTeilnehmer.store')->middleware(['module:participant_management', 'projectFeature:participant_management', 'can:gruppeHasTeilnehmer.store']);
+        // GruppeHasTeilnehmer
+        Route::get('/gruppehasteilnehmer/{id}', [GruppeHasTeilnehmerController::class, 'show'])->name('gruppeHasTeilnehmer.show')->middleware(['module:participant_management', 'projectFeature:participant_management']);
+        Route::post('/gruppehasteilnehmer/anlegen', [GruppeHasTeilnehmerController::class, 'store'])->name('gruppeHasTeilnehmer.store')->middleware(['module:participant_management', 'projectFeature:participant_management', 'can:gruppeHasTeilnehmer.store']);
 
-    Route::delete('/gruppehasteilnehmer/gruppe/{gruppe}/teilnehmer/{personen}', [GruppeHasTeilnehmerController::class, 'destroyTeilnehmer'])->name('gruppeHasTeilnehmer.destroyTeilnehmer')->middleware(['module:participant_management', 'projectFeature:participant_management', 'can:gruppeHasTeilnehmer.destroyTeilnehmer']);
-    Route::delete('/gruppehasteilnehmer/entfernen/{id}', [GruppeHasTeilnehmerController::class, 'destroy'])->name('gruppeHasPersonen.destroy')->middleware(['module:participant_management', 'projectFeature:participant_management', 'can:gruppeHasTeilnehmer.destroyTeilnehmer']);
+        Route::delete('/gruppehasteilnehmer/gruppe/{gruppe}/teilnehmer/{personen}', [GruppeHasTeilnehmerController::class, 'destroyTeilnehmer'])->name('gruppeHasTeilnehmer.destroyTeilnehmer')->middleware(['module:participant_management', 'projectFeature:participant_management', 'can:gruppeHasTeilnehmer.destroyTeilnehmer']);
+        Route::delete('/gruppehasteilnehmer/entfernen/{id}', [GruppeHasTeilnehmerController::class, 'destroy'])->name('gruppeHasPersonen.destroy')->middleware(['module:participant_management', 'projectFeature:participant_management', 'can:gruppeHasTeilnehmer.destroyTeilnehmer']);
     });
 
-    //Klassenbuch
+    // Klassenbuch
     Route::middleware('projectFeature:classbook_management')->group(function () {
-    Route::get('/klassenbuecher', [KlassenbuchController::class, 'index'])->name('klassenbuch.index');
-    Route::post('/klassenbuecher', [KlassenbuchController::class, 'store'])->name('klassenbuch.store');
-    Route::get('/klassenbuecher/{klassenbuch}', [KlassenbuchController::class, 'show'])->name('klassenbuch.show');
-    Route::get('/klassenbuecher/{klassenbuch}/wochen/{woche}', [KlassenbuchController::class, 'woche'])->name('klassenbuch.woche.show');
-    Route::post('/klassenbuecher/{klassenbuch}/wochen/{woche}/eintraege', [KlassenbuchController::class, 'storeEintrag'])->name('klassenbuch.eintrag.store');
-    Route::delete('/klassenbuecher/{klassenbuch}/wochen/{woche}/eintraege/{eintrag}', [KlassenbuchController::class, 'destroyEintrag'])->name('klassenbuch.eintrag.destroy');
-    Route::post('/klassenbuecher/{klassenbuch}/wochen/{woche}/einreichen', [KlassenbuchController::class, 'submit'])->name('klassenbuch.woche.submit');
-    Route::post('/klassenbuecher/{klassenbuch}/wochen/{woche}/pruefen', [KlassenbuchController::class, 'review'])->name('klassenbuch.woche.review');
-    Route::post('/klassenbuecher/{klassenbuch}/wochen/{woche}/kommentare', [KlassenbuchController::class, 'storeKommentar'])->name('klassenbuch.kommentar.store');
-    Route::put('/klassenbuecher/{klassenbuch}/wochen/{woche}/kommentare/{kommentar}', [KlassenbuchController::class, 'updateKommentar'])->name('klassenbuch.kommentar.update');
+        Route::get('/klassenbuecher', [KlassenbuchController::class, 'index'])->name('klassenbuch.index');
+        Route::post('/klassenbuecher', [KlassenbuchController::class, 'store'])->name('klassenbuch.store');
+        Route::get('/klassenbuecher/{klassenbuch}', [KlassenbuchController::class, 'show'])->name('klassenbuch.show');
+        Route::get('/klassenbuecher/{klassenbuch}/wochen/{woche}', [KlassenbuchController::class, 'woche'])->name('klassenbuch.woche.show');
+        Route::post('/klassenbuecher/{klassenbuch}/wochen/{woche}/eintraege', [KlassenbuchController::class, 'storeEintrag'])->name('klassenbuch.eintrag.store');
+        Route::delete('/klassenbuecher/{klassenbuch}/wochen/{woche}/eintraege/{eintrag}', [KlassenbuchController::class, 'destroyEintrag'])->name('klassenbuch.eintrag.destroy');
+        Route::post('/klassenbuecher/{klassenbuch}/wochen/{woche}/einreichen', [KlassenbuchController::class, 'submit'])->name('klassenbuch.woche.submit');
+        Route::post('/klassenbuecher/{klassenbuch}/wochen/{woche}/pruefen', [KlassenbuchController::class, 'review'])->name('klassenbuch.woche.review');
+        Route::post('/klassenbuecher/{klassenbuch}/wochen/{woche}/kommentare', [KlassenbuchController::class, 'storeKommentar'])->name('klassenbuch.kommentar.store');
+        Route::put('/klassenbuecher/{klassenbuch}/wochen/{woche}/kommentare/{kommentar}', [KlassenbuchController::class, 'updateKommentar'])->name('klassenbuch.kommentar.update');
     });
 
-    //Teilnehmer
+    // Teilnehmer
     Route::middleware(['module:participant_management', 'projectFeature:participant_management'])->group(function () {
-    Route::get('/teilnehmer', [TeilnehmerController::class, 'index'])->name('teilnehmer.index')->can('teilnehmer.index');
-    Route::get('/teilnehmer/anlegen', [TeilnehmerController::class, 'create'])->name('teilnehmer.create')->can('teilnehmer.store');
-    Route::post('/teilnehmer/anlegen', [TeilnehmerController::class, 'store'])->name('teilnehmer.store')->can('teilnehmer.store');
-    Route::post('/teilnehmer/import', [TeilnehmerController::class, 'import'])->name('teilnehmer.import')->middleware('canAnyPermission:teilnehmer.import,teilnehmer.store');
-    Route::patch('/teilnehmer/namen-tauschen', [TeilnehmerController::class, 'swapNames'])->name('teilnehmer.names.swap')->can('teilnehmer.update');
-    Route::delete('/teilnehmer/entfernen', [TeilnehmerController::class, 'bulkDestroy'])->name('teilnehmer.bulkDestroy')->middleware('canAnyPermission:teilnehmer.bulkDestroy,teilnehmer.destroy');
-    Route::delete('/teilnehmer/entfernen/{id}', [TeilnehmerController::class, 'destroy'])->name('teilnehmer.destroy')->can('teilnehmer.destroy');
-    Route::get('/teilnehmer/bearbeiten/{id}', [TeilnehmerController::class, 'show'])->name('teilnehmer.edit')->can('teilnehmer.update');
-    Route::patch('/teilnehmer/update/{id}', [TeilnehmerController::class, 'update'])->name('teilnehmer.update')->can('teilnehmer.update');
-    Route::patch('/teilnehmer/{person}/elterneinverstaendnis', [TeilnehmerController::class, 'updateParentalConsent'])->name('teilnehmer.elterneinverstaendnis.update')->middleware(['module:participant_management', 'projectFeature:participant_management'])->can('teilnehmer.elterneinverstaendnis.update');
-    Route::get('/teilnehmer/{person}/lebenslauf', [ParticipantCvController::class, 'staffIndex'])->name('teilnehmer.resume.index')->middleware('module:participant_portal')->can('teilnehmer.update');
-    Route::post('/teilnehmer/{person}/lebenslauf/eintraege', [ParticipantCvController::class, 'store'])->name('teilnehmer.resume.entries.store')->middleware('module:participant_portal')->can('teilnehmer.update');
-    Route::post('/teilnehmer/{person}/lebenslauf/versionen', [ParticipantCvController::class, 'createVersion'])->name('teilnehmer.resume.versions.store')->middleware('module:participant_portal')->can('teilnehmer.update');
-    Route::put('/teilnehmer/lebenslauf/eintraege/{entry}', [ParticipantCvController::class, 'update'])->name('teilnehmer.resume.entries.update')->middleware('module:participant_portal')->can('teilnehmer.update');
-    Route::delete('/teilnehmer/lebenslauf/eintraege/{entry}', [ParticipantCvController::class, 'destroy'])->name('teilnehmer.resume.entries.destroy')->middleware('module:participant_portal')->can('teilnehmer.update');
-    Route::get('/teilnehmer/lebenslauf/versionen/{version}/download', [ParticipantCvController::class, 'download'])->name('teilnehmer.resume.versions.download')->middleware('module:participant_portal')->can('teilnehmer.update');
-    Route::get('/teilnehmer/lebenslauf/versionen/{version}/vorschau', [ParticipantCvController::class, 'print'])->name('teilnehmer.resume.versions.print')->middleware('module:participant_portal')->can('teilnehmer.update');
-    Route::put('/teilnehmer/teilnahme/{participation}/aufnahmecheckliste/{item}', [IntakeChecklistController::class, 'updateCompletion'])->name('teilnehmer.intake-checklist.update')->can('teilnehmer.update');
-    Route::put('/teilnehmer/teilnahme/{participation}/abschlusscheckliste/{item}', [ParticipationCompletionController::class, 'updateCompletion'])->name('teilnehmer.completion-checklist.update')->middleware('projectFeature:completion_management')->can('teilnehmer.update');
-    Route::post('/teilnehmer/teilnahme/{participation}/abschlussbericht', [ParticipationCompletionController::class, 'submit'])->name('teilnehmer.completion-reports.submit')->middleware('projectFeature:completion_management')->can('teilnehmer.update');
-    Route::put('/teilnehmer/abschlussbericht/{report}/entscheidung', [ParticipationCompletionController::class, 'decide'])->name('teilnehmer.completion-reports.decide')->middleware('projectFeature:completion_management')->can('teilnehmer.update');
-    Route::get('/teilnehmer/abschlussbericht/{report}/export', [ParticipationCompletionController::class, 'export'])->name('teilnehmer.completion-reports.export')->middleware('projectFeature:completion_management')->can('teilnehmer.update');
-    Route::post('/teilnehmer/teilnahme/{participation}/portal-einladung', [ParticipantPortalController::class, 'invite'])->name('teilnehmer.portal.invite')->middleware('module:participant_portal')->can('teilnehmer.update');
-    Route::post('/teilnehmer/teilnahme/{participation}/aufgaben', [ParticipationTaskController::class, 'store'])->name('teilnehmer.tasks.store')->can('teilnehmer.update');
-    Route::put('/teilnehmer/aufgaben/{task}', [ParticipationTaskController::class, 'update'])->name('teilnehmer.tasks.update')->can('teilnehmer.update');
-    Route::delete('/teilnehmer/aufgaben/{task}', [ParticipationTaskController::class, 'destroy'])->name('teilnehmer.tasks.destroy')->can('teilnehmer.update');
-    Route::put('/teilnehmer/bewerbungen/{application}', [ParticipationApplicationController::class, 'update'])->name('teilnehmer.applications.update')->middleware('module:participant_portal')->can('teilnehmer.update');
-    Route::put('/teilnehmer/bewerbungen/{application}/dokumente', [ParticipantApplicationPackageController::class, 'staffSync'])->name('teilnehmer.applications.documents.sync')->middleware('module:participant_portal')->can('teilnehmer.update');
-    Route::post('/teilnehmer/bewerbungen/{application}/freigabe', [ParticipantApplicationPackageController::class, 'staffApprove'])->name('teilnehmer.applications.package.approve')->middleware('module:participant_portal')->can('teilnehmer.update');
-    Route::post('/teilnehmer/teilnahme/{participation}/stellenempfehlungen', [ParticipantJobRecommendationController::class, 'staffStore'])->name('teilnehmer.recommendations.store')->middleware('module:participant_portal')->can('teilnehmer.update');
-    Route::put('/teilnehmer/anwesenheit/korrekturen/{correction}', [AttendanceCorrectionController::class, 'resolve'])->name('teilnehmer.attendance.corrections.resolve')->middleware('module:participant_portal')->can('teilnehmer.update');
-    Route::post('/teilnehmer/teilnahme/{participation}/portal-dokumente', [ParticipantDocumentController::class, 'store'])->name('teilnehmer.portal-documents.store')->middleware('module:participant_portal')->can('teilnehmer.update');
-    Route::put('/teilnehmer/portal-dokumente/{document}/pruefen', [ParticipantDocumentController::class, 'review'])->name('teilnehmer.portal-documents.review')->middleware('module:participant_portal')->can('teilnehmer.update');
-    Route::get('/teilnehmer/portal-dokumente/{document}/download', [ParticipantDocumentController::class, 'download'])->name('teilnehmer.portal-documents.download')->middleware('module:participant_portal')->can('teilnehmer.update');
-    Route::post('/teilnehmer/teilnahme/{participation}/nachrichten', [ParticipantMessageController::class, 'staffStore'])->name('teilnehmer.messages.store')->middleware('module:participant_portal')->can('teilnehmer.update');
-    Route::put('/teilnehmer/teilnahme/{participation}/nachrichten/gelesen', [ParticipantMessageController::class, 'staffRead'])->name('teilnehmer.messages.read')->middleware('module:participant_portal')->can('teilnehmer.update');
-    Route::put('/teilnehmer/datenauskunft/{dataRequest}', [ParticipantDataRequestController::class, 'resolve'])->name('teilnehmer.data-requests.resolve')->middleware('module:participant_portal')->middleware('canAnyPermission:teilnehmer.data-request.manage,teilnehmer.update');
-    Route::patch('/teilnehmer/{person}/sozialdaten', [TeilnehmerController::class, 'updateSozialdaten'])->name('person.sozialdaten.update')->middleware('canAnyPermission:person.sozialdaten.update,teilnehmer.update');
-    Route::get('/teilnehmer/{id}', [TeilnehmerController::class, 'indexNachProjekt'])->name('teilnehmer.projekt.index')->middleware('canAnyPermission:teilnehmer.projekt.index,teilnehmer.index');
+        Route::get('/teilnehmer', [TeilnehmerController::class, 'index'])->name('teilnehmer.index')->can('teilnehmer.index');
+        Route::get('/teilnehmer/anlegen', [TeilnehmerController::class, 'create'])->name('teilnehmer.create')->can('teilnehmer.store');
+        Route::post('/teilnehmer/anlegen', [TeilnehmerController::class, 'store'])->name('teilnehmer.store')->can('teilnehmer.store');
+        Route::post('/teilnehmer/import', [TeilnehmerController::class, 'import'])->name('teilnehmer.import')->middleware('canAnyPermission:teilnehmer.import,teilnehmer.store');
+        Route::patch('/teilnehmer/namen-tauschen', [TeilnehmerController::class, 'swapNames'])->name('teilnehmer.names.swap')->can('teilnehmer.update');
+        Route::delete('/teilnehmer/entfernen', [TeilnehmerController::class, 'bulkDestroy'])->name('teilnehmer.bulkDestroy')->middleware('canAnyPermission:teilnehmer.bulkDestroy,teilnehmer.destroy');
+        Route::delete('/teilnehmer/entfernen/{id}', [TeilnehmerController::class, 'destroy'])->name('teilnehmer.destroy')->can('teilnehmer.destroy');
+        Route::get('/teilnehmer/bearbeiten/{id}', [TeilnehmerController::class, 'show'])->name('teilnehmer.edit')->can('teilnehmer.update');
+        Route::patch('/teilnehmer/update/{id}', [TeilnehmerController::class, 'update'])->name('teilnehmer.update')->can('teilnehmer.update');
+        Route::patch('/teilnehmer/{person}/elterneinverstaendnis', [TeilnehmerController::class, 'updateParentalConsent'])->name('teilnehmer.elterneinverstaendnis.update')->middleware(['module:participant_management', 'projectFeature:participant_management'])->can('teilnehmer.elterneinverstaendnis.update');
+        Route::get('/teilnehmer/{person}/lebenslauf', [ParticipantCvController::class, 'staffIndex'])->name('teilnehmer.resume.index')->middleware('module:participant_portal')->can('teilnehmer.update');
+        Route::post('/teilnehmer/{person}/lebenslauf/eintraege', [ParticipantCvController::class, 'store'])->name('teilnehmer.resume.entries.store')->middleware('module:participant_portal')->can('teilnehmer.update');
+        Route::post('/teilnehmer/{person}/lebenslauf/versionen', [ParticipantCvController::class, 'createVersion'])->name('teilnehmer.resume.versions.store')->middleware('module:participant_portal')->can('teilnehmer.update');
+        Route::put('/teilnehmer/lebenslauf/eintraege/{entry}', [ParticipantCvController::class, 'update'])->name('teilnehmer.resume.entries.update')->middleware('module:participant_portal')->can('teilnehmer.update');
+        Route::delete('/teilnehmer/lebenslauf/eintraege/{entry}', [ParticipantCvController::class, 'destroy'])->name('teilnehmer.resume.entries.destroy')->middleware('module:participant_portal')->can('teilnehmer.update');
+        Route::get('/teilnehmer/lebenslauf/versionen/{version}/download', [ParticipantCvController::class, 'download'])->name('teilnehmer.resume.versions.download')->middleware('module:participant_portal')->can('teilnehmer.update');
+        Route::get('/teilnehmer/lebenslauf/versionen/{version}/vorschau', [ParticipantCvController::class, 'print'])->name('teilnehmer.resume.versions.print')->middleware('module:participant_portal')->can('teilnehmer.update');
+        Route::put('/teilnehmer/teilnahme/{participation}/aufnahmecheckliste/{item}', [IntakeChecklistController::class, 'updateCompletion'])->name('teilnehmer.intake-checklist.update')->can('teilnehmer.update');
+        Route::put('/teilnehmer/teilnahme/{participation}/abschlusscheckliste/{item}', [ParticipationCompletionController::class, 'updateCompletion'])->name('teilnehmer.completion-checklist.update')->middleware('projectFeature:completion_management')->can('teilnehmer.update');
+        Route::post('/teilnehmer/teilnahme/{participation}/abschlussbericht', [ParticipationCompletionController::class, 'submit'])->name('teilnehmer.completion-reports.submit')->middleware('projectFeature:completion_management')->can('teilnehmer.update');
+        Route::put('/teilnehmer/abschlussbericht/{report}/entscheidung', [ParticipationCompletionController::class, 'decide'])->name('teilnehmer.completion-reports.decide')->middleware('projectFeature:completion_management')->can('teilnehmer.update');
+        Route::get('/teilnehmer/abschlussbericht/{report}/export', [ParticipationCompletionController::class, 'export'])->name('teilnehmer.completion-reports.export')->middleware('projectFeature:completion_management')->can('teilnehmer.update');
+        Route::post('/teilnehmer/teilnahme/{participation}/portal-einladung', [ParticipantPortalController::class, 'invite'])->name('teilnehmer.portal.invite')->middleware('module:participant_portal')->can('teilnehmer.update');
+        Route::post('/teilnehmer/teilnahme/{participation}/aufgaben', [ParticipationTaskController::class, 'store'])->name('teilnehmer.tasks.store')->can('teilnehmer.update');
+        Route::put('/teilnehmer/aufgaben/{task}', [ParticipationTaskController::class, 'update'])->name('teilnehmer.tasks.update')->can('teilnehmer.update');
+        Route::delete('/teilnehmer/aufgaben/{task}', [ParticipationTaskController::class, 'destroy'])->name('teilnehmer.tasks.destroy')->can('teilnehmer.update');
+        Route::put('/teilnehmer/bewerbungen/{application}', [ParticipationApplicationController::class, 'update'])->name('teilnehmer.applications.update')->middleware('module:participant_portal')->can('teilnehmer.update');
+        Route::put('/teilnehmer/bewerbungen/{application}/dokumente', [ParticipantApplicationPackageController::class, 'staffSync'])->name('teilnehmer.applications.documents.sync')->middleware('module:participant_portal')->can('teilnehmer.update');
+        Route::post('/teilnehmer/bewerbungen/{application}/freigabe', [ParticipantApplicationPackageController::class, 'staffApprove'])->name('teilnehmer.applications.package.approve')->middleware('module:participant_portal')->can('teilnehmer.update');
+        Route::post('/teilnehmer/teilnahme/{participation}/stellenempfehlungen', [ParticipantJobRecommendationController::class, 'staffStore'])->name('teilnehmer.recommendations.store')->middleware('module:participant_portal')->can('teilnehmer.update');
+        Route::put('/teilnehmer/anwesenheit/korrekturen/{correction}', [AttendanceCorrectionController::class, 'resolve'])->name('teilnehmer.attendance.corrections.resolve')->middleware('module:participant_portal')->can('teilnehmer.update');
+        Route::post('/teilnehmer/teilnahme/{participation}/portal-dokumente', [ParticipantDocumentController::class, 'store'])->name('teilnehmer.portal-documents.store')->middleware('module:participant_portal')->can('teilnehmer.update');
+        Route::put('/teilnehmer/portal-dokumente/{document}/pruefen', [ParticipantDocumentController::class, 'review'])->name('teilnehmer.portal-documents.review')->middleware('module:participant_portal')->can('teilnehmer.update');
+        Route::get('/teilnehmer/portal-dokumente/{document}/download', [ParticipantDocumentController::class, 'download'])->name('teilnehmer.portal-documents.download')->middleware('module:participant_portal')->can('teilnehmer.update');
+        Route::post('/teilnehmer/teilnahme/{participation}/nachrichten', [ParticipantMessageController::class, 'staffStore'])->name('teilnehmer.messages.store')->middleware('module:participant_portal')->can('teilnehmer.update');
+        Route::put('/teilnehmer/teilnahme/{participation}/nachrichten/gelesen', [ParticipantMessageController::class, 'staffRead'])->name('teilnehmer.messages.read')->middleware('module:participant_portal')->can('teilnehmer.update');
+        Route::put('/teilnehmer/datenauskunft/{dataRequest}', [ParticipantDataRequestController::class, 'resolve'])->name('teilnehmer.data-requests.resolve')->middleware('module:participant_portal')->middleware('canAnyPermission:teilnehmer.data-request.manage,teilnehmer.update');
+        Route::patch('/teilnehmer/{person}/sozialdaten', [TeilnehmerController::class, 'updateSozialdaten'])->name('person.sozialdaten.update')->middleware('canAnyPermission:person.sozialdaten.update,teilnehmer.update');
+        Route::get('/teilnehmer/{id}', [TeilnehmerController::class, 'indexNachProjekt'])->name('teilnehmer.projekt.index')->middleware('canAnyPermission:teilnehmer.projekt.index,teilnehmer.index');
 
-    // Personen Has Abschluss
-    Route::post('/teilnehmer/abschluss/anlegen', [AbschlusseController::class, 'store'])->name('abschluss.store')->can('teilnehmer.update')->middleware('projectFeature:completion_management');
-    Route::delete('/teilnehmer/abschluss/entfernen/{id}', [AbschlusseController::class, 'destroy'])->name('abschluss.destroy')->can('teilnehmer.update')->middleware('projectFeature:completion_management');
+        // Personen Has Abschluss
+        Route::post('/teilnehmer/abschluss/anlegen', [AbschlusseController::class, 'store'])->name('abschluss.store')->can('teilnehmer.update')->middleware('projectFeature:completion_management');
+        Route::delete('/teilnehmer/abschluss/entfernen/{id}', [AbschlusseController::class, 'destroy'])->name('abschluss.destroy')->can('teilnehmer.update')->middleware('projectFeature:completion_management');
 
-    // Personen Has Praktikum
-    Route::post('/teilnehmer/praktikum/anlegen', [PersonenHasBildungsmassnahmenController::class, 'store'])->name('teilnehmer.praktikum.store')->can('teilnehmer.update')->middleware('projectFeature:internship_management');
-    Route::put('/teilnehmer/praktikum/{measure}', [PersonenHasBildungsmassnahmenController::class, 'update'])->name('teilnehmer.praktikum.update')->can('teilnehmer.update')->middleware('projectFeature:internship_management');
-    Route::delete('/teilnehmer/praktikum/{measure}', [PersonenHasBildungsmassnahmenController::class, 'destroy'])->name('teilnehmer.praktikum.destroy')->can('teilnehmer.update')->middleware('projectFeature:internship_management');
+        // Personen Has Praktikum
+        Route::get('/praktikanten', [InternshipController::class, 'index'])->name('internships.index')->can('teilnehmer.index')->middleware('projectFeature:internship_management');
+        Route::post('/teilnehmer/praktikum/anlegen', [PersonenHasBildungsmassnahmenController::class, 'store'])->name('teilnehmer.praktikum.store')->can('teilnehmer.update')->middleware('projectFeature:internship_management');
+        Route::put('/teilnehmer/praktikum/{measure}', [PersonenHasBildungsmassnahmenController::class, 'update'])->name('teilnehmer.praktikum.update')->can('teilnehmer.update')->middleware('projectFeature:internship_management');
+        Route::delete('/teilnehmer/praktikum/{measure}', [PersonenHasBildungsmassnahmenController::class, 'destroy'])->name('teilnehmer.praktikum.destroy')->can('teilnehmer.update')->middleware('projectFeature:internship_management');
+        Route::get('/teilnehmer/praktikum/{measure}/vertrag', [InternshipController::class, 'contract'])->name('teilnehmer.praktikum.contract')->can('teilnehmer.index')->middleware('projectFeature:internship_management');
+        Route::get('/teilnehmer/praktikum/{measure}/bescheinigung', [InternshipController::class, 'certificate'])->name('teilnehmer.praktikum.certificate')->can('teilnehmer.index')->middleware('projectFeature:internship_management');
     });
 
-    //Räumlichkeiten
+    // Räumlichkeiten
     Route::middleware('module:room_management')->group(function () {
         Route::get('/ressourcen/standort/raeumlichkeiten/', [RaumlichkeitenController::class, 'index'])->name('raeumlichkeiten.index');
         Route::post('/ressourcen/standort/raeumlichkeiten/anlegen', [RaumlichkeitenController::class, 'store'])->name('raeumlichkeiten.store');
@@ -564,44 +567,44 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
         Route::delete('/ressourcen/standort/raeumlichkeiten/buchung/{buchung}', [RaumlichkeitenController::class, 'destroyBuchung'])->name('raeumlichkeiten.buchung.destroy');
     });
 
-    //Anwesenheiten
+    // Anwesenheiten
     Route::middleware('projectFeature:attendance_management')->group(function () {
-    Route::post('/anwesenheit/speichern', [AnwesenheitController::class, 'store'])->name('anwesenheit.store')->can('anwesenheit.manage');
-    Route::delete('/anwesenheit/entfernen/{id}', [AnwesenheitController::class, 'destroy'])->name('anwesenheit.destroy')->can('anwesenheit.destroy');
-    Route::post('/anwesenheit/update', [AnwesenheitController::class, 'update'])->name('anwesenheit.update')->can('anwesenheit.manage');
+        Route::post('/anwesenheit/speichern', [AnwesenheitController::class, 'store'])->name('anwesenheit.store')->can('anwesenheit.manage');
+        Route::delete('/anwesenheit/entfernen/{id}', [AnwesenheitController::class, 'destroy'])->name('anwesenheit.destroy')->can('anwesenheit.destroy');
+        Route::post('/anwesenheit/update', [AnwesenheitController::class, 'update'])->name('anwesenheit.update')->can('anwesenheit.manage');
     });
 
-    //Kontakte
+    // Kontakte
     Route::middleware(['module:participant_management', 'projectFeature:participant_management'])->group(function () {
-    Route::delete('/teilnehmer/kontakt/entfernen/{id}', [KontaktController::class, 'destroy'])->name('kontakt.destroy')->can('teilnehmer.update');
-    Route::post('/teilnehmer/kontakt/anlegen', [KontaktController::class, 'store'])->name('kontakt.store')->can('teilnehmer.update');
+        Route::delete('/teilnehmer/kontakt/entfernen/{id}', [KontaktController::class, 'destroy'])->name('kontakt.destroy')->can('teilnehmer.update');
+        Route::post('/teilnehmer/kontakt/anlegen', [KontaktController::class, 'store'])->name('kontakt.store')->can('teilnehmer.update');
 
-    //Adresse
-    Route::post('/teilnehmer/adresse/anlegen', [AdresseController::class, 'store'])->name('adresse.store')->can('teilnehmer.update');
-    Route::delete('/teilnehmer/adresse/entfernen/{id}', [AdresseController::class, 'destroy'])->name('adresse.destroy')->can('teilnehmer.update');
+        // Adresse
+        Route::post('/teilnehmer/adresse/anlegen', [AdresseController::class, 'store'])->name('adresse.store')->can('teilnehmer.update');
+        Route::delete('/teilnehmer/adresse/entfernen/{id}', [AdresseController::class, 'destroy'])->name('adresse.destroy')->can('teilnehmer.update');
 
-    //ProjektHasTeilnehmer
-    Route::post('/teilnehmer/projekt/anlegen', [ProjektHasTeilnehmerController::class, 'store'])->name('projekthasteilnehmer.store')->middleware('canAnyPermission:projekthasteilnehmer.store,teilnehmer.update');
-    Route::put('/teilnehmer/projekt/edit', [ProjektHasTeilnehmerController::class, 'update'])->name('projekthasteilnehmer.update')->middleware('canAnyPermission:projekthasteilnehmer.update,teilnehmer.update');
+        // ProjektHasTeilnehmer
+        Route::post('/teilnehmer/projekt/anlegen', [ProjektHasTeilnehmerController::class, 'store'])->name('projekthasteilnehmer.store')->middleware('canAnyPermission:projekthasteilnehmer.store,teilnehmer.update');
+        Route::put('/teilnehmer/projekt/edit', [ProjektHasTeilnehmerController::class, 'update'])->name('projekthasteilnehmer.update')->middleware('canAnyPermission:projekthasteilnehmer.update,teilnehmer.update');
 
-    //ProjektHasTeilnehmerLuv
-    Route::post('/teilnehmer/projekt/luv/anlegen', [ProjektHasTeilnehmerLuvController::class, 'store'])->name('projekthasteilnehmer.luv.store')->middleware('canAnyPermission:projekthasteilnehmer.luv.store,teilnehmer.update');
-    Route::put('/teilnehmer/projekt/luv/edit', [ProjektHasTeilnehmerLuvController::class, 'update'])->name('projekthasteilnehmer.luv.update')->middleware('canAnyPermission:projekthasteilnehmer.luv.update,teilnehmer.update');
-    Route::delete('/teilnehmer/projekt/luv/entfernen/{id}', [ProjektHasTeilnehmerLuvController::class, 'destroy'])->name('projekthasteilnehmer.luv.destroy')->middleware('canAnyPermission:projekthasteilnehmer.luv.destroy,teilnehmer.update');
-    Route::get('/teilnehmer/projekt/luv/export/{id}', [ProjektHasTeilnehmerLuvController::class, 'export'])->name('projekthasteilnehmer.luv.export')->middleware('canAnyPermission:projekthasteilnehmer.luv.export,teilnehmer.index');
+        // ProjektHasTeilnehmerLuv
+        Route::post('/teilnehmer/projekt/luv/anlegen', [ProjektHasTeilnehmerLuvController::class, 'store'])->name('projekthasteilnehmer.luv.store')->middleware('canAnyPermission:projekthasteilnehmer.luv.store,teilnehmer.update');
+        Route::put('/teilnehmer/projekt/luv/edit', [ProjektHasTeilnehmerLuvController::class, 'update'])->name('projekthasteilnehmer.luv.update')->middleware('canAnyPermission:projekthasteilnehmer.luv.update,teilnehmer.update');
+        Route::delete('/teilnehmer/projekt/luv/entfernen/{id}', [ProjektHasTeilnehmerLuvController::class, 'destroy'])->name('projekthasteilnehmer.luv.destroy')->middleware('canAnyPermission:projekthasteilnehmer.luv.destroy,teilnehmer.update');
+        Route::get('/teilnehmer/projekt/luv/export/{id}', [ProjektHasTeilnehmerLuvController::class, 'export'])->name('projekthasteilnehmer.luv.export')->middleware('canAnyPermission:projekthasteilnehmer.luv.export,teilnehmer.index');
     });
 
-    //ProjektHasPersonen
+    // ProjektHasPersonen
     Route::post('/personen/projekt/zuweisen', [ProjektHasPersonenController::class, 'store'])->name('projekthaspersonen.store')->can('benutzer.update');
     Route::delete('/personen/projekt/entfernen/{id}', [ProjektHasPersonenController::class, 'destroy'])->name('projekthaspersonen.destroy')->can('benutzer.update');
 
-    //Teilnehmer Bank
+    // Teilnehmer Bank
     Route::middleware(['module:participant_management', 'projectFeature:participant_management'])->group(function () {
         Route::post('/teilnehmer/bank/anlegen', [BaenkeController::class, 'store'])->name('bank.store')->can('teilnehmer.update');
         Route::delete('/teilnehmer/bank/entfernen/{id}', [BaenkeController::class, 'destroy'])->name('bank.destroy')->can('teilnehmer.update');
     });
 
-    //Partner
+    // Partner
     Route::get('/organisation/partner', [PartnerController::class, 'index'])->name('partner.index');
     Route::get('/partner', [PartnerController::class, 'index'])->name('dashboard.partner.index');
     Route::post('/organisation/partner/anlegen', [PartnerController::class, 'store'])->name('partner.store');
@@ -611,7 +614,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::post('/organisation/partner/{partner}/bop-usb-stick-brief', [PartnerController::class, 'exportBopUsbStickLetter'])->name('partner.bop-usb-stick-letter.export');
     Route::get('/organisation/partner/{partner}/dokumente/{dokument}/export', [ExportWordController::class, 'partnerDokument'])->name('partner.document.export');
 
-    //Kostenstelle
+    // Kostenstelle
     Route::get('/kostenstelle', [KostenstelleController::class, 'index'])->name('kostenstelle.index');
     Route::post('/kostenstelle/anlegen', [KostenstelleController::class, 'store'])->name('kostenstelle.store');
 
@@ -619,7 +622,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
         return Inertia::render('Design/Responsive');
     })->name('responsive');
 
-    //Notification
+    // Notification
     Route::get('/user/notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::get('/notifications/unread-feed', [NotificationController::class, 'unreadFeed'])->name('notifications.unreadFeed');
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead'])->name('notifications.readAll');
@@ -628,33 +631,32 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::delete('/notifications', [NotificationController::class, 'destroyAll'])->name('notifications.destroyAll');
     Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
 
-    //Brief
-        Route::post('/brief', [BriefController::class, 'store'])->name('brief.store');
-        Route::post('/brief/share', [BriefController::class, 'share'])->name('brief.share');
-        Route::delete('/brief/delete/{id}', [BriefController::class, 'destroy'])->name('brief.destroy');
-        Route::delete('/brief/shared/delete/{id}', [BriefController::class, 'sharedDestroy'])->name('briefShared.destroy');
+    // Brief
+    Route::post('/brief', [BriefController::class, 'store'])->name('brief.store');
+    Route::post('/brief/share', [BriefController::class, 'share'])->name('brief.share');
+    Route::delete('/brief/delete/{id}', [BriefController::class, 'destroy'])->name('brief.destroy');
+    Route::delete('/brief/shared/delete/{id}', [BriefController::class, 'sharedDestroy'])->name('briefShared.destroy');
 
-    //Notizen
-        Route::post('/notizen', [NotizController::class, 'store'])->name('notizen.store');
-        Route::delete('/notizen/delete/{id}', [NotizController::class, 'destroy'])->name('notizen.destroy');
+    // Notizen
+    Route::post('/notizen', [NotizController::class, 'store'])->name('notizen.store');
+    Route::delete('/notizen/delete/{id}', [NotizController::class, 'destroy'])->name('notizen.destroy');
 
-        //Export
-        Route::get('/teilnehmer/export/stammblatt/{teilnehmerId}/{projektId}', [ExportExcelController::class, 'esfStammblatt'])->name('export.excel.esfStammblatt')->middleware(['module:participant_management', 'projectFeature:participant_management']);
+    // Export
+    Route::get('/teilnehmer/export/stammblatt/{teilnehmerId}/{projektId}', [ExportExcelController::class, 'esfStammblatt'])->name('export.excel.esfStammblatt')->middleware(['module:participant_management', 'projectFeature:participant_management']);
 
-    //Fahrtarten
+    // Fahrtarten
     Route::get('/finanzen/fahrtarten', [FahrtartenController::class, 'index'])->name('fahrtarten.index');
     Route::post('/finanzen/fahrtarten/anlegen', [FahrtartenController::class, 'store'])->name('fahrtarten.store');
     Route::delete('/finanzen/fahrtarten/delete/{id}', [FahrtartenController::class, 'destroy'])->name('fahrtarten.destroy');
 
-    //Fahrtkosten
+    // Fahrtkosten
     Route::get('/finanzen/fahrtkosten', [FahrtkostensaetzeController::class, 'index'])->name('fahrtkosten.index');
     Route::post('/finanzen/fahrtkosten/anlegen', [FahrtkostensaetzeController::class, 'store'])->name('fahrtkosten.store');
     Route::delete('/finanzen/fahrtkosten/delete/{id}', [FahrtkostensaetzeController::class, 'destroy'])->name('fahrtkosten.destroy');
 
-    //Teilnehmer Farhten
+    // Teilnehmer Farhten
     Route::post('/fahrtkosten/Abrechnen/anlegen', [FahrtkostenAbrechnenController::class, 'store'])->name('fahrtkostenAbrechnung.store');
     Route::delete('/fahrtkosten/Abrechnen/delete/{id}', [FahrtkostenAbrechnenController::class, 'destroy'])->name('fahrtkostenAbrechnung.destroy');
-
 
     Route::prefix('ressourcen')->name('dienstwagen.')->group(function () {
         // Fahrzeuge
@@ -706,9 +708,9 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
         Route::get('/fahrtenbuch/report/pdf', [DienstwagenfahrtenbuchController::class, 'generateFahrtenbuchPDF'])->name('fahrtenbuch.report.pdf')->can('dienstwagen.fahrtenbuch.report.pdf');
         Route::get('/fahrtenbuch/report/excel', [DienstwagenfahrtenbuchController::class, 'generateFahrtenbuchExcel'])->name('fahrtenbuch.report.excel')->can('dienstwagen.fahrtenbuch.report.excel');
     });
-    //End Prefix Ressourcen
+    // End Prefix Ressourcen
 
-  //Dokumente Exportieren
+    // Dokumente Exportieren
     Route::get('/export/dokument/{id}', [ExportWordController::class, 'info_teilnehmende'])->name('export.info_teilnehmende');
     Route::get('/export/dokument/bildungsvertrag_inteqra/{id}', [ExportWordController::class, 'bildungsvertrag_inteqra'])->name('export.bildungsvertrag_inteqra');
     Route::get('/export/dokument/datenschutzhinweis_art13/{id}', [ExportWordController::class, 'datenschutzhinweis_art13'])->name('export.datenschutzhinweis_art13');
@@ -718,7 +720,6 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::get('/export/dokument/einverstaendnis_elternarbeit/{id}', [ExportWordController::class, 'einverstaendnis_elternarbeit'])->name('export.einverstaendnis_elternarbeit');
     Route::get('/export/dokument/edv_nutzungsvereinbarung/{id}', [ExportWordController::class, 'edv_nutzungsvereinbarung'])->name('export.edv_nutzungsvereinbarung');
     Route::get('/export/dokument/hausordnung_v1/{id}', [ExportWordController::class, 'hausordnung_v1'])->name('export.hausordnung_v1');
-
 
     Route::get('/export/dokument/anwesenheitslite_V1/{id}', [ExportExcelController::class, 'anwesenheitslite_V1'])->name('export.anwesenheitslite_V1');
     Route::get('/export/dokument/anwesenheitliste_monat_projekt_gruppe/{id}', [ExportExcelController::class, 'anwesenheitliste_monat_projekt_gruppe'])->name('export.projekt.anwesenheit.periode');
@@ -734,16 +735,16 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::get('/ausleihende', [GeraetController::class, 'indexAusleihende'])->name('geraet.index.ausleihende')->middleware('canAnyPermission:geraet.index.ausleihende,index-ausleihende');
 
     /*   Gerät Ausgabe */
-    Route::get('/ressourcen/geraetausgabe', [GeraetausgabeController::class,'index'])->name('geraet.ausgabe.index')->can('geraet.ausgabe.index');
-    Route::post('/ressourcen/geraetausgabe', [GeraetausgabeController::class,'store'])->name('geraet.ausgabe.store')->can('geraet.ausgabe.store');
+    Route::get('/ressourcen/geraetausgabe', [GeraetausgabeController::class, 'index'])->name('geraet.ausgabe.index')->can('geraet.ausgabe.index');
+    Route::post('/ressourcen/geraetausgabe', [GeraetausgabeController::class, 'store'])->name('geraet.ausgabe.store')->can('geraet.ausgabe.store');
     Route::delete('/ressourcen/geraetausgabe/{id}', [GeraetausgabeController::class, 'destroy'])->name('geraetausgabe.destroy')->can('geraet.ausgabe.destroy');
     Route::get('/ressourcen/geraetausgabe-view/{id}', [GeraetausgabeController::class, 'view'])->name('ausgabe.view')->can('geraet.ausgabe.index');
     Route::get('/ressourcen/geraetausgabe-excel/{id}', [GeraetausgabeController::class, 'exportExcel'])->name('geraet.ausgabe.export.excel')->can('geraet.ausgabe.export.excel');
     Route::post('/ressourcen/geraetausgabe-store-add', [GeraetausgabeController::class, 'storeAdd'])->name('geraet.ausgabe.store.add')->can('geraet.ausgabe.store.add');
 
     /*   Gerät Rückgabe */
-    Route::get('/ressourcen/geraet/rueckgabe', [GeraetrueckgabeController::class,'index'])->name('geraet.rueckgabe.index')->can('geraet.rueckgabe.index');
-    Route::post('/ressourcen/geraet/rueckgabe', [GeraetrueckgabeController::class,'store'])->name('geraet.rueckgabe.store')->can('geraet.rueckgabe.store');
+    Route::get('/ressourcen/geraet/rueckgabe', [GeraetrueckgabeController::class, 'index'])->name('geraet.rueckgabe.index')->can('geraet.rueckgabe.index');
+    Route::post('/ressourcen/geraet/rueckgabe', [GeraetrueckgabeController::class, 'store'])->name('geraet.rueckgabe.store')->can('geraet.rueckgabe.store');
     Route::delete('/ressourcen/geraetrueckgabe/{id}', [GeraetrueckgabeController::class, 'destroy'])->name('geraetrueckgabe.destroy')->can('geraet.rueckgabe.destroy');
     Route::get('/ressourcen/geraetrueckgabe-view/{id}', [GeraetrueckgabeController::class, 'view'])->name('rueckgabe.view')->can('geraet.rueckgabe.index');
     Route::get('/ressourcen/geraetrueckgabe-excel/{id}', [GeraetrueckgabeController::class, 'exportExcel'])->name('geraet.rueckgabe.export.excel')->can('geraet.rueckgabe.export.excel');
@@ -777,18 +778,14 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::get('/Materialanforderung/{id}', [MaterialanforderungController::class, 'show'])->name('materialanforderung.show');
     Route::get('/Materialanforderung/{materialanforderung}/pdf', [MaterialanforderungController::class, 'exportPdf'])->name('materialanforderung.pdf');
     Route::get('/Bestellungen/create', [MaterialanforderungController::class, 'create'])->name('materialanforderung.create');
-    Route::post('/Bestellungen/senden', [MaterialanforderungController::class,'store'])->name('materialanforderung.store');
-    Route::put('/Bestellungen/update', [MaterialanforderungController::class,'update'])->name('materialanforderung.update');
+    Route::post('/Bestellungen/senden', [MaterialanforderungController::class, 'store'])->name('materialanforderung.store');
+    Route::put('/Bestellungen/update', [MaterialanforderungController::class, 'update'])->name('materialanforderung.update');
     Route::delete('/Materialanforderung/{materialanforderung}', [MaterialanforderungController::class, 'destroy'])->name('materialanforderung.destroy');
     Route::post('/Materialanforderung/{materialanforderung}/kommentare', [MaterialanforderungKommentarController::class, 'store'])->name('materialanforderung.kommentare.store')->middleware('throttle:30,1');
     Route::put('/Materialanforderung/kommentare/{kommentar}/klaeren', [MaterialanforderungKommentarController::class, 'resolve'])->name('materialanforderung.kommentare.resolve');
     Route::get('/Materialanforderung/kommentar-anhaenge/{attachment}', [MaterialanforderungKommentarController::class, 'downloadAttachment'])->name('materialanforderung.kommentare.anhaenge.download');
 
-
     Route::put('/materialanforderung/{id}/{status}/genehmigen', [MaterialanforderungController::class, 'genehmigen'])->name('materialanforderung.genehmigen');
-
-
-
 
     Route::post('export-anwesenheitsliste-pobo/preview', [ProjektBopController::class, 'anwesenheitslistePOBOPreviewBIBB'])->name('anwesenheitsliste.POBO.bibb.preview');
     Route::post('export-anwesenheitsliste-pobo/draft', [ProjektBopController::class, 'anwesenheitslistePOBODraftShowBIBB'])->name('anwesenheitsliste.POBO.bibb.draft.show');
@@ -808,7 +805,6 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::get('/export-anwesenheitsliste-pobo/tag1/{partnerID}/{schuljahr}/{teil}/{klasse?}', [ProjektBopController::class, 'anwesenheitslistePOBOTag1'])->name('anwesenheitsliste.BoTag1.export');
     Route::get('/export/hausordnung/{partnerId}/{schuljahr}/{teil}/{sortBy}/{termin}', [ProjektBopController::class, 'hausordnungExportPdf'])->name('hausordnung.export.schule.pdf');
 
-
     Route::get('/bereichsauswahl/{partnerId}/{schuljahr}/{teil}', [ProjektBopController::class, 'bereichsauswahl'])->name('bereichsauswahl.index');
     Route::put('/bop/durchlauf/teilnehmer/{participant}/status', [BopRunController::class, 'updateParticipantStatus'])->name('bop.run.participant.status');
     Route::post('/bop/durchlauf/{partner}/gruppen/{phaseType}', [BopRunController::class, 'generateGroups'])->name('bop.run.groups.generate');
@@ -822,8 +818,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::get('/export/auswertungsbogen/pa/roland/pdf/{partnerId}/{schuljahr}/{teil}', [ProjektBopController::class, 'generatePdfAuswertungsbogenPaRolandSchule'])->name('export.auswertungsbogenPA.roland.schule.pdf')->middleware(['can:dokumente.schule.export', 'canAnyPermission:potenzialanalyse.index,potenzialanalyse.update,potenzialanalyse.manage']);
     Route::get('/export/elterneinverstaendniserklaerung/{partnerId}/{schuljahr}/{teil}', [ProjektBopController::class, 'exportElterneinverstaendniserklaerungSchule'])->name('export.elterneinverstaendniserklaerung.schule');
 
-
-    //Einteilung Berieche
+    // Einteilung Berieche
     Route::get('/einteilung/{partnerId}/{schuljahr}/{teil}', [EinteilungParameterController::class, 'index'])->name('einteilung.show');
     Route::post('/einteilung/update', [EinteilungParameterController::class, 'update'])->name('einteilung.update');
     Route::post('/einteilung/create', [EinteilungParameterController::class, 'createManual'])->name('einteilung.create');
@@ -834,22 +829,19 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::post('/einteilung/gruppen-generieren', [EinteilungParameterController::class, 'gruppenGenerieren'])->name('gruppen.generieren');
     Route::post('/einteilung/export-excel', [EinteilungParameterController::class, 'exportExcel'])->name('einteilung.export.excel')->middleware('can:einteilung.export');
 
-
-    //zu bearbeiten
-Route::get('/anwesenheitsdaten/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'anwesenheitsdaten'])->name('index-anpassung-anwesenheitsdaten');
-Route::post('/anwesenheitsdaten/{schulId}/{schuljahr}/{teil}/export', [BopLegacyFunctionController::class, 'anwesenheitsdatenExport'])->name('export.anwesenheitsdaten.schule.excel');
-Route::get('/teilnehmerliste/excel/{schuleId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'teilnehmerliste'])->name('export.teilnehmerliste.schule.excel')->middleware(['module:participant_management', 'projectFeature:participant_management']);
-Route::get('/teilnehmerccliste/excel/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'index'])->name('teilnehmer.liste.schule')->middleware(['module:participant_management', 'projectFeature:participant_management']);
-Route::get('/alleTeilnehmer/folder/create/{idSchule}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'createFolderAll'])->name('alleTeilnehmer.folder.create');
-Route::get('/anwesenheitsliste/vorbereitung/bo/{schuleId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'anwesenheitslisteVorbereitung'])->name('anwesenheitslisteVorBOTage');
-Route::get('/export/anwesenheitsliste/rechnung/{idSchule}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'anwesenheitslisteRechnung'])->name('export.anwesenheitsliste.rechnung');
-Route::get('/export/zertifikat/pobo/{idSchule}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'zertifikatPobo'])->name('export.zertifikat.schule.pobo');
-Route::get('/export/zertifikat/pobo/pdf/{schuleId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'zertifikatPoboPdf'])->name('export.zertifikat.schule.pobo.pdf');
-Route::get('/export/auswertung/pobo/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'auswertungPobo'])->name('export.auswertungBO.schule.pdf');
-Route::get('/export/auswertung/pobo/tofolder/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'auswertungPoboToFolder'])->name('export.auswertungBO.schule.pdf.tofolder');
-Route::get('/export/auswertung/pa/tofolder/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'auswertungPaToFolder'])->name('export.auswertungPA.schule.pdf.tofolder')->middleware(['can:dokumente.ansprechpartner.manage', 'canAnyPermission:potenzialanalyse.index,potenzialanalyse.update,potenzialanalyse.manage']);
-Route::get('/export/auswertung/pobo/runde/{schuleId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'auswertungPoboRunde'])->name('auswertungPoboModal');
-
-
+    // zu bearbeiten
+    Route::get('/anwesenheitsdaten/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'anwesenheitsdaten'])->name('index-anpassung-anwesenheitsdaten');
+    Route::post('/anwesenheitsdaten/{schulId}/{schuljahr}/{teil}/export', [BopLegacyFunctionController::class, 'anwesenheitsdatenExport'])->name('export.anwesenheitsdaten.schule.excel');
+    Route::get('/teilnehmerliste/excel/{schuleId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'teilnehmerliste'])->name('export.teilnehmerliste.schule.excel')->middleware(['module:participant_management', 'projectFeature:participant_management']);
+    Route::get('/teilnehmerccliste/excel/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'index'])->name('teilnehmer.liste.schule')->middleware(['module:participant_management', 'projectFeature:participant_management']);
+    Route::get('/alleTeilnehmer/folder/create/{idSchule}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'createFolderAll'])->name('alleTeilnehmer.folder.create');
+    Route::get('/anwesenheitsliste/vorbereitung/bo/{schuleId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'anwesenheitslisteVorbereitung'])->name('anwesenheitslisteVorBOTage');
+    Route::get('/export/anwesenheitsliste/rechnung/{idSchule}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'anwesenheitslisteRechnung'])->name('export.anwesenheitsliste.rechnung');
+    Route::get('/export/zertifikat/pobo/{idSchule}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'zertifikatPobo'])->name('export.zertifikat.schule.pobo');
+    Route::get('/export/zertifikat/pobo/pdf/{schuleId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'zertifikatPoboPdf'])->name('export.zertifikat.schule.pobo.pdf');
+    Route::get('/export/auswertung/pobo/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'auswertungPobo'])->name('export.auswertungBO.schule.pdf');
+    Route::get('/export/auswertung/pobo/tofolder/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'auswertungPoboToFolder'])->name('export.auswertungBO.schule.pdf.tofolder');
+    Route::get('/export/auswertung/pa/tofolder/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'auswertungPaToFolder'])->name('export.auswertungPA.schule.pdf.tofolder')->middleware(['can:dokumente.ansprechpartner.manage', 'canAnyPermission:potenzialanalyse.index,potenzialanalyse.update,potenzialanalyse.manage']);
+    Route::get('/export/auswertung/pobo/runde/{schuleId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'auswertungPoboRunde'])->name('auswertungPoboModal');
 
 });

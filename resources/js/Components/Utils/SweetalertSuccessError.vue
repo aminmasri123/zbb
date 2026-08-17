@@ -1,49 +1,79 @@
 <script setup>
-import { usePage } from "@inertiajs/vue3";
-import { watchEffect } from "vue";
-import Swal from "sweetalert2";
+import { usePage } from '@inertiajs/vue3'
+import { ref, watch } from 'vue'
+import Swal from 'sweetalert2'
 
-const page = usePage();
+const page = usePage()
+const displayedSuccess = ref(null)
+const displayedError = ref(null)
+const displayedValidationErrors = ref(null)
 
-watchEffect(() => {
-    const flash = page.props.flash || {};
-    const errors = page.props.errors || {};
+watch(
+    () => page.props.flash?.success || null,
+    (message) => {
+        if (!message) {
+            displayedSuccess.value = null
+            return
+        }
 
-    // ✅ Erfolgsmeldung
-    if (flash.success) {
+        if (displayedSuccess.value === message) return
+        displayedSuccess.value = message
+
         Swal.fire({
-            icon: "success",
-            title: "Erfolg",
-            text: flash.success,
+            icon: 'success',
+            title: 'Erfolg',
+            text: message,
             timer: 2500,
             showConfirmButton: false,
             toast: true,
-            position: "center",
-        });
-    }
+            position: 'center',
+        })
+    },
+    { immediate: true },
+)
 
-    // ✅ Eigene Fehlermeldung (flash.error)
-    if (flash.error) {
-        Swal.fire({
-            icon: "error",
-            title: "Fehler",
-            text: flash.error,
-        });
-    }
+watch(
+    () => page.props.flash?.error || null,
+    (message) => {
+        if (!message) {
+            displayedError.value = null
+            return
+        }
 
-    // ✅ Laravel Validator-Fehler anzeigen
-    if (Object.keys(errors).length > 0) {
+        if (displayedError.value === message) return
+        displayedError.value = message
+
         Swal.fire({
-            icon: "error",
-            title: "Validierungsfehler",
-            html: Object.values(errors).join("<br>"),
-        });
-    }
-});
+            icon: 'error',
+            title: 'Fehler',
+            text: message,
+        })
+    },
+    { immediate: true },
+)
+
+watch(
+    () => JSON.stringify(page.props.errors || {}),
+    (fingerprint) => {
+        const errors = JSON.parse(fingerprint)
+        if (Object.keys(errors).length === 0) {
+            displayedValidationErrors.value = null
+            return
+        }
+
+        if (displayedValidationErrors.value === fingerprint) return
+        displayedValidationErrors.value = fingerprint
+
+        Swal.fire({
+            icon: 'error',
+            title: 'Validierungsfehler',
+            html: Object.values(errors).join('<br>'),
+        })
+    },
+    { immediate: true },
+)
 </script>
 
-
 <template>
-  <!-- Diese Komponente zeigt selbst nichts an -->
-  <div></div>
+    <div></div>
 </template>

@@ -88,6 +88,76 @@ class PotenzialanalyseController extends Controller
         ]);
     }
 
+    public function updateGewichtungsmatrix(Request $request, Projekt $projekt)
+    {
+        $this->authorizeProjectConfig($projekt);
+        $this->ensureProjektUsesPotenzialanalyse($projekt);
+
+        $validated = $request->validate([
+            'uebungen' => ['required', 'array'],
+            'uebungen.*.id' => ['required', 'integer', 'distinct'],
+            'uebungen.*.kompetenzen' => ['present', 'array'],
+            'uebungen.*.kompetenzen.*.merkmal' => ['required', Rule::in(self::PA_MERKMALE)],
+            'uebungen.*.kompetenzen.*.gewichtung' => ['required', 'numeric', 'gt:0', 'max:100'],
+        ]);
+
+        $uebungen = $projekt->potenzialanalyseUebungen()->get()->keyBy('id');
+        $gesendeteIds = collect($validated['uebungen'])->pluck('id')->map(fn ($id) => (int) $id);
+
+        if ($gesendeteIds->count() !== $uebungen->count()
+            || $gesendeteIds->diff($uebungen->keys())->isNotEmpty()
+            || $uebungen->keys()->diff($gesendeteIds)->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'uebungen' => 'Die Gewichtungsmatrix enthält nicht alle Übungen dieses Projekts.',
+            ]);
+        }
+
+        foreach ($validated['uebungen'] as $index => $zeile) {
+            $merkmale = collect($zeile['kompetenzen'])->pluck('merkmal');
+            if ($merkmale->duplicates()->isNotEmpty()) {
+                throw ValidationException::withMessages([
+                    "uebungen.{$index}.kompetenzen" => 'Eine Kompetenz darf pro Übung nur einmal vorkommen.',
+                ]);
+            }
+        }
+
+        $summen = array_fill_keys(self::PA_MERKMALE, 0.0);
+        foreach ($validated['uebungen'] as $zeile) {
+            if (! $uebungen->get((int) $zeile['id'])->aktiv) {
+                continue;
+            }
+
+            foreach ($zeile['kompetenzen'] as $zuordnung) {
+                $summen[$zuordnung['merkmal']] += (float) $zuordnung['gewichtung'];
+            }
+        }
+
+        $ungueltigeSummen = collect($summen)
+            ->filter(fn (float $summe) => $summe > 0 && abs($summe - 100.0) > 0.01);
+
+        if ($ungueltigeSummen->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'gewichtungsmatrix' => 'Jede verwendete Kompetenz muss insgesamt genau 100 % ergeben.',
+            ]);
+        }
+
+        DB::transaction(function () use ($validated, $uebungen) {
+            foreach ($validated['uebungen'] as $zeile) {
+                $this->syncUebungKompetenzen(
+                    $uebungen->get((int) $zeile['id']),
+                    collect($zeile['kompetenzen'])
+                        ->map(fn (array $zuordnung) => [...$zuordnung, 'aktiv' => true])
+                        ->all(),
+                );
+            }
+        });
+
+        return response()->json([
+            'message' => 'Gewichtungsmatrix wurde gespeichert.',
+            'uebungen' => $this->projektUebungen($projekt),
+        ]);
+    }
+
     public function destroyUebung(PotenzialanalyseUebung $uebung)
     {
         $uebung->load('projekt');

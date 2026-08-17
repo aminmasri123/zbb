@@ -937,55 +937,92 @@
 
                 <!-- ================= Praktika ================= -->
                 <div v-else-if="activeTab === 'Praktika'">
-
-                        <button @click="showModalPraktikumCreate = true" class="bg-zbb text-white px-4 mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
-                            <span>➕ Praktikum hinzufügen</span>
-
+                    <div class="mb-6 mt-4 flex flex-wrap gap-2">
+                        <button @click="showModalPraktikumCreate = true" class="flex-1 rounded-md bg-zbb px-4 py-2 text-sm text-white transition hover:bg-zbb/80">
+                            Praktikum oder Maßnahme hinzufügen
                         </button>
-                        <div v-if="teilnehmer.praktika && teilnehmer.praktika.length" class="space-y-3 mb-6">
-                            <div
-                            v-for="praktikum in (teilnehmer.praktika || []).slice().reverse()"
-                                :key="praktikum.id"
-                                class="flex justify-between items-start bg-gray-50 border rounded-lg px-4 py-3"
-                            >
-                                <div class="flex-1">
-                                    <p class="text-sm font-bold text-zbb uppercase">
-                                        {{ praktikum.typ }}
-                                    </p>
-                                    <p class="text-gray-600 text-sm">
-                                        📍 <span class="font-semibold">{{ praktikum.traeger || 'Keine Angabe' }}</span>
-                                    </p>
-                                    <p class="text-gray-600 text-sm">
-                                        📅 {{ formatDate(praktikum.start) }} - {{ formatDate(praktikum.end) }}
-                                    </p>
-                                    <p
-                                        class="text-xs font-medium mt-2 px-2 py-1 rounded-full inline-block"
-                                        :class="{
-                                            'bg-blue-100 text-blue-700': praktikum.status === 'geplant',
-                                            'bg-yellow-100 text-yellow-700': praktikum.status === 'laufend',
-                                            'bg-green-100 text-green-700': praktikum.status === 'abgeschlossen',
-                                            'bg-red-100 text-red-700': praktikum.status === 'abgebrochen',
-                                        }"
-                                    >
-                                        {{ praktikum.status }}
-                                    </p>
-                                    <p v-if="praktikum.bemerkung" class="text-gray-600 text-sm mt-2 italic">
-                                        💬 {{ praktikum.bemerkung }}
-                                    </p>
-                                    <p v-if="praktikum.contact_name" class="mt-2 text-xs text-gray-600">Kontakt: {{ praktikum.contact_name }}<span v-if="praktikum.contact_email"> · {{ praktikum.contact_email }}</span><span v-if="praktikum.contact_phone"> · {{ praktikum.contact_phone }}</span></p>
-                                    <p v-if="praktikum.next_follow_up_at" class="mt-1 text-xs font-medium" :class="new Date(praktikum.next_follow_up_at) < new Date() && ['geplant','laufend'].includes(praktikum.status) ? 'text-red-600' : 'text-gray-500'">Nachverfolgung: {{ formatDate(praktikum.next_follow_up_at) }}</p>
+                        <Link :href="route('internships.index')" class="rounded-md border border-zbb bg-white px-4 py-2 text-sm font-medium text-zbb hover:bg-orange-50">
+                            Alle Praktikant:innen
+                        </Link>
+                    </div>
+
+                    <div v-if="teilnehmer.praktika?.length" class="mb-6 space-y-4">
+                        <article v-for="praktikum in [...teilnehmer.praktika].reverse()" :key="praktikum.id" class="rounded-xl border bg-gray-50 p-4">
+                            <div class="flex flex-wrap items-start justify-between gap-4">
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <p class="text-sm font-bold uppercase text-zbb">{{ praktikum.typ }}</p>
+                                        <span v-if="praktikum.typ === 'Praktikum'" class="rounded-full px-2 py-1 text-xs font-semibold" :class="praktikum.placement_type === 'internal' ? 'bg-orange-100 text-orange-800' : 'bg-sky-100 text-sky-800'">
+                                            {{ praktikum.placement_type === 'internal' ? 'Intern' : 'Extern' }}
+                                        </span>
+                                        <span class="rounded-full px-2 py-1 text-xs font-semibold" :class="statusClass(praktikum.status)">{{ praktikum.status }}</span>
+                                    </div>
+                                    <p class="mt-2 text-sm font-semibold text-gray-800">{{ praktikum.host_project?.name || praktikum.traeger || 'Keine Einsatzstelle angegeben' }}</p>
+                                    <p v-if="praktikum.department" class="text-sm text-gray-600">Einsatzbereich: {{ praktikum.department }}</p>
+                                    <p v-if="praktikum.supervisor" class="text-sm text-gray-600">Fachliche Betreuung: {{ praktikum.supervisor.vorname }} {{ praktikum.supervisor.nachname }}</p>
+                                    <p v-else-if="praktikum.contact_name" class="text-sm text-gray-600">Kontakt: {{ praktikum.contact_name }}<span v-if="praktikum.contact_email"> · {{ praktikum.contact_email }}</span><span v-if="praktikum.contact_phone"> · {{ praktikum.contact_phone }}</span></p>
+                                    <p class="text-sm text-gray-600">{{ formatDate(praktikum.start) }} – {{ formatDate(praktikum.end) }}<span v-if="praktikum.weekly_hours"> · {{ praktikum.weekly_hours }} Wochenstunden</span></p>
+                                    <p v-if="praktikum.next_follow_up_at" class="mt-1 text-xs font-medium" :class="isOverdueFollowUp(praktikum) ? 'text-red-600' : 'text-gray-500'">Nachverfolgung: {{ formatDate(praktikum.next_follow_up_at) }}</p>
                                     <p v-if="praktikum.objective" class="mt-2 text-sm"><span class="font-semibold">Ziel:</span> {{ praktikum.objective }}</p>
                                     <p v-if="praktikum.result" class="mt-2 text-sm"><span class="font-semibold">Ergebnis:</span> {{ praktikum.result }}</p>
-                                    <div v-if="praktikum.editing" class="mt-4 grid gap-3 rounded border bg-white p-4 md:grid-cols-2"><input v-model="praktikum.traeger" maxlength="255" placeholder="Träger" class="rounded border-gray-300 text-sm"/><input v-model="praktikum.contact_name" maxlength="255" placeholder="Ansprechpartner" class="rounded border-gray-300 text-sm"/><input v-model="praktikum.contact_email" type="email" maxlength="255" placeholder="E-Mail" class="rounded border-gray-300 text-sm"/><input v-model="praktikum.contact_phone" maxlength="50" placeholder="Telefon" class="rounded border-gray-300 text-sm"/><input v-model="praktikum.start" type="date" class="rounded border-gray-300 text-sm"/><input v-model="praktikum.end" type="date" class="rounded border-gray-300 text-sm"/><input v-model="praktikum.next_follow_up_at" type="date" class="rounded border-gray-300 text-sm"/><input v-model.number="praktikum.weekly_hours" type="number" min="1" max="168" placeholder="Wochenstunden" class="rounded border-gray-300 text-sm"/><select v-model="praktikum.status" class="rounded border-gray-300 text-sm"><option value="geplant">Geplant</option><option value="laufend">Laufend</option><option value="abgeschlossen">Abgeschlossen</option><option value="abgebrochen">Abgebrochen</option></select><input v-model="praktikum.status_note" maxlength="3000" placeholder="Vermerk zum Statuswechsel" class="rounded border-gray-300 text-sm"/><textarea v-model="praktikum.objective" maxlength="10000" rows="2" placeholder="Ziel" class="rounded border-gray-300 text-sm md:col-span-2"></textarea><textarea v-model="praktikum.result" maxlength="10000" rows="2" placeholder="Ergebnis (bei Abschluss/Abbruch erforderlich)" class="rounded border-gray-300 text-sm md:col-span-2"></textarea><textarea v-model="praktikum.bemerkung" maxlength="10000" rows="2" placeholder="Bemerkung" class="rounded border-gray-300 text-sm md:col-span-2"></textarea><div class="flex gap-2 md:col-span-2"><button type="button" class="rounded bg-zbb px-3 py-2 text-xs text-white" @click="savePraktikum(praktikum)">Verlauf speichern</button><button type="button" class="rounded border px-3 py-2 text-xs" @click="praktikum.editing=false">Abbrechen</button></div></div>
-                                    <details v-if="praktikum.status_history?.length" class="mt-3 text-xs text-gray-500"><summary class="cursor-pointer">Statusverlauf ({{ praktikum.status_history.length }})</summary><p v-for="history in praktikum.status_history" :key="history.id" class="mt-1">{{ history.from_status || 'Neu' }} → {{ history.to_status }} · {{ formatDateTime(history.created_at) }}<span v-if="history.note"> · {{ history.note }}</span></p></details>
                                 </div>
-                                <div class="ml-4 flex flex-col gap-2"><button type="button" class="text-sm text-zbb" @click="praktikum.editing=!praktikum.editing">Bearbeiten</button><button type="button" class="text-sm text-red-600" @click="archivePraktikum(praktikum)">Archivieren</button></div>
+                                <div class="flex flex-wrap gap-2">
+                                    <a v-if="praktikum.typ === 'Praktikum'" :href="route('teilnehmer.praktikum.contract', praktikum.id)" class="rounded border bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:border-zbb hover:text-zbb">Vertrag exportieren</a>
+                                    <a v-if="praktikum.typ === 'Praktikum' && praktikum.status === 'abgeschlossen'" :href="route('teilnehmer.praktikum.certificate', praktikum.id)" class="rounded border bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:border-zbb hover:text-zbb">Bescheinigung exportieren</a>
+                                    <button type="button" class="rounded border bg-white px-3 py-2 text-xs text-zbb" @click="praktikum.editing = !praktikum.editing">Bearbeiten</button>
+                                    <button type="button" class="rounded border border-red-200 bg-white px-3 py-2 text-xs text-red-600" @click="archivePraktikum(praktikum)">Archivieren</button>
+                                </div>
                             </div>
-                        </div>
-                        <p v-else class="text-gray-400 italic mb-6">
-                            Noch keine Praktika vorhanden.
-                        </p>
 
+                            <div v-if="praktikum.editing" class="mt-4 grid gap-3 rounded-lg border bg-white p-4 md:grid-cols-2">
+                                <select v-if="praktikum.typ === 'Praktikum'" v-model="praktikum.placement_type" class="rounded border-gray-300 text-sm">
+                                    <option value="external">Externes Praktikum</option>
+                                    <option value="internal">Internes Praktikum</option>
+                                </select>
+                                <template v-if="praktikum.typ === 'Praktikum' && praktikum.placement_type === 'internal'">
+                                    <select v-model="praktikum.host_project_id" class="rounded border-gray-300 text-sm">
+                                        <option :value="null">Einsatzprojekt wählen</option>
+                                        <option v-for="project in internshipHostProjects" :key="project.id" :value="project.id">{{ project.name }}</option>
+                                    </select>
+                                    <select v-model="praktikum.supervisor_person_id" class="rounded border-gray-300 text-sm">
+                                        <option :value="null">Fachliche Betreuung wählen</option>
+                                        <option v-for="person in supervisorsForProject(praktikum.host_project_id)" :key="person.id" :value="person.id">{{ person.vorname }} {{ person.nachname }}</option>
+                                    </select>
+                                </template>
+                                <template v-else>
+                                    <input v-model="praktikum.traeger" maxlength="255" placeholder="Träger / Praktikumsbetrieb" class="rounded border-gray-300 text-sm" />
+                                    <input v-model="praktikum.contact_name" maxlength="255" placeholder="Ansprechpartner:in" class="rounded border-gray-300 text-sm" />
+                                    <input v-model="praktikum.contact_email" type="email" maxlength="255" placeholder="E-Mail" class="rounded border-gray-300 text-sm" />
+                                    <input v-model="praktikum.contact_phone" maxlength="50" placeholder="Telefon" class="rounded border-gray-300 text-sm" />
+                                </template>
+                                <input v-if="praktikum.typ === 'Praktikum'" v-model="praktikum.host_address" maxlength="255" placeholder="Anschrift der Einsatzstelle" class="rounded border-gray-300 text-sm" />
+                                <input v-if="praktikum.typ === 'Praktikum'" v-model="praktikum.department" maxlength="255" placeholder="Einsatzbereich / Abteilung" class="rounded border-gray-300 text-sm" />
+                                <input v-if="praktikum.typ === 'Praktikum'" v-model="praktikum.occupation" maxlength="255" placeholder="Beruf / Tätigkeitsbereich" class="rounded border-gray-300 text-sm" />
+                                <select v-if="praktikum.typ === 'Praktikum'" v-model="praktikum.internship_kind" class="rounded border-gray-300 text-sm">
+                                    <option :value="null">Art des Praktikums</option>
+                                    <option value="orientation">Orientierungspraktikum</option>
+                                    <option value="qualification">Qualifizierungspraktikum</option>
+                                    <option value="integration">Eingliederungspraktikum</option>
+                                </select>
+                                <input v-if="praktikum.typ === 'Praktikum'" v-model="praktikum.attendance_weekday" maxlength="30" placeholder="Betreuungs-/Beschulungstag" class="rounded border-gray-300 text-sm" />
+                                <input v-model="praktikum.start" type="date" class="rounded border-gray-300 text-sm" />
+                                <input v-model="praktikum.end" type="date" class="rounded border-gray-300 text-sm" />
+                                <input v-model="praktikum.next_follow_up_at" type="date" class="rounded border-gray-300 text-sm" />
+                                <input v-model.number="praktikum.weekly_hours" type="number" min="1" max="168" placeholder="Wochenstunden" class="rounded border-gray-300 text-sm" />
+                                <select v-model="praktikum.status" class="rounded border-gray-300 text-sm"><option value="geplant">Geplant</option><option value="laufend">Laufend</option><option value="abgeschlossen">Abgeschlossen</option><option value="abgebrochen">Abgebrochen</option></select>
+                                <input v-model="praktikum.status_note" maxlength="3000" placeholder="Vermerk zum Statuswechsel" class="rounded border-gray-300 text-sm" />
+                                <textarea v-model="praktikum.objective" maxlength="10000" rows="2" placeholder="Ziel" class="rounded border-gray-300 text-sm md:col-span-2"></textarea>
+                                <textarea v-if="praktikum.typ === 'Praktikum'" v-model="praktikum.activities" maxlength="6000" rows="4" placeholder="Tätigkeiten – eine pro Zeile, maximal sechs" class="rounded border-gray-300 text-sm md:col-span-2"></textarea>
+                                <textarea v-if="praktikum.typ === 'Praktikum'" v-model="praktikum.assessment" maxlength="6000" rows="4" placeholder="Beurteilung – maximal vier kurze Absätze" class="rounded border-gray-300 text-sm md:col-span-2"></textarea>
+                                <textarea v-model="praktikum.result" maxlength="10000" rows="2" placeholder="Ergebnis (bei Abschluss/Abbruch erforderlich)" class="rounded border-gray-300 text-sm md:col-span-2"></textarea>
+                                <textarea v-model="praktikum.bemerkung" maxlength="10000" rows="2" placeholder="Bemerkung / weiterführende Vereinbarung" class="rounded border-gray-300 text-sm md:col-span-2"></textarea>
+                                <div class="flex gap-2 md:col-span-2"><button type="button" class="rounded bg-zbb px-3 py-2 text-xs text-white" @click="savePraktikum(praktikum)">Verlauf speichern</button><button type="button" class="rounded border px-3 py-2 text-xs" @click="praktikum.editing = false">Abbrechen</button></div>
+                            </div>
+
+                            <details v-if="praktikum.status_history?.length" class="mt-3 text-xs text-gray-500"><summary class="cursor-pointer">Statusverlauf ({{ praktikum.status_history.length }})</summary><p v-for="history in praktikum.status_history" :key="history.id" class="mt-1">{{ history.from_status || 'Neu' }} → {{ history.to_status }} · {{ formatDateTime(history.created_at) }}<span v-if="history.note"> · {{ history.note }}</span></p></details>
+                        </article>
+                    </div>
+                    <p v-else class="mb-6 italic text-gray-400">Noch keine Praktika oder Maßnahmen vorhanden.</p>
                 </div>
 
                 <!-- ================= Fahrtkosten ================= -->
@@ -2000,6 +2037,7 @@
     <ModalPraktikumCreate
         :visible="showModalPraktikumCreate"
         :teilnehmer="teilnehmer"
+        :host-projects="internshipHostProjects"
 
         @close="showModalPraktikumCreate = false"
         @added="praktikumAdded"
@@ -2055,6 +2093,7 @@
         projekte: Array,
         standorte: Array,
         betreuer: Array,
+        internshipHostProjects: { type: Array, default: () => [] },
         erhalteneBriefe: Array,
         meineBriefe: Array,
         anwesenheitsstatuten: Array,
@@ -3459,6 +3498,20 @@ const toggleLuv = (id) => {
 // ====================== Praktikum ======================
 const showModalPraktikumCreate = ref(false);
 
+const supervisorsForProject = (projectId) => (props.internshipHostProjects || [])
+    .find((project) => project.id === projectId)?.mitarbeiter || [];
+const statusClass = (status) => ({
+    geplant: 'bg-blue-100 text-blue-700',
+    laufend: 'bg-yellow-100 text-yellow-700',
+    abgeschlossen: 'bg-green-100 text-green-700',
+    abgebrochen: 'bg-red-100 text-red-700',
+}[status] || 'bg-gray-100 text-gray-700');
+const isOverdueFollowUp = (item) => Boolean(
+    item.next_follow_up_at
+    && ['geplant', 'laufend'].includes(item.status)
+    && new Date(`${item.next_follow_up_at.slice(0, 10)}T23:59:59`) < new Date()
+);
+
 const praktikumAdded = (daten) => {
     if (!teilnehmer.value.praktika) {  // ← "value" hinzufügen
         teilnehmer.value.praktika = [];
@@ -3471,7 +3524,14 @@ const savePraktikum = async (praktikum) => {
         const response = await axios.put(route('teilnehmer.praktikum.update', praktikum.id), praktikum);
         Object.assign(praktikum, response.data.data, { editing: false });
         Swal.fire('Gespeichert', response.data.message, 'success');
-    } catch (error) { Swal.fire('Fehler', error.response?.data?.message || 'Der Verlauf konnte nicht gespeichert werden.', 'error'); }
+    } catch (error) {
+        const errors = error.response?.data?.errors;
+        Swal.fire({
+            icon: 'error',
+            title: 'Speichern nicht möglich',
+            html: errors ? Object.values(errors).flat().join('<br>') : (error.response?.data?.message || 'Der Verlauf konnte nicht gespeichert werden.'),
+        });
+    }
 };
 
 const archivePraktikum = async (praktikum) => {
