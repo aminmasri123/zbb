@@ -57,6 +57,18 @@
                 </div>
 
                 <div class="flex min-w-0 items-center justify-end gap-1 sm:ml-4">
+                    <div
+                        v-if="sessionRemainingSeconds !== null"
+                        class="inline-flex items-center gap-1 rounded-md border px-2 py-1.5 text-xs font-semibold tabular-nums sm:px-3"
+                        :class="sessionCountdownClass"
+                        :title="`Automatische Abmeldung nach Inaktivität in ${formattedSessionRemaining}`"
+                        aria-live="polite"
+                    >
+                        <i class="las la-clock text-base" aria-hidden="true"></i>
+                        <span class="hidden xl:inline">Sitzung</span>
+                        <span>{{ formattedSessionRemaining }}</span>
+                    </div>
+
                     <!-- Teams Dropdown -->
                     <Dropdown v-if="$page.props.auth.user.projekte" align="right" width="60">
                         <template #trigger>
@@ -398,6 +410,7 @@
     import { useI18n } from 'vue-i18n';
     import { switchTheme } from '../../theme';
     import { usePermissions } from '@/utils/permissions';
+    import { sessionRemainingSeconds } from '@/keepAlive';
 
     const sidebarTextHidden = ref(false);
     const props = defineProps({
@@ -446,6 +459,18 @@ const page = usePage();
 const { can, canAny } = usePermissions();
 const notifications = ref(page.props.notify?.notifications || []);
 const unreadNotificationCount = ref(page.props.notify?.unreadCount || notifications.value.length);
+const formattedSessionRemaining = computed(() => {
+    const total = Math.max(0, Number(sessionRemainingSeconds.value || 0));
+    const minutes = Math.floor(total / 60);
+    const seconds = total % 60;
+
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+});
+const sessionCountdownClass = computed(() => {
+    if (sessionRemainingSeconds.value <= 5 * 60) return 'border-red-300 bg-red-50 text-red-700';
+    if (sessionRemainingSeconds.value <= 10 * 60) return 'border-orange-300 bg-orange-50 text-orange-700';
+    return 'border-green-300 bg-green-50 text-green-700';
+});
 let notificationPollTimer = null;
 let notificationRequestRunning = false;
 

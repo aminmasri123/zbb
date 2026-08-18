@@ -1,10 +1,33 @@
-const SESSION_CHECK_INTERVAL_MS = 3 * 60_000;
+import { ref } from 'vue';
 
-let intervalId = null;
+const SESSION_CHECK_INTERVAL_MS = 3 * 60_000;
+const ACTIVITY_THROTTLE_MS = 60_000;
+const EXPIRY_WARNING_SECONDS = 5 * 60;
+
+let sessionCheckTimer = null;
+let countdownTimer = null;
 let requestRunning = false;
 let redirecting = false;
+let expiresAtMs = null;
+let lastActivitySentAt = 0;
+let warningShown = false;
+
+export const sessionRemainingSeconds = ref(null);
+export const sessionLifetimeSeconds = ref(30 * 60);
 
 const sessionStatusUrl = () => window.asset('system/session-status');
+const sessionActivityUrl = () => window.asset('system/session-activity');
+
+const applySessionPayload = (payload = {}) => {
+    sessionLifetimeSeconds.value = Number(payload.lifetime_seconds || sessionLifetimeSeconds.value);
+    expiresAtMs = Number(payload.expires_at || 0) * 1000 || null;
+
+    if (expiresAtMs) {
+        sessionRemainingSeconds.value = Math.max(0, Math.ceil((expiresAtMs - Date.now()) / 1000));
+    }
+
+    if ((sessionRemainingSeconds.value ?? 0) > EXPIRY_WARNING_SECONDS) warningShown = false;
+};
 
 export const redirectAfterSessionExpiry = () => {
     if (redirecting) return;
@@ -12,8 +35,25 @@ export const redirectAfterSessionExpiry = () => {
     redirecting = true;
     window.__zbbSessionExpired = true;
     window.dispatchEvent(new CustomEvent('zbb:session-expired'));
-    window.alert('Ihre Sitzung ist abgelaufen. Nicht bestätigte Änderungen konnten nicht gespeichert werden.');
+    window.alert('Ihre Sitzung ist wegen Inaktivität abgelaufen. Nicht bestätigte Änderungen konnten nicht gespeichert werden.');
     window.location.replace(window.asset(''));
+};
+
+const updateCountdown = () => {
+    if (!expiresAtMs || redirecting) return;
+
+    const remaining = Math.max(0, Math.ceil((expiresAtMs - Date.now()) / 1000));
+    sessionRemainingSeconds.value = remaining;
+
+    if (remaining <= 0) {
+        redirectAfterSessionExpiry();
+        return;
+    }
+
+    if (remaining <= EXPIRY_WARNING_SECONDS && !warningShown) {
+        warningShown = true;
+        window.alert('Ihre Sitzung läuft in 5 Minuten ab. Bewegen Sie die Maus, klicken Sie oder drücken Sie eine Taste, wenn Sie weiterarbeiten.');
+    }
 };
 
 export const checkAuthenticatedSession = async ({ redirect = true } = {}) => {
@@ -36,9 +76,30 @@ export const checkAuthenticatedSession = async ({ redirect = true } = {}) => {
             return false;
         }
 
-        return response.ok;
+        if (!response.ok) return false;
+
+        applySessionPayload(await response.json());
+        return true;
     } catch {
         return false;
+    }
+};
+
+export const recordAuthenticatedActivity = async () => {
+    if (redirecting || !navigator.onLine) return;
+
+    const now = Date.now();
+    if ((now - lastActivitySentAt) < ACTIVITY_THROTTLE_MS) return;
+    lastActivitySentAt = now;
+
+    try {
+        const response = await window.axios.post(sessionActivityUrl(), {}, {
+            headers: { Accept: 'application/json' },
+        });
+        applySessionPayload(response.data);
+    } catch {
+        // 401/419 behandelt der globale Axios-Interceptor. Kurze Netzfehler
+        // verlängern die Sitzung bewusst nicht.
     }
 };
 
@@ -53,11 +114,18 @@ export const pingBackend = async () => {
     }
 };
 
+const activityEvents = ['pointerdown', 'keydown', 'touchstart', 'scroll'];
+
 export const startBackendKeepAlive = () => {
-    if (intervalId !== null) return;
+    if (sessionCheckTimer !== null) return;
 
     pingBackend();
-    intervalId = window.setInterval(pingBackend, SESSION_CHECK_INTERVAL_MS);
+    sessionCheckTimer = window.setInterval(pingBackend, SESSION_CHECK_INTERVAL_MS);
+    countdownTimer = window.setInterval(updateCountdown, 1000);
+
+    activityEvents.forEach((eventName) => {
+        window.addEventListener(eventName, recordAuthenticatedActivity, { passive: true });
+    });
 
     window.addEventListener('focus', pingBackend);
     window.addEventListener('online', pingBackend);

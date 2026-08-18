@@ -223,12 +223,36 @@ Route::get('/system/keepalive', function () {
 // Geschützte Statusprüfung: bei abgelaufener Sitzung antwortet Laravel auf
 // die JSON-Anfrage mit 401, statt unbemerkt eine Loginseite zurückzugeben.
 Route::get('/system/session-status', function () {
-    return response()->json(['authenticated' => true])->withHeaders([
+    $lifetimeSeconds = max(60, (int) config('session.lifetime', 30) * 60);
+    $lastActivity = (int) session('auth_last_user_activity_at', now()->timestamp);
+
+    return response()->json([
+        'authenticated' => true,
+        'expires_at' => $lastActivity + $lifetimeSeconds,
+        'remaining_seconds' => max(0, ($lastActivity + $lifetimeSeconds) - now()->timestamp),
+        'lifetime_seconds' => $lifetimeSeconds,
+    ])->withHeaders([
         'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
     ]);
 })->middleware('auth')
     ->withoutMiddleware(\App\Http\Middleware\HandleInertiaRequests::class)
     ->name('system.session-status');
+
+Route::post('/system/session-activity', function () {
+    $lifetimeSeconds = max(60, (int) config('session.lifetime', 30) * 60);
+    $lastActivity = (int) session('auth_last_user_activity_at', now()->timestamp);
+
+    return response()->json([
+        'authenticated' => true,
+        'expires_at' => $lastActivity + $lifetimeSeconds,
+        'remaining_seconds' => $lifetimeSeconds,
+        'lifetime_seconds' => $lifetimeSeconds,
+    ])->withHeaders([
+        'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+    ]);
+})->middleware(['auth', 'throttle:20,1'])
+    ->withoutMiddleware(\App\Http\Middleware\HandleInertiaRequests::class)
+    ->name('system.session-activity');
 
 // Geschützte Routen
 Route::middleware('throttle:60,1')->group(function () {
