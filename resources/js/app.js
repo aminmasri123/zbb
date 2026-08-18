@@ -21,6 +21,7 @@ import Button from 'primevue/button';
 import Aura from '@primeuix/themes/aura';
 import { setThemeOnLoad } from './theme';
 import ParticipantPortalLayout from './Layouts/ParticipantPortalLayout.vue';
+import { startBackendKeepAlive } from './keepAlive';
 
 
 const appName = window.document.getElementsByTagName('title')[0]?.innerText || 'ERP ZBB';
@@ -78,3 +79,4 @@ createInertiaApp({
 });
 
 setThemeOnLoad();
+startBackendKeepAlive();

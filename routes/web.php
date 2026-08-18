@@ -211,6 +211,15 @@ Route::post('/set-locale', function () {
     return response()->json(['success' => true]);
 });
 
+// Hält den Laravel-/PHP-Upstream und die laufende Sitzung aktiv, solange die
+// Anwendung in einem Browser geöffnet ist. Die Route benötigt bewusst weder
+// Datenbankabfragen noch Berechtigungsprüfung.
+Route::get('/system/keepalive', function () {
+    return response()->noContent(204)->withHeaders([
+        'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+    ]);
+})->name('system.keepalive');
+
 // Geschützte Routen
 Route::middleware('throttle:60,1')->group(function () {
     Route::get('/bereichsauswahl/zugang/{token}', [ProjektBopController::class, 'bereichsauswahlSelfShow'])->name('bereichsauswahl.self.show');
