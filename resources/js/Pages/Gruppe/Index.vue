@@ -211,7 +211,7 @@ watch(search, () => {
         <template #header>{{$t('Gruppen')}}</template>
 
         <!-- Toolbar -->
-        <div class="flex items-stretch w-3/4 mx-auto mb-3 overflow-hidden rounded-md border border-gray-300 bg-white shadow-md">
+        <div class="mx-auto mb-3 flex w-full max-w-7xl items-stretch overflow-hidden rounded-md border border-gray-300 bg-white shadow-md">
             <button
                 v-if="canCreateGroup"
                 type="button"
@@ -235,7 +235,7 @@ watch(search, () => {
 
         <!-- Tabelle -->
         <!-- Gruppenübersicht -->
-        <div class="bg-white rounded-2xl shadow-md mt-8 p-8 w-3/4 mx-auto">
+        <div class="mx-auto mt-6 w-full max-w-7xl rounded-2xl bg-white p-4 shadow-md sm:p-6 lg:mt-8 lg:p-8">
             <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
                 <h2 class="text-lg font-semibold text-gray-800">
                     {{ props.filters.partner ? `Gruppen für ${props.filters.partner.name}` : (props.canSeeAllGroups ? 'Projektgruppen' : 'Meine Gruppen') }}
@@ -265,14 +265,14 @@ watch(search, () => {
                 <div
                 v-for="gruppe in filteredGruppen"
                 :key="gruppe.id"
-                class="flex flex-col sm:flex-row justify-between sm:items-center bg-white border border-gray-100 rounded-xl px-5 py-4 shadow-sm hover:shadow-md transition-all duration-200"
+                class="flex min-w-0 flex-col justify-between gap-4 rounded-xl border border-gray-100 bg-white px-4 py-4 shadow-sm transition-all duration-200 hover:shadow-md sm:px-5 xl:flex-row xl:items-center"
                 >
                 <!-- Linker Bereich -->
-                <div>
-                    <div class="flex items-center gap-4">
+                <div class="min-w-0 flex-1">
+                    <div class="flex min-w-0 flex-wrap items-start gap-3 sm:items-center sm:gap-4">
                     <Link
                         :href="route('gruppeHasTeilnehmer.show', gruppe.id)"
-                        class="flex items-center gap-2 font-semibold text-gray-800 hover:text-zbb transition-colors"
+                        class="flex min-w-0 flex-1 items-start gap-2 font-semibold text-gray-800 transition-colors hover:text-zbb sm:items-center"
                     >
                         <img
                             v-if="hatProfilbild(gruppe.betreuer)"
@@ -287,7 +287,7 @@ watch(search, () => {
                         >
                             {{ betreuerInitialen(gruppe.betreuer) }}
                         </span>
-                        <span>
+                        <span class="min-w-0 break-words leading-snug">
                             {{ gruppe.betreuer?.vorname }} {{ gruppe.betreuer?.nachname }}
                             <span class="mx-1 text-gray-400">—</span>
                             {{ gruppe.bereich?.name || '– ohne Bereich –' }}
@@ -296,7 +296,7 @@ watch(search, () => {
 
                     <!-- Gruppentyp-Badge -->
                     <span
-                        class="inline-block bg-zbb/10 text-zbb text-xs font-medium px-3 py-1 rounded-full border border-zbb/20"
+                        class="inline-block shrink-0 rounded-full border border-zbb/20 bg-zbb/10 px-3 py-1 text-xs font-medium text-zbb"
                     >
                         {{
                         gruppe.typ === '1-day' ? '1 Tag' :
@@ -305,61 +305,64 @@ watch(search, () => {
                         }}
                     </span>
                     </div>
-                    <span class="text-sm p-0 m-0 text-red-500">{{ formatDate(gruppe.anfangsdatum) }} {{ formatDate(gruppe.enddatum) }}   {{ formatTime(gruppe.startzeit) }}-{{ formatTime(gruppe.endzeit) }}</span>
+                    <span class="mt-2 block break-words text-sm leading-snug text-red-500">
+                        {{ formatDate(gruppe.anfangsdatum) }} {{ formatDate(gruppe.enddatum) }}
+                        <span class="whitespace-nowrap">{{ formatTime(gruppe.startzeit) }}-{{ formatTime(gruppe.endzeit) }}</span>
+                    </span>
 
                     <!-- Zusatzinfos -->
-                    <div class="flex flex-wrap gap-4 text-sm text-gray-500">
-                    <div class="flex items-center gap-1">
+                    <div class="mt-2 grid min-w-0 gap-x-4 gap-y-2 text-sm text-gray-500 sm:grid-cols-2 xl:flex xl:flex-wrap">
+                    <div class="flex min-w-0 items-center gap-1">
                         <i class="la la-users la-2x text-zbb/70"></i>
                         <span>{{ gruppe.teilnehmer_count || 0 }} Teilnehmer</span>
                     </div>
-                    <div class="flex items-center gap-1">
+                    <div class="flex min-w-0 items-center gap-1">
                         <i class="la la-clock la-2x text-zbb/70"></i>
                         <span>{{ gruppe.anwesend_heute || 0 }} heute anwesend</span>
                     </div>
-                    <div class="flex items-center gap-1">
+                    <div class="flex min-w-0 items-center gap-1">
                         <i class="la la-door-open la-2x text-zbb/70"></i>
-                        <span v-if="gruppe.ort_typ === 'extern'">{{ gruppe.externer_ort || 'Externer Ort' }}</span>
-                        <span v-else>{{ gruppe.raum?.name || 'Kein Raum' }}</span>
+                        <span v-if="gruppe.ort_typ === 'extern'" class="min-w-0 break-words">{{ gruppe.externer_ort || 'Externer Ort' }}</span>
+                        <span v-else class="min-w-0 break-words">{{ gruppe.raum?.name || 'Kein Raum' }}</span>
                     </div>
-                    <div class="flex items-center gap-1">
+                    <div class="flex min-w-0 items-center gap-1">
                         <i class="la la-map-marker la-2x text-zbb/70"></i>
-                        <span>{{ gruppe.standort?.name || gruppe.raum?.standort?.name || 'Kein Standort' }}</span>
+                        <span class="min-w-0 break-words">{{ gruppe.standort?.name || gruppe.raum?.standort?.name || 'Kein Standort' }}</span>
                     </div>
-                    <div v-if="gruppe.partners?.length" class="flex items-center gap-1">
+                    <div v-if="gruppe.partners?.length" class="flex min-w-0 items-start gap-1 sm:col-span-2 xl:max-w-full">
                         <i class="la la-school la-2x text-zbb/70"></i>
-                        <span>Bezug: {{ gruppe.partners.map((partner) => partner.name).join(', ') }}</span>
+                        <span class="min-w-0 break-words">Bezug: {{ gruppe.partners.map((partner) => partner.name).join(', ') }}</span>
                     </div>
                     </div>
                 </div>
 
                 <!-- Buttons -->
-                <div class="flex gap-2 mt-4 sm:mt-0">
+                <div class="grid w-full shrink-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap xl:w-auto xl:max-w-[46%] xl:justify-end">
                     <Link
                     v-if="props.projekt?.klassenbuch_aktiv && can('klassenbuch.index')"
                     :href="route('klassenbuch.index')"
-                    class="px-4 py-2 text-sm font-medium rounded-md border border-zbb text-zbb shadow-sm hover:bg-zbb hover:text-white transition"
+                    class="rounded-md border border-zbb px-4 py-2 text-center text-sm font-medium text-zbb shadow-sm transition hover:bg-zbb hover:text-white"
                     >
                     Klassenbuch
                     </Link>
                     <button
                     v-if="gruppe.raum"
                     @click="openMeldungModal(gruppe)"
-                    class="px-4 py-2 text-sm font-medium rounded-md bg-amber-500 text-white shadow-sm hover:bg-amber-600 transition"
+                    class="rounded-md bg-amber-500 px-4 py-2 text-center text-sm font-medium text-white shadow-sm transition hover:bg-amber-600"
                     >
                     Melden
                     </button>
                     <button
                     v-if="canUpdateGroup"
                     @click="openModalEdit(gruppe)"
-                    class="px-4 py-2 text-sm font-medium rounded-md bg-zbb text-white shadow-sm hover:bg-zbb/90 transition"
+                    class="rounded-md bg-zbb px-4 py-2 text-center text-sm font-medium text-white shadow-sm transition hover:bg-zbb/90"
                     >
                     Verwalten
                     </button>
                     <button
                     v-if="canDeleteGroup"
                     @click="confirmDelete(gruppe)"
-                    class="px-4 py-2 text-sm font-medium rounded-md bg-red-600 text-white shadow-sm hover:bg-red-700 transition"
+                    class="rounded-md bg-red-600 px-4 py-2 text-center text-sm font-medium text-white shadow-sm transition hover:bg-red-700"
                     >
                     Löschen
                     </button>

@@ -584,37 +584,37 @@ const updatePartnerAPI = async (form) => {
         <template #header>{{ $t('Partner') }}</template>
 
         <!-- Suchfeld -->
-        <div class="flex justify-around items-center mb-3">
-            <div @click="openModalCreate" class="flex items-center">
+        <div class="mx-auto mb-3 flex w-full max-w-7xl items-stretch overflow-hidden rounded-md border border-gray-300 bg-white shadow-md">
+            <button type="button" @click="openModalCreate" class="flex w-14 shrink-0 items-center justify-center border-r border-gray-300 text-zbb transition hover:bg-zbb hover:text-white" title="Partner anlegen">
                 <i
-                    class="la la-plus bg-white border border-gray-300 rounded-l-md px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
-            </div>
+                    class="la la-plus"></i>
+            </button>
 
             <label for="search" class="sr-only">{{ $t('Suchen') }}</label>
             <input id="search" v-model="search" type="text"
-                class="border border-gray-300 text-gray-900 text-sm  focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                class="block min-w-0 flex-1 border-0 p-2.5 text-sm text-gray-900 focus:border-orange-500 focus:ring-orange-500"
                 placeholder="Suchen ..." />
 
 
-            <Link :href="route('partner.index')" class="flex items-center">
+            <Link :href="route('partner.index')" class="flex w-14 shrink-0 items-center justify-center border-l border-gray-300 text-zbb transition hover:bg-zbb hover:text-white" title="Aktualisieren">
                 <i
-                    class="la la-refresh bg-white border border-gray-300 rounded-r-md px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"></i>
+                    class="la la-refresh"></i>
             </Link>
         </div>
         <!-- Partnerausgabe -->
-        <div class="relative  mb-10">
+        <div class="relative mx-auto mb-10 w-full max-w-7xl overflow-visible">
             <table id="table"
-                class="w-full text-sm table-fixed mb-5 text-left border-collapse border border-gray-300 shadow-sm">
+                class="mb-5 w-full table-auto border-collapse border border-gray-300 text-left text-sm shadow-sm">
                 <thead class="text-md text-gray-600 uppercase bg-gray-200">
                     <tr>
-                        <th class="border border-gray-300 px-6 py-3 w-16 text-center">ID</th>
-                        <th class="border border-gray-300 px-6 py-3 w-48">Bezeichnung</th>
-                        <th class="border border-gray-300 px-6 py-3 w-1/4">Ansprechpartner</th>
-                        <th class="border border-gray-300 px-6 py-3 w-1/4">Adresse</th>
-                        <th class="border border-gray-300 px-6 py-3 w-1/4">Kontakt</th>
-                        <th class="border border-gray-300 px-6 py-3 w-1/4">Partnerschaftstypen</th>
-                        <th class="border border-gray-300 px-6 py-3 w-40">Beschreibung</th>
-                        <th class="border border-gray-300 px-6 py-3 w-12 text-center">*</th>
+                        <th class="hidden w-16 border border-gray-300 px-3 py-3 text-center md:table-cell xl:px-6">ID</th>
+                        <th class="w-[46%] border border-gray-300 px-3 py-3 xl:w-48 xl:px-6">Bezeichnung</th>
+                        <th class="border border-gray-300 px-3 py-3 xl:w-1/4 xl:px-6">Ansprechpartner <span class="normal-case xl:hidden">/ Details</span></th>
+                        <th class="hidden w-1/4 border border-gray-300 px-6 py-3 xl:table-cell">Adresse</th>
+                        <th class="hidden w-1/4 border border-gray-300 px-6 py-3 xl:table-cell">Kontakt</th>
+                        <th class="hidden w-1/4 border border-gray-300 px-6 py-3 xl:table-cell">Partnerschaftstypen</th>
+                        <th class="hidden w-40 border border-gray-300 px-6 py-3 xl:table-cell">Beschreibung</th>
+                        <th class="w-12 border border-gray-300 px-2 py-3 text-center">*</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -625,26 +625,26 @@ const updatePartnerAPI = async (form) => {
 
                             <!-- ID (nur einmal anzeigen) -->
                             <td v-if="index === 0" :rowspan="partner.ansprechpartners.length"
-                                class="align-middle border-r border-gray-300 px-6 py-4 text-center">
+                                class="hidden align-middle border-r border-gray-300 px-3 py-4 text-center md:table-cell xl:px-6">
                                 {{ partner.id }}
                             </td>
 
                             <!-- NAME + SCHULJAHR (nur einmal anzeigen) -->
                             <td v-if="index === 0" :rowspan="partner.ansprechpartners.length"
-                                class="align-middle border-r border-gray-300 px-6 py-4 text-sm">
+                                class="min-w-0 align-middle border-r border-gray-300 px-3 py-4 text-sm xl:px-6">
 
                                 <button
                                     v-if="isBopProject && can('einteilung.planning')"
                                     type="button"
-                                    class="block text-left font-bold text-orange-700 hover:underline"
+                                    class="block max-w-full break-words text-left font-bold text-orange-700 hover:underline"
                                     title="BOP-Ablauf dieser Schule planen"
                                     @click="openBopPlannerForSchool(partner)"
                                 >
                                     {{ partner.name }}
                                 </button>
-                                <div v-else class="font-bold">{{ partner.name }}</div>
+                                <div v-else class="break-words font-bold">{{ partner.name }}</div>
 
-                                <div class="flex gap-3 mt-1" v-if="partner.ansprechpartners.some(p =>
+                                <div class="mt-2 flex flex-wrap gap-3" v-if="partner.ansprechpartners.some(p =>
                                     p.partner_typ?.some(t => t.bezeichnung === 'Kooperationsschule')
                                 )">
 
@@ -671,7 +671,7 @@ const updatePartnerAPI = async (form) => {
                                                         {{ participantPartsEnabled ? normalizedPart(teil) : 'Aktionen' }}
                                                     </button>
                                                     <div v-show="isDropdownOpen(partner.id, jahr, teil)"
-                                                        class="dropdown-menu absolute mt-1  bg-white border rounded text-xs shadow-lg z-50">
+                                                        class="dropdown-menu absolute z-50 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded border bg-white text-xs shadow-lg">
 
                                                         <!-- Links analog Blade -->
 
@@ -831,15 +831,35 @@ const updatePartnerAPI = async (form) => {
                                     </div>
 
                                 </div>
+
+                                <p v-if="partner.beschreibung" class="mt-3 break-words text-xs text-gray-500 xl:hidden">
+                                    {{ partner.beschreibung }}
+                                </p>
                             </td>
 
                             <!-- Ansprechpartner -->
-                            <td class="px-6 py-4 border-r border-gray-300 align-top">
-                                {{ person.vorname }} {{ person.nachname }}
+                            <td class="min-w-0 border-r border-gray-300 px-3 py-4 align-top xl:px-6">
+                                <div class="break-words font-medium text-gray-800">{{ person.vorname }} {{ person.nachname }}</div>
+
+                                <div class="mt-2 space-y-2 text-xs text-gray-500 xl:hidden">
+                                    <div v-for="adresse in person.adresses" :key="`compact-address-${adresse.id}`" class="flex items-start gap-1">
+                                        <i class="la la-map-marker mt-0.5 shrink-0 text-zbb/70"></i>
+                                        <span class="min-w-0 break-words">{{ adresse.strasse }} {{ adresse.hausnummer }}, {{ adresse.plz }} {{ adresse.stadt }}</span>
+                                    </div>
+                                    <div v-for="kontakt in person.kontaktes" :key="`compact-contact-${kontakt.id}`" class="flex items-start gap-1">
+                                        <i class="la la-address-book mt-0.5 shrink-0 text-zbb/70"></i>
+                                        <span class="min-w-0 break-all">{{ kontakt.kontakttyp?.name }}: {{ kontakt.wert }}</span>
+                                    </div>
+                                    <div v-if="person.partner_typ?.length" class="flex flex-wrap gap-1">
+                                        <span v-for="typ in person.partner_typ" :key="`compact-type-${typ.id}`" class="rounded bg-orange-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                                            {{ typ.bezeichnung }}
+                                        </span>
+                                    </div>
+                                </div>
                             </td>
 
                             <!-- Adresse -->
-                            <td class="px-6 py-4 border-r border-gray-300 align-top">
+                            <td class="hidden border-r border-gray-300 px-6 py-4 align-top xl:table-cell">
                                 <div v-for="adresse in person.adresses" :key="adresse.id">
                                     {{ adresse.strasse }} {{ adresse.hausnummer }}<br>
                                     {{ adresse.plz }} {{ adresse.stadt }}
@@ -847,14 +867,14 @@ const updatePartnerAPI = async (form) => {
                             </td>
 
                             <!-- Kontakt -->
-                            <td class="px-6 py-4 border-r border-gray-300 align-top">
+                            <td class="hidden border-r border-gray-300 px-6 py-4 align-top xl:table-cell">
                                 <div v-for="kontakt in person.kontaktes" :key="kontakt.id">
                                     {{ kontakt.kontakttyp?.name }}: {{ kontakt.wert }}
                                 </div>
                             </td>
 
                             <!-- Partnerschaftstyp -->
-                            <td class="px-6 py-4 border-r border-gray-300 align-top">
+                            <td class="hidden border-r border-gray-300 px-6 py-4 align-top xl:table-cell">
                                 <div class="flex flex-wrap gap-1">
                                     <span v-for="typ in person.partner_typ" :key="typ.id"
                                         class="bg-orange-500 text-white rounded px-2 py-0.5 text-[10px] font-bold">
@@ -865,7 +885,7 @@ const updatePartnerAPI = async (form) => {
 
                             <!-- Beschreibung (nur einmal) -->
                             <td v-if="index === 0" :rowspan="partner.ansprechpartners.length"
-                                class="align-top border-r border-gray-300 px-6 py-4">
+                                class="hidden border-r border-gray-300 px-6 py-4 align-top xl:table-cell">
                                 {{ partner.beschreibung }}
                             </td>
 
