@@ -78,4 +78,13 @@ class BopPaRolandEvaluationLayoutTest extends TestCase
         $this->assertStringContainsString('auswertungsbogen-pa-roland-template-v3.pdf', $service);
         $this->assertFileExists(resource_path('pdf/auswertungsbogen-pa-roland-template-v3.pdf'));
     }
+
+    public function test_second_header_row_values_are_vertically_centered(): void
+    {
+        $service = file_get_contents(app_path('Services/Bop/RolandEvaluationPdfService.php'));
+
+        $this->assertIsString($service);
+        $this->assertStringContainsString("23.2, 25.4, 112.5", $service);
+        $this->assertStringContainsString("151.0, 25.4, 28.0", $service);
+    }
 }

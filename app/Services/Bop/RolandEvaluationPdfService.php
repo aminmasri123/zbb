@@ -68,8 +68,10 @@ class RolandEvaluationPdfService
         $this->writeFittedText($pdf, 23.2, 16.5, 112.5, (string) ($participant['name'] ?? ''));
         $this->writeFittedText($pdf, 149.0, 16.5, 52.5, (string) ($participant['geburtsdatum'] ?? ''));
         $this->writeFittedText($pdf, 223.0, 16.5, 61.5, (string) ($participant['geschlecht'] ?? ''));
-        $this->writeFittedText($pdf, 23.2, 23.5, 112.5, (string) ($participant['schule'] ?? ''));
-        $this->writeFittedText($pdf, 151.0, 23.5, 28.0, (string) ($participant['klasse'] ?? ''));
+        // Die zweite Kopfzeile liegt optisch tiefer als die erste. Die Werte werden
+        // deshalb auf deren vertikale Mitte gesetzt statt an der oberen Zellkante.
+        $this->writeFittedText($pdf, 23.2, 25.4, 112.5, (string) ($participant['schule'] ?? ''));
+        $this->writeFittedText($pdf, 151.0, 25.4, 28.0, (string) ($participant['klasse'] ?? ''));
     }
 
     private function writeFittedText(Fpdi $pdf, float $x, float $y, float $width, string $text): void
