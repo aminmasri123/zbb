@@ -10,10 +10,10 @@ let requestRunning = false;
 let redirecting = false;
 let expiresAtMs = null;
 let lastActivitySentAt = 0;
-let warningShown = false;
 
 export const sessionRemainingSeconds = ref(null);
 export const sessionLifetimeSeconds = ref(30 * 60);
+export const sessionWarningVisible = ref(false);
 
 const sessionStatusUrl = () => window.asset('system/session-status');
 const sessionActivityUrl = () => window.asset('system/session-activity');
@@ -26,7 +26,9 @@ const applySessionPayload = (payload = {}) => {
         sessionRemainingSeconds.value = Math.max(0, Math.ceil((expiresAtMs - Date.now()) / 1000));
     }
 
-    if ((sessionRemainingSeconds.value ?? 0) > EXPIRY_WARNING_SECONDS) warningShown = false;
+    if ((sessionRemainingSeconds.value ?? 0) > EXPIRY_WARNING_SECONDS) {
+        sessionWarningVisible.value = false;
+    }
 };
 
 export const redirectAfterSessionExpiry = () => {
@@ -34,8 +36,8 @@ export const redirectAfterSessionExpiry = () => {
 
     redirecting = true;
     window.__zbbSessionExpired = true;
+    sessionWarningVisible.value = false;
     window.dispatchEvent(new CustomEvent('zbb:session-expired'));
-    window.alert('Ihre Sitzung ist wegen Inaktivität abgelaufen. Nicht bestätigte Änderungen konnten nicht gespeichert werden.');
     window.location.replace(window.asset(''));
 };
 
@@ -50,10 +52,7 @@ const updateCountdown = () => {
         return;
     }
 
-    if (remaining <= EXPIRY_WARNING_SECONDS && !warningShown) {
-        warningShown = true;
-        window.alert('Ihre Sitzung läuft in 5 Minuten ab. Bewegen Sie die Maus, klicken Sie oder drücken Sie eine Taste, wenn Sie weiterarbeiten.');
-    }
+    if (remaining <= EXPIRY_WARNING_SECONDS) sessionWarningVisible.value = true;
 };
 
 export const checkAuthenticatedSession = async ({ redirect = true } = {}) => {
@@ -85,11 +84,12 @@ export const checkAuthenticatedSession = async ({ redirect = true } = {}) => {
     }
 };
 
-export const recordAuthenticatedActivity = async () => {
+export const recordAuthenticatedActivity = async ({ force = false } = {}) => {
     if (redirecting || !navigator.onLine) return;
+    if (sessionWarningVisible.value && !force) return;
 
     const now = Date.now();
-    if ((now - lastActivitySentAt) < ACTIVITY_THROTTLE_MS) return;
+    if (!force && (now - lastActivitySentAt) < ACTIVITY_THROTTLE_MS) return;
     lastActivitySentAt = now;
 
     try {
@@ -100,6 +100,27 @@ export const recordAuthenticatedActivity = async () => {
     } catch {
         // 401/419 behandelt der globale Axios-Interceptor. Kurze Netzfehler
         // verlängern die Sitzung bewusst nicht.
+    }
+};
+
+export const continueAuthenticatedSession = async () => {
+    await recordAuthenticatedActivity({ force: true });
+};
+
+export const endAuthenticatedSession = async () => {
+    if (redirecting) return;
+
+    redirecting = true;
+    window.__zbbSessionExpired = true;
+    sessionWarningVisible.value = false;
+
+    try {
+        await window.axios.post(window.route('logout'));
+    } catch {
+        // Auch wenn der Server bereits abgemeldet hat oder nicht erreichbar ist,
+        // wird die geschützte Arbeitsmaske sofort verlassen.
+    } finally {
+        window.location.replace(window.asset(''));
     }
 };
 

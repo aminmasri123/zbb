@@ -350,6 +350,50 @@
         </div>
     </nav>
 
+    <Teleport to="body">
+        <div
+            v-if="sessionWarningVisible"
+            class="fixed inset-0 z-[16000] flex items-center justify-center bg-black/60 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="session-warning-title"
+        >
+            <div class="w-full max-w-md rounded-lg border border-orange-300 bg-white p-6 text-gray-900 shadow-2xl">
+                <div class="flex items-start gap-4">
+                    <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-700">
+                        <i class="las la-clock text-2xl" aria-hidden="true"></i>
+                    </div>
+                    <div>
+                        <h2 id="session-warning-title" class="text-lg font-bold">Sitzung läuft gleich ab</h2>
+                        <p class="mt-2 text-sm text-gray-700">
+                            Ihre Sitzung endet wegen Inaktivität in
+                            <strong class="tabular-nums text-red-700">{{ formattedSessionRemaining }}</strong>.
+                            Möchten Sie angemeldet bleiben?
+                        </p>
+                    </div>
+                </div>
+
+                <div class="mt-6 flex justify-end gap-3">
+                    <button
+                        type="button"
+                        class="rounded border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100"
+                        @click="endAuthenticatedSession"
+                    >
+                        Nein, abmelden
+                    </button>
+                    <button
+                        type="button"
+                        class="rounded bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700"
+                        autofocus
+                        @click="continueAuthenticatedSession"
+                    >
+                        Ja, angemeldet bleiben
+                    </button>
+                </div>
+            </div>
+        </div>
+    </Teleport>
+
     <div
         v-if="showProjectRequiredModal"
         class="fixed inset-0 z-[120] flex items-center justify-center bg-black/45 p-4"
@@ -410,7 +454,12 @@
     import { useI18n } from 'vue-i18n';
     import { switchTheme } from '../../theme';
     import { usePermissions } from '@/utils/permissions';
-    import { sessionRemainingSeconds } from '@/keepAlive';
+    import {
+        continueAuthenticatedSession,
+        endAuthenticatedSession,
+        sessionRemainingSeconds,
+        sessionWarningVisible,
+    } from '@/keepAlive';
 
     const sidebarTextHidden = ref(false);
     const props = defineProps({
