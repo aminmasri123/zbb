@@ -17,6 +17,7 @@ use App\Models\PersonenIstSchueler;
 use App\Models\Projekt;
 use App\Services\Bop\AttendanceFooterService;
 use App\Services\Bop\PublicAreaSelectionAccess;
+use App\Services\Bop\RolandEvaluationPdfService;
 use App\Services\MyDatum;
 use App\Services\Projects\ActiveProjectContext;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
@@ -67,6 +68,7 @@ class ProjektBopController extends Controller
         private readonly PublicAreaSelectionAccess $publicAreaSelection,
         private readonly AttendanceFooterService $attendanceFooter,
         private readonly ActiveProjectContext $activeProjectContext,
+        private readonly RolandEvaluationPdfService $rolandEvaluationPdf,
     ) {
     }
 
@@ -2570,11 +2572,12 @@ class ProjektBopController extends Controller
 
     public function generatePdfAuswertungsbogenPaRolandSchule($partnerId, $schuljahr, $teil)
     {
-        // Dieser Export erzeugt eine vollständige PDF-Seite je Teilnehmer.
-        // Das höhere Limit gilt ausschließlich für die Dauer dieses Requests.
-        $this->prepareLargePdfExport();
+        // Der Export wird in kleinen Bloecken gerendert und danach zusammengefuegt.
+        // So bleibt der Speicherverbrauch auch bei vielen Teilnehmenden begrenzt.
+        $pdfPath = null;
 
         try {
+            $this->prepareLargePdfExport();
             $this->ensurePartnerInActiveProject((int) $partnerId);
             $schuljahr = (string) $schuljahr;
             $teil = (string) $teil;
@@ -2624,18 +2627,22 @@ class ProjektBopController extends Controller
                 ];
             })->values();
 
-            $pdf = Pdf::loadView('pdf.auswertungsbogenPA-roland', [
-                'teilnehmer' => $teilnehmer,
+            $pdfPath = $this->rolandEvaluationPdf->create($teilnehmer, [
                 'schulname' => $schule->name,
                 'schuljahr' => $schuljahr,
                 'teil' => $teil,
             ]);
-            $pdf->setPaper('A4', 'landscape');
 
-            return $pdf->download(
-                'Auswertungsbogen_PA_neu_Roland_' . $this->exportFilePart($schule->name) . '_' . $this->exportFilePart($schuljahr) . '_Teil_' . $this->exportFilePart($teil) . '.pdf'
-            );
+            return response()->download(
+                $pdfPath,
+                'Auswertungsbogen_PA_neu_Roland_' . $this->exportFilePart($schule->name) . '_' . $this->exportFilePart($schuljahr) . '_Teil_' . $this->exportFilePart($teil) . '.pdf',
+                ['Content-Type' => 'application/pdf']
+            )->deleteFileAfterSend(true);
         } catch (\Throwable $e) {
+            if ($pdfPath) {
+                File::delete($pdfPath);
+            }
+
             Log::error('Auswertungsbogen PA neu Roland konnte nicht erstellt werden.', [
                 'route' => 'export.auswertungsbogenPA.roland.schule.pdf',
                 'partner_id' => (int) $partnerId,

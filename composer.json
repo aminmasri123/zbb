@@ -16,6 +16,8 @@
         "laravel/tinker": "^2.7",
         "phpoffice/phpspreadsheet": "^5.2",
         "phpoffice/phpword": "^1.4",
+        "setasign/fpdf": "^1.8",
+        "setasign/fpdi": "^2.6",
         "spatie/laravel-permission": "^6.9",
         "tightenco/ziggy": "^1.0"
     },

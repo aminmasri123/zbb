@@ -2,7 +2,10 @@
 
 namespace Tests\Unit;
 
+use App\Services\Bop\RolandEvaluationPdfService;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\File;
+use setasign\Fpdi\Fpdi;
 use Tests\TestCase;
 
 class BopPaRolandEvaluationLayoutTest extends TestCase
@@ -41,5 +44,34 @@ class BopPaRolandEvaluationLayoutTest extends TestCase
         $pdf->render();
 
         $this->assertSame(2, $pdf->getDomPDF()->getCanvas()->get_page_count());
+    }
+
+    public function test_large_roland_export_is_rendered_in_chunks_and_merged(): void
+    {
+        $participant = [
+            'name' => 'Mustermann, Erika',
+            'geburtsdatum' => '15.04.2011',
+            'geschlecht' => 'w',
+            'schule' => 'Gemeinschaftsschule Musterstadt',
+            'klasse' => '8a',
+        ];
+
+        $path = app(RolandEvaluationPdfService::class)->create(
+            collect(array_fill(0, 12, $participant)),
+            [
+                'schulname' => $participant['schule'],
+                'schuljahr' => '2026',
+                'teil' => '1',
+            ]
+        );
+
+        try {
+            $pdf = new Fpdi();
+
+            $this->assertSame(12, $pdf->setSourceFile($path));
+            $this->assertGreaterThan(10_000, File::size($path));
+        } finally {
+            File::delete($path);
+        }
     }
 }
