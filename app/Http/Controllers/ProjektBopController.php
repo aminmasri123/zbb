@@ -1929,7 +1929,7 @@ class ProjektBopController extends Controller
 
         // Teilnehmer laden
         $alleTeilnehmer = PersonenIstSchueler::where('schule_id', $schule->id)
-            ->where('schuljahr', $schuljahr)
+            ->forSchuljahr($schuljahr)
             ->where('teil', $teil)
             ->when($klasse !== 'exportAlleKlassen' && $klasse !== 'exportAlleKlassenZip' , fn($q) => $q->where('klasse', $klasse))
             ->with('person')
@@ -2264,8 +2264,8 @@ class ProjektBopController extends Controller
             }
         // Daten aus der Tabelle abrufen
        if($sortBy == 'nachname'){
-             $alle_teilnehmer = PersonenIstSchueler::where('schuljahr', $schuljahr)
-            ->where('schule_id', $partnerID)
+             $alle_teilnehmer = PersonenIstSchueler::where('schule_id', $partnerID)
+            ->forSchuljahr($schuljahr)
                 ->where('teil', $teil)
                 ->with('person')
                 ->get()
@@ -2273,8 +2273,8 @@ class ProjektBopController extends Controller
 
 
        }elseif($sortBy == 'klasse'){
-           $alle_teilnehmer = PersonenIstSchueler::where('schuljahr', $schuljahr)
-            ->where('schule_id', $partnerID)
+           $alle_teilnehmer = PersonenIstSchueler::where('schule_id', $partnerID)
+            ->forSchuljahr($schuljahr)
             ->where('teil', $teil)
             ->with('person')
             ->get()
@@ -2375,7 +2375,7 @@ class ProjektBopController extends Controller
 
         $teilnehmerIds = PersonenIstSchueler::query()
             ->where('schule_id', $validated['partner_id'])
-            ->where('schuljahr', $validated['schuljahr'])
+            ->forSchuljahr($validated['schuljahr'])
             ->where('teil', $validated['teil'])
             ->pluck('id');
 

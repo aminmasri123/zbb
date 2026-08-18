@@ -538,7 +538,7 @@ class ExportWordController extends Controller
 
         $studentRows = PersonenIstSchueler::query()
             ->where('schule_id', $partner->id)
-            ->where('schuljahr', $context['schuljahr'])
+            ->forSchuljahr($context['schuljahr'])
             ->where('teil', $context['teil'])
             ->with(['person.adresses', 'person.kontaktes.kontakttyp', 'person.sozialedaten'])
             ->get();
@@ -1029,7 +1029,7 @@ class ExportWordController extends Controller
         $contextRows = PersonenIstSchueler::query()
             ->where('schule_id', $hauptpartner->getKey())
             ->when($personIds->isNotEmpty(), fn ($query) => $query->whereIn('person_id', $personIds))
-            ->when($requestedSchuljahr !== '', fn ($query) => $query->where('schuljahr', $requestedSchuljahr))
+            ->when($requestedSchuljahr !== '', fn ($query) => $query->forSchuljahr($requestedSchuljahr))
             ->when($requestedTeil !== '', fn ($query) => $query->where('teil', $requestedTeil))
             ->orderByDesc('id')
             ->get();
@@ -1063,7 +1063,7 @@ class ExportWordController extends Controller
 
         $schoolRows = PersonenIstSchueler::query()
             ->where('schule_id', $hauptpartner->getKey())
-            ->where('schuljahr', $context->schuljahr)
+            ->forSchuljahr($context->schuljahr)
             ->where('teil', $context->teil)
             ->get();
 
@@ -1125,7 +1125,7 @@ class ExportWordController extends Controller
         $run = BopRun::query()
             ->where('projekt_id', $projekt->getKey())
             ->where('partner_id', $partnerId)
-            ->where('schuljahr', $schuljahr)
+            ->forSchuljahr($schuljahr)
             ->whereIn('teil', array_values(array_unique([$teil, $normalisedPart, 'Teil ' . $normalisedPart, '_all'])))
             ->with('phases')
             ->orderByRaw('CASE WHEN teil = ? THEN 0 WHEN teil = ? THEN 1 WHEN teil = ? THEN 2 ELSE 3 END', [
@@ -1554,7 +1554,7 @@ class ExportWordController extends Controller
         $run = BopRun::query()
             ->where('projekt_id', $projekt->getKey())
             ->where('partner_id', $partner->getKey())
-            ->where('schuljahr', $schuljahr)
+            ->forSchuljahr($schuljahr)
             ->whereIn('teil', array_values(array_unique([$teil, $normalisedPart, 'Teil ' . $normalisedPart, '_all'])))
             ->with('phases')
             ->first();

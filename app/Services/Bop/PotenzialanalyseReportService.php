@@ -286,7 +286,7 @@ class PotenzialanalyseReportService
         $students = PersonenIstSchueler::query()
             ->with(['person', 'schule'])
             ->where('schule_id', $schoolId)
-            ->where('schuljahr', $schoolYear)
+            ->forSchuljahr($schoolYear)
             ->where('teil', $part)
             ->get()
             ->keyBy('person_id');

@@ -33,7 +33,7 @@ class BopLegacyFunctionController extends Controller
     {
         return PersonenIstSchueler::with(['person', 'einteilungen'])
             ->where('schule_id', $schuleId)
-            ->where('schuljahr', $schuljahr)
+            ->forSchuljahr($schuljahr)
             ->where('teil', $teil)
             ->orderBy('klasse')
             ->get()

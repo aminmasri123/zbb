@@ -47,7 +47,7 @@ class EinteilungBereicheController extends Controller
 
         $klassen = PersonenIstSchueler::query()
             ->where('schule_id', $partnerId)
-            ->where('schuljahr', $schuljahr)
+            ->forSchuljahr($schuljahr)
             ->where('teil', $teil)
             ->pluck('klasse')
             ->filter()
@@ -215,7 +215,7 @@ class EinteilungBereicheController extends Controller
     {
         return PersonenIstSchueler::query()
             ->where('schule_id', $partnerId)
-            ->where('schuljahr', $schuljahr)
+            ->forSchuljahr($schuljahr)
             ->where('teil', $teil);
     }
 

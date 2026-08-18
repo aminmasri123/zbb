@@ -22,6 +22,24 @@ class BopRun extends Model
         'parts' => 'array',
     ];
 
+    public function scopeForSchuljahr($query, $schuljahr)
+    {
+        $value = trim((string) $schuljahr);
+        preg_match('/\d{4}/', $value, $matches);
+        $startYear = $matches[0] ?? trim(explode('/', $value, 2)[0]);
+
+        return $query->where(function ($yearQuery) use ($value, $startYear) {
+            $yearQuery->where('schuljahr', $value);
+
+            if ($startYear !== '') {
+                $yearQuery
+                    ->orWhere('schuljahr', $startYear)
+                    ->orWhere('schuljahr', 'like', $startYear . '/%')
+                    ->orWhere('schuljahr', 'like', $startYear . '-%');
+            }
+        });
+    }
+
     public function phases()
     {
         return $this->hasMany(BopPhaseSchedule::class)->orderBy('id');

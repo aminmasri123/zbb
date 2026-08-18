@@ -972,7 +972,7 @@ class EinteilungParameterController extends Controller
     {
         return PersonenIstSchueler::query()
             ->where('schule_id', $partnerId)
-            ->where('schuljahr', $schuljahr)
+            ->forSchuljahr($schuljahr)
             ->where('teil', $teil);
     }
 

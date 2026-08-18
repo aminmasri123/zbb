@@ -99,7 +99,7 @@
                     <span v-if="!displayHideTextSidebar" :class="{'rotate-180': activeMenu === 'kooperationspartner', 'text-zbb': $page.component.startsWith('Partner')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
                 </a>
                 <ul v-show="activeMenu === 'kooperationspartner'" class="pl-6 mt-2 space-y-2">
-                    <li v-if="can('kooperationspartner.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('dashboard.partner.index')">{{$t('Partnerübersicht')}}</Link></li>
+                    <li v-if="can('kooperationspartner.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('partner.index')">{{$t('Partnerübersicht')}}</Link></li>
                 </ul>
             </li>
 

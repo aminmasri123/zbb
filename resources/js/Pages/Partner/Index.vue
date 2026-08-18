@@ -128,11 +128,20 @@ function isMenuOpen(key) {
     return openMenus.value[key] || false;
 }
 
+function schoolYearStart(jahr) {
+    const value = String(jahr ?? '').trim();
+    return value.match(/\d{4}/)?.[0] ?? value.split('/')[0].trim();
+}
+
+function sameSchoolYear(jahrA, jahrB) {
+    return schoolYearStart(jahrA) === schoolYearStart(jahrB);
+}
+
 
 function getKlassen(jahr, teil, partner) {
     return [...new Set(
         partner.schueler
-            .filter(s => s.schuljahr === jahr && s.teil === teil)
+            .filter(s => sameSchoolYear(s.schuljahr, jahr) && s.teil === teil)
             .map(s => s.klasse)
             .filter(Boolean)
     )];
@@ -141,7 +150,7 @@ function getKlassen(jahr, teil, partner) {
 function getSchuelerCount(jahr, teil, partner) {
     return new Set(
         partner.schueler
-            .filter(s => s.schuljahr === jahr && s.teil === teil)
+            .filter(s => sameSchoolYear(s.schuljahr, jahr) && s.teil === teil)
             .map(s => s.personen_id ?? s.person_id ?? s.id)
             .filter(Boolean)
     ).size;
@@ -154,11 +163,12 @@ function getSchuljahre(partner) {
             ...(partner.bop_plans ?? []).map(plan => plan.schuljahr),
         ]
             .filter(jahr => jahr !== null && jahr !== undefined && jahr !== '')
+            .map(schoolYearStart)
     )].sort((jahrA, jahrB) => String(jahrB).localeCompare(String(jahrA), 'de', { numeric: true }));
 }
 
 function bopYearStatus(partner, jahr) {
-    return (partner.bop_plans ?? []).find(plan => String(plan.schuljahr) === String(jahr))?.status || null;
+    return (partner.bop_plans ?? []).find(plan => sameSchoolYear(plan.schuljahr, jahr))?.status || null;
 }
 
 function bopYearClass(partner, jahr) {
@@ -178,7 +188,7 @@ function bopYearTitle(partner, jahr) {
 }
 
 function displaySchoolYear(jahr) {
-    return isBopProject.value ? String(jahr).split('/')[0] : jahr;
+    return isBopProject.value ? schoolYearStart(jahr) : jahr;
 }
 
 function normalizedPart(part) {
@@ -188,10 +198,10 @@ function normalizedPart(part) {
 function getTeile(partner, jahr) {
     if (!participantPartsEnabled.value) return ['1'];
     const actualParts = (partner.schueler ?? [])
-        .filter(student => String(student.schuljahr) === String(jahr))
+        .filter(student => sameSchoolYear(student.schuljahr, jahr))
         .map(student => String(student.teil));
     const plannedParts = (partner.bop_plans ?? [])
-        .filter(plan => String(plan.schuljahr) === String(jahr))
+        .filter(plan => sameSchoolYear(plan.schuljahr, jahr))
         .flatMap(plan => plan.parts ?? ['1'])
         .map(String);
     const parts = new Map();
@@ -210,7 +220,7 @@ function partLabel(part) {
 function partHasParticipants(partner, jahr, teil) {
     const key = normalizedPart(teil);
     return (partner.schueler ?? []).some(student =>
-        String(student.schuljahr) === String(jahr) && normalizedPart(student.teil) === key
+        sameSchoolYear(student.schuljahr, jahr) && normalizedPart(student.teil) === key
     );
 }
 
@@ -232,12 +242,12 @@ function handleBopPlanSaved(payload) {
     const run = payload?.run;
     if (!partner) return;
     if (payload?.reset_mode === 'full') {
-        partner.bop_plans = (partner.bop_plans ?? []).filter(plan => String(plan.schuljahr) !== String(payload.context?.schuljahr));
+        partner.bop_plans = (partner.bop_plans ?? []).filter(plan => !sameSchoolYear(plan.schuljahr, payload.context?.schuljahr));
         return;
     }
     if (!run) return;
-    const plans = [...(partner.bop_plans ?? [])].filter(plan => !payload.previous_schuljahr || String(plan.schuljahr) !== String(payload.previous_schuljahr));
-    const index = plans.findIndex(plan => String(plan.schuljahr) === String(run.schuljahr));
+    const plans = [...(partner.bop_plans ?? [])].filter(plan => !payload.previous_schuljahr || !sameSchoolYear(plan.schuljahr, payload.previous_schuljahr));
+    const index = plans.findIndex(plan => sameSchoolYear(plan.schuljahr, run.schuljahr));
     const summary = { id: run.id, partner_id: run.partner_id, schuljahr: run.schuljahr, status: run.status, parts: run.parts || ['1'], updated_at: run.updated_at };
     if (index >= 0) plans[index] = summary;
     else plans.push(summary);
@@ -248,7 +258,7 @@ async function openBopPlannerForSchool(partner) {
     closeDropdowns();
     const now = new Date();
     const currentStartYear = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
-    const currentYear = `${currentStartYear}/${currentStartYear + 1}`;
+    const currentYear = String(currentStartYear);
 
     openModal('bopRunPlanner', {
         jahr: currentYear,

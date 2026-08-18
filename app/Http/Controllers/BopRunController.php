@@ -56,12 +56,14 @@ class BopRunController extends Controller
         $run = BopRun::with(['phases.participants'])
             ->where('projekt_id', $project->id)
             ->where('partner_id', $partner->id)
-            ->where('schuljahr', $schuljahr)
+            ->forSchuljahr($schuljahr)
             ->where('teil', $teil)
-            ->first() ?? ($teil !== '_all' ? BopRun::with(['phases.participants'])->where([
-                'projekt_id' => $project->id, 'partner_id' => $partner->id,
-                'schuljahr' => $schuljahr, 'teil' => '_all',
-            ])->first() : null);
+            ->first() ?? ($teil !== '_all' ? BopRun::with(['phases.participants'])
+                ->where('projekt_id', $project->id)
+                ->where('partner_id', $partner->id)
+                ->forSchuljahr($schuljahr)
+                ->where('teil', '_all')
+                ->first() : null);
 
         return response()->json($this->payload($project, $partner, $schuljahr, $teil, $students, $run));
     }
@@ -133,14 +135,18 @@ class BopRunController extends Controller
             throw ValidationException::withMessages(['planned_classes' => 'Mindestens eine Klasse ist einem unbekannten Teil zugeordnet.']);
         }
 
-        $sourceRun = $originalSchuljahr ? BopRun::where([
-            'projekt_id' => $project->id, 'partner_id' => $partner->id,
-            'schuljahr' => $originalSchuljahr, 'teil' => $teil,
-        ])->first() : null;
-        if ($sourceRun && $originalSchuljahr !== $schuljahr && BopRun::where([
-            'projekt_id' => $project->id, 'partner_id' => $partner->id,
-            'schuljahr' => $schuljahr, 'teil' => $teil,
-        ])->where('id', '!=', $sourceRun->id)->exists()) {
+        $sourceRun = $originalSchuljahr ? BopRun::query()
+            ->where('projekt_id', $project->id)
+            ->where('partner_id', $partner->id)
+            ->forSchuljahr($originalSchuljahr)
+            ->where('teil', $teil)
+            ->first() : null;
+        if ($sourceRun && $originalSchuljahr !== $schuljahr && BopRun::query()
+            ->where('projekt_id', $project->id)
+            ->where('partner_id', $partner->id)
+            ->forSchuljahr($schuljahr)
+            ->where('teil', $teil)
+            ->where('id', '!=', $sourceRun->id)->exists()) {
             throw ValidationException::withMessages([
                 'schuljahr' => "Für das Schuljahr {$schuljahr} existiert bereits eine Planung. Bitte diese zuerst öffnen oder löschen.",
             ]);
@@ -268,10 +274,12 @@ class BopRunController extends Controller
         ]);
         $project = $this->bopProject($request, $partner);
         $teil = $data['teil'] ?? '_all';
-        $run = BopRun::with('phases')->where([
-            'projekt_id' => $project->id, 'partner_id' => $partner->id,
-            'schuljahr' => $data['schuljahr'], 'teil' => $teil,
-        ])->firstOrFail();
+        $run = BopRun::with('phases')
+            ->where('projekt_id', $project->id)
+            ->where('partner_id', $partner->id)
+            ->forSchuljahr($data['schuljahr'])
+            ->where('teil', $teil)
+            ->firstOrFail();
 
         DB::transaction(function () use ($run, $data) {
             foreach ($run->phases as $phase) {
@@ -311,11 +319,11 @@ class BopRunController extends Controller
             'teil' => ['required', 'string', 'max:40'],
         ]);
         $project = $this->bopProject($request, $partner);
-        $run = BopRun::where([
-            'projekt_id' => $project->id,
-            'partner_id' => $partner->id,
-            'schuljahr' => $context['schuljahr'],
-        ])->whereIn('teil', [$context['teil'], '_all'])
+        $run = BopRun::query()
+            ->where('projekt_id', $project->id)
+            ->where('partner_id', $partner->id)
+            ->forSchuljahr($context['schuljahr'])
+            ->whereIn('teil', [$context['teil'], '_all'])
             ->orderByRaw('CASE WHEN teil = ? THEN 0 ELSE 1 END', [$context['teil']])
             ->firstOrFail();
         $phase = $run->phases()->where('phase_type', $phaseType)->firstOrFail();
@@ -350,7 +358,7 @@ class BopRunController extends Controller
     {
         return PersonenIstSchueler::with('person:id,vorname,nachname')
             ->where('schule_id', $partner->id)
-            ->where('schuljahr', $schuljahr)
+            ->forSchuljahr($schuljahr)
             ->when($teil !== '_all', fn (Builder $query) => $query->where('teil', $teil))
             ->whereHas('person', fn (Builder $query) => $query->where('aktiv', true))
             ->get()

@@ -609,7 +609,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
 
     // Partner
     Route::get('/organisation/partner', [PartnerController::class, 'index'])->name('partner.index');
-    Route::get('/partner', [PartnerController::class, 'index'])->name('dashboard.partner.index');
+    Route::redirect('/partner', '/organisation/partner')->name('dashboard.partner.index');
     Route::post('/organisation/partner/anlegen', [PartnerController::class, 'store'])->name('partner.store');
     Route::delete('/organisation/partner/entfernen/{id}', [PartnerController::class, 'destroy'])->name('partner.destroy');
     Route::put('/organisation/partner/edit/{id}', [PartnerController::class, 'update'])->name('partner.update');

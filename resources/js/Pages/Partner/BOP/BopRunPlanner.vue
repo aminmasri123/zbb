@@ -450,7 +450,7 @@ async function resetPlanning(forcedMode = null) {
 
         <section class="grid gap-4 rounded-lg border bg-white p-4 md:grid-cols-5">
           <label class="text-sm font-semibold text-gray-700">Schuljahr
-            <div class="mt-1 flex gap-1"><input v-model="selectedSchoolYear" list="bop-school-years" type="text" class="min-w-0 flex-1 rounded border-gray-300 text-sm" placeholder="2026/2027" /><datalist id="bop-school-years"><option v-for="year in schoolYears" :key="year" :value="year"></option></datalist><button type="button" class="rounded border px-2 text-xs" :disabled="loading || saving" @click="load">Laden</button></div>
+            <div class="mt-1 flex gap-1"><input v-model="selectedSchoolYear" list="bop-school-years" type="text" class="min-w-0 flex-1 rounded border-gray-300 text-sm" placeholder="2026" /><datalist id="bop-school-years"><option v-for="year in schoolYears" :key="year" :value="year"></option></datalist><button type="button" class="rounded border px-2 text-xs" :disabled="loading || saving" @click="load">Laden</button></div>
             <span class="mt-1 block text-xs font-normal text-gray-500">Frei eingeben oder vorhandenes Schuljahr auswählen</span>
           </label>
           <label class="text-sm font-semibold text-gray-700">Schulform
