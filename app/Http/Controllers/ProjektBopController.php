@@ -18,6 +18,7 @@ use App\Models\Projekt;
 use App\Services\Bop\AttendanceFooterService;
 use App\Services\Bop\PublicAreaSelectionAccess;
 use App\Services\MyDatum;
+use App\Services\Projects\ActiveProjectContext;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
 use BaconQrCode\Renderer\ImageRenderer;
 use BaconQrCode\Renderer\RendererStyle\RendererStyle;
@@ -65,22 +66,25 @@ class ProjektBopController extends Controller
     public function __construct(
         private readonly PublicAreaSelectionAccess $publicAreaSelection,
         private readonly AttendanceFooterService $attendanceFooter,
+        private readonly ActiveProjectContext $activeProjectContext,
     ) {
     }
 
     private function ensurePartnerInActiveProject(int $partnerId): int
     {
-        $projectId = auth()->user()?->current_team_id;
-        abort_unless($projectId, 409, 'Bitte waehlen Sie zuerst ein aktives Projekt aus.');
+        $user = auth()->user();
+        $project = $user ? $this->activeProjectContext->currentAvailableFor($user) : null;
+        abort_unless($project, 409, 'Bitte waehlen Sie zuerst ein aktives Projekt aus.');
+
         abort_unless(
             DB::table('projekt_has_partners')
-                ->where('projekt_id', $projectId)
+                ->where('projekt_id', $project->id)
                 ->where('partner_id', $partnerId)
                 ->exists(),
             404
         );
 
-        return (int) $projectId;
+        return (int) $project->id;
     }
 
     private function normalizeAuswahlAnzahl(int $value): int

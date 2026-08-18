@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\Berechtigungskategorie;
+use App\Models\Partner;
 use App\Models\Personen;
 use App\Models\Projekt;
+use App\Models\ProjektHasPartner;
 use App\Models\ProjektHasPersonen;
 use App\Models\Role;
 use App\Models\RoleDataAccessSetting;
@@ -133,6 +135,45 @@ class ActiveProjectContextTest extends TestCase
             'personen_id' => $participant->id,
             'projekt_id' => $other->id,
         ]);
+    }
+
+    public function test_school_pa_exports_use_the_same_fallback_project_as_the_partner_page(): void
+    {
+        $user = $this->userWithParticipantAccess();
+        $assigned = $this->project('BOP Standardprojekt');
+        $stale = $this->project('Nicht mehr zugewiesen');
+        $this->assignUser($user, $assigned);
+
+        $partner = Partner::query()->create(['name' => 'Testschule']);
+        ProjektHasPartner::query()->create([
+            'projekt_id' => $assigned->id,
+            'partner_id' => $partner->id,
+        ]);
+
+        $this->givePermission($user, 'dokumente.schule.export');
+        $this->givePermission($user, 'potenzialanalyse.index');
+
+        foreach ([
+            'export.auswertungsbogenPA.schule.pdf',
+            'export.auswertungsbogenPA.roland.schule.pdf',
+        ] as $routeName) {
+            $user->update([
+                'current_team_id' => $stale->id,
+                'default_projekt_id' => $assigned->id,
+            ]);
+
+            $this->actingAs($user->fresh())
+                ->from('/partner')
+                ->get(route($routeName, [
+                    'partnerId' => $partner->id,
+                    'schuljahr' => '2026',
+                    'teil' => '1',
+                ]))
+                ->assertRedirect('/partner')
+                ->assertSessionHas('error');
+
+            $this->assertSame($assigned->id, $user->fresh()->current_team_id);
+        }
     }
 
     private function project(string $name): Projekt
