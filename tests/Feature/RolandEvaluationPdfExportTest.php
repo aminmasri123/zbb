@@ -16,7 +16,7 @@ class RolandEvaluationPdfExportTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_export_accepts_start_year_and_downloads_one_page_per_participant(): void
+    public function test_export_accepts_start_year_and_downloads_only_selected_class(): void
     {
         $user = User::factory()->create();
         $project = Projekt::factory()->create(['name' => 'BOP']);
@@ -28,7 +28,7 @@ class RolandEvaluationPdfExportTest extends TestCase
         $this->grantTestPermission($user, 'dokumente.schule.export');
         $this->grantTestPermission($user, 'potenzialanalyse.index');
 
-        foreach (['Alpha', 'Beta'] as $lastName) {
+        foreach ([['Alpha', '8a'], ['Beta', '8a'], ['Gamma', '8b']] as [$lastName, $class]) {
             $person = Personen::factory()->create([
                 'vorname' => 'Erika',
                 'nachname' => $lastName,
@@ -37,7 +37,7 @@ class RolandEvaluationPdfExportTest extends TestCase
 
             PersonenIstSchueler::query()->create([
                 'person_id' => $person->id,
-                'klasse' => '8a',
+                'klasse' => $class,
                 'schule_id' => $partner->id,
                 'schuljahr' => '2026/2027',
                 'teil' => '1',
@@ -46,10 +46,10 @@ class RolandEvaluationPdfExportTest extends TestCase
 
         $response = $this->actingAs($user)->get(route(
             'export.auswertungsbogenPA.roland.schule.pdf',
-            ['partnerId' => $partner->id, 'schuljahr' => '2026', 'teil' => '1']
+            ['partnerId' => $partner->id, 'schuljahr' => '2026', 'teil' => '1', 'klasse' => '8a']
         ));
 
-        $response->assertOk()->assertDownload('Auswertungsbogen_PA_neu_Roland_Testschule_2026_Teil_1.pdf');
+        $response->assertOk()->assertDownload('Auswertungsbogen_PA_neu_Roland_Testschule_2026_Teil_1_Klasse_8a.pdf');
         $path = $response->baseResponse->getFile()->getPathname();
 
         try {

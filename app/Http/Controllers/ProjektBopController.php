@@ -2570,7 +2570,7 @@ class ProjektBopController extends Controller
             return $pdf->stream('Auswertungbogen_PA_' . $schule->name. '_' . $schuljahr  . '_Teil_' . $teil .'.pdf');
     }
 
-    public function generatePdfAuswertungsbogenPaRolandSchule($partnerId, $schuljahr, $teil)
+    public function generatePdfAuswertungsbogenPaRolandSchule($partnerId, $schuljahr, $teil, $klasse = null)
     {
         // Der Export wird in kleinen Bloecken gerendert und danach zusammengefuegt.
         // So bleibt der Speicherverbrauch auch bei vielen Teilnehmenden begrenzt.
@@ -2586,6 +2586,7 @@ class ProjektBopController extends Controller
 
             $schueler = PersonenIstSchueler::with('person')
                 ->filterSchueler((int) $partnerId, $schuljahr, $teil)
+                ->when($klasse !== null && trim((string) $klasse) !== '', fn ($query) => $query->where('klasse', (string) $klasse))
                 ->get()
                 ->sort(function ($a, $b) {
                     $klasseCompare = strnatcasecmp((string) $a->klasse, (string) $b->klasse);
@@ -2627,15 +2628,15 @@ class ProjektBopController extends Controller
                 ];
             })->values();
 
-            $pdfPath = $this->rolandEvaluationPdf->create($teilnehmer, [
-                'schulname' => $schule->name,
-                'schuljahr' => $schuljahr,
-                'teil' => $teil,
-            ]);
+            $pdfPath = $this->rolandEvaluationPdf->create($teilnehmer);
+
+            $classFilePart = $klasse !== null && trim((string) $klasse) !== ''
+                ? '_Klasse_' . $this->exportFilePart((string) $klasse)
+                : '';
 
             return response()->download(
                 $pdfPath,
-                'Auswertungsbogen_PA_neu_Roland_' . $this->exportFilePart($schule->name) . '_' . $this->exportFilePart($schuljahr) . '_Teil_' . $this->exportFilePart($teil) . '.pdf',
+                'Auswertungsbogen_PA_neu_Roland_' . $this->exportFilePart($schule->name) . '_' . $this->exportFilePart($schuljahr) . '_Teil_' . $this->exportFilePart($teil) . $classFilePart . '.pdf',
                 ['Content-Type' => 'application/pdf']
             )->deleteFileAfterSend(true);
         } catch (\Throwable $e) {

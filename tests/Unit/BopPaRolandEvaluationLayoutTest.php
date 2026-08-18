@@ -46,7 +46,7 @@ class BopPaRolandEvaluationLayoutTest extends TestCase
         $this->assertSame(2, $pdf->getDomPDF()->getCanvas()->get_page_count());
     }
 
-    public function test_large_roland_export_is_rendered_in_chunks_and_merged(): void
+    public function test_large_roland_export_uses_static_template_for_all_pages(): void
     {
         $participant = [
             'name' => 'Mustermann, Erika',
@@ -57,12 +57,7 @@ class BopPaRolandEvaluationLayoutTest extends TestCase
         ];
 
         $path = app(RolandEvaluationPdfService::class)->create(
-            collect(array_fill(0, 12, $participant)),
-            [
-                'schulname' => $participant['schule'],
-                'schuljahr' => '2026',
-                'teil' => '1',
-            ]
+            collect(array_fill(0, 12, $participant))
         );
 
         try {

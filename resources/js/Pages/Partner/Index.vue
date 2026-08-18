@@ -736,7 +736,26 @@ const updatePartnerAPI = async (form) => {
                                                         <!--  Bereichsauswahl -->
                                                         <a v-if="canAnySelectionPermission" :href="route('bereichsauswahl.index', { partnerId: partner.id, schuljahr: jahr, teil: teil })" class="block px-4 py-1  hover:bg-gray-200">Bereichsauswahl</a>
                                                         <a v-if="can('dokumente.schule.export')" :href="route('export.auswertungsbogenPA.schule.pdf', { partnerId: partner.id, schuljahr: jahr, teil })" class="block px-4 py-1 hover:bg-gray-200">Auswertungsbogen PA</a>
-                                                        <a v-if="can('dokumente.schule.export')" :href="route('export.auswertungsbogenPA.roland.schule.pdf', { partnerId: partner.id, schuljahr: jahr, teil })" class="block px-4 py-1 hover:bg-gray-200">Auswertungsbogen PA neu Roland</a>
+                                                        <div v-if="can('dokumente.schule.export')">
+                                                            <button
+                                                                type="button"
+                                                                class="flex w-full items-center justify-between px-4 py-1 text-left hover:bg-gray-200"
+                                                                @click.stop="toggleMenu(`roland-${partner.id}-${jahr}-${teil}`)"
+                                                            >
+                                                                <span>Auswertungsbogen PA neu Roland</span>
+                                                                <span>{{ isMenuOpen(`roland-${partner.id}-${jahr}-${teil}`) ? '▼' : '▶' }}</span>
+                                                            </button>
+                                                            <div v-show="isMenuOpen(`roland-${partner.id}-${jahr}-${teil}`)" class="border-l-2 border-gray-200 pl-3">
+                                                                <a
+                                                                    v-for="klasse in getKlassen(jahr, teil, partner)"
+                                                                    :key="`roland-${partner.id}-${jahr}-${teil}-${klasse}`"
+                                                                    :href="route('export.auswertungsbogenPA.roland.schule.pdf', { partnerId: partner.id, schuljahr: jahr, teil, klasse })"
+                                                                    class="block px-4 py-1 hover:bg-gray-200"
+                                                                >
+                                                                    Klasse {{ klasse }}
+                                                                </a>
+                                                            </div>
+                                                        </div>
                                                         <a v-if="can('dokumente.ansprechpartner.manage')" :href="route('export.elterneinverstaendniserklaerung.schule', { partnerId: partner.id, schuljahr: jahr, teil })" class="block px-4 py-1 hover:bg-gray-200">X Elterneinverständniserklärung</a>
 
                                                         <Link v-if="canAnyAssignmentPermission" :href="route('einteilung.show', { partnerId: partner.id, schuljahr: jahr, teil })" class="block px-4 py-1 hover:bg-gray-200">Einteilung</Link>

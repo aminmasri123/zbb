@@ -818,7 +818,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::post('/bereichwahl-update', [ProjektBopController::class, 'waehlen'])->name('bereichsauswahl.bop.radio.update');
 
     Route::get('/export/auswertungsbogen/pa/pdf/{partnerId}/{schuljahr}/{teil}', [ProjektBopController::class, 'generatePdfauswertungsbogenPASchule'])->name('export.auswertungsbogenPA.schule.pdf')->middleware(['can:dokumente.schule.export', 'canAnyPermission:potenzialanalyse.index,potenzialanalyse.update,potenzialanalyse.manage']);
-    Route::get('/export/auswertungsbogen/pa/roland/pdf/{partnerId}/{schuljahr}/{teil}', [ProjektBopController::class, 'generatePdfAuswertungsbogenPaRolandSchule'])->name('export.auswertungsbogenPA.roland.schule.pdf')->middleware(['can:dokumente.schule.export', 'canAnyPermission:potenzialanalyse.index,potenzialanalyse.update,potenzialanalyse.manage']);
+    Route::get('/export/auswertungsbogen/pa/roland/pdf/{partnerId}/{schuljahr}/{teil}/{klasse?}', [ProjektBopController::class, 'generatePdfAuswertungsbogenPaRolandSchule'])->name('export.auswertungsbogenPA.roland.schule.pdf')->middleware(['can:dokumente.schule.export', 'canAnyPermission:potenzialanalyse.index,potenzialanalyse.update,potenzialanalyse.manage']);
     Route::get('/export/elterneinverstaendniserklaerung/{partnerId}/{schuljahr}/{teil}', [ProjektBopController::class, 'exportElterneinverstaendniserklaerungSchule'])->name('export.elterneinverstaendniserklaerung.schule');
 
     // Einteilung Berieche
