@@ -20,11 +20,13 @@ const sessionActivityUrl = () => window.asset('system/session-activity');
 
 const applySessionPayload = (payload = {}) => {
     sessionLifetimeSeconds.value = Number(payload.lifetime_seconds || sessionLifetimeSeconds.value);
-    expiresAtMs = Number(payload.expires_at || 0) * 1000 || null;
+    const serverRemainingSeconds = Math.max(0, Number(payload.remaining_seconds || 0));
 
-    if (expiresAtMs) {
-        sessionRemainingSeconds.value = Math.max(0, Math.ceil((expiresAtMs - Date.now()) / 1000));
-    }
+    // Der Server liefert die Restdauer bereits fertig berechnet. Daraus wird
+    // eine lokale Deadline gebildet, damit unterschiedliche Server-/PC-Uhren
+    // oder Zeitzonen den angezeigten Countdown nicht verfälschen.
+    sessionRemainingSeconds.value = serverRemainingSeconds;
+    expiresAtMs = Date.now() + (serverRemainingSeconds * 1000);
 
     if ((sessionRemainingSeconds.value ?? 0) > EXPIRY_WARNING_SECONDS) {
         sessionWarningVisible.value = false;
