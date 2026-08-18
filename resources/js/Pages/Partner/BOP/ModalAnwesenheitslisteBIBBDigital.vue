@@ -58,6 +58,8 @@ const draftLoading = ref(false)
 const draftLoaded = ref(false)
 const draftHydrating = ref(false)
 const draftDirty = ref(false)
+const draftSaveBlocked = ref(false)
+const draftSaveError = ref('')
 const draftLastSavedAt = ref(null)
 const draftExpiresAt = ref(null)
 const sheetFullscreen = ref(false)
@@ -131,6 +133,7 @@ const bereicheText = computed(() => {
 })
 const signatureCount = computed(() => Object.values(signatures).filter(Boolean).length)
 const draftStatusText = computed(() => {
+  if (draftSaveBlocked.value) return 'Speichern fehlgeschlagen'
   if (draftLoading.value) return 'wird geladen'
   if (draftSaving.value) return 'wird gespeichert'
   if (draftDirty.value) return 'Änderungen offen'
@@ -394,6 +397,8 @@ const saveDraft = async ({ silent = true, payload = null, signatureSnapshotGuard
     const isLatestSaveResponse = requestId === draftSaveRequestId
 
     if (isLatestSaveResponse) {
+      draftSaveBlocked.value = false
+      draftSaveError.value = ''
       if (response.data.payload && !signatureChangedDuringSave) applyDraftPayload(response.data.payload)
       draftRevision.value = response.data.revision || draftRevision.value
       draftLastSavedAt.value = response.data.updated_at || new Date().toISOString()
@@ -402,6 +407,11 @@ const saveDraft = async ({ silent = true, payload = null, signatureSnapshotGuard
       draftDirty.value = signatureChangedDuringSave
     }
   } catch (error) {
+    if (requestId === draftSaveRequestId && ![401, 419].includes(error?.response?.status)) {
+      draftSaveBlocked.value = true
+      draftSaveError.value = 'Die letzte Änderung wurde nicht vom Server bestätigt. Weitere Unterschriften sind gesperrt. Bitte Verbindung und Server prüfen und dann erneut speichern.'
+      draftDirty.value = true
+    }
     if (!silent && requestId === draftSaveRequestId) {
       BibbSwal.fire('Fehler', await readBlobError(error), 'error')
     }
@@ -605,6 +615,13 @@ const pdfLayout = (doc) => {
     rowHeight: 7.2 * rowScale,
     rowsPerPage: form.exportFormat === 'A3' ? 17 : 13,
   }
+}
+
+const warnAboutUnsavedDraft = (event) => {
+  if (window.__zbbSessionExpired || !props.visible || (!draftDirty.value && !draftSaveBlocked.value)) return
+
+  event.preventDefault()
+  event.returnValue = ''
 }
 
 const ensureManualDayGroups = (day) => ({
@@ -1039,6 +1056,8 @@ const resetState = () => {
   stopDraftTimers()
   closeSheetFullscreen()
   draftHydrating.value = true
+  draftSaveBlocked.value = false
+  draftSaveError.value = ''
   draftLoaded.value = false
   draftDirty.value = false
   form.exportFormat = 'A3'
@@ -1071,9 +1090,11 @@ watch(
   () => props.visible,
   (visible) => {
     if (visible) {
+      window.addEventListener('beforeunload', warnAboutUnsavedDraft)
       loadPreview({ includeDraft: true })
       startDraftPolling()
     } else {
+      window.removeEventListener('beforeunload', warnAboutUnsavedDraft)
       flushDraftSave()
       resetState()
     }
@@ -1099,6 +1120,7 @@ watch(sheetFullscreen, (fullscreen) => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', warnAboutUnsavedDraft)
   flushDraftSave()
   stopDraftTimers()
   closeSheetFullscreen()
@@ -1279,6 +1301,9 @@ onBeforeUnmount(() => {
             Zentraler Entwurf: {{ draftStatusText }} / {{ signatureCount }} Unterschriften / Revision {{ draftRevision }}
             <span v-if="draftExpiryText"> / Rohdaten bis {{ draftExpiryText }}</span>
           </p>
+          <div v-if="draftSaveBlocked" class="mt-3 rounded border border-red-400 bg-red-50 p-3 text-sm font-semibold text-red-800" role="alert">
+            {{ draftSaveError }}
+          </div>
 
           <div v-if="days.length === 0" class="mt-4 rounded border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
             Keine Tage gefunden.
@@ -1405,6 +1430,7 @@ onBeforeUnmount(() => {
                         <i class="la la-check-circle"></i>
                       </span>
                       <SignatureBox
+                        :disabled="draftSaveBlocked"
                         v-if="participantCanSignDay(participant, day)"
                         :model-value="signatures[signatureKey(day, participant)] || ''"
                         :participant-name="[participant.vorname, participant.nachname].filter(Boolean).join(' ')"
@@ -1428,6 +1454,7 @@ onBeforeUnmount(() => {
                         <i class="la la-check-circle"></i>
                       </span>
                       <SignatureBox
+                        :disabled="draftSaveBlocked"
                         v-if="feedbackDay"
                         :model-value="signatures[signatureKey(feedbackDay, participant)] || ''"
                         :participant-name="[participant.vorname, participant.nachname].filter(Boolean).join(' ')"

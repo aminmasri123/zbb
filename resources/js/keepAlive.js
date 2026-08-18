@@ -1,23 +1,29 @@
-const KEEPALIVE_INTERVAL_MS = 45_000;
-const RETRY_INTERVAL_MS = 5_000;
+const SESSION_CHECK_INTERVAL_MS = 3 * 60_000;
 
 let intervalId = null;
-let retryId = null;
 let requestRunning = false;
+let redirecting = false;
 
-const keepaliveUrl = () => window.asset('system/keepalive');
+const sessionStatusUrl = () => window.asset('system/session-status');
 
-export const pingBackend = async () => {
-    if (requestRunning || !navigator.onLine) {
-        return;
-    }
+export const redirectAfterSessionExpiry = () => {
+    if (redirecting) return;
 
-    requestRunning = true;
+    redirecting = true;
+    window.__zbbSessionExpired = true;
+    window.dispatchEvent(new CustomEvent('zbb:session-expired'));
+    window.alert('Ihre Sitzung ist abgelaufen. Nicht bestätigte Änderungen konnten nicht gespeichert werden.');
+    window.location.replace(window.asset(''));
+};
+
+export const checkAuthenticatedSession = async ({ redirect = true } = {}) => {
+    if (!navigator.onLine) return false;
 
     try {
-        const response = await fetch(`${keepaliveUrl()}?t=${Date.now()}`, {
+        const response = await fetch(`${sessionStatusUrl()}?t=${Date.now()}`, {
             method: 'GET',
             credentials: 'same-origin',
+            redirect: 'manual',
             cache: 'no-store',
             headers: {
                 Accept: 'application/json',
@@ -25,38 +31,37 @@ export const pingBackend = async () => {
             },
         });
 
-        if (!response.ok) {
-            throw new Error(`Keepalive antwortete mit HTTP ${response.status}`);
+        if ([401, 419].includes(response.status) || response.type === 'opaqueredirect') {
+            if (redirect) redirectAfterSessionExpiry();
+            return false;
         }
 
-        if (retryId !== null) {
-            window.clearInterval(retryId);
-            retryId = null;
-        }
-    } catch (error) {
-        // Bei einem kurzen PHP-FPM-Neustart alle fünf Sekunden erneut prüfen.
-        // Es erscheint absichtlich keine Meldung, damit die Arbeit nicht gestört wird.
-        if (retryId === null) {
-            retryId = window.setInterval(pingBackend, RETRY_INTERVAL_MS);
-        }
+        return response.ok;
+    } catch {
+        return false;
+    }
+};
+
+export const pingBackend = async () => {
+    if (requestRunning || document.hidden) return;
+
+    requestRunning = true;
+    try {
+        await checkAuthenticatedSession();
     } finally {
         requestRunning = false;
     }
 };
 
 export const startBackendKeepAlive = () => {
-    if (intervalId !== null) {
-        return;
-    }
+    if (intervalId !== null) return;
 
     pingBackend();
-    intervalId = window.setInterval(pingBackend, KEEPALIVE_INTERVAL_MS);
+    intervalId = window.setInterval(pingBackend, SESSION_CHECK_INTERVAL_MS);
 
     window.addEventListener('focus', pingBackend);
     window.addEventListener('online', pingBackend);
     document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) {
-            pingBackend();
-        }
+        if (!document.hidden) pingBackend();
     });
 };

@@ -1,6 +1,7 @@
 <script setup>
 import { nextTick, onMounted, ref, watch } from 'vue'
 import Swal from 'sweetalert2'
+import { checkAuthenticatedSession } from '@/keepAlive'
 
 const props = defineProps({
   modelValue: {
@@ -82,6 +83,16 @@ const pointerPosition = (event, targetCanvas) => {
 
 const openExpanded = async () => {
   if (props.disabled) return
+
+  const sessionActive = await checkAuthenticatedSession()
+  if (!sessionActive) {
+    await Swal.fire({
+      title: 'Unterschrift gesperrt',
+      text: 'Die Sitzung oder Serververbindung konnte nicht bestätigt werden. Bitte stellen Sie die Verbindung wieder her und melden Sie sich gegebenenfalls erneut an.',
+      icon: 'error',
+    })
+    return
+  }
 
   expanded.value = true
   await nextTick()

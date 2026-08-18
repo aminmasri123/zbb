@@ -69,6 +69,10 @@ createInertiaApp({
     // ✅ Und am Ende mounten
     app.mount(el);
 
+    if (props.initialPage?.props?.auth?.user) {
+        startBackendKeepAlive();
+    }
+
     return app;
 },
 
@@ -79,4 +83,3 @@ createInertiaApp({
 });
 
 setThemeOnLoad();
-startBackendKeepAlive();

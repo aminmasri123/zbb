@@ -97,6 +97,8 @@ const draftLoading = ref(false)
 const draftLoaded = ref(false)
 const draftHydrating = ref(false)
 const draftDirty = ref(false)
+const draftSaveBlocked = ref(false)
+const draftSaveError = ref('')
 const draftLastSavedAt = ref(null)
 const draftExpiresAt = ref(null)
 const sheetFullscreen = ref(false)
@@ -129,6 +131,7 @@ const draftScopeReady = computed(() => props.partnerId
   && props.teil
   && (!isPreparationPa.value || form.klasse))
 const draftStatusText = computed(() => {
+  if (draftSaveBlocked.value) return 'Speichern fehlgeschlagen'
   if (draftLoading.value) return 'wird geladen'
   if (draftSaving.value) return 'wird gespeichert'
   if (draftDirty.value) return 'Änderungen offen'
@@ -560,6 +563,8 @@ const saveDraft = async ({ silent = true, payload = null, signatureSnapshotGuard
     const isLatestSaveResponse = requestId === draftSaveRequestId
 
     if (isLatestSaveResponse) {
+      draftSaveBlocked.value = false
+      draftSaveError.value = ''
       if (response.data.payload && !signatureChangedDuringSave) applyDraftPayload(response.data.payload)
       draftRevision.value = response.data.revision || draftRevision.value
       draftLastSavedAt.value = response.data.updated_at || new Date().toISOString()
@@ -568,6 +573,11 @@ const saveDraft = async ({ silent = true, payload = null, signatureSnapshotGuard
       draftDirty.value = signatureChangedDuringSave
     }
   } catch (error) {
+    if (requestId === draftSaveRequestId && ![401, 419].includes(error?.response?.status)) {
+      draftSaveBlocked.value = true
+      draftSaveError.value = 'Die letzte Änderung wurde nicht vom Server bestätigt. Weitere Unterschriften sind gesperrt. Bitte Verbindung und Server prüfen und dann erneut speichern.'
+      draftDirty.value = true
+    }
     if (!silent && requestId === draftSaveRequestId) {
       PaSwal.fire('Fehler', await readBlobError(error), 'error')
     }
@@ -711,6 +721,13 @@ const paTermDaysPayload = () => {
       source: 'pa-term',
       note: day.note,
     }))
+}
+
+const warnAboutUnsavedDraft = (event) => {
+  if (window.__zbbSessionExpired || !props.visible || (!draftDirty.value && !draftSaveBlocked.value)) return
+
+  event.preventDefault()
+  event.returnValue = ''
 }
 
 const preparationDaysPayload = () => {
@@ -1427,6 +1444,8 @@ const resetState = () => {
   stopDraftTimers()
   closeSheetFullscreen()
   draftHydrating.value = true
+  draftSaveBlocked.value = false
+  draftSaveError.value = ''
   form.exportFormat = 'A4'
   form.startDate = ''
   form.endDate = ''
@@ -1491,10 +1510,12 @@ watch(
   () => props.visible,
   async (visible) => {
     if (visible) {
+      window.addEventListener('beforeunload', warnAboutUnsavedDraft)
       await loadBopPlanDefaults()
       loadPreview({ includeDraft: true })
       startDraftPolling()
     } else {
+      window.removeEventListener('beforeunload', warnAboutUnsavedDraft)
       flushDraftSave()
       resetState()
     }
@@ -1520,6 +1541,7 @@ watch(sheetFullscreen, (fullscreen) => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', warnAboutUnsavedDraft)
   flushDraftSave()
   stopDraftTimers()
   closeSheetFullscreen()
@@ -1722,6 +1744,9 @@ onBeforeUnmount(() => {
             Zentraler Entwurf: {{ draftStatusText }} / {{ signatureCount }} Unterschriften / Revision {{ draftRevision }}
             <span v-if="draftExpiryText"> / Rohdaten bis {{ draftExpiryText }}</span>
           </p>
+          <div v-if="draftSaveBlocked" class="mt-3 rounded border border-red-400 bg-red-50 p-3 text-sm font-semibold text-red-800" role="alert">
+            {{ draftSaveError }}
+          </div>
 
           <div v-if="days.length === 0" class="mt-4 rounded border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
             {{ noDaysText }}
@@ -1846,6 +1871,7 @@ onBeforeUnmount(() => {
                           <i class="la la-check-circle"></i>
                         </span>
                         <SignatureBox
+                          :disabled="draftSaveBlocked"
                           :model-value="signatures[signatureKey(day, row.participant)] || ''"
                           :participant-name="[row.participant.vorname, row.participant.nachname].filter(Boolean).join(' ')"
                           compact

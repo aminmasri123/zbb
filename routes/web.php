@@ -220,6 +220,16 @@ Route::get('/system/keepalive', function () {
     ]);
 })->name('system.keepalive');
 
+// Geschützte Statusprüfung: bei abgelaufener Sitzung antwortet Laravel auf
+// die JSON-Anfrage mit 401, statt unbemerkt eine Loginseite zurückzugeben.
+Route::get('/system/session-status', function () {
+    return response()->json(['authenticated' => true])->withHeaders([
+        'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+    ]);
+})->middleware('auth')
+    ->withoutMiddleware(\App\Http\Middleware\HandleInertiaRequests::class)
+    ->name('system.session-status');
+
 // Geschützte Routen
 Route::middleware('throttle:60,1')->group(function () {
     Route::get('/bereichsauswahl/zugang/{token}', [ProjektBopController::class, 'bereichsauswahlSelfShow'])->name('bereichsauswahl.self.show');

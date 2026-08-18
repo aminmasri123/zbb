@@ -8,9 +8,19 @@ window._ = _;
  */
 
 import axios from 'axios';
+import { redirectAfterSessionExpiry } from './keepAlive';
 window.axios = axios;
 
 window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
+
+window.axios.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        if ([401, 419].includes(error?.response?.status)) redirectAfterSessionExpiry();
+
+        return Promise.reject(error);
+    }
+);
 
 /**
  * Echo exposes an expressive API for subscribing to channels and listening
