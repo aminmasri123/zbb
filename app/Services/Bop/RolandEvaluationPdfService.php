@@ -16,7 +16,9 @@ class RolandEvaluationPdfService
         $temporaryRoot = storage_path('app/tmp');
         $identifier = Str::uuid()->toString();
         $outputPath = $temporaryRoot . DIRECTORY_SEPARATOR . 'roland-evaluation-' . $identifier . '.pdf';
-        $templatePath = resource_path('pdf/auswertungsbogen-pa-roland-template.pdf');
+        // Versionierter Dateiname verhindert, dass ein Server nach einem Deployment
+        // weiterhin eine alte, bereits gecachte PDF-Vorlage verwendet.
+        $templatePath = resource_path('pdf/auswertungsbogen-pa-roland-template-v3.pdf');
 
         File::ensureDirectoryExists($temporaryRoot);
 
@@ -74,12 +76,12 @@ class RolandEvaluationPdfService
     {
         $encodedText = iconv('UTF-8', 'windows-1252//TRANSLIT//IGNORE', trim($text));
         $encodedText = $encodedText === false ? '' : $encodedText;
-        $fontSize = 7.7;
+        $fontSize = 8.6;
 
         do {
             $pdf->SetFont('Helvetica', '', $fontSize);
             $fontSize -= 0.2;
-        } while ($fontSize >= 5.8 && $pdf->GetStringWidth($encodedText) > $width);
+        } while ($fontSize >= 6.2 && $pdf->GetStringWidth($encodedText) > $width);
 
         if ($pdf->GetStringWidth($encodedText) > $width) {
             while ($encodedText !== '' && $pdf->GetStringWidth($encodedText . '...') > $width) {

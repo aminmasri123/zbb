@@ -12,7 +12,7 @@
             margin: 0;
             color: #111;
             font-family: DejaVu Sans, Arial, sans-serif;
-            font-size: 7.7pt;
+            font-size: 8.6pt;
         }
 
         .sheet {
@@ -32,8 +32,8 @@
             height: 8mm;
             margin: 0;
             text-align: center;
-            font-size: 12pt;
-            font-weight: 400;
+            font-size: 13pt;
+            font-weight: 600;
             line-height: 6mm;
         }
 
@@ -45,13 +45,13 @@
             left: 0;
             width: 100%;
             height: 14mm;
-            border: 2px solid #111;
+            border: 1.4px solid #111;
         }
 
         .meta td {
             height: 6.7mm;
             border: 1px solid #111;
-            padding: 0.7mm 1mm;
+            padding: 0.65mm 1.15mm;
             vertical-align: middle;
             white-space: nowrap;
             overflow: hidden;
@@ -80,15 +80,23 @@
             width: 34.5%;
             height: 100%;
             padding-right: 0;
-            border-right: 3px solid #111;
+            border-right: 0;
+        }
+
+        .center-divider {
+            position: absolute;
+            top: 7.8mm;
+            left: 34.5%;
+            height: 143.2mm;
+            border-left: 2.2px solid #111;
         }
 
         .right-pane {
             position: absolute;
-            top: 0;
-            left: 34.5%;
-            width: 65.5%;
-            height: 100%;
+            top: 1.8mm;
+            left: 35.2%;
+            width: 64.8%;
+            height: 149.2mm;
             padding-left: 0;
         }
 
@@ -97,8 +105,8 @@
         .scale-table { width: 100%; }
 
         .task-table thead th {
-            height: 7.5mm;
-            border-bottom: 3px solid #aaa;
+            height: 7.8mm;
+            border-bottom: 1.6px solid #999;
             font-weight: 400;
             text-align: center;
             vertical-align: bottom;
@@ -112,11 +120,11 @@
         .task-table .time { width: 19%; }
 
         .task-table tbody td {
-            height: 5.3mm;
+            height: 5.5mm;
             border: 1px solid #111;
-            border-bottom: 3px solid #aaa;
-            padding: 0.05mm 0.5mm;
-            line-height: 4.4mm;
+            border-bottom: 1.6px solid #999;
+            padding: 0.1mm 0.65mm;
+            line-height: 4.6mm;
             vertical-align: middle;
         }
 
@@ -126,8 +134,8 @@
 
         .pmax-label {
             display: inline-block;
-            font-size: 8pt;
-            transform: rotate(-90deg);
+            font-size: 7.2pt;
+            white-space: nowrap;
         }
 
         .black-box {
@@ -153,13 +161,13 @@
 
         .scale-table {
             width: 54%;
-            font-size: 6.1pt;
+            font-size: 6.8pt;
             line-height: 1;
         }
 
         .scale-table th,
         .scale-table td {
-            height: 3.1mm;
+            height: 3.25mm;
             border: 0.7px solid #333;
             padding: 0.15mm 0.35mm;
             text-align: center;
@@ -173,12 +181,12 @@
         .block { width: 100%; }
 
         .block-title {
-            height: 8mm;
-            border-bottom: 3px solid #aaa;
+            height: 8.3mm;
+            border-bottom: 1.6px solid #999;
             text-align: center;
             vertical-align: bottom;
-            font-size: 8.2pt;
-            font-weight: 400;
+            font-size: 9pt;
+            font-weight: 500;
         }
 
         .block-title .title-text { width: 65%; padding-bottom: 1mm; }
@@ -186,7 +194,7 @@
 
         .rating-grid { width: 100%; }
         .block-title .rating-grid { height: 7.5mm; }
-        .competence-table .rating-grid { height: 5.3mm; }
+        .competence-table .rating-grid { height: 5.5mm; }
 
         .rating-grid td {
             border: 1px solid #111;
@@ -202,19 +210,19 @@
         .rating-grid td.optional { background: #bbb; }
 
         .competence-table td {
-            height: 5.3mm;
-            border-bottom: 3px solid #aaa;
-            padding: 0.05mm 0.5mm;
-            line-height: 4.3mm;
+            height: 5.5mm;
+            border-bottom: 1.6px solid #999;
+            padding: 0.1mm 0.65mm;
+            line-height: 4.5mm;
             vertical-align: middle;
         }
 
-        .competence-table .comp-number { width: 5%; }
+        .competence-table .comp-number { width: 5%; padding-left: 1.2mm; }
         .competence-table .comp-task { width: 28%; }
         .competence-table .comp-name { width: 32%; }
         .competence-table .comp-rating { width: 35%; padding: 0; }
 
-        .block-gap { height: 2.5mm; background: #fff; }
+        .block-gap { height: 3mm; background: #fff; }
 
         .legend {
             position: absolute;
@@ -222,7 +230,7 @@
             bottom: 0;
             width: 100%;
             height: 18mm;
-            font-size: 6.8pt;
+            font-size: 7.2pt;
             line-height: 1.35;
         }
 
@@ -325,6 +333,7 @@
         </table>
 
         <div class="main">
+                <div class="center-divider"></div>
                 <div class="left-pane">
                     <table class="task-table">
                         <thead>

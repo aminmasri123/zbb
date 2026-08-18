@@ -69,4 +69,13 @@ class BopPaRolandEvaluationLayoutTest extends TestCase
             File::delete($path);
         }
     }
+
+    public function test_roland_export_uses_the_versioned_non_overlapping_template(): void
+    {
+        $service = file_get_contents(app_path('Services/Bop/RolandEvaluationPdfService.php'));
+
+        $this->assertIsString($service);
+        $this->assertStringContainsString('auswertungsbogen-pa-roland-template-v3.pdf', $service);
+        $this->assertFileExists(resource_path('pdf/auswertungsbogen-pa-roland-template-v3.pdf'));
+    }
 }
