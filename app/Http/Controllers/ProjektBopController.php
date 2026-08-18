@@ -302,14 +302,27 @@ class ProjektBopController extends Controller
         $this->purgeExpiredBibbDrafts();
         $scope = $this->bibbDraftScope($request);
         $draft = BibbAttendanceListDraft::where('draft_hash', $scope['draft_hash'])->first();
+        $legacyDraft = $this->legacyBibbDraft($scope);
+        $sourceDraft = $draft ?: $legacyDraft;
+        $payload = $sourceDraft
+            ? $this->decryptBibbDraftPayloadSignatures($sourceDraft->payload ?? [])
+            : null;
+
+        if ($draft && $legacyDraft && is_array($payload)) {
+            $payload = $this->restoreLegacySignatures(
+                $payload,
+                $this->decryptBibbDraftPayloadSignatures($legacyDraft->payload ?? [])
+            );
+        }
 
         return response()->json([
-            'exists' => (bool) $draft,
-            'payload' => $draft ? $this->decryptBibbDraftPayloadSignatures($draft->payload ?? []) : null,
-            'revision' => $draft?->revision ?? 0,
-            'updated_at' => $draft?->updated_at?->toIso8601String(),
-            'expires_at' => $draft?->expires_at?->toIso8601String(),
-            'final_pdf_path' => $draft?->final_pdf_path,
+            'exists' => (bool) $sourceDraft,
+            'payload' => $payload,
+            'revision' => $sourceDraft?->revision ?? 0,
+            'updated_at' => $sourceDraft?->updated_at?->toIso8601String(),
+            'expires_at' => $sourceDraft?->expires_at?->toIso8601String(),
+            'final_pdf_path' => $sourceDraft?->final_pdf_path,
+            'restored_from_schuljahr' => $legacyDraft?->schuljahr,
         ]);
     }
 
@@ -350,10 +363,19 @@ class ProjektBopController extends Controller
                 ->lockForUpdate()
                 ->first();
 
-            $existingPayload = $this->decryptBibbDraftPayloadSignatures($draft?->payload ?? []);
+            $storedPayload = $this->decryptBibbDraftPayloadSignatures($draft?->payload ?? []);
+            $existingPayload = $storedPayload;
+            $legacyDraft = $this->legacyBibbDraft($scope);
+            if ($legacyDraft) {
+                $existingPayload = $this->restoreLegacySignatures(
+                    $existingPayload,
+                    $this->decryptBibbDraftPayloadSignatures($legacyDraft->payload ?? [])
+                );
+            }
             $payload = $this->mergeBibbDraftPayload($existingPayload, $incomingPayload);
+            $restoredLegacySignatures = $storedPayload !== $existingPayload;
 
-            if (! $this->draftPayloadHasChanges($existingPayload, $payload)) {
+            if (! $restoredLegacySignatures && ! $this->draftPayloadHasChanges($existingPayload, $payload)) {
                 return [$draft, $existingPayload];
             }
 
@@ -363,6 +385,10 @@ class ProjektBopController extends Controller
             $draft->revision = ($draft->revision ?: 0) + 1;
             $draft->user_update = $userId;
             $draft->save();
+
+            if ($restoredLegacySignatures) {
+                BibbAttendanceListDraft::whereIn('draft_hash', $scope['legacy_draft_hashes'])->delete();
+            }
 
             return [$draft, $payload];
         });
@@ -381,7 +407,10 @@ class ProjektBopController extends Controller
     {
         $scope = $this->bibbDraftScope($request);
 
-        BibbAttendanceListDraft::where('draft_hash', $scope['draft_hash'])->delete();
+        BibbAttendanceListDraft::whereIn('draft_hash', [
+            $scope['draft_hash'],
+            ...$scope['legacy_draft_hashes'],
+        ])->delete();
 
         return response()->json(['success' => true]);
     }
@@ -615,15 +644,16 @@ class ProjektBopController extends Controller
         $projektId = $this->ensurePartnerInActiveProject($partnerId);
         $schuljahr = (string) $validated['schuljahrInputBibb'];
         $teil = (string) $validated['teilInputBibb'];
+        $draftHash = $this->bibbDraftHash($projektId, $partnerId, $schuljahr, $teil);
+        $legacyDraftHashes = collect($this->schoolYearAliases($schuljahr))
+            ->reject(fn (string $alias) => $alias === trim($schuljahr))
+            ->map(fn (string $alias) => $this->bibbDraftHash($projektId, $partnerId, $alias, $teil))
+            ->values()
+            ->all();
 
         return [
-            'draft_hash' => hash('sha256', implode('|', [
-                $projektId ?: 0,
-                $partnerId,
-                $schuljahr,
-                $teil,
-                'bibb-attendance-list',
-            ])),
+            'draft_hash' => $draftHash,
+            'legacy_draft_hashes' => $legacyDraftHashes,
             'projekt_id' => $projektId,
             'partner_id' => $partnerId,
             'schuljahr' => $schuljahr,
@@ -694,6 +724,51 @@ class ProjektBopController extends Controller
         $payload['signatures'] = $signatures;
 
         return $payload;
+    }
+
+    /**
+     * Liefert alle historisch verwendeten Schreibweisen desselben Schuljahres.
+     * So bleibt ein unter "2026/2027" gespeicherter Entwurf auch bei der neuen
+     * Eingabe "2026" auffindbar.
+     */
+    private function schoolYearAliases(string $schuljahr): array
+    {
+        $value = trim($schuljahr);
+        preg_match('/\d{4}/', $value, $matches);
+
+        if (empty($matches[0])) {
+            return [$value];
+        }
+
+        $startYear = (int) $matches[0];
+        $endYear = $startYear + 1;
+
+        return array_values(array_unique([
+            $value,
+            (string) $startYear,
+            $startYear . '/' . $endYear,
+            $startYear . '-' . $endYear,
+            $startYear . '/' . substr((string) $endYear, -2),
+            $startYear . '-' . substr((string) $endYear, -2),
+        ]));
+    }
+
+    /**
+     * Übernimmt nur fehlende alte Unterschriften. Aktuelle Werte gewinnen und
+     * Termine/Formulardaten des neuen Entwurfs werden nicht überschrieben.
+     */
+    private function restoreLegacySignatures(array $currentPayload, array $legacyPayload): array
+    {
+        $currentSignatures = is_array($currentPayload['signatures'] ?? null)
+            ? $currentPayload['signatures']
+            : [];
+        $legacySignatures = is_array($legacyPayload['signatures'] ?? null)
+            ? $legacyPayload['signatures']
+            : [];
+
+        $currentPayload['signatures'] = array_replace($legacySignatures, $currentSignatures);
+
+        return $currentPayload;
     }
 
     private function draftPayloadHasChanges(array $existingPayload, array $nextPayload): bool
@@ -1120,14 +1195,27 @@ class ProjektBopController extends Controller
         $this->purgeExpiredPaDrafts();
         $scope = $this->paDraftScope($request);
         $draft = PaAttendanceListDraft::where('draft_hash', $scope['draft_hash'])->first();
+        $legacyDraft = $this->legacyPaDraft($scope);
+        $sourceDraft = $draft ?: $legacyDraft;
+        $payload = $sourceDraft
+            ? $this->decryptPaDraftPayloadSignatures($sourceDraft->payload ?? [])
+            : null;
+
+        if ($draft && $legacyDraft && is_array($payload)) {
+            $payload = $this->restoreLegacySignatures(
+                $payload,
+                $this->decryptPaDraftPayloadSignatures($legacyDraft->payload ?? [])
+            );
+        }
 
         return response()->json([
-            'exists' => (bool) $draft,
-            'payload' => $draft ? $this->decryptPaDraftPayloadSignatures($draft->payload ?? []) : null,
-            'revision' => $draft?->revision ?? 0,
-            'updated_at' => $draft?->updated_at?->toIso8601String(),
-            'expires_at' => $draft?->expires_at?->toIso8601String(),
-            'final_pdf_path' => $draft?->final_pdf_path,
+            'exists' => (bool) $sourceDraft,
+            'payload' => $payload,
+            'revision' => $sourceDraft?->revision ?? 0,
+            'updated_at' => $sourceDraft?->updated_at?->toIso8601String(),
+            'expires_at' => $sourceDraft?->expires_at?->toIso8601String(),
+            'final_pdf_path' => $sourceDraft?->final_pdf_path,
+            'restored_from_schuljahr' => $legacyDraft?->schuljahr,
         ]);
     }
 
@@ -1179,10 +1267,19 @@ class ProjektBopController extends Controller
                 ->lockForUpdate()
                 ->first();
 
-            $existingPayload = $this->decryptPaDraftPayloadSignatures($draft?->payload ?? []);
+            $storedPayload = $this->decryptPaDraftPayloadSignatures($draft?->payload ?? []);
+            $existingPayload = $storedPayload;
+            $legacyDraft = $this->legacyPaDraft($scope);
+            if ($legacyDraft) {
+                $existingPayload = $this->restoreLegacySignatures(
+                    $existingPayload,
+                    $this->decryptPaDraftPayloadSignatures($legacyDraft->payload ?? [])
+                );
+            }
             $payload = $this->mergePaDraftPayload($existingPayload, $incomingPayload);
+            $restoredLegacySignatures = $storedPayload !== $existingPayload;
 
-            if (! $this->draftPayloadHasChanges($existingPayload, $payload)) {
+            if (! $restoredLegacySignatures && ! $this->draftPayloadHasChanges($existingPayload, $payload)) {
                 return [$draft, $existingPayload];
             }
 
@@ -1192,6 +1289,10 @@ class ProjektBopController extends Controller
             $draft->revision = ($draft->revision ?: 0) + 1;
             $draft->user_update = $userId;
             $draft->save();
+
+            if ($restoredLegacySignatures) {
+                PaAttendanceListDraft::whereIn('draft_hash', $scope['legacy_draft_hashes'])->delete();
+            }
 
             return [$draft, $payload];
         });
@@ -1210,7 +1311,10 @@ class ProjektBopController extends Controller
     {
         $scope = $this->paDraftScope($request);
 
-        PaAttendanceListDraft::where('draft_hash', $scope['draft_hash'])->delete();
+        PaAttendanceListDraft::whereIn('draft_hash', [
+            $scope['draft_hash'],
+            ...$scope['legacy_draft_hashes'],
+        ])->delete();
 
         return response()->json(['success' => true]);
     }
@@ -1428,18 +1532,32 @@ class ProjektBopController extends Controller
         $teil = (string) $validated['teil'];
         $draftExportMode = $listType === 'pa' ? 'alle' : $exportMode;
         $draftKlasse = $listType === 'pa' ? null : $klasse;
-
-        return [
-            'draft_hash' => hash('sha256', implode('|', [
-                $projektId ?: 0,
+        $draftHash = $this->paDraftHash(
+            $projektId,
+            $partnerId,
+            $schuljahr,
+            $teil,
+            $draftExportMode,
+            $draftKlasse,
+            $listType
+        );
+        $legacyDraftHashes = collect($this->schoolYearAliases($schuljahr))
+            ->reject(fn (string $alias) => $alias === trim($schuljahr))
+            ->map(fn (string $alias) => $this->paDraftHash(
+                $projektId,
                 $partnerId,
-                $schuljahr,
+                $alias,
                 $teil,
                 $draftExportMode,
-                $draftKlasse ?: '',
-                $listType,
-                'pa-attendance-list',
-            ])),
+                $draftKlasse,
+                $listType
+            ))
+            ->values()
+            ->all();
+
+        return [
+            'draft_hash' => $draftHash,
+            'legacy_draft_hashes' => $legacyDraftHashes,
             'projekt_id' => $projektId,
             'partner_id' => $partnerId,
             'schuljahr' => $schuljahr,
@@ -1450,6 +1568,39 @@ class ProjektBopController extends Controller
             'draft_export_mode' => $draftExportMode,
             'draft_klasse' => $draftKlasse,
         ];
+    }
+
+    private function paDraftHash(
+        ?int $projektId,
+        int $partnerId,
+        string $schuljahr,
+        string $teil,
+        string $exportMode,
+        ?string $klasse,
+        string $listType
+    ): string {
+        return hash('sha256', implode('|', [
+            $projektId ?: 0,
+            $partnerId,
+            trim($schuljahr),
+            $teil,
+            $exportMode,
+            $klasse ?: '',
+            $listType,
+            'pa-attendance-list',
+        ]));
+    }
+
+    private function legacyPaDraft(array $scope): ?PaAttendanceListDraft
+    {
+        if (empty($scope['legacy_draft_hashes'])) {
+            return null;
+        }
+
+        return PaAttendanceListDraft::query()
+            ->whereIn('draft_hash', $scope['legacy_draft_hashes'])
+            ->latest('updated_at')
+            ->first();
     }
 
     private function sanitizePaDraftPayload(array $payload): array
@@ -1518,6 +1669,29 @@ class ProjektBopController extends Controller
                 ? $schedule['selectedDayId']
                 : null,
         ];
+    }
+
+    private function bibbDraftHash(?int $projektId, int $partnerId, string $schuljahr, string $teil): string
+    {
+        return hash('sha256', implode('|', [
+            $projektId ?: 0,
+            $partnerId,
+            trim($schuljahr),
+            $teil,
+            'bibb-attendance-list',
+        ]));
+    }
+
+    private function legacyBibbDraft(array $scope): ?BibbAttendanceListDraft
+    {
+        if (empty($scope['legacy_draft_hashes'])) {
+            return null;
+        }
+
+        return BibbAttendanceListDraft::query()
+            ->whereIn('draft_hash', $scope['legacy_draft_hashes'])
+            ->latest('updated_at')
+            ->first();
     }
 
     private function mergePaDraftPayload(array $existingPayload, array $incomingPayload): array

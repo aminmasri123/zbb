@@ -30,6 +30,13 @@ class PaPreparationAttendanceClassTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+        DB::table('projekt_has_personens')->insert([
+            'projekt_id' => $project->id,
+            'personen_id' => $user->person_id,
+            'status' => 'aktiv',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
         $user->update(['current_team_id' => $project->id]);
 
         $students = [];
@@ -116,6 +123,13 @@ class PaPreparationAttendanceClassTest extends TestCase
         DB::table('projekt_has_partners')->insert([
             'projekt_id' => $project->id,
             'partner_id' => $school->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('projekt_has_personens')->insert([
+            'projekt_id' => $project->id,
+            'personen_id' => $user->person_id,
+            'status' => 'aktiv',
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -217,6 +231,13 @@ class PaPreparationAttendanceClassTest extends TestCase
         DB::table('projekt_has_partners')->insert([
             'projekt_id' => $project->id,
             'partner_id' => $school->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('projekt_has_personens')->insert([
+            'projekt_id' => $project->id,
+            'personen_id' => $user->person_id,
+            'status' => 'aktiv',
             'created_at' => now(),
             'updated_at' => now(),
         ]);
