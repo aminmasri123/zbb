@@ -109,6 +109,9 @@ let draftSaveTimer = null
 let draftPollTimer = null
 let previousBodyOverflow = ''
 let draftSaveRequestId = 0
+let draftSaveQueue = Promise.resolve()
+let draftSaveQueueDepth = 0
+let draftSaveGeneration = 0
 
 const selectedDays = computed(() => days.value.filter((day) => day.selected))
 const selectedDay = computed(() => days.value.find((day) => day.id === selectedDayId.value) || selectedDays.value[0] || null)
@@ -545,13 +548,10 @@ const loadDraft = async ({ silent = true } = {}) => {
   }
 }
 
-const saveDraft = async ({ silent = true, payload = null, signatureSnapshotGuard = null } = {}) => {
-  if (!draftScopeReady.value) return
+const performDraftSave = async ({ silent, draftPayload, requestSignatureSnapshot, generation }) => {
+  if (generation !== draftSaveGeneration) return
 
-  const draftPayload = payload || buildDraftPayload()
-  const requestSignatureSnapshot = signatureSnapshotGuard ?? signatureSnapshot(signatures)
   const requestId = ++draftSaveRequestId
-  draftSaving.value = true
 
   try {
     const response = await axios.put(route('anwesenheitsliste.PA.digital.draft.store'), {
@@ -560,7 +560,7 @@ const saveDraft = async ({ silent = true, payload = null, signatureSnapshotGuard
     })
 
     const signatureChangedDuringSave = signatureSnapshot(signatures) !== requestSignatureSnapshot
-    const isLatestSaveResponse = requestId === draftSaveRequestId
+    const isLatestSaveResponse = generation === draftSaveGeneration && requestId === draftSaveRequestId
 
     if (isLatestSaveResponse) {
       draftSaveBlocked.value = false
@@ -573,19 +573,45 @@ const saveDraft = async ({ silent = true, payload = null, signatureSnapshotGuard
       draftDirty.value = signatureChangedDuringSave
     }
   } catch (error) {
-    if (requestId === draftSaveRequestId && ![401, 419].includes(error?.response?.status)) {
+    if (generation === draftSaveGeneration && requestId === draftSaveRequestId && ![401, 419].includes(error?.response?.status)) {
       draftSaveBlocked.value = true
       draftSaveError.value = 'Die letzte Änderung wurde nicht vom Server bestätigt. Weitere Unterschriften sind gesperrt. Bitte Verbindung und Server prüfen und dann erneut speichern.'
       draftDirty.value = true
     }
-    if (!silent && requestId === draftSaveRequestId) {
+    if (!silent && generation === draftSaveGeneration && requestId === draftSaveRequestId) {
       PaSwal.fire('Fehler', await readBlobError(error), 'error')
     }
-  } finally {
-    if (requestId === draftSaveRequestId) {
-      draftSaving.value = false
-    }
   }
+}
+
+const saveDraft = ({ silent = true, payload = null, signatureSnapshotGuard = null } = {}) => {
+  if (!draftScopeReady.value) return Promise.resolve()
+
+  const queuedSave = {
+    silent,
+    draftPayload: payload || buildDraftPayload(),
+    requestSignatureSnapshot: signatureSnapshotGuard ?? signatureSnapshot(signatures),
+    generation: draftSaveGeneration,
+  }
+
+  draftSaveQueueDepth++
+  draftSaving.value = true
+
+  const task = draftSaveQueue.then(() => performDraftSave(queuedSave))
+  draftSaveQueue = task.catch(() => {})
+
+  return task.finally(() => {
+    draftSaveQueueDepth = Math.max(0, draftSaveQueueDepth - 1)
+    draftSaving.value = draftSaveQueueDepth > 0
+  })
+}
+
+const captureSignature = (day, participant, value) => {
+  if (!day || !participant || !previewContext.value || draftHydrating.value) return
+  if (!isParticipantExpectedOnDay(day, participant) || !value) return
+
+  signatures[signatureKey(day, participant)] = value
+  draftDirty.value = true
 }
 
 const saveCompletedSignature = (day, participant, value) => {
@@ -594,8 +620,7 @@ const saveCompletedSignature = (day, participant, value) => {
   if (!value) return
 
   const key = signatureKey(day, participant)
-  signatures[key] = value
-  draftDirty.value = true
+  captureSignature(day, participant, value)
   window.clearTimeout(draftSaveTimer)
   draftSaveTimer = null
 
@@ -1402,6 +1427,7 @@ const clearDraft = async () => {
 
     window.clearTimeout(draftSaveTimer)
     draftSaveTimer = null
+    draftSaveGeneration++
     draftSaveRequestId++
     draftHydrating.value = true
     form.startDate = ''
@@ -1745,7 +1771,15 @@ onBeforeUnmount(() => {
             <span v-if="draftExpiryText"> / Rohdaten bis {{ draftExpiryText }}</span>
           </p>
           <div v-if="draftSaveBlocked" class="mt-3 rounded border border-red-400 bg-red-50 p-3 text-sm font-semibold text-red-800" role="alert">
-            {{ draftSaveError }}
+            <span>{{ draftSaveError }}</span>
+            <button
+              type="button"
+              class="ml-3 rounded border border-red-500 bg-white px-3 py-1 text-xs font-bold text-red-800 hover:bg-red-100 disabled:opacity-50"
+              :disabled="draftSaving"
+              @click="saveDraft({ silent: false })"
+            >
+              Jetzt erneut speichern
+            </button>
           </div>
 
           <div v-if="days.length === 0" class="mt-4 rounded border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
@@ -1875,7 +1909,8 @@ onBeforeUnmount(() => {
                           :model-value="signatures[signatureKey(day, row.participant)] || ''"
                           :participant-name="[row.participant.vorname, row.participant.nachname].filter(Boolean).join(' ')"
                           compact
-                          @update:model-value="saveCompletedSignature(day, row.participant, $event)"
+                          @update:model-value="captureSignature(day, row.participant, $event)"
+                          @completed="saveCompletedSignature(day, row.participant, $event)"
                           @cleared="removeSignature(day, row.participant)"
                         />
                       </div>

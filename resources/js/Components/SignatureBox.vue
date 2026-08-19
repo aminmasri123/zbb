@@ -1,7 +1,6 @@
 <script setup>
 import { nextTick, onMounted, ref, watch } from 'vue'
 import Swal from 'sweetalert2'
-import { checkAuthenticatedSession } from '@/keepAlive'
 
 const props = defineProps({
   modelValue: {
@@ -22,7 +21,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['update:modelValue', 'cleared'])
+const emit = defineEmits(['update:modelValue', 'completed', 'cleared'])
 const signatureInkColor = '#003f9e'
 
 const canvas = ref(null)
@@ -32,6 +31,7 @@ const hasInk = ref(Boolean(props.modelValue))
 let ctx = null
 let expandedCtx = null
 let expandedDrawing = false
+let signatureChanged = false
 
 const configureContext = (context, lineWidth = 4.5) => {
   if (!context) return
@@ -84,16 +84,16 @@ const pointerPosition = (event, targetCanvas) => {
 const openExpanded = async () => {
   if (props.disabled) return
 
-  const sessionActive = await checkAuthenticatedSession()
-  if (!sessionActive) {
+  if (!navigator.onLine || window.__zbbSessionExpired) {
     await Swal.fire({
       title: 'Unterschrift gesperrt',
-      text: 'Die Sitzung oder Serververbindung konnte nicht bestätigt werden. Bitte stellen Sie die Verbindung wieder her und melden Sie sich gegebenenfalls erneut an.',
+      text: 'Die Sitzung oder Serververbindung ist nicht verfügbar. Bitte stellen Sie die Verbindung wieder her und melden Sie sich gegebenenfalls erneut an.',
       icon: 'error',
     })
     return
   }
 
+  signatureChanged = false
   expanded.value = true
   await nextTick()
   setupExpandedContext()
@@ -101,8 +101,17 @@ const openExpanded = async () => {
 }
 
 const closeExpanded = () => {
+  const completedValue = signatureChanged && expandedCanvas.value
+    ? expandedCanvas.value.toDataURL('image/png')
+    : ''
+
   expanded.value = false
   expandedDrawing = false
+
+  if (completedValue) {
+    signatureChanged = false
+    emit('completed', completedValue)
+  }
 }
 
 const startExpandedDrawing = (event) => {
@@ -131,6 +140,7 @@ const stopExpandedDrawing = (event) => {
   event.preventDefault()
   expandedDrawing = false
   hasInk.value = true
+  signatureChanged = true
   emit('update:modelValue', expandedCanvas.value.toDataURL('image/png'))
 }
 
@@ -169,6 +179,7 @@ const clearSignature = async () => {
 
   syncCanvases('')
   hasInk.value = false
+  signatureChanged = false
   emit('update:modelValue', '')
   emit('cleared')
 }
@@ -177,6 +188,13 @@ watch(
   () => props.modelValue,
   (value) => {
     hasInk.value = Boolean(value)
+    // Während aktiv unterschrieben wird, darf ein asynchron geladenes
+    // Vorschaubild die nächsten Stiftzüge nicht wieder übermalen.
+    if (expanded.value) {
+      drawValueOnCanvas(canvas.value, ctx, value)
+      return
+    }
+
     syncCanvases(value)
   }
 )

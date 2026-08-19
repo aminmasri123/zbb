@@ -3,6 +3,7 @@ import { ref } from 'vue';
 const SESSION_CHECK_INTERVAL_MS = 3 * 60_000;
 const ACTIVITY_THROTTLE_MS = 60_000;
 const EXPIRY_WARNING_SECONDS = 5 * 60;
+const SESSION_REQUEST_TIMEOUT_MS = 10_000;
 
 let sessionCheckTimer = null;
 let countdownTimer = null;
@@ -60,12 +61,16 @@ const updateCountdown = () => {
 export const checkAuthenticatedSession = async ({ redirect = true } = {}) => {
     if (!navigator.onLine) return false;
 
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), SESSION_REQUEST_TIMEOUT_MS);
+
     try {
         const response = await fetch(`${sessionStatusUrl()}?t=${Date.now()}`, {
             method: 'GET',
             credentials: 'same-origin',
             redirect: 'manual',
             cache: 'no-store',
+            signal: controller.signal,
             headers: {
                 Accept: 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
@@ -83,6 +88,8 @@ export const checkAuthenticatedSession = async ({ redirect = true } = {}) => {
         return true;
     } catch {
         return false;
+    } finally {
+        window.clearTimeout(timeoutId);
     }
 };
 
