@@ -2403,8 +2403,8 @@ const neueBank = ref({ name: '', iban: '', blz: '' })
 
 
 const form = ref({
-    geschlecht: "m",
-    geburtsdatum: "1997-05-17",
+    geschlecht: teilnehmer.value?.geschlecht || "",
+    geburtsdatum: teilnehmer.value?.geburtsdatum?.slice(0, 10) || "",
     betreuer: "",
     bemerkungen: "",
     notizen: "",
@@ -2453,10 +2453,24 @@ const seite = ref("");
 const toDeleteItem = ref(null);
 
 const alter = computed(() => {
-  const geb = form.value.geburtsdatum;
+  const geb = form.value.geburtsdatum || teilnehmer.value?.geburtsdatum;
   if (!geb) return "";
-  const diff = Date.now() - new Date(geb).getTime();
-  return Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
+
+  const datePart = String(geb).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return "";
+
+  const [year, month, day] = datePart.split("-").map(Number);
+  const today = new Date();
+
+  let age = today.getFullYear() - year;
+  const todayMonth = today.getMonth() + 1;
+  const todayDay = today.getDate();
+
+  if (todayMonth < month || (todayMonth === month && todayDay < day)) {
+    age -= 1;
+  }
+
+  return age >= 0 ? age : "";
 });
 
 onMounted(() => {
