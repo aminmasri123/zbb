@@ -62,6 +62,18 @@
                 </ul>
             </li>
 
+            <!-- Zutrittsverwaltung Submenu -->
+            <li v-if="moduleEnabled('access_management') && can('zutritt.index')" class="submenu">
+                <a href="#" @click.prevent="toggleMenu('zutritt')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">
+                    <i class="las la-key la-lg mr-2"></i>
+                    <span v-if="!displayHideTextSidebar">Zutrittsverwaltung</span>
+                    <span :class="{'rotate-180': activeMenu === 'zutritt', 'hidden': displayHideTextSidebar === true, 'text-zbb': $page.component.startsWith('AccessManagement')}" class="ml-auto transform transition-transform duration-300 menu-arrow"></span>
+                </a>
+                <ul v-show="activeMenu === 'zutritt'" class="pl-6 mt-2 space-y-2">
+                    <li><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('zutritt.index')">Anträge und Profile</Link></li>
+                </ul>
+            </li>
+
 
              <!-- Geräte Submenu -->
              <li v-if="moduleEnabled('it_management') && canAny(['geraet.index', 'geraet.store', 'geraet.update', 'geraet.ausgabe.index', 'geraet.rueckgabe.index'])" class="submenu">

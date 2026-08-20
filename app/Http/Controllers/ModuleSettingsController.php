@@ -11,6 +11,8 @@ class ModuleSettingsController extends Controller
 {
     public function index(ModuleStateResolver $resolver)
     {
+        $isAdministrator = request()->user()?->hasRole('Administrator') ?? false;
+
         return Inertia::render('Einstellung/Modules/Index', [
             'modules' => SystemModule::query()
                 ->where('visible_in_settings', true)
@@ -29,6 +31,7 @@ class ModuleSettingsController extends Controller
                     'supports_location_scope' => $module->supports_location_scope,
                     'default_enabled' => $module->default_enabled,
                     'global_enabled' => $resolver->enabled($module->key),
+                    'can_toggle' => $module->key !== 'access_management' || $isAdministrator,
                     'assignments' => $module->assignments,
                 ]),
         ]);
@@ -40,8 +43,13 @@ class ModuleSettingsController extends Controller
             'enabled' => ['required', 'boolean'],
         ]);
 
-        abort_if($module->is_system_module && !$validated['enabled'], 422, 'Systemmodule koennen nicht deaktiviert werden.');
+        abort_if($module->is_system_module && ! $validated['enabled'], 422, 'Systemmodule koennen nicht deaktiviert werden.');
         abort_unless($module->is_enforced, 422, 'Dieses Modul ist noch nicht vollstaendig an den Backend-Schutz angeschlossen.');
+        abort_if(
+            $module->key === 'access_management' && ! $request->user()?->hasRole('Administrator'),
+            403,
+            'Das Zutrittsmodul kann nur durch Administratoren umgeschaltet werden.'
+        );
         $resolver->set(
             $module,
             (bool) $validated['enabled'],

@@ -69,7 +69,7 @@ function update(module, enabled) {
                                 type="button"
                                 class="rounded-full px-4 py-2 text-sm font-semibold transition"
                                 :class="effectiveEnabled(module) ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-700'"
-                                :disabled="!canUpdateModules || saving === module.id || !module.is_enforced || (module.is_system_module && effectiveEnabled(module))"
+                                :disabled="!canUpdateModules || !module.can_toggle || saving === module.id || !module.is_enforced || (module.is_system_module && effectiveEnabled(module))"
                                 @click="update(module, !effectiveEnabled(module))"
                             >
                                 {{ saving === module.id ? 'Speichert …' : (effectiveEnabled(module) ? 'Aktiv' : 'Inaktiv') }}
@@ -78,6 +78,9 @@ function update(module, enabled) {
 
                         <p v-if="!module.is_enforced" class="mt-3 text-xs text-amber-700">
                             Vorgemerkt – Backend-Schutz wird in einer spaeteren Pilotphase angeschlossen.
+                        </p>
+                        <p v-else-if="!module.can_toggle" class="mt-3 text-xs text-amber-700">
+                            Dieses Modul kann nur durch die Rolle Administrator aktiviert oder deaktiviert werden.
                         </p>
                     </article>
                 </section>

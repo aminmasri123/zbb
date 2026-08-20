@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AbschlusseController;
 use App\Http\Controllers\AbteilungController;
+use App\Http\Controllers\AccessManagementController;
 use App\Http\Controllers\AccountDeletionRequestController;
 use App\Http\Controllers\AdresseController;
 use App\Http\Controllers\AnwesenheitController;
@@ -363,6 +364,19 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::get('/ressourcen', function () {
         return Inertia::render('Dashboards/Ressourcen');
     })->name('ressourcen.index');
+
+    Route::middleware('module:access_management')
+        ->prefix('ressourcen/zutritt')
+        ->name('zutritt.')
+        ->group(function () {
+            Route::get('/', [AccessManagementController::class, 'index'])->name('index')->can('zutritt.index');
+            Route::post('/tueren', [AccessManagementController::class, 'storeDoor'])->name('tueren.store')->can('zutritt.stammdaten.manage');
+            Route::post('/profile', [AccessManagementController::class, 'storeProfile'])->name('profile.store')->can('zutritt.stammdaten.manage');
+            Route::post('/antraege', [AccessManagementController::class, 'storeRequest'])->name('antraege.store')->can('zutritt.antrag.store');
+            Route::put('/antraege/{accessRequest}/entscheidung', [AccessManagementController::class, 'decide'])->name('antraege.decision')->can('zutritt.antrag.approve');
+            Route::put('/antraege/{accessRequest}/aktivierung', [AccessManagementController::class, 'activate'])->name('antraege.activation')->can('zutritt.aktivierung.update');
+            Route::put('/antraege/{accessRequest}/entzug', [AccessManagementController::class, 'revoke'])->name('antraege.revocation')->can('zutritt.aktivierung.update');
+        });
     Route::get('/finanzen', function () {
         return Inertia::render('Dashboards/Finanzen');
     })->name('finanzen.index');

@@ -992,6 +992,7 @@ class UserSeeder extends Seeder
             31 => ['name' => 'Potenzialanalyse', 'beschreibung' => 'Potenzialanalyse, PA-Uebungen, Bewertungen und PA-Berichte.'],
             32 => ['name' => 'Programm-Feedback', 'beschreibung' => 'Verbesserungsvorschlaege und Fehlermeldungen zum Programm.'],
             33 => ['name' => 'Interne Kommunikation', 'beschreibung' => 'Datenschutzgeschuetzte interne Einzel-, Gruppen- und Projektkommunikation.'],
+            34 => ['name' => 'Zutrittsverwaltung', 'beschreibung' => 'Zutrittsantraege, Genehmigungen, technische Aktivierung sowie Tuer- und Profilstammdaten.'],
         ];
     }
 
@@ -1264,6 +1265,13 @@ class UserSeeder extends Seeder
             $this->permission('raeumlichkeiten.buchung.store', 24, 'Erlaubt das Anlegen von Raumbuchungen, Wartungsfenstern oder Sperrzeiten.'),
             $this->permission('raeumlichkeiten.buchung.update', 24, 'Erlaubt das Bearbeiten bestehender Raumbuchungen, Wartungsfenster oder Sperrzeiten.'),
             $this->permission('raeumlichkeiten.buchung.destroy', 24, 'Erlaubt das Stornieren von Raumbuchungen, Wartungsfenstern oder Sperrzeiten.'),
+
+            // Zutrittsverwaltung
+            $this->permission('zutritt.index', 34, 'Erlaubt das Einsehen der Zutrittsantraege und ihrer Bearbeitungsstaende.'),
+            $this->permission('zutritt.antrag.store', 34, 'Erlaubt das Stellen eines neuen Zutrittsantrags fuer eine berechtigte Person.'),
+            $this->permission('zutritt.antrag.approve', 34, 'Erlaubt das Genehmigen oder Ablehnen von Zutrittsantraegen. Eine Selbstgenehmigung bleibt ausgeschlossen.'),
+            $this->permission('zutritt.aktivierung.update', 34, 'Erlaubt die dokumentierte manuelle Aktivierung und den Entzug genehmigter Zutrittsrechte.'),
+            $this->permission('zutritt.stammdaten.manage', 34, 'Erlaubt das Verwalten von Tueren und Zutrittsprofilen.'),
 
             // Dienstwagen
             $this->permission('dienstwagen.index', 25, 'Erlaubt das Einsehen der Dienstwagenuebersicht.'),
