@@ -11,6 +11,7 @@ import {
   loadBopAttendanceFooterImage,
 } from '@/utils/bopAttendanceFooter'
 import { usePermissions } from '@/utils/permissions'
+import { resolvePaSignatureKey } from '@/utils/paSignatureKeyResolver'
 import { prepareSignaturesForPdf } from '@/utils/signatures'
 
 const props = defineProps({
@@ -232,7 +233,12 @@ const signatureDayId = (day, participant) => {
   return day?.signature_ids_by_class?.[className] || day?.id
 }
 
-const signatureKey = (day, participant) => `${signatureDayId(day, participant)}:${participant.person_id || participant.id}`
+const signatureKey = (day, participant) => resolvePaSignatureKey({
+  day,
+  participant,
+  signatures,
+  preferredDayId: signatureDayId(day, participant),
+})
 
 const readBlobError = async (error) => {
   let data = error.response?.data
