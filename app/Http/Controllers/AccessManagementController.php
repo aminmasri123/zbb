@@ -482,6 +482,33 @@ class AccessManagementController extends Controller
         return back()->with('success', 'Zutrittsprofil wurde angelegt.');
     }
 
+    public function updateProfile(Request $request, AccessProfile $accessProfile)
+    {
+        $this->authorizePermission($request, 'zutritt.stammdaten.manage');
+
+        $validated = $request->validate([
+            'name' => [
+                'required',
+                'string',
+                'max:160',
+                Rule::unique('access_profiles', 'name')->ignore($accessProfile->id),
+            ],
+            'description' => ['nullable', 'string', 'max:2000'],
+            'door_ids' => ['required', 'array', 'min:1'],
+            'door_ids.*' => ['integer', Rule::exists('access_doors', 'id')->where('active', true)],
+        ]);
+
+        DB::transaction(function () use ($accessProfile, $validated) {
+            $accessProfile->update([
+                'name' => $validated['name'],
+                'description' => $validated['description'] ?? null,
+            ]);
+            $accessProfile->doors()->sync(array_values(array_unique($validated['door_ids'])));
+        });
+
+        return back()->with('success', 'Zutrittsprofil wurde aktualisiert. Bereits eingereichte Anträge bleiben unverändert.');
+    }
+
     public function storeRequest(Request $request)
     {
         $this->authorizePermission($request, 'zutritt.antrag.store');

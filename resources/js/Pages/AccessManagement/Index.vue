@@ -56,6 +56,7 @@ const profileForm = useForm({
 })
 const profileTargetRoomId = ref('')
 const profileRouteMessage = ref('')
+const editingProfileId = ref(null)
 
 const floorPlanForm = useForm({
     standort_id: '',
@@ -189,14 +190,37 @@ function submitDoor() {
 }
 
 function submitProfile() {
-    profileForm.post(route('zutritt.profile.store'), {
+    const options = {
         preserveScroll: true,
         onSuccess: () => {
-            profileForm.reset()
-            profileTargetRoomId.value = ''
-            profileRouteMessage.value = ''
+            resetProfileEditor()
         },
-    })
+    }
+
+    if (editingProfileId.value) {
+        profileForm.put(route('zutritt.profile.update', editingProfileId.value), options)
+        return
+    }
+
+    profileForm.post(route('zutritt.profile.store'), options)
+}
+
+function editProfile(profile) {
+    editingProfileId.value = Number(profile.id)
+    profileForm.name = profile.name || ''
+    profileForm.description = profile.description || ''
+    profileForm.door_ids = (profile.doors || []).map((door) => Number(door.id))
+    profileForm.clearErrors()
+    profileTargetRoomId.value = ''
+    profileRouteMessage.value = 'Profil geladen. Änderungen gelten nur für zukünftige Anträge.'
+}
+
+function resetProfileEditor() {
+    editingProfileId.value = null
+    profileForm.reset()
+    profileForm.clearErrors()
+    profileTargetRoomId.value = ''
+    profileRouteMessage.value = ''
 }
 
 function applyDoorRequirementsToProfile() {
@@ -1253,8 +1277,8 @@ onBeforeUnmount(() => {
             <template v-if="activeTab === 'profiles' && accessPermissions.canManageMasterData">
                 <section class="grid gap-6 xl:grid-cols-[minmax(0,420px)_1fr]">
                     <form class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm" @submit.prevent="submitProfile">
-                        <h3 class="text-lg font-semibold text-gray-900">Zutrittsprofil anlegen</h3>
-                        <p class="mt-1 text-sm text-gray-600">Ein Profil bündelt die Türen, die gemeinsam beantragt werden können.</p>
+                        <h3 class="text-lg font-semibold text-gray-900">{{ editingProfileId ? 'Zutrittsprofil bearbeiten' : 'Zutrittsprofil anlegen' }}</h3>
+                        <p class="mt-1 text-sm text-gray-600">{{ editingProfileId ? 'Änderungen gelten für zukünftige Anträge. Bereits eingereichte Anträge behalten ihren bisherigen Stand.' : 'Ein Profil bündelt die Türen, die gemeinsam beantragt werden können.' }}</p>
 
                         <div class="mt-5 space-y-4">
                             <label class="block">
@@ -1291,7 +1315,12 @@ onBeforeUnmount(() => {
                                 <span v-if="profileForm.errors.door_ids" class="mt-1 block text-xs text-red-600">{{ profileForm.errors.door_ids }}</span>
                             </fieldset>
 
-                            <button type="submit" class="rounded-md bg-zbb px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50" :disabled="profileForm.processing || !activeDoors.length">Profil speichern</button>
+                            <div class="flex flex-wrap gap-2">
+                                <button type="submit" class="rounded-md bg-zbb px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50" :disabled="profileForm.processing || !activeDoors.length">
+                                    {{ profileForm.processing ? 'Wird gespeichert …' : (editingProfileId ? 'Änderungen speichern' : 'Profil speichern') }}
+                                </button>
+                                <button v-if="editingProfileId" type="button" class="rounded-md border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50" @click="resetProfileEditor">Abbrechen</button>
+                            </div>
                         </div>
                     </form>
 
@@ -1305,7 +1334,12 @@ onBeforeUnmount(() => {
                                         <h4 class="font-semibold text-gray-900">{{ profile.name }}</h4>
                                         <p v-if="profile.description" class="mt-1 text-sm text-gray-600">{{ profile.description }}</p>
                                     </div>
-                                    <span class="rounded-full px-2 py-1 text-xs font-semibold" :class="profile.active ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-600'">{{ profile.active ? 'Aktiv' : 'Inaktiv' }}</span>
+                                    <div class="flex items-center gap-2">
+                                        <button type="button" class="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50" @click="editProfile(profile)">
+                                            <i class="las la-edit mr-1"></i>Bearbeiten
+                                        </button>
+                                        <span class="rounded-full px-2 py-1 text-xs font-semibold" :class="profile.active ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-600'">{{ profile.active ? 'Aktiv' : 'Inaktiv' }}</span>
+                                    </div>
                                 </div>
                                 <ul class="mt-3 flex flex-wrap gap-2">
                                     <li v-for="door in profile.doors" :key="door.id" class="rounded bg-gray-100 px-2 py-1 text-xs text-gray-700">{{ door.name }}</li>

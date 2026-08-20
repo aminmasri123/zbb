@@ -418,6 +418,60 @@ class AccessManagementModuleTest extends TestCase
         ]);
     }
 
+    public function test_master_data_manager_can_update_a_profile_without_changing_existing_request_snapshots(): void
+    {
+        $user = User::factory()->create();
+        $this->givePermission($user, 'zutritt.stammdaten.manage');
+        $this->givePermission($user, 'zutritt.antrag.store');
+        $this->enableModule($user);
+
+        $profile = $this->profile();
+        $originalDoor = $profile->doors()->firstOrFail();
+
+        $this->actingAs($user)
+            ->post(route('zutritt.antraege.store'), [
+                'requested_for_person_id' => $user->person_id,
+                'access_profile_id' => $profile->id,
+                'valid_from' => now()->addHour()->format('Y-m-d H:i:s'),
+                'valid_until' => now()->addMonth()->format('Y-m-d H:i:s'),
+                'reason' => 'Bestehender Antrag vor der Profiländerung.',
+            ])
+            ->assertRedirect();
+
+        $replacementDoor = AccessDoor::query()->create([
+            'standort_id' => Standort::factory()->create()->id,
+            'name' => 'Außentür G1',
+            'code' => 'G1-UPDATE',
+            'active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->put(route('zutritt.profile.update', $profile), [
+                'name' => 'Zugang OG 19',
+                'description' => 'Aktualisiertes Profil',
+                'door_ids' => [$replacementDoor->id],
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('access_profiles', [
+            'id' => $profile->id,
+            'name' => 'Zugang OG 19',
+            'description' => 'Aktualisiertes Profil',
+        ]);
+        $this->assertDatabaseMissing('access_profile_door', [
+            'access_profile_id' => $profile->id,
+            'access_door_id' => $originalDoor->id,
+        ]);
+        $this->assertDatabaseHas('access_profile_door', [
+            'access_profile_id' => $profile->id,
+            'access_door_id' => $replacementDoor->id,
+        ]);
+
+        $snapshot = AccessRequest::query()->firstOrFail()->profile_snapshot;
+        $this->assertSame('Pilotprofil', $snapshot['name']);
+        $this->assertSame($originalDoor->id, $snapshot['doors'][0]['id']);
+    }
+
     public function test_disabling_module_preserves_access_data(): void
     {
         $user = User::factory()->create();
