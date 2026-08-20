@@ -78,4 +78,9 @@ class Raeume extends Model
     {
         return $this->hasMany(Gruppe::class, 'raum_id')->orderBy('anfangsdatum')->orderBy('startzeit');
     }
+
+    public function accessFloorPlanPlacements()
+    {
+        return $this->hasMany(AccessFloorPlanRoom::class, 'raum_id');
+    }
 }

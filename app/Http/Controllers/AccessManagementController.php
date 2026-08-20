@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AccessDoor;
+use App\Models\AccessFloorPlan;
 use App\Models\AccessProfile;
 use App\Models\AccessRequest as AccessRequestModel;
 use App\Models\AccessRequestEvent;
@@ -12,6 +13,7 @@ use App\Models\Standort;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -64,9 +66,47 @@ class AccessManagementController extends Controller
                 ->whereKey($user->person_id)
                 ->get(['id', 'vorname', 'nachname']);
 
+        $floorPlans = $canManageMasterData
+            ? AccessFloorPlan::query()
+                ->with([
+                    'standort:id,name',
+                    'roomPlacements.room:id,standort_id,name,raumnummer,etage',
+                    'doorPlacements.door:id,standort_id,room_from_id,room_to_id,name,code',
+                ])
+                ->orderBy('standort_id')
+                ->orderBy('floor_label')
+                ->get()
+                ->map(fn (AccessFloorPlan $floorPlan) => [
+                    'id' => $floorPlan->id,
+                    'standort_id' => $floorPlan->standort_id,
+                    'standort' => $floorPlan->standort,
+                    'floor_label' => $floorPlan->floor_label,
+                    'name' => $floorPlan->name,
+                    'image_url' => route('zutritt.grundrisse.image', $floorPlan),
+                    'image_width' => $floorPlan->image_width,
+                    'image_height' => $floorPlan->image_height,
+                    'rooms' => $floorPlan->roomPlacements->map(fn ($placement) => [
+                        'room_id' => $placement->raum_id,
+                        'x_percent' => $placement->x_percent,
+                        'y_percent' => $placement->y_percent,
+                        'width_percent' => $placement->width_percent,
+                        'height_percent' => $placement->height_percent,
+                        'room' => $placement->room,
+                    ])->values(),
+                    'doors' => $floorPlan->doorPlacements->map(fn ($placement) => [
+                        'door_id' => $placement->access_door_id,
+                        'x_percent' => $placement->x_percent,
+                        'y_percent' => $placement->y_percent,
+                        'rotation_degrees' => $placement->rotation_degrees,
+                        'door' => $placement->door,
+                    ])->values(),
+                ])->values()
+            : collect();
+
         return Inertia::render('AccessManagement/Index', [
             'accessRequests' => $requests,
             'profiles' => $profiles,
+            'floorPlans' => $floorPlans,
             'doors' => $canManageMasterData
                 ? AccessDoor::query()
                     ->with(['standort:id,name', 'roomFrom:id,name,raumnummer', 'roomTo:id,name,raumnummer'])
@@ -79,7 +119,7 @@ class AccessManagementController extends Controller
                 ? Standort::query()->orderBy('name')->get(['id', 'name'])
                 : [],
             'rooms' => $canManageMasterData
-                ? Raeume::query()->orderBy('name')->get(['id', 'standort_id', 'name', 'raumnummer'])
+                ? Raeume::query()->orderBy('etage')->orderBy('raumnummer')->orderBy('name')->get(['id', 'standort_id', 'name', 'raumnummer', 'etage'])
                 : [],
             'currentUserId' => $user->id,
             'accessPermissions' => [
@@ -123,6 +163,177 @@ class AccessManagementController extends Controller
         AccessDoor::create($validated + ['active' => true]);
 
         return back()->with('success', 'Tuer wurde angelegt.');
+    }
+
+    public function storeFloorPlan(Request $request)
+    {
+        $this->authorizePermission($request, 'zutritt.stammdaten.manage');
+
+        $request->merge([
+            'floor_label' => trim((string) $request->input('floor_label')),
+            'name' => trim((string) $request->input('name')),
+        ]);
+
+        $validated = $request->validate([
+            'standort_id' => ['required', 'integer', 'exists:standorts,id'],
+            'floor_label' => [
+                'required',
+                'string',
+                'max:80',
+                Rule::unique('access_floor_plans')->where(fn ($query) => $query
+                    ->where('standort_id', $request->integer('standort_id'))),
+            ],
+            'name' => ['required', 'string', 'max:160'],
+            'image' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
+        ], [
+            'floor_label.unique' => 'Für diesen Standort und diese Etage existiert bereits ein Grundriss.',
+        ]);
+
+        $file = $request->file('image');
+        $dimensions = @getimagesize($file->getRealPath()) ?: null;
+        $path = $file->store('access-management/floor-plans', 'local');
+
+        if (! $path) {
+            throw ValidationException::withMessages([
+                'image' => 'Der Grundriss konnte nicht gespeichert werden.',
+            ]);
+        }
+
+        try {
+            AccessFloorPlan::create([
+                'standort_id' => $validated['standort_id'],
+                'floor_label' => trim($validated['floor_label']),
+                'name' => trim($validated['name']),
+                'image_path' => $path,
+                'original_name' => $file->getClientOriginalName(),
+                'mime_type' => $file->getMimeType() ?: 'application/octet-stream',
+                'image_width' => $dimensions[0] ?? null,
+                'image_height' => $dimensions[1] ?? null,
+                'active' => true,
+            ]);
+        } catch (\Throwable $exception) {
+            Storage::disk('local')->delete($path);
+            throw $exception;
+        }
+
+        return back()->with('success', '2D-Grundriss wurde angelegt. Räume und Türen können jetzt platziert werden.');
+    }
+
+    public function floorPlanImage(Request $request, AccessFloorPlan $accessFloorPlan)
+    {
+        $this->authorizePermission($request, 'zutritt.stammdaten.manage');
+        abort_unless(Storage::disk('local')->exists($accessFloorPlan->image_path), 404);
+
+        return Storage::disk('local')->response(
+            $accessFloorPlan->image_path,
+            $accessFloorPlan->original_name,
+            [
+                'Content-Type' => $accessFloorPlan->mime_type,
+                'Content-Disposition' => 'inline; filename="grundriss-'.$accessFloorPlan->id.'"',
+                'Cache-Control' => 'private, max-age=300',
+                'X-Content-Type-Options' => 'nosniff',
+            ]
+        );
+    }
+
+    public function updateFloorPlanLayout(Request $request, AccessFloorPlan $accessFloorPlan)
+    {
+        $this->authorizePermission($request, 'zutritt.stammdaten.manage');
+
+        $validated = $request->validate([
+            'rooms' => ['present', 'array'],
+            'rooms.*.room_id' => ['required', 'integer', 'distinct', 'exists:raeumes,id'],
+            'rooms.*.x_percent' => ['required', 'numeric', 'min:0', 'max:100'],
+            'rooms.*.y_percent' => ['required', 'numeric', 'min:0', 'max:100'],
+            'rooms.*.width_percent' => ['required', 'numeric', 'min:2', 'max:100'],
+            'rooms.*.height_percent' => ['required', 'numeric', 'min:2', 'max:100'],
+            'doors' => ['present', 'array'],
+            'doors.*.door_id' => ['required', 'integer', 'distinct', 'exists:access_doors,id'],
+            'doors.*.x_percent' => ['required', 'numeric', 'min:0', 'max:100'],
+            'doors.*.y_percent' => ['required', 'numeric', 'min:0', 'max:100'],
+            'doors.*.rotation_degrees' => ['required', 'numeric', 'min:0', 'max:359.99'],
+        ]);
+
+        $roomIds = collect($validated['rooms'])->pluck('room_id')->map(fn ($id) => (int) $id);
+        $validRoomCount = Raeume::query()
+            ->where('standort_id', $accessFloorPlan->standort_id)
+            ->where(function ($query) use ($accessFloorPlan) {
+                $query->whereNull('etage')
+                    ->orWhere('etage', $accessFloorPlan->floor_label);
+            })
+            ->whereIn('id', $roomIds)
+            ->count();
+
+        if ($validRoomCount !== $roomIds->count()) {
+            throw ValidationException::withMessages([
+                'rooms' => 'Alle Räume müssen zum Standort und zur Etage des Grundrisses gehören.',
+            ]);
+        }
+
+        foreach ($validated['rooms'] as $index => $room) {
+            if ((float) $room['x_percent'] + (float) $room['width_percent'] > 100
+                || (float) $room['y_percent'] + (float) $room['height_percent'] > 100) {
+                throw ValidationException::withMessages([
+                    "rooms.$index" => 'Die Raumfläche muss vollständig innerhalb des Grundrisses liegen.',
+                ]);
+            }
+        }
+
+        $doorIds = collect($validated['doors'])->pluck('door_id')->map(fn ($id) => (int) $id);
+        $validDoorCount = AccessDoor::query()
+            ->where('standort_id', $accessFloorPlan->standort_id)
+            ->whereIn('id', $doorIds)
+            ->count();
+
+        if ($validDoorCount !== $doorIds->count()) {
+            throw ValidationException::withMessages([
+                'doors' => 'Alle Türen auf dem Plan müssen zum Standort des Grundrisses gehören.',
+            ]);
+        }
+
+        DB::transaction(function () use ($accessFloorPlan, $validated) {
+            $now = now();
+            $accessFloorPlan->roomPlacements()->delete();
+            $accessFloorPlan->doorPlacements()->delete();
+
+            if ($validated['rooms'] !== []) {
+                DB::table('access_floor_plan_rooms')->insert(collect($validated['rooms'])->map(fn ($room) => [
+                    'access_floor_plan_id' => $accessFloorPlan->id,
+                    'raum_id' => $room['room_id'],
+                    'x_percent' => $room['x_percent'],
+                    'y_percent' => $room['y_percent'],
+                    'width_percent' => $room['width_percent'],
+                    'height_percent' => $room['height_percent'],
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ])->all());
+            }
+
+            if ($validated['doors'] !== []) {
+                DB::table('access_floor_plan_doors')->insert(collect($validated['doors'])->map(fn ($door) => [
+                    'access_floor_plan_id' => $accessFloorPlan->id,
+                    'access_door_id' => $door['door_id'],
+                    'x_percent' => $door['x_percent'],
+                    'y_percent' => $door['y_percent'],
+                    'rotation_degrees' => $door['rotation_degrees'],
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ])->all());
+            }
+        });
+
+        return back()->with('success', '2D-Anordnung wurde gespeichert.');
+    }
+
+    public function destroyFloorPlan(Request $request, AccessFloorPlan $accessFloorPlan)
+    {
+        $this->authorizePermission($request, 'zutritt.stammdaten.manage');
+
+        $path = $accessFloorPlan->image_path;
+        $accessFloorPlan->delete();
+        Storage::disk('local')->delete($path);
+
+        return back()->with('success', '2D-Grundriss wurde entfernt. Räume und Türen bleiben erhalten.');
     }
 
     public function storeProfile(Request $request)

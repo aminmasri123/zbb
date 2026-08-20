@@ -372,6 +372,10 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
             Route::get('/', [AccessManagementController::class, 'index'])->name('index')->middleware('canStoredPermission:zutritt.index');
             Route::post('/tueren', [AccessManagementController::class, 'storeDoor'])->name('tueren.store')->middleware('canStoredPermission:zutritt.stammdaten.manage');
             Route::post('/profile', [AccessManagementController::class, 'storeProfile'])->name('profile.store')->middleware('canStoredPermission:zutritt.stammdaten.manage');
+            Route::post('/grundrisse', [AccessManagementController::class, 'storeFloorPlan'])->name('grundrisse.store')->middleware('canStoredPermission:zutritt.stammdaten.manage');
+            Route::get('/grundrisse/{accessFloorPlan}/bild', [AccessManagementController::class, 'floorPlanImage'])->name('grundrisse.image')->middleware('canStoredPermission:zutritt.stammdaten.manage');
+            Route::put('/grundrisse/{accessFloorPlan}/layout', [AccessManagementController::class, 'updateFloorPlanLayout'])->name('grundrisse.layout.update')->middleware('canStoredPermission:zutritt.stammdaten.manage');
+            Route::delete('/grundrisse/{accessFloorPlan}', [AccessManagementController::class, 'destroyFloorPlan'])->name('grundrisse.destroy')->middleware('canStoredPermission:zutritt.stammdaten.manage');
             Route::post('/antraege', [AccessManagementController::class, 'storeRequest'])->name('antraege.store')->middleware('canStoredPermission:zutritt.antrag.store');
             Route::put('/antraege/{accessRequest}/entscheidung', [AccessManagementController::class, 'decide'])->name('antraege.decision')->middleware('canStoredPermission:zutritt.antrag.approve');
             Route::put('/antraege/{accessRequest}/aktivierung', [AccessManagementController::class, 'activate'])->name('antraege.activation')->middleware('canStoredPermission:zutritt.aktivierung.update');
@@ -858,6 +862,9 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::post('export-anwesenheitsliste/pa/preview', [ProjektBopController::class, 'anwesenheitslistePAPreviewDigital'])->name('anwesenheitsliste.PA.digital.preview');
     Route::post('export-anwesenheitsliste/pa/draft', [ProjektBopController::class, 'anwesenheitslistePADraftShow'])->name('anwesenheitsliste.PA.digital.draft.show');
     Route::put('export-anwesenheitsliste/pa/draft', [ProjektBopController::class, 'anwesenheitslistePADraftStore'])->name('anwesenheitsliste.PA.digital.draft.store');
+    Route::post('export-anwesenheitsliste/pa/signature/histories', [ProjektBopController::class, 'anwesenheitslistePASignatureHistoryIndex'])->name('anwesenheitsliste.PA.digital.signature.histories');
+    Route::post('export-anwesenheitsliste/pa/signature/history', [ProjektBopController::class, 'anwesenheitslistePASignatureHistory'])->name('anwesenheitsliste.PA.digital.signature.history');
+    Route::post('export-anwesenheitsliste/pa/signature/restore', [ProjektBopController::class, 'anwesenheitslistePASignatureRestore'])->name('anwesenheitsliste.PA.digital.signature.restore');
     Route::post('export-anwesenheitsliste/pa/draft/clear', [ProjektBopController::class, 'anwesenheitslistePADraftDestroy'])->name('anwesenheitsliste.PA.digital.draft.clear');
     Route::delete('export-anwesenheitsliste/pa/draft', [ProjektBopController::class, 'anwesenheitslistePADraftDestroy'])->name('anwesenheitsliste.PA.digital.draft.destroy');
     Route::post('export-anwesenheitsliste/pa/archive-folder', [ProjektBopController::class, 'anwesenheitslistePAArchiveFolder'])->name('anwesenheitsliste.PA.digital.archive.folder');

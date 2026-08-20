@@ -11,11 +11,13 @@ use App\Models\EinteilungBereiche;
 use App\Models\Gruppe;
 use App\Models\GruppeHasPersonen;
 use App\Models\PaAttendanceListDraft;
+use App\Models\PaAttendanceSignatureVersion;
 use App\Models\Partner;
 use App\Models\Personen;
 use App\Models\PersonenIstSchueler;
 use App\Models\Projekt;
 use App\Services\Bop\AttendanceFooterService;
+use App\Services\Bop\PaAttendanceSignatureHistoryService;
 use App\Services\Bop\PublicAreaSelectionAccess;
 use App\Services\Bop\RolandEvaluationPdfService;
 use App\Services\MyDatum;
@@ -67,6 +69,7 @@ class ProjektBopController extends Controller
     public function __construct(
         private readonly PublicAreaSelectionAccess $publicAreaSelection,
         private readonly AttendanceFooterService $attendanceFooter,
+        private readonly PaAttendanceSignatureHistoryService $paSignatureHistory,
         private readonly ActiveProjectContext $activeProjectContext,
         private readonly RolandEvaluationPdfService $rolandEvaluationPdf,
     ) {
@@ -1244,7 +1247,7 @@ class ProjektBopController extends Controller
         $incomingPayload = $this->sanitizePaDraftPayload((array) $request->input('payload', []));
         $userId = auth()->id();
 
-        [$draft, $payload] = DB::transaction(function () use ($scope, $incomingPayload, $userId) {
+        [$draft, $payload] = DB::transaction(function () use ($scope, $incomingPayload, $userId, $request) {
             $now = now();
 
             PaAttendanceListDraft::query()->insertOrIgnore([
@@ -1288,6 +1291,14 @@ class ProjektBopController extends Controller
             $draft->payload = $this->encryptPaDraftPayloadSignatures($payload);
             $draft->revision = ($draft->revision ?: 0) + 1;
             $draft->user_update = $userId;
+            $this->paSignatureHistory->recordChanges(
+                $draft,
+                $scope,
+                $existingPayload,
+                $incomingPayload,
+                $payload,
+                $request
+            );
             $draft->save();
 
             if ($restoredLegacySignatures) {
@@ -1307,14 +1318,214 @@ class ProjektBopController extends Controller
         ]);
     }
 
+    public function anwesenheitslistePASignatureHistory(Request $request)
+    {
+        $scope = $this->paDraftScope($request);
+        $validated = $request->validate([
+            'signatureKey' => ['required', 'string', 'max:255'],
+        ]);
+        $signatureKey = (string) $validated['signatureKey'];
+        $participant = $this->paSignatureHistory->participantSnapshot($scope, $signatureKey);
+
+        abort_unless($participant, 404);
+
+        if ($this->paSignatureHistory->versions($scope, $signatureKey)->isEmpty()) {
+            DB::transaction(function () use ($scope, $signatureKey, $request) {
+                $draftHashes = [$scope['draft_hash'], ...$scope['legacy_draft_hashes']];
+                $drafts = PaAttendanceListDraft::query()
+                    ->whereIn('draft_hash', $draftHashes)
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get()
+                    ->sortByDesc('updated_at');
+
+                foreach ($drafts as $draft) {
+                    $payload = $this->decryptPaDraftPayloadSignatures($draft->payload ?? []);
+                    $signature = $payload['signatures'][$signatureKey] ?? null;
+
+                    if (is_string($signature) && $signature !== '') {
+                        $this->paSignatureHistory->append(
+                            $draft,
+                            $scope,
+                            $payload,
+                            $signatureKey,
+                            $signature,
+                            'imported',
+                            $request
+                        );
+                        break;
+                    }
+                }
+            });
+        }
+
+        return response()->json([
+            'participant' => $participant,
+            'signature_key' => $signatureKey,
+            'versions' => $this->paSignatureHistory->presentVersions($scope, $signatureKey),
+        ]);
+    }
+
+    public function anwesenheitslistePASignatureHistoryIndex(Request $request)
+    {
+        $scope = $this->paDraftScope($request);
+
+        DB::transaction(function () use ($scope, $request) {
+            $drafts = PaAttendanceListDraft::query()
+                ->whereIn('draft_hash', [$scope['draft_hash'], ...$scope['legacy_draft_hashes']])
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->sortByDesc('updated_at');
+
+            foreach ($drafts as $draft) {
+                $payload = $this->decryptPaDraftPayloadSignatures($draft->payload ?? []);
+                foreach (($payload['signatures'] ?? []) as $signatureKey => $signature) {
+                    if (!is_string($signatureKey) || !is_string($signature) || $signature === '') {
+                        continue;
+                    }
+
+                    if ($this->paSignatureHistory->versions($scope, $signatureKey)->isEmpty()) {
+                        $this->paSignatureHistory->append(
+                            $draft,
+                            $scope,
+                            $payload,
+                            $signatureKey,
+                            $signature,
+                            'imported',
+                            $request
+                        );
+                    }
+                }
+            }
+        });
+
+        return response()->json([
+            'subjects' => $this->paSignatureHistory->scopeSubjects($scope),
+        ]);
+    }
+
+    public function anwesenheitslistePASignatureRestore(Request $request)
+    {
+        $scope = $this->paDraftScope($request);
+        $validated = $request->validate([
+            'signatureKey' => ['required', 'string', 'max:255'],
+            'versionId' => ['required', 'integer'],
+        ]);
+        $signatureKey = (string) $validated['signatureKey'];
+        $participant = $this->paSignatureHistory->participantSnapshot($scope, $signatureKey);
+
+        abort_unless($participant, 404);
+
+        $subjectHash = $this->paSignatureHistory->subjectHash($scope, $signatureKey);
+        $sourceVersion = PaAttendanceSignatureVersion::query()
+            ->where('subject_hash', $subjectHash)
+            ->whereKey($validated['versionId'])
+            ->firstOrFail();
+        $latestVersion = PaAttendanceSignatureVersion::query()
+            ->where('subject_hash', $subjectHash)
+            ->latest('version')
+            ->first();
+
+        abort_if($latestVersion?->is($sourceVersion), 422, 'Diese Unterschriftsversion ist bereits aktuell.');
+
+        $signature = $this->paSignatureHistory->decryptVersion($sourceVersion);
+        abort_unless($signature, 422, 'Diese Unterschriftsversion kann nicht wiederhergestellt werden.');
+
+        $userId = auth()->id();
+        $draft = DB::transaction(function () use ($scope, $signatureKey, $signature, $sourceVersion, $request, $userId) {
+            $now = now();
+
+            PaAttendanceListDraft::query()->insertOrIgnore([
+                'draft_hash' => $scope['draft_hash'],
+                'projekt_id' => $scope['projekt_id'],
+                'partner_id' => $scope['partner_id'],
+                'schuljahr' => $scope['schuljahr'],
+                'teil' => $scope['teil'],
+                'export_mode' => $scope['draft_export_mode'],
+                'klasse' => $scope['draft_klasse'],
+                'payload' => json_encode([]),
+                'revision' => 0,
+                'user_create' => $userId,
+                'user_update' => $userId,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+            $draft = PaAttendanceListDraft::query()
+                ->where('draft_hash', $scope['draft_hash'])
+                ->lockForUpdate()
+                ->firstOrFail();
+            $payload = $this->decryptPaDraftPayloadSignatures($draft->payload ?? []);
+            $payload['version'] = max(2, (int) ($payload['version'] ?? 1));
+            $payload['signatures'] = is_array($payload['signatures'] ?? null) ? $payload['signatures'] : [];
+            $payload['signatures'][$signatureKey] = $signature;
+            $payload['saved_at'] = now()->toIso8601String();
+
+            $draft->revision = ($draft->revision ?: 0) + 1;
+            $draft->user_update = $userId;
+            $draft->payload = $this->encryptPaDraftPayloadSignatures($payload);
+            $this->paSignatureHistory->append(
+                $draft,
+                $scope,
+                $payload,
+                $signatureKey,
+                $signature,
+                'restored',
+                $request,
+                $sourceVersion->id
+            );
+            $draft->save();
+
+            return $draft;
+        });
+
+        return response()->json([
+            'success' => true,
+            'signature' => $signature,
+            'revision' => $draft->revision,
+            'updated_at' => $draft->updated_at?->toIso8601String(),
+            'participant' => $participant,
+            'versions' => $this->paSignatureHistory->presentVersions($scope, $signatureKey),
+        ]);
+    }
+
     public function anwesenheitslistePADraftDestroy(Request $request)
     {
         $scope = $this->paDraftScope($request);
 
-        PaAttendanceListDraft::whereIn('draft_hash', [
-            $scope['draft_hash'],
-            ...$scope['legacy_draft_hashes'],
-        ])->delete();
+        DB::transaction(function () use ($scope, $request) {
+            $drafts = PaAttendanceListDraft::query()
+                ->whereIn('draft_hash', [$scope['draft_hash'], ...$scope['legacy_draft_hashes']])
+                ->lockForUpdate()
+                ->get();
+            $recordedKeys = [];
+
+            foreach ($drafts->sortByDesc('updated_at') as $draft) {
+                $payload = $this->decryptPaDraftPayloadSignatures($draft->payload ?? []);
+
+                foreach (($payload['signatures'] ?? []) as $signatureKey => $signature) {
+                    if (!is_string($signatureKey) || !is_string($signature) || $signature === '' || isset($recordedKeys[$signatureKey])) {
+                        continue;
+                    }
+
+                    $this->paSignatureHistory->append(
+                        $draft,
+                        $scope,
+                        $payload,
+                        $signatureKey,
+                        null,
+                        'deleted',
+                        $request
+                    );
+                    $recordedKeys[$signatureKey] = true;
+                }
+            }
+
+            PaAttendanceListDraft::query()
+                ->whereKey($drafts->modelKeys())
+                ->delete();
+        });
 
         return response()->json(['success' => true]);
     }
@@ -1359,11 +1570,7 @@ class ProjektBopController extends Controller
             $scope['klasse'],
             $scope['list_type']
         );
-        $path = $folder . DIRECTORY_SEPARATOR . $filename;
-
-        if (File::exists($path)) {
-            File::delete($path);
-        }
+        [$filename, $path] = $this->availablePaSignedPdfPath($folder, $filename);
 
         $request->file('pdf')->move($folder, $filename);
 
@@ -1372,11 +1579,36 @@ class ProjektBopController extends Controller
 
         $draft = PaAttendanceListDraft::where('draft_hash', $scope['draft_hash'])->first();
         if ($draft) {
-            $payload = is_array($draft->payload) ? $draft->payload : [];
+            $payload = $this->decryptPaDraftPayloadSignatures($draft->payload ?? []);
+            $legacyDraft = $this->legacyPaDraft($scope);
+            if ($legacyDraft) {
+                $payload = $this->restoreLegacySignatures(
+                    $payload,
+                    $this->decryptPaDraftPayloadSignatures($legacyDraft->payload ?? [])
+                );
+            }
+            foreach (($payload['signatures'] ?? []) as $signatureKey => $signature) {
+                if (!is_string($signatureKey) || !is_string($signature) || $signature === '') {
+                    continue;
+                }
+
+                if ($this->paSignatureHistory->versions($scope, $signatureKey)->isEmpty()) {
+                    $this->paSignatureHistory->append(
+                        $draft,
+                        $scope,
+                        $payload,
+                        $signatureKey,
+                        $signature,
+                        'imported',
+                        $request
+                    );
+                }
+            }
             $payload['final_pdf'] = [
                 'path' => $relativePath,
                 'saved_at' => now()->toIso8601String(),
                 'draft_expires_at' => $expiresAt->toIso8601String(),
+                'signature_versions' => $this->paSignatureHistory->currentVersionManifest($scope, $payload),
             ];
 
             $draft->payload = $this->encryptPaDraftPayloadSignatures($payload);
@@ -1397,6 +1629,25 @@ class ProjektBopController extends Controller
             'updated_at' => $draft?->updated_at?->toIso8601String(),
             'expires_at' => $draft?->expires_at?->toIso8601String() ?? $expiresAt->toIso8601String(),
         ]);
+    }
+
+    private function availablePaSignedPdfPath(string $folder, string $filename): array
+    {
+        $path = $folder . DIRECTORY_SEPARATOR . $filename;
+        if (!File::exists($path)) {
+            return [$filename, $path];
+        }
+
+        $baseName = Str::beforeLast($filename, '.pdf');
+        $version = 2;
+
+        do {
+            $versionedFilename = $baseName . '_v' . $version . '.pdf';
+            $versionedPath = $folder . DIRECTORY_SEPARATOR . $versionedFilename;
+            $version++;
+        } while (File::exists($versionedPath));
+
+        return [$versionedFilename, $versionedPath];
     }
 
     private function purgeExpiredPaDrafts(): int

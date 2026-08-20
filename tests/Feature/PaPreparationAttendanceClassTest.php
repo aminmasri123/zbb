@@ -4,12 +4,14 @@ namespace Tests\Feature;
 
 use App\Models\Partner;
 use App\Models\PaAttendanceListDraft;
+use App\Models\PaAttendanceSignatureVersion;
 use App\Models\Personen;
 use App\Models\PersonenIstSchueler;
 use App\Models\Projekt;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Crypt;
 use Tests\TestCase;
 
 class PaPreparationAttendanceClassTest extends TestCase
@@ -324,5 +326,145 @@ class PaPreparationAttendanceClassTest extends TestCase
             ->putJson(route('anwesenheitsliste.PA.digital.draft.store'), $scope + ['payload' => $draftPayload])
             ->assertOk()
             ->assertJsonPath('revision', 2);
+    }
+
+    public function test_pa_keeps_individual_signature_versions_and_can_restore_an_older_version(): void
+    {
+        $user = User::factory()->create();
+        $this->grantTestPermission($user, 'anwesenheit.abrechnung');
+
+        $project = Projekt::factory()->create();
+        $school = Partner::query()->create(['name' => 'Testschule Signaturverlauf']);
+        DB::table('projekt_has_partners')->insert([
+            'projekt_id' => $project->id,
+            'partner_id' => $school->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('projekt_has_personens')->insert([
+            'projekt_id' => $project->id,
+            'personen_id' => $user->person_id,
+            'status' => 'aktiv',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $user->update(['current_team_id' => $project->id]);
+
+        $person = Personen::factory()->create([
+            'typ' => 'teilnehmer',
+            'vorname' => 'Mina',
+            'nachname' => 'Muster',
+        ]);
+        PersonenIstSchueler::query()->create([
+            'person_id' => $person->id,
+            'klasse' => '7.1',
+            'schule_id' => $school->id,
+            'schuljahr' => '2026/2027',
+            'teil' => '1',
+        ]);
+
+        $scope = [
+            'schuleId' => $school->id,
+            'schuljahr' => '2026/2027',
+            'teil' => '1',
+            'listType' => 'pa',
+            'exportMode' => 'alle',
+        ];
+        $day = [
+            'id' => 'pa-tag-1-2026-08-20',
+            'date' => '2026-08-20',
+            'type' => 'pa_day',
+            'selected' => true,
+            'note' => 'PA-Tag 1',
+        ];
+        $signatureKey = $day['id'] . ':' . $person->id;
+        $firstSignature = 'data:image/png;base64,ZXJzdGU=';
+        $secondSignature = 'data:image/png;base64,endlaXRl=';
+        $payload = [
+            'version' => 2,
+            'form' => ['startDate' => '2026-08-20'],
+            'days' => [$day],
+            'selectedDayId' => $day['id'],
+            'classSchedules' => [],
+            'signatures' => [$signatureKey => $firstSignature],
+        ];
+
+        $this->actingAs($user)
+            ->putJson(route('anwesenheitsliste.PA.digital.draft.store'), $scope + ['payload' => $payload])
+            ->assertOk();
+
+        $payload['signatures'][$signatureKey] = $secondSignature;
+        $this->actingAs($user->fresh())
+            ->putJson(route('anwesenheitsliste.PA.digital.draft.store'), $scope + ['payload' => $payload])
+            ->assertOk();
+
+        $versions = PaAttendanceSignatureVersion::query()->orderBy('version')->get();
+        $this->assertCount(2, $versions);
+        $this->assertSame(['captured', 'replaced'], $versions->pluck('action')->all());
+        $this->assertSame(['2026-08-20', '2026-08-20'], $versions->pluck('signed_for_date')->map->toDateString()->all());
+        $this->assertNotSame($firstSignature, $versions[0]->signature_ciphertext);
+        $this->assertSame(hash('sha256', $firstSignature), $versions[0]->signature_sha256);
+
+        $this->actingAs($user->fresh())
+            ->postJson(route('anwesenheitsliste.PA.digital.signature.history'), $scope + [
+                'signatureKey' => $signatureKey,
+            ])
+            ->assertOk()
+            ->assertJsonCount(2, 'versions')
+            ->assertJsonPath('versions.0.version', 2)
+            ->assertJsonPath('versions.0.is_current', true)
+            ->assertJsonPath('versions.1.signature', $firstSignature);
+
+        $this->actingAs($user->fresh())
+            ->postJson(route('anwesenheitsliste.PA.digital.signature.restore'), $scope + [
+                'signatureKey' => $signatureKey,
+                'versionId' => $versions[0]->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('signature', $firstSignature)
+            ->assertJsonPath('versions.0.action', 'restored')
+            ->assertJsonPath('versions.0.version', 3);
+
+        $storedDraft = PaAttendanceListDraft::query()->firstOrFail();
+        $this->assertSame(3, PaAttendanceSignatureVersion::query()->count());
+        $this->assertStringStartsWith('enc:v1:', $storedDraft->payload['signatures'][$signatureKey]);
+        $this->assertSame(hash('sha256', $firstSignature), PaAttendanceSignatureVersion::query()->latest('version')->value('signature_sha256'));
+
+        $orphanSignatureKey = 'pa-2026-08-19:' . $person->id;
+        $orphanSignature = 'data:image/png;base64,YWx0YmVzdGFuZA==';
+        $storedPayload = $storedDraft->payload;
+        $storedPayload['signatures'][$orphanSignatureKey] = 'enc:v1:' . Crypt::encryptString($orphanSignature);
+        $storedDraft->payload = $storedPayload;
+        $storedDraft->save();
+
+        $this->actingAs($user->fresh())
+            ->postJson(route('anwesenheitsliste.PA.digital.signature.histories'), $scope)
+            ->assertOk()
+            ->assertJsonCount(2, 'subjects')
+            ->assertJsonPath('subjects.0.signature_key', $orphanSignatureKey)
+            ->assertJsonPath('subjects.0.signed_for_date', '2026-08-19')
+            ->assertJsonPath('subjects.0.current_action', 'imported')
+            ->assertJsonPath('subjects.0.version_count', 1);
+
+        $this->actingAs($user->fresh())
+            ->postJson(route('anwesenheitsliste.PA.digital.draft.clear'), $scope)
+            ->assertOk();
+
+        $this->assertDatabaseCount('pa_attendance_list_drafts', 0);
+        $this->assertSame(6, PaAttendanceSignatureVersion::query()->count());
+        $this->assertSame('deleted', PaAttendanceSignatureVersion::query()->latest('version')->value('action'));
+        $this->assertNull(PaAttendanceSignatureVersion::query()->latest('version')->value('signature_ciphertext'));
+
+        $this->actingAs($user->fresh())
+            ->postJson(route('anwesenheitsliste.PA.digital.signature.histories'), $scope)
+            ->assertOk()
+            ->assertJsonCount(2, 'subjects')
+            ->assertJsonPath('subjects.0.participant_name', 'Mina Muster')
+            ->assertJsonPath('subjects.0.class_name', '7.1')
+            ->assertJsonPath('subjects.0.signed_for_date', '2026-08-19')
+            ->assertJsonPath('subjects.0.current_action', 'deleted')
+            ->assertJsonPath('subjects.0.version_count', 2)
+            ->assertJsonPath('subjects.1.signed_for_date', '2026-08-20')
+            ->assertJsonPath('subjects.1.version_count', 4);
     }
 }

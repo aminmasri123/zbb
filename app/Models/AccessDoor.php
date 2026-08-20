@@ -43,4 +43,9 @@ class AccessDoor extends Model
     {
         return $this->belongsToMany(AccessProfile::class, 'access_profile_door');
     }
+
+    public function floorPlanPlacements()
+    {
+        return $this->hasMany(AccessFloorPlanDoor::class);
+    }
 }

@@ -34,6 +34,9 @@ class AttendancePermissionConsolidationTest extends TestCase
         $this->assertSame(['anwesenheit.manage'], RoutePermissionMap::permissionsFor('anwesenheit.group.mark-present'));
         $this->assertSame(['anwesenheit.export'], RoutePermissionMap::permissionsFor('export.anwesenheitslite_V1'));
         $this->assertSame(['anwesenheit.abrechnung'], RoutePermissionMap::permissionsFor('anwesenheitsliste.PA.digital.preview'));
+        $this->assertSame(['anwesenheit.abrechnung'], RoutePermissionMap::permissionsFor('anwesenheitsliste.PA.digital.signature.histories'));
+        $this->assertSame(['anwesenheit.abrechnung'], RoutePermissionMap::permissionsFor('anwesenheitsliste.PA.digital.signature.history'));
+        $this->assertSame(['anwesenheit.abrechnung'], RoutePermissionMap::permissionsFor('anwesenheitsliste.PA.digital.signature.restore'));
         $this->assertSame(['anwesenheit.abrechnung'], RoutePermissionMap::permissionsFor('anwesenheitsliste.BoTag1.export'));
         $this->assertSame(['anwesenheit.archiv'], RoutePermissionMap::permissionsFor('anwesenheitsliste.POBO.bibb.pdf.store'));
     }

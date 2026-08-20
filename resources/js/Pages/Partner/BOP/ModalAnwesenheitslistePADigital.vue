@@ -88,6 +88,15 @@ const exportingWord = ref(false)
 const exportingPdf = ref(false)
 const creatingArchiveFolder = ref(false)
 const signatures = reactive({})
+const signatureHistoryVisible = ref(false)
+const signatureHistoryLoading = ref(false)
+const signatureHistoryRestoringId = ref(null)
+const signatureHistoryVersions = ref([])
+const signatureHistoryContext = ref(null)
+const signatureHistoryOverviewVisible = ref(false)
+const signatureHistoryOverviewLoading = ref(false)
+const signatureHistoryOverviewItems = ref([])
+const signatureHistoryOverviewSearch = ref('')
 const baseDraftSchedule = ref({ form: {}, days: [], selectedDayId: null })
 const classSchedules = ref({})
 const activeScheduleClass = ref(null)
@@ -125,6 +134,18 @@ const classedParticipants = computed(() => sheetParticipants.value.map((particip
     && (index === 0 || String(sheetParticipants.value[index - 1]?.klasse || '') !== String(participant.klasse || '')),
 })))
 const signatureCount = computed(() => Object.values(signatures).filter(Boolean).length)
+const filteredSignatureHistoryOverviewItems = computed(() => {
+  const needle = signatureHistoryOverviewSearch.value.trim().toLocaleLowerCase('de-DE')
+  if (!needle) return signatureHistoryOverviewItems.value
+
+  return signatureHistoryOverviewItems.value.filter((item) => [
+    item.participant_name,
+    item.class_name,
+    item.day_label,
+    item.signed_for_date ? dateLabel(item.signed_for_date) : '',
+    signatureHistoryActionLabel(item.current_action),
+  ].some((value) => String(value || '').toLocaleLowerCase('de-DE').includes(needle)))
+})
 const scopeReady = computed(() => props.partnerId
   && props.schuljahr
   && props.teil
@@ -311,6 +332,26 @@ const buildDraftPayload = ({ signaturesPayload = { ...signatures } } = {}) => {
     classSchedules: classSchedulePatch,
     signatures: signaturesPayload,
   }
+}
+
+const signatureHistoryActionLabel = (action) => ({
+  captured: 'Unterschrieben',
+  replaced: 'Neu unterschrieben',
+  restored: 'Wiederhergestellt',
+  deleted: 'Gelöscht',
+  imported: 'Aus bestehendem Entwurf übernommen',
+}[action] || action)
+
+const signatureHistoryTimestamp = (value) => {
+  if (!value) return ''
+
+  return new Date(value).toLocaleString('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 const signatureSnapshot = (signaturePayload = {}) => JSON.stringify(
@@ -664,6 +705,108 @@ const flushDraftSave = async () => {
   window.clearTimeout(draftSaveTimer)
   draftSaveTimer = null
   await saveDraft({ silent: true, payload })
+}
+
+const loadSignatureHistory = async (context) => {
+  signatureHistoryContext.value = context
+  signatureHistoryVersions.value = []
+  signatureHistoryVisible.value = true
+  signatureHistoryLoading.value = true
+
+  try {
+    await flushDraftSave()
+    await draftSaveQueue
+    const response = await axios.post(route('anwesenheitsliste.PA.digital.signature.history'), {
+      ...draftScopePayload(),
+      signatureKey: context.signatureKey,
+    })
+
+    signatureHistoryVersions.value = response.data.versions || []
+    if (response.data.participant) {
+      signatureHistoryContext.value.participantName = response.data.participant.name || signatureHistoryContext.value.participantName
+      signatureHistoryContext.value.className = response.data.participant.class_name || signatureHistoryContext.value.className
+    }
+  } catch (error) {
+    signatureHistoryVisible.value = false
+    PaSwal.fire('Verlauf nicht verfügbar', await readBlobError(error), 'error')
+  } finally {
+    signatureHistoryLoading.value = false
+  }
+}
+
+const openSignatureHistory = (day, participant) => loadSignatureHistory({
+  signatureKey: signatureKey(day, participant),
+  participantName: [participant?.vorname, participant?.nachname].filter(Boolean).join(' '),
+  className: participant?.klasse || '',
+  dayLabel: dayTypeLabel(day),
+  date: day?.date || '',
+})
+
+const openSignatureHistoryFromOverview = (item) => {
+  signatureHistoryOverviewVisible.value = false
+
+  return loadSignatureHistory({
+    signatureKey: item.signature_key,
+    participantName: item.participant_name,
+    className: item.class_name || '',
+    dayLabel: item.day_label || 'PA-Tag',
+    date: item.signed_for_date || '',
+  })
+}
+
+const openSignatureHistoryOverview = async () => {
+  signatureHistoryOverviewVisible.value = true
+  signatureHistoryOverviewLoading.value = true
+  signatureHistoryOverviewSearch.value = ''
+
+  try {
+    await flushDraftSave()
+    await draftSaveQueue
+    const response = await axios.post(route('anwesenheitsliste.PA.digital.signature.histories'), draftScopePayload())
+    signatureHistoryOverviewItems.value = response.data.subjects || []
+  } catch (error) {
+    signatureHistoryOverviewVisible.value = false
+    PaSwal.fire('Übersicht nicht verfügbar', await readBlobError(error), 'error')
+  } finally {
+    signatureHistoryOverviewLoading.value = false
+  }
+}
+
+const restoreSignatureVersion = async (version) => {
+  if (!version?.can_restore || !signatureHistoryContext.value) return
+
+  const result = await PaSwal.fire({
+    title: `Version ${version.version} wiederherstellen?`,
+    text: 'Die aktuelle Unterschrift bleibt im Verlauf erhalten. Die ausgewählte Version wird als neue aktuelle Version gespeichert.',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'Wiederherstellen',
+    cancelButtonText: 'Abbrechen',
+  })
+
+  if (!result.isConfirmed) return
+
+  signatureHistoryRestoringId.value = version.id
+
+  try {
+    const response = await axios.post(route('anwesenheitsliste.PA.digital.signature.restore'), {
+      ...draftScopePayload(),
+      signatureKey: signatureHistoryContext.value.signatureKey,
+      versionId: version.id,
+    })
+
+    signatures[signatureHistoryContext.value.signatureKey] = response.data.signature
+    signatureHistoryVersions.value = response.data.versions || []
+    draftRevision.value = response.data.revision || draftRevision.value
+    draftLastSavedAt.value = response.data.updated_at || new Date().toISOString()
+    draftSaveBlocked.value = false
+    draftSaveError.value = ''
+    PaSwal.fire('Wiederhergestellt', 'Die ausgewählte Unterschrift ist jetzt wieder aktuell.', 'success')
+  } catch (error) {
+    PaSwal.fire('Wiederherstellung fehlgeschlagen', await readBlobError(error), 'error')
+  } finally {
+    signatureHistoryRestoringId.value = null
+  }
 }
 
 const startDraftPolling = () => {
@@ -1489,6 +1632,15 @@ const resetState = () => {
   manualDate.value = ''
   manualNote.value = ''
   Object.keys(signatures).forEach((key) => delete signatures[key])
+  signatureHistoryVisible.value = false
+  signatureHistoryLoading.value = false
+  signatureHistoryRestoringId.value = null
+  signatureHistoryVersions.value = []
+  signatureHistoryContext.value = null
+  signatureHistoryOverviewVisible.value = false
+  signatureHistoryOverviewLoading.value = false
+  signatureHistoryOverviewItems.value = []
+  signatureHistoryOverviewSearch.value = ''
   resetDraftMeta()
   draftHydrating.value = false
 }
@@ -1739,6 +1891,16 @@ onBeforeUnmount(() => {
               </button>
               <button
                 type="button"
+                class="inline-flex items-center gap-2 rounded border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                :disabled="draftLoading || !draftLoaded"
+                title="Alle Unterschriftsverläufe dieser PA anzeigen"
+                @click="openSignatureHistoryOverview"
+              >
+                <i class="la la-history"></i>
+                Alle Verläufe
+              </button>
+              <button
+                type="button"
                 class="inline-flex h-10 w-10 items-center justify-center rounded border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                 :disabled="draftSaving || !draftLoaded"
                 title="Entwurf speichern"
@@ -1913,6 +2075,15 @@ onBeforeUnmount(() => {
                           @completed="saveCompletedSignature(day, row.participant, $event)"
                           @cleared="removeSignature(day, row.participant)"
                         />
+                        <button
+                          type="button"
+                          class="mt-1 inline-flex w-full items-center justify-center gap-1 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-semibold text-slate-700 hover:bg-slate-100"
+                          title="Versionsverlauf dieser Unterschrift anzeigen"
+                          @click="openSignatureHistory(day, row.participant)"
+                        >
+                          <i class="la la-history"></i>
+                          Verlauf
+                        </button>
                       </div>
                       <div v-else class="px-2 py-3 text-center text-[10px] font-semibold uppercase tracking-wide">
                         Nicht vorgesehen
@@ -1933,6 +2104,165 @@ onBeforeUnmount(() => {
         </div>
       </section>
     </div>
+
+    <Dialog
+      v-model:visible="signatureHistoryOverviewVisible"
+      modal
+      append-to="body"
+      class="w-full max-w-4xl"
+      header="Alle Unterschriftsverläufe"
+    >
+      <div class="space-y-4">
+        <div class="rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+          Hier erscheinen auch ältere Unterschriften, deren damaliges PA-Datum nicht mehr in der aktuellen Auswahl sichtbar ist.
+        </div>
+
+        <input
+          v-model="signatureHistoryOverviewSearch"
+          type="search"
+          class="w-full rounded border-slate-300 text-sm"
+          placeholder="Nach Schüler, Klasse, Tag, Datum oder Status suchen"
+        />
+
+        <div v-if="signatureHistoryOverviewLoading" class="py-8 text-center text-sm text-slate-500">
+          Unterschriftsverläufe werden geladen ...
+        </div>
+
+        <div
+          v-else-if="filteredSignatureHistoryOverviewItems.length === 0"
+          class="rounded border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500"
+        >
+          Keine passenden Unterschriftsverläufe gefunden.
+        </div>
+
+        <div v-else class="max-h-[65vh] overflow-auto rounded border border-slate-200">
+          <table class="min-w-full text-left text-sm">
+            <thead class="sticky top-0 bg-slate-100 text-xs uppercase text-slate-600">
+              <tr>
+                <th class="px-3 py-2">Schüler/-in</th>
+                <th class="px-3 py-2">Klasse</th>
+                <th class="px-3 py-2">PA-Tag</th>
+                <th class="px-3 py-2">Status</th>
+                <th class="px-3 py-2 text-right">Versionen</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="item in filteredSignatureHistoryOverviewItems"
+                :key="item.signature_key"
+                class="cursor-pointer border-t border-slate-200 hover:bg-slate-50"
+                tabindex="0"
+                @click="openSignatureHistoryFromOverview(item)"
+                @keydown.enter="openSignatureHistoryFromOverview(item)"
+              >
+                <td class="px-3 py-2 font-semibold text-slate-900">{{ item.participant_name }}</td>
+                <td class="px-3 py-2 text-slate-600">{{ item.class_name || '–' }}</td>
+                <td class="px-3 py-2 text-slate-600">
+                  <span class="block">{{ item.day_label || 'PA-Tag' }}</span>
+                  <span class="text-xs">{{ item.signed_for_date ? dateLabel(item.signed_for_date) : 'Datum unbekannt' }}</span>
+                </td>
+                <td class="px-3 py-2">
+                  <span
+                    class="rounded px-2 py-1 text-xs font-semibold"
+                    :class="item.has_current_signature ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'"
+                  >
+                    {{ signatureHistoryActionLabel(item.current_action) }}
+                  </span>
+                </td>
+                <td class="px-3 py-2 text-right font-bold text-slate-700">{{ item.version_count }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </Dialog>
+
+    <Dialog
+      v-model:visible="signatureHistoryVisible"
+      modal
+      append-to="body"
+      class="w-full max-w-3xl"
+      header="Unterschriftsverlauf"
+    >
+      <div v-if="signatureHistoryContext" class="space-y-4">
+        <div class="rounded border border-slate-200 bg-slate-50 p-3">
+          <p class="font-bold text-slate-900">{{ signatureHistoryContext.participantName }}</p>
+          <p class="text-sm text-slate-600">
+            Klasse {{ signatureHistoryContext.className || '–' }} /
+            {{ signatureHistoryContext.dayLabel }} /
+            {{ dateLabel(signatureHistoryContext.date) }}
+          </p>
+        </div>
+
+        <div v-if="signatureHistoryLoading" class="py-8 text-center text-sm text-slate-500">
+          Verlauf wird geladen ...
+        </div>
+
+        <div
+          v-else-if="signatureHistoryVersions.length === 0"
+          class="rounded border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500"
+        >
+          Für diesen Schüler und PA-Tag wurde noch keine Unterschriftsversion gespeichert.
+        </div>
+
+        <div v-else class="max-h-[65vh] space-y-3 overflow-y-auto pr-1">
+          <article
+            v-for="version in signatureHistoryVersions"
+            :key="version.id"
+            class="rounded border p-3"
+            :class="version.is_current ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white'"
+          >
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <strong class="text-sm text-slate-900">Version {{ version.version }}</strong>
+                  <span
+                    v-if="version.is_current"
+                    class="rounded bg-emerald-600 px-2 py-0.5 text-[10px] font-bold uppercase text-white"
+                  >
+                    Aktuell
+                  </span>
+                  <span class="text-xs font-semibold text-slate-600">
+                    {{ signatureHistoryActionLabel(version.action) }}
+                  </span>
+                </div>
+                <p class="mt-1 text-xs text-slate-500">
+                  {{ signatureHistoryTimestamp(version.created_at) }}
+                  <span v-if="version.actor_name"> / {{ version.actor_name }}</span>
+                  <span v-if="version.source_draft_revision"> / Entwurf {{ version.source_draft_revision }}</span>
+                </p>
+                <p class="mt-1 text-xs text-slate-500">
+                  {{ version.day_label || signatureHistoryContext.dayLabel }}
+                  <span v-if="version.signed_for_date"> / {{ dateLabel(version.signed_for_date) }}</span>
+                  <span v-if="version.class_name"> / Klasse {{ version.class_name }}</span>
+                </p>
+              </div>
+
+              <button
+                v-if="version.can_restore"
+                type="button"
+                class="inline-flex items-center gap-1 rounded border border-blue-300 bg-white px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                :disabled="signatureHistoryRestoringId !== null"
+                @click="restoreSignatureVersion(version)"
+              >
+                <i class="la la-undo"></i>
+                {{ signatureHistoryRestoringId === version.id ? 'Wird wiederhergestellt ...' : 'Wiederherstellen' }}
+              </button>
+            </div>
+
+            <div v-if="version.signature" class="mt-3 rounded border border-slate-200 bg-white p-2">
+              <img :src="version.signature" alt="Gespeicherte Unterschrift" class="h-24 w-full object-contain" />
+            </div>
+            <p v-else-if="version.action === 'deleted'" class="mt-3 text-xs font-semibold text-red-700">
+              In dieser Version wurde die Unterschrift gelöscht.
+            </p>
+            <p v-else-if="!version.signature_available" class="mt-3 text-xs font-semibold text-red-700">
+              Das verschlüsselte Bild dieser Version konnte nicht gelesen werden.
+            </p>
+          </article>
+        </div>
+      </div>
+    </Dialog>
 
     <template #footer>
       <Button

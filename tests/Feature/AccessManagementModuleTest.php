@@ -3,16 +3,20 @@
 namespace Tests\Feature;
 
 use App\Models\AccessDoor;
+use App\Models\AccessFloorPlan;
 use App\Models\AccessProfile;
 use App\Models\AccessRequest;
 use App\Models\Berechtigungskategorie;
 use App\Models\Role;
+use App\Models\Raeume;
 use App\Models\Standort;
 use App\Models\SystemModule;
 use App\Models\User;
 use App\Services\Modules\ModuleStateResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
@@ -95,6 +99,136 @@ class AccessManagementModuleTest extends TestCase
                 ->has('doors')
                 ->has('locations')
                 ->has('rooms'));
+    }
+
+    public function test_master_data_manager_can_create_and_arrange_a_private_2d_floor_plan(): void
+    {
+        Storage::fake('local');
+
+        $user = User::factory()->create();
+        $this->givePermission($user, 'zutritt.index');
+        $this->givePermission($user, 'zutritt.stammdaten.manage');
+        $this->enableModule($user);
+
+        $location = Standort::factory()->create();
+        $room = Raeume::query()->create([
+            'standort_id' => $location->id,
+            'name' => 'Büro 101',
+            'raumnummer' => '101',
+            'etage' => 'EG',
+            'typ' => 'Büro',
+        ]);
+        $door = AccessDoor::query()->create([
+            'standort_id' => $location->id,
+            'room_to_id' => $room->id,
+            'name' => 'Tür Büro 101',
+            'code' => 'T-EG-101',
+            'active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('zutritt.grundrisse.store'), [
+                'standort_id' => $location->id,
+                'floor_label' => 'EG',
+                'name' => 'Hauptgebäude Erdgeschoss',
+                'image' => UploadedFile::fake()->image('grundriss-eg.png', 1200, 800),
+            ])
+            ->assertRedirect();
+
+        $floorPlan = AccessFloorPlan::query()->firstOrFail();
+        Storage::disk('local')->assertExists($floorPlan->image_path);
+
+        $this->actingAs($user)
+            ->put(route('zutritt.grundrisse.layout.update', $floorPlan), [
+                'rooms' => [[
+                    'room_id' => $room->id,
+                    'x_percent' => 10,
+                    'y_percent' => 15,
+                    'width_percent' => 30,
+                    'height_percent' => 20,
+                ]],
+                'doors' => [[
+                    'door_id' => $door->id,
+                    'x_percent' => 39,
+                    'y_percent' => 25,
+                    'rotation_degrees' => 90,
+                ]],
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('access_floor_plan_rooms', [
+            'access_floor_plan_id' => $floorPlan->id,
+            'raum_id' => $room->id,
+            'x_percent' => 10,
+            'width_percent' => 30,
+        ]);
+        $this->assertDatabaseHas('access_floor_plan_doors', [
+            'access_floor_plan_id' => $floorPlan->id,
+            'access_door_id' => $door->id,
+            'rotation_degrees' => 90,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('zutritt.grundrisse.image', $floorPlan))
+            ->assertOk()
+            ->assertHeader('Cache-Control', 'max-age=300, private');
+
+        $this->actingAs($user)
+            ->get(route('zutritt.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('floorPlans', 1)
+                ->has('floorPlans.0.rooms', 1)
+                ->has('floorPlans.0.doors', 1));
+
+        $viewer = User::factory()->create();
+        $this->givePermission($viewer, 'zutritt.index');
+
+        $this->actingAs($viewer)
+            ->get(route('zutritt.grundrisse.image', $floorPlan))
+            ->assertForbidden();
+    }
+
+    public function test_floor_plan_rejects_rooms_from_another_location(): void
+    {
+        Storage::fake('local');
+
+        $user = User::factory()->create();
+        $this->givePermission($user, 'zutritt.stammdaten.manage');
+        $this->enableModule($user);
+
+        $floorPlan = AccessFloorPlan::query()->create([
+            'standort_id' => Standort::factory()->create()->id,
+            'floor_label' => 'EG',
+            'name' => 'Pilotplan',
+            'image_path' => 'access-management/floor-plans/pilot.png',
+            'original_name' => 'pilot.png',
+            'mime_type' => 'image/png',
+            'active' => true,
+        ]);
+        $foreignLocation = Standort::factory()->create();
+        $foreignRoom = Raeume::query()->create([
+            'standort_id' => $foreignLocation->id,
+            'name' => 'Fremder Raum',
+            'raumnummer' => 'F-1',
+            'etage' => 'EG',
+            'typ' => 'Büro',
+        ]);
+
+        $this->actingAs($user)
+            ->put(route('zutritt.grundrisse.layout.update', $floorPlan), [
+                'rooms' => [[
+                    'room_id' => $foreignRoom->id,
+                    'x_percent' => 10,
+                    'y_percent' => 10,
+                    'width_percent' => 20,
+                    'height_percent' => 20,
+                ]],
+                'doors' => [],
+            ])
+            ->assertSessionHasErrors('rooms');
+
+        $this->assertDatabaseCount('access_floor_plan_rooms', 0);
     }
 
     public function test_request_approval_and_manual_activation_require_separate_users(): void
