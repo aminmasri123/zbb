@@ -12,6 +12,7 @@ use App\Models\SystemModule;
 use App\Models\User;
 use App\Services\Modules\ModuleStateResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -58,6 +59,33 @@ class AccessManagementModuleTest extends TestCase
             ->assertRedirect();
 
         $this->assertTrue(app(ModuleStateResolver::class)->enabled('access_management'));
+    }
+
+    public function test_access_route_uses_current_role_assignment_when_permission_cache_is_stale(): void
+    {
+        $user = User::factory()->create();
+        $role = Role::query()->create([
+            'name' => 'Zutrittsverwaltung-'.uniqid(),
+            'guard_name' => 'web',
+            'color' => 'bg-orange-200',
+        ]);
+        $permission = $this->ensurePermission('zutritt.index');
+
+        $user->assignRole($role);
+        $this->assertFalse($user->fresh()->can('zutritt.index'));
+
+        DB::table('role_has_permissions')->insert([
+            'permission_id' => $permission->id,
+            'role_id' => $role->id,
+        ]);
+
+        $this->enableModule($user);
+
+        $this->assertTrue($user->fresh()->hasStoredPermission('zutritt.index'));
+
+        $this->actingAs($user)
+            ->get(route('zutritt.index'))
+            ->assertOk();
     }
 
     public function test_request_approval_and_manual_activation_require_separate_users(): void
@@ -186,14 +214,14 @@ class AccessManagementModuleTest extends TestCase
         $user->givePermissionTo($name);
     }
 
-    private function ensurePermission(string $name): void
+    private function ensurePermission(string $name): Permission
     {
         $category = Berechtigungskategorie::query()->firstOrCreate(
             ['name' => 'Zutrittsverwaltung'],
             ['beschreibung' => 'Test']
         );
 
-        Permission::query()->updateOrCreate(
+        $permission = Permission::query()->updateOrCreate(
             ['name' => $name, 'guard_name' => 'web'],
             [
                 'berechtigungskategorie_id' => $category->id,
@@ -202,5 +230,7 @@ class AccessManagementModuleTest extends TestCase
         );
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        return $permission;
     }
 }

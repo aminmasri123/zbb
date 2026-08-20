@@ -201,6 +201,11 @@ class PermissionCatalogTest extends TestCase
                         $this->addPermissionReference($references, $permission, $location);
                     }
                 }
+
+                if (str_starts_with($middleware, 'canStoredPermission:')) {
+                    $permission = substr($middleware, strlen('canStoredPermission:'));
+                    $this->addPermissionReference($references, $permission, $location);
+                }
             }
         }
 
@@ -261,7 +266,9 @@ class PermissionCatalogTest extends TestCase
     private function routeAlreadyDefinesAuthorization(array $middleware): bool
     {
         foreach ($middleware as $entry) {
-            if (is_string($entry) && (str_starts_with($entry, 'can:') || str_starts_with($entry, 'canAnyPermission:'))) {
+            if (is_string($entry) && (str_starts_with($entry, 'can:')
+                || str_starts_with($entry, 'canAnyPermission:')
+                || str_starts_with($entry, 'canStoredPermission:'))) {
                 return true;
             }
         }
