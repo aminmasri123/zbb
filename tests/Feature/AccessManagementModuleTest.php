@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\Modules\ModuleStateResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -69,15 +70,18 @@ class AccessManagementModuleTest extends TestCase
             'guard_name' => 'web',
             'color' => 'bg-orange-200',
         ]);
-        $permission = $this->ensurePermission('zutritt.index');
+        $permissions = collect([
+            $this->ensurePermission('zutritt.index'),
+            $this->ensurePermission('zutritt.stammdaten.manage'),
+        ]);
 
         $user->assignRole($role);
         $this->assertFalse($user->fresh()->can('zutritt.index'));
 
-        DB::table('role_has_permissions')->insert([
+        DB::table('role_has_permissions')->insert($permissions->map(fn (Permission $permission) => [
             'permission_id' => $permission->id,
             'role_id' => $role->id,
-        ]);
+        ])->all());
 
         $this->enableModule($user);
 
@@ -85,7 +89,12 @@ class AccessManagementModuleTest extends TestCase
 
         $this->actingAs($user)
             ->get(route('zutritt.index'))
-            ->assertOk();
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('accessPermissions.canManageMasterData', true)
+                ->has('doors')
+                ->has('locations')
+                ->has('rooms'));
     }
 
     public function test_request_approval_and_manual_activation_require_separate_users(): void

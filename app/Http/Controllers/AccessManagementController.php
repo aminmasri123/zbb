@@ -21,10 +21,10 @@ class AccessManagementController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        $canManageMasterData = $user->can('zutritt.stammdaten.manage');
+        $canManageMasterData = $user->hasStoredPermission('zutritt.stammdaten.manage');
         $canProcessAll = $canManageMasterData
-            || $user->can('zutritt.antrag.approve')
-            || $user->can('zutritt.aktivierung.update');
+            || $user->hasStoredPermission('zutritt.antrag.approve')
+            || $user->hasStoredPermission('zutritt.aktivierung.update');
 
         $requests = AccessRequestModel::query()
             ->with([
@@ -83,9 +83,9 @@ class AccessManagementController extends Controller
                 : [],
             'currentUserId' => $user->id,
             'accessPermissions' => [
-                'canCreateRequest' => $user->can('zutritt.antrag.store'),
-                'canApprove' => $user->can('zutritt.antrag.approve'),
-                'canActivate' => $user->can('zutritt.aktivierung.update'),
+                'canCreateRequest' => $user->hasStoredPermission('zutritt.antrag.store'),
+                'canApprove' => $user->hasStoredPermission('zutritt.antrag.approve'),
+                'canActivate' => $user->hasStoredPermission('zutritt.aktivierung.update'),
                 'canManageMasterData' => $canManageMasterData,
             ],
         ]);
@@ -171,9 +171,9 @@ class AccessManagementController extends Controller
         ]);
 
         $user = $request->user();
-        $canRequestForOthers = $user->can('zutritt.stammdaten.manage')
-            || $user->can('zutritt.antrag.approve')
-            || $user->can('zutritt.aktivierung.update');
+        $canRequestForOthers = $user->hasStoredPermission('zutritt.stammdaten.manage')
+            || $user->hasStoredPermission('zutritt.antrag.approve')
+            || $user->hasStoredPermission('zutritt.aktivierung.update');
 
         abort_unless(
             $canRequestForOthers || (int) $validated['requested_for_person_id'] === (int) $user->person_id,
@@ -353,7 +353,7 @@ class AccessManagementController extends Controller
 
     private function authorizePermission(Request $request, string $permission): void
     {
-        abort_unless($request->user()?->can($permission), 403);
+        abort_unless($request->user()?->hasStoredPermission($permission), 403);
     }
 
     private function recordEvent(
