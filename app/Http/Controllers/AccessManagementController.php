@@ -71,7 +71,7 @@ class AccessManagementController extends Controller
                 ->with([
                     'standort:id,name',
                     'roomPlacements.room:id,standort_id,name,raumnummer,etage',
-                    'doorPlacements.door:id,standort_id,room_from_id,room_to_id,name,code',
+                    'doorPlacements.door.requiredForRooms:id,standort_id,name,raumnummer,etage',
                 ])
                 ->orderBy('standort_id')
                 ->orderBy('floor_label')
@@ -99,6 +99,7 @@ class AccessManagementController extends Controller
                         'x_percent' => $placement->x_percent,
                         'y_percent' => $placement->y_percent,
                         'rotation_degrees' => $placement->rotation_degrees,
+                        'required_room_ids' => $placement->door?->requiredForRooms->pluck('id')->values() ?? [],
                         'door' => $placement->door,
                     ])->values(),
                 ])->values()
@@ -110,7 +111,12 @@ class AccessManagementController extends Controller
             'floorPlans' => $floorPlans,
             'doors' => $canManageMasterData
                 ? AccessDoor::query()
-                    ->with(['standort:id,name', 'roomFrom:id,name,raumnummer', 'roomTo:id,name,raumnummer'])
+                    ->with([
+                        'standort:id,name',
+                        'roomFrom:id,name,raumnummer',
+                        'roomTo:id,name,raumnummer',
+                        'requiredForRooms:id,standort_id,name,raumnummer,etage',
+                    ])
                     ->orderByDesc('active')
                     ->orderBy('name')
                     ->get()
@@ -354,6 +360,103 @@ class AccessManagementController extends Controller
         Storage::disk('local')->delete($path);
 
         return back()->with('success', '2D-Grundriss wurde entfernt. Räume und Türen bleiben erhalten.');
+    }
+
+    public function updateFloorPlanDoorConnection(
+        Request $request,
+        AccessFloorPlan $accessFloorPlan,
+        AccessDoor $accessDoor
+    ) {
+        $this->authorizePermission($request, 'zutritt.stammdaten.manage');
+
+        $doorIsPlaced = $accessFloorPlan->doorPlacements()
+            ->where('access_door_id', $accessDoor->id)
+            ->exists();
+
+        if (! $doorIsPlaced || (int) $accessDoor->standort_id !== (int) $accessFloorPlan->standort_id) {
+            throw ValidationException::withMessages([
+                'door' => 'Die Tür muss auf diesem Grundriss platziert sein und zum Standort gehören.',
+            ]);
+        }
+
+        $validated = $request->validate([
+            'room_from_id' => ['nullable', 'integer', 'different:room_to_id', 'exists:raeumes,id'],
+            'room_to_id' => ['required', 'integer', 'exists:raeumes,id'],
+            'required_room_ids' => ['present', 'array'],
+            'required_room_ids.*' => ['integer', 'distinct', 'exists:raeumes,id'],
+        ], [
+            'room_from_id.different' => 'Eine Tür kann nicht auf beiden Seiten mit demselben Raum verbunden werden.',
+            'room_to_id.required' => 'Bitte wählen Sie den Raum hinter der Tür aus.',
+        ]);
+
+        $roomIds = collect([
+            $validated['room_from_id'] ?? null,
+            $validated['room_to_id'],
+        ])->filter()->map(fn ($id) => (int) $id)->unique()->values();
+
+        $placedRoomCount = $accessFloorPlan->roomPlacements()
+            ->whereIn('raum_id', $roomIds)
+            ->count();
+
+        if ($placedRoomCount !== $roomIds->count()) {
+            throw ValidationException::withMessages([
+                'rooms' => 'Alle verbundenen Räume müssen zuerst auf diesem Grundriss platziert und gespeichert werden.',
+            ]);
+        }
+
+        $validRoomCount = Raeume::query()
+            ->where('standort_id', $accessFloorPlan->standort_id)
+            ->where(function ($query) use ($accessFloorPlan) {
+                $query->whereNull('etage')
+                    ->orWhere('etage', $accessFloorPlan->floor_label);
+            })
+            ->whereIn('id', $roomIds)
+            ->count();
+
+        if ($validRoomCount !== $roomIds->count()) {
+            throw ValidationException::withMessages([
+                'rooms' => 'Alle verbundenen Räume müssen zum Standort und zur Etage des Grundrisses gehören.',
+            ]);
+        }
+
+        $requiredRoomIds = collect($validated['required_room_ids'])
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+        $placedRequiredRoomCount = $accessFloorPlan->roomPlacements()
+            ->whereIn('raum_id', $requiredRoomIds)
+            ->count();
+
+        if ($placedRequiredRoomCount !== $requiredRoomIds->count()) {
+            throw ValidationException::withMessages([
+                'required_room_ids' => 'Alle Zugangsziele müssen auf diesem Grundriss platziert und gespeichert sein.',
+            ]);
+        }
+
+        $validRequiredRoomCount = Raeume::query()
+            ->where('standort_id', $accessFloorPlan->standort_id)
+            ->where(function ($query) use ($accessFloorPlan) {
+                $query->whereNull('etage')
+                    ->orWhere('etage', $accessFloorPlan->floor_label);
+            })
+            ->whereIn('id', $requiredRoomIds)
+            ->count();
+
+        if ($validRequiredRoomCount !== $requiredRoomIds->count()) {
+            throw ValidationException::withMessages([
+                'required_room_ids' => 'Alle Zugangsziele müssen zum Standort und zur Etage des Grundrisses gehören.',
+            ]);
+        }
+
+        DB::transaction(function () use ($accessDoor, $validated, $requiredRoomIds) {
+            $accessDoor->update([
+                'room_from_id' => $validated['room_from_id'] ?? null,
+                'room_to_id' => $validated['room_to_id'],
+            ]);
+            $accessDoor->requiredForRooms()->sync($requiredRoomIds->all());
+        });
+
+        return back()->with('success', 'Tür und Räume wurden im 2D-Grundriss verknüpft.');
     }
 
     public function storeProfile(Request $request)

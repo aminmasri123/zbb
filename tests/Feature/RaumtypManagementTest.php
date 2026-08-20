@@ -13,6 +13,14 @@ class RaumtypManagementTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_corridor_is_available_as_a_standard_room_type(): void
+    {
+        $this->assertDatabaseHas('raumtypen', [
+            'name' => 'Flur / Verkehrsfläche',
+            'aktiv' => true,
+        ]);
+    }
+
     public function test_authorized_user_can_create_and_update_a_room_type(): void
     {
         $user = User::factory()->create();

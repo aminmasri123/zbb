@@ -235,6 +235,116 @@ class AccessManagementModuleTest extends TestCase
         $this->assertDatabaseCount('access_floor_plan_rooms', 0);
     }
 
+    public function test_master_data_manager_can_link_a_placed_door_to_rooms_from_the_2d_plan(): void
+    {
+        $user = User::factory()->create();
+        $this->givePermission($user, 'zutritt.stammdaten.manage');
+        $this->enableModule($user);
+
+        $location = Standort::factory()->create();
+        $corridor = Raeume::query()->create([
+            'standort_id' => $location->id,
+            'name' => 'Flur OG',
+            'raumnummer' => 'FL-OG-01',
+            'etage' => 'OG',
+            'typ' => 'Flur / Verkehrsfläche',
+        ]);
+        $room = Raeume::query()->create([
+            'standort_id' => $location->id,
+            'name' => 'IT und Mediengestaltung',
+            'raumnummer' => '19',
+            'etage' => 'OG',
+            'typ' => 'Unterrichtsraum',
+        ]);
+        $unplacedRoom = Raeume::query()->create([
+            'standort_id' => $location->id,
+            'name' => 'Nicht platzierter Raum',
+            'raumnummer' => '20',
+            'etage' => 'OG',
+            'typ' => 'Büro',
+        ]);
+        $door = AccessDoor::query()->create([
+            'standort_id' => $location->id,
+            'name' => 'Außentür G1',
+            'code' => 'G1',
+            'active' => true,
+        ]);
+        $floorPlan = AccessFloorPlan::query()->create([
+            'standort_id' => $location->id,
+            'floor_label' => 'OG',
+            'name' => 'Hauptgebäude OG',
+            'image_path' => 'access-management/floor-plans/og.png',
+            'original_name' => 'og.png',
+            'mime_type' => 'image/png',
+            'image_width' => 1600,
+            'image_height' => 900,
+            'active' => true,
+        ]);
+
+        foreach ([$corridor, $room] as $index => $placedRoom) {
+            $floorPlan->roomPlacements()->create([
+                'raum_id' => $placedRoom->id,
+                'x_percent' => 10 + $index * 30,
+                'y_percent' => 10,
+                'width_percent' => 20,
+                'height_percent' => 20,
+                'rotation_degrees' => 0,
+            ]);
+        }
+        $floorPlan->doorPlacements()->create([
+            'access_door_id' => $door->id,
+            'x_percent' => 35,
+            'y_percent' => 20,
+            'rotation_degrees' => 0,
+        ]);
+
+        $this->actingAs($user)
+            ->put(route('zutritt.grundrisse.doors.connection.update', [$floorPlan, $door]), [
+                'room_from_id' => $corridor->id,
+                'room_to_id' => $room->id,
+                'required_room_ids' => [$corridor->id, $room->id],
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('access_doors', [
+            'id' => $door->id,
+            'room_from_id' => $corridor->id,
+            'room_to_id' => $room->id,
+        ]);
+        $this->assertDatabaseHas('access_door_room_requirements', [
+            'access_door_id' => $door->id,
+            'raum_id' => $room->id,
+        ]);
+
+        $this->actingAs($user)
+            ->put(route('zutritt.grundrisse.doors.connection.update', [$floorPlan, $door]), [
+                'room_from_id' => null,
+                'room_to_id' => $room->id,
+                'required_room_ids' => [$room->id],
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('access_doors', [
+            'id' => $door->id,
+            'room_from_id' => null,
+            'room_to_id' => $room->id,
+        ]);
+        $this->assertDatabaseMissing('access_door_room_requirements', [
+            'access_door_id' => $door->id,
+            'raum_id' => $corridor->id,
+        ]);
+
+        $this->actingAs($user)
+            ->put(route('zutritt.grundrisse.doors.connection.update', [$floorPlan, $door]), [
+                'room_from_id' => null,
+                'room_to_id' => $room->id,
+                'required_room_ids' => [$unplacedRoom->id],
+            ])
+            ->assertSessionHasErrors('required_room_ids');
+
+        $this->assertSame($room->id, $door->fresh()->room_to_id);
+    }
+
     public function test_request_approval_and_manual_activation_require_separate_users(): void
     {
         $requester = User::factory()->create();

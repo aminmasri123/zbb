@@ -26,6 +26,9 @@ const selectedDoorToAdd = ref('')
 const selectedPlacement = ref(null)
 const layoutSaving = ref(false)
 const layoutMessage = ref('')
+const doorLinkDraft = ref(null)
+const doorLinkSaving = ref(false)
+const doorLinkMessage = ref('')
 let dragState = null
 
 const requestForm = useForm({
@@ -51,6 +54,8 @@ const profileForm = useForm({
     description: '',
     door_ids: [],
 })
+const profileTargetRoomId = ref('')
+const profileRouteMessage = ref('')
 
 const floorPlanForm = useForm({
     standort_id: '',
@@ -86,6 +91,81 @@ const selectedPlacementItem = computed(() => {
     const collection = selectedPlacement.value.kind === 'room' ? planRooms.value : planDoors.value
     return collection[selectedPlacement.value.index] || null
 })
+const selectedDoor = computed(() => selectedPlacement.value?.kind === 'door'
+    ? doorForPlacement(selectedPlacementItem.value)
+    : null)
+const selectedDoorIsPersisted = computed(() => selectedPlacement.value?.kind === 'door'
+    && (selectedFloorPlan.value?.doors || []).some((item) => Number(item.door_id) === Number(selectedPlacementItem.value?.door_id)))
+const doorLinkSegments = computed(() => {
+    const segments = []
+
+    planDoors.value.forEach((placement) => {
+        const door = doorForPlacement(placement)
+        if (!door) return
+
+        const draft = Number(doorLinkDraft.value?.door_id) === Number(placement.door_id)
+            ? doorLinkDraft.value
+            : null
+        const roomFromId = draft ? draft.room_from_id : door.room_from_id
+        const roomToId = draft ? draft.room_to_id : door.room_to_id
+        const requiredRoomIds = draft
+            ? draft.required_room_ids
+            : doorRequiredRoomIds(door, placement)
+        const doorPoint = {
+            x: Number(placement.x_percent),
+            y: Number(placement.y_percent),
+        }
+
+        if (roomFromId) {
+            const roomPoint = planRoomCenter(roomFromId)
+            if (roomPoint) segments.push({
+                key: `${placement.door_id}-from-${roomFromId}`,
+                kind: 'room',
+                x1: doorPoint.x,
+                y1: doorPoint.y,
+                x2: roomPoint.x,
+                y2: roomPoint.y,
+            })
+        } else if (roomToId) {
+            const outsidePoint = nearestPlanEdge(doorPoint)
+            segments.push({
+                key: `${placement.door_id}-outside`,
+                kind: 'outside',
+                x1: doorPoint.x,
+                y1: doorPoint.y,
+                x2: outsidePoint.x,
+                y2: outsidePoint.y,
+            })
+        }
+
+        if (roomToId) {
+            const roomPoint = planRoomCenter(roomToId)
+            if (roomPoint) segments.push({
+                key: `${placement.door_id}-to-${roomToId}`,
+                kind: 'room',
+                x1: doorPoint.x,
+                y1: doorPoint.y,
+                x2: roomPoint.x,
+                y2: roomPoint.y,
+            })
+        }
+
+
+        requiredRoomIds.forEach((roomId) => {
+            const roomPoint = planRoomCenter(roomId)
+            if (roomPoint) segments.push({
+                key: `${placement.door_id}-access-${roomId}`,
+                kind: 'access',
+                x1: doorPoint.x,
+                y1: doorPoint.y,
+                x2: roomPoint.x,
+                y2: roomPoint.y,
+            })
+        })
+    })
+
+    return segments
+})
 
 const counters = computed(() => ({
     open: props.accessRequests.filter((item) => item.status === 'submitted').length,
@@ -111,8 +191,35 @@ function submitDoor() {
 function submitProfile() {
     profileForm.post(route('zutritt.profile.store'), {
         preserveScroll: true,
-        onSuccess: () => profileForm.reset(),
+        onSuccess: () => {
+            profileForm.reset()
+            profileTargetRoomId.value = ''
+            profileRouteMessage.value = ''
+        },
     })
+}
+
+function applyDoorRequirementsToProfile() {
+    const room = props.rooms.find((candidate) => Number(candidate.id) === Number(profileTargetRoomId.value))
+    if (!room) {
+        profileRouteMessage.value = 'Bitte wählen Sie zuerst einen Zielraum aus.'
+        return
+    }
+
+    const requiredDoors = activeDoors.value.filter((door) => doorRequiredRoomIds(door)
+        .some((roomId) => Number(roomId) === Number(room.id)))
+
+    if (!requiredDoors.length) {
+        profileRouteMessage.value = 'Für diesen Raum wurde im 2D-Grundriss noch keine notwendige Zugangstür festgelegt.'
+        return
+    }
+
+    profileForm.door_ids = requiredDoors.map((door) => Number(door.id))
+    if (!profileForm.name.trim()) profileForm.name = `Zugang ${roomLabel(room)}`
+    if (!profileForm.description.trim()) {
+        profileForm.description = `Zugang zu ${roomLabel(room)} über ${requiredDoors.map((door) => door.name).join(', ')}.`
+    }
+    profileRouteMessage.value = `${requiredDoors.length} erforderliche Tür${requiredDoors.length === 1 ? '' : 'en'} aus dem 2D-Grundriss übernommen.`
 }
 
 function submitFloorPlan() {
@@ -150,6 +257,8 @@ function loadFloorPlan() {
         rotation_degrees: Number(item.rotation_degrees),
     }))
     selectedPlacement.value = null
+    doorLinkDraft.value = null
+    doorLinkMessage.value = ''
     selectedRoomToAdd.value = ''
     selectedDoorToAdd.value = ''
     layoutMessage.value = ''
@@ -210,6 +319,16 @@ function startPlacementDrag(kind, index, event) {
     window.addEventListener('pointerup', stopPlacementDrag, { once: true })
 }
 
+function handleRoomPointerDown(index, event) {
+    if (doorLinkDraft.value?.selecting) {
+        event.preventDefault()
+        selectRoomForDoorLink(index)
+        return
+    }
+
+    startPlacementDrag('room', index, event)
+}
+
 function movePlacement(event) {
     if (!dragState) return
     const collection = dragState.kind === 'room' ? planRooms.value : planDoors.value
@@ -266,6 +385,169 @@ function removeSelectedPlacement() {
     collection.splice(selectedPlacement.value.index, 1)
     selectedPlacement.value = null
     layoutMessage.value = 'Ungespeicherte Änderungen'
+}
+
+function doorForPlacement(placement) {
+    if (!placement) return null
+    return props.doors.find((door) => Number(door.id) === Number(placement.door_id))
+        || placement.door
+        || null
+}
+
+function doorRequiredRoomIds(door, placement = null) {
+    if (Array.isArray(door?.required_for_rooms)) {
+        return door.required_for_rooms.map((room) => Number(room.id))
+    }
+    return (placement?.required_room_ids || []).map((roomId) => Number(roomId))
+}
+
+function planRoomCenter(roomId) {
+    const placement = planRooms.value.find((room) => Number(room.room_id) === Number(roomId))
+    if (!placement) return null
+
+    return {
+        x: Number(placement.x_percent) + Number(placement.width_percent) / 2,
+        y: Number(placement.y_percent) + Number(placement.height_percent) / 2,
+    }
+}
+
+function nearestPlanEdge(point) {
+    const edges = [
+        { distance: point.x, point: { x: 0, y: point.y } },
+        { distance: 100 - point.x, point: { x: 100, y: point.y } },
+        { distance: point.y, point: { x: point.x, y: 0 } },
+        { distance: 100 - point.y, point: { x: point.x, y: 100 } },
+    ]
+
+    return edges.sort((first, second) => first.distance - second.distance)[0].point
+}
+
+function beginDoorLinking() {
+    const placement = selectedPlacementItem.value
+    const door = selectedDoor.value
+    if (!placement || !door || !selectedDoorIsPersisted.value) {
+        doorLinkMessage.value = 'Bitte die Tür zuerst platzieren und die 2D-Anordnung speichern.'
+        return
+    }
+
+    doorLinkDraft.value = {
+        door_id: Number(door.id),
+        door_name: door.name,
+        room_from_id: door.room_from_id ? Number(door.room_from_id) : null,
+        room_to_id: door.room_to_id ? Number(door.room_to_id) : null,
+        required_room_ids: doorRequiredRoomIds(door, placement),
+        selecting: door.room_to_id ? null : 'to',
+    }
+    doorLinkMessage.value = door.room_to_id
+        ? 'Wählen Sie eine Seite aus und klicken Sie danach den gewünschten Raum im Plan an.'
+        : 'Klicken Sie jetzt den Raum hinter der Tür im Plan an.'
+}
+
+function selectDoorLinkSide(side) {
+    if (!doorLinkDraft.value) return
+    doorLinkDraft.value.selecting = side
+    doorLinkMessage.value = {
+        from: 'Klicken Sie den Raum vor der Tür an oder wählen Sie Außenbereich.',
+        to: 'Klicken Sie den Raum hinter der Tür an.',
+        access: 'Klicken Sie alle Räume an, für deren Zugang diese Tür benötigt wird. Erneutes Anklicken entfernt die Zuordnung.',
+    }[side]
+}
+
+function setDoorLinkOutside() {
+    if (!doorLinkDraft.value) return
+    doorLinkDraft.value.room_from_id = null
+    doorLinkDraft.value.selecting = 'to'
+    doorLinkMessage.value = 'Außenbereich gewählt. Klicken Sie jetzt den Raum hinter der Tür an.'
+}
+
+function selectRoomForDoorLink(index) {
+    const draft = doorLinkDraft.value
+    const placement = planRooms.value[index]
+    if (!draft?.selecting || !placement) return
+
+    const isPersisted = (selectedFloorPlan.value?.rooms || [])
+        .some((item) => Number(item.room_id) === Number(placement.room_id))
+    if (!isPersisted) {
+        doorLinkMessage.value = 'Bitte den Raum zuerst platzieren und die 2D-Anordnung speichern.'
+        return
+    }
+
+    const roomId = Number(placement.room_id)
+    if (draft.selecting === 'access') {
+        const existingIndex = draft.required_room_ids.findIndex((requiredRoomId) => Number(requiredRoomId) === roomId)
+        if (existingIndex === -1) {
+            draft.required_room_ids.push(roomId)
+            doorLinkMessage.value = `${planRoomLabel(placement)} benötigt jetzt diese Tür. Weitere Zielräume können ebenfalls angeklickt werden.`
+        } else {
+            draft.required_room_ids.splice(existingIndex, 1)
+            doorLinkMessage.value = `${planRoomLabel(placement)} wurde als Zugangsziel entfernt.`
+        }
+        return
+    }
+
+    const otherRoomId = draft.selecting === 'from' ? draft.room_to_id : draft.room_from_id
+    if (Number(otherRoomId) === roomId) {
+        doorLinkMessage.value = 'Bitte wählen Sie auf jeder Türseite einen anderen Raum.'
+        return
+    }
+
+    if (draft.selecting === 'from') {
+        draft.room_from_id = roomId
+        draft.selecting = 'to'
+        doorLinkMessage.value = `${planRoomLabel(placement)} als erste Seite gewählt. Wählen Sie jetzt den Raum hinter der Tür.`
+    } else {
+        draft.room_to_id = roomId
+        draft.selecting = null
+        doorLinkMessage.value = `${planRoomLabel(placement)} als Zielraum gewählt. Sie können die Verknüpfung jetzt speichern.`
+    }
+}
+
+function doorLinkRoomLabel(roomId, outsideFallback = false) {
+    if (!roomId) return outsideFallback ? 'Außenbereich' : 'Noch nicht ausgewählt'
+    const room = props.rooms.find((candidate) => Number(candidate.id) === Number(roomId))
+    return room ? roomLabel(room) : `Raum ${roomId}`
+}
+
+function roomDoorLinkRole(placement) {
+    const draft = doorLinkDraft.value
+    if (!draft) return ''
+    if (Number(draft.room_from_id) === Number(placement.room_id)) return 'border-violet-700 ring-2 ring-violet-300'
+    if (Number(draft.room_to_id) === Number(placement.room_id)) return 'border-emerald-700 ring-2 ring-emerald-300'
+    if (draft.required_room_ids.some((roomId) => Number(roomId) === Number(placement.room_id))) return 'border-fuchsia-700 ring-2 ring-fuchsia-300'
+    if (draft.selecting) return 'cursor-crosshair hover:border-fuchsia-600 hover:ring-2 hover:ring-fuchsia-200'
+    return ''
+}
+
+function saveDoorLink() {
+    const draft = doorLinkDraft.value
+    const plan = selectedFloorPlan.value
+    if (!draft || !plan) return
+    if (!draft.room_to_id) {
+        doorLinkMessage.value = 'Bitte wählen Sie den Raum hinter der Tür aus.'
+        return
+    }
+
+    doorLinkSaving.value = true
+    router.put(route('zutritt.grundrisse.doors.connection.update', [plan.id, draft.door_id]), {
+        room_from_id: draft.room_from_id,
+        room_to_id: draft.room_to_id,
+        required_room_ids: draft.required_room_ids,
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            doorLinkDraft.value = null
+            doorLinkMessage.value = 'Verknüpfung gespeichert.'
+        },
+        onError: (errors) => {
+            doorLinkMessage.value = Object.values(errors)[0] || 'Die Verknüpfung konnte nicht gespeichert werden.'
+        },
+        onFinish: () => { doorLinkSaving.value = false },
+    })
+}
+
+function cancelDoorLink() {
+    doorLinkDraft.value = null
+    doorLinkMessage.value = ''
 }
 
 function normalizeSelectedRoom() {
@@ -753,6 +1035,7 @@ onBeforeUnmount(() => {
                                 <li>Element mit der Maus an die richtige Position ziehen.</li>
                                 <li>Raumgröße sowie Raum- oder Türdrehung einstellen.</li>
                                 <li>Anordnung speichern.</li>
+                                <li>Tür anklicken, „Verknüpfen“ wählen und die angrenzenden Räume im Plan anklicken.</li>
                             </ol>
                         </div>
                     </aside>
@@ -806,15 +1089,35 @@ onBeforeUnmount(() => {
                             <div ref="floorCanvas" class="relative mt-5 select-none overflow-hidden rounded-lg border-2 border-gray-300 bg-gray-100 shadow-inner touch-none">
                                 <img :src="selectedFloorPlan.image_url" :alt="selectedFloorPlan.name" class="block h-auto w-full" draggable="false">
                                 <div class="absolute inset-0">
+                                    <svg class="pointer-events-none absolute inset-0 z-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                                        <line
+                                            v-for="segment in doorLinkSegments"
+                                            :key="segment.key"
+                                            :x1="segment.x1"
+                                            :y1="segment.y1"
+                                            :x2="segment.x2"
+                                            :y2="segment.y2"
+                                            :stroke="segment.kind === 'outside' ? '#c2410c' : (segment.kind === 'access' ? '#a21caf' : '#0f766e')"
+                                            :stroke-dasharray="segment.kind === 'outside' ? '5 4' : (segment.kind === 'access' ? '2 4' : 'none')"
+                                            stroke-width="3"
+                                            stroke-linecap="round"
+                                            vector-effect="non-scaling-stroke"
+                                        />
+                                    </svg>
+
                                     <button
                                         v-for="(item, index) in planRooms"
                                         :key="`room-${item.room_id}`"
                                         type="button"
-                                        class="absolute flex cursor-move items-center justify-center overflow-hidden border-2 bg-blue-400/30 px-1 text-center text-xs font-semibold text-blue-950 shadow-sm"
-                                        :class="selectedPlacement?.kind === 'room' && selectedPlacement.index === index ? 'z-20 border-blue-700 ring-2 ring-white' : 'z-10 border-blue-500'"
+                                        class="absolute flex items-center justify-center overflow-hidden border-2 bg-blue-400/30 px-1 text-center text-xs font-semibold text-blue-950 shadow-sm"
+                                        :class="[
+                                            doorLinkDraft?.selecting ? 'cursor-crosshair' : 'cursor-move',
+                                            selectedPlacement?.kind === 'room' && selectedPlacement.index === index ? 'z-20 border-blue-700 ring-2 ring-white' : 'z-10 border-blue-500',
+                                            roomDoorLinkRole(item),
+                                        ]"
                                         :style="{ left: `${item.x_percent}%`, top: `${item.y_percent}%`, width: `${item.width_percent}%`, height: `${item.height_percent}%`, transform: `rotate(${item.rotation_degrees}deg)`, transformOrigin: 'center' }"
                                         :title="planRoomLabel(item)"
-                                        @pointerdown="startPlacementDrag('room', index, $event)"
+                                        @pointerdown="handleRoomPointerDown(index, $event)"
                                     >
                                         <span class="truncate">{{ planRoomLabel(item) }}</span>
                                     </button>
@@ -862,10 +1165,78 @@ onBeforeUnmount(() => {
                                     </label>
                                 </div>
 
-                                <label v-else class="mt-4 block">
-                                    <span class="text-sm text-gray-700">Drehung: {{ selectedPlacementItem.rotation_degrees }}°</span>
-                                    <input v-model.number="selectedPlacementItem.rotation_degrees" type="range" min="0" max="359" step="1" class="mt-2 w-full" @input="layoutMessage = 'Ungespeicherte Änderungen'">
-                                </label>
+                                <div v-else class="mt-4 space-y-4">
+                                    <label class="block">
+                                        <span class="text-sm text-gray-700">Drehung: {{ selectedPlacementItem.rotation_degrees }}°</span>
+                                        <input v-model.number="selectedPlacementItem.rotation_degrees" type="range" min="0" max="359" step="1" class="mt-2 w-full" @input="layoutMessage = 'Ungespeicherte Änderungen'">
+                                    </label>
+
+                                    <section class="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                                        <div class="flex flex-wrap items-start justify-between gap-3">
+                                            <div>
+                                                <p class="text-xs font-semibold uppercase tracking-wide text-amber-800">Räumliche Verknüpfung</p>
+                                                <p class="mt-1 text-sm font-medium text-gray-800">{{ selectedDoor ? doorConnection(selectedDoor) : 'Noch nicht zugeordnet' }}</p>
+                                            </div>
+                                            <button
+                                                v-if="!doorLinkDraft"
+                                                type="button"
+                                                class="rounded-md bg-amber-600 px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                                :disabled="!selectedDoorIsPersisted"
+                                                @click="beginDoorLinking"
+                                            >
+                                                <i class="las la-project-diagram mr-1"></i> Verknüpfen
+                                            </button>
+                                        </div>
+
+                                        <p v-if="!selectedDoorIsPersisted" class="mt-2 text-xs text-amber-800">Speichern Sie zuerst die 2D-Anordnung, bevor Sie die Tür verknüpfen.</p>
+
+                                        <div v-if="doorLinkDraft" class="mt-4 space-y-3">
+                                            <div class="grid gap-3 md:grid-cols-2">
+                                                <div class="rounded-md border border-violet-200 bg-white p-3">
+                                                    <p class="text-xs font-semibold uppercase tracking-wide text-violet-700">Erste Türseite</p>
+                                                    <p class="mt-1 min-h-6 text-sm font-semibold text-gray-900">{{ doorLinkRoomLabel(doorLinkDraft.room_from_id, true) }}</p>
+                                                    <div class="mt-3 flex flex-wrap gap-2">
+                                                        <button type="button" class="rounded border border-violet-300 px-2.5 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-50" @click="setDoorLinkOutside">Außenbereich</button>
+                                                        <button type="button" class="rounded border border-violet-300 px-2.5 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-50" @click="selectDoorLinkSide('from')">Raum im Plan wählen</button>
+                                                    </div>
+                                                </div>
+
+                                                <div class="rounded-md border border-emerald-200 bg-white p-3">
+                                                    <p class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Raum hinter der Tür</p>
+                                                    <p class="mt-1 min-h-6 text-sm font-semibold text-gray-900">{{ doorLinkRoomLabel(doorLinkDraft.room_to_id) }}</p>
+                                                    <button type="button" class="mt-3 rounded border border-emerald-300 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50" @click="selectDoorLinkSide('to')">Raum im Plan wählen</button>
+                                                </div>
+                                            </div>
+
+                                            <div class="rounded-md border border-fuchsia-200 bg-white p-3">
+                                                <div class="flex flex-wrap items-start justify-between gap-3">
+                                                    <div>
+                                                        <p class="text-xs font-semibold uppercase tracking-wide text-fuchsia-700">Zugang erforderlich für</p>
+                                                        <p class="mt-1 text-sm text-gray-700">Diese Zuordnung sorgt dafür, dass G1 beispielsweise bei einem Profil für Raum 19 automatisch vorgeschlagen wird.</p>
+                                                    </div>
+                                                    <button type="button" class="rounded border border-fuchsia-300 px-2.5 py-1.5 text-xs font-semibold text-fuchsia-700 hover:bg-fuchsia-50" @click="selectDoorLinkSide('access')">Zielräume im Plan wählen</button>
+                                                </div>
+                                                <div v-if="doorLinkDraft.required_room_ids.length" class="mt-3 flex flex-wrap gap-2">
+                                                    <span v-for="roomId in doorLinkDraft.required_room_ids" :key="roomId" class="rounded-full bg-fuchsia-100 px-2.5 py-1 text-xs font-semibold text-fuchsia-800">{{ doorLinkRoomLabel(roomId) }}</span>
+                                                </div>
+                                                <p v-else class="mt-2 text-xs text-gray-500">Noch kein Zielraum zugeordnet.</p>
+                                            </div>
+
+                                            <p class="rounded-md bg-white px-3 py-2 text-sm text-gray-700">
+                                                <i class="las la-mouse-pointer mr-1 text-amber-700"></i>{{ doorLinkMessage }}
+                                            </p>
+
+                                            <div class="flex flex-wrap justify-end gap-2">
+                                                <button type="button" class="rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-white" @click="cancelDoorLink">Abbrechen</button>
+                                                <button type="button" class="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="doorLinkSaving || !doorLinkDraft.room_to_id" @click="saveDoorLink">
+                                                    {{ doorLinkSaving ? 'Wird gespeichert …' : 'Verknüpfung speichern' }}
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <p v-else-if="doorLinkMessage" class="mt-3 text-sm text-emerald-700">{{ doorLinkMessage }}</p>
+                                    </section>
+                                </div>
                             </div>
 
                             <div class="mt-5 flex flex-wrap items-center justify-between gap-3">
@@ -895,6 +1266,18 @@ onBeforeUnmount(() => {
                                 <span class="text-sm font-medium text-gray-700">Beschreibung</span>
                                 <textarea v-model="profileForm.description" rows="3" class="mt-1 w-full rounded-md border-gray-300" maxlength="2000"></textarea>
                             </label>
+
+                            <section class="rounded-md border border-fuchsia-200 bg-fuchsia-50 p-3">
+                                <label class="block">
+                                    <span class="text-sm font-medium text-fuchsia-900">Zielraum aus dem 2D-Grundriss</span>
+                                    <select v-model="profileTargetRoomId" class="mt-1 w-full rounded-md border-fuchsia-200 bg-white text-sm" @change="profileRouteMessage = ''">
+                                        <option value="">Bitte auswählen</option>
+                                        <option v-for="room in rooms" :key="room.id" :value="room.id">{{ room.etage ? `${room.etage} · ` : '' }}{{ roomLabel(room) }}</option>
+                                    </select>
+                                </label>
+                                <button type="button" class="mt-3 rounded-md bg-fuchsia-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="!profileTargetRoomId" @click="applyDoorRequirementsToProfile">Erforderliche Türen übernehmen</button>
+                                <p v-if="profileRouteMessage" class="mt-2 text-xs font-medium text-fuchsia-900">{{ profileRouteMessage }}</p>
+                            </section>
 
                             <fieldset>
                                 <legend class="text-sm font-medium text-gray-700">Enthaltene Türen</legend>

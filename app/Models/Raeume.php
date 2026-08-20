@@ -83,4 +83,10 @@ class Raeume extends Model
     {
         return $this->hasMany(AccessFloorPlanRoom::class, 'raum_id');
     }
+
+    public function requiredAccessDoors()
+    {
+        return $this->belongsToMany(AccessDoor::class, 'access_door_room_requirements', 'raum_id', 'access_door_id')
+            ->withTimestamps();
+    }
 }
