@@ -2,6 +2,7 @@
 import { Head, router, useForm } from '@inertiajs/vue3'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
+import DialogModal from '@/Components/DialogModal.vue'
 
 const props = defineProps({
     accessRequests: { type: Array, default: () => [] },
@@ -27,6 +28,9 @@ const selectedPlacement = ref(null)
 const layoutSaving = ref(false)
 const layoutMessage = ref('')
 const layoutLockUpdating = ref(false)
+const layoutLockModalOpen = ref(false)
+const layoutLockTarget = ref(false)
+const layoutLockError = ref('')
 const doorLinkDraft = ref(null)
 const doorLinkSaving = ref(false)
 const doorLinkMessage = ref('')
@@ -642,12 +646,25 @@ function toggleFloorPlanLock() {
         return
     }
 
-    const question = shouldLock
-        ? 'Platzierung wirklich sperren? Räume und Türen können danach erst wieder nach dem Entsperren verschoben werden.'
-        : 'Platzierung zum Bearbeiten entsperren? Danach können Räume und Türen wieder verändert werden.'
-    if (!window.confirm(question)) return
+    layoutLockTarget.value = shouldLock
+    layoutLockError.value = ''
+    layoutLockModalOpen.value = true
+}
+
+function closeFloorPlanLockModal() {
+    if (layoutLockUpdating.value) return
+    layoutLockModalOpen.value = false
+    layoutLockError.value = ''
+}
+
+function confirmFloorPlanLock() {
+    const plan = selectedFloorPlan.value
+    if (!plan || layoutLockUpdating.value || !layoutLockModalOpen.value) return
+
+    const shouldLock = layoutLockTarget.value
 
     layoutLockUpdating.value = true
+    layoutLockError.value = ''
     router.put(route('zutritt.grundrisse.lock.update', plan.id), {
         locked: shouldLock,
     }, {
@@ -655,9 +672,10 @@ function toggleFloorPlanLock() {
         onSuccess: () => {
             layoutMessage.value = shouldLock ? 'Platzierung gesperrt' : 'Platzierung entsperrt'
             selectedPlacement.value = null
+            layoutLockModalOpen.value = false
         },
         onError: (errors) => {
-            layoutMessage.value = Object.values(errors)[0] || 'Der Sperrstatus konnte nicht geändert werden.'
+            layoutLockError.value = Object.values(errors)[0] || 'Der Sperrstatus konnte nicht geändert werden.'
         },
         onFinish: () => { layoutLockUpdating.value = false },
     })
@@ -1420,5 +1438,45 @@ onBeforeUnmount(() => {
                 </section>
             </template>
         </div>
+
+        <DialogModal :show="layoutLockModalOpen" max-width="lg" :closeable="!layoutLockUpdating" @close="closeFloorPlanLockModal">
+            <template #title>
+                <div class="flex items-center gap-3">
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" :class="layoutLockTarget ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'">
+                        <i :class="layoutLockTarget ? 'las la-lock' : 'las la-lock-open'" class="text-xl"></i>
+                    </span>
+                    <span>{{ layoutLockTarget ? 'Platzierung sperren?' : 'Platzierung entsperren?' }}</span>
+                </div>
+            </template>
+
+            <template #content>
+                <div class="space-y-3">
+                    <p v-if="selectedFloorPlan" class="font-medium text-gray-800">{{ selectedFloorPlan.standort?.name }} · {{ selectedFloorPlan.floor_label }} · {{ selectedFloorPlan.name }}</p>
+                    <p v-if="layoutLockTarget">
+                        Nach dem Sperren können Räume und Türen nicht mehr verschoben, gedreht, vergrößert, hinzugefügt oder entfernt werden. Türverknüpfungen bleiben weiterhin bearbeitbar.
+                    </p>
+                    <p v-else>
+                        Nach dem Entsperren kann die 2D-Platzierung wieder verändert werden. Speichern und sperren Sie den Plan anschließend erneut, um versehentliche Änderungen zu vermeiden.
+                    </p>
+                    <p v-if="layoutLockError" class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{{ layoutLockError }}</p>
+                </div>
+            </template>
+
+            <template #footer>
+                <button type="button" class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50" :disabled="layoutLockUpdating" @click="closeFloorPlanLockModal">
+                    Abbrechen
+                </button>
+                <button
+                    type="button"
+                    class="rounded-md px-4 py-2 text-sm font-semibold text-white disabled:cursor-wait disabled:opacity-50"
+                    :class="layoutLockTarget ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'"
+                    :disabled="layoutLockUpdating"
+                    @click="confirmFloorPlanLock"
+                >
+                    <i :class="layoutLockTarget ? 'las la-lock' : 'las la-lock-open'" class="mr-1"></i>
+                    {{ layoutLockUpdating ? 'Wird geändert …' : (layoutLockTarget ? 'Jetzt sperren' : 'Jetzt entsperren') }}
+                </button>
+            </template>
+        </DialogModal>
     </AppLayout>
 </template>
