@@ -140,6 +140,7 @@ function loadFloorPlan() {
         y_percent: Number(item.y_percent),
         width_percent: Number(item.width_percent),
         height_percent: Number(item.height_percent),
+        rotation_degrees: Number(item.rotation_degrees ?? 0),
     }))
     planDoors.value = (plan?.doors || []).map((item) => ({
         ...item,
@@ -166,6 +167,7 @@ function addRoomToPlan() {
         y_percent: 5 + offset,
         width_percent: 20,
         height_percent: 12,
+        rotation_degrees: 0,
     })
     selectedPlacement.value = { kind: 'room', index: planRooms.value.length - 1 }
     selectedRoomToAdd.value = ''
@@ -245,6 +247,7 @@ function normalizeSelectedRoom() {
     if (!item || selectedPlacement.value?.kind !== 'room') return
     item.width_percent = Number(item.width_percent)
     item.height_percent = Number(item.height_percent)
+    item.rotation_degrees = clamp(Number(item.rotation_degrees) || 0, 0, 359)
     item.x_percent = clamp(Number(item.x_percent), 0, 100 - item.width_percent)
     item.y_percent = clamp(Number(item.y_percent), 0, 100 - item.height_percent)
     layoutMessage.value = 'Ungespeicherte Änderungen'
@@ -261,6 +264,7 @@ function saveFloorPlanLayout() {
             y_percent: Number(item.y_percent.toFixed(4)),
             width_percent: Number(item.width_percent),
             height_percent: Number(item.height_percent),
+            rotation_degrees: Number(item.rotation_degrees),
         })),
         doors: planDoors.value.map((item) => ({
             door_id: item.door_id,
@@ -720,7 +724,7 @@ onBeforeUnmount(() => {
                             <ol class="mt-2 list-decimal space-y-1 pl-5">
                                 <li>Raum oder Tür auswählen und hinzufügen.</li>
                                 <li>Element mit der Maus an die richtige Position ziehen.</li>
-                                <li>Raumgröße oder Türdrehung einstellen.</li>
+                                <li>Raumgröße sowie Raum- oder Türdrehung einstellen.</li>
                                 <li>Anordnung speichern.</li>
                             </ol>
                         </div>
@@ -781,7 +785,7 @@ onBeforeUnmount(() => {
                                         type="button"
                                         class="absolute flex cursor-move items-center justify-center overflow-hidden border-2 bg-blue-400/30 px-1 text-center text-xs font-semibold text-blue-950 shadow-sm"
                                         :class="selectedPlacement?.kind === 'room' && selectedPlacement.index === index ? 'z-20 border-blue-700 ring-2 ring-white' : 'z-10 border-blue-500'"
-                                        :style="{ left: `${item.x_percent}%`, top: `${item.y_percent}%`, width: `${item.width_percent}%`, height: `${item.height_percent}%` }"
+                                        :style="{ left: `${item.x_percent}%`, top: `${item.y_percent}%`, width: `${item.width_percent}%`, height: `${item.height_percent}%`, transform: `rotate(${item.rotation_degrees}deg)`, transformOrigin: 'center' }"
                                         :title="planRoomLabel(item)"
                                         @pointerdown="startPlacementDrag('room', index, $event)"
                                     >
@@ -812,7 +816,7 @@ onBeforeUnmount(() => {
                                     <button type="button" class="rounded-md border border-red-300 px-3 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-50" @click="removeSelectedPlacement">Vom Plan entfernen</button>
                                 </div>
 
-                                <div v-if="selectedPlacement?.kind === 'room'" class="mt-4 grid gap-4 sm:grid-cols-2">
+                                <div v-if="selectedPlacement?.kind === 'room'" class="mt-4 grid gap-4 sm:grid-cols-3">
                                     <label class="block">
                                         <span class="text-sm text-gray-700">Breite: {{ selectedPlacementItem.width_percent }} %</span>
                                         <input v-model.number="selectedPlacementItem.width_percent" type="range" min="2" max="80" step="1" class="mt-2 w-full" @input="normalizeSelectedRoom">
@@ -820,6 +824,14 @@ onBeforeUnmount(() => {
                                     <label class="block">
                                         <span class="text-sm text-gray-700">Höhe: {{ selectedPlacementItem.height_percent }} %</span>
                                         <input v-model.number="selectedPlacementItem.height_percent" type="range" min="2" max="80" step="1" class="mt-2 w-full" @input="normalizeSelectedRoom">
+                                    </label>
+                                    <label class="block">
+                                        <span class="text-sm text-gray-700">Drehung: {{ selectedPlacementItem.rotation_degrees }}°</span>
+                                        <input v-model.number="selectedPlacementItem.rotation_degrees" type="range" min="0" max="359" step="1" class="mt-2 w-full" @input="normalizeSelectedRoom">
+                                        <div class="mt-2 flex items-center gap-2">
+                                            <input v-model.number="selectedPlacementItem.rotation_degrees" type="number" min="0" max="359" step="1" class="w-24 rounded-md border-gray-300 py-1.5 text-sm" aria-label="Raumdrehung in Grad" @input="normalizeSelectedRoom">
+                                            <span class="text-sm text-gray-600">Grad</span>
+                                        </div>
                                     </label>
                                 </div>
 

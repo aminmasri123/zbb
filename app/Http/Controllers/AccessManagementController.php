@@ -91,6 +91,7 @@ class AccessManagementController extends Controller
                         'y_percent' => $placement->y_percent,
                         'width_percent' => $placement->width_percent,
                         'height_percent' => $placement->height_percent,
+                        'rotation_degrees' => $placement->rotation_degrees,
                         'room' => $placement->room,
                     ])->values(),
                     'doors' => $floorPlan->doorPlacements->map(fn ($placement) => [
@@ -247,6 +248,7 @@ class AccessManagementController extends Controller
             'rooms.*.y_percent' => ['required', 'numeric', 'min:0', 'max:100'],
             'rooms.*.width_percent' => ['required', 'numeric', 'min:2', 'max:100'],
             'rooms.*.height_percent' => ['required', 'numeric', 'min:2', 'max:100'],
+            'rooms.*.rotation_degrees' => ['required', 'numeric', 'min:0', 'max:359.99'],
             'doors' => ['present', 'array'],
             'doors.*.door_id' => ['required', 'integer', 'distinct', 'exists:access_doors,id'],
             'doors.*.x_percent' => ['required', 'numeric', 'min:0', 'max:100'],
@@ -304,6 +306,7 @@ class AccessManagementController extends Controller
                     'y_percent' => $room['y_percent'],
                     'width_percent' => $room['width_percent'],
                     'height_percent' => $room['height_percent'],
+                    'rotation_degrees' => $room['rotation_degrees'],
                     'created_at' => $now,
                     'updated_at' => $now,
                 ])->all());

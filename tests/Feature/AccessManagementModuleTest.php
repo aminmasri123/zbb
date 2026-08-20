@@ -146,6 +146,7 @@ class AccessManagementModuleTest extends TestCase
                     'y_percent' => 15,
                     'width_percent' => 30,
                     'height_percent' => 20,
+                    'rotation_degrees' => 35,
                 ]],
                 'doors' => [[
                     'door_id' => $door->id,
@@ -161,6 +162,7 @@ class AccessManagementModuleTest extends TestCase
             'raum_id' => $room->id,
             'x_percent' => 10,
             'width_percent' => 30,
+            'rotation_degrees' => 35,
         ]);
         $this->assertDatabaseHas('access_floor_plan_doors', [
             'access_floor_plan_id' => $floorPlan->id,
@@ -179,6 +181,7 @@ class AccessManagementModuleTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->has('floorPlans', 1)
                 ->has('floorPlans.0.rooms', 1)
+                ->where('floorPlans.0.rooms.0.rotation_degrees', 35)
                 ->has('floorPlans.0.doors', 1));
 
         $viewer = User::factory()->create();
@@ -223,6 +226,7 @@ class AccessManagementModuleTest extends TestCase
                     'y_percent' => 10,
                     'width_percent' => 20,
                     'height_percent' => 20,
+                    'rotation_degrees' => 0,
                 ]],
                 'doors' => [],
             ])

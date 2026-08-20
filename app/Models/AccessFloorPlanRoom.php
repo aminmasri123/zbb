@@ -16,6 +16,7 @@ class AccessFloorPlanRoom extends Model
         'y_percent',
         'width_percent',
         'height_percent',
+        'rotation_degrees',
     ];
 
     protected $casts = [
@@ -23,6 +24,7 @@ class AccessFloorPlanRoom extends Model
         'y_percent' => 'float',
         'width_percent' => 'float',
         'height_percent' => 'float',
+        'rotation_degrees' => 'float',
     ];
 
     public function floorPlan()
