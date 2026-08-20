@@ -218,10 +218,11 @@ function movePlacement(event) {
 
     const deltaX = ((event.clientX - dragState.startX) / dragState.bounds.width) * 100
     const deltaY = ((event.clientY - dragState.startY) / dragState.bounds.height) * 100
-    const maxX = dragState.kind === 'room' ? 100 - Number(item.width_percent) : 100
-    const maxY = dragState.kind === 'room' ? 100 - Number(item.height_percent) : 100
-    item.x_percent = clamp(dragState.originX + deltaX, 0, maxX)
-    item.y_percent = clamp(dragState.originY + deltaY, 0, maxY)
+    const limits = dragState.kind === 'room'
+        ? roomPositionLimits(item)
+        : { minX: 0, maxX: 100, minY: 0, maxY: 100 }
+    item.x_percent = clamp(dragState.originX + deltaX, limits.minX, limits.maxX)
+    item.y_percent = clamp(dragState.originY + deltaY, limits.minY, limits.maxY)
     layoutMessage.value = 'Ungespeicherte Änderungen'
 }
 
@@ -232,6 +233,31 @@ function stopPlacementDrag() {
 
 function clamp(value, minimum, maximum) {
     return Math.min(Math.max(value, minimum), maximum)
+}
+
+function roomPositionLimits(item) {
+    const plan = selectedFloorPlan.value
+    const imageWidth = Number(plan?.image_width) || floorCanvas.value?.clientWidth || 1
+    const imageHeight = Number(plan?.image_height) || floorCanvas.value?.clientHeight || imageWidth
+    const heightToWidthRatio = imageHeight / imageWidth
+    const width = Number(item.width_percent)
+    const height = Number(item.height_percent)
+    const radians = (Number(item.rotation_degrees) || 0) * Math.PI / 180
+    const absoluteCosine = Math.abs(Math.cos(radians))
+    const absoluteSine = Math.abs(Math.sin(radians))
+    const rotatedWidth = absoluteCosine * width + absoluteSine * height * heightToWidthRatio
+    const rotatedHeight = absoluteSine * width / heightToWidthRatio + absoluteCosine * height
+    const minX = (rotatedWidth - width) / 2
+    const maxX = 100 - (rotatedWidth + width) / 2
+    const minY = (rotatedHeight - height) / 2
+    const maxY = 100 - (rotatedHeight + height) / 2
+
+    return {
+        minX: minX <= maxX ? minX : (minX + maxX) / 2,
+        maxX: minX <= maxX ? maxX : (minX + maxX) / 2,
+        minY: minY <= maxY ? minY : (minY + maxY) / 2,
+        maxY: minY <= maxY ? maxY : (minY + maxY) / 2,
+    }
 }
 
 function removeSelectedPlacement() {
@@ -248,8 +274,9 @@ function normalizeSelectedRoom() {
     item.width_percent = Number(item.width_percent)
     item.height_percent = Number(item.height_percent)
     item.rotation_degrees = clamp(Number(item.rotation_degrees) || 0, 0, 359)
-    item.x_percent = clamp(Number(item.x_percent), 0, 100 - item.width_percent)
-    item.y_percent = clamp(Number(item.y_percent), 0, 100 - item.height_percent)
+    const limits = roomPositionLimits(item)
+    item.x_percent = clamp(Number(item.x_percent), limits.minX, limits.maxX)
+    item.y_percent = clamp(Number(item.y_percent), limits.minY, limits.maxY)
     layoutMessage.value = 'Ungespeicherte Änderungen'
 }
 

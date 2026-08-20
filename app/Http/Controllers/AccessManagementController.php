@@ -244,8 +244,8 @@ class AccessManagementController extends Controller
         $validated = $request->validate([
             'rooms' => ['present', 'array'],
             'rooms.*.room_id' => ['required', 'integer', 'distinct', 'exists:raeumes,id'],
-            'rooms.*.x_percent' => ['required', 'numeric', 'min:0', 'max:100'],
-            'rooms.*.y_percent' => ['required', 'numeric', 'min:0', 'max:100'],
+            'rooms.*.x_percent' => ['required', 'numeric'],
+            'rooms.*.y_percent' => ['required', 'numeric'],
             'rooms.*.width_percent' => ['required', 'numeric', 'min:2', 'max:100'],
             'rooms.*.height_percent' => ['required', 'numeric', 'min:2', 'max:100'],
             'rooms.*.rotation_degrees' => ['required', 'numeric', 'min:0', 'max:359.99'],
@@ -272,11 +272,28 @@ class AccessManagementController extends Controller
             ]);
         }
 
+        $heightToWidthRatio = ($accessFloorPlan->image_width && $accessFloorPlan->image_height)
+            ? $accessFloorPlan->image_height / $accessFloorPlan->image_width
+            : 1;
+
         foreach ($validated['rooms'] as $index => $room) {
-            if ((float) $room['x_percent'] + (float) $room['width_percent'] > 100
-                || (float) $room['y_percent'] + (float) $room['height_percent'] > 100) {
+            $width = (float) $room['width_percent'];
+            $height = (float) $room['height_percent'];
+            $radians = deg2rad((float) $room['rotation_degrees']);
+            $absoluteCosine = abs(cos($radians));
+            $absoluteSine = abs(sin($radians));
+            $rotatedWidth = $absoluteCosine * $width + $absoluteSine * $height * $heightToWidthRatio;
+            $rotatedHeight = $absoluteSine * $width / $heightToWidthRatio + $absoluteCosine * $height;
+            $centerX = (float) $room['x_percent'] + $width / 2;
+            $centerY = (float) $room['y_percent'] + $height / 2;
+            $tolerance = 0.01;
+
+            if ($centerX - $rotatedWidth / 2 < -$tolerance
+                || $centerX + $rotatedWidth / 2 > 100 + $tolerance
+                || $centerY - $rotatedHeight / 2 < -$tolerance
+                || $centerY + $rotatedHeight / 2 > 100 + $tolerance) {
                 throw ValidationException::withMessages([
-                    "rooms.$index" => 'Die Raumfläche muss vollständig innerhalb des Grundrisses liegen.',
+                    "rooms.$index" => 'Die gedrehte Raumfläche muss vollständig innerhalb des Grundrisses liegen.',
                 ]);
             }
         }
