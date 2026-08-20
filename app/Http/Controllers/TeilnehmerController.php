@@ -36,6 +36,7 @@ use App\Models\Standort;
 use App\Models\User;
 use App\Notifications\ConfiguredEventNotification;
 use App\Services\NotificationRecipientService;
+use App\Services\Bop\PaAttendanceSignatureHistoryService;
 use App\Services\Participants\ParticipantOverviewService;
 use App\Services\Projects\ActiveProjectContext;
 use Carbon\Carbon;
@@ -56,6 +57,7 @@ class TeilnehmerController extends Controller
     public function __construct(
         private readonly ActiveProjectContext $activeProjectContext,
         private readonly ParticipantOverviewService $participantOverviewService,
+        private readonly PaAttendanceSignatureHistoryService $paSignatureHistory,
     ) {}
 
     public function index(Request $request)
@@ -750,6 +752,33 @@ class TeilnehmerController extends Controller
     public function edit($id)
     {
         //
+    }
+
+    public function paSignatureHistories(Request $request, $id)
+    {
+        $user = $request->user();
+        $project = $this->activeProjectContext->currentAvailableFor($user);
+
+        abort_unless($project, 409, 'Bitte wählen Sie zuerst ein aktives Projekt aus.');
+
+        $participant = Personen::query()
+            ->teilnehmer()
+            ->visibleForUser($user)
+            ->whereHas('projekte', fn ($query) => $query->where('projekts.id', $project->id))
+            ->findOrFail($id);
+
+        $this->paSignatureHistory->importParticipantDrafts(
+            $project->id,
+            $participant->id,
+            $request
+        );
+
+        return response()->json([
+            'subjects' => $this->paSignatureHistory->participantSubjects(
+                $project->id,
+                $participant->id
+            ),
+        ]);
     }
 
     public function update(Request $request, $id)

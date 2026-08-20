@@ -8,6 +8,7 @@ use App\Models\PersonenIstSchueler;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class PaAttendanceSignatureHistoryService
@@ -255,6 +256,103 @@ class PaAttendanceSignatureHistoryService
             ->all();
     }
 
+    public function importParticipantDrafts(int $projectId, int $personId, Request $request): void
+    {
+        DB::transaction(function () use ($projectId, $personId, $request) {
+            $drafts = PaAttendanceListDraft::query()
+                ->where('projekt_id', $projectId)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->sortByDesc('updated_at');
+
+            foreach ($drafts as $draft) {
+                $payload = $this->decryptDraftPayloadSignatures($draft->payload ?? []);
+
+                foreach (($payload['signatures'] ?? []) as $signatureKey => $signature) {
+                    if (!is_string($signatureKey)
+                        || !is_string($signature)
+                        || $signature === ''
+                        || $this->personIdFromSignatureKey($signatureKey) !== $personId) {
+                        continue;
+                    }
+
+                    $listType = $this->listTypeForDraftSignature($payload, $signatureKey);
+                    $scope = [
+                        'projekt_id' => $draft->projekt_id,
+                        'partner_id' => $draft->partner_id,
+                        'schuljahr' => $draft->schuljahr,
+                        'teil' => $draft->teil,
+                        'list_type' => $listType,
+                    ];
+
+                    if ($this->versions($scope, $signatureKey)->isNotEmpty()) {
+                        continue;
+                    }
+
+                    $this->append(
+                        $draft,
+                        $scope,
+                        $payload,
+                        $signatureKey,
+                        $signature,
+                        'imported',
+                        $request
+                    );
+                }
+            }
+        });
+    }
+
+    public function participantSubjects(int $projectId, int $personId): array
+    {
+        return PaAttendanceSignatureVersion::query()
+            ->where('projekt_id', $projectId)
+            ->where('person_id', $personId)
+            ->with([
+                'draft:id,export_mode,klasse',
+                'partner:id,name',
+            ])
+            ->orderByDesc('version')
+            ->get()
+            ->groupBy('subject_hash')
+            ->map(function ($versions) {
+                /** @var PaAttendanceSignatureVersion $latest */
+                $latest = $versions->first();
+                $exportMode = $latest->list_type === 'pa'
+                    ? 'alle'
+                    : ($latest->draft?->export_mode ?? ($latest->class_name ? 'klasse' : 'alle'));
+                $klasse = $exportMode === 'klasse'
+                    ? ($latest->draft?->klasse ?: $latest->class_name)
+                    : null;
+
+                return [
+                    'signature_key' => $latest->signature_key,
+                    'partner_id' => $latest->partner_id,
+                    'partner_name' => $latest->partner?->name ?: 'Schule #' . $latest->partner_id,
+                    'schuljahr' => $latest->schuljahr,
+                    'teil' => $latest->teil,
+                    'list_type' => $latest->list_type,
+                    'export_mode' => $exportMode,
+                    'klasse' => $klasse,
+                    'class_name' => $latest->class_name,
+                    'signed_for_date' => $latest->signed_for_date?->toDateString(),
+                    'day_type' => $latest->day_type,
+                    'day_label' => $latest->day_label,
+                    'current_action' => $latest->action,
+                    'has_current_signature' => (bool) $latest->signature_ciphertext,
+                    'version_count' => $versions->count(),
+                    'updated_at' => $latest->created_at?->toIso8601String(),
+                ];
+            })
+            ->sortByDesc(fn (array $subject) => implode('|', [
+                (string) $subject['signed_for_date'],
+                (string) $subject['updated_at'],
+            ]))
+            ->values()
+            ->all();
+    }
+
     public function decryptVersion(PaAttendanceSignatureVersion $version): ?string
     {
         return $version->signature_ciphertext
@@ -320,6 +418,31 @@ class PaAttendanceSignatureHistoryService
             'type' => Str::startsWith($dayKey, 'pa-vorbereitung-') ? 'preparation' : 'pa_day',
             'label' => Str::startsWith($dayKey, 'pa-vorbereitung-') ? 'Vorbereitung PA' : 'PA-Tag',
         ];
+    }
+
+    private function listTypeForDraftSignature(array $payload, string $signatureKey): string
+    {
+        if (Str::startsWith($signatureKey, 'pa-vorbereitung-')) {
+            return 'pa_preparation';
+        }
+
+        $formListType = data_get($payload, 'form.listType');
+
+        return $formListType === 'pa_preparation' ? 'pa_preparation' : 'pa';
+    }
+
+    private function decryptDraftPayloadSignatures(array $payload): array
+    {
+        if (!is_array($payload['signatures'] ?? null)) {
+            return $payload;
+        }
+
+        $payload['signatures'] = collect($payload['signatures'])
+            ->map(fn ($signature) => is_string($signature) ? $this->decrypt($signature) : null)
+            ->filter(fn ($signature) => is_string($signature) && $signature !== '')
+            ->all();
+
+        return $payload;
     }
 
     private function validDate(mixed $date): ?string

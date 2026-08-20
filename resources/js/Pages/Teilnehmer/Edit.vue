@@ -472,6 +472,11 @@
                     <div class="rounded-2xl border bg-white p-6 shadow-sm"><div class="mb-4"><h3 class="text-lg font-semibold text-zbb">Portal-Dokumente</h3><p class="text-sm text-gray-500">Unterlagen dieser Projektteilnahme prüfen oder bereitstellen.</p></div><div class="mb-5 grid gap-3 md:grid-cols-4"><select v-model="staffDocumentCategory" class="rounded border-gray-300"><option value="cv">Lebenslauf</option><option value="application">Bewerbungsunterlage</option><option value="certificate">Zeugnis/Nachweis</option><option value="other">Sonstiges</option></select><input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" class="rounded border p-2 text-sm" @change="staffDocumentFile=$event.target.files[0]"/><label class="flex items-center gap-2 text-sm"><input v-model="staffDocumentVisible" type="checkbox"/>Für Teilnehmer sichtbar</label><button class="rounded bg-zbb px-4 py-2 text-white" @click="uploadStaffDocument">Bereitstellen</button></div><div class="space-y-3"><article v-for="doc in portalDocumentItems" :key="doc.id" class="rounded-xl border p-4"><div class="flex flex-wrap justify-between gap-3"><div><p class="font-semibold">{{ doc.original_name }}</p><p class="text-xs text-gray-500">{{ doc.category }} · {{ Math.ceil(doc.size/1024) }} KB · {{ doc.status }}</p></div><a :href="route('teilnehmer.portal-documents.download',doc.id)" class="text-sm text-zbb underline">Download</a></div><div class="mt-3 flex flex-wrap gap-2"><input v-model="doc.review_note" class="min-w-64 flex-1 rounded border-gray-300 text-sm" placeholder="Prüfhinweis"/><label class="flex items-center gap-2 text-sm"><input v-model="doc.visible_to_participant" type="checkbox"/>sichtbar</label><button class="rounded bg-green-600 px-3 py-2 text-xs text-white" @click="reviewPortalDocument(doc,'approved')">Freigeben</button><button class="rounded bg-red-600 px-3 py-2 text-xs text-white" @click="reviewPortalDocument(doc,'rejected')">Ablehnen</button></div></article><p v-if="!portalDocumentItems.length" class="text-sm text-gray-500">Keine Portal-Dokumente vorhanden.</p></div></div>
                 </div>
 
+                <PaSignaturesSection
+                    v-else-if="activeTab === 'PA-Unterschriften'"
+                    :participant-id="Number(teilnehmer.id)"
+                />
+
                 <!-- =================== Anwesenheit =================== -->
                 <div v-else-if="activeTab === 'Anwesenheit'">
                     <div v-if="attendanceCorrectionItems.length" class="mx-auto mt-4 w-5/6 rounded-xl border border-amber-200 bg-amber-50 p-4">
@@ -2075,6 +2080,7 @@
     import Toggle from '@/Components/Toggle.vue';
     import Alert from '@/Components/Utils/SweetalertSuccessError.vue'
     import Stammdaten from '@/Pages/Teilnehmer/Tabs/StammdatenSection.vue';
+    import PaSignaturesSection from '@/Pages/Teilnehmer/Tabs/PaSignaturesSection.vue';
     import InputText from 'primevue/inputtext';
     import FloatLabel from 'primevue/floatlabel';
     import DatePicker from 'primevue/datepicker';
@@ -2166,10 +2172,19 @@ watchEffect(() => {
         ])) return false;
         return true;
     };
-    const tabs = computed(() => configuredParticipantTabKeys.value
-        .map((key) => participantTabDefinitions.value.get(key))
-        .filter(participantTabAvailable)
-        .map((definition) => definition.label));
+    const tabs = computed(() => {
+        const visibleTabs = configuredParticipantTabKeys.value
+            .map((key) => participantTabDefinitions.value.get(key))
+            .filter(participantTabAvailable)
+            .map((definition) => definition.label);
+
+        if (can('anwesenheit.abrechnung') && projectFeatureEnabled('potential_analysis')) {
+            const attendanceIndex = visibleTabs.indexOf('Anwesenheit');
+            visibleTabs.splice(attendanceIndex >= 0 ? attendanceIndex + 1 : visibleTabs.length, 0, 'PA-Unterschriften');
+        }
+
+        return visibleTabs;
+    });
 
     // Lokale Kopie der Teilnehmerdaten
     const teilnehmer = ref(JSON.parse(JSON.stringify(props.teilnehmer)));

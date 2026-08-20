@@ -8,6 +8,8 @@ use App\Models\PaAttendanceSignatureVersion;
 use App\Models\Personen;
 use App\Models\PersonenIstSchueler;
 use App\Models\Projekt;
+use App\Models\Role;
+use App\Models\RoleDataAccessSetting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -466,5 +468,106 @@ class PaPreparationAttendanceClassTest extends TestCase
             ->assertJsonPath('subjects.0.version_count', 2)
             ->assertJsonPath('subjects.1.signed_for_date', '2026-08-20')
             ->assertJsonPath('subjects.1.version_count', 4);
+    }
+
+    public function test_participant_profile_lists_every_pa_signature_day_and_all_versions(): void
+    {
+        $user = User::factory()->create();
+        $this->grantTestPermission($user, 'teilnehmer.update');
+        $this->grantTestPermission($user, 'anwesenheit.abrechnung');
+        $role = Role::query()->create([
+            'name' => 'PA-Signaturprofil-' . uniqid(),
+            'guard_name' => 'web',
+            'color' => '#123456',
+        ]);
+        RoleDataAccessSetting::query()->create([
+            'role_id' => $role->id,
+            'team_scope' => 'own_projects',
+            'participant_scope' => 'all',
+        ]);
+        $user->assignRole($role);
+
+        $project = Projekt::factory()->create();
+        $school = Partner::query()->create(['name' => 'Profil-Testschule']);
+        $participant = Personen::factory()->create([
+            'typ' => 'teilnehmer',
+            'vorname' => 'Lea',
+            'nachname' => 'Beispiel',
+        ]);
+        foreach ([$user->person_id, $participant->id] as $personId) {
+            DB::table('projekt_has_personens')->insert([
+                'projekt_id' => $project->id,
+                'personen_id' => $personId,
+                'status' => 'aktiv',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+        DB::table('projekt_has_partners')->insert([
+            'projekt_id' => $project->id,
+            'partner_id' => $school->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        PersonenIstSchueler::query()->create([
+            'person_id' => $participant->id,
+            'klasse' => '8.2',
+            'schule_id' => $school->id,
+            'schuljahr' => '2026/2027',
+            'teil' => '1',
+        ]);
+        $user->update(['current_team_id' => $project->id]);
+
+        $scope = [
+            'schuleId' => $school->id,
+            'schuljahr' => '2026/2027',
+            'teil' => '1',
+            'listType' => 'pa',
+            'exportMode' => 'alle',
+        ];
+        $currentKey = 'pa-2026-08-20:' . $participant->id;
+        $payload = [
+            'version' => 2,
+            'form' => ['startDate' => '2026-08-20'],
+            'days' => [[
+                'id' => 'pa-2026-08-20',
+                'date' => '2026-08-20',
+                'type' => 'pa_day',
+                'note' => 'PA-Tag 2',
+            ]],
+            'selectedDayId' => 'pa-2026-08-20',
+            'signatures' => [$currentKey => 'data:image/png;base64,dmVyc2lvbjE='],
+        ];
+
+        $this->actingAs($user)
+            ->putJson(route('anwesenheitsliste.PA.digital.draft.store'), $scope + ['payload' => $payload])
+            ->assertOk();
+        $payload['signatures'][$currentKey] = 'data:image/png;base64,dmVyc2lvbjI=';
+        $this->actingAs($user->fresh())
+            ->putJson(route('anwesenheitsliste.PA.digital.draft.store'), $scope + ['payload' => $payload])
+            ->assertOk();
+
+        $draft = PaAttendanceListDraft::query()->firstOrFail();
+        $legacyKey = 'pa-2026-08-19:' . $participant->id;
+        $storedPayload = $draft->payload;
+        $storedPayload['signatures'][$legacyKey] = 'enc:v1:' . Crypt::encryptString('data:image/png;base64,YWx0');
+        $draft->update(['payload' => $storedPayload]);
+
+        $this->actingAs($user->fresh())
+            ->getJson(route('teilnehmer.pa-signatures.index', $participant->id))
+            ->assertOk()
+            ->assertJsonCount(2, 'subjects')
+            ->assertJsonPath('subjects.0.signed_for_date', '2026-08-20')
+            ->assertJsonPath('subjects.0.day_label', 'PA-Tag 2')
+            ->assertJsonPath('subjects.0.partner_name', 'Profil-Testschule')
+            ->assertJsonPath('subjects.0.class_name', '8.2')
+            ->assertJsonPath('subjects.0.version_count', 2)
+            ->assertJsonPath('subjects.1.signed_for_date', '2026-08-19')
+            ->assertJsonPath('subjects.1.current_action', 'imported');
+
+        $user->revokePermissionTo('anwesenheit.abrechnung');
+        $this->actingAs($user->fresh())
+            ->getJson(route('teilnehmer.pa-signatures.index', $participant->id))
+            ->assertForbidden();
     }
 }

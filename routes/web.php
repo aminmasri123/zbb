@@ -568,6 +568,10 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
         Route::delete('/teilnehmer/entfernen', [TeilnehmerController::class, 'bulkDestroy'])->name('teilnehmer.bulkDestroy')->middleware('canAnyPermission:teilnehmer.bulkDestroy,teilnehmer.destroy');
         Route::delete('/teilnehmer/entfernen/{id}', [TeilnehmerController::class, 'destroy'])->name('teilnehmer.destroy')->can('teilnehmer.destroy');
         Route::get('/teilnehmer/bearbeiten/{id}', [TeilnehmerController::class, 'show'])->name('teilnehmer.edit')->can('teilnehmer.update');
+        Route::get('/teilnehmer/{id}/pa-unterschriften', [TeilnehmerController::class, 'paSignatureHistories'])
+            ->name('teilnehmer.pa-signatures.index')
+            ->middleware('can:anwesenheit.abrechnung')
+            ->can('teilnehmer.update');
         Route::patch('/teilnehmer/update/{id}', [TeilnehmerController::class, 'update'])->name('teilnehmer.update')->can('teilnehmer.update');
         Route::patch('/teilnehmer/{person}/elterneinverstaendnis', [TeilnehmerController::class, 'updateParentalConsent'])->name('teilnehmer.elterneinverstaendnis.update')->middleware(['module:participant_management', 'projectFeature:participant_management'])->can('teilnehmer.elterneinverstaendnis.update');
         Route::get('/teilnehmer/{person}/lebenslauf', [ParticipantCvController::class, 'staffIndex'])->name('teilnehmer.resume.index')->middleware('module:participant_portal')->can('teilnehmer.update');

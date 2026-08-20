@@ -150,6 +150,7 @@ class RoutePermissionMap
         'anwesenheitsliste.PA.digital.signature.histories' => 'anwesenheit.abrechnung',
         'anwesenheitsliste.PA.digital.signature.history' => 'anwesenheit.abrechnung',
         'anwesenheitsliste.PA.digital.signature.restore' => 'anwesenheit.abrechnung',
+        'teilnehmer.pa-signatures.index' => 'anwesenheit.abrechnung',
         'anwesenheitsliste.PA.digital.draft.destroy' => 'anwesenheit.abrechnung',
         'anwesenheitsliste.PA.digital.draft.clear' => 'anwesenheit.abrechnung',
         'anwesenheitsliste.PA.export.word' => 'anwesenheit.abrechnung',

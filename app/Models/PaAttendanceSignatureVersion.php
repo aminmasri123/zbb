@@ -55,4 +55,14 @@ class PaAttendanceSignatureVersion extends Model
     {
         return $this->belongsTo(User::class, 'actor_user_id');
     }
+
+    public function draft()
+    {
+        return $this->belongsTo(PaAttendanceListDraft::class, 'draft_id');
+    }
+
+    public function partner()
+    {
+        return $this->belongsTo(Partner::class, 'partner_id');
+    }
 }
