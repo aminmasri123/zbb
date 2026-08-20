@@ -19,12 +19,14 @@ class AccessFloorPlan extends Model
         'image_width',
         'image_height',
         'active',
+        'layout_locked',
     ];
 
     protected $casts = [
         'image_width' => 'integer',
         'image_height' => 'integer',
         'active' => 'boolean',
+        'layout_locked' => 'boolean',
     ];
 
     public function standort()

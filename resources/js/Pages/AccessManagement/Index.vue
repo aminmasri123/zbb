@@ -26,6 +26,7 @@ const selectedDoorToAdd = ref('')
 const selectedPlacement = ref(null)
 const layoutSaving = ref(false)
 const layoutMessage = ref('')
+const layoutLockUpdating = ref(false)
 const doorLinkDraft = ref(null)
 const doorLinkSaving = ref(false)
 const doorLinkMessage = ref('')
@@ -69,6 +70,7 @@ const activeProfiles = computed(() => props.profiles.filter((profile) => profile
 const activeDoors = computed(() => props.doors.filter((door) => door.active))
 const roomsForDoor = computed(() => props.rooms.filter((room) => Number(room.standort_id) === Number(doorForm.standort_id)))
 const selectedFloorPlan = computed(() => props.floorPlans.find((plan) => Number(plan.id) === Number(selectedFloorPlanId.value)) || null)
+const isLayoutLocked = computed(() => Boolean(selectedFloorPlan.value?.layout_locked))
 const floorLabelsForPlan = computed(() => [...new Set(props.rooms
     .filter((room) => Number(room.standort_id) === Number(floorPlanForm.standort_id))
     .map((room) => room.etage)
@@ -289,6 +291,7 @@ function loadFloorPlan() {
 }
 
 function addRoomToPlan() {
+    if (isLayoutLocked.value) return
     const room = props.rooms.find((item) => Number(item.id) === Number(selectedRoomToAdd.value))
     if (!room) return
 
@@ -308,6 +311,7 @@ function addRoomToPlan() {
 }
 
 function addDoorToPlan() {
+    if (isLayoutLocked.value) return
     const door = props.doors.find((item) => Number(item.id) === Number(selectedDoorToAdd.value))
     if (!door) return
 
@@ -327,6 +331,10 @@ function addDoorToPlan() {
 function startPlacementDrag(kind, index, event) {
     if (event.button !== 0 || !floorCanvas.value) return
     event.preventDefault()
+    if (isLayoutLocked.value) {
+        selectedPlacement.value = { kind, index }
+        return
+    }
     const item = kind === 'room' ? planRooms.value[index] : planDoors.value[index]
     const bounds = floorCanvas.value.getBoundingClientRect()
     selectedPlacement.value = { kind, index }
@@ -404,7 +412,7 @@ function roomPositionLimits(item) {
 }
 
 function removeSelectedPlacement() {
-    if (!selectedPlacement.value) return
+    if (!selectedPlacement.value || isLayoutLocked.value) return
     const collection = selectedPlacement.value.kind === 'room' ? planRooms.value : planDoors.value
     collection.splice(selectedPlacement.value.index, 1)
     selectedPlacement.value = null
@@ -576,7 +584,7 @@ function cancelDoorLink() {
 
 function normalizeSelectedRoom() {
     const item = selectedPlacementItem.value
-    if (!item || selectedPlacement.value?.kind !== 'room') return
+    if (!item || selectedPlacement.value?.kind !== 'room' || isLayoutLocked.value) return
     item.width_percent = Number(item.width_percent)
     item.height_percent = Number(item.height_percent)
     item.rotation_degrees = clamp(Number(item.rotation_degrees) || 0, 0, 359)
@@ -587,7 +595,7 @@ function normalizeSelectedRoom() {
 }
 
 function saveFloorPlanLayout() {
-    if (!selectedFloorPlan.value) return
+    if (!selectedFloorPlan.value || isLayoutLocked.value) return
     layoutSaving.value = true
     layoutMessage.value = ''
     router.put(route('zutritt.grundrisse.layout.update', selectedFloorPlan.value.id), {
@@ -621,6 +629,37 @@ function deleteFloorPlan() {
         onSuccess: () => {
             selectedFloorPlanId.value = props.floorPlans[0]?.id || ''
         },
+    })
+}
+
+function toggleFloorPlanLock() {
+    const plan = selectedFloorPlan.value
+    if (!plan || layoutLockUpdating.value) return
+
+    const shouldLock = !isLayoutLocked.value
+    if (shouldLock && layoutMessage.value === 'Ungespeicherte Änderungen') {
+        layoutMessage.value = 'Bitte die Änderungen zuerst speichern, bevor Sie die Platzierung sperren.'
+        return
+    }
+
+    const question = shouldLock
+        ? 'Platzierung wirklich sperren? Räume und Türen können danach erst wieder nach dem Entsperren verschoben werden.'
+        : 'Platzierung zum Bearbeiten entsperren? Danach können Räume und Türen wieder verändert werden.'
+    if (!window.confirm(question)) return
+
+    layoutLockUpdating.value = true
+    router.put(route('zutritt.grundrisse.lock.update', plan.id), {
+        locked: shouldLock,
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            layoutMessage.value = shouldLock ? 'Platzierung gesperrt' : 'Platzierung entsperrt'
+            selectedPlacement.value = null
+        },
+        onError: (errors) => {
+            layoutMessage.value = Object.values(errors)[0] || 'Der Sperrstatus konnte nicht geändert werden.'
+        },
+        onFinish: () => { layoutLockUpdating.value = false },
     })
 }
 
@@ -1059,6 +1098,7 @@ onBeforeUnmount(() => {
                                 <li>Element mit der Maus an die richtige Position ziehen.</li>
                                 <li>Raumgröße sowie Raum- oder Türdrehung einstellen.</li>
                                 <li>Anordnung speichern.</li>
+                                <li>Die fertige Platzierung sperren, damit sie nicht versehentlich verändert wird.</li>
                                 <li>Tür anklicken, „Verknüpfen“ wählen und die angrenzenden Räume im Plan anklicken.</li>
                             </ol>
                         </div>
@@ -1081,31 +1121,57 @@ onBeforeUnmount(() => {
                                         <option v-for="plan in floorPlans" :key="plan.id" :value="plan.id">{{ plan.standort?.name }} · {{ plan.floor_label }} · {{ plan.name }}</option>
                                     </select>
                                 </label>
-                                <button type="button" class="w-fit rounded-md border border-red-300 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50" @click="deleteFloorPlan">
-                                    Grundriss entfernen
-                                </button>
+                                <div class="flex flex-wrap gap-2">
+                                    <button
+                                        type="button"
+                                        class="w-fit rounded-md border px-3 py-2 text-sm font-semibold disabled:cursor-wait disabled:opacity-50"
+                                        :class="isLayoutLocked ? 'border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100' : 'border-gray-300 text-gray-700 hover:bg-gray-50'"
+                                        :disabled="layoutLockUpdating"
+                                        @click="toggleFloorPlanLock"
+                                    >
+                                        <i :class="isLayoutLocked ? 'las la-lock-open' : 'las la-lock'" class="mr-1"></i>
+                                        {{ layoutLockUpdating ? 'Wird geändert …' : (isLayoutLocked ? 'Platzierung entsperren' : 'Platzierung sperren') }}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="w-fit rounded-md border border-red-300 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                        :disabled="isLayoutLocked"
+                                        :title="isLayoutLocked ? 'Zum Entfernen zuerst die Platzierung entsperren' : ''"
+                                        @click="deleteFloorPlan"
+                                    >
+                                        Grundriss entfernen
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div v-if="isLayoutLocked" class="mt-4 flex items-start gap-3 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                                <i class="las la-lock mt-0.5 text-lg"></i>
+                                <div>
+                                    <p class="font-semibold">Platzierung ist gesperrt</p>
+                                    <p>Räume und Türen können nicht verschoben, gedreht, vergrößert, hinzugefügt oder entfernt werden. Auswahl und Türverknüpfungen bleiben möglich.</p>
+                                </div>
                             </div>
 
                             <div class="mt-4 grid gap-3 lg:grid-cols-2">
-                                <div class="rounded-md border border-gray-200 bg-gray-50 p-3">
+                                <div class="rounded-md border border-gray-200 bg-gray-50 p-3" :class="isLayoutLocked ? 'opacity-60' : ''">
                                     <label class="text-sm font-medium text-gray-700">Raum platzieren</label>
                                     <div class="mt-2 flex gap-2">
-                                        <select v-model="selectedRoomToAdd" class="min-w-0 flex-1 rounded-md border-gray-300 text-sm">
+                                        <select v-model="selectedRoomToAdd" class="min-w-0 flex-1 rounded-md border-gray-300 text-sm" :disabled="isLayoutLocked">
                                             <option value="">Nicht platzierten Raum auswählen</option>
                                             <option v-for="room in availablePlanRooms" :key="room.id" :value="room.id">{{ room.etage ? `${room.etage} · ` : '' }}{{ roomLabel(room) }}</option>
                                         </select>
-                                        <button type="button" class="rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-40" :disabled="!selectedRoomToAdd" @click="addRoomToPlan">Hinzufügen</button>
+                                        <button type="button" class="rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40" :disabled="isLayoutLocked || !selectedRoomToAdd" @click="addRoomToPlan">Hinzufügen</button>
                                     </div>
                                 </div>
 
-                                <div class="rounded-md border border-gray-200 bg-gray-50 p-3">
+                                <div class="rounded-md border border-gray-200 bg-gray-50 p-3" :class="isLayoutLocked ? 'opacity-60' : ''">
                                     <label class="text-sm font-medium text-gray-700">Tür platzieren</label>
                                     <div class="mt-2 flex gap-2">
-                                        <select v-model="selectedDoorToAdd" class="min-w-0 flex-1 rounded-md border-gray-300 text-sm">
+                                        <select v-model="selectedDoorToAdd" class="min-w-0 flex-1 rounded-md border-gray-300 text-sm" :disabled="isLayoutLocked">
                                             <option value="">Nicht platzierte Tür auswählen</option>
                                             <option v-for="door in availablePlanDoors" :key="door.id" :value="door.id">{{ door.name }}{{ door.code ? ` (${door.code})` : '' }}</option>
                                         </select>
-                                        <button type="button" class="rounded-md bg-amber-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-40" :disabled="!selectedDoorToAdd" @click="addDoorToPlan">Hinzufügen</button>
+                                        <button type="button" class="rounded-md bg-amber-600 px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40" :disabled="isLayoutLocked || !selectedDoorToAdd" @click="addDoorToPlan">Hinzufügen</button>
                                     </div>
                                 </div>
                             </div>
@@ -1135,7 +1201,7 @@ onBeforeUnmount(() => {
                                         type="button"
                                         class="absolute flex items-center justify-center overflow-hidden border-2 bg-blue-400/30 px-1 text-center text-xs font-semibold text-blue-950 shadow-sm"
                                         :class="[
-                                            doorLinkDraft?.selecting ? 'cursor-crosshair' : 'cursor-move',
+                                            doorLinkDraft?.selecting ? 'cursor-crosshair' : (isLayoutLocked ? 'cursor-pointer' : 'cursor-move'),
                                             selectedPlacement?.kind === 'room' && selectedPlacement.index === index ? 'z-20 border-blue-700 ring-2 ring-white' : 'z-10 border-blue-500',
                                             roomDoorLinkRole(item),
                                         ]"
@@ -1150,8 +1216,11 @@ onBeforeUnmount(() => {
                                         v-for="(item, index) in planDoors"
                                         :key="`door-${item.door_id}`"
                                         type="button"
-                                        class="absolute z-30 flex h-7 w-7 cursor-move items-center justify-center rounded-full border-2 bg-amber-400 text-amber-950 shadow-md"
-                                        :class="selectedPlacement?.kind === 'door' && selectedPlacement.index === index ? 'border-red-700 ring-2 ring-white' : 'border-amber-900'"
+                                        class="absolute z-30 flex h-7 w-7 items-center justify-center rounded-full border-2 bg-amber-400 text-amber-950 shadow-md"
+                                        :class="[
+                                            isLayoutLocked ? 'cursor-pointer' : 'cursor-move',
+                                            selectedPlacement?.kind === 'door' && selectedPlacement.index === index ? 'border-red-700 ring-2 ring-white' : 'border-amber-900',
+                                        ]"
                                         :style="{ left: `${item.x_percent}%`, top: `${item.y_percent}%`, transform: `translate(-50%, -50%) rotate(${item.rotation_degrees}deg)` }"
                                         :title="planDoorLabel(item)"
                                         @pointerdown="startPlacementDrag('door', index, $event)"
@@ -1167,23 +1236,24 @@ onBeforeUnmount(() => {
                                         <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Ausgewähltes Element</p>
                                         <p class="font-semibold text-gray-900">{{ selectedPlacement?.kind === 'room' ? planRoomLabel(selectedPlacementItem) : planDoorLabel(selectedPlacementItem) }}</p>
                                     </div>
-                                    <button type="button" class="rounded-md border border-red-300 px-3 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-50" @click="removeSelectedPlacement">Vom Plan entfernen</button>
+                                    <button v-if="!isLayoutLocked" type="button" class="rounded-md border border-red-300 px-3 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-50" @click="removeSelectedPlacement">Vom Plan entfernen</button>
+                                    <span v-else class="inline-flex items-center rounded-full bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800"><i class="las la-lock mr-1"></i> Platzierung gesperrt</span>
                                 </div>
 
                                 <div v-if="selectedPlacement?.kind === 'room'" class="mt-4 grid gap-4 sm:grid-cols-3">
                                     <label class="block">
                                         <span class="text-sm text-gray-700">Breite: {{ selectedPlacementItem.width_percent }} %</span>
-                                        <input v-model.number="selectedPlacementItem.width_percent" type="range" min="2" max="80" step="1" class="mt-2 w-full" @input="normalizeSelectedRoom">
+                                        <input v-model.number="selectedPlacementItem.width_percent" type="range" min="2" max="80" step="1" class="mt-2 w-full disabled:opacity-50" :disabled="isLayoutLocked" @input="normalizeSelectedRoom">
                                     </label>
                                     <label class="block">
                                         <span class="text-sm text-gray-700">Höhe: {{ selectedPlacementItem.height_percent }} %</span>
-                                        <input v-model.number="selectedPlacementItem.height_percent" type="range" min="2" max="80" step="1" class="mt-2 w-full" @input="normalizeSelectedRoom">
+                                        <input v-model.number="selectedPlacementItem.height_percent" type="range" min="2" max="80" step="1" class="mt-2 w-full disabled:opacity-50" :disabled="isLayoutLocked" @input="normalizeSelectedRoom">
                                     </label>
                                     <label class="block">
                                         <span class="text-sm text-gray-700">Drehung: {{ selectedPlacementItem.rotation_degrees }}°</span>
-                                        <input v-model.number="selectedPlacementItem.rotation_degrees" type="range" min="0" max="359" step="1" class="mt-2 w-full" @input="normalizeSelectedRoom">
+                                        <input v-model.number="selectedPlacementItem.rotation_degrees" type="range" min="0" max="359" step="1" class="mt-2 w-full disabled:opacity-50" :disabled="isLayoutLocked" @input="normalizeSelectedRoom">
                                         <div class="mt-2 flex items-center gap-2">
-                                            <input v-model.number="selectedPlacementItem.rotation_degrees" type="number" min="0" max="359" step="1" class="w-24 rounded-md border-gray-300 py-1.5 text-sm" aria-label="Raumdrehung in Grad" @input="normalizeSelectedRoom">
+                                            <input v-model.number="selectedPlacementItem.rotation_degrees" type="number" min="0" max="359" step="1" class="w-24 rounded-md border-gray-300 py-1.5 text-sm disabled:opacity-50" :disabled="isLayoutLocked" aria-label="Raumdrehung in Grad" @input="normalizeSelectedRoom">
                                             <span class="text-sm text-gray-600">Grad</span>
                                         </div>
                                     </label>
@@ -1192,7 +1262,7 @@ onBeforeUnmount(() => {
                                 <div v-else class="mt-4 space-y-4">
                                     <label class="block">
                                         <span class="text-sm text-gray-700">Drehung: {{ selectedPlacementItem.rotation_degrees }}°</span>
-                                        <input v-model.number="selectedPlacementItem.rotation_degrees" type="range" min="0" max="359" step="1" class="mt-2 w-full" @input="layoutMessage = 'Ungespeicherte Änderungen'">
+                                        <input v-model.number="selectedPlacementItem.rotation_degrees" type="range" min="0" max="359" step="1" class="mt-2 w-full disabled:opacity-50" :disabled="isLayoutLocked" @input="layoutMessage = 'Ungespeicherte Änderungen'">
                                     </label>
 
                                     <section class="rounded-lg border border-amber-200 bg-amber-50 p-4">
@@ -1265,8 +1335,8 @@ onBeforeUnmount(() => {
 
                             <div class="mt-5 flex flex-wrap items-center justify-between gap-3">
                                 <p class="text-sm" :class="layoutMessage === 'Gespeichert' ? 'text-green-700' : 'text-amber-700'">{{ layoutMessage }}</p>
-                                <button type="button" class="rounded-md bg-zbb px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50" :disabled="layoutSaving" @click="saveFloorPlanLayout">
-                                    {{ layoutSaving ? 'Wird gespeichert …' : '2D-Anordnung speichern' }}
+                                <button type="button" class="rounded-md bg-zbb px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50" :disabled="layoutSaving || isLayoutLocked" @click="saveFloorPlanLayout">
+                                    {{ layoutSaving ? 'Wird gespeichert …' : (isLayoutLocked ? 'Platzierung gesperrt' : '2D-Anordnung speichern') }}
                                 </button>
                             </div>
                         </template>

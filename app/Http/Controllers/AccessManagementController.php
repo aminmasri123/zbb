@@ -85,6 +85,7 @@ class AccessManagementController extends Controller
                     'image_url' => route('zutritt.grundrisse.image', $floorPlan),
                     'image_width' => $floorPlan->image_width,
                     'image_height' => $floorPlan->image_height,
+                    'layout_locked' => $floorPlan->layout_locked,
                     'rooms' => $floorPlan->roomPlacements->map(fn ($placement) => [
                         'room_id' => $placement->raum_id,
                         'x_percent' => $placement->x_percent,
@@ -247,6 +248,12 @@ class AccessManagementController extends Controller
     {
         $this->authorizePermission($request, 'zutritt.stammdaten.manage');
 
+        if ($accessFloorPlan->layout_locked) {
+            throw ValidationException::withMessages([
+                'layout' => 'Die Platzierung dieses Grundrisses ist gesperrt. Bitte entsperren Sie den Plan zuerst.',
+            ]);
+        }
+
         $validated = $request->validate([
             'rooms' => ['present', 'array'],
             'rooms.*.room_id' => ['required', 'integer', 'distinct', 'exists:raeumes,id'],
@@ -351,9 +358,35 @@ class AccessManagementController extends Controller
         return back()->with('success', '2D-Anordnung wurde gespeichert.');
     }
 
+    public function updateFloorPlanLock(Request $request, AccessFloorPlan $accessFloorPlan)
+    {
+        $this->authorizePermission($request, 'zutritt.stammdaten.manage');
+
+        $validated = $request->validate([
+            'locked' => ['required', 'boolean'],
+        ]);
+
+        $accessFloorPlan->update([
+            'layout_locked' => $validated['locked'],
+        ]);
+
+        return back()->with(
+            'success',
+            $validated['locked']
+                ? 'Die 2D-Platzierung wurde gesperrt.'
+                : 'Die 2D-Platzierung wurde zum Bearbeiten entsperrt.'
+        );
+    }
+
     public function destroyFloorPlan(Request $request, AccessFloorPlan $accessFloorPlan)
     {
         $this->authorizePermission($request, 'zutritt.stammdaten.manage');
+
+        if ($accessFloorPlan->layout_locked) {
+            throw ValidationException::withMessages([
+                'layout' => 'Der Grundriss ist gesperrt. Bitte entsperren Sie ihn vor dem Entfernen.',
+            ]);
+        }
 
         $path = $accessFloorPlan->image_path;
         $accessFloorPlan->delete();

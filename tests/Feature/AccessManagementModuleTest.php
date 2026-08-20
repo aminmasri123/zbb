@@ -235,6 +235,86 @@ class AccessManagementModuleTest extends TestCase
         $this->assertDatabaseCount('access_floor_plan_rooms', 0);
     }
 
+    public function test_locked_floor_plan_rejects_layout_changes_until_it_is_unlocked(): void
+    {
+        $user = User::factory()->create();
+        $this->givePermission($user, 'zutritt.stammdaten.manage');
+        $this->enableModule($user);
+
+        $location = Standort::factory()->create();
+        $room = Raeume::query()->create([
+            'standort_id' => $location->id,
+            'name' => 'IT und Mediengestaltung',
+            'raumnummer' => '19',
+            'etage' => 'OG',
+            'typ' => 'Unterrichtsraum',
+        ]);
+        $floorPlan = AccessFloorPlan::query()->create([
+            'standort_id' => $location->id,
+            'floor_label' => 'OG',
+            'name' => 'Hauptgebäude OG',
+            'image_path' => 'access-management/floor-plans/og.png',
+            'original_name' => 'og.png',
+            'mime_type' => 'image/png',
+            'active' => true,
+        ]);
+        $placement = $floorPlan->roomPlacements()->create([
+            'raum_id' => $room->id,
+            'x_percent' => 10,
+            'y_percent' => 15,
+            'width_percent' => 20,
+            'height_percent' => 20,
+            'rotation_degrees' => 0,
+        ]);
+
+        $this->actingAs($user)
+            ->put(route('zutritt.grundrisse.lock.update', $floorPlan), ['locked' => true])
+            ->assertRedirect();
+
+        $this->assertTrue($floorPlan->fresh()->layout_locked);
+
+        $lockedLayout = [
+            'rooms' => [[
+                'room_id' => $room->id,
+                'x_percent' => 50,
+                'y_percent' => 15,
+                'width_percent' => 20,
+                'height_percent' => 20,
+                'rotation_degrees' => 0,
+            ]],
+            'doors' => [],
+        ];
+
+        $this->actingAs($user)
+            ->put(route('zutritt.grundrisse.layout.update', $floorPlan), $lockedLayout)
+            ->assertSessionHasErrors('layout');
+
+        $this->actingAs($user)
+            ->delete(route('zutritt.grundrisse.destroy', $floorPlan))
+            ->assertSessionHasErrors('layout');
+
+        $this->assertDatabaseHas('access_floor_plan_rooms', [
+            'id' => $placement->id,
+            'x_percent' => 10,
+        ]);
+        $this->assertDatabaseHas('access_floor_plans', ['id' => $floorPlan->id]);
+
+        $this->actingAs($user)
+            ->put(route('zutritt.grundrisse.lock.update', $floorPlan), ['locked' => false])
+            ->assertRedirect();
+
+        $this->actingAs($user)
+            ->put(route('zutritt.grundrisse.layout.update', $floorPlan), $lockedLayout)
+            ->assertRedirect();
+
+        $this->assertFalse($floorPlan->fresh()->layout_locked);
+        $this->assertDatabaseHas('access_floor_plan_rooms', [
+            'access_floor_plan_id' => $floorPlan->id,
+            'raum_id' => $room->id,
+            'x_percent' => 50,
+        ]);
+    }
+
     public function test_master_data_manager_can_link_a_placed_door_to_rooms_from_the_2d_plan(): void
     {
         $user = User::factory()->create();

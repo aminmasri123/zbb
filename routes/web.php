@@ -376,6 +376,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
             Route::post('/grundrisse', [AccessManagementController::class, 'storeFloorPlan'])->name('grundrisse.store')->middleware('canStoredPermission:zutritt.stammdaten.manage');
             Route::get('/grundrisse/{accessFloorPlan}/bild', [AccessManagementController::class, 'floorPlanImage'])->name('grundrisse.image')->middleware('canStoredPermission:zutritt.stammdaten.manage');
             Route::put('/grundrisse/{accessFloorPlan}/layout', [AccessManagementController::class, 'updateFloorPlanLayout'])->name('grundrisse.layout.update')->middleware('canStoredPermission:zutritt.stammdaten.manage');
+            Route::put('/grundrisse/{accessFloorPlan}/sperre', [AccessManagementController::class, 'updateFloorPlanLock'])->name('grundrisse.lock.update')->middleware('canStoredPermission:zutritt.stammdaten.manage');
             Route::put('/grundrisse/{accessFloorPlan}/tueren/{accessDoor}/verknuepfung', [AccessManagementController::class, 'updateFloorPlanDoorConnection'])->name('grundrisse.doors.connection.update')->middleware('canStoredPermission:zutritt.stammdaten.manage');
             Route::delete('/grundrisse/{accessFloorPlan}', [AccessManagementController::class, 'destroyFloorPlan'])->name('grundrisse.destroy')->middleware('canStoredPermission:zutritt.stammdaten.manage');
             Route::post('/antraege', [AccessManagementController::class, 'storeRequest'])->name('antraege.store')->middleware('canStoredPermission:zutritt.antrag.store');
