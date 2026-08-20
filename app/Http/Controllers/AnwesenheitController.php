@@ -11,6 +11,7 @@ use App\Services\Projects\ActiveProjectContext;
 use App\Services\SaarlandWorkdayService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class AnwesenheitController extends Controller
 {
@@ -135,6 +136,71 @@ class AnwesenheitController extends Controller
         return redirect()->back()->with('success', $attendance ? 'Anwesenheit aktualisiert.' : 'Anwesenheit hinzugefuegt.');
     }
 
+    public function markGroupPresent(Request $request, Gruppe $gruppe)
+    {
+        $validated = $request->validate([
+            'tag' => ['required', 'date', 'exists:tages,datum'],
+        ]);
+
+        $authorizedGroup = $this->authorizedGroup((int) $gruppe->id);
+        $this->assertAttendanceDateAllowed($authorizedGroup, $validated['tag']);
+
+        $presentStatus = \App\Models\Anwesenheitsstatuten::query()
+            ->whereRaw('LOWER(status) = ?', ['anwesend'])
+            ->first();
+
+        if (! $presentStatus) {
+            throw ValidationException::withMessages([
+                'status' => 'Der Anwesenheitsstatus „anwesend“ ist nicht eingerichtet.',
+            ]);
+        }
+
+        $participantIds = GruppeHasPersonen::query()
+            ->where('gruppe_id', $authorizedGroup->id)
+            ->distinct()
+            ->pluck('personen_id')
+            ->map(fn ($id) => (int) $id)
+            ->values();
+
+        if ($participantIds->isEmpty()) {
+            return response()->json([
+                'message' => 'In dieser Gruppe sind keine Teilnehmer vorhanden.',
+                'updated_count' => 0,
+                'status' => $presentStatus->status,
+            ]);
+        }
+
+        $tagId = (int) Tage::where('datum', $validated['tag'])->value('id');
+
+        DB::transaction(function () use ($authorizedGroup, $participantIds, $tagId, $presentStatus, $request): void {
+            $plannedTimeId = $this->timeId($authorizedGroup->startzeit, $authorizedGroup->endzeit);
+
+            foreach ($participantIds as $participantId) {
+                $attendance = GruppeHasPersonen::query()->firstOrNew([
+                    'gruppe_id' => $authorizedGroup->id,
+                    'personen_id' => $participantId,
+                    'tage_id' => $tagId,
+                ]);
+
+                if (! $attendance->exists) {
+                    $attendance->zeitgeplant_id = $plannedTimeId;
+                    $attendance->zeittatsaechlich_id = $plannedTimeId;
+                    $attendance->bemerkung = null;
+                }
+
+                $attendance->anwesenheitsstatuten_id = $presentStatus->id;
+                $attendance->user_id = $request->user()?->id;
+                $attendance->save();
+            }
+        });
+
+        return response()->json([
+            'message' => "{$participantIds->count()} Teilnehmer wurden für diesen Tag als anwesend markiert.",
+            'updated_count' => $participantIds->count(),
+            'status' => $presentStatus->status,
+        ]);
+    }
+
     public function destroy(int $id)
     {
         $attendance = GruppeHasPersonen::query()->findOrFail($id);
@@ -179,6 +245,16 @@ class AnwesenheitController extends Controller
 
     private function assertAttendanceDateAllowed(Gruppe $group, string $date): void
     {
+        $startsAt = $group->anfangsdatum ? \Carbon\Carbon::parse($group->anfangsdatum)->startOfDay() : null;
+        $endsAt = $group->enddatum ? \Carbon\Carbon::parse($group->enddatum)->endOfDay() : $startsAt;
+        $attendanceDate = \Carbon\Carbon::parse($date);
+
+        abort_unless(
+            ! $startsAt || ($attendanceDate->betweenIncluded($startsAt, $endsAt)),
+            422,
+            'Der ausgewählte Tag liegt außerhalb des Gruppenzeitraums.',
+        );
+
         if ($this->workdays->isWorkday($date)) {
             return;
         }

@@ -30,6 +30,8 @@
     const legacyExportLoading = ref(null)
     const selectedTeilnehmerIds = ref([])
     const isSubmittingTeilnehmer = ref(false)
+    const selectedAttendanceActionDate = ref(null)
+    const bulkAttendanceSavingDate = ref(null)
     const paTeilnehmerDaten = ref(JSON.parse(JSON.stringify(props.potenzialanalyse?.teilnehmer || {})))
     const selectedPaTeilnehmerId = ref(null)
     const paSaving = ref(false)
@@ -1849,6 +1851,49 @@ const speichernSofort = async (tID, ttag, statusName, tatstartTime, tatendTime) 
   }
 }
 
+const toggleAttendanceDayAction = (tag) => {
+  if (!canManageAttendance.value || !attendanceDateEditable(tag)) return
+
+  selectedAttendanceActionDate.value = selectedAttendanceActionDate.value === tag.date
+    ? null
+    : tag.date
+}
+
+const markiereAlleAnwesend = async (tag) => {
+  if (!canManageAttendance.value || !attendanceDateEditable(tag) || bulkAttendanceSavingDate.value) return
+
+  bulkAttendanceSavingDate.value = tag.date
+
+  try {
+    const response = await axios.post(route('anwesenheit.group.mark-present', props.gruppe.id), {
+      tag: tag.date,
+    })
+    const statusName = response.data?.status || 'anwesend'
+
+    gruppenTeilnehmer.value.forEach((teilnehmer) => {
+      if (Array.isArray(teilnehmer.anwesenheit)) {
+        teilnehmer.anwesenheit[tag.index] = statusName
+      }
+    })
+
+    await Swal.fire({
+      icon: 'success',
+      title: 'Anwesenheit gespeichert',
+      text: response.data?.message || `Alle Teilnehmer wurden für ${tag.label} als anwesend markiert.`,
+      timer: 1800,
+      showConfirmButton: false,
+    })
+  } catch (error) {
+    await Swal.fire({
+      icon: 'error',
+      title: 'Sammeländerung fehlgeschlagen',
+      text: error.response?.data?.message || 'Die Teilnehmer konnten nicht gemeinsam als anwesend markiert werden.',
+    })
+  } finally {
+    bulkAttendanceSavingDate.value = null
+  }
+}
+
 const entferneTeilnehmer = async (teilnehmer) => {
   if (!canRemoveTeilnehmerFromGroup.value) {
     return
@@ -2253,12 +2298,23 @@ const exportMitTag = async () => {
                   v-for="tag in sichtbareTage"
                   :key="tag.date"
                   class="border px-2 py-2 text-center"
-                  :class="nonWorkingDayMap.has(tag.date) ? 'bg-gray-200' : ''"
+                  :class="[
+                    nonWorkingDayMap.has(tag.date) ? 'bg-gray-200' : '',
+                    selectedAttendanceActionDate === tag.date ? 'ring-2 ring-inset ring-zbb' : '',
+                  ]"
                 >
                   <div class="flex flex-col items-center">
-                    <span class="font-semibold">{{ tag.wochentag }}</span>
-                    <span class="text-xs text-gray-500">{{ tag.kurzdatum }}</span>
-                    <span class="text-[11px] text-gray-400">{{ tag.label }}</span>
+                    <button
+                      type="button"
+                      class="flex min-h-12 w-full flex-col items-center justify-center rounded px-2 py-1 transition"
+                      :class="canManageAttendance && attendanceDateEditable(tag) ? 'cursor-pointer hover:bg-zbb/10 hover:text-zbb' : 'cursor-default'"
+                      :title="canManageAttendance && attendanceDateEditable(tag) ? `${tag.label}: Sammelaktion anzeigen` : ''"
+                      @click="toggleAttendanceDayAction(tag)"
+                    >
+                      <span class="font-semibold">{{ tag.wochentag }}</span>
+                      <span class="text-xs text-gray-500">{{ tag.kurzdatum }}</span>
+                      <span class="text-[11px] text-gray-400">{{ tag.label }}</span>
+                    </button>
                     <span v-if="nonWorkingDayMap.has(tag.date)" class="mt-1 rounded bg-gray-700 px-1.5 py-0.5 text-[10px] font-semibold text-white">
                       {{ nonWorkingDayMap.get(tag.date).label }}
                     </span>
@@ -2272,6 +2328,16 @@ const exportMitTag = async () => {
                       @click="confirmNonWorkingDay(tag)"
                     >
                       Arbeit freigeben
+                    </button>
+                    <button
+                      v-if="selectedAttendanceActionDate === tag.date && canManageAttendance && attendanceDateEditable(tag)"
+                      type="button"
+                      class="mt-2 inline-flex min-h-9 items-center justify-center gap-1.5 rounded bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-60"
+                      :disabled="Boolean(bulkAttendanceSavingDate)"
+                      @click.stop="markiereAlleAnwesend(tag)"
+                    >
+                      <i :class="bulkAttendanceSavingDate === tag.date ? 'la la-spinner la-spin' : 'la la-check-double'"></i>
+                      {{ bulkAttendanceSavingDate === tag.date ? 'Speichert …' : 'Alle anwesend' }}
                     </button>
                   </div>
                 </th>
@@ -2490,15 +2556,15 @@ const exportMitTag = async () => {
                 <h5 class="text-sm font-semibold text-gray-800">Schritt 1: Selbsteinschätzung</h5>
               </div>
               <div class="overflow-x-auto">
-                <table class="w-full min-w-[720px] text-xs">
+                <table class="w-full min-w-[780px] text-sm">
                   <thead class="bg-white text-xs uppercase text-gray-500">
                     <tr>
                       <th class="border-b px-2 py-1.5 text-left">Merkmal</th>
                       <th class="border-b px-2 py-1.5 text-center">Kat.</th>
-                      <th v-for="wert in paBewertungWerte" :key="'selbst-head-' + wert" class="border-b px-1 py-1 text-center">
+                      <th v-for="wert in paBewertungWerte" :key="'selbst-head-' + wert" class="border-b px-1 py-1.5 text-center">
                         <button
                           type="button"
-                          class="inline-flex h-6 w-6 items-center justify-center rounded text-xs font-semibold text-gray-600 hover:bg-zbb hover:text-white"
+                          class="inline-flex h-9 w-9 items-center justify-center rounded-md text-sm font-bold text-gray-700 transition hover:bg-zbb hover:text-white disabled:opacity-50"
                           :title="`Alle Merkmale mit ${wert} bewerten`"
                           :disabled="!canEditPotenzialanalyse"
                           @click="setzePaBewertungSpalte('selbsteinschaetzung', wert)"
@@ -2513,16 +2579,18 @@ const exportMitTag = async () => {
                     <tr v-for="merkmal in paMerkmale" :key="'selbst-' + merkmal.key" class="border-b last:border-b-0">
                       <td class="px-2 py-1.5 font-medium text-gray-800">{{ merkmal.label }}</td>
                       <td class="px-2 py-1.5 text-center text-xs text-gray-500">{{ merkmal.kategorie }}</td>
-                      <td v-for="wert in paBewertungWerte" :key="'selbst-' + merkmal.key + '-' + wert" class="px-2 py-1.5 text-center">
-                        <input
-                          v-model.number="paEintrag(selectedPaTeilnehmer.id).selbsteinschaetzung[merkmal.key].bewertung"
-                          type="radio"
-                          :name="`pa-selbst-${selectedPaTeilnehmer.id}-${merkmal.key}`"
-                          :value="wert"
-                          class="h-3.5 w-3.5 text-zbb focus:ring-zbb"
-                          :disabled="!canEditPotenzialanalyse"
-                          @change="setzePaBewertung(selectedPaTeilnehmer.id, 'selbsteinschaetzung', merkmal.key, wert)"
-                        />
+                      <td v-for="wert in paBewertungWerte" :key="'selbst-' + merkmal.key + '-' + wert" class="px-1 py-1.5 text-center">
+                        <label class="inline-flex h-11 w-11 items-center justify-center rounded-md transition" :class="canEditPotenzialanalyse ? 'cursor-pointer hover:bg-zbb/10' : 'cursor-not-allowed'">
+                          <input
+                            v-model.number="paEintrag(selectedPaTeilnehmer.id).selbsteinschaetzung[merkmal.key].bewertung"
+                            type="radio"
+                            :name="`pa-selbst-${selectedPaTeilnehmer.id}-${merkmal.key}`"
+                            :value="wert"
+                            class="h-5 w-5 text-zbb focus:ring-2 focus:ring-zbb"
+                            :disabled="!canEditPotenzialanalyse"
+                            @change="setzePaBewertung(selectedPaTeilnehmer.id, 'selbsteinschaetzung', merkmal.key, wert)"
+                          />
+                        </label>
                       </td>
                       <td class="px-2 py-1.5">
                         <textarea
@@ -2619,16 +2687,16 @@ const exportMitTag = async () => {
                 </div>
               </div>
               <div class="overflow-x-auto">
-                <table class="w-full min-w-[720px] text-xs">
+                <table class="w-full min-w-[840px] text-sm">
                   <thead class="bg-white text-xs uppercase text-gray-500">
                     <tr>
                       <th class="border-b px-2 py-1.5 text-left">Merkmal</th>
                       <th class="border-b px-2 py-1.5 text-center">Kat.</th>
                       <th class="border-b px-2 py-1.5 text-left">Berechneter Vorschlag</th>
-                      <th v-for="wert in paBewertungWerte" :key="'kompetenz-head-' + wert" class="border-b px-1 py-1 text-center">
-                        <button
-                          type="button"
-                          class="inline-flex h-6 w-6 items-center justify-center rounded text-xs font-semibold text-gray-600 hover:bg-zbb hover:text-white"
+                       <th v-for="wert in paBewertungWerte" :key="'kompetenz-head-' + wert" class="border-b px-1 py-1.5 text-center">
+                         <button
+                           type="button"
+                           class="inline-flex h-9 w-9 items-center justify-center rounded-md text-sm font-bold text-gray-700 transition hover:bg-zbb hover:text-white disabled:opacity-50"
                           :title="`Alle Kompetenzen mit ${wert} bewerten`"
                           :disabled="!canEditPotenzialanalyse"
                           @click="setzePaBewertungSpalte('kompetenzen', wert)"
@@ -2650,16 +2718,18 @@ const exportMitTag = async () => {
                         </div>
                         <span v-else class="text-gray-400">–</span>
                       </td>
-                      <td v-for="wert in paBewertungWerte" :key="'kompetenz-' + merkmal.key + '-' + wert" class="px-2 py-1.5 text-center">
-                        <input
-                          v-model.number="paEintrag(selectedPaTeilnehmer.id).kompetenzen[merkmal.key].bewertung"
-                          type="radio"
-                          :name="`pa-kompetenz-${selectedPaTeilnehmer.id}-${merkmal.key}`"
-                          :value="wert"
-                          class="h-3.5 w-3.5 text-zbb focus:ring-zbb"
-                          :disabled="!canEditPotenzialanalyse"
-                          @change="setzePaBewertung(selectedPaTeilnehmer.id, 'kompetenzen', merkmal.key, wert)"
-                        />
+                      <td v-for="wert in paBewertungWerte" :key="'kompetenz-' + merkmal.key + '-' + wert" class="px-1 py-1.5 text-center">
+                        <label class="inline-flex h-11 w-11 items-center justify-center rounded-md transition" :class="canEditPotenzialanalyse ? 'cursor-pointer hover:bg-zbb/10' : 'cursor-not-allowed'">
+                          <input
+                            v-model.number="paEintrag(selectedPaTeilnehmer.id).kompetenzen[merkmal.key].bewertung"
+                            type="radio"
+                            :name="`pa-kompetenz-${selectedPaTeilnehmer.id}-${merkmal.key}`"
+                            :value="wert"
+                            class="h-5 w-5 text-zbb focus:ring-2 focus:ring-zbb"
+                            :disabled="!canEditPotenzialanalyse"
+                            @change="setzePaBewertung(selectedPaTeilnehmer.id, 'kompetenzen', merkmal.key, wert)"
+                          />
+                        </label>
                       </td>
                       <td class="px-2 py-1.5">
                         <textarea

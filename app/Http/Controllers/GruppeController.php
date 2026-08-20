@@ -20,7 +20,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class GruppeController extends Controller
 {
@@ -366,18 +365,31 @@ class GruppeController extends Controller
         $activeProject = $this->activeProjectContext->currentAvailableFor($user);
         abort_unless($activeProject, 409, 'Bitte wählen Sie zuerst ein aktives Projekt aus.');
 
-        try {
-            $gruppe = Gruppe::findOrFail($id);
-            abort_unless((int) $gruppe->projekt_id === $activeProject->id, 403);
-            abort_unless($this->canManageGroup($user, $gruppe, 'gruppe.destroy'), 403);
+        $gruppe = Gruppe::find($id);
+        if (! $gruppe) {
+            // DELETE ist idempotent: Ein versehentlicher zweiter Request darf nach
+            // erfolgreichem Löschen keinen falschen Fehlerdialog auslösen.
+            return response()->json([
+                'message' => 'Gruppe wurde bereits geloescht.',
+                'already_deleted' => true,
+            ]);
+        }
 
+        abort_unless((int) $gruppe->projekt_id === $activeProject->id, 403);
+        abort_unless($this->canManageGroup($user, $gruppe, 'gruppe.destroy'), 403);
+
+        try {
             $gruppe->delete();
 
             return response()->json(['message' => 'Gruppe erfolgreich geloescht!'], 200);
-        } catch (ModelNotFoundException $e) {
-            return response()->json(['message' => 'Gruppe nicht gefunden.'], 404);
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
+            Log::error('Fehler beim Löschen der Gruppe.', [
+                'gruppe_id' => $id,
+                'user_id' => $user?->id,
+                'exception' => $e,
+            ]);
+
+            return response()->json(['message' => 'Die Gruppe konnte nicht gelöscht werden.'], 500);
         }
     }
 

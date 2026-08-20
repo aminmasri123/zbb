@@ -6,6 +6,7 @@ use App\Models\Anwesenheitsstatuten;
 use App\Models\Bereich;
 use App\Models\Berechtigungskategorie;
 use App\Models\Gruppe;
+use App\Models\GruppeHasPersonen;
 use App\Models\Personen;
 use App\Models\Projekt;
 use App\Models\ProjektHasPersonen;
@@ -15,6 +16,7 @@ use App\Models\RoleDataAccessSetting;
 use App\Models\Standort;
 use App\Models\Tage;
 use App\Models\User;
+use App\Models\Zeiten;
 use App\Support\RoutePermissionMap;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
@@ -29,6 +31,7 @@ class AttendancePermissionConsolidationTest extends TestCase
     {
         $this->assertSame(['anwesenheit.manage'], RoutePermissionMap::permissionsFor('anwesenheit.store'));
         $this->assertSame(['anwesenheit.manage'], RoutePermissionMap::permissionsFor('anwesenheit.update'));
+        $this->assertSame(['anwesenheit.manage'], RoutePermissionMap::permissionsFor('anwesenheit.group.mark-present'));
         $this->assertSame(['anwesenheit.export'], RoutePermissionMap::permissionsFor('export.anwesenheitslite_V1'));
         $this->assertSame(['anwesenheit.abrechnung'], RoutePermissionMap::permissionsFor('anwesenheitsliste.PA.digital.preview'));
         $this->assertSame(['anwesenheit.abrechnung'], RoutePermissionMap::permissionsFor('anwesenheitsliste.BoTag1.export'));
@@ -50,7 +53,7 @@ class AttendancePermissionConsolidationTest extends TestCase
         $this->assign($foreignProject, $foreignParticipant, $location);
 
         $group = $this->group($activeProject, $user, $location);
-        $day = Tage::query()->create(['datum' => '2026-07-12', 'wochentag' => 'Sonntag']);
+        $day = Tage::query()->create(['datum' => '2026-07-13', 'wochentag' => 'Montag']);
         $status = Anwesenheitsstatuten::query()->create([
             'status' => 'anwesend',
             'abkuerzung' => 'A',
@@ -79,6 +82,71 @@ class AttendancePermissionConsolidationTest extends TestCase
             'tage_id' => $day->id,
             'anwesenheitsstatuten_id' => $status->id,
         ]);
+    }
+
+    public function test_group_day_can_be_marked_present_in_one_request_without_changing_times(): void
+    {
+        $user = $this->staffUser();
+        $project = Projekt::factory()->create();
+        $location = Standort::factory()->create();
+        $this->assign($project, $user->person, $location);
+        $user->update(['current_team_id' => $project->id]);
+
+        $participants = Personen::factory()->count(2)->create(['typ' => 'teilnehmer']);
+        $participants->each(fn (Personen $participant) => $this->assign($project, $participant, $location));
+
+        $group = $this->group($project, $user, $location);
+        $group->update([
+            'anfangsdatum' => '2026-07-13',
+            'enddatum' => '2026-07-17',
+            'startzeit' => '08:00',
+            'endzeit' => '16:00',
+        ]);
+        $day = Tage::query()->create(['datum' => '2026-07-13', 'wochentag' => 'Montag']);
+        $absent = Anwesenheitsstatuten::query()->create([
+            'status' => 'unentschuldigt',
+            'abkuerzung' => 'U',
+            'farben' => '#dc2626',
+        ]);
+        $present = Anwesenheitsstatuten::query()->create([
+            'status' => 'anwesend',
+            'abkuerzung' => 'A',
+            'farben' => '#16a34a',
+        ]);
+        $planned = Zeiten::query()->create(['startzeit' => '08:00', 'endzeit' => '16:00']);
+        $actualTimes = [
+            Zeiten::query()->create(['startzeit' => '08:10', 'endzeit' => '15:50']),
+            Zeiten::query()->create(['startzeit' => '08:20', 'endzeit' => '15:40']),
+        ];
+
+        foreach ($participants as $index => $participant) {
+            GruppeHasPersonen::query()->create([
+                'personen_id' => $participant->id,
+                'user_id' => $user->id,
+                'gruppe_id' => $group->id,
+                'tage_id' => $day->id,
+                'zeitgeplant_id' => $planned->id,
+                'zeittatsaechlich_id' => $actualTimes[$index]->id,
+                'anwesenheitsstatuten_id' => $absent->id,
+            ]);
+        }
+
+        $this->actingAs($user)
+            ->postJson(route('anwesenheit.group.mark-present', $group), ['tag' => $day->datum])
+            ->assertOk()
+            ->assertJsonPath('updated_count', 2)
+            ->assertJsonPath('status', 'anwesend');
+
+        foreach ($participants as $index => $participant) {
+            $this->assertDatabaseHas('gruppe_has_personens', [
+                'gruppe_id' => $group->id,
+                'personen_id' => $participant->id,
+                'tage_id' => $day->id,
+                'anwesenheitsstatuten_id' => $present->id,
+                'zeitgeplant_id' => $planned->id,
+                'zeittatsaechlich_id' => $actualTimes[$index]->id,
+            ]);
+        }
     }
 
     private function staffUser(): User

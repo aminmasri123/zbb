@@ -62,6 +62,10 @@
     });
 
     const deleteItem = async () => {
+    if (deleting.value) {
+        return;
+    }
+
     if (deleteInput.value !== 'delete') {
         Swal.fire({
             title: 'Fehler!',

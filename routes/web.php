@@ -616,6 +616,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     // Anwesenheiten
     Route::middleware('projectFeature:attendance_management')->group(function () {
         Route::post('/anwesenheit/speichern', [AnwesenheitController::class, 'store'])->name('anwesenheit.store')->can('anwesenheit.manage');
+        Route::post('/anwesenheit/gruppe/{gruppe}/tag/alle-anwesend', [AnwesenheitController::class, 'markGroupPresent'])->name('anwesenheit.group.mark-present')->can('anwesenheit.manage');
         Route::delete('/anwesenheit/entfernen/{id}', [AnwesenheitController::class, 'destroy'])->name('anwesenheit.destroy')->can('anwesenheit.destroy');
         Route::post('/anwesenheit/update', [AnwesenheitController::class, 'update'])->name('anwesenheit.update')->can('anwesenheit.manage');
     });

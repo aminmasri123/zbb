@@ -130,6 +130,7 @@ class RoutePermissionMap
         'gruppe.export.serienbrief' => [],
         'anwesenheit.store' => 'anwesenheit.manage',
         'anwesenheit.update' => 'anwesenheit.manage',
+        'anwesenheit.group.mark-present' => 'anwesenheit.manage',
         'gruppeHasPersonen.destroy' => 'gruppeHasTeilnehmer.destroyTeilnehmer',
         'gruppe.bop.export.anwesenheitsliste' => 'anwesenheit.export',
         'export.anwesenheitslite_V1' => 'anwesenheit.export',
