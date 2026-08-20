@@ -84,7 +84,7 @@ class AttendancePermissionConsolidationTest extends TestCase
         ]);
     }
 
-    public function test_group_day_can_be_marked_present_in_one_request_without_changing_times(): void
+    public function test_group_day_can_be_marked_present_or_absent_without_changing_times(): void
     {
         $user = $this->staffUser();
         $project = Projekt::factory()->create();
@@ -143,6 +143,26 @@ class AttendancePermissionConsolidationTest extends TestCase
                 'personen_id' => $participant->id,
                 'tage_id' => $day->id,
                 'anwesenheitsstatuten_id' => $present->id,
+                'zeitgeplant_id' => $planned->id,
+                'zeittatsaechlich_id' => $actualTimes[$index]->id,
+            ]);
+        }
+
+        $this->actingAs($user)
+            ->postJson(route('anwesenheit.group.mark-present', $group), [
+                'tag' => $day->datum,
+                'status' => 'unentschuldigt',
+            ])
+            ->assertOk()
+            ->assertJsonPath('updated_count', 2)
+            ->assertJsonPath('status', 'unentschuldigt');
+
+        foreach ($participants as $index => $participant) {
+            $this->assertDatabaseHas('gruppe_has_personens', [
+                'gruppe_id' => $group->id,
+                'personen_id' => $participant->id,
+                'tage_id' => $day->id,
+                'anwesenheitsstatuten_id' => $absent->id,
                 'zeitgeplant_id' => $planned->id,
                 'zeittatsaechlich_id' => $actualTimes[$index]->id,
             ]);

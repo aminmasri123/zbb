@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Gruppe;
 use App\Models\GruppeHasPersonen;
+use App\Models\Anwesenheitsstatuten;
 use App\Models\Personen;
 use App\Models\Tage;
 use App\Models\Zeiten;
@@ -140,18 +141,20 @@ class AnwesenheitController extends Controller
     {
         $validated = $request->validate([
             'tag' => ['required', 'date', 'exists:tages,datum'],
+            'status' => ['sometimes', 'string', 'in:anwesend,unentschuldigt'],
         ]);
 
         $authorizedGroup = $this->authorizedGroup((int) $gruppe->id);
         $this->assertAttendanceDateAllowed($authorizedGroup, $validated['tag']);
 
-        $presentStatus = \App\Models\Anwesenheitsstatuten::query()
-            ->whereRaw('LOWER(status) = ?', ['anwesend'])
+        $statusName = strtolower($validated['status'] ?? 'anwesend');
+        $attendanceStatus = Anwesenheitsstatuten::query()
+            ->whereRaw('LOWER(status) = ?', [$statusName])
             ->first();
 
-        if (! $presentStatus) {
+        if (! $attendanceStatus) {
             throw ValidationException::withMessages([
-                'status' => 'Der Anwesenheitsstatus „anwesend“ ist nicht eingerichtet.',
+                'status' => "Der Anwesenheitsstatus „{$statusName}“ ist nicht eingerichtet.",
             ]);
         }
 
@@ -166,13 +169,13 @@ class AnwesenheitController extends Controller
             return response()->json([
                 'message' => 'In dieser Gruppe sind keine Teilnehmer vorhanden.',
                 'updated_count' => 0,
-                'status' => $presentStatus->status,
+                'status' => $attendanceStatus->status,
             ]);
         }
 
         $tagId = (int) Tage::where('datum', $validated['tag'])->value('id');
 
-        DB::transaction(function () use ($authorizedGroup, $participantIds, $tagId, $presentStatus, $request): void {
+        DB::transaction(function () use ($authorizedGroup, $participantIds, $tagId, $attendanceStatus, $request): void {
             $plannedTimeId = $this->timeId($authorizedGroup->startzeit, $authorizedGroup->endzeit);
 
             foreach ($participantIds as $participantId) {
@@ -188,16 +191,18 @@ class AnwesenheitController extends Controller
                     $attendance->bemerkung = null;
                 }
 
-                $attendance->anwesenheitsstatuten_id = $presentStatus->id;
+                $attendance->anwesenheitsstatuten_id = $attendanceStatus->id;
                 $attendance->user_id = $request->user()?->id;
                 $attendance->save();
             }
         });
 
+        $displayStatus = $statusName === 'anwesend' ? 'anwesend' : 'abwesend';
+
         return response()->json([
-            'message' => "{$participantIds->count()} Teilnehmer wurden für diesen Tag als anwesend markiert.",
+            'message' => "{$participantIds->count()} Teilnehmer wurden für diesen Tag als {$displayStatus} markiert.",
             'updated_count' => $participantIds->count(),
-            'status' => $presentStatus->status,
+            'status' => $attendanceStatus->status,
         ]);
     }
 

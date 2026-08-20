@@ -1859,27 +1859,42 @@ const toggleAttendanceDayAction = (tag) => {
     : tag.date
 }
 
-const markiereAlleAnwesend = async (tag) => {
+const markiereAlle = async (tag, statusName) => {
   if (!canManageAttendance.value || !attendanceDateEditable(tag) || bulkAttendanceSavingDate.value) return
+
+  const istAnwesend = statusName === 'anwesend'
+  const statusLabel = istAnwesend ? 'anwesend' : 'abwesend'
+  const result = await Swal.fire({
+    icon: 'warning',
+    title: `${tag.label}: Alle ${statusLabel} markieren?`,
+    text: `Möchten Sie wirklich alle ${gruppenTeilnehmer.value.length} Teilnehmer für diesen Tag als ${statusLabel} markieren?`,
+    showCancelButton: true,
+    confirmButtonText: `Ja, alle ${statusLabel}`,
+    cancelButtonText: 'Abbrechen',
+    confirmButtonColor: istAnwesend ? '#059669' : '#dc2626',
+  })
+
+  if (!result.isConfirmed) return
 
   bulkAttendanceSavingDate.value = tag.date
 
   try {
     const response = await axios.post(route('anwesenheit.group.mark-present', props.gruppe.id), {
       tag: tag.date,
+      status: statusName,
     })
-    const statusName = response.data?.status || 'anwesend'
+    const savedStatusName = response.data?.status || statusName
 
     gruppenTeilnehmer.value.forEach((teilnehmer) => {
       if (Array.isArray(teilnehmer.anwesenheit)) {
-        teilnehmer.anwesenheit[tag.index] = statusName
+        teilnehmer.anwesenheit[tag.index] = savedStatusName
       }
     })
 
     await Swal.fire({
       icon: 'success',
       title: 'Anwesenheit gespeichert',
-      text: response.data?.message || `Alle Teilnehmer wurden für ${tag.label} als anwesend markiert.`,
+      text: response.data?.message || `Alle Teilnehmer wurden für ${tag.label} als ${statusLabel} markiert.`,
       timer: 1800,
       showConfirmButton: false,
     })
@@ -1887,7 +1902,7 @@ const markiereAlleAnwesend = async (tag) => {
     await Swal.fire({
       icon: 'error',
       title: 'Sammeländerung fehlgeschlagen',
-      text: error.response?.data?.message || 'Die Teilnehmer konnten nicht gemeinsam als anwesend markiert werden.',
+      text: error.response?.data?.message || `Die Teilnehmer konnten nicht gemeinsam als ${statusLabel} markiert werden.`,
     })
   } finally {
     bulkAttendanceSavingDate.value = null
@@ -2309,6 +2324,7 @@ const exportMitTag = async () => {
                       class="flex min-h-12 w-full flex-col items-center justify-center rounded px-2 py-1 transition"
                       :class="canManageAttendance && attendanceDateEditable(tag) ? 'cursor-pointer hover:bg-zbb/10 hover:text-zbb' : 'cursor-default'"
                       :title="canManageAttendance && attendanceDateEditable(tag) ? `${tag.label}: Sammelaktion anzeigen` : ''"
+                      :aria-expanded="selectedAttendanceActionDate === tag.date"
                       @click="toggleAttendanceDayAction(tag)"
                     >
                       <span class="font-semibold">{{ tag.wochentag }}</span>
@@ -2329,16 +2345,29 @@ const exportMitTag = async () => {
                     >
                       Arbeit freigeben
                     </button>
-                    <button
+                    <div
                       v-if="selectedAttendanceActionDate === tag.date && canManageAttendance && attendanceDateEditable(tag)"
-                      type="button"
-                      class="mt-2 inline-flex min-h-9 items-center justify-center gap-1.5 rounded bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-60"
-                      :disabled="Boolean(bulkAttendanceSavingDate)"
-                      @click.stop="markiereAlleAnwesend(tag)"
+                      class="mt-2 flex flex-wrap items-center justify-center gap-2"
                     >
-                      <i :class="bulkAttendanceSavingDate === tag.date ? 'la la-spinner la-spin' : 'la la-check-double'"></i>
-                      {{ bulkAttendanceSavingDate === tag.date ? 'Speichert …' : 'Alle anwesend' }}
-                    </button>
+                      <button
+                        type="button"
+                        class="inline-flex min-h-9 items-center justify-center gap-1.5 rounded bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-60"
+                        :disabled="Boolean(bulkAttendanceSavingDate)"
+                        @click.stop="markiereAlle(tag, 'anwesend')"
+                      >
+                        <i :class="bulkAttendanceSavingDate === tag.date ? 'la la-spinner la-spin' : 'la la-check-double'"></i>
+                        {{ bulkAttendanceSavingDate === tag.date ? 'Speichert …' : 'Alle anwesend' }}
+                      </button>
+                      <button
+                        type="button"
+                        class="inline-flex min-h-9 items-center justify-center gap-1.5 rounded bg-red-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-red-700 disabled:cursor-wait disabled:opacity-60"
+                        :disabled="Boolean(bulkAttendanceSavingDate)"
+                        @click.stop="markiereAlle(tag, 'unentschuldigt')"
+                      >
+                        <i class="la la-user-times"></i>
+                        Alle abwesend
+                      </button>
+                    </div>
                   </div>
                 </th>
               </tr>
