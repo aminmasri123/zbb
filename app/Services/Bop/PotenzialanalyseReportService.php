@@ -12,20 +12,15 @@ use App\Models\PotenzialanalyseBeurteilung;
 use App\Models\PotenzialanalyseKompetenzbewertung;
 use App\Models\PotenzialanalyseSelbsteinschaetzung;
 use App\Models\PotenzialanalyseUebungErgebnis;
-use App\Services\Documents\HtmlPdfDocumentCombiner;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
+use setasign\Fpdi\Fpdi;
 
 class PotenzialanalyseReportService
 {
-    public function __construct(
-        private readonly HtmlPdfDocumentCombiner $htmlCombiner,
-    ) {
-    }
-
     private const MERKMALE = [
         ['key' => 'feinmotorik', 'bereich' => 'Berufsübergreifende Kompetenzen', 'label' => 'Feinmotorik'],
         ['key' => 'grobmotorik', 'bereich' => 'Berufsübergreifende Kompetenzen', 'label' => 'Grobmotorik'],
@@ -238,21 +233,63 @@ class PotenzialanalyseReportService
 
         abort_if($people->isEmpty(), 422, 'Die Gruppe verfügt über keine Teilnehmer.');
 
-        $documents = $people->map(
-            fn (Personen $person) => view('pdf.berichtPA', $this->originalBopReportData($gruppe, $person))->render()
-        );
-        $pdf = Pdf::loadHTML($this->htmlCombiner->combine($documents))
-            ->setOption('isHtml5ParserEnabled', true)
-            ->setOption('isRemoteEnabled', true)
-            ->setPaper('a4', 'portrait')
-            ->output();
-
         $name = $this->safeName('PA_Berichte_Gruppe_' . ($gruppe->bereich?->name ?: $gruppe->id)) . '.pdf';
-        $path = storage_path('app/tmp/' . Str::uuid() . '_' . $name);
+        $token = (string) Str::uuid();
+        $temporaryDirectory = storage_path('app/tmp/pa-group-' . $token);
+        $path = storage_path('app/tmp/' . $token . '_' . $name);
+
         File::ensureDirectoryExists(dirname($path));
-        File::put($path, $pdf);
+        File::ensureDirectoryExists($temporaryDirectory);
+
+        try {
+            $partPaths = [];
+
+            foreach ($people as $index => $person) {
+                $partPath = $temporaryDirectory . DIRECTORY_SEPARATOR . sprintf('%04d.pdf', $index + 1);
+                $contents = $this->renderPdf($gruppe, $person);
+                File::put($partPath, $contents);
+                $partPaths[] = $partPath;
+
+                unset($contents);
+                gc_collect_cycles();
+                if (function_exists('gc_mem_caches')) {
+                    gc_mem_caches();
+                }
+            }
+
+            $this->mergePdfFiles($partPaths, $path);
+        } catch (\Throwable $exception) {
+            File::delete($path);
+
+            throw $exception;
+        } finally {
+            File::deleteDirectory($temporaryDirectory);
+        }
 
         return ['path' => $path, 'name' => $name, 'count' => $people->count()];
+    }
+
+    /**
+     * @param  iterable<string>  $paths
+     */
+    private function mergePdfFiles(iterable $paths, string $outputPath): void
+    {
+        $merged = new Fpdi();
+
+        foreach ($paths as $path) {
+            $pageCount = $merged->setSourceFile($path);
+
+            for ($pageNumber = 1; $pageNumber <= $pageCount; $pageNumber++) {
+                $template = $merged->importPage($pageNumber);
+                $size = $merged->getTemplateSize($template);
+                $orientation = $size['width'] > $size['height'] ? 'L' : 'P';
+
+                $merged->AddPage($orientation, [$size['width'], $size['height']]);
+                $merged->useImportedPage($template, 0, 0, $size['width'], $size['height']);
+            }
+        }
+
+        $merged->Output('F', $outputPath);
     }
 
     public function orderedParticipants(Gruppe $gruppe): Collection

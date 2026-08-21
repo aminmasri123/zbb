@@ -2,8 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\Gruppe;
+use App\Models\Personen;
+use App\Services\Bop\PotenzialanalyseReportService;
 use App\Support\RoutePermissionMap;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\File;
+use setasign\Fpdi\Fpdi;
 use Tests\TestCase;
 
 class PotenzialanalyseReportExportTest extends TestCase
@@ -30,6 +35,66 @@ class PotenzialanalyseReportExportTest extends TestCase
 
     public function test_original_bop_pa_report_renders_as_four_page_pdf(): void
     {
+        $pdf = Pdf::loadView('pdf.berichtPA', [
+            'beurteilungen' => config('beurteilungen'),
+            'teilnehmer' => $this->participantFixture(),
+        ])
+            ->setOption('isHtml5ParserEnabled', true)
+            ->setOption('isRemoteEnabled', true)
+            ->setPaper('a4', 'portrait');
+
+        $pdf->render();
+        $output = $pdf->output();
+
+        $this->assertStringStartsWith('%PDF-', $output);
+        $this->assertGreaterThan(1000, strlen($output));
+        $this->assertSame(4, $pdf->getDomPDF()->getCanvas()->get_page_count());
+    }
+
+    public function test_group_export_merges_thirty_original_four_page_reports(): void
+    {
+        $singleReport = Pdf::loadView('pdf.berichtPA', [
+            'beurteilungen' => config('beurteilungen'),
+            'teilnehmer' => $this->participantFixture(),
+        ])
+            ->setOption('isHtml5ParserEnabled', true)
+            ->setOption('isRemoteEnabled', true)
+            ->setPaper('a4', 'portrait')
+            ->output();
+
+        $gruppe = new Gruppe(['id' => 10]);
+        $gruppe->setRelation('bereich', null);
+        $gruppe->setRelation('teilnehmer', collect(range(1, 30))->map(fn (int $id) => new Personen([
+            'id' => $id,
+            'vorname' => 'Person '.str_pad((string) $id, 2, '0', STR_PAD_LEFT),
+            'nachname' => 'Test',
+        ])));
+
+        $service = new class($singleReport) extends PotenzialanalyseReportService
+        {
+            public function __construct(private readonly string $singleReport)
+            {
+            }
+
+            public function renderPdf(Gruppe $gruppe, Personen $person): string
+            {
+                return $this->singleReport;
+            }
+        };
+
+        $result = $service->createGroupPdf($gruppe);
+
+        try {
+            $merged = new Fpdi();
+            $this->assertSame(30, $result['count']);
+            $this->assertSame(120, $merged->setSourceFile($result['path']));
+        } finally {
+            File::delete($result['path']);
+        }
+    }
+
+    private function participantFixture(): object
+    {
         $fields = [
             'feinmotorik',
             'grobmotorik',
@@ -44,7 +109,8 @@ class PotenzialanalyseReportExportTest extends TestCase
             'umgangsformen',
         ];
         $ratings = array_fill_keys($fields, 4);
-        $participant = (object) [
+
+        return (object) [
             'vorname' => 'Mia',
             'nachname' => 'Beispiel',
             'klasse' => '7.1',
@@ -61,21 +127,6 @@ class PotenzialanalyseReportExportTest extends TestCase
                 ],
             ]),
         ];
-
-        $pdf = Pdf::loadView('pdf.berichtPA', [
-            'beurteilungen' => config('beurteilungen'),
-            'teilnehmer' => $participant,
-        ])
-            ->setOption('isHtml5ParserEnabled', true)
-            ->setOption('isRemoteEnabled', true)
-            ->setPaper('a4', 'portrait');
-
-        $pdf->render();
-        $output = $pdf->output();
-
-        $this->assertStringStartsWith('%PDF-', $output);
-        $this->assertGreaterThan(1000, strlen($output));
-        $this->assertSame(4, $pdf->getDomPDF()->getCanvas()->get_page_count());
     }
 
     public function test_pa_report_routes_use_the_existing_pa_export_permission(): void
