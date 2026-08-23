@@ -993,6 +993,7 @@ class UserSeeder extends Seeder
             32 => ['name' => 'Programm-Feedback', 'beschreibung' => 'Verbesserungsvorschlaege und Fehlermeldungen zum Programm.'],
             33 => ['name' => 'Interne Kommunikation', 'beschreibung' => 'Datenschutzgeschuetzte interne Einzel-, Gruppen- und Projektkommunikation.'],
             34 => ['name' => 'Zutrittsverwaltung', 'beschreibung' => 'Zutrittsantraege, Genehmigungen, technische Aktivierung sowie Tuer- und Profilstammdaten.'],
+            35 => ['name' => 'KI-Agent', 'beschreibung' => 'Intern autorisierte, projektgebundene KI-Berichtsentwuerfe.'],
         ];
     }
 
@@ -1029,6 +1030,7 @@ class UserSeeder extends Seeder
             $this->permission('apps.index', 1, 'Erlaubt den Zugriff auf die interne Apps-Uebersicht mit Dateimanager, Kalender, Kontakten, Aufgaben und Popups.'),
             $this->permission('notifications.readAll', 1, 'Erlaubt das Markieren eigener Benachrichtigungen als gelesen. Diese Berechtigung betrifft keine fremden Benachrichtigungen.'),
             $this->permission('chat.use', 33, 'Erlaubt Mitarbeitenden die Nutzung des internen Chats. Unterhaltungen bleiben auf explizit zugeordnete Mitglieder begrenzt.'),
+            $this->permission('ai.report.use', 35, 'Erlaubt das Erzeugen eines projektgebundenen KI-Berichtsentwurfs. Eine menschliche Freigabe bleibt erforderlich.'),
 
             // Berechtigungen / Rollen
             $this->permission('berechtigung.index', 8, 'Erlaubt das Oeffnen der Berechtigungsverwaltung und das Einsehen von Rollen, Kategorien, Datenzugriffen und zugewiesenen Permissions.'),

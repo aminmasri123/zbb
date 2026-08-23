@@ -4,6 +4,7 @@
             <li v-if="!displayHideTextSidebar"  class="text-white text-sm font-bold uppercase">
                 <span>{{$t('übersicht')}}</span>
             </li>
+            <li v-if="can('ai.report.use')"><Link :href="route('ai.workspace.index')" class="flex items-center gap-3 rounded-lg px-3 py-2 font-semibold" :class="$page.component.startsWith('Ai/Workspace')?'bg-cyan-50 text-cyan-800':'hover:bg-gray-100'"><span>✦</span><span :class="{'hidden':displayHideTextSidebar===true}">KI-Arbeitsbereich</span></Link></li>
             <!-- Dashboard Submenu -->
             <li v-if="can('dashboard.index')" class="submenu">
                 <a href="#" @click.prevent="toggleMenu('dashboard')" class="flex items-center text-white hover:bg-gray-700 transition duration-200">

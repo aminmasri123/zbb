@@ -30,6 +30,10 @@ class Kernel extends ConsoleKernel
         $schedule->command('chat:purge-expired')
             ->dailyAt('02:45')
             ->withoutOverlapping();
+
+        $schedule->command('ai-workspace:purge-expired')
+            ->everyMinute()
+            ->withoutOverlapping();
     }
 
     /**

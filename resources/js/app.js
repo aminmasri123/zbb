@@ -10,6 +10,7 @@ import { formatDate } from '@/utils/dateFormat.js';
 
 import { createApp, h } from 'vue';
 import { createInertiaApp } from '@inertiajs/vue3';
+import { router } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy/dist/vue.m';
 import i18n from './i18n'; // Stelle sicher, dass i18n korrekt importiert wird
@@ -37,6 +38,12 @@ window.addEventListener("storage", (event) => {
 });
 
 
+
+const startSessionKeepAliveForPage = (pageProps) => {
+    if (pageProps?.auth?.user) {
+        startBackendKeepAlive();
+    }
+};
 
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,
@@ -69,9 +76,12 @@ createInertiaApp({
     // ✅ Und am Ende mounten
     app.mount(el);
 
-    if (props.initialPage?.props?.auth?.user) {
-        startBackendKeepAlive();
-    }
+    startSessionKeepAliveForPage(props.initialPage?.props);
+
+    router.on('finish', (event) => {
+        const page = event.detail?.page || {};
+        startSessionKeepAliveForPage(page.props);
+    });
 
     return app;
 },

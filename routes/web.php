@@ -4,6 +4,8 @@ use App\Http\Controllers\AbschlusseController;
 use App\Http\Controllers\AbteilungController;
 use App\Http\Controllers\AccessManagementController;
 use App\Http\Controllers\AccountDeletionRequestController;
+use App\Http\Controllers\AiReportController;
+use App\Http\Controllers\AiWorkspaceController;
 use App\Http\Controllers\AdresseController;
 use App\Http\Controllers\AnwesenheitController;
 use App\Http\Controllers\AppsController;
@@ -194,6 +196,8 @@ Route::middleware(['module:participant_portal', 'auth', 'participantPortalUser']
     Route::delete('/portal/bewerbungsstudio/dokumente/{document}', [ParticipantCareerStudioController::class, 'destroy'])->name('participant-portal.career-studio.destroy');
     Route::get('/portal/bewerbungsstudio/dokumente/{document}/vorschau', [ParticipantCareerStudioController::class, 'preview'])->name('participant-portal.career-studio.preview');
     Route::get('/portal/bewerbungsstudio/dokumente/{document}/download', [ParticipantCareerStudioController::class, 'download'])->name('participant-portal.career-studio.download');
+    Route::get('/portal/bewerbungsstudio/dokumente/{document}/download-docx', [ParticipantCareerStudioController::class, 'downloadDocx'])->name('participant-portal.career-studio.download-docx');
+    Route::post('/portal/bewerbungsstudio/ki-anschreiben', [ParticipantCareerStudioController::class, 'generateCoverLetter'])->name('participant-portal.career-studio.ai-cover-letter')->middleware('throttle:3,1');
     Route::put('/portal/bewerbungen/{application}/studio-dokumente', [ParticipantApplicationDispatchController::class, 'sync'])->name('participant-portal.applications.career-documents.sync');
     Route::post('/portal/bewerbungen/{application}/notizen', [ParticipantApplicationDispatchController::class, 'note'])->name('participant-portal.applications.notes.store');
     Route::post('/portal/bewerbungen/{application}/versenden', [ParticipantApplicationDispatchController::class, 'send'])->name('participant-portal.applications.send');
@@ -203,6 +207,14 @@ Route::middleware(['module:participant_portal', 'auth', 'participantPortalUser']
     Route::post('/portal/lebenslauf/versionen', [ParticipantCvController::class, 'createVersion'])->name('participant-portal.resume.versions.store');
     Route::get('/portal/lebenslauf/versionen/{version}/download', [ParticipantCvController::class, 'download'])->name('participant-portal.resume.versions.download');
     Route::get('/portal/lebenslauf/versionen/{version}/druck', [ParticipantCvController::class, 'print'])->name('participant-portal.resume.versions.print');
+});
+
+Route::middleware(['auth','can:ai.report.use'])->prefix('ki')->name('ai.workspace.')->group(function () {
+    Route::get('/', [AiWorkspaceController::class, 'index'])->name('index');
+    Route::post('/generieren', [AiWorkspaceController::class, 'generate'])->name('generate')->middleware('throttle:5,1');
+    Route::get('/laeufe/{run}/{format}', [AiWorkspaceController::class, 'export'])->name('export');
+    Route::delete('/laeufe', [AiWorkspaceController::class, 'destroyAll'])->name('destroy-all');
+    Route::delete('/laeufe/{run}', [AiWorkspaceController::class, 'destroy'])->name('destroy');
 });
 
 Route::post('/set-locale', function () {
@@ -225,12 +237,14 @@ Route::get('/system/keepalive', function () {
 // die JSON-Anfrage mit 401, statt unbemerkt eine Loginseite zurückzugeben.
 Route::get('/system/session-status', function () {
     $lifetimeSeconds = max(60, (int) config('session.lifetime', 30) * 60);
-    $lastActivity = (int) session('auth_last_user_activity_at', now()->timestamp);
+    $now = now()->timestamp;
+    $lastActivity = (int) session('auth_last_user_activity_at', $now);
+    $expiresAt = $lastActivity + $lifetimeSeconds;
 
     return response()->json([
         'authenticated' => true,
-        'expires_at' => $lastActivity + $lifetimeSeconds,
-        'remaining_seconds' => max(0, ($lastActivity + $lifetimeSeconds) - now()->timestamp),
+        'expires_at' => $expiresAt,
+        'remaining_seconds' => max(0, $expiresAt - $now),
         'lifetime_seconds' => $lifetimeSeconds,
     ])->withHeaders([
         'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
@@ -241,12 +255,14 @@ Route::get('/system/session-status', function () {
 
 Route::post('/system/session-activity', function () {
     $lifetimeSeconds = max(60, (int) config('session.lifetime', 30) * 60);
-    $lastActivity = (int) session('auth_last_user_activity_at', now()->timestamp);
+    $now = now()->timestamp;
+    $lastActivity = (int) session('auth_last_user_activity_at', $now);
+    $expiresAt = $lastActivity + $lifetimeSeconds;
 
     return response()->json([
         'authenticated' => true,
-        'expires_at' => $lastActivity + $lifetimeSeconds,
-        'remaining_seconds' => $lifetimeSeconds,
+        'expires_at' => $expiresAt,
+        'remaining_seconds' => max(0, $expiresAt - $now),
         'lifetime_seconds' => $lifetimeSeconds,
     ])->withHeaders([
         'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
@@ -269,6 +285,10 @@ Route::middleware('throttle:10,1')->group(function () {
 // Route::middleware(['auth', 'verified', 'injectUserPermissions', 'injectUserProjekte'])->group(function() {
 
 Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'routePermission', 'configuredNotifications'])->group(function () {
+
+    Route::post('/ki/berichte/entwurf', [AiReportController::class, 'store'])
+        ->name('ai.reports.draft')
+        ->middleware('throttle:3,1');
 
     Route::prefix('chat')->name('chat.')->group(function () {
         Route::get('/', [StaffChatController::class, 'index'])->name('index');

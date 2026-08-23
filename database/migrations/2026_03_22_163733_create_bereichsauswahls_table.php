@@ -19,7 +19,11 @@ return new class extends Migration
             $table->foreignId('bereich_id3')->constrained('bereiches')->onDelete('cascade')->nullable();
             $table->foreignId('bereich_id4')->constrained('bereiches')->onDelete('cascade')->nullable();
             $table->foreignId('user_create')->constrained('users')->onDelete('cascade');
-            $table->foreignId('user_update')->constrained('users')->onDelete('cascade')->nullable();
+            $table->unsignedBigInteger('user_update')->nullable();
+            $table->foreign('user_update', 'bereichsauswahls_user_update_fk')
+                ->references('id')
+                ->on('users')
+                ->onDelete('cascade');
             $table->timestamps();
         });
     }

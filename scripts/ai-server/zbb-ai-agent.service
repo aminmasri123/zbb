@@ -1,0 +1,49 @@
+[Unit]
+Description=ZBB Internal AI Agent Service
+After=network-online.target ollama.service
+Wants=network-online.target
+Requires=ollama.service
+
+[Service]
+Type=simple
+User=zbb-agent
+Group=zbb-agent
+WorkingDirectory=/opt/zbb-ai-agent/current
+EnvironmentFile=/etc/zbb-ai-agent/agent.env
+ExecStart=/opt/zbb-ai-agent/current/.venv/bin/uvicorn zbb_agent.main:application --factory --host 127.0.0.1 --port 8000 --workers 1 --no-access-log
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=180
+TimeoutStopSec=30
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectHostname=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictNamespaces=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+UMask=0077
+
+StateDirectory=zbb-ai-agent
+ReadWritePaths=/var/lib/zbb-ai-agent
+MemoryHigh=384M
+MemoryMax=512M
+TasksMax=64
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

@@ -37,4 +37,20 @@ return [
         'timeout' => (int) env('BA_JOBSEARCH_TIMEOUT', 12),
     ],
 
+    'zbb_ai_agent' => [
+        // The production web server reaches the remote loopback listener through
+        // a supervised SSH tunnel. Never point this setting at a LAN listener.
+        'base_url' => env('ZBB_AI_AGENT_BASE_URL', 'http://127.0.0.1:18000'),
+        'key_id' => env('ZBB_AI_AGENT_KEY_ID'),
+        'secret' => env('ZBB_AI_AGENT_SECRET'),
+        'connect_timeout' => (int) env('ZBB_AI_AGENT_CONNECT_TIMEOUT', 3),
+        'timeout' => (int) env('ZBB_AI_AGENT_TIMEOUT', 130),
+        'max_response_bytes' => (int) env('ZBB_AI_AGENT_MAX_RESPONSE_BYTES', 1000000),
+    ],
+
+    'zbb_ai_workspace' => [
+        'pdfinfo' => env('ZBB_PDFINFO_BINARY', 'pdfinfo'),
+        'pdftotext' => env('ZBB_PDFTOTEXT_BINARY', 'pdftotext'),
+    ],
+
 ];

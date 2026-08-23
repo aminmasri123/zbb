@@ -1128,6 +1128,7 @@
 
                 <!-- ================= LuV ================= -->
                 <div v-else-if="activeTab === 'LuV'">
+                    <AiReportDraft v-if="can('ai.report.use')" :participant-id="teilnehmer.id" />
                     <!-- Projekt hinzufügen -->
                     <button @click="showModalLuvCreate = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
                         <span v-if="!loadingProjekt">➕ Luv erstellen</span>
@@ -2086,6 +2087,7 @@
     import DatePicker from 'primevue/datepicker';
     import Modal from '@/Components/ModalForm.vue';
     import ModalLuvCreate from '@/Pages/Teilnehmer/Tabs/LuV/LuVModalCreate.vue';
+    import AiReportDraft from '@/Pages/Teilnehmer/Tabs/LuV/AiReportDraft.vue';
     import ModalPraktikumCreate from '@/Pages/Teilnehmer/Tabs/Praktikum/PraktikumModalCreate.vue';
     import WeeklyAttendance from '@/Pages/Praktikum/WeeklyAttendance.vue';
     import { timeToMinutes, istAnwesend, berechneAbweichungMinuten, formatMinutes, abweichungsIcon, abweichungsClass} from "@/utils/arbeitszeit.js";

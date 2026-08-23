@@ -12,6 +12,7 @@ class RoutePermissionMap
     private const OVERRIDES = [
         'dashboard' => 'dashboard.index',
         'dashboard.preferences.update' => 'dashboard.index',
+        'ai.reports.draft' => 'ai.report.use',
         'program-feedback.index' => [],
         'program-feedback.store' => [],
         'program-feedback.update' => 'program-feedback.manage',

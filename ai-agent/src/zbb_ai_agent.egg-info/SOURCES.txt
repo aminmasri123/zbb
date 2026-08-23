@@ -1,0 +1,16 @@
+pyproject.toml
+src/zbb_agent/__init__.py
+src/zbb_agent/auth.py
+src/zbb_agent/config.py
+src/zbb_agent/main.py
+src/zbb_agent/ollama.py
+src/zbb_agent/schemas.py
+src/zbb_agent/service.py
+src/zbb_agent/tools.py
+src/zbb_ai_agent.egg-info/PKG-INFO
+src/zbb_ai_agent.egg-info/SOURCES.txt
+src/zbb_ai_agent.egg-info/dependency_links.txt
+src/zbb_ai_agent.egg-info/requires.txt
+src/zbb_ai_agent.egg-info/top_level.txt
+tests/test_auth.py
+tests/test_service.py
