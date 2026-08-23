@@ -95,8 +95,16 @@
 
                         <div class="grid gap-2 text-xs text-indigo-900 sm:grid-cols-3">
                             <span><strong>Stand:</strong> {{ runStatus.status || 'Wartet' }}</span>
-                            <span><strong>Laufzeit:</strong> {{ formatDuration(runStatus.elapsed_seconds) }}</span>
+                            <span><strong>Laufzeit:</strong> {{ formatDuration(displayedElapsedSeconds) }}</span>
                             <span v-if="runStatus.estimated_remaining_seconds !== null"><strong>Noch ca.:</strong> {{ formatDuration(runStatus.estimated_remaining_seconds) }}</span>
+                        </div>
+
+                        <div v-if="runStatus.queue_warning" class="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" role="alert">
+                            {{ runStatus.queue_warning }}
+                        </div>
+
+                        <div v-if="errorMessage" class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">
+                            {{ errorMessage }}
                         </div>
 
                         <p v-if="runId" class="text-xs text-gray-500">Lauf-ID: {{ runId }}</p>
@@ -167,14 +175,17 @@ const loading = ref(false);
 const errorMessage = ref('');
 const draft = ref(null);
 const runId = ref('');
+const clientElapsedSeconds = ref(0);
 const runStatus = reactive({
     status: '',
     status_label: '',
     progress_percent: 0,
     elapsed_seconds: 0,
     estimated_remaining_seconds: null,
+    queue_warning: null,
 });
 let pollTimer = null;
+let elapsedTimer = null;
 
 const form = reactive({
     from_date: isoDate(startOfYear),
@@ -183,6 +194,10 @@ const form = reactive({
 });
 
 const isWorking = computed(() => runStatus.status === 'queued' || runStatus.status === 'running');
+const displayedElapsedSeconds = computed(() => Math.max(
+    Number(runStatus.elapsed_seconds) || 0,
+    clientElapsedSeconds.value,
+));
 
 const formatDuration = (seconds) => {
     if (seconds === null || seconds === undefined) {
@@ -210,6 +225,11 @@ const stopPolling = () => {
         clearInterval(pollTimer);
         pollTimer = null;
     }
+
+    if (elapsedTimer !== null) {
+        clearInterval(elapsedTimer);
+        elapsedTimer = null;
+    }
 };
 
 const pollStatus = async () => {
@@ -226,6 +246,8 @@ const pollStatus = async () => {
         runStatus.progress_percent = Number(payload.progress_percent) || 0;
         runStatus.elapsed_seconds = payload.elapsed_seconds ?? null;
         runStatus.estimated_remaining_seconds = payload.estimated_remaining_seconds ?? null;
+        runStatus.queue_warning = payload.queue_warning ?? null;
+        clientElapsedSeconds.value = Math.max(clientElapsedSeconds.value, Number(payload.elapsed_seconds) || 0);
 
         if (payload.status === 'completed') {
             draft.value = payload.report || null;
@@ -261,6 +283,9 @@ const pollStatus = async () => {
 const startPolling = () => {
     stopPolling();
     pollTimer = window.setInterval(pollStatus, 2500);
+    elapsedTimer = window.setInterval(() => {
+        clientElapsedSeconds.value += 1;
+    }, 1000);
 };
 
 const open = () => {
@@ -284,6 +309,8 @@ const reset = () => {
     runStatus.progress_percent = 0;
     runStatus.elapsed_seconds = 0;
     runStatus.estimated_remaining_seconds = null;
+    runStatus.queue_warning = null;
+    clientElapsedSeconds.value = 0;
 };
 
 const reportTypeLabel = (type) => ({ luv: 'LuV-Bericht', interim: 'Zwischenbericht', final: 'Abschlussbericht' }[type] || type);
@@ -298,6 +325,8 @@ const generate = async () => {
     runStatus.progress_percent = 0;
     runStatus.elapsed_seconds = 0;
     runStatus.estimated_remaining_seconds = null;
+    runStatus.queue_warning = null;
+    clientElapsedSeconds.value = 0;
 
     try {
         const response = await axios.post(route('ai.reports.draft'), {
@@ -310,7 +339,9 @@ const generate = async () => {
 
         runId.value = response.data.run_id || '';
         await pollStatus();
-        startPolling();
+        if (isWorking.value) {
+            startPolling();
+        }
     } catch (error) {
         const status = error.response?.status;
         const validationErrors = error.response?.data?.errors;

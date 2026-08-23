@@ -41,15 +41,23 @@ ZBB_AI_AGENT_TIMEOUT=130
 ZBB_AI_AGENT_MAX_RESPONSE_BYTES=1000000
 AI_REPORT_QUEUE_CONNECTION=database
 QUEUE_CONNECTION=database
+DB_QUEUE_RETRY_AFTER=1260
 ```
 
-Damit LuV-Generierungen wirklich im Hintergrund laufen (statt im Request zu blockieren), die Queue-Tabelle anlegen und Worker starten:
+Damit LuV-Generierungen wirklich im Hintergrund laufen, muss der Worker als dauerhafter systemd-Dienst aktiv sein. Nach dem Pull genügt auf dem Webserver:
 
 ```bash
-php artisan queue:table
-php artisan migrate --force
+sudo bash scripts/web-server/install-zbb-queue-worker.sh /var/www/matrix
+```
 
-php artisan queue:work database --queue=default --sleep=1 --tries=1 --timeout=1200 --memory=256 >> /var/log/zbb-queue-worker.log 2>&1 &
+Das Skript migriert die versionierte `jobs`-Tabelle, cached die Konfiguration und installiert `zbb-laravel-queue.service`. Ein mit `&` gestarteter Worker reicht nicht, weil er beim Logout oder Neustart verschwinden kann.
+
+Prüfung:
+
+```bash
+systemctl is-active zbb-laravel-queue.service
+systemctl status zbb-laravel-queue.service --no-pager -l
+sudo -u www-data php artisan queue:failed
 ```
 
 Der bestehende Tunnel wird als systemd-Service mit `-L 127.0.0.1:18000:127.0.0.1:8000`, eigenem SSH-Schlüssel, `ExitOnForwardFailure=yes`, `ServerAliveInterval=30` und `Restart=always` eingerichtet. Niemals Agent oder Ollama an `0.0.0.0` binden.

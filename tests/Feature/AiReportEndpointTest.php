@@ -3,15 +3,18 @@
 namespace Tests\Feature;
 
 use App\Jobs\GenerateAiReportJob;
-use App\Models\Personen;
 use App\Models\AiReportRun;
+use App\Models\Personen;
 use App\Models\Projekt;
 use App\Models\ProjektHasPersonen;
 use App\Models\Role;
 use App\Models\RoleDataAccessSetting;
 use App\Models\User;
+use App\Services\Ai\AiReportOrchestrator;
 use App\Services\Ai\Tools\GetProjectReportRulesTool;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -146,6 +149,90 @@ class AiReportEndpointTest extends TestCase
             ->assertOk()
             ->assertJsonPath('status', 'failed')
             ->assertJsonPath('error_code', 'agent_unavailable');
+    }
+
+    public function test_queued_status_reports_real_elapsed_time_and_worker_warning(): void
+    {
+        Carbon::setTestNow('2026-08-23 12:01:00');
+        [$user, $project, $participant] = $this->context(true);
+
+        $run = AiReportRun::query()->create([
+            'run_uuid' => '123e4567-e89b-12d3-a456-426614174003',
+            'user_id' => $user->id,
+            'project_id' => $project->id,
+            'participant_id' => $participant->id,
+            'report_type' => 'luv',
+            'from_date' => '2026-01-01',
+            'until_date' => '2026-06-30',
+            'request' => 'Erstelle einen belegten Entwurf.',
+            'status' => 'queued',
+            'progress_percent' => 0,
+        ]);
+        $run->forceFill(['created_at' => Carbon::parse('2026-08-23 12:00:00')])->save();
+
+        $this->actingAs($user)->getJson('/ki/berichte/entwurf/'.$run->run_uuid)
+            ->assertOk()
+            ->assertJsonPath('status', 'queued')
+            ->assertJsonPath('elapsed_seconds', 60)
+            ->assertJsonPath(
+                'queue_warning',
+                'Der Auftrag wartet noch auf den Hintergrunddienst. Bitte den Queue-Worker auf dem Webserver prüfen.',
+            );
+
+        Carbon::setTestNow();
+    }
+
+    public function test_worker_sends_model_cast_dates_as_iso_dates(): void
+    {
+        [$user, $project, $participant] = $this->context(true);
+        $run = AiReportRun::query()->create([
+            'run_uuid' => '123e4567-e89b-42d3-a456-426614174004',
+            'user_id' => $user->id,
+            'project_id' => $project->id,
+            'participant_id' => $participant->id,
+            'report_type' => 'luv',
+            'from_date' => '2026-01-01',
+            'until_date' => '2026-06-30',
+            'request' => 'Erstelle einen belegten Entwurf.',
+            'status' => 'queued',
+        ]);
+
+        Http::fake(function (Request $request) {
+            $payload = $request->data();
+
+            return Http::response([
+                'kind' => 'final',
+                'run_id' => $payload['run_id'],
+                'report' => [
+                    'report_type' => 'luv',
+                    'title' => 'Testentwurf',
+                    'sections' => [[
+                        'heading' => 'Datenlage',
+                        'claims' => [[
+                            'claim_id' => 'missing-1',
+                            'text' => 'Daten fehlen.',
+                            'status' => 'insufficient_data',
+                            'source_ids' => [],
+                        ]],
+                    ]],
+                    'warnings' => [],
+                ],
+            ]);
+        });
+
+        (new GenerateAiReportJob($run->run_uuid))->handle(app(AiReportOrchestrator::class));
+
+        $this->assertDatabaseHas('ai_report_runs', [
+            'run_uuid' => $run->run_uuid,
+            'status' => 'completed',
+            'progress_percent' => 100,
+        ]);
+        Http::assertSent(function (Request $request): bool {
+            $payload = $request->data();
+
+            return ($payload['period']['from_date'] ?? null) === '2026-01-01'
+                && ($payload['period']['until_date'] ?? null) === '2026-06-30';
+        });
     }
 
     /** @return array{User, Projekt, Personen} */

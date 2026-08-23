@@ -33,6 +33,8 @@ If evidence is missing, emit an insufficient_data claim without source_ids.
 Never change or guess participant_id, project_id, report period, or report type.
 Return only the requested structured report or an allowed tool call.
 The report is always a draft and can never approve or send itself.
+Keep the report concise: at most 6 sections, at most 3 claims per section, and at most
+2 short sentences per claim.
 Never use general world knowledge for political or legal role definitions, current office holders,
 or other time-sensitive facts unless they are explicitly provided by a trusted tool result.
 When evidence is missing for any fact claim, label it with status insufficient_data and avoid
@@ -50,14 +52,23 @@ class AgentService:
         self.ollama = ollama
 
     async def next_turn(self, request: AgentTurnRequest) -> AgentTurnResponse:
+        has_evidence = bool(request.tool_results)
         payload = {
-            "model": self.settings.ollama_model,
+            "model": self.settings.ollama_report_model or self.settings.ollama_model,
             "stream": False,
             "think": False,
             "messages": self._messages(request),
-            "tools": ollama_tools(request.allowed_tools),
-            "options": {"temperature": 0},
+            "keep_alive": "10m",
+            "options": {
+                "temperature": 0,
+                "num_ctx": 4096,
+                "num_predict": 900 if has_evidence else 160,
+            },
         }
+        if has_evidence:
+            payload["format"] = "json"
+        else:
+            payload["tools"] = ollama_tools(request.allowed_tools)
         response = await self.ollama.chat(payload)
         message = response.get("message")
         if not isinstance(message, dict):

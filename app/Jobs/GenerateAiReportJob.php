@@ -15,11 +15,14 @@ use Throwable;
 
 class GenerateAiReportJob implements ShouldQueue
 {
-    use Queueable, InteractsWithQueue;
+    use InteractsWithQueue, Queueable;
 
     public int $timeout = 1200;
+
     public int $tries = 1;
+
     public bool $failOnTimeout = true;
+
     public string $runUuid;
 
     public function __construct(string $runUuid)
@@ -50,22 +53,24 @@ class GenerateAiReportJob implements ShouldQueue
             return;
         }
 
-        $originalProjectId = (int) $user->current_team_id;
         $run->forceFill([
             'status' => 'running',
             'started_at' => now(),
             'progress_percent' => 10,
         ])->save();
 
-        $user->forceFill(['current_team_id' => $run->project_id])->save();
+        // The project was authorized when the run was created. Use it only on
+        // this in-memory worker model; never overwrite the user's active
+        // project in the database while they continue working in the UI.
+        $user->setAttribute('current_team_id', $run->project_id);
 
         try {
             $draft = $orchestrator->draft(
                 $user,
                 (int) $run->participant_id,
                 (string) $run->report_type,
-                (string) $run->from_date,
-                (string) $run->until_date,
+                $run->from_date->toDateString(),
+                $run->until_date->toDateString(),
                 (string) $run->request,
             );
 
@@ -74,9 +79,7 @@ class GenerateAiReportJob implements ShouldQueue
                 'progress_percent' => 100,
                 'report' => $draft,
                 'completed_at' => now(),
-                'duration_seconds' => $run->started_at
-                    ? now()->diffInSeconds($run->started_at)
-                    : null,
+                'duration_seconds' => $this->durationSeconds($run),
                 'error_code' => null,
                 'error_message' => null,
             ]);
@@ -85,9 +88,7 @@ class GenerateAiReportJob implements ShouldQueue
                 'status' => 'failed',
                 'progress_percent' => 100,
                 'completed_at' => now(),
-                'duration_seconds' => $run->started_at
-                    ? now()->diffInSeconds($run->started_at)
-                    : null,
+                'duration_seconds' => $this->durationSeconds($run),
                 'error_code' => 'authorization_error',
                 'error_message' => 'Nicht berechtigt, diesen Teilnehmer zu verarbeiten.',
             ]);
@@ -96,9 +97,7 @@ class GenerateAiReportJob implements ShouldQueue
                 'status' => 'failed',
                 'progress_percent' => 100,
                 'completed_at' => now(),
-                'duration_seconds' => $run->started_at
-                    ? now()->diffInSeconds($run->started_at)
-                    : null,
+                'duration_seconds' => $this->durationSeconds($run),
                 'error_code' => 'agent_unavailable',
                 'error_message' => 'Der KI-Dienst war nicht erreichbar oder lieferte eine ungültige Antwort.',
             ]);
@@ -111,14 +110,10 @@ class GenerateAiReportJob implements ShouldQueue
                 'status' => 'failed',
                 'progress_percent' => 100,
                 'completed_at' => now(),
-                'duration_seconds' => $run->started_at
-                    ? now()->diffInSeconds($run->started_at)
-                    : null,
+                'duration_seconds' => $this->durationSeconds($run),
                 'error_code' => 'internal_error',
                 'error_message' => 'Der KI-Dienst konnte nicht verarbeitet werden.',
             ]);
-        } finally {
-            $user->forceFill(['current_team_id' => $originalProjectId])->save();
         }
     }
 
@@ -133,11 +128,16 @@ class GenerateAiReportJob implements ShouldQueue
             'status' => 'failed',
             'progress_percent' => 100,
             'completed_at' => now(),
-            'duration_seconds' => $run->started_at
-                ? now()->diffInSeconds($run->started_at)
-                : null,
+            'duration_seconds' => $this->durationSeconds($run),
             'error_code' => 'worker_failed',
             'error_message' => 'Der KI-Worker ist unerwartet beendet.',
         ]);
+    }
+
+    private function durationSeconds(AiReportRun $run): ?int
+    {
+        return $run->started_at
+            ? max(0, (int) floor($run->started_at->diffInSeconds(now(), true)))
+            : null;
     }
 }

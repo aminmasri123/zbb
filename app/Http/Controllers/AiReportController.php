@@ -44,7 +44,7 @@ final class AiReportController extends Controller
                 'request' => $data['request'],
             ]);
 
-            $queueConnection = env('AI_REPORT_QUEUE_CONNECTION', config('queue.default', 'database'));
+            $queueConnection = (string) config('queue.ai_report_connection', config('queue.default', 'sync'));
             GenerateAiReportJob::dispatch($reportRun->run_uuid)->onConnection($queueConnection);
         } catch (AgentUnavailableException) {
             return response()->json([
@@ -75,9 +75,8 @@ final class AiReportController extends Controller
         }
 
         $status = (string) $runModel->status;
-        $elapsedSeconds = $runModel->started_at
-            ? now()->diffInSeconds($runModel->started_at)
-            : now()->diffInSeconds($runModel->created_at);
+        $elapsedFrom = $runModel->started_at ?? $runModel->created_at;
+        $elapsedSeconds = max(0, (int) floor($elapsedFrom->diffInSeconds(now(), true)));
 
         $estimatedRemainingSeconds = null;
         if ($status !== 'completed' && $status !== 'failed' && $runModel->started_at !== null) {
@@ -109,6 +108,9 @@ final class AiReportController extends Controller
             'progress_percent' => (int) $runModel->progress_percent,
             'report_type' => (string) $runModel->report_type,
             'created_at' => $runModel->created_at->toIso8601String(),
+            'queue_warning' => $status === 'queued' && $elapsedSeconds >= 30
+                ? 'Der Auftrag wartet noch auf den Hintergrunddienst. Bitte den Queue-Worker auf dem Webserver prüfen.'
+                : null,
         ];
 
         if ($runModel->status === 'completed') {

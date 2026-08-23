@@ -11,6 +11,7 @@ class Settings:
     service_secret: str
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "qwen3:1.7b"
+    ollama_report_model: str = ""
     ollama_vision_model: str = "qwen3-vl:2b-instruct"
     request_max_bytes: int = 16_000_000
     signature_max_age_seconds: int = 60
@@ -25,6 +26,10 @@ class Settings:
                 "ZBB_OLLAMA_BASE_URL", "http://127.0.0.1:11434"
             ).rstrip("/"),
             ollama_model=os.environ.get("ZBB_OLLAMA_MODEL", "qwen3:1.7b").strip(),
+            ollama_report_model=os.environ.get(
+                "ZBB_OLLAMA_REPORT_MODEL",
+                os.environ.get("ZBB_OLLAMA_MODEL", "qwen3:1.7b"),
+            ).strip(),
             ollama_vision_model=os.environ.get("ZBB_OLLAMA_VISION_MODEL", "qwen3-vl:2b-instruct").strip(),
             request_max_bytes=int(os.environ.get("ZBB_AGENT_REQUEST_MAX_BYTES", "16000000")),
             signature_max_age_seconds=int(
@@ -42,6 +47,8 @@ class Settings:
             raise ValueError("ZBB_AGENT_SECRET must contain at least 32 bytes")
         if not self.ollama_model:
             raise ValueError("ZBB_OLLAMA_MODEL is required")
+        if not (self.ollama_report_model or self.ollama_model):
+            raise ValueError("ZBB_OLLAMA_REPORT_MODEL is required")
         if not self.ollama_vision_model:
             raise ValueError("ZBB_OLLAMA_VISION_MODEL is required")
         if self.request_max_bytes < 1_024:

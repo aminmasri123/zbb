@@ -255,3 +255,44 @@ async def test_final_report_accepts_known_sources_and_missing_data_marker() -> N
 
     assert result.kind == "final"
     assert result.report.sections[0].claims[0].source_ids == ["note-1"]
+
+
+@pytest.mark.asyncio
+async def test_evidence_turn_uses_fast_report_model_and_bounded_json_output() -> None:
+    fake = FakeOllama({
+        "message": {
+            "content": """{
+                "report_type":"luv",
+                "title":"Kurzer Entwurf",
+                "sections":[{
+                    "heading":"Datenlage",
+                    "claims":[{
+                        "claim_id":"c1",
+                        "text":"Dokumentierte Aussage",
+                        "status":"supported",
+                        "source_ids":["note-1"]
+                    }]
+                }],
+                "warnings":[]
+            }"""
+        }
+    })
+    settings = Settings(
+        service_key_id="laravel",
+        service_secret="x" * 32,
+        ollama_model="qwen3:4b-instruct-2507-q4_K_M",
+        ollama_report_model="qwen3:1.7b",
+    )
+    tool_results = [
+        ToolResultMessage(
+            tool_name=ToolName.LUV_DATA,
+            content={"items": [{"source_id": "note-1", "text": "Dokumentiert"}]},
+        )
+    ]
+
+    await AgentService(settings, fake).next_turn(request(tool_results=tool_results))
+
+    assert fake.payload["model"] == "qwen3:1.7b"
+    assert fake.payload["format"] == "json"
+    assert "tools" not in fake.payload
+    assert fake.payload["options"]["num_predict"] == 900

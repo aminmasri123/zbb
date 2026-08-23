@@ -36,7 +36,7 @@ class AiReportOrchestratorTest extends TestCase
         Http::preventStrayRequests();
     }
 
-    public function test_it_authorizes_and_executes_model_tool_calls_inside_laravel(): void
+    public function test_it_prefetches_all_authorized_tools_and_uses_one_agent_request(): void
     {
         [$user, $project, $participant] = $this->context();
         $runId = null;
@@ -46,18 +46,6 @@ class AiReportOrchestratorTest extends TestCase
             $requestNumber++;
             $payload = $request->data();
             $runId ??= $payload['run_id'];
-
-            if ($requestNumber === 1) {
-                return Http::response([
-                    'kind' => 'tool_calls',
-                    'run_id' => $runId,
-                    'calls' => [[
-                        'call_id' => 'rules-1',
-                        'name' => GetProjectReportRulesTool::NAME,
-                        'arguments' => [],
-                    ]],
-                ]);
-            }
 
             return Http::response([
                 'kind' => 'final',
@@ -89,11 +77,11 @@ class AiReportOrchestratorTest extends TestCase
         );
 
         $this->assertSame('Entwurf', $result['report']['title']);
-        $this->assertSame(2, $requestNumber);
+        $this->assertSame(1, $requestNumber);
         Http::assertSent(function (Request $request) use ($project): bool {
             $results = $request->data()['tool_results'] ?? [];
 
-            return $results !== []
+            return count($results) === 5
                 && $results[0]['tool_name'] === GetProjectReportRulesTool::NAME
                 && $results[0]['content']['project_id'] === $project->id;
         });
@@ -120,7 +108,7 @@ class AiReportOrchestratorTest extends TestCase
         }
     }
 
-    public function test_it_rejects_a_replayed_tool_call_id(): void
+    public function test_it_rejects_tool_calls_after_all_evidence_was_prefetched(): void
     {
         [$user, , $participant] = $this->context();
         $runId = null;

@@ -16,6 +16,12 @@ return [
     'default' => env('QUEUE_CONNECTION', 'sync'),
 
     /*
+    | The LuV generator must use a real background queue in production. Keep
+    | this in configuration so it also works when Laravel config is cached.
+    */
+    'ai_report_connection' => env('AI_REPORT_QUEUE_CONNECTION', env('QUEUE_CONNECTION', 'sync')),
+
+    /*
     |--------------------------------------------------------------------------
     | Queue Connections
     |--------------------------------------------------------------------------
@@ -38,7 +44,8 @@ return [
             'driver' => 'database',
             'table' => 'jobs',
             'queue' => 'default',
-            'retry_after' => 90,
+            // Must be longer than GenerateAiReportJob::$timeout (1200 seconds).
+            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 1260),
             'after_commit' => false,
         ],
 
