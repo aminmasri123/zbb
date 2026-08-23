@@ -13,6 +13,7 @@ class RoutePermissionMap
         'dashboard' => 'dashboard.index',
         'dashboard.preferences.update' => 'dashboard.index',
         'ai.reports.draft' => 'ai.report.use',
+        'ai.reports.status' => 'ai.report.use',
         'program-feedback.index' => [],
         'program-feedback.store' => [],
         'program-feedback.update' => 'program-feedback.manage',

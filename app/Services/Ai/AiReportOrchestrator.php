@@ -34,18 +34,51 @@ final class AiReportOrchestrator
         string $untilDate,
         string $userRequest,
     ): array {
+        $context = $this->createDraftContext($user, $participantId, $fromDate, $untilDate);
+
+        return $this->runDraft($user, $context, $reportType, $fromDate, $untilDate, $userRequest);
+    }
+
+    public function createDraftContext(User $user, int $participantId, string $fromDate, string $untilDate): AiRunContext
+    {
         $projectId = (int) $user->current_team_id;
         if ($projectId < 1) {
             throw new AuthorizationException('Fuer den KI-Lauf ist kein aktives Projekt autorisiert.');
         }
 
-        $allowedTools = [GetProjectReportRulesTool::NAME,GetParticipantIdentitySummaryTool::NAME,GetParticipantLuvDataTool::NAME,GetAttendanceSummaryTool::NAME,GetDocumentationEntriesTool::NAME];
+        $allowedTools = [
+            GetProjectReportRulesTool::NAME,
+            GetParticipantIdentitySummaryTool::NAME,
+            GetParticipantLuvDataTool::NAME,
+            GetAttendanceSummaryTool::NAME,
+            GetDocumentationEntriesTool::NAME,
+        ];
         $context = new AiRunContext((int) $user->getKey(), $projectId, $allowedTools, $participantId, $fromDate, $untilDate);
 
         // This authorization must happen before the model is contacted. A model
         // returning a final response immediately must never bypass Laravel.
         $this->authorizer->authorize($user, $context, GetProjectReportRulesTool::PERMISSION);
         $this->authorizeParticipant($user, $projectId, $participantId);
+
+        return $context;
+    }
+
+    /**
+     * @return array{run_id: string, report: array<string, mixed>}
+     */
+    private function runDraft(
+        User $user,
+        AiRunContext $context,
+        string $reportType,
+        string $fromDate,
+        string $untilDate,
+        string $userRequest,
+    ): array {
+        $projectId = $context->projectId;
+        $participantId = $context->participantId;
+        if ($participantId === null) {
+            throw new AuthorizationException('Der Teilnehmer ist fuer diesen KI-Lauf nicht autorisiert.');
+        }
 
         $runId = (string) Str::uuid();
         $toolResults = [];
@@ -60,7 +93,7 @@ final class AiReportOrchestrator
                 fromDate: $fromDate,
                 untilDate: $untilDate,
                 userRequest: $userRequest,
-                allowedTools: $allowedTools,
+                allowedTools: $context->allowedTools,
                 toolResults: $toolResults,
             ));
 

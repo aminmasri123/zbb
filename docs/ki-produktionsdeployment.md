@@ -39,6 +39,17 @@ ZBB_AI_AGENT_SECRET=<identisches, mindestens 32 Byte langes Secret>
 ZBB_AI_AGENT_CONNECT_TIMEOUT=3
 ZBB_AI_AGENT_TIMEOUT=130
 ZBB_AI_AGENT_MAX_RESPONSE_BYTES=1000000
+AI_REPORT_QUEUE_CONNECTION=database
+QUEUE_CONNECTION=database
+```
+
+Damit LuV-Generierungen wirklich im Hintergrund laufen (statt im Request zu blockieren), die Queue-Tabelle anlegen und Worker starten:
+
+```bash
+php artisan queue:table
+php artisan migrate --force
+
+php artisan queue:work database --queue=default --sleep=1 --tries=1 --timeout=1200 --memory=256 >> /var/log/zbb-queue-worker.log 2>&1 &
 ```
 
 Der bestehende Tunnel wird als systemd-Service mit `-L 127.0.0.1:18000:127.0.0.1:8000`, eigenem SSH-Schlüssel, `ExitOnForwardFailure=yes`, `ServerAliveInterval=30` und `Restart=always` eingerichtet. Niemals Agent oder Ollama an `0.0.0.0` binden.

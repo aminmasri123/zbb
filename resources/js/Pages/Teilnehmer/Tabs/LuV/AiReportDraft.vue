@@ -31,11 +31,11 @@
                         </div>
                         <p class="mt-1 text-sm text-gray-500">Teilnehmer-ID {{ participantId }} · menschliche Prüfung erforderlich</p>
                     </div>
-                    <button type="button" class="rounded-lg p-2 text-xl text-gray-400 hover:bg-gray-100 hover:text-gray-700" aria-label="Dialog schließen" @click="close">×</button>
+                    <button type="button" class="rounded-lg p-2 text-xl text-gray-400 hover:bg-gray-100 hover:text-gray-700" aria-label="Dialog schließen" :disabled="loading" @click="close">×</button>
                 </header>
 
                 <div class="space-y-6 p-6">
-                    <form v-if="!draft" class="space-y-5" @submit.prevent="generate">
+                    <form v-if="!draft && !isWorking" class="space-y-5" @submit.prevent="generate">
                         <div class="grid gap-4 sm:grid-cols-2">
                             <label class="block">
                                 <span class="mb-1 block text-sm font-semibold text-gray-700">Berichtszeitraum von</span>
@@ -69,14 +69,40 @@
                         </div>
 
                         <div class="flex justify-end gap-3">
-                            <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" :disabled="loading" @click="close">Abbrechen</button>
+                            <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60" :disabled="loading" @click="close">Abbrechen</button>
                             <button type="submit" class="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-wait disabled:opacity-60" :disabled="loading">
                                 {{ loading ? 'KI verarbeitet den Entwurf …' : 'Entwurf erzeugen' }}
                             </button>
                         </div>
                     </form>
 
-                    <div v-else class="space-y-5">
+                    <section v-if="isWorking && !draft" class="space-y-4 rounded-xl border border-indigo-200 bg-indigo-50 p-5">
+                        <div class="flex items-center gap-3">
+                            <div class="h-4 w-4 animate-pulse rounded-full bg-indigo-500"></div>
+                            <p class="text-sm font-semibold text-indigo-900">KI verarbeitet den Entwurf...</p>
+                        </div>
+
+                        <p class="text-sm text-indigo-800">
+                            {{ runStatus.status_label || 'Warte auf KI-Verarbeitung…' }}
+                        </p>
+
+                        <div class="h-3 w-full overflow-hidden rounded-full bg-indigo-200">
+                            <div
+                                class="h-3 rounded-full bg-gradient-to-r from-indigo-500 to-indigo-700 transition-all duration-300"
+                                :style="{ width: `${Math.min(100, Math.max(0, Number(runStatus.progress_percent) || 0))}%` }"
+                            ></div>
+                        </div>
+
+                        <div class="grid gap-2 text-xs text-indigo-900 sm:grid-cols-3">
+                            <span><strong>Stand:</strong> {{ runStatus.status || 'Wartet' }}</span>
+                            <span><strong>Laufzeit:</strong> {{ formatDuration(runStatus.elapsed_seconds) }}</span>
+                            <span v-if="runStatus.estimated_remaining_seconds !== null"><strong>Noch ca.:</strong> {{ formatDuration(runStatus.estimated_remaining_seconds) }}</span>
+                        </div>
+
+                        <p v-if="runId" class="text-xs text-gray-500">Lauf-ID: {{ runId }}</p>
+                    </section>
+
+                    <div v-else-if="draft" class="space-y-5">
                         <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                             <strong>Nicht freigegeben:</strong> Dieser Entwurf wurde weder als LuV gespeichert noch versendet.
                         </div>
@@ -102,7 +128,7 @@
                             <p v-else class="text-sm italic text-gray-500">Dieser Abschnitt enthält keine Aussagen.</p>
                         </section>
 
-                        <div v-if="draft.warnings.length" class="rounded-lg border border-orange-200 bg-orange-50 p-4">
+                            <div v-if="draft.warnings.length" class="rounded-lg border border-orange-200 bg-orange-50 p-4">
                             <h4 class="mb-2 text-sm font-semibold text-orange-900">Hinweise</h4>
                             <ul class="list-disc space-y-1 pl-5 text-sm text-orange-800">
                                 <li v-for="warning in draft.warnings" :key="warning">{{ warning }}</li>
@@ -110,9 +136,13 @@
                         </div>
 
                         <div class="flex flex-wrap justify-end gap-3">
-                            <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50" @click="reset">Neuen Entwurf erstellen</button>
+                            <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100" @click="reset">Neuen Entwurf erstellen</button>
                             <button type="button" class="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800" @click="close">Schließen</button>
                         </div>
+                    </div>
+
+                    <div v-else class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                        <p>{{ errorMessage }}</p>
                     </div>
                 </div>
             </div>
@@ -122,7 +152,7 @@
 
 <script setup>
 import axios from 'axios';
-import { reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, reactive, ref } from 'vue';
 
 const props = defineProps({
     participantId: { type: Number, required: true },
@@ -137,11 +167,101 @@ const loading = ref(false);
 const errorMessage = ref('');
 const draft = ref(null);
 const runId = ref('');
+const runStatus = reactive({
+    status: '',
+    status_label: '',
+    progress_percent: 0,
+    elapsed_seconds: 0,
+    estimated_remaining_seconds: null,
+});
+let pollTimer = null;
+
 const form = reactive({
     from_date: isoDate(startOfYear),
     until_date: isoDate(today),
-    request: 'Erstelle einen sachlichen LuV-Entwurf. Verwende ausschließlich belegte Informationen und kennzeichne fehlende Daten deutlich.',
+    request: 'Erstelle einen sachlichen LuV-Entwurf. Verwende ausschliesslich belegte Informationen und kennzeichne fehlende Daten deutlich.',
 });
+
+const isWorking = computed(() => runStatus.status === 'queued' || runStatus.status === 'running');
+
+const formatDuration = (seconds) => {
+    if (seconds === null || seconds === undefined) {
+        return '—';
+    }
+
+    const safeSeconds = Math.max(0, Number(seconds));
+    if (!Number.isFinite(safeSeconds)) {
+        return '—';
+    }
+
+    const rounded = Math.round(safeSeconds);
+    const minutes = Math.floor(rounded / 60);
+    const secs = rounded % 60;
+
+    if (minutes > 0) {
+        return `${minutes} min ${secs.toString().padStart(2, '0')} s`;
+    }
+
+    return `${secs} s`;
+};
+
+const stopPolling = () => {
+    if (pollTimer !== null) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
+};
+
+const pollStatus = async () => {
+    if (!runId.value) {
+        return;
+    }
+
+    try {
+        const statusResponse = await axios.get(route('ai.reports.status', { run: runId.value }));
+        const payload = statusResponse.data || {};
+
+        runStatus.status = payload.status || '';
+        runStatus.status_label = payload.status_label || '';
+        runStatus.progress_percent = Number(payload.progress_percent) || 0;
+        runStatus.elapsed_seconds = payload.elapsed_seconds ?? null;
+        runStatus.estimated_remaining_seconds = payload.estimated_remaining_seconds ?? null;
+
+        if (payload.status === 'completed') {
+            draft.value = payload.report || null;
+            loading.value = false;
+            stopPolling();
+            return;
+        }
+
+        if (payload.status === 'failed') {
+            loading.value = false;
+            errorMessage.value = payload.error_message || 'Der KI-Dienst konnte die Anfrage nicht verarbeiten.';
+            stopPolling();
+            return;
+        }
+    } catch (error) {
+        if (error.response?.status === 404) {
+            loading.value = false;
+            errorMessage.value = 'Dieser KI-Lauf wurde nicht gefunden.';
+            stopPolling();
+            return;
+        }
+
+        if (error.response?.status === 429) {
+            errorMessage.value = 'Zu viele KI-Anfragen. Bitte warte kurz und versuche es erneut.';
+            return;
+        }
+
+        errorMessage.value = 'Der Status der KI-Verarbeitung konnte nicht abgefragt werden.';
+        return;
+    }
+};
+
+const startPolling = () => {
+    stopPolling();
+    pollTimer = window.setInterval(pollStatus, 2500);
+};
 
 const open = () => {
     visible.value = true;
@@ -149,20 +269,35 @@ const open = () => {
 };
 
 const close = () => {
-    if (!loading.value) visible.value = false;
+    if (!loading.value) {
+        visible.value = false;
+        stopPolling();
+    }
 };
 
 const reset = () => {
     draft.value = null;
     runId.value = '';
     errorMessage.value = '';
+    runStatus.status = '';
+    runStatus.status_label = '';
+    runStatus.progress_percent = 0;
+    runStatus.elapsed_seconds = 0;
+    runStatus.estimated_remaining_seconds = null;
 };
 
 const reportTypeLabel = (type) => ({ luv: 'LuV-Bericht', interim: 'Zwischenbericht', final: 'Abschlussbericht' }[type] || type);
 
 const generate = async () => {
     loading.value = true;
+    draft.value = null;
     errorMessage.value = '';
+    stopPolling();
+    runStatus.status = 'queued';
+    runStatus.status_label = 'Warte auf KI-Verarbeitung';
+    runStatus.progress_percent = 0;
+    runStatus.elapsed_seconds = 0;
+    runStatus.estimated_remaining_seconds = null;
 
     try {
         const response = await axios.post(route('ai.reports.draft'), {
@@ -172,11 +307,14 @@ const generate = async () => {
             until_date: form.until_date,
             request: form.request,
         });
-        draft.value = response.data.report;
-        runId.value = response.data.run_id;
+
+        runId.value = response.data.run_id || '';
+        await pollStatus();
+        startPolling();
     } catch (error) {
         const status = error.response?.status;
         const validationErrors = error.response?.data?.errors;
+
         if (validationErrors) {
             errorMessage.value = Object.values(validationErrors).flat().join(' ');
         } else if (status === 403 || status === 404) {
@@ -188,8 +326,13 @@ const generate = async () => {
         } else {
             errorMessage.value = error.response?.data?.message || 'Der KI-Entwurf konnte nicht erstellt werden.';
         }
-    } finally {
+
         loading.value = false;
+        stopPolling();
     }
 };
+
+onBeforeUnmount(() => {
+    stopPolling();
+});
 </script>

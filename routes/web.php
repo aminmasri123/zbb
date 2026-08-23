@@ -290,6 +290,10 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
         ->name('ai.reports.draft')
         ->middleware('throttle:3,1');
 
+    Route::get('/ki/berichte/entwurf/{run}', [AiReportController::class, 'show'])
+        ->name('ai.reports.status')
+        ->middleware('throttle:60,1');
+
     Route::prefix('chat')->name('chat.')->group(function () {
         Route::get('/', [StaffChatController::class, 'index'])->name('index');
         Route::post('/unterhaltungen', [StaffChatController::class, 'storeConversation'])->name('conversations.store')->middleware('throttle:20,1');

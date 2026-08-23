@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\GenerateAiReportJob;
 use App\Models\Personen;
+use App\Models\AiReportRun;
 use App\Models\Projekt;
 use App\Models\ProjektHasPersonen;
 use App\Models\Role;
@@ -10,8 +12,8 @@ use App\Models\RoleDataAccessSetting;
 use App\Models\User;
 use App\Services\Ai\Tools\GetProjectReportRulesTool;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class AiReportEndpointTest extends TestCase
@@ -33,53 +35,49 @@ class AiReportEndpointTest extends TestCase
         Http::preventStrayRequests();
     }
 
-    public function test_authorized_user_receives_only_a_draft_response(): void
+    public function test_authorized_user_is_put_into_queue(): void
     {
         [$user, , $participant] = $this->context(true);
-        Http::fake(function (Request $request) {
-            $payload = $request->data();
+        Queue::fake();
+        Http::fake();
 
-            return Http::response([
-                'kind' => 'final',
-                'run_id' => $payload['run_id'],
-                'report' => [
-                    'report_type' => 'luv',
-                    'title' => 'Lokaler Entwurf',
-                    'sections' => [[
-                        'heading' => 'Datenlage',
-                        'claims' => [[
-                            'claim_id' => 'missing-1',
-                            'text' => 'Weitere Daten werden benoetigt.',
-                            'status' => 'insufficient_data',
-                            'source_ids' => [],
-                        ]],
-                    ]],
-                    'warnings' => [],
-                ],
-            ]);
-        });
-
-        $this->actingAs($user)->postJson('/ki/berichte/entwurf', $this->payload($participant->id))
-            ->assertOk()
+        $response = $this->actingAs($user)->postJson('/ki/berichte/entwurf', $this->payload($participant->id))
+            ->assertStatus(202)
             ->assertHeader('Cache-Control', 'no-store, private')
-            ->assertJsonPath('status', 'draft')
-            ->assertJsonPath('report.title', 'Lokaler Entwurf');
+            ->assertJsonPath('status', 'queued');
+
+        $runId = $response->json('run_id');
+        $this->assertNotEmpty($runId);
+        $this->assertSame(route('ai.reports.status', ['run' => $runId]), $response->json('status_url'));
+
+        $this->assertDatabaseHas('ai_report_runs', [
+            'run_uuid' => $runId,
+            'user_id' => $user->id,
+            'participant_id' => $participant->id,
+            'status' => 'queued',
+        ]);
+
+        Queue::assertPushed(GenerateAiReportJob::class, fn (GenerateAiReportJob $job) => $job->runUuid === $runId);
     }
 
     public function test_missing_permission_is_denied_before_the_agent_is_contacted(): void
     {
         [$user, , $participant] = $this->context(false);
+        Queue::fake();
         Http::fake();
 
         $this->actingAs($user)->postJson('/ki/berichte/entwurf', $this->payload($participant->id))
             ->assertForbidden();
 
         Http::assertNothingSent();
+        $this->assertDatabaseMissing('ai_report_runs', ['user_id' => $user->id]);
+        Queue::assertNothingPushed();
     }
 
     public function test_invalid_period_is_rejected_before_the_agent_is_contacted(): void
     {
         [$user, , $participant] = $this->context(true);
+        Queue::fake();
         Http::fake();
         $payload = $this->payload($participant->id);
         $payload['until_date'] = '2025-12-31';
@@ -89,19 +87,65 @@ class AiReportEndpointTest extends TestCase
             ->assertJsonValidationErrors('until_date');
 
         Http::assertNothingSent();
+        $this->assertDatabaseMissing('ai_report_runs', ['user_id' => $user->id]);
+        Queue::assertNothingPushed();
     }
 
-    public function test_agent_failure_returns_a_generic_service_unavailable_response(): void
+    public function test_status_endpoint_returns_completed_and_failed_runs(): void
     {
-        [$user, , $participant] = $this->context(true);
-        Http::fake(['*' => Http::response(['detail' => 'sensitive-upstream-detail'], 500)]);
+        [$user, $project, $participant] = $this->context(true);
 
-        $response = $this->actingAs($user)
-            ->postJson('/ki/berichte/entwurf', $this->payload($participant->id))
-            ->assertServiceUnavailable()
-            ->assertHeader('Cache-Control', 'no-store, private');
+        $completedRun = AiReportRun::query()->create([
+            'run_uuid' => '123e4567-e89b-12d3-a456-426614174001',
+            'user_id' => $user->id,
+            'project_id' => $project->id,
+            'participant_id' => $participant->id,
+            'report_type' => 'luv',
+            'from_date' => '2026-01-01',
+            'until_date' => '2026-06-30',
+            'request' => 'Erstelle einen belegten Entwurf.',
+            'status' => 'completed',
+            'progress_percent' => 100,
+            'report' => [
+                'report_type' => 'luv',
+                'title' => 'Lokaler Entwurf',
+                'sections' => [[
+                    'heading' => 'Datenlage',
+                    'claims' => [[
+                        'claim_id' => 'ok-1',
+                        'text' => 'Zusammengefasste Befunde liegen vor.',
+                        'status' => 'supported',
+                        'source_ids' => ['document-1'],
+                    ]],
+                ]],
+                'warnings' => [],
+            ],
+        ]);
 
-        $this->assertStringNotContainsString('sensitive-upstream-detail', $response->getContent());
+        $this->actingAs($user)->getJson('/ki/berichte/entwurf/'.$completedRun->run_uuid)
+            ->assertOk()
+            ->assertJsonPath('status', 'completed')
+            ->assertJsonPath('report.title', 'Lokaler Entwurf');
+
+        $failedRun = AiReportRun::query()->create([
+            'run_uuid' => '123e4567-e89b-12d3-a456-426614174002',
+            'user_id' => $user->id,
+            'project_id' => $project->id,
+            'participant_id' => $participant->id,
+            'report_type' => 'luv',
+            'from_date' => '2026-01-01',
+            'until_date' => '2026-06-30',
+            'request' => 'Erstelle einen belegten Entwurf.',
+            'status' => 'failed',
+            'progress_percent' => 100,
+            'error_code' => 'agent_unavailable',
+            'error_message' => 'Der KI-Dienst war nicht erreichbar.',
+        ]);
+
+        $this->actingAs($user)->getJson('/ki/berichte/entwurf/'.$failedRun->run_uuid)
+            ->assertOk()
+            ->assertJsonPath('status', 'failed')
+            ->assertJsonPath('error_code', 'agent_unavailable');
     }
 
     /** @return array{User, Projekt, Personen} */

@@ -34,6 +34,10 @@ class Kernel extends ConsoleKernel
         $schedule->command('ai-workspace:purge-expired')
             ->everyMinute()
             ->withoutOverlapping();
+
+        $schedule->command('ai-report:purge-expired')
+            ->everyMinute()
+            ->withoutOverlapping();
     }
 
     /**
