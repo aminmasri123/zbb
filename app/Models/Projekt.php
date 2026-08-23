@@ -211,7 +211,7 @@ class Projekt extends Model
         'anwesenheit' => ['label' => 'Anwesenheit', 'group' => 'Teilnahme', 'description' => 'Anwesenheiten des aktiven Projekts.', 'feature' => 'attendance_management'],
         'praktika' => ['label' => 'Praktika', 'group' => 'Teilnahme', 'description' => 'Praktika und betriebliche Erprobungen.', 'feature' => 'internship_management'],
         'fahrtkosten' => ['label' => 'Fahrtkosten', 'group' => 'Teilnahme', 'description' => 'Fahrtkostenabrechnungen des Teilnehmers.'],
-        'luv' => ['label' => 'LuV', 'group' => 'Teilnahme', 'description' => 'Leistungs- und Verhaltensbeurteilungen.', 'feature' => 'potential_analysis'],
+        'luv' => ['label' => 'LuV', 'group' => 'Teilnahme', 'description' => 'Leistungs- und Verhaltensbeurteilungen.'],
         'briefe' => ['label' => 'Briefe', 'group' => 'Dokumentation', 'description' => 'Erstellte und freigegebene Briefe.'],
         'notizen' => ['label' => 'Notizen', 'group' => 'Dokumentation', 'description' => 'Projektbezogene Notizen und Vermerke.'],
         'kinder' => ['label' => 'Kinder', 'group' => 'Dokumentation', 'description' => 'Angaben zu Kindern und familiärem Kontext.'],
