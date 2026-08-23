@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Auth;
 use Laravel\Jetstream\HasProfilePhoto;
 use Spatie\Permission\Traits\HasRoles;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -104,6 +105,17 @@ class User extends Authenticatable
         $fullName = trim(($this->first_name ?? '') . ' ' . ($this->last_name ?? ''));
 
         return $fullName !== '' ? $fullName : ($this->username ?? $this->email ?? '');
+    }
+
+    /**
+     * Use a host-relative URL so profile photos keep working when the
+     * application URL or filesystem URL is cached for another environment.
+     */
+    protected function profilePhotoUrl(): Attribute
+    {
+        return Attribute::get(fn (): string => $this->profile_photo_path
+            ? '/storage/'.ltrim($this->profile_photo_path, '/')
+            : $this->defaultProfilePhotoUrl());
     }
 
     /**
