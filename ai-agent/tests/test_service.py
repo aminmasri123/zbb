@@ -106,20 +106,73 @@ async def test_workspace_normalizes_model_metadata_and_unknown_citations() -> No
     agent = AgentService(Settings(service_key_id="laravel", service_secret="x" * 32), fake)
     result = await agent.generate(WorkspaceGenerateRequest(
         run_id=RUN_ID,
-        task=WorkspaceTask.CHAT,
-        instruction="Formuliere einen freundlichen Begrüßungssatz.",
-        sources=[],
+        task=WorkspaceTask.SUMMARIZE,
+        instruction="Fasse das Dokument zusammen.",
+        sources=[{
+            "source_id": "document-1-page-1",
+            "label": "Test.pdf",
+            "page": 1,
+            "text": "Sicherer Quelltext",
+        }],
     ))
 
     assert result.run_id == RUN_ID
-    assert result.task == WorkspaceTask.CHAT
+    assert result.task == WorkspaceTask.SUMMARIZE
     assert result.content == "Sicherer Text"
     assert result.citations == []
     assert result.warnings == []
     assert fake.payload["model"] == "qwen3:1.7b"
     assert fake.payload["keep_alive"] == "10m"
+    assert fake.payload["options"]["num_ctx"] == 4096
+    assert fake.payload["options"]["num_predict"] == 360
+    assert fake.payload["format"]["required"] == ["title", "content", "citations", "warnings"]
+
+
+@pytest.mark.asyncio
+async def test_workspace_chat_wraps_plain_model_text_in_trusted_response_shape() -> None:
+    fake = FakeOllama({"message": {"content": "Pädagogik befasst sich mit Bildung und Erziehung."}})
+    agent = AgentService(Settings(service_key_id="laravel", service_secret="x" * 32), fake)
+
+    result = await agent.generate(WorkspaceGenerateRequest(
+        run_id=RUN_ID,
+        task=WorkspaceTask.CHAT,
+        instruction="Was ist Pädagogik?",
+        sources=[],
+    ))
+
+    assert result.run_id == RUN_ID
+    assert result.task == WorkspaceTask.CHAT
+    assert result.title == "KI-Antwort"
+    assert result.content == "Pädagogik befasst sich mit Bildung und Erziehung."
+    assert result.citations == []
+    assert result.warnings == []
+    assert "format" not in fake.payload
+    assert "Return only the answer text" in fake.payload["messages"][0]["content"]
     assert fake.payload["options"]["num_ctx"] == 2048
     assert fake.payload["options"]["num_predict"] == 450
+
+
+@pytest.mark.asyncio
+async def test_workspace_accepts_json_code_fence_from_document_model() -> None:
+    fake = FakeOllama({"message": {"content": """```json
+    {"title":"Kurzfassung","content":"Dokumentinhalt","citations":[],"warnings":[]}
+    ```"""}})
+    agent = AgentService(Settings(service_key_id="laravel", service_secret="x" * 32), fake)
+
+    result = await agent.generate(WorkspaceGenerateRequest(
+        run_id=RUN_ID,
+        task=WorkspaceTask.SUMMARIZE,
+        instruction="Zusammenfassen",
+        sources=[{
+            "source_id": "document-1-page-1",
+            "label": "Test.pdf",
+            "page": 1,
+            "text": "Dokumentinhalt",
+        }],
+    ))
+
+    assert result.title == "Kurzfassung"
+    assert result.content == "Dokumentinhalt"
 
 
 @pytest.mark.asyncio
