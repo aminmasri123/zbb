@@ -13,6 +13,9 @@ final readonly class AiRunContext
         public int $userId,
         public int $projectId,
         public array $allowedTools,
+        public ?int $participantId = null,
+        public ?string $fromDate = null,
+        public ?string $untilDate = null,
     ) {
         if ($this->userId < 1 || $this->projectId < 1) {
             throw new InvalidArgumentException('Benutzer- und Projekt-ID muessen positiv sein.');
@@ -30,6 +33,10 @@ final readonly class AiRunContext
 
         if (count(array_unique($this->allowedTools)) !== count($this->allowedTools)) {
             throw new InvalidArgumentException('Die Tool-Allowlist darf keine Duplikate enthalten.');
+        }
+
+        if ($this->participantId !== null && $this->participantId < 1) {
+            throw new InvalidArgumentException('Die Teilnehmer-ID muss positiv sein.');
         }
     }
 

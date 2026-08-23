@@ -6,6 +6,10 @@ use App\Models\Personen;
 use App\Models\User;
 use App\Services\Ai\Exceptions\AgentUnavailableException;
 use App\Services\Ai\Tools\GetProjectReportRulesTool;
+use App\Services\Ai\Tools\GetParticipantIdentitySummaryTool;
+use App\Services\Ai\Tools\GetParticipantLuvDataTool;
+use App\Services\Ai\Tools\GetAttendanceSummaryTool;
+use App\Services\Ai\Tools\GetDocumentationEntriesTool;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Str;
 
@@ -35,8 +39,8 @@ final class AiReportOrchestrator
             throw new AuthorizationException('Fuer den KI-Lauf ist kein aktives Projekt autorisiert.');
         }
 
-        $allowedTools = [GetProjectReportRulesTool::NAME];
-        $context = new AiRunContext((int) $user->getKey(), $projectId, $allowedTools);
+        $allowedTools = [GetProjectReportRulesTool::NAME,GetParticipantIdentitySummaryTool::NAME,GetParticipantLuvDataTool::NAME,GetAttendanceSummaryTool::NAME,GetDocumentationEntriesTool::NAME];
+        $context = new AiRunContext((int) $user->getKey(), $projectId, $allowedTools, $participantId, $fromDate, $untilDate);
 
         // This authorization must happen before the model is contacted. A model
         // returning a final response immediately must never bypass Laravel.
