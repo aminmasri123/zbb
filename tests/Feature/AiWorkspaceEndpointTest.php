@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class AiWorkspaceEndpointTest extends TestCase
@@ -62,6 +63,19 @@ class AiWorkspaceEndpointTest extends TestCase
     public function test_guest_is_redirected_to_login_from_the_workspace(): void
     {
         $this->get('/ki')->assertRedirect('/login');
+    }
+
+    public function test_authorized_workspace_page_shares_the_sidebar_permission(): void
+    {
+        $user = User::factory()->create();
+        $this->grantTestPermission($user, 'ai.report.use');
+
+        $this->actingAs($user)
+            ->get('/ki')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Ai/Workspace')
+                ->where('permissions', fn ($permissions) => collect($permissions)->contains('ai.report.use')));
     }
 
     public function test_user_cannot_export_another_users_result(): void

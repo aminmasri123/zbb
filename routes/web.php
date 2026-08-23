@@ -209,7 +209,7 @@ Route::middleware(['module:participant_portal', 'auth', 'participantPortalUser']
     Route::get('/portal/lebenslauf/versionen/{version}/druck', [ParticipantCvController::class, 'print'])->name('participant-portal.resume.versions.print');
 });
 
-Route::middleware(['auth','can:ai.report.use'])->prefix('ki')->name('ai.workspace.')->group(function () {
+Route::middleware(['auth', 'injectUserPermissions', 'can:ai.report.use'])->prefix('ki')->name('ai.workspace.')->group(function () {
     Route::get('/', [AiWorkspaceController::class, 'index'])->name('index');
     Route::post('/generieren', [AiWorkspaceController::class, 'generate'])->name('generate')->middleware('throttle:5,1');
     Route::get('/laeufe/{run}/{format}', [AiWorkspaceController::class, 'export'])->name('export');
