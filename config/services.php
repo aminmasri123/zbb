@@ -51,6 +51,7 @@ return [
     'zbb_ai_workspace' => [
         'pdfinfo' => env('ZBB_PDFINFO_BINARY', 'pdfinfo'),
         'pdftotext' => env('ZBB_PDFTOTEXT_BINARY', 'pdftotext'),
+        'timeout' => (int) env('ZBB_AI_WORKSPACE_TIMEOUT', 300),
     ],
 
 ];

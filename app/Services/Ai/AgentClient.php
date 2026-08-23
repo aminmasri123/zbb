@@ -79,7 +79,12 @@ final class AgentClient
         } catch (JsonException $exception) {
             throw new InvalidArgumentException('Die KI-Arbeitsbereichsanfrage kann nicht serialisiert werden.', previous: $exception);
         }
-        $response = $this->request('POST', '/v1/workspace/generate', $body);
+        $response = $this->request(
+            'POST',
+            '/v1/workspace/generate',
+            $body,
+            max(1, (int) config('services.zbb_ai_workspace.timeout', 300)),
+        );
         $tasks = ['chat', 'cover_letter', 'summarize', 'compare', 'image_analysis'];
         if (($response['run_id'] ?? null) !== ($payload['run_id'] ?? null)
             || ! in_array($response['task'] ?? null, $tasks, true)
@@ -103,7 +108,7 @@ final class AgentClient
     }
 
     /** @return array<string, mixed> */
-    private function request(string $method, string $path, string $body): array
+    private function request(string $method, string $path, string $body, ?int $timeout = null): array
     {
         $this->validateConfiguration();
 
@@ -113,7 +118,7 @@ final class AgentClient
 
         try {
             $response = Http::connectTimeout($this->connectTimeout)
-                ->timeout($this->timeout)
+                ->timeout($timeout ?? $this->timeout)
                 ->acceptJson()
                 ->withHeaders([
                     'X-ZBB-Key-Id' => $this->keyId,

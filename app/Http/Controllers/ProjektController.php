@@ -8,6 +8,7 @@ use App\Models\Bereich;
 use App\Models\DokumentKategorie;
 use App\Models\Dokumente;
 use App\Models\Projekt;
+use App\Models\ProjektLuvTemplate;
 use App\Models\BopRun;
 use App\Models\PersonenIstSchueler;
 use App\Models\Personen;
@@ -232,6 +233,7 @@ class ProjektController extends Controller
                 'mitarbeiter.user.roles',
                 'intakeChecklistItems' => fn ($query) => $query->where('active', true),
                 'completionChecklistItems' => fn ($query) => $query->where('active', true),
+                'luvTemplates' => fn ($query) => $query->latest('version'),
             ])
             ->findOrFail($id);
 
@@ -260,6 +262,19 @@ class ProjektController extends Controller
                 'participant_profile' => $projekt->participantProfileSettings(),
                 'participant_profile_tab_definitions' => Projekt::participantProfileTabDefinitions(),
                 'participant_overview_column_definitions' => Projekt::participantOverviewColumnDefinitions(),
+                'luv_templates' => $projekt->luvTemplates->map(fn (ProjektLuvTemplate $template) => [
+                    'id' => $template->id,
+                    'version' => $template->version,
+                    'name' => $template->name,
+                    'original_filename' => $template->original_filename,
+                    'has_file' => filled($template->file_path),
+                    'sections' => $template->sections,
+                    'ai_instructions' => $template->ai_instructions,
+                    'is_active' => $template->is_active,
+                    'created_at' => $template->created_at?->toIso8601String(),
+                ])->values()->all(),
+                'luv_default_sections' => ProjektLuvTemplate::DEFAULT_SECTIONS,
+                'luv_supported_placeholders' => ProjektLuvTemplate::SUPPORTED_PLACEHOLDERS,
             ]),
             'fehlendeMitarbeiter' => $fehlendeMitarbeiter,
             'alleStandorte' => Standort::orderBy('name')->get(['id', 'name']),

@@ -3,6 +3,7 @@
 namespace App\Services\Ai\Tools;
 
 use App\Models\User;
+use App\Models\ProjektLuvTemplate;
 use App\Services\Ai\AiProjectAuthorizer;
 use App\Services\Ai\AiRunContext;
 use App\Services\Ai\Contracts\AiTool;
@@ -35,6 +36,8 @@ final class GetProjectReportRulesTool implements AiTool
             'project_id' => (int) $project->id,
             'rules' => $project->ruleSettings(),
             'features' => $project->featureSettings(),
+            'luv_template' => $project->activeLuvTemplate?->aiConfiguration()
+                ?? ProjektLuvTemplate::defaultAiConfiguration(),
         ];
     }
 }

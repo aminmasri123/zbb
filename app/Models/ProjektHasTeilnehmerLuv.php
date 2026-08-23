@@ -17,6 +17,7 @@ class ProjektHasTeilnehmerLuv extends Model
         'bis',
         'ausgangssituation',
         'zielvereinbarung',
+        'qualifikationen',
     ];
 
    protected $casts = [

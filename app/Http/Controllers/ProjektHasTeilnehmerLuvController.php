@@ -10,6 +10,7 @@ use App\Models\ProjektHasPersonen;
 use App\Models\ProjektHasTeilnehmerLuv;
 use PhpOffice\PhpWord\TemplateProcessor;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class ProjektHasTeilnehmerLuvController extends Controller
@@ -42,6 +43,7 @@ class ProjektHasTeilnehmerLuvController extends Controller
             'typ'                => ['required', 'in:Start,Verlauf,Abschluss'],
             'ausgangssituation'  => ['nullable', 'string'],
             'zielvereinbarung'   => ['nullable', 'string'],
+            'qualifikationen'    => ['nullable', 'string'],
         ]);
 
         // ❌ Rückgabe bei Fehler – für axios (JSON!)
@@ -71,8 +73,9 @@ class ProjektHasTeilnehmerLuvController extends Controller
             'typ'               => $validated['typ'],
             'von'               => $validated['von'],
             'bis'               => $validated['bis'],
-            'ausgangssituation' => $validated['ausgangssituation'],
-            'zielvereinbarung'  => $validated['zielvereinbarung'],
+            'ausgangssituation' => $validated['ausgangssituation'] ?? null,
+            'zielvereinbarung'  => $validated['zielvereinbarung'] ?? null,
+            'qualifikationen'   => $validated['qualifikationen'] ?? null,
         ]);
 
         // ✔ JSON Antwort für axios + Modal schließen
@@ -131,12 +134,6 @@ class ProjektHasTeilnehmerLuvController extends Controller
 
     public function export(string $id)
     {
-        $templateFile = storage_path('vorlage/projekte/word/luv.docx');
-
-        if (!file_exists($templateFile)) {
-            return redirect()->back()->with('error', 'Die LuV-Datei für den Export konnte nicht gefunden werden.');
-        }
-
         // LuV + Beziehungen laden
         $luv = ProjektHasTeilnehmerLuv::where('id', $id)
             ->with(
@@ -160,6 +157,16 @@ class ProjektHasTeilnehmerLuvController extends Controller
         $projektbegleiter = $luv->projektHasTeilnehmer->meta->projektbegleiter;
         $projekt          = $luv->projektHasTeilnehmer->projekt;
         $zeitraum         = $luv->projektHasTeilnehmer->zeitraume()->orderBy('id', 'desc')->first();
+
+        $activeTemplate = $projekt->activeLuvTemplate;
+        $templateFile = $activeTemplate?->file_path
+            && Storage::disk('local')->exists($activeTemplate->file_path)
+                ? Storage::disk('local')->path($activeTemplate->file_path)
+                : storage_path('vorlage/projekte/word/luv.docx');
+
+        if (!file_exists($templateFile)) {
+            return redirect()->back()->with('error', 'Die LuV-Datei für den Export konnte nicht gefunden werden.');
+        }
 
         // Zeitraum (LuV)
         $von = $luv->von;
@@ -207,6 +214,7 @@ class ProjektHasTeilnehmerLuvController extends Controller
         $templateProcessor->setValue('zuweisungBis', $zeitraum->endtermin->format('d.m.Y'));
         $templateProcessor->setValue('ausgangssituation', $luv->ausgangssituation);
         $templateProcessor->setValue('zielvereinbarung', $luv->zielvereinbarung);
+        $templateProcessor->setValue('qualifikationen', $luv->qualifikationen ?? '');
 
         // Liste aller LUVs — Textblock
         $luvs = ProjektHasTeilnehmerLuv::where(

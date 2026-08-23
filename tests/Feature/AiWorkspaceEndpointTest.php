@@ -4,9 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\AiWorkspaceRun;
 use App\Models\User;
+use App\Jobs\GenerateAiWorkspaceJob;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -28,6 +30,34 @@ class AiWorkspaceEndpointTest extends TestCase
         $this->actingAs($user)->postJson('/ki/generieren',['task'=>'chat','instruction'=>'Formuliere einen Testsatz.'])
             ->assertOk()->assertJsonPath('run.task','chat')->assertJsonPath('run.content','Lokale KI-Antwort');
         $this->assertDatabaseHas('ai_workspace_runs',['user_id'=>$user->id,'task'=>'chat','status'=>'completed']);
+        $this->assertNull(AiWorkspaceRun::query()->firstOrFail()->request_payload);
+    }
+
+    public function test_workspace_dispatches_a_background_job_and_exposes_owned_progress(): void
+    {
+        Queue::fake();
+        config()->set('queue.ai_workspace_connection', 'database');
+        $user = User::factory()->create();
+        $this->grantTestPermission($user, 'ai.report.use');
+
+        $response = $this->actingAs($user)->postJson('/ki/generieren', [
+            'task' => 'chat',
+            'instruction' => 'Erstelle eine kurze Antwort.',
+        ])->assertAccepted()
+            ->assertJsonPath('status', 'queued');
+
+        $uuid = $response->json('run_id');
+        Queue::assertPushed(GenerateAiWorkspaceJob::class, fn (GenerateAiWorkspaceJob $job) => $job->runUuid === $uuid);
+        $this->assertDatabaseHas('ai_workspace_runs', ['run_uuid' => $uuid, 'status' => 'queued']);
+
+        $this->actingAs($user)->getJson(route('ai.workspace.status', $uuid))
+            ->assertOk()
+            ->assertJsonPath('status', 'queued')
+            ->assertJsonPath('run.run_uuid', $uuid);
+
+        $other = User::factory()->create();
+        $this->grantTestPermission($other, 'ai.report.use');
+        $this->actingAs($other)->getJson(route('ai.workspace.status', $uuid))->assertNotFound();
     }
 
     public function test_user_without_permission_cannot_reach_the_agent(): void
@@ -56,6 +86,7 @@ class AiWorkspaceEndpointTest extends TestCase
         $this->actingAs($user)->get("/ki/laeufe/{$run->id}/pdf")->assertForbidden();
         $this->actingAs($user)->deleteJson("/ki/laeufe/{$run->id}")->assertForbidden();
         $this->actingAs($user)->deleteJson('/ki/laeufe')->assertForbidden();
+        $this->actingAs($user)->getJson('/ki/status/'.$run->run_uuid)->assertForbidden();
 
         $this->assertDatabaseHas('ai_workspace_runs', ['id' => $run->id]);
     }

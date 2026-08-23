@@ -20,6 +20,8 @@ use App\Models\Zeitraum;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Projekt extends Model
 {
@@ -83,6 +85,17 @@ class Projekt extends Model
         'participant_overview_columns' => [],
         'participant_overview_show_metrics' => true,
     ];
+
+    public function luvTemplates(): HasMany
+    {
+        return $this->hasMany(ProjektLuvTemplate::class, 'projekt_id');
+    }
+
+    public function activeLuvTemplate(): HasOne
+    {
+        return $this->hasOne(ProjektLuvTemplate::class, 'projekt_id')
+            ->where('is_active', true);
+    }
 
     public const PARTICIPANT_OVERVIEW_COLUMN_DEFINITIONS = [
         'id' => [

@@ -26,6 +26,7 @@ const administrationTabs = computed(() => [
     { key: 'overview', label: 'Übersicht' },
     { key: 'participants', label: 'Teilnehmerprofil' },
     { key: 'features', label: 'Funktionen & Regeln' },
+    ...(canUpdateProjekt.value ? [{ key: 'luv', label: 'LuV & KI' }] : []),
     ...(canManagePotenzialanalyse.value ? [{ key: 'potential_analysis', label: 'Potenzialanalyse' }] : []),
     { key: 'staff', label: 'Mitarbeiter' },
 ]);
@@ -778,6 +779,88 @@ const addMitarbeiter = (person) => {
             Swal.fire('Fehler', 'Zuweisung konnte nicht gespeichert werden.', 'error');
         });
 };
+
+const cloneLuvSections = (sections) => JSON.parse(JSON.stringify(
+    Array.isArray(sections) && sections.length ? sections : (props.projekt.luv_default_sections || [])
+));
+const luvTemplates = ref([...(props.projekt.luv_templates || [])]);
+const activeLuvTemplate = computed(() => luvTemplates.value.find((template) => template.is_active) || null);
+const luvTemplateFile = ref(null);
+const luvTemplateSaving = ref(false);
+const luvTemplateActivating = ref(null);
+const luvTemplateForm = reactive({
+    name: activeLuvTemplate.value?.name || 'LuV ' + props.projekt.name,
+    ai_instructions: activeLuvTemplate.value?.ai_instructions || '',
+    sections: cloneLuvSections(activeLuvTemplate.value?.sections),
+});
+
+const editLuvTemplateVersion = (template) => {
+    luvTemplateForm.name = template.name;
+    luvTemplateForm.ai_instructions = template.ai_instructions || '';
+    luvTemplateForm.sections = cloneLuvSections(template.sections);
+};
+
+const addLuvSection = () => {
+    if (luvTemplateForm.sections.length >= 6) return;
+    luvTemplateForm.sections.push({
+        key: `abschnitt_${Date.now()}`,
+        heading: 'Neuer Abschnitt',
+        instruction: 'Fasse ausschließlich die belegten Informationen zu diesem Abschnitt zusammen.',
+        required: false,
+    });
+};
+
+const removeLuvSection = (index) => {
+    if (luvTemplateForm.sections.length > 1) luvTemplateForm.sections.splice(index, 1);
+};
+
+const moveLuvSection = (index, direction) => {
+    const target = index + direction;
+    if (target < 0 || target >= luvTemplateForm.sections.length) return;
+    [luvTemplateForm.sections[index], luvTemplateForm.sections[target]] = [
+        luvTemplateForm.sections[target],
+        luvTemplateForm.sections[index],
+    ];
+};
+
+const saveLuvTemplate = async () => {
+    luvTemplateSaving.value = true;
+    try {
+        const data = new FormData();
+        data.append('name', luvTemplateForm.name);
+        data.append('ai_instructions', luvTemplateForm.ai_instructions || '');
+        data.append('sections', JSON.stringify(luvTemplateForm.sections));
+        if (luvTemplateFile.value) data.append('template', luvTemplateFile.value);
+
+        const response = await axios.post(route('projekt.luv-templates.store', props.projekt.id), data);
+        luvTemplates.value = response.data.templates;
+        luvTemplateFile.value = null;
+        Swal.fire('Aktiviert', response.data.message, 'success');
+    } catch (error) {
+        const message = Object.values(error.response?.data?.errors || {}).flat()[0];
+        Swal.fire('Fehler', message || 'Die LuV-Vorlagenversion konnte nicht gespeichert werden.', 'error');
+    } finally {
+        luvTemplateSaving.value = false;
+    }
+};
+
+const activateLuvTemplate = async (template) => {
+    luvTemplateActivating.value = template.id;
+    try {
+        const response = await axios.put(route('projekt.luv-templates.activate', [props.projekt.id, template.id]));
+        luvTemplates.value = response.data.templates;
+        editLuvTemplateVersion(luvTemplates.value.find((item) => item.is_active));
+        Swal.fire('Aktiviert', response.data.message, 'success');
+    } catch (error) {
+        Swal.fire('Fehler', error.response?.data?.message || 'Die Version konnte nicht aktiviert werden.', 'error');
+    } finally {
+        luvTemplateActivating.value = null;
+    }
+};
+
+const formatLuvTemplateDate = (value) => value
+    ? new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+    : '-';
 </script>
 
 <template>
@@ -1196,6 +1279,111 @@ const addMitarbeiter = (person) => {
                         </label>
                     </div>
                     <p v-if="Object.keys(ruleErrors).length" class="mt-3 text-sm text-red-600">Bitte die markierten Regelwerte prüfen.</p>
+                </div>
+            </section>
+
+            <section v-if="activeAdministrationTab === 'luv' && canUpdateProjekt" class="space-y-6">
+                <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                    <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <h2 class="text-lg font-semibold">Projektbezogene LuV- und KI-Vorlage</h2>
+                            <p class="mt-1 max-w-3xl text-sm text-gray-500">
+                                Reihenfolge, Überschriften und Schreibregeln gelten nur für {{ projekt.name }}. Beim Speichern entsteht immer eine neue, sofort aktive Version; ältere Versionen bleiben wiederherstellbar.
+                            </p>
+                        </div>
+                        <span v-if="activeLuvTemplate" class="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">Aktiv: Version {{ activeLuvTemplate.version }}</span>
+                        <span v-else class="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">Globale Standardvorlage aktiv</span>
+                    </div>
+
+                    <div class="grid gap-5 lg:grid-cols-2">
+                        <label class="text-sm font-medium text-gray-700">
+                            Name der neuen Version
+                            <input v-model="luvTemplateForm.name" type="text" maxlength="120" class="mt-1 w-full rounded border-gray-300" />
+                        </label>
+                        <label class="text-sm font-medium text-gray-700">
+                            Word-Vorlage (DOCX, optional)
+                            <input type="file" accept=".docx" class="mt-1 block w-full rounded border border-gray-300 p-2 text-sm" @change="luvTemplateFile = $event.target.files?.[0] || null" />
+                            <span class="mt-1 block text-xs font-normal text-gray-500">Ohne neue Datei wird die Datei der aktiven Version weiterverwendet. Maximal 10 MB.</span>
+                        </label>
+                    </div>
+
+                    <label class="mt-5 block text-sm font-medium text-gray-700">
+                        Zusätzliche Schreibregeln für die KI
+                        <textarea v-model="luvTemplateForm.ai_instructions" rows="4" maxlength="4000" class="mt-1 w-full rounded border-gray-300" placeholder="Beispiel: Formell, wertschätzend und in kurzen Sätzen schreiben. Keine Diagnosen formulieren." />
+                        <span class="mt-1 block text-xs font-normal text-gray-500">Diese Regeln ändern keine Sicherheits-, Quellen- oder Berechtigungsprüfung.</span>
+                    </label>
+
+                    <div class="mt-6 flex items-center justify-between gap-3">
+                        <div>
+                            <h3 class="font-semibold text-gray-800">Abschnitte und Reihenfolge</h3>
+                            <p class="text-xs text-gray-500">Die lokale KI verarbeitet höchstens sechs kompakte Abschnitte.</p>
+                        </div>
+                        <button type="button" class="rounded border border-zbb px-3 py-2 text-sm text-zbb disabled:opacity-50" :disabled="luvTemplateForm.sections.length >= 6" @click="addLuvSection">Abschnitt hinzufügen</button>
+                    </div>
+
+                    <div class="mt-3 space-y-3">
+                        <div v-for="(section, index) in luvTemplateForm.sections" :key="section.key" class="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                            <div class="flex flex-wrap items-start gap-3">
+                                <div class="min-w-[240px] flex-1 space-y-3">
+                                    <input v-model="section.heading" type="text" maxlength="120" class="w-full rounded border-gray-300 font-semibold" placeholder="Überschrift" />
+                                    <textarea v-model="section.instruction" rows="2" maxlength="800" class="w-full rounded border-gray-300 text-sm" placeholder="Was soll die KI in diesem Abschnitt schreiben?" />
+                                    <label class="inline-flex items-center gap-2 text-sm text-gray-600">
+                                        <input v-model="section.required" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
+                                        Pflichtabschnitt
+                                    </label>
+                                </div>
+                                <div class="flex gap-1">
+                                    <button type="button" class="rounded border bg-white px-2 py-1 text-sm disabled:opacity-30" :disabled="index === 0" title="Nach oben" @click="moveLuvSection(index, -1)">↑</button>
+                                    <button type="button" class="rounded border bg-white px-2 py-1 text-sm disabled:opacity-30" :disabled="index === luvTemplateForm.sections.length - 1" title="Nach unten" @click="moveLuvSection(index, 1)">↓</button>
+                                    <button type="button" class="rounded border border-red-200 bg-white px-2 py-1 text-sm text-red-600 disabled:opacity-30" :disabled="luvTemplateForm.sections.length === 1" title="Entfernen" @click="removeLuvSection(index)">×</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <details class="mt-5 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+                        <summary class="cursor-pointer font-semibold">Erlaubte Word-Platzhalter anzeigen</summary>
+                        <p class="mt-2 text-xs">Platzhalter in Word werden zum Beispiel als <code>${vorname}</code> geschrieben. Nicht unterstützte Platzhalter werden beim Upload abgewiesen.</p>
+                        <div class="mt-3 flex flex-wrap gap-2">
+                            <code v-for="placeholder in projekt.luv_supported_placeholders" :key="placeholder" class="rounded bg-white px-2 py-1 text-xs">{{ '${' + placeholder + '}' }}</code>
+                        </div>
+                    </details>
+
+                    <div class="mt-5 flex justify-end">
+                        <button type="button" class="rounded bg-zbb px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50" :disabled="luvTemplateSaving" @click="saveLuvTemplate">
+                            {{ luvTemplateSaving ? 'Speichert …' : 'Als neue Version speichern und aktivieren' }}
+                        </button>
+                    </div>
+                </div>
+
+                <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                    <h2 class="text-lg font-semibold">Versionsverlauf</h2>
+                    <p class="mt-1 text-sm text-gray-500">Eine frühere Version kann jederzeit wieder aktiviert werden. Vorlagendateien liegen geschützt außerhalb des öffentlichen Webverzeichnisses.</p>
+                    <div v-if="luvTemplates.length" class="mt-4 overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500">
+                                <tr><th class="px-3 py-2">Version</th><th class="px-3 py-2">Name</th><th class="px-3 py-2">Word-Datei</th><th class="px-3 py-2">Erstellt</th><th class="px-3 py-2 text-right">Aktion</th></tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <tr v-for="template in luvTemplates" :key="template.id">
+                                    <td class="px-3 py-3"><span class="font-semibold">v{{ template.version }}</span><span v-if="template.is_active" class="ml-2 rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">aktiv</span></td>
+                                    <td class="px-3 py-3">{{ template.name }}</td>
+                                    <td class="px-3 py-3">
+                                        <a v-if="template.has_file" :href="route('projekt.luv-templates.download', [projekt.id, template.id])" class="text-zbb hover:underline">{{ template.original_filename || 'DOCX herunterladen' }}</a>
+                                        <span v-else class="text-gray-400">globale Vorlage</span>
+                                    </td>
+                                    <td class="px-3 py-3 text-gray-500">{{ formatLuvTemplateDate(template.created_at) }}</td>
+                                    <td class="px-3 py-3">
+                                        <div class="flex justify-end gap-2">
+                                            <button type="button" class="rounded border border-gray-300 px-3 py-1.5 text-xs text-gray-700" @click="editLuvTemplateVersion(template)">Als Basis laden</button>
+                                            <button v-if="!template.is_active" type="button" class="rounded border border-zbb px-3 py-1.5 text-xs text-zbb disabled:opacity-50" :disabled="luvTemplateActivating === template.id" @click="activateLuvTemplate(template)">Aktivieren</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div v-else class="mt-4 rounded-lg bg-gray-50 p-4 text-sm text-gray-600">Noch keine projektspezifische Version vorhanden. Bis zur ersten Speicherung wird die globale Standardvorlage verwendet.</div>
                 </div>
             </section>
 

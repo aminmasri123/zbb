@@ -87,6 +87,7 @@ use App\Http\Controllers\ProjektController;
 use App\Http\Controllers\ProjektHasPersonenController;
 use App\Http\Controllers\ProjektHasTeilnehmerController;
 use App\Http\Controllers\ProjektHasTeilnehmerLuvController;
+use App\Http\Controllers\ProjektLuvTemplateController;
 use App\Http\Controllers\RaumlichkeitenController;
 use App\Http\Controllers\RaumtypController;
 use App\Http\Controllers\RoleDataAccessController;
@@ -212,6 +213,7 @@ Route::middleware(['module:participant_portal', 'auth', 'participantPortalUser']
 Route::middleware(['auth', 'injectUserPermissions', 'can:ai.report.use'])->prefix('ki')->name('ai.workspace.')->group(function () {
     Route::get('/', [AiWorkspaceController::class, 'index'])->name('index');
     Route::post('/generieren', [AiWorkspaceController::class, 'generate'])->name('generate')->middleware('throttle:5,1');
+    Route::get('/status/{run}', [AiWorkspaceController::class, 'status'])->name('status');
     Route::get('/laeufe/{run}/{format}', [AiWorkspaceController::class, 'export'])->name('export');
     Route::delete('/laeufe', [AiWorkspaceController::class, 'destroyAll'])->name('destroy-all');
     Route::delete('/laeufe/{run}', [AiWorkspaceController::class, 'destroy'])->name('destroy');
@@ -491,6 +493,9 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::put('/projekt/{projekt}/abschlusscheckliste', [ParticipationCompletionController::class, 'updateDefinition'])->name('projekt.completion-checklist.update')->middleware('projectFeature:completion_management')->can('projekt.update');
     Route::put('/projekt/{projekt}/portal-funktionen', [ProjektController::class, 'updatePortalFeatures'])->name('projekt.portal-features.update')->can('projekt.update');
     Route::put('/projekt/{projekt}/teilnehmerprofil', [ProjektController::class, 'updateParticipantProfile'])->name('projekt.participant-profile.update')->can('projekt.update');
+    Route::post('/projekt/{projekt}/luv-vorlagen', [ProjektLuvTemplateController::class, 'store'])->name('projekt.luv-templates.store')->can('projekt.update');
+    Route::put('/projekt/{projekt}/luv-vorlagen/{template}/aktivieren', [ProjektLuvTemplateController::class, 'activate'])->name('projekt.luv-templates.activate')->can('projekt.update');
+    Route::get('/projekt/{projekt}/luv-vorlagen/{template}/download', [ProjektLuvTemplateController::class, 'download'])->name('projekt.luv-templates.download')->can('projekt.update');
     Route::get('/projekt/{projekt}/einwilligungen', [ProjectConsentController::class, 'index'])->name('projekt.consents.index')->middleware('module:participant_portal')->can('projekt.update');
     Route::post('/projekt/{projekt}/einwilligungen', [ProjectConsentController::class, 'store'])->name('projekt.consents.store')->middleware('module:participant_portal')->can('projekt.update');
     Route::post('/projekt/einwilligungen/{definition}/version', [ProjectConsentController::class, 'revise'])->name('projekt.consents.revise')->middleware('module:participant_portal')->can('projekt.update');

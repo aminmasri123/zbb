@@ -21,6 +21,8 @@ return [
     */
     'ai_report_connection' => env('AI_REPORT_QUEUE_CONNECTION', env('QUEUE_CONNECTION', 'sync')),
 
+    'ai_workspace_connection' => env('AI_WORKSPACE_QUEUE_CONNECTION', env('AI_REPORT_QUEUE_CONNECTION', env('QUEUE_CONNECTION', 'sync'))),
+
     /*
     |--------------------------------------------------------------------------
     | Queue Connections

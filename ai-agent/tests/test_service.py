@@ -116,6 +116,10 @@ async def test_workspace_normalizes_model_metadata_and_unknown_citations() -> No
     assert result.content == "Sicherer Text"
     assert result.citations == []
     assert result.warnings == []
+    assert fake.payload["model"] == "qwen3:1.7b"
+    assert fake.payload["keep_alive"] == "10m"
+    assert fake.payload["options"]["num_ctx"] == 2048
+    assert fake.payload["options"]["num_predict"] == 450
 
 
 @pytest.mark.asyncio

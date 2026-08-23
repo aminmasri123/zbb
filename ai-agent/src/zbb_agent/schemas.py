@@ -142,7 +142,7 @@ class WorkspaceGenerateRequest(StrictModel):
     run_id: UUID
     task: WorkspaceTask
     instruction: Annotated[str, Field(min_length=1, max_length=8_000)]
-    sources: Annotated[list[WorkspaceSource], Field(max_length=80)] = Field(default_factory=list)
+    sources: Annotated[list[WorkspaceSource], Field(max_length=100)] = Field(default_factory=list)
     image_base64: Annotated[str | None, Field(max_length=14_000_000)] = None
 
     @model_validator(mode="after")
