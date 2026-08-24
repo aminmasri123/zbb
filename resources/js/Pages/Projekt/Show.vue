@@ -25,6 +25,7 @@ const canConfigureProjectFeature = (featureKey) =>
         : canUpdateProjekt.value;
 const administrationTabs = computed(() => [
     { key: 'overview', label: 'Übersicht' },
+    ...(canUpdateProjekt.value ? [{ key: 'areas', label: 'Bereiche' }] : []),
     { key: 'participants', label: 'Teilnehmerprofil' },
     { key: 'features', label: 'Funktionen & Regeln' },
     ...(canUpdateProjekt.value ? [{ key: 'luv', label: 'LuV & KI' }] : []),
@@ -32,18 +33,11 @@ const administrationTabs = computed(() => [
     { key: 'staff', label: 'Mitarbeiter' },
 ]);
 const activeAdministrationTab = ref('overview');
-const areaAssignmentOpen = ref(false);
 const areaAssignmentSaving = ref(false);
 const selectedAreaIds = ref((props.projekt.bereiche || []).map((bereich) => bereich.id));
 
-const openAreaAssignment = () => {
+const resetAreaAssignment = () => {
     selectedAreaIds.value = (props.projekt.bereiche || []).map((bereich) => bereich.id);
-    areaAssignmentOpen.value = true;
-};
-
-const cancelAreaAssignment = () => {
-    selectedAreaIds.value = (props.projekt.bereiche || []).map((bereich) => bereich.id);
-    areaAssignmentOpen.value = false;
 };
 
 const saveAreaAssignment = async () => {
@@ -56,7 +50,6 @@ const saveAreaAssignment = async () => {
 
         props.projekt.bereiche = response.data.bereiche;
         selectedAreaIds.value = response.data.bereiche.map((bereich) => bereich.id);
-        areaAssignmentOpen.value = false;
         Swal.fire('Gespeichert!', 'Die Bereiche wurden dem Projekt zugeordnet.', 'success');
     } catch (error) {
         const message = Object.values(error.response?.data?.errors || {}).flat()[0];
@@ -1206,19 +1199,7 @@ const formatLuvTemplateDate = (value) => value
                         <p class="font-semibold">{{ projekt.abteilung?.name || '-' }}</p>
                     </div>
                     <div>
-                        <div class="flex items-center gap-2">
-                            <p class="text-xs uppercase text-gray-500">Bereiche</p>
-                            <button
-                                v-if="canUpdateProjekt && !areaAssignmentOpen"
-                                type="button"
-                                class="inline-flex items-center gap-1 text-xs font-medium text-zbb hover:text-zbb/80"
-                                title="Projektbereiche zuweisen"
-                                @click="openAreaAssignment"
-                            >
-                                <i class="las la-edit"></i>
-                                Zuweisen
-                            </button>
-                        </div>
+                        <p class="text-xs uppercase text-gray-500">Bereiche</p>
                         <p class="font-semibold">{{ projekt.bereiche?.map((bereich) => bereich.code || bereich.name).join(', ') || '-' }}</p>
                     </div>
                     <div>
@@ -1232,53 +1213,53 @@ const formatLuvTemplateDate = (value) => value
                         </p>
                     </div>
                 </div>
+            </section>
 
-                <div v-if="areaAssignmentOpen" class="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
-                    <div class="mb-3">
-                        <h2 class="text-sm font-semibold text-gray-800">Projektbereiche zuweisen</h2>
-                        <p class="mt-1 text-xs text-gray-500">
-                            Bereiche auswählen oder aus der Auswahl entfernen und anschließend speichern.
-                        </p>
-                    </div>
+            <section v-if="activeAdministrationTab === 'areas' && canUpdateProjekt" class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                <div class="mb-5">
+                    <h2 class="text-lg font-semibold text-gray-800">Projektbereiche</h2>
+                    <p class="mt-1 text-sm text-gray-500">
+                        Wählen Sie alle Bereiche aus, die diesem Projekt zugeordnet werden sollen. Bereiche können über das Kreuz im Auswahlfeld entfernt werden.
+                    </p>
+                </div>
 
-                    <MultiSelect
-                        v-model="selectedAreaIds"
-                        :options="alleBereiche || []"
-                        optionLabel="name"
-                        optionValue="id"
-                        display="chip"
-                        filter
-                        placeholder="Bereiche auswählen"
-                        class="w-full"
+                <MultiSelect
+                    v-model="selectedAreaIds"
+                    :options="alleBereiche || []"
+                    optionLabel="name"
+                    optionValue="id"
+                    display="chip"
+                    filter
+                    placeholder="Bereiche auswählen"
+                    class="w-full"
+                >
+                    <template #option="{ option }">
+                        <div class="flex items-center gap-2">
+                            <span>{{ option.name }}</span>
+                            <span v-if="option.code" class="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                                {{ option.code }}
+                            </span>
+                        </div>
+                    </template>
+                </MultiSelect>
+
+                <div class="mt-5 flex justify-end gap-2">
+                    <button
+                        type="button"
+                        class="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                        :disabled="areaAssignmentSaving"
+                        @click="resetAreaAssignment"
                     >
-                        <template #option="{ option }">
-                            <div class="flex items-center gap-2">
-                                <span>{{ option.name }}</span>
-                                <span v-if="option.code" class="rounded bg-gray-200 px-2 py-0.5 text-xs text-gray-600">
-                                    {{ option.code }}
-                                </span>
-                            </div>
-                        </template>
-                    </MultiSelect>
-
-                    <div class="mt-4 flex justify-end gap-2">
-                        <button
-                            type="button"
-                            class="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                            :disabled="areaAssignmentSaving"
-                            @click="cancelAreaAssignment"
-                        >
-                            Abbrechen
-                        </button>
-                        <button
-                            type="button"
-                            class="rounded bg-zbb px-4 py-2 text-sm font-medium text-white hover:bg-zbb/90 disabled:opacity-50"
-                            :disabled="areaAssignmentSaving"
-                            @click="saveAreaAssignment"
-                        >
-                            {{ areaAssignmentSaving ? 'Speichert …' : 'Bereiche speichern' }}
-                        </button>
-                    </div>
+                        Zurücksetzen
+                    </button>
+                    <button
+                        type="button"
+                        class="rounded bg-zbb px-4 py-2 text-sm font-medium text-white hover:bg-zbb/90 disabled:opacity-50"
+                        :disabled="areaAssignmentSaving"
+                        @click="saveAreaAssignment"
+                    >
+                        {{ areaAssignmentSaving ? 'Speichert …' : 'Bereiche speichern' }}
+                    </button>
                 </div>
             </section>
 
