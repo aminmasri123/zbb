@@ -1195,6 +1195,12 @@ class ProjektBopController extends Controller
 
     public function anwesenheitslistePADraftShow(Request $request)
     {
+        // Ein zentraler PA-Entwurf kann mehrere hundert verschlüsselte
+        // PNG-Signaturen enthalten. Eloquent, Entschlüsselung und JSON-Antwort
+        // benötigen zeitweise mehrere Kopien davon. Die Anhebung gilt nur für
+        // diesen Request und verändert keine gespeicherten Signaturdaten.
+        $this->ensureMemoryLimit(512 * 1024 * 1024);
+
         $this->purgeExpiredPaDrafts();
         $scope = $this->paDraftScope($request);
         $draft = PaAttendanceListDraft::where('draft_hash', $scope['draft_hash'])->first();
@@ -1224,6 +1230,11 @@ class ProjektBopController extends Controller
 
     public function anwesenheitslistePADraftStore(Request $request)
     {
+        // Auch der Delta-Save muss den vorhandenen zentralen JSON-Entwurf einmal
+        // einlesen. Bei großen Beständen reicht das PHP-Standardlimit von 128 MB
+        // nicht, obwohl nur eine einzelne Signatur geändert wird.
+        $this->ensureMemoryLimit(512 * 1024 * 1024);
+
         $this->purgeExpiredPaDrafts();
         $scope = $this->paDraftScope($request);
         $request->validate([
@@ -3250,14 +3261,20 @@ class ProjektBopController extends Controller
 
     private function prepareLargePdfExport(): void
     {
-        $minimumBytes = 512 * 1024 * 1024;
-        $currentLimit = trim((string) ini_get('memory_limit'));
-
-        if ($currentLimit !== '-1' && $this->phpIniSizeToBytes($currentLimit) < $minimumBytes) {
-            @ini_set('memory_limit', '512M');
-        }
+        $this->ensureMemoryLimit(512 * 1024 * 1024);
 
         @set_time_limit(180);
+    }
+
+    private function ensureMemoryLimit(int $minimumBytes): void
+    {
+        $currentLimit = trim((string) ini_get('memory_limit'));
+
+        if ($currentLimit === '-1' || $this->phpIniSizeToBytes($currentLimit) >= $minimumBytes) {
+            return;
+        }
+
+        @ini_set('memory_limit', (string) max(1, (int) ceil($minimumBytes / 1024 / 1024)).'M');
     }
 
     private function phpIniSizeToBytes(string $value): int
