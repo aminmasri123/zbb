@@ -156,6 +156,8 @@ const submit = () => {
                         optionLabel="name"
                         optionValue="id"
                         display="chip"
+                        filter
+                        filterPlaceholder="Rolle suchen …"
                         class="w-full"
                     />
                     <InputError class="mt-2" :message="form.errors.rollen" />

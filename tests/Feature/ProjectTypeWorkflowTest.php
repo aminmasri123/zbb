@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Abteilung;
+use App\Models\Bereich;
 use App\Models\Berechtigungskategorie;
 use App\Models\ProjectType;
 use App\Models\Projekt;
@@ -60,6 +61,27 @@ class ProjectTypeWorkflowTest extends TestCase
             ['asa_flex', 'bae', 'bop', 'bvb', 'bvb_reha', 'coaching'],
             ProjectType::query()->orderBy('key')->pluck('key')->all()
         );
+    }
+
+    public function test_project_update_replaces_assigned_areas(): void
+    {
+        $user = User::factory()->create();
+        $this->givePermission($user, 'projekt.update');
+        $project = Projekt::factory()->create();
+        $previousArea = Bereich::query()->create(['name' => 'Vorheriger Bereich']);
+        $newArea = Bereich::query()->create(['name' => 'Neuer Bereich']);
+
+        $project->bereiche()->attach($previousArea->id, ['aktiv' => 1]);
+
+        $payload = $this->projectPayload($project->abteilung, $project->name);
+        $payload['bereiche'] = [$newArea->id];
+
+        $this->actingAs($user)
+            ->putJson(route('projekt.update', $project->id), $payload)
+            ->assertOk()
+            ->assertJsonPath('projekt.bereiche.0.id', $newArea->id);
+
+        $this->assertSame([$newArea->id], $project->fresh()->bereiche()->pluck('bereiches.id')->all());
     }
 
     private function projectPayload(Abteilung $department, string $name): array

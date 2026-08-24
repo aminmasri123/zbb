@@ -262,6 +262,7 @@ const submit = async () => {
                         optionValue="id"
                         display="chip"
                         filter
+                        filterPlaceholder="Rolle suchen …"
                         class="mt-1 w-full"
                         placeholder="Rollen auswählen"
                     />

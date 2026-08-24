@@ -114,6 +114,25 @@ class GruppeController extends Controller
         ]);
     }
 
+    public function create(Request $request)
+    {
+        $user = $request->user();
+        $this->authorizeAny($user, ['gruppe.store']);
+
+        $activeProject = $this->activeProjectContext->currentAvailableFor($user);
+
+        if (! $activeProject) {
+            return redirect()->back()->with('error', 'Bitte waehlen Sie ein Projekt aus.');
+        }
+
+        $projekt = $this->projektMitVerfuegbarenRaeumen($activeProject->id);
+
+        return Inertia::render('Gruppe/Create', [
+            'projekt' => $projekt,
+            'betreuer' => $this->betreuerOptions($projekt, $user, $this->canSeeAllGroups($user)),
+        ]);
+    }
+
     public function store(Request $request, RaumBelegungService $belegungService)
     {
         $user = auth()->user();

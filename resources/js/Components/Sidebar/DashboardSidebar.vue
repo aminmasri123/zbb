@@ -87,7 +87,7 @@
                 </a>
                 <ul v-show="activeMenu === 'benutzer'" class="pl-6 mt-2 space-y-2">
                     <li v-if="can('benutzer.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('user.index')">{{$t('teamübersicht')}}</Link></li>
-                    <li v-if="can('benutzer.store')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('user.index')">{{$t('team_anlegen')}}</Link></li>
+                    <li v-if="can('benutzer.store')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('user.create')">{{$t('team_anlegen')}}</Link></li>
                 </ul>
             </li>
 
@@ -169,7 +169,7 @@
                     <li v-if="can('gruppe.index')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('gruppe.index')">{{$t('Gruppenübersicht')}}</Link></li>
                 </ul>
                 <ul v-show="activeMenu === 'gruppe'" class="pl-6 mt-2 space-y-2">
-                    <li v-if="can('gruppe.store')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('gruppe.index')">{{$t('Gruppe anlegen')}}</Link></li>
+                    <li v-if="can('gruppe.store')"><Link class="text-gray-400 hover:text-white transition duration-200" :href="route('gruppe.create')">{{$t('Gruppe anlegen')}}</Link></li>
                 </ul>
             </li>
 

@@ -553,6 +553,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     // Gruppe
     Route::middleware('projectFeature:group_management')->group(function () {
         Route::get('/gruppe', [GruppeController::class, 'index'])->name('gruppe.index');
+        Route::get('/gruppe/anlegen', [GruppeController::class, 'create'])->name('gruppe.create')->can('gruppe.store');
         Route::post('/gruppe/arbeitstage-vorschau', [GruppeController::class, 'workdayPreview'])->name('gruppe.workday-preview')->can('gruppe.store');
         Route::post('/gruppe/{gruppe}/arbeitstag-ausnahme', [GruppeController::class, 'updateNonWorkingDate'])->name('gruppe.non-working-date.update')->can('anwesenheit.manage');
         Route::put('/gruppe/{id}', [GruppeController::class, 'update'])->name('gruppe.update');

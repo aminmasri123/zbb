@@ -120,6 +120,25 @@
     localBereiche.value.sort((a, b) => a.name.localeCompare(b.name));
     };
 
+    const updateBereichOption = (updatedBereich) => {
+    if (!updatedBereich) return;
+
+    const optionIndex = localBereiche.value.findIndex(bereich => bereich.id === updatedBereich.id);
+    if (optionIndex !== -1) {
+        localBereiche.value[optionIndex] = updatedBereich;
+        localBereiche.value.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    localProjekte.value = localProjekte.value.map(projekt => ({
+        ...projekt,
+        bereiche: projekt.bereiche?.map(bereich =>
+            bereich.id === updatedBereich.id ? updatedBereich : bereich
+        ) ?? [],
+    }));
+
+    applySearchFilter();
+    };
+
     const addKostenstelleOption = (kostenstelle) => {
     if (!kostenstelle || localKostenstellen.value.some(k => k.id === kostenstelle.id)) {
         return;
@@ -353,6 +372,7 @@
                :bereiche="localBereiche"
                :kostenstellen="localKostenstellen"
                @bereich-created="addBereichOption"
+               @bereich-updated="updateBereichOption"
                @kostenstelle-created="addKostenstelleOption"
                @close="closeModalEdit"
                @updated="updateProjekt"/>
