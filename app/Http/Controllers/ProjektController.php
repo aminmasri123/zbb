@@ -230,12 +230,24 @@ class ProjektController extends Controller
                 'dokumentKategorien',
                 'potenzialanalyseUebungen.kriterien',
                 'potenzialanalyseUebungen.kompetenzZuordnungen',
+                'potenzialanalyseProfil.kompetenzen',
+                'potenzialanalyseProfile.kompetenzen',
                 'mitarbeiter.user.roles',
                 'intakeChecklistItems' => fn ($query) => $query->where('active', true),
                 'completionChecklistItems' => fn ($query) => $query->where('active', true),
                 'luvTemplates' => fn ($query) => $query->latest('version'),
             ])
             ->findOrFail($id);
+
+        $activePaProfileId = $projekt->potenzialanalyse_profil_id;
+        $projekt->setRelation(
+            'potenzialanalyseUebungen',
+            $projekt->potenzialanalyseUebungen
+                ->filter(fn ($uebung) => $activePaProfileId
+                    ? (int) $uebung->profil_id === (int) $activePaProfileId
+                    : $uebung->profil_id === null)
+                ->values(),
+        );
 
         $zugewieseneMitarbeiterIds = DB::table('projekt_has_personens')
             ->where('projekt_id', $projekt->id)
@@ -254,8 +266,12 @@ class ProjektController extends Controller
             ->orderBy('vorname')
             ->get();
 
+        $profileScoringConfig = data_get($projekt->potenzialanalyseProfil?->bericht_config, 'auswertung_config')
+            ?? $projekt->potenzialanalyse_auswertung_config;
+
         return Inertia::render('Projekt/Show', [
             'projekt' => array_merge($projekt->toArray(), [
+                'potenzialanalyse_auswertung_config' => $profileScoringConfig,
                 'features' => $projekt->featureSettings(),
                 'rules' => $projekt->ruleSettings(),
                 'portal_features' => $projekt->portalFeatureSettings(),

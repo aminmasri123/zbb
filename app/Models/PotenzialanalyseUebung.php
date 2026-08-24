@@ -13,12 +13,16 @@ class PotenzialanalyseUebung extends Model
 
     protected $fillable = [
         'projekt_id',
+        'profil_id',
         'name',
         'tag',
         'beschreibung',
         'hoechstwert',
         'auswertbar',
         'ergebnis_typ',
+        'berechnungsregel',
+        'fehler_abzug',
+        'berechnungs_config',
         'mindestwert',
         'sort_order',
         'aktiv',
@@ -29,6 +33,8 @@ class PotenzialanalyseUebung extends Model
         'hoechstwert' => 'integer',
         'auswertbar' => 'boolean',
         'mindestwert' => 'float',
+        'fehler_abzug' => 'float',
+        'berechnungs_config' => 'array',
         'sort_order' => 'integer',
         'aktiv' => 'boolean',
     ];
@@ -36,6 +42,11 @@ class PotenzialanalyseUebung extends Model
     public function projekt()
     {
         return $this->belongsTo(Projekt::class, 'projekt_id');
+    }
+
+    public function profil()
+    {
+        return $this->belongsTo(PotenzialanalyseProfil::class, 'profil_id');
     }
 
     public function kriterien()

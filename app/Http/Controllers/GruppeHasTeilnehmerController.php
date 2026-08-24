@@ -21,6 +21,7 @@ use App\Models\PotenzialanalyseSelbsteinschaetzung;
 use App\Models\PotenzialanalyseUebungErgebnis;
 use App\Services\Projects\ActiveProjectContext;
 use App\Services\PotenzialanalyseScoringService;
+use App\Services\PotenzialanalyseProfileService;
 use App\Services\SaarlandWorkdayService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
@@ -32,6 +33,7 @@ class GruppeHasTeilnehmerController extends Controller
         private readonly ActiveProjectContext $activeProjectContext,
         private readonly SaarlandWorkdayService $workdays,
         private readonly PotenzialanalyseScoringService $paScoring,
+        private readonly PotenzialanalyseProfileService $paProfiles,
     ) {
     }
 
@@ -470,6 +472,10 @@ class GruppeHasTeilnehmerController extends Controller
     private function potenzialanalysePayload(Gruppe $gruppe, $user = null): array
     {
         $projekt = $gruppe->projekt;
+        $competencies = $this->paProfiles->competenciesForGroup($gruppe);
+        $profile = $this->paProfiles->profileForGroup($gruppe);
+        $profileScoringConfig = data_get($profile?->bericht_config, 'auswertung_config')
+            ?? $projekt?->potenzialanalyse_auswertung_config;
         $canView = $this->canViewPotenzialanalyse($user);
         $canUpdate = $user?->can('potenzialanalyse.update') ?? false;
         $emptyPayload = [
@@ -482,7 +488,8 @@ class GruppeHasTeilnehmerController extends Controller
             'tage' => null,
             'uebungen' => [],
             'teilnehmer' => [],
-            'kompetenzen' => PotenzialanalyseScoringService::COMPETENCIES,
+            'kompetenzen' => $competencies,
+            'profil' => $this->paProfiles->profilePayload($profile),
             'bericht_stile' => PotenzialanalyseScoringService::REPORT_STYLES,
             'auswertung_config' => $this->paScoring->defaultConfig(),
         ];
@@ -491,7 +498,19 @@ class GruppeHasTeilnehmerController extends Controller
             return $emptyPayload;
         }
 
+        if ($profile && $profile->status !== 'veroeffentlicht') {
+            return array_replace($emptyPayload, [
+                'kompetenzen' => $competencies,
+                'profil' => $this->paProfiles->profilePayload($profile),
+                'konfigurationshinweis' => 'Das Projektprofil muss vor der Durchführung veröffentlicht werden.',
+            ]);
+        }
+
+        $activeProfileId = $gruppe->potenzialanalyse_profil_id ?: $projekt->potenzialanalyse_profil_id;
         $uebungen = $projekt->potenzialanalyseUebungen
+            ->filter(fn ($uebung) => $activeProfileId
+                ? (int) $uebung->profil_id === (int) $activeProfileId
+                : $uebung->profil_id === null)
             ->filter(fn ($uebung) => $uebung->aktiv)
             ->map(function ($uebung) {
                 return [
@@ -502,6 +521,9 @@ class GruppeHasTeilnehmerController extends Controller
                     'hoechstwert' => $uebung->hoechstwert,
                     'auswertbar' => $uebung->auswertbar,
                     'ergebnis_typ' => $uebung->ergebnis_typ,
+                    'berechnungsregel' => $uebung->berechnungsregel ?: 'direkte_punkte',
+                    'fehler_abzug' => $uebung->fehler_abzug,
+                    'berechnungs_config' => $uebung->berechnungs_config,
                     'mindestwert' => $uebung->mindestwert,
                     'sort_order' => $uebung->sort_order,
                     'kompetenzen' => $uebung->kompetenzZuordnungen
@@ -544,9 +566,10 @@ class GruppeHasTeilnehmerController extends Controller
                 'tage' => $projekt->potenzialanalyse_tage,
                 'uebungen' => $uebungen,
                 'teilnehmer' => [],
-                'kompetenzen' => PotenzialanalyseScoringService::COMPETENCIES,
+                'kompetenzen' => $competencies,
+                'profil' => $this->paProfiles->profilePayload($profile),
                 'bericht_stile' => PotenzialanalyseScoringService::REPORT_STYLES,
-                'auswertung_config' => $this->paScoring->normalizeConfig($projekt->potenzialanalyse_auswertung_config),
+                'auswertung_config' => $this->paScoring->normalizeConfig($profileScoringConfig),
             ];
         }
 
@@ -648,9 +671,10 @@ class GruppeHasTeilnehmerController extends Controller
             'tage' => $projekt->potenzialanalyse_tage,
             'uebungen' => $uebungen,
             'teilnehmer' => $teilnehmer,
-            'kompetenzen' => PotenzialanalyseScoringService::COMPETENCIES,
+            'kompetenzen' => $competencies,
+            'profil' => $this->paProfiles->profilePayload($profile),
             'bericht_stile' => PotenzialanalyseScoringService::REPORT_STYLES,
-            'auswertung_config' => $this->paScoring->normalizeConfig($projekt->potenzialanalyse_auswertung_config),
+            'auswertung_config' => $this->paScoring->normalizeConfig($profileScoringConfig),
         ];
     }
 
@@ -660,6 +684,10 @@ class GruppeHasTeilnehmerController extends Controller
 
         return [
             'punkte' => $entry->punkte,
+            'fehler' => $entry->fehler,
+            'berechnete_punkte' => $entry->berechnete_punkte,
+            'maximalpunkte_snapshot' => $entry->maximalpunkte_snapshot,
+            'fehler_abzug_snapshot' => $entry->fehler_abzug_snapshot,
             'zeit' => $zeit,
             'zeit_min' => intdiv($zeit, 60),
             'zeit_sec' => $zeit % 60,

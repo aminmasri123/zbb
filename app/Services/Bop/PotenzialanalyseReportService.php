@@ -12,6 +12,7 @@ use App\Models\PotenzialanalyseBeurteilung;
 use App\Models\PotenzialanalyseKompetenzbewertung;
 use App\Models\PotenzialanalyseSelbsteinschaetzung;
 use App\Models\PotenzialanalyseUebungErgebnis;
+use App\Services\PotenzialanalyseProfileService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -35,6 +36,11 @@ class PotenzialanalyseReportService
         ['key' => 'umgangsformen', 'bereich' => 'Soziale Kompetenzen', 'label' => 'Umgangsformen'],
     ];
 
+    public function __construct(
+        private readonly ?PotenzialanalyseProfileService $profiles = null,
+    ) {
+    }
+
     public function reportData(Gruppe $gruppe, Personen $person): array
     {
         $gruppe->loadMissing(['projekt', 'bereich', 'partner', 'teilnehmer.schueler']);
@@ -50,7 +56,14 @@ class PotenzialanalyseReportService
         $selfRatings = ($ratings->get('selbst') ?? collect())->keyBy('merkmal');
         $coachRatings = ($ratings->get('anleiter') ?? collect())->keyBy('merkmal');
 
-        $merkmale = collect(self::MERKMALE)->map(function (array $merkmal) use ($selfRatings, $coachRatings) {
+        $definitions = collect($this->profiles?->competenciesForGroup($gruppe) ?? self::MERKMALE)
+            ->map(fn (array $competency) => [
+                'key' => $competency['key'],
+                'bereich' => $competency['category'] ?? $competency['bereich'],
+                'label' => $competency['label'],
+            ]);
+
+        $merkmale = $definitions->map(function (array $merkmal) use ($selfRatings, $coachRatings) {
             $self = $selfRatings->get($merkmal['key']);
             $coach = $coachRatings->get($merkmal['key']);
 
@@ -75,9 +88,12 @@ class PotenzialanalyseReportService
             ->map(fn ($result) => [
                 'name' => $result->uebung?->name ?? 'Übung',
                 'tag' => $result->uebung?->tag,
-                'punkte' => $result->punkte,
+                'punkte' => $result->berechnete_punkte ?? $result->punkte,
+                'fehler' => $result->fehler,
                 'hoechstwert' => $result->uebung?->hoechstwert,
-                'zeit' => $this->formatDuration((int) ($result->zeit ?? 0)),
+                'zeit' => $result->uebung?->berechnungsregel === 'zeit'
+                    ? $this->formatDuration((int) ($result->zeit ?? 0))
+                    : '',
             ]);
 
         $assessment = PotenzialanalyseBeurteilung::query()
@@ -119,6 +135,7 @@ class PotenzialanalyseReportService
             ->first();
 
         $school = $student?->schule ?: $gruppe->partner;
+        $profil = $this->profiles?->profileForGroup($gruppe);
 
         return [
             'person' => $person,
@@ -129,6 +146,8 @@ class PotenzialanalyseReportService
             'uebungen' => $results,
             'kriterien' => $kriterien,
             'bericht' => $bericht,
+            'profil' => $profil,
+            'berichtConfig' => data_get($profil?->bericht_config, 'darstellung', []),
             'statusLabel' => $this->statusLabel($bericht?->status),
             'zeitraum' => $this->dateRange($gruppe->anfangsdatum, $gruppe->enddatum),
             'erstelltAm' => $bericht?->fertiggestellt_at?->format('d.m.Y')
@@ -139,6 +158,14 @@ class PotenzialanalyseReportService
 
     public function renderPdf(Gruppe $gruppe, Personen $person): string
     {
+        if ($this->profiles?->profileForGroup($gruppe)) {
+            return Pdf::loadView('pdf.bericht-pa-profil', $this->reportData($gruppe, $person))
+                ->setOption('isHtml5ParserEnabled', true)
+                ->setOption('isRemoteEnabled', true)
+                ->setPaper('a4', 'portrait')
+                ->output();
+        }
+
         $data = $this->originalBopReportData($gruppe, $person);
 
         return Pdf::loadView('pdf.berichtPA', $data)

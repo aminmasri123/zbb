@@ -17,11 +17,21 @@ class PotenzialanalyseUebungErgebnis extends Model
         'uebung_id',
         'user_id',
         'punkte',
+        'fehler',
+        'berechnete_punkte',
+        'maximalpunkte_snapshot',
+        'fehler_abzug_snapshot',
+        'berechnungs_snapshot',
         'zeit',
     ];
 
     protected $casts = [
         'punkte' => 'integer',
+        'fehler' => 'integer',
+        'berechnete_punkte' => 'float',
+        'maximalpunkte_snapshot' => 'float',
+        'fehler_abzug_snapshot' => 'float',
+        'berechnungs_snapshot' => 'array',
         'zeit' => 'integer',
     ];
 

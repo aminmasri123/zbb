@@ -26,6 +26,7 @@ class Gruppe extends Model
         'raum_id',
         'bereich_id',
         'projekt_id',
+        'potenzialanalyse_profil_id',
         'bop_phase_schedule_id',
         'partner_id',
         'standort_id',
@@ -61,6 +62,11 @@ class Gruppe extends Model
     public function projekt()
     {
         return $this->hasOne(Projekt::class, 'id', 'projekt_id');
+    }
+
+    public function potenzialanalyseProfil()
+    {
+        return $this->belongsTo(PotenzialanalyseProfil::class, 'potenzialanalyse_profil_id');
     }
     public function betreuer()
     {

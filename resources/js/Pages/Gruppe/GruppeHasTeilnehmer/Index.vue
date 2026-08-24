@@ -437,7 +437,7 @@ const activePaTabIndex = computed(() => {
   return index >= 0 ? index : 0
 })
 const paBewertungWerte = [1, 2, 3, 4, 5]
-const paMerkmale = [
+const paLegacyMerkmale = [
   { key: 'feinmotorik', label: 'Feinmotorik', kategorie: 'BP' },
   { key: 'grobmotorik', label: 'Grobmotorik', kategorie: 'BP' },
   { key: 'wahrnehmung_symmetrie', label: 'Wahrnehmung und Symmetrie', kategorie: 'BP' },
@@ -451,7 +451,18 @@ const paMerkmale = [
   { key: 'umgangsformen', label: 'Umgangsformen', kategorie: 'SP' },
 ]
 
-const paKompetenzBemerkungTexte = {
+const paMerkmale = (props.potenzialanalyse?.kompetenzen?.length
+  ? props.potenzialanalyse.kompetenzen
+  : paLegacyMerkmale
+).map((merkmal) => ({
+  ...merkmal,
+  kategorie: merkmal.category_code || merkmal.kategorie || '',
+  kategorieLabel: merkmal.category || merkmal.kategorie_label || '',
+  selbsteinschaetzungText: merkmal.self_assessment_text || merkmal.selbsteinschaetzung_text || '',
+  ratingDescriptions: merkmal.rating_descriptions || merkmal.bewertungsbeschreibungen || [],
+}))
+
+const paLegacyKompetenzBemerkungTexte = {
   feinmotorik: [
     'Mit Werkzeugen an vorgegebenen Grenzen oder Linien entlang zu arbeiten, ist bedingt möglich; gefühlvoller Werkzeugeinsatz und sichere Steuerung gelingen teilweise.',
     'Mit Werkzeugen an vorgegebenen Grenzen oder Linien entlang zu arbeiten, gelingt teilweise; Werkzeuge werden zunehmend sicherer gesteuert.',
@@ -531,8 +542,24 @@ const paKompetenzBemerkungTexte = {
   ],
 }
 
+const paKompetenzBemerkungTexte = {
+  ...paLegacyKompetenzBemerkungTexte,
+  ...Object.fromEntries(
+    paMerkmale
+      .filter((merkmal) => Array.isArray(merkmal.ratingDescriptions) && merkmal.ratingDescriptions.length === 5)
+      .map((merkmal) => [merkmal.key, merkmal.ratingDescriptions])
+  ),
+}
+
 const defaultPaBewertung = () => ({ bewertung: null, bemerkung: '' })
-const defaultPaUebungErgebnis = () => ({ punkte: null, zeit: null, zeit_min: 0, zeit_sec: 0 })
+const defaultPaUebungErgebnis = () => ({
+  punkte: null,
+  fehler: null,
+  berechnete_punkte: null,
+  zeit: null,
+  zeit_min: 0,
+  zeit_sec: 0,
+})
 
 const defaultPaBericht = () => ({
   status: 'entwurf',
@@ -645,15 +672,57 @@ const normalisierePaUebungswerte = (personenId) => {
   paUebungen.value.forEach((uebung) => {
     const ergebnis = paUebungErgebnis(personenId, uebung.id)
     const maxPunkte = Number(uebung.hoechstwert)
+    const zeitRelevant = ['zeit', 'direkte_punkte'].includes(uebung.berechnungsregel)
 
-    ergebnis.punkte = normalisierePaZahl(ergebnis.punkte, {
-      min: Number(uebung.mindestwert ?? 0),
-      max: Number.isFinite(maxPunkte) ? maxPunkte : null,
-    })
-    ergebnis.zeit_min = normalisierePaZahl(ergebnis.zeit_min, { min: 0, max: 999 }) ?? 0
-    ergebnis.zeit_sec = normalisierePaZahl(ergebnis.zeit_sec, { min: 0, max: 59 }) ?? 0
+    ergebnis.zeit_min = zeitRelevant
+      ? (normalisierePaZahl(ergebnis.zeit_min, { min: 0, max: 999 }) ?? 0)
+      : 0
+    ergebnis.zeit_sec = zeitRelevant
+      ? (normalisierePaZahl(ergebnis.zeit_sec, { min: 0, max: 59 }) ?? 0)
+      : 0
     ergebnis.zeit = (ergebnis.zeit_min * 60) + ergebnis.zeit_sec
+
+    if (uebung.berechnungsregel === 'fehler_abzug') {
+      ergebnis.fehler = normalisierePaZahl(ergebnis.fehler, { min: 0, max: 100000 })
+      ergebnis.punkte = null
+      ergebnis.berechnete_punkte = ergebnis.fehler === null || !Number.isFinite(maxPunkte)
+        ? null
+        : Math.max(
+            Number(uebung.mindestwert ?? 0),
+            maxPunkte - (ergebnis.fehler * Number(uebung.fehler_abzug ?? 1))
+          )
+    } else if (uebung.berechnungsregel === 'zeit') {
+      ergebnis.punkte = null
+      ergebnis.fehler = null
+      ergebnis.berechnete_punkte = paZeitbewertung(uebung, ergebnis)
+    } else if (uebung.berechnungsregel === 'beobachtung') {
+      ergebnis.punkte = null
+      ergebnis.fehler = null
+      ergebnis.berechnete_punkte = null
+    } else {
+      ergebnis.punkte = normalisierePaZahl(ergebnis.punkte, {
+        min: Number(uebung.mindestwert ?? 0),
+        max: Number.isFinite(maxPunkte) ? maxPunkte : null,
+      })
+      ergebnis.fehler = null
+      ergebnis.berechnete_punkte = ergebnis.punkte
+    }
   })
+}
+
+const paZeitbewertung = (uebung, ergebnis) => {
+  const zeit = (Number(ergebnis?.zeit_min ?? 0) * 60) + Number(ergebnis?.zeit_sec ?? 0)
+  const grenzen = uebung?.berechnungs_config?.zeitgrenzen || {}
+  const keys = ['stufe_5_bis', 'stufe_4_bis', 'stufe_3_bis', 'stufe_2_bis']
+
+  if (zeit <= 0 || !keys.every((key) => Number.isFinite(Number(grenzen[key])) && Number(grenzen[key]) > 0)) {
+    return null
+  }
+  if (zeit <= Number(grenzen.stufe_5_bis)) return 5
+  if (zeit <= Number(grenzen.stufe_4_bis)) return 4
+  if (zeit <= Number(grenzen.stufe_3_bis)) return 3
+  if (zeit <= Number(grenzen.stufe_2_bis)) return 2
+  return 1
 }
 
 const clampUebungPunkte = (personenId, uebung) => {
@@ -673,6 +742,22 @@ const clampUebungPunkte = (personenId, uebung) => {
   const max = Number(uebung.hoechstwert)
   const wert = Math.max(Number(uebung.mindestwert ?? 0), Number(ergebnis.punkte || 0))
   ergebnis.punkte = Number.isFinite(max) && max >= 0 ? Math.min(wert, max) : wert
+  planePotenzialanalyseSpeichern({ personenId, sofort: true })
+}
+
+const aktualisierePaFehlerErgebnis = (personenId, uebung) => {
+  if (!canEditPotenzialanalyse.value) return
+  const ergebnis = paUebungErgebnis(personenId, uebung.id)
+  const fehler = normalisierePaZahl(ergebnis.fehler, { min: 0, max: 100000 })
+  const max = Number(uebung.hoechstwert)
+  const abzug = Number(uebung.fehler_abzug ?? 1)
+
+  ergebnis.fehler = fehler
+  ergebnis.punkte = null
+  ergebnis.berechnete_punkte = fehler === null || !Number.isFinite(max)
+    ? null
+    : Math.max(Number(uebung.mindestwert ?? 0), max - (fehler * abzug))
+
   planePotenzialanalyseSpeichern({ personenId, sofort: true })
 }
 
@@ -721,13 +806,19 @@ const paUebungenPayload = (eintrag) =>
     const key = String(uebung.id)
     const wert = eintrag?.uebungen?.[key] || defaultPaUebungErgebnis()
 
+    const istZeit = uebung.berechnungsregel === 'zeit'
+    const istQualitaet = uebung.berechnungsregel === 'fehler_abzug'
+    const zeitRelevant = istZeit || uebung.berechnungsregel === 'direkte_punkte'
+
     payload[key] = {
-      punkte: normalisierePaZahl(wert.punkte, {
+      punkte: istZeit || istQualitaet || uebung.berechnungsregel === 'beobachtung' ? null : normalisierePaZahl(wert.punkte, {
         min: Number(uebung.mindestwert ?? 0),
         max: Number.isFinite(Number(uebung.hoechstwert)) ? Number(uebung.hoechstwert) : null,
       }),
-      zeit_min: normalisierePaZahl(wert.zeit_min, { min: 0, max: 999 }) ?? 0,
-      zeit_sec: normalisierePaZahl(wert.zeit_sec, { min: 0, max: 59 }) ?? 0,
+      fehler: istQualitaet ? normalisierePaZahl(wert.fehler, { min: 0, max: 100000 }) : null,
+      berechnete_punkte: wert.berechnete_punkte ?? null,
+      zeit_min: zeitRelevant ? (normalisierePaZahl(wert.zeit_min, { min: 0, max: 999 }) ?? 0) : 0,
+      zeit_sec: zeitRelevant ? (normalisierePaZahl(wert.zeit_sec, { min: 0, max: 59 }) ?? 0) : 0,
     }
 
     return payload
@@ -1449,6 +1540,7 @@ const paUebungsSetHatInhalt = (entries) => {
 
     return (
       entry.punkte !== null && entry.punkte !== undefined && entry.punkte !== '' ||
+      entry.fehler !== null && entry.fehler !== undefined && entry.fehler !== '' ||
       zeit > 0 ||
       zeitMin > 0 ||
       zeitSec > 0
@@ -2606,7 +2698,10 @@ const exportMitTag = async () => {
                   </thead>
                   <tbody>
                     <tr v-for="merkmal in paMerkmale" :key="'selbst-' + merkmal.key" class="border-b last:border-b-0">
-                      <td class="px-2 py-1.5 font-medium text-gray-800">{{ merkmal.label }}</td>
+                      <td class="px-2 py-1.5">
+                        <p class="font-medium text-gray-800">{{ merkmal.label }}</p>
+                        <p v-if="merkmal.selbsteinschaetzungText" class="mt-0.5 text-xs font-normal text-gray-500">{{ merkmal.selbsteinschaetzungText }}</p>
+                      </td>
                       <td class="px-2 py-1.5 text-center text-xs text-gray-500">{{ merkmal.kategorie }}</td>
                       <td v-for="wert in paBewertungWerte" :key="'selbst-' + merkmal.key + '-' + wert" class="px-1 py-1.5 text-center">
                         <label class="inline-flex h-11 w-11 items-center justify-center rounded-md transition" :class="canEditPotenzialanalyse ? 'cursor-pointer hover:bg-zbb/10' : 'cursor-not-allowed'">
@@ -2645,7 +2740,7 @@ const exportMitTag = async () => {
                   <thead class="bg-white text-xs uppercase text-gray-500">
                     <tr>
                       <th class="border-b px-3 py-2 text-left">Übung</th>
-                      <th class="border-b px-3 py-2 text-left">Punkte</th>
+                      <th class="border-b px-3 py-2 text-left">Fehler / Punkte</th>
                       <th class="border-b px-3 py-2 text-left">Zeit</th>
                     </tr>
                   </thead>
@@ -2655,13 +2750,39 @@ const exportMitTag = async () => {
                         <div class="flex flex-wrap items-center gap-2">
                           <p class="font-medium text-gray-800">{{ uebung.name }}</p>
                           <span v-if="uebung.tag" class="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-500">Tag {{ uebung.tag }}</span>
-                          <span class="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-500">{{ uebung.ergebnis_typ || 'punkte' }}: {{ uebung.mindestwert ?? 0 }}–{{ uebung.hoechstwert ?? '-' }}</span>
+                          <span class="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-500">{{ uebung.berechnungsregel || 'direkte_punkte' }}</span>
                           <span v-if="uebung.auswertbar" class="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">Auswertbar</span>
                         </div>
                         <p v-if="uebung.beschreibung" class="mt-1 text-xs text-gray-500">{{ uebung.beschreibung }}</p>
                       </td>
                       <td class="px-3 py-3 align-top">
-                        <div class="flex items-center gap-2">
+                        <div v-if="uebung.berechnungsregel === 'fehler_abzug'" class="space-y-1">
+                          <div class="flex items-center gap-2">
+                            <InputText
+                              v-model.number="paUebungErgebnis(selectedPaTeilnehmer.id, uebung.id).fehler"
+                              type="number"
+                              min="0"
+                              class="w-28"
+                              :disabled="!canEditPotenzialanalyse || !uebung.hoechstwert"
+                              @blur="aktualisierePaFehlerErgebnis(selectedPaTeilnehmer.id, uebung)"
+                            />
+                            <span class="text-sm text-gray-500">Fehler × {{ uebung.fehler_abzug ?? 1 }}</span>
+                          </div>
+                          <p class="text-xs font-semibold text-zbb">
+                            Ergebnis: {{ paUebungErgebnis(selectedPaTeilnehmer.id, uebung.id).berechnete_punkte ?? '–' }} / {{ uebung.hoechstwert ?? '–' }}
+                          </p>
+                          <p v-if="!uebung.hoechstwert" class="text-xs text-amber-700">Maximalpunkte müssen im Projekt konfiguriert werden.</p>
+                        </div>
+                        <div v-else-if="uebung.berechnungsregel === 'beobachtung'" class="text-xs text-gray-500">
+                          Keine automatische Punkteberechnung. Die individuelle Bewertung erfolgt im Kompetenzschritt.
+                        </div>
+                        <div v-else-if="uebung.berechnungsregel === 'zeit'" class="text-xs text-gray-600">
+                          Die Stufe wird ausschließlich aus der eingegebenen Zeit berechnet.
+                          <p class="mt-1 font-semibold text-zbb">
+                            Zeitstufe: {{ paZeitbewertung(uebung, paUebungErgebnis(selectedPaTeilnehmer.id, uebung.id)) ?? '–' }}
+                          </p>
+                        </div>
+                        <div v-else class="flex items-center gap-2">
                           <InputText
                             v-model.number="paUebungErgebnis(selectedPaTeilnehmer.id, uebung.id).punkte"
                             type="number"
@@ -2676,7 +2797,8 @@ const exportMitTag = async () => {
                         </div>
                       </td>
                       <td class="px-3 py-3 align-top">
-                        <div class="flex items-center gap-2">
+                        <span v-if="['fehler_abzug', 'beobachtung'].includes(uebung.berechnungsregel)" class="text-xs text-gray-400">nicht relevant</span>
+                        <div v-else class="flex items-center gap-2">
                           <InputText
                             v-model.number="paUebungErgebnis(selectedPaTeilnehmer.id, uebung.id).zeit_min"
                             type="number"

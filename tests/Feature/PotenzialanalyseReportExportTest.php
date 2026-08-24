@@ -51,6 +51,49 @@ class PotenzialanalyseReportExportTest extends TestCase
         $this->assertSame(4, $pdf->getDomPDF()->getCanvas()->get_page_count());
     }
 
+    public function test_data_driven_profile_report_renders_without_bop_specific_fields(): void
+    {
+        $person = new Personen(['vorname' => 'Mia', 'nachname' => 'Beispiel']);
+        $gruppe = new Gruppe();
+        $gruppe->setRelation('projekt', (object) ['name' => 'Freies Projekt']);
+
+        $pdf = Pdf::loadView('pdf.bericht-pa-profil', [
+            'person' => $person,
+            'gruppe' => $gruppe,
+            'merkmale' => collect([
+                'Zukunftskompetenzen' => collect([[
+                    'label' => 'Lernflexibilität',
+                    'selbst' => 4,
+                    'anleiter' => 5,
+                    'selbst_bemerkung' => null,
+                    'anleiter_bemerkung' => 'Passt Strategien sicher an.',
+                ]]),
+            ]),
+            'uebungen' => collect([[
+                'name' => 'Neue Aufgabe',
+                'punkte' => 17,
+                'fehler' => 3,
+                'hoechstwert' => 20,
+                'zeit' => '4:12 min',
+            ]]),
+            'bericht' => null,
+            'berichtConfig' => [
+                'titel' => 'Projektbezogene Auswertung',
+                'untertitel' => 'Version 1',
+                'uebungsergebnisse_anzeigen' => true,
+                'selbsteinschaetzung_anzeigen' => true,
+                'staerkenprofil_anzeigen' => true,
+            ],
+            'zeitraum' => '01.08.2026 - 05.08.2026',
+            'erstelltAm' => '24.08.2026',
+        ])->setPaper('a4', 'portrait');
+
+        $output = $pdf->output();
+
+        $this->assertStringStartsWith('%PDF-', $output);
+        $this->assertGreaterThan(1000, strlen($output));
+    }
+
     public function test_group_export_merges_thirty_original_four_page_reports(): void
     {
         $singleReport = Pdf::loadView('pdf.berichtPA', [

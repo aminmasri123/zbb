@@ -325,7 +325,7 @@ const savePortalFeatures = async () => {
 const selectedStandorte = reactive({});
 const projektMitarbeiter = ref([...(props.projekt.mitarbeiter || [])]);
 const fehlendeMitarbeiterListe = ref([...(props.fehlendeMitarbeiter || [])]);
-const paKompetenzen = [
+const paLegacyKompetenzen = [
     ['feinmotorik', 'Feinmotorik'],
     ['grobmotorik', 'Grobmotorik'],
     ['wahrnehmung_symmetrie', 'Wahrnehmung und Symmetrie'],
@@ -338,6 +338,77 @@ const paKompetenzen = [
     ['teamfaehigkeit', 'Teamfähigkeit'],
     ['umgangsformen', 'Umgangsformen'],
 ].map(([key, label]) => ({ key, label }));
+const paProfil = props.projekt.potenzialanalyse_profil || null;
+const paKompetenzen = (paProfil?.kompetenzen?.length ? paProfil.kompetenzen : paLegacyKompetenzen)
+    .map((item) => ({
+        key: item.key,
+        label: item.label,
+        category: item.category || item.kategorie_label || '',
+        categoryCode: item.category_code || item.kategorie_code || '',
+    }));
+const paProfilBearbeitbar = computed(() => !paProfil || paProfil.status === 'entwurf');
+const paProfilForm = reactive({
+    name: `${props.projekt.name} Potenzialanalyse`,
+    vorlage: 'hamet_eplus',
+});
+const paBerichtConfigForm = reactive({
+    titel: paProfil?.bericht_config?.darstellung?.titel || 'Auswertung der Potenzialanalyse',
+    untertitel: paProfil?.bericht_config?.darstellung?.untertitel || '',
+    uebungsergebnisse_anzeigen: paProfil?.bericht_config?.darstellung?.uebungsergebnisse_anzeigen ?? true,
+    selbsteinschaetzung_anzeigen: paProfil?.bericht_config?.darstellung?.selbsteinschaetzung_anzeigen ?? true,
+    staerkenprofil_anzeigen: paProfil?.bericht_config?.darstellung?.staerkenprofil_anzeigen ?? true,
+});
+const paKompetenzForm = reactive({
+    key: '',
+    label: '',
+    kategorie: 'persoenlich',
+    kategorie_label: 'Persönliche Kompetenzen',
+    kategorie_code: 'PP',
+    beschreibung: '',
+    selbsteinschaetzung_text: '',
+    bewertungsbeschreibungen: [
+        'Kaum erkennbar; umfassende Unterstützung ist erforderlich.',
+        'Teilweise erkennbar; häufige Unterstützung ist erforderlich.',
+        'Überwiegend angemessen; gelegentliche Unterstützung ist erforderlich.',
+        'Sicher, selbstständig und wiederholt erkennbar.',
+        'Besonders sicher, selbstständig und auch in anspruchsvollen Situationen erkennbar.',
+    ],
+    sort_order: 0,
+    aktiv: true,
+});
+const paKategorieOptionen = [
+    { value: 'persoenlich', label: 'Persönliche Kompetenzen', code: 'PP' },
+    { value: 'praktisch', label: 'Praktische Kompetenzen', code: 'PR' },
+    { value: 'methodisch', label: 'Methodische Kompetenzen', code: 'MP' },
+    { value: 'sozial', label: 'Soziale Kompetenzen', code: 'SP' },
+];
+const setPaKategorie = () => {
+    const category = paKategorieOptionen.find((item) => item.value === paKompetenzForm.kategorie);
+    if (!category) return;
+    paKompetenzForm.kategorie_label = category.label;
+    paKompetenzForm.kategorie_code = category.code;
+};
+const paKompetenzEntwuerfe = reactive(Object.fromEntries((paProfil?.kompetenzen || []).map((competency) => [
+    competency.id,
+    {
+        key: competency.key,
+        label: competency.label,
+        kategorie: competency.kategorie,
+        kategorie_label: competency.kategorie_label,
+        kategorie_code: competency.kategorie_code,
+        beschreibung: competency.beschreibung || '',
+        selbsteinschaetzung_text: competency.selbsteinschaetzung_text || '',
+        bewertungsbeschreibungen: competency.bewertungsbeschreibungen || [
+            'Kaum erkennbar; umfassende Unterstützung ist erforderlich.',
+            'Teilweise erkennbar; häufige Unterstützung ist erforderlich.',
+            'Überwiegend angemessen; gelegentliche Unterstützung ist erforderlich.',
+            'Sicher, selbstständig und wiederholt erkennbar.',
+            'Besonders sicher, selbstständig und auch in anspruchsvollen Situationen erkennbar.',
+        ],
+        sort_order: competency.sort_order || 0,
+        aktiv: competency.aktiv ?? true,
+    },
+])));
 const paReportStyles = [
     { value: 'staerkenorientiert', label: 'Stärkenorientiert' },
     { value: 'ausfuehrlich', label: 'Ausführlich' },
@@ -353,9 +424,33 @@ const paZuordnungen = (entries = []) => paKompetenzen.map((kompetenz) => {
         gewichtung: Number(found?.gewichtung ?? 100),
     };
 });
+const paZeitstufen = [
+    { key: 'stufe_5_bis', label: 'Stufe 5 bis' },
+    { key: 'stufe_4_bis', label: 'Stufe 4 bis' },
+    { key: 'stufe_3_bis', label: 'Stufe 3 bis' },
+    { key: 'stufe_2_bis', label: 'Stufe 2 bis' },
+];
+const formatPaZeitgrenze = (seconds) => {
+    if (seconds === null || seconds === undefined || seconds === '') return '';
+    const value = Number(seconds);
+    if (!Number.isFinite(value) || value <= 0) return '';
+    return `${Math.floor(value / 60)}:${String(Math.floor(value % 60)).padStart(2, '0')}`;
+};
+const parsePaZeitgrenze = (value) => {
+    const match = String(value ?? '').trim().match(/^(\d+):([0-5]\d)$/);
+    return match ? (Number(match[1]) * 60) + Number(match[2]) : null;
+};
+const paZeitgrenzenAusConfig = (config = {}) => Object.fromEntries(paZeitstufen.map(({ key }) => [
+    key,
+    formatPaZeitgrenze(config?.zeitgrenzen?.[key]),
+]));
 const normalizePaUebung = (uebung) => ({
     ...uebung,
     ergebnis_typ: uebung.ergebnis_typ || 'punkte',
+    berechnungsregel: uebung.berechnungsregel || 'direkte_punkte',
+    fehler_abzug: Number(uebung.fehler_abzug ?? 1),
+    berechnungs_config: uebung.berechnungs_config || {},
+    zeitgrenzen: paZeitgrenzenAusConfig(uebung.berechnungs_config || {}),
     mindestwert: Number(uebung.mindestwert ?? 0),
     kompetenzen: paZuordnungen(uebung.kompetenz_zuordnungen || uebung.kompetenzen || []),
 });
@@ -367,6 +462,10 @@ const paUebungForm = reactive({
     hoechstwert: null,
     auswertbar: false,
     ergebnis_typ: 'punkte',
+    berechnungsregel: 'direkte_punkte',
+    fehler_abzug: 1,
+    berechnungs_config: {},
+    zeitgrenzen: paZeitgrenzenAusConfig(),
     mindestwert: 0,
     kompetenzen: paZuordnungen(),
     sort_order: 0,
@@ -471,6 +570,10 @@ const resetUebungForm = () => {
     paUebungForm.hoechstwert = null;
     paUebungForm.auswertbar = false;
     paUebungForm.ergebnis_typ = 'punkte';
+    paUebungForm.berechnungsregel = 'direkte_punkte';
+    paUebungForm.fehler_abzug = 1;
+    paUebungForm.berechnungs_config = {};
+    paUebungForm.zeitgrenzen = paZeitgrenzenAusConfig();
     paUebungForm.mindestwert = 0;
     paUebungForm.kompetenzen = paZuordnungen();
     paUebungForm.sort_order = 0;
@@ -514,6 +617,14 @@ const paPayload = (item) => ({
     hoechstwert: item.hoechstwert || null,
     auswertbar: Boolean(item.auswertbar),
     ergebnis_typ: item.ergebnis_typ || 'punkte',
+    berechnungsregel: item.berechnungsregel || 'direkte_punkte',
+    fehler_abzug: Number(item.fehler_abzug ?? 1),
+    berechnungs_config: item.berechnungsregel === 'zeit'
+        ? {
+            ...(item.berechnungs_config || {}),
+            zeitgrenzen: Object.fromEntries(paZeitstufen.map(({ key }) => [key, parsePaZeitgrenze(item.zeitgrenzen?.[key])])),
+        }
+        : (item.berechnungs_config || null),
     mindestwert: Number(item.mindestwert ?? 0),
     kompetenzen: (item.kompetenzen || [])
         .filter((entry) => entry.aktiv)
@@ -521,6 +632,138 @@ const paPayload = (item) => ({
     sort_order: item.sort_order || 0,
     aktiv: Boolean(item.aktiv),
 });
+
+const reloadAfterPaChange = () => window.location.reload();
+
+const createPaProfil = async () => {
+    savingPa.value = true;
+    try {
+        const response = await axios.post(
+            route('potenzialanalyse.projekt.profile.store', props.projekt.id),
+            JSON.parse(JSON.stringify(paProfilForm)),
+        );
+        await Swal.fire('Profil angelegt', response.data.message, 'success');
+        reloadAfterPaChange();
+    } catch (error) {
+        const errors = error.response?.data?.errors;
+        Swal.fire('Fehler', errors ? Object.values(errors).flat()[0] : (error.response?.data?.message || 'Das Profil konnte nicht angelegt werden.'), 'error');
+    } finally {
+        savingPa.value = false;
+    }
+};
+
+const publishPaProfil = async () => {
+    if (!paProfil) return;
+    savingPa.value = true;
+    try {
+        const response = await axios.post(route('potenzialanalyse.profile.publish', paProfil.id));
+        await Swal.fire('Profil veröffentlicht', response.data.message, 'success');
+        reloadAfterPaChange();
+    } catch (error) {
+        const errors = error.response?.data?.errors;
+        Swal.fire('Profil noch nicht vollständig', errors ? Object.values(errors).flat()[0] : (error.response?.data?.message || 'Das Profil konnte nicht veröffentlicht werden.'), 'warning');
+    } finally {
+        savingPa.value = false;
+    }
+};
+
+const savePaBerichtConfig = async () => {
+    if (!paProfil || !paProfilBearbeitbar.value) return;
+    savingPa.value = true;
+    try {
+        const response = await axios.put(
+            route('potenzialanalyse.profile.bericht-config.update', paProfil.id),
+            JSON.parse(JSON.stringify(paBerichtConfigForm)),
+        );
+        Swal.fire('Gespeichert', response.data.message, 'success');
+    } catch (error) {
+        const errors = error.response?.data?.errors;
+        Swal.fire('Fehler', errors ? Object.values(errors).flat()[0] : (error.response?.data?.message || 'Die Berichtsdarstellung konnte nicht gespeichert werden.'), 'error');
+    } finally {
+        savingPa.value = false;
+    }
+};
+
+const createPaProfilVersion = async () => {
+    if (!paProfil) return;
+    savingPa.value = true;
+    try {
+        const response = await axios.post(route('potenzialanalyse.profile.versions.store', paProfil.id));
+        await Swal.fire('Neue Version', response.data.message, 'success');
+        reloadAfterPaChange();
+    } catch (error) {
+        Swal.fire('Fehler', error.response?.data?.message || 'Die neue Version konnte nicht angelegt werden.', 'error');
+    } finally {
+        savingPa.value = false;
+    }
+};
+
+const storePaKompetenz = async () => {
+    if (!paProfil || !paProfilBearbeitbar.value) return;
+    setPaKategorie();
+    savingPa.value = true;
+    try {
+        const response = await axios.post(
+            route('potenzialanalyse.profile.kompetenzen.store', paProfil.id),
+            JSON.parse(JSON.stringify(paKompetenzForm)),
+        );
+        await Swal.fire('Kompetenz angelegt', response.data.message, 'success');
+        reloadAfterPaChange();
+    } catch (error) {
+        const errors = error.response?.data?.errors;
+        Swal.fire('Fehler', errors ? Object.values(errors).flat()[0] : (error.response?.data?.message || 'Die Kompetenz konnte nicht angelegt werden.'), 'error');
+    } finally {
+        savingPa.value = false;
+    }
+};
+
+const updatePaKompetenz = async (competency) => {
+    const draft = paKompetenzEntwuerfe[competency.id];
+    if (!draft || !paProfilBearbeitbar.value) return;
+    const category = paKategorieOptionen.find((item) => item.value === draft.kategorie);
+    if (category) {
+        draft.kategorie_label = category.label;
+        draft.kategorie_code = category.code;
+    }
+
+    savingPa.value = true;
+    try {
+        const response = await axios.put(
+            route('potenzialanalyse.profile.kompetenzen.update', competency.id),
+            JSON.parse(JSON.stringify(draft)),
+        );
+        await Swal.fire('Gespeichert', response.data.message, 'success');
+        reloadAfterPaChange();
+    } catch (error) {
+        const errors = error.response?.data?.errors;
+        Swal.fire('Fehler', errors ? Object.values(errors).flat()[0] : (error.response?.data?.message || 'Die Kompetenz konnte nicht aktualisiert werden.'), 'error');
+    } finally {
+        savingPa.value = false;
+    }
+};
+
+const destroyPaKompetenz = async (competency) => {
+    if (!paProfilBearbeitbar.value) return;
+    const confirmation = await Swal.fire({
+        title: 'Kompetenz entfernen?',
+        text: `${competency.label} wird auch aus der Gewichtungsmatrix entfernt.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Entfernen',
+        cancelButtonText: 'Abbrechen',
+    });
+    if (!confirmation.isConfirmed) return;
+
+    savingPa.value = true;
+    try {
+        await axios.delete(route('potenzialanalyse.profile.kompetenzen.destroy', competency.id));
+        reloadAfterPaChange();
+    } catch (error) {
+        Swal.fire('Fehler', error.response?.data?.message || 'Die Kompetenz konnte nicht entfernt werden.', 'error');
+    } finally {
+        savingPa.value = false;
+    }
+};
 
 const savePaAuswertungConfig = async () => {
     if (!canManagePotenzialanalyse.value) return;
@@ -1404,13 +1647,119 @@ const formatLuvTemplateDate = (value) => value
                 </div>
 
                 <div v-if="paAktiv" class="space-y-5">
+                    <div class="rounded border border-indigo-200 bg-indigo-50 p-4">
+                        <div v-if="paProfil" class="space-y-4">
+                            <div class="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <h3 class="font-semibold text-indigo-950">{{ paProfil.name }} · Version {{ paProfil.version }}</h3>
+                                        <span class="rounded px-2 py-0.5 text-xs font-semibold" :class="paProfil.status === 'entwurf' ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'">
+                                            {{ paProfil.status === 'entwurf' ? 'Entwurf' : 'Veröffentlicht' }}
+                                        </span>
+                                    </div>
+                                    <p class="mt-1 text-xs text-indigo-800">
+                                        Kategorien, Kompetenzen, Übungen, Berechnungsregeln und Gewichtungen stammen aus dieser Projektversion.
+                                    </p>
+                                </div>
+                                <div class="flex flex-wrap gap-2">
+                                    <button v-if="paProfilBearbeitbar" type="button" class="rounded bg-indigo-700 px-3 py-2 text-sm text-white disabled:opacity-50" :disabled="savingPa" @click="publishPaProfil">Profil veröffentlichen</button>
+                                    <button v-else type="button" class="rounded border border-indigo-300 bg-white px-3 py-2 text-sm text-indigo-800 disabled:opacity-50" :disabled="savingPa" @click="createPaProfilVersion">Neue Version bearbeiten</button>
+                                </div>
+                            </div>
+
+                            <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                                <div v-for="competency in paProfil.kompetenzen" :key="competency.id" class="rounded border border-indigo-100 bg-white p-3">
+                                    <div v-if="!paProfilBearbeitbar">
+                                        <div>
+                                            <p class="text-xs font-semibold uppercase text-indigo-500">{{ competency.kategorie_code }} · {{ competency.kategorie_label }}</p>
+                                            <p class="mt-1 text-sm font-semibold text-gray-800">{{ competency.label }}</p>
+                                            <p v-if="competency.selbsteinschaetzung_text" class="mt-1 text-xs text-gray-500">{{ competency.selbsteinschaetzung_text }}</p>
+                                        </div>
+                                    </div>
+                                    <div v-else class="space-y-2">
+                                        <input v-model="paKompetenzEntwuerfe[competency.id].label" class="w-full rounded border-gray-300 text-sm font-semibold" />
+                                        <select v-model="paKompetenzEntwuerfe[competency.id].kategorie" class="w-full rounded border-gray-300 text-xs">
+                                            <option v-for="category in paKategorieOptionen" :key="category.value" :value="category.value">{{ category.label }}</option>
+                                        </select>
+                                        <textarea v-model="paKompetenzEntwuerfe[competency.id].selbsteinschaetzung_text" rows="2" class="w-full rounded border-gray-300 text-xs" placeholder="Text für Selbsteinschätzung"></textarea>
+                                        <div class="flex items-center justify-between gap-2">
+                                            <button type="button" class="text-xs font-semibold text-indigo-700 hover:underline" @click="updatePaKompetenz(competency)">Speichern</button>
+                                            <button type="button" class="text-xs text-red-600 hover:underline" @click="destroyPaKompetenz(competency)">Entfernen</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div v-if="paProfilBearbeitbar" class="rounded border border-indigo-100 bg-white p-3">
+                                <h4 class="text-sm font-semibold text-gray-800">Freie Kompetenz hinzufügen</h4>
+                                <div class="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                                    <label class="text-xs text-gray-600">Technischer Schlüssel
+                                        <input v-model="paKompetenzForm.key" placeholder="z. B. lernbereitschaft" class="mt-1 w-full rounded border-gray-300 text-sm" />
+                                    </label>
+                                    <label class="text-xs text-gray-600">Bezeichnung
+                                        <input v-model="paKompetenzForm.label" class="mt-1 w-full rounded border-gray-300 text-sm" />
+                                    </label>
+                                    <label class="text-xs text-gray-600">Kategorie
+                                        <select v-model="paKompetenzForm.kategorie" class="mt-1 w-full rounded border-gray-300 text-sm" @change="setPaKategorie">
+                                            <option v-for="category in paKategorieOptionen" :key="category.value" :value="category.value">{{ category.label }}</option>
+                                        </select>
+                                    </label>
+                                    <label class="text-xs text-gray-600 xl:col-span-2">Text für Selbsteinschätzung
+                                        <input v-model="paKompetenzForm.selbsteinschaetzung_text" placeholder="Ich kann ..." class="mt-1 w-full rounded border-gray-300 text-sm" />
+                                    </label>
+                                </div>
+                                <div class="mt-3 flex justify-end">
+                                    <button type="button" class="rounded bg-indigo-700 px-4 py-2 text-sm text-white disabled:opacity-50" :disabled="savingPa || !paKompetenzForm.key || !paKompetenzForm.label" @click="storePaKompetenz">Kompetenz hinzufügen</button>
+                                </div>
+                            </div>
+
+                            <div v-if="paProfilBearbeitbar" class="rounded border border-indigo-100 bg-white p-3">
+                                <div class="flex flex-wrap items-start justify-between gap-3">
+                                    <div>
+                                        <h4 class="text-sm font-semibold text-gray-800">Projektbezogene Berichtsdarstellung</h4>
+                                        <p class="mt-1 text-xs text-gray-500">Die Einstellung wird mit der Profilversion veröffentlicht.</p>
+                                    </div>
+                                    <button type="button" class="rounded bg-indigo-700 px-3 py-2 text-sm text-white disabled:opacity-50" :disabled="savingPa" @click="savePaBerichtConfig">Berichtseinstellungen speichern</button>
+                                </div>
+                                <div class="mt-3 grid gap-3 md:grid-cols-2">
+                                    <label class="text-xs text-gray-600">Titel
+                                        <input v-model="paBerichtConfigForm.titel" class="mt-1 w-full rounded border-gray-300 text-sm" />
+                                    </label>
+                                    <label class="text-xs text-gray-600">Untertitel
+                                        <input v-model="paBerichtConfigForm.untertitel" class="mt-1 w-full rounded border-gray-300 text-sm" />
+                                    </label>
+                                </div>
+                                <div class="mt-3 flex flex-wrap gap-4 text-sm text-gray-700">
+                                    <label class="flex items-center gap-2"><input v-model="paBerichtConfigForm.uebungsergebnisse_anzeigen" type="checkbox" class="rounded border-gray-300 text-zbb" /> Übungsergebnisse anzeigen</label>
+                                    <label class="flex items-center gap-2"><input v-model="paBerichtConfigForm.selbsteinschaetzung_anzeigen" type="checkbox" class="rounded border-gray-300 text-zbb" /> Selbsteinschätzung anzeigen</label>
+                                    <label class="flex items-center gap-2"><input v-model="paBerichtConfigForm.staerkenprofil_anzeigen" type="checkbox" class="rounded border-gray-300 text-zbb" /> Stärkenprofil anzeigen</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div v-else class="space-y-3">
+                            <div>
+                                <h3 class="font-semibold text-indigo-950">Skalierbares Projektprofil anlegen</h3>
+                                <p class="mt-1 text-xs text-indigo-800">Beginnen Sie leer oder kopieren Sie die bearbeitbare hamet-e+-Startvorlage. Bestehende BOP-Projekte bleiben ohne Auswahl unverändert.</p>
+                            </div>
+                            <div class="grid gap-3 md:grid-cols-[1fr_260px_auto]">
+                                <input v-model="paProfilForm.name" class="rounded border-indigo-200 text-sm" placeholder="Profilname" />
+                                <select v-model="paProfilForm.vorlage" class="rounded border-indigo-200 text-sm">
+                                    <option value="leer">Leeres Profil</option>
+                                    <option value="hamet_eplus">hamet e+ als Startvorlage</option>
+                                </select>
+                                <button type="button" class="rounded bg-indigo-700 px-4 py-2 text-sm text-white disabled:opacity-50" :disabled="savingPa" @click="createPaProfil">Profil anlegen</button>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="rounded border border-blue-200 bg-blue-50 p-4">
                         <div class="flex flex-wrap items-start justify-between gap-3">
                             <div>
                                 <h3 class="text-sm font-semibold text-blue-900">Berechnung und Berichtstext</h3>
                                 <p class="mt-1 text-xs text-blue-700">Die Werte erzeugen einen prüfbaren Vorschlag. Sie ersetzen nicht die fachliche Einschätzung.</p>
                             </div>
-                            <button type="button" class="rounded bg-zbb px-4 py-2 text-sm text-white disabled:opacity-60" :disabled="savingPa" @click="savePaAuswertungConfig">Einstellungen speichern</button>
+                            <button type="button" class="rounded bg-zbb px-4 py-2 text-sm text-white disabled:opacity-60" :disabled="savingPa || !paProfilBearbeitbar" @click="savePaAuswertungConfig">Einstellungen speichern</button>
                         </div>
                         <div class="mt-4 grid gap-4 lg:grid-cols-2">
                             <div>
@@ -1449,7 +1798,7 @@ const formatLuvTemplateDate = (value) => value
                             <button
                                 type="button"
                                 class="rounded bg-zbb px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-60"
-                                :disabled="savingPa || !paUebungen.length"
+                                :disabled="savingPa || !paUebungen.length || !paProfilBearbeitbar"
                                 @click="savePaGewichtungsmatrix"
                             >
                                 {{ savingPa ? 'Speichert …' : 'Matrix speichern' }}
@@ -1499,7 +1848,7 @@ const formatLuvTemplateDate = (value) => value
                                                     max="100"
                                                     step="0.01"
                                                     :value="paMatrixCellValue(uebung, kompetenz.key)"
-                                                    :disabled="!uebung.aktiv || savingPa"
+                                                    :disabled="!uebung.aktiv || savingPa || !paProfilBearbeitbar"
                                                     placeholder="–"
                                                     class="w-full rounded border-gray-300 py-1.5 pr-7 text-right text-sm disabled:bg-gray-100"
                                                     :aria-label="`${uebung.name}: ${kompetenz.label}`"
@@ -1539,7 +1888,7 @@ const formatLuvTemplateDate = (value) => value
 
                     <div class="rounded border border-gray-200 bg-gray-50 p-4">
                         <h3 class="mb-3 text-sm font-semibold text-gray-700">Übung anlegen</h3>
-                        <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-6">
+                        <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
                             <label class="text-sm text-gray-600">
                                 Name
                                 <input v-model="paUebungForm.name" class="mt-1 w-full rounded border-gray-300 text-sm" />
@@ -1555,15 +1904,26 @@ const formatLuvTemplateDate = (value) => value
                                 />
                             </label>
                             <label class="text-sm text-gray-600">Ergebnistyp
-                                <select v-model="paUebungForm.ergebnis_typ" class="mt-1 w-full rounded border-gray-300 text-sm">
+                                <select v-model="paUebungForm.ergebnis_typ" :disabled="paUebungForm.berechnungsregel === 'zeit'" class="mt-1 w-full rounded border-gray-300 text-sm disabled:bg-gray-100">
                                     <option value="punkte">Punkte</option><option value="prozent">Prozent</option><option value="skala">Skala</option>
                                 </select>
                             </label>
+                            <label class="text-sm text-gray-600">Berechnungsregel
+                                <select v-model="paUebungForm.berechnungsregel" class="mt-1 w-full rounded border-gray-300 text-sm">
+                                    <option value="direkte_punkte">Direkte Punkte</option>
+                                    <option value="fehler_abzug">Maximalpunkte minus Fehler</option>
+                                    <option value="zeit">Zeit / Grenzwerte</option>
+                                    <option value="beobachtung">Nur Beobachtung</option>
+                                </select>
+                            </label>
+                            <label class="text-sm text-gray-600">Abzug je Fehler
+                                <input v-model.number="paUebungForm.fehler_abzug" type="number" min="0" step="0.01" :disabled="paUebungForm.berechnungsregel !== 'fehler_abzug'" class="mt-1 w-full rounded border-gray-300 text-sm disabled:bg-gray-100" />
+                            </label>
                             <label class="text-sm text-gray-600">Mindestwert
-                                <input v-model.number="paUebungForm.mindestwert" type="number" min="0" class="mt-1 w-full rounded border-gray-300 text-sm" />
+                                <input v-model.number="paUebungForm.mindestwert" type="number" min="0" :disabled="paUebungForm.berechnungsregel === 'zeit'" class="mt-1 w-full rounded border-gray-300 text-sm disabled:bg-gray-100" />
                             </label>
                             <label class="text-sm text-gray-600">Höchstwert
-                                <input v-model.number="paUebungForm.hoechstwert" type="number" min="1" :disabled="paUebungForm.ergebnis_typ === 'prozent'" :placeholder="paUebungForm.ergebnis_typ === 'prozent' ? '100' : ''" class="mt-1 w-full rounded border-gray-300 text-sm disabled:bg-gray-100" />
+                                <input v-model.number="paUebungForm.hoechstwert" type="number" min="1" :disabled="paUebungForm.ergebnis_typ === 'prozent' || paUebungForm.berechnungsregel === 'zeit'" :placeholder="paUebungForm.berechnungsregel === 'zeit' ? 'automatisch 5' : (paUebungForm.ergebnis_typ === 'prozent' ? '100' : '')" class="mt-1 w-full rounded border-gray-300 text-sm disabled:bg-gray-100" />
                             </label>
                             <label class="text-sm text-gray-600">
                                 Reihenfolge
@@ -1574,6 +1934,16 @@ const formatLuvTemplateDate = (value) => value
                             Beschreibung
                             <textarea v-model="paUebungForm.beschreibung" rows="2" class="mt-1 w-full rounded border-gray-300 text-sm"></textarea>
                         </label>
+                        <div v-if="paUebungForm.berechnungsregel === 'zeit'" class="mt-3 rounded border border-blue-100 bg-blue-50 p-3">
+                            <p class="text-sm font-semibold text-blue-800">Individuelle Zeitgrenzen</p>
+                            <p class="mt-1 text-xs text-blue-700">Format Minuten:Sekunden, zum Beispiel 3:30. Längere Zeiten als die Grenze für Stufe 2 ergeben Stufe 1.</p>
+                            <div class="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                                <label v-for="stufe in paZeitstufen" :key="stufe.key" class="text-xs text-gray-600">
+                                    {{ stufe.label }}
+                                    <input v-model="paUebungForm.zeitgrenzen[stufe.key]" type="text" inputmode="numeric" placeholder="0:00" class="mt-1 w-full rounded border-gray-300 text-sm" />
+                                </label>
+                            </div>
+                        </div>
                         <p class="mt-3 rounded border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
                             Die Kompetenz-Zuordnung erfolgt nach dem Anlegen zentral in der Gewichtungsmatrix.
                         </p>
@@ -1585,7 +1955,7 @@ const formatLuvTemplateDate = (value) => value
                             <button
                                 type="button"
                                 class="rounded bg-zbb px-4 py-2 text-sm text-white disabled:opacity-60"
-                                :disabled="savingPa"
+                                :disabled="savingPa || !paProfilBearbeitbar"
                                 @click="storeUebung"
                             >
                                 Übung speichern
@@ -1602,7 +1972,7 @@ const formatLuvTemplateDate = (value) => value
                         :key="uebung.id"
                         class="rounded border border-gray-200 p-4"
                     >
-                        <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-7">
+                        <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
                             <label class="text-sm text-gray-600">
                                 Uebung
                                 <input v-model="uebung.name" class="mt-1 w-full rounded border-gray-300 text-sm" />
@@ -1618,15 +1988,26 @@ const formatLuvTemplateDate = (value) => value
                                 />
                             </label>
                             <label class="text-sm text-gray-600">Ergebnistyp
-                                <select v-model="uebung.ergebnis_typ" class="mt-1 w-full rounded border-gray-300 text-sm">
+                                <select v-model="uebung.ergebnis_typ" :disabled="uebung.berechnungsregel === 'zeit'" class="mt-1 w-full rounded border-gray-300 text-sm disabled:bg-gray-100">
                                     <option value="punkte">Punkte</option><option value="prozent">Prozent</option><option value="skala">Skala</option>
                                 </select>
                             </label>
+                            <label class="text-sm text-gray-600">Berechnungsregel
+                                <select v-model="uebung.berechnungsregel" class="mt-1 w-full rounded border-gray-300 text-sm">
+                                    <option value="direkte_punkte">Direkte Punkte</option>
+                                    <option value="fehler_abzug">Maximalpunkte minus Fehler</option>
+                                    <option value="zeit">Zeit / Grenzwerte</option>
+                                    <option value="beobachtung">Nur Beobachtung</option>
+                                </select>
+                            </label>
+                            <label class="text-sm text-gray-600">Abzug je Fehler
+                                <input v-model.number="uebung.fehler_abzug" type="number" min="0" step="0.01" :disabled="uebung.berechnungsregel !== 'fehler_abzug'" class="mt-1 w-full rounded border-gray-300 text-sm disabled:bg-gray-100" />
+                            </label>
                             <label class="text-sm text-gray-600">Mindestwert
-                                <input v-model.number="uebung.mindestwert" type="number" min="0" class="mt-1 w-full rounded border-gray-300 text-sm" />
+                                <input v-model.number="uebung.mindestwert" type="number" min="0" :disabled="uebung.berechnungsregel === 'zeit'" class="mt-1 w-full rounded border-gray-300 text-sm disabled:bg-gray-100" />
                             </label>
                             <label class="text-sm text-gray-600">Höchstwert
-                                <input v-model.number="uebung.hoechstwert" type="number" min="1" :disabled="uebung.ergebnis_typ === 'prozent'" class="mt-1 w-full rounded border-gray-300 text-sm disabled:bg-gray-100" />
+                                <input v-model.number="uebung.hoechstwert" type="number" min="1" :disabled="uebung.ergebnis_typ === 'prozent' || uebung.berechnungsregel === 'zeit'" class="mt-1 w-full rounded border-gray-300 text-sm disabled:bg-gray-100" />
                             </label>
                             <label class="text-sm text-gray-600">
                                 Reihenfolge
@@ -1645,6 +2026,16 @@ const formatLuvTemplateDate = (value) => value
                             Beschreibung
                             <textarea v-model="uebung.beschreibung" rows="2" class="mt-1 w-full rounded border-gray-300 text-sm"></textarea>
                         </label>
+                        <div v-if="uebung.berechnungsregel === 'zeit'" class="mt-3 rounded border border-blue-100 bg-blue-50 p-3">
+                            <p class="text-sm font-semibold text-blue-800">Individuelle Zeitgrenzen</p>
+                            <p class="mt-1 text-xs text-blue-700">Format Minuten:Sekunden. Die Grenzen gelten ausschließlich für diese Übung.</p>
+                            <div class="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                                <label v-for="stufe in paZeitstufen" :key="`${uebung.id}-${stufe.key}`" class="text-xs text-gray-600">
+                                    {{ stufe.label }}
+                                    <input v-model="uebung.zeitgrenzen[stufe.key]" type="text" inputmode="numeric" placeholder="0:00" class="mt-1 w-full rounded border-gray-300 text-sm" />
+                                </label>
+                            </div>
+                        </div>
                         <p class="mt-3 text-xs text-gray-500">
                             Kompetenz-Zuordnungen und Gewichtungen werden zentral in der Matrix oben gepflegt.
                         </p>
@@ -1652,7 +2043,7 @@ const formatLuvTemplateDate = (value) => value
                             <button
                                 type="button"
                                 class="rounded border border-zbb px-3 py-2 text-sm text-zbb disabled:opacity-60"
-                                :disabled="savingPa"
+                                :disabled="savingPa || !paProfilBearbeitbar"
                                 @click="updateUebung(uebung)"
                             >
                                 Übung aktualisieren
@@ -1660,7 +2051,7 @@ const formatLuvTemplateDate = (value) => value
                             <button
                                 type="button"
                                 class="rounded border border-red-200 px-3 py-2 text-sm text-red-600 disabled:opacity-60"
-                                :disabled="savingPa"
+                                :disabled="savingPa || !paProfilBearbeitbar"
                                 @click="destroyUebung(uebung)"
                             >
                                 Löschen

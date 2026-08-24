@@ -60,10 +60,16 @@ class PotenzialanalyseScoringService
         ];
     }
 
-    public function scoreExercises(Collection $exercises, array $results, ?array $config = null): array
+    public function scoreExercises(
+        Collection $exercises,
+        array $results,
+        ?array $config = null,
+        ?array $competencyDefinitions = null
+    ): array
     {
         $config = $this->normalizeConfig($config);
-        $competencies = collect(self::COMPETENCIES)->keyBy('key');
+        $competencyDefinitions ??= self::COMPETENCIES;
+        $competencies = collect($competencyDefinitions)->keyBy('key');
         $buckets = [];
 
         foreach ($exercises as $exercise) {
@@ -73,7 +79,9 @@ class PotenzialanalyseScoringService
 
             $exerciseId = (int) data_get($exercise, 'id');
             $entry = $results[$exerciseId] ?? $results[(string) $exerciseId] ?? null;
-            $value = is_array($entry) ? ($entry['punkte'] ?? null) : data_get($entry, 'punkte');
+            $value = is_array($entry)
+                ? ($entry['berechnete_punkte'] ?? $entry['punkte'] ?? null)
+                : (data_get($entry, 'berechnete_punkte') ?? data_get($entry, 'punkte'));
 
             if ($value === null || $value === '') {
                 continue;
@@ -119,7 +127,7 @@ class PotenzialanalyseScoringService
             }
         }
 
-        return collect(self::COMPETENCIES)->mapWithKeys(function (array $competency) use ($buckets, $config) {
+        return collect($competencyDefinitions)->mapWithKeys(function (array $competency) use ($buckets, $config) {
             $bucket = $buckets[$competency['key']] ?? null;
             if (! $bucket || $bucket['weight_sum'] <= 0) {
                 return [$competency['key'] => $competency + [
@@ -149,11 +157,18 @@ class PotenzialanalyseScoringService
         })->all();
     }
 
-    public function combinedScores(array $exerciseScores, array $coach, array $self, ?array $config = null): array
+    public function combinedScores(
+        array $exerciseScores,
+        array $coach,
+        array $self,
+        ?array $config = null,
+        ?array $competencyDefinitions = null
+    ): array
     {
         $config = $this->normalizeConfig($config);
+        $competencyDefinitions ??= self::COMPETENCIES;
 
-        return collect(self::COMPETENCIES)->mapWithKeys(function (array $competency) use ($exerciseScores, $config) {
+        return collect($competencyDefinitions)->mapWithKeys(function (array $competency) use ($exerciseScores, $config) {
             $key = $competency['key'];
             $exercisePercentage = $exerciseScores[$key]['percentage'] ?? null;
             $percentage = $exercisePercentage !== null ? (float) $exercisePercentage : null;
@@ -178,7 +193,9 @@ class PotenzialanalyseScoringService
         array $reportFields,
         string $style = 'staerkenorientiert',
         int $variation = 0,
+        ?array $competencyDefinitions = null,
     ): array {
+        $competencyDefinitions ??= self::COMPETENCIES;
         $style = collect(self::REPORT_STYLES)->pluck('value')->contains($style) ? $style : 'staerkenorientiert';
         $rated = collect($combinedScores)->filter(fn (array $item) => $item['rating'] !== null);
         $strengths = $rated->filter(fn (array $item) => $item['rating'] >= 4)->sortByDesc('percentage')->values();
@@ -333,7 +350,7 @@ class PotenzialanalyseScoringService
             }
         }
 
-        $agreements = collect(self::COMPETENCIES)->filter(function (array $competency) use ($coach, $self) {
+        $agreements = collect($competencyDefinitions)->filter(function (array $competency) use ($coach, $self) {
             $coachRating = data_get($coach, $competency['key'] . '.bewertung');
             $selfRating = data_get($self, $competency['key'] . '.bewertung');
             return $coachRating !== null && $selfRating !== null && abs((int) $coachRating - (int) $selfRating) <= 1;

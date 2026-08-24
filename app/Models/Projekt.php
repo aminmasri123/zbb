@@ -37,6 +37,7 @@ class Projekt extends Model
         'potenzialanalyse_aktiv',
         'potenzialanalyse_tage',
         'potenzialanalyse_auswertung_config',
+        'potenzialanalyse_profil_id',
         'feature_settings',
         'rule_settings',
         'portal_feature_settings',
@@ -518,6 +519,18 @@ class Projekt extends Model
             ->orderBy('sort_order')
             ->orderBy('tag')
             ->orderBy('name');
+    }
+
+    public function potenzialanalyseProfil()
+    {
+        return $this->belongsTo(PotenzialanalyseProfil::class, 'potenzialanalyse_profil_id');
+    }
+
+    public function potenzialanalyseProfile()
+    {
+        return $this->hasMany(PotenzialanalyseProfil::class, 'projekt_id')
+            ->orderByDesc('version')
+            ->orderByDesc('id');
     }
 
     public function intakeChecklistItems()
