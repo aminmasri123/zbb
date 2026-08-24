@@ -3,8 +3,12 @@
 namespace App\Services;
 
 use App\Models\Gruppe;
+use App\Models\PotenzialanalyseBeurteilung;
+use App\Models\PotenzialanalyseKriterium;
 use App\Models\PotenzialanalyseProfil;
+use App\Models\PotenzialanalyseSelbsteinschaetzung;
 use App\Models\PotenzialanalyseUebung;
+use App\Models\PotenzialanalyseUebungErgebnis;
 use App\Models\Projekt;
 use Illuminate\Support\Facades\DB;
 
@@ -201,6 +205,52 @@ class PotenzialanalyseProfileService
             $source->projekt()->update(['potenzialanalyse_profil_id' => $copy->id]);
 
             return $copy->load(['kompetenzen', 'uebungen.kompetenzZuordnungen']);
+        });
+    }
+
+    public function discardDraft(PotenzialanalyseProfil $profil): ?PotenzialanalyseProfil
+    {
+        if ($profil->status !== 'entwurf') {
+            throw new \DomainException('Nur ein unveröffentlichter Entwurf kann verworfen werden.');
+        }
+
+        if ((int) $profil->projekt?->potenzialanalyse_profil_id !== (int) $profil->id) {
+            throw new \DomainException('Nur der aktuell ausgewählte Profilentwurf kann verworfen werden.');
+        }
+
+        $exerciseIds = $profil->uebungen()->pluck('id');
+        $criterionIds = PotenzialanalyseKriterium::query()
+            ->whereIn('uebung_id', $exerciseIds)
+            ->pluck('id');
+        $inUse = Gruppe::query()->where('potenzialanalyse_profil_id', $profil->id)->exists()
+            || PotenzialanalyseUebungErgebnis::query()->whereIn('uebung_id', $exerciseIds)->exists()
+            || PotenzialanalyseBeurteilung::query()->whereIn('kriterium_id', $criterionIds)->exists()
+            || PotenzialanalyseSelbsteinschaetzung::query()->whereIn('kriterium_id', $criterionIds)->exists();
+
+        if ($inUse) {
+            throw new \DomainException('Der Profilentwurf wird bereits in einer Durchführung verwendet und kann nicht verworfen werden.');
+        }
+
+        return DB::transaction(function () use ($profil) {
+            $project = $profil->projekt;
+            $project->update(['potenzialanalyse_profil_id' => null]);
+            $profil->uebungen()->delete();
+            $profil->delete();
+
+            $fallback = PotenzialanalyseProfil::query()
+                ->where('projekt_id', $project->id)
+                ->where('status', 'veroeffentlicht')
+                ->orderByDesc('version')
+                ->orderByDesc('id')
+                ->first();
+
+            PotenzialanalyseProfil::query()
+                ->where('projekt_id', $project->id)
+                ->update(['aktiv' => false]);
+            $fallback?->update(['aktiv' => true]);
+            $project->update(['potenzialanalyse_profil_id' => $fallback?->id]);
+
+            return $fallback;
         });
     }
 

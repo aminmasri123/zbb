@@ -107,6 +107,25 @@ class PotenzialanalyseController extends Controller
         ], 201);
     }
 
+    public function destroyProfil(PotenzialanalyseProfil $profil)
+    {
+        $profil->loadMissing('projekt');
+        $this->authorizeProjectConfig($profil->projekt);
+
+        try {
+            $fallback = $this->profiles->discardDraft($profil);
+        } catch (\DomainException $exception) {
+            throw ValidationException::withMessages(['profil' => $exception->getMessage()]);
+        }
+
+        return response()->json([
+            'message' => $fallback
+                ? 'Der Entwurf wurde verworfen. Die zuletzt veröffentlichte Profilversion ist wieder aktiv.'
+                : 'Der Entwurf wurde verworfen. Sie können jetzt erneut eine Vorlage auswählen.',
+            'profil' => $this->profiles->profilePayload($fallback),
+        ]);
+    }
+
     public function updateProfilBerichtConfig(Request $request, PotenzialanalyseProfil $profil)
     {
         $profil->loadMissing('projekt');

@@ -667,6 +667,33 @@ const publishPaProfil = async () => {
     }
 };
 
+const resetPaProfil = async () => {
+    if (!paProfil || !paProfilBearbeitbar.value) return;
+
+    const confirmation = await Swal.fire({
+        title: 'Profilentwurf zurücksetzen?',
+        text: 'Der unveröffentlichte Entwurf mit seinen Kompetenzen, Übungen und Gewichtungen wird verworfen. Danach können Sie die Vorlage erneut auswählen.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Entwurf verwerfen',
+        cancelButtonText: 'Abbrechen',
+        confirmButtonColor: '#b91c1c',
+    });
+    if (!confirmation.isConfirmed) return;
+
+    savingPa.value = true;
+    try {
+        const response = await axios.delete(route('potenzialanalyse.profile.destroy', paProfil.id));
+        await Swal.fire('Zurückgesetzt', response.data.message, 'success');
+        reloadAfterPaChange();
+    } catch (error) {
+        const errors = error.response?.data?.errors;
+        Swal.fire('Zurücksetzen nicht möglich', errors ? Object.values(errors).flat()[0] : (error.response?.data?.message || 'Der Profilentwurf konnte nicht verworfen werden.'), 'error');
+    } finally {
+        savingPa.value = false;
+    }
+};
+
 const savePaBerichtConfig = async () => {
     if (!paProfil || !paProfilBearbeitbar.value) return;
     savingPa.value = true;
@@ -1663,6 +1690,7 @@ const formatLuvTemplateDate = (value) => value
                                 </div>
                                 <div class="flex flex-wrap gap-2">
                                     <button v-if="paProfilBearbeitbar" type="button" class="rounded bg-indigo-700 px-3 py-2 text-sm text-white disabled:opacity-50" :disabled="savingPa" @click="publishPaProfil">Profil veröffentlichen</button>
+                                    <button v-if="paProfilBearbeitbar" type="button" class="rounded border border-red-300 bg-white px-3 py-2 text-sm text-red-700 disabled:opacity-50" :disabled="savingPa" @click="resetPaProfil">Entwurf zurücksetzen</button>
                                     <button v-else type="button" class="rounded border border-indigo-300 bg-white px-3 py-2 text-sm text-indigo-800 disabled:opacity-50" :disabled="savingPa" @click="createPaProfilVersion">Neue Version bearbeiten</button>
                                 </div>
                             </div>

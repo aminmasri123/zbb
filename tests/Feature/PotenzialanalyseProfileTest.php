@@ -98,4 +98,25 @@ class PotenzialanalyseProfileTest extends TestCase
         $this->assertSame('Lernflexibilität', $published->fresh('kompetenzen')->kompetenzen->first()->label);
         $this->assertSame('Anpassungs- und Lernfähigkeit', $newVersion->fresh('kompetenzen')->kompetenzen->first()->label);
     }
+
+    #[Test]
+    public function an_unused_draft_can_be_discarded_so_the_template_can_be_selected_again(): void
+    {
+        $project = Projekt::factory()->create(['potenzialanalyse_aktiv' => true]);
+        $service = app(PotenzialanalyseProfileService::class);
+        $profile = $service->createEmptyProfile($project, 'Falsche Vorlage');
+        $exercise = PotenzialanalyseUebung::query()->create([
+            'projekt_id' => $project->id,
+            'profil_id' => $profile->id,
+            'name' => 'Testübung',
+            'aktiv' => true,
+        ]);
+
+        $fallback = $service->discardDraft($profile->load('projekt'));
+
+        $this->assertNull($fallback);
+        $this->assertNull($project->fresh()->potenzialanalyse_profil_id);
+        $this->assertDatabaseMissing('potenzialanalyse_profile', ['id' => $profile->id]);
+        $this->assertDatabaseMissing('potenzialanalyse_uebungen', ['id' => $exercise->id]);
+    }
 }

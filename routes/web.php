@@ -527,6 +527,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
         Route::post('/projekt/{projekt}/potenzialanalyse/profile', [PotenzialanalyseController::class, 'storeProfil'])->name('potenzialanalyse.projekt.profile.store');
         Route::post('/potenzialanalyse/profile/{profil}/veroeffentlichen', [PotenzialanalyseController::class, 'publishProfil'])->name('potenzialanalyse.profile.publish');
         Route::post('/potenzialanalyse/profile/{profil}/versionen', [PotenzialanalyseController::class, 'createProfilVersion'])->name('potenzialanalyse.profile.versions.store');
+        Route::delete('/potenzialanalyse/profile/{profil}', [PotenzialanalyseController::class, 'destroyProfil'])->name('potenzialanalyse.profile.destroy');
         Route::put('/potenzialanalyse/profile/{profil}/bericht-config', [PotenzialanalyseController::class, 'updateProfilBerichtConfig'])->name('potenzialanalyse.profile.bericht-config.update');
         Route::post('/potenzialanalyse/profile/{profil}/kompetenzen', [PotenzialanalyseController::class, 'storeProfilKompetenz'])->name('potenzialanalyse.profile.kompetenzen.store');
         Route::put('/potenzialanalyse/profil-kompetenzen/{kompetenz}', [PotenzialanalyseController::class, 'updateProfilKompetenz'])->name('potenzialanalyse.profile.kompetenzen.update');
