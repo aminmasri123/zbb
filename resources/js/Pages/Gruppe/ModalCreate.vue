@@ -1,6 +1,6 @@
 
 <template>
-  <Modal v-if="visible" @close="emit('close')">
+  <Modal v-if="visible || standalone" :inline="standalone" @close="emit('close')">
     <template #header>{{$t('Gruppe anlegen')}}</template>
     <template #body>
     <form >
@@ -204,6 +204,10 @@ import { confirmRoomOverlap, showRequestError } from './roomConflictDialog'
 
 const props = defineProps({
     visible: Boolean,
+    standalone: {
+        type: Boolean,
+        default: false,
+    },
     projekt: {
         type: Object,
         required: true,

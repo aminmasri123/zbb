@@ -487,6 +487,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::post('/projekt/anlegen', [ProjektController::class, 'store'])->name('projekt.store');
     Route::put('/projekt/{projekt}/dokumente', [ProjektController::class, 'updateDokumente'])->name('projekt.dokumente.update');
     Route::put('/projekt/{id}', [ProjektController::class, 'update'])->name('projekt.update');
+    Route::put('/projekt/{projekt}/bereiche', [ProjektController::class, 'updateBereiche'])->name('projekt.bereiche.update')->can('projekt.update');
     Route::put('/projekt/{projekt}/funktionen', [ProjektController::class, 'updateFeatures'])->name('projekt.features.update')->can('projekt.update');
     Route::put('/projekt/{projekt}/regeln', [ProjektController::class, 'updateRules'])->name('projekt.rules.update')->can('projekt.update');
     Route::put('/projekt/{projekt}/aufnahmecheckliste', [IntakeChecklistController::class, 'updateDefinition'])->name('projekt.intake-checklist.update')->can('projekt.update');

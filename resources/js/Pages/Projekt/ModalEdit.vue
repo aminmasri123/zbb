@@ -30,7 +30,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['close', 'updated', 'bereich-created', 'bereich-updated', 'kostenstelle-created']);
+const emit = defineEmits(['close', 'updated', 'bereich-created', 'kostenstelle-created']);
 
 const { can } = usePermissions();
 const canManagePotenzialanalyse = computed(() => can('potenzialanalyse.manage'));
@@ -210,10 +210,6 @@ const handleBereichCreated = (bereich) => {
   emit('bereich-created', bereich);
 };
 
-const handleBereichUpdated = (bereich) => {
-  emit('bereich-updated', bereich);
-};
-
 const handleKostenstelleCreated = (kostenstelle) => {
   emit('kostenstelle-created', kostenstelle);
 };
@@ -346,9 +342,7 @@ const handleKostenstelleCreated = (kostenstelle) => {
           <BereichSelector
             v-model="form.bereiche"
             :bereiche="props.bereiche"
-            manage-assigned
             @created="handleBereichCreated"
-            @updated="handleBereichUpdated"
           />
         </div>
       </div>

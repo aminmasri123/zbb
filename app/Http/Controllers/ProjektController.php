@@ -293,8 +293,33 @@ class ProjektController extends Controller
                 'luv_supported_placeholders' => ProjektLuvTemplate::SUPPORTED_PLACEHOLDERS,
             ]),
             'fehlendeMitarbeiter' => $fehlendeMitarbeiter,
+            'alleBereiche' => Bereich::query()
+                ->orderBy('name')
+                ->get(['id', 'name', 'code']),
             'alleStandorte' => Standort::orderBy('name')->get(['id', 'name']),
             'anwesenheitsstatuten' => Anwesenheitsstatuten::query()->orderBy('status')->get(['id', 'status', 'abkuerzung']),
+        ]);
+    }
+
+    public function updateBereiche(Request $request, Projekt $projekt)
+    {
+        $validated = $request->validate([
+            'bereiche' => ['present', 'array'],
+            'bereiche.*' => ['integer', 'distinct', 'exists:bereiches,id'],
+        ]);
+
+        $syncData = collect($validated['bereiche'])
+            ->mapWithKeys(fn ($id) => [$id => ['aktiv' => 1]])
+            ->all();
+
+        $projekt->bereiche()->sync($syncData);
+
+        return response()->json([
+            'message' => 'Projektbereiche wurden aktualisiert.',
+            'bereiche' => $projekt->fresh()
+                ->bereiche()
+                ->orderBy('name')
+                ->get(['bereiches.id', 'bereiches.name', 'bereiches.code']),
         ]);
     }
 

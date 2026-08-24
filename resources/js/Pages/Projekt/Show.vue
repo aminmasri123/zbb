@@ -10,6 +10,7 @@ import { usePermissions } from '@/utils/permissions';
 const props = defineProps({
     projekt: Object,
     fehlendeMitarbeiter: Array,
+    alleBereiche: Array,
     alleStandorte: Array,
     anwesenheitsstatuten: Array,
 });
@@ -31,6 +32,40 @@ const administrationTabs = computed(() => [
     { key: 'staff', label: 'Mitarbeiter' },
 ]);
 const activeAdministrationTab = ref('overview');
+const areaAssignmentOpen = ref(false);
+const areaAssignmentSaving = ref(false);
+const selectedAreaIds = ref((props.projekt.bereiche || []).map((bereich) => bereich.id));
+
+const openAreaAssignment = () => {
+    selectedAreaIds.value = (props.projekt.bereiche || []).map((bereich) => bereich.id);
+    areaAssignmentOpen.value = true;
+};
+
+const cancelAreaAssignment = () => {
+    selectedAreaIds.value = (props.projekt.bereiche || []).map((bereich) => bereich.id);
+    areaAssignmentOpen.value = false;
+};
+
+const saveAreaAssignment = async () => {
+    areaAssignmentSaving.value = true;
+
+    try {
+        const response = await axios.put(route('projekt.bereiche.update', props.projekt.id), {
+            bereiche: selectedAreaIds.value,
+        });
+
+        props.projekt.bereiche = response.data.bereiche;
+        selectedAreaIds.value = response.data.bereiche.map((bereich) => bereich.id);
+        areaAssignmentOpen.value = false;
+        Swal.fire('Gespeichert!', 'Die Bereiche wurden dem Projekt zugeordnet.', 'success');
+    } catch (error) {
+        const message = Object.values(error.response?.data?.errors || {}).flat()[0];
+        Swal.fire('Fehler', message || 'Die Projektbereiche konnten nicht gespeichert werden.', 'error');
+    } finally {
+        areaAssignmentSaving.value = false;
+    }
+};
+
 const projectFeatures = reactive({ ...(props.projekt.features || {}) });
 const featureSaving = ref(false);
 const featureErrors = ref({});
@@ -1171,7 +1206,19 @@ const formatLuvTemplateDate = (value) => value
                         <p class="font-semibold">{{ projekt.abteilung?.name || '-' }}</p>
                     </div>
                     <div>
-                        <p class="text-xs uppercase text-gray-500">Bereiche</p>
+                        <div class="flex items-center gap-2">
+                            <p class="text-xs uppercase text-gray-500">Bereiche</p>
+                            <button
+                                v-if="canUpdateProjekt && !areaAssignmentOpen"
+                                type="button"
+                                class="inline-flex items-center gap-1 text-xs font-medium text-zbb hover:text-zbb/80"
+                                title="Projektbereiche zuweisen"
+                                @click="openAreaAssignment"
+                            >
+                                <i class="las la-edit"></i>
+                                Zuweisen
+                            </button>
+                        </div>
                         <p class="font-semibold">{{ projekt.bereiche?.map((bereich) => bereich.code || bereich.name).join(', ') || '-' }}</p>
                     </div>
                     <div>
@@ -1183,6 +1230,54 @@ const formatLuvTemplateDate = (value) => value
                         <p class="font-semibold">
                             {{ projekt.potenzialanalyse_aktiv ? `Ja (${projekt.potenzialanalyse_tage || '?'} Tage)` : 'Nein' }}
                         </p>
+                    </div>
+                </div>
+
+                <div v-if="areaAssignmentOpen" class="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <div class="mb-3">
+                        <h2 class="text-sm font-semibold text-gray-800">Projektbereiche zuweisen</h2>
+                        <p class="mt-1 text-xs text-gray-500">
+                            Bereiche auswählen oder aus der Auswahl entfernen und anschließend speichern.
+                        </p>
+                    </div>
+
+                    <MultiSelect
+                        v-model="selectedAreaIds"
+                        :options="alleBereiche || []"
+                        optionLabel="name"
+                        optionValue="id"
+                        display="chip"
+                        filter
+                        placeholder="Bereiche auswählen"
+                        class="w-full"
+                    >
+                        <template #option="{ option }">
+                            <div class="flex items-center gap-2">
+                                <span>{{ option.name }}</span>
+                                <span v-if="option.code" class="rounded bg-gray-200 px-2 py-0.5 text-xs text-gray-600">
+                                    {{ option.code }}
+                                </span>
+                            </div>
+                        </template>
+                    </MultiSelect>
+
+                    <div class="mt-4 flex justify-end gap-2">
+                        <button
+                            type="button"
+                            class="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                            :disabled="areaAssignmentSaving"
+                            @click="cancelAreaAssignment"
+                        >
+                            Abbrechen
+                        </button>
+                        <button
+                            type="button"
+                            class="rounded bg-zbb px-4 py-2 text-sm font-medium text-white hover:bg-zbb/90 disabled:opacity-50"
+                            :disabled="areaAssignmentSaving"
+                            @click="saveAreaAssignment"
+                        >
+                            {{ areaAssignmentSaving ? 'Speichert …' : 'Bereiche speichern' }}
+                        </button>
                     </div>
                 </div>
             </section>

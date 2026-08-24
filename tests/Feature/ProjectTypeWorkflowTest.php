@@ -73,15 +73,21 @@ class ProjectTypeWorkflowTest extends TestCase
 
         $project->bereiche()->attach($previousArea->id, ['aktiv' => 1]);
 
-        $payload = $this->projectPayload($project->abteilung, $project->name);
-        $payload['bereiche'] = [$newArea->id];
-
         $this->actingAs($user)
-            ->putJson(route('projekt.update', $project->id), $payload)
+            ->putJson(route('projekt.bereiche.update', $project), [
+                'bereiche' => [$newArea->id],
+            ])
             ->assertOk()
-            ->assertJsonPath('projekt.bereiche.0.id', $newArea->id);
+            ->assertJsonPath('bereiche.0.id', $newArea->id);
 
         $this->assertSame([$newArea->id], $project->fresh()->bereiche()->pluck('bereiches.id')->all());
+
+        $this->actingAs($user)
+            ->putJson(route('projekt.bereiche.update', $project), ['bereiche' => []])
+            ->assertOk()
+            ->assertJsonPath('bereiche', []);
+
+        $this->assertCount(0, $project->fresh()->bereiche);
     }
 
     private function projectPayload(Abteilung $department, string $name): array
