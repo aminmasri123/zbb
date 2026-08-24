@@ -97,6 +97,33 @@ class PaAttendanceSignatureHistoryService
                 continue;
             }
 
+            $this->recordSignatureChanges($draft, $scope, $mergedPayload, [
+                (string) $signatureKey => [
+                    'previous' => $previousValue,
+                    'current' => $currentValue,
+                ],
+            ], $request);
+        }
+    }
+
+    /**
+     * @param array<string, array{previous:?string,current:?string}> $changes
+     */
+    public function recordSignatureChanges(
+        PaAttendanceListDraft $draft,
+        array $scope,
+        array $schedulePayload,
+        array $changes,
+        Request $request
+    ): void {
+        foreach ($changes as $signatureKey => $change) {
+            $previousValue = $change['previous'] ?? null;
+            $currentValue = $change['current'] ?? null;
+
+            if ($previousValue === $currentValue) {
+                continue;
+            }
+
             $action = $currentValue
                 ? ($previousValue ? 'replaced' : 'captured')
                 : 'deleted';
@@ -104,7 +131,7 @@ class PaAttendanceSignatureHistoryService
             $this->append(
                 $draft,
                 $scope,
-                $mergedPayload,
+                $schedulePayload,
                 (string) $signatureKey,
                 $currentValue,
                 $action,

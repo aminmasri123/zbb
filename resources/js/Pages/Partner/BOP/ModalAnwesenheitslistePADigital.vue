@@ -89,6 +89,7 @@ const exportingWord = ref(false)
 const exportingPdf = ref(false)
 const creatingArchiveFolder = ref(false)
 const signatures = reactive({})
+const pendingSignatureChanges = reactive({})
 const signatureHistoryVisible = ref(false)
 const signatureHistoryLoading = ref(false)
 const signatureHistoryRestoringId = ref(null)
@@ -447,6 +448,10 @@ const dayWithGroups = (day) => {
   }
 }
 
+const clearPendingSignatureChanges = () => {
+  Object.keys(pendingSignatureChanges).forEach((key) => delete pendingSignatureChanges[key])
+}
+
 const mergedScheduleForAllClasses = () => {
   const classNames = [...new Set(allParticipants.value.map(participantClassName))]
   const mergedDays = new Map()
@@ -554,6 +559,7 @@ const applyDraftPayload = (payload) => {
     }
 
     syncSignatures(payload.signatures || {}, { removeMissing: true })
+    clearPendingSignatureChanges()
     draftDirty.value = false
   } finally {
     draftHydrating.value = false
@@ -578,6 +584,7 @@ const loadDraft = async ({ silent = true } = {}) => {
           ? String(form.klasse).trim()
           : null
         syncSignatures({}, { removeMissing: true })
+        clearPendingSignatureChanges()
         draftHydrating.value = false
       }
     }
@@ -609,6 +616,13 @@ const performDraftSave = async ({ silent, draftPayload, requestSignatureSnapshot
     const signatureChangedDuringSave = signatureSnapshot(signatures) !== requestSignatureSnapshot
     const isLatestSaveResponse = generation === draftSaveGeneration && requestId === draftSaveRequestId
 
+    Object.entries(draftPayload.signatures || {}).forEach(([key, value]) => {
+      if (Object.prototype.hasOwnProperty.call(pendingSignatureChanges, key)
+        && pendingSignatureChanges[key] === value) {
+        delete pendingSignatureChanges[key]
+      }
+    })
+
     if (isLatestSaveResponse) {
       draftSaveBlocked.value = false
       draftSaveError.value = ''
@@ -617,7 +631,7 @@ const performDraftSave = async ({ silent, draftPayload, requestSignatureSnapshot
       draftLastSavedAt.value = response.data.updated_at || new Date().toISOString()
       draftExpiresAt.value = response.data.expires_at || draftExpiresAt.value
       draftLoaded.value = true
-      draftDirty.value = signatureChangedDuringSave
+      draftDirty.value = signatureChangedDuringSave || Object.keys(pendingSignatureChanges).length > 0
     }
   } catch (error) {
     if (generation === draftSaveGeneration && requestId === draftSaveRequestId && ![401, 419].includes(error?.response?.status)) {
@@ -636,7 +650,7 @@ const saveDraft = ({ silent = true, payload = null, signatureSnapshotGuard = nul
 
   const queuedSave = {
     silent,
-    draftPayload: payload || buildDraftPayload(),
+    draftPayload: payload || buildDraftPayload({ signaturesPayload: { ...pendingSignatureChanges } }),
     requestSignatureSnapshot: signatureSnapshotGuard ?? signatureSnapshot(signatures),
     generation: draftSaveGeneration,
   }
@@ -658,6 +672,7 @@ const captureSignature = (day, participant, value) => {
   if (!isParticipantExpectedOnDay(day, participant) || !value) return
 
   signatures[signatureKey(day, participant)] = value
+  pendingSignatureChanges[signatureKey(day, participant)] = value
   draftDirty.value = true
 }
 
@@ -681,6 +696,7 @@ const removeSignature = (day, participant) => {
 
   const key = signatureKey(day, participant)
   delete signatures[key]
+  pendingSignatureChanges[key] = ''
   draftDirty.value = true
   window.clearTimeout(draftSaveTimer)
   draftSaveTimer = null
@@ -707,7 +723,7 @@ const scheduleDraftSave = () => {
 const flushDraftSave = async () => {
   if (!draftDirty.value || !previewContext.value) return
 
-  const payload = buildDraftPayload()
+  const payload = buildDraftPayload({ signaturesPayload: { ...pendingSignatureChanges } })
   window.clearTimeout(draftSaveTimer)
   draftSaveTimer = null
   await saveDraft({ silent: true, payload })
@@ -1016,6 +1032,7 @@ const reloadScope = async () => {
   selectedDayId.value = null
   if (isPreparationPa.value) {
     syncSignatures({}, { removeMissing: true })
+    clearPendingSignatureChanges()
   }
   resetDraftMeta()
   draftHydrating.value = false
@@ -1592,6 +1609,7 @@ const clearDraft = async () => {
     manualDate.value = ''
     manualNote.value = ''
     syncSignatures({}, { removeMissing: true })
+    clearPendingSignatureChanges()
     draftHydrating.value = false
     draftDirty.value = false
     draftRevision.value = 0
@@ -1638,6 +1656,7 @@ const resetState = () => {
   manualDate.value = ''
   manualNote.value = ''
   Object.keys(signatures).forEach((key) => delete signatures[key])
+  clearPendingSignatureChanges()
   signatureHistoryVisible.value = false
   signatureHistoryLoading.value = false
   signatureHistoryRestoringId.value = null

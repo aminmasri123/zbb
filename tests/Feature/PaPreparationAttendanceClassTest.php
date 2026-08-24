@@ -380,25 +380,46 @@ class PaPreparationAttendanceClassTest extends TestCase
             'note' => 'PA-Tag 1',
         ];
         $signatureKey = $day['id'] . ':' . $person->id;
+        $preservedSignatureKey = $day['id'] . ':999999';
         $firstSignature = 'data:image/png;base64,ZXJzdGU=';
         $secondSignature = 'data:image/png;base64,endlaXRl=';
+        $preservedSignature = 'data:image/png;base64,dW52ZXJhZW5kZXJ0';
         $payload = [
             'version' => 2,
             'form' => ['startDate' => '2026-08-20'],
             'days' => [$day],
             'selectedDayId' => $day['id'],
             'classSchedules' => [],
-            'signatures' => [$signatureKey => $firstSignature],
+            'signatures' => [
+                $signatureKey => $firstSignature,
+                $preservedSignatureKey => $preservedSignature,
+            ],
         ];
 
         $this->actingAs($user)
             ->putJson(route('anwesenheitsliste.PA.digital.draft.store'), $scope + ['payload' => $payload])
-            ->assertOk();
+            ->assertOk()
+            ->assertJsonPath('payload', null);
 
-        $payload['signatures'][$signatureKey] = $secondSignature;
+        $preservedCiphertext = PaAttendanceListDraft::query()
+            ->firstOrFail()
+            ->payload['signatures'][$preservedSignatureKey];
+
+        // Der Browser sendet beim Sammeln nur die geänderte Unterschrift. Der
+        // bestehende Ciphertext aller anderen Unterschriften muss bytegenau
+        // erhalten bleiben.
+        $payload['signatures'] = [$signatureKey => $secondSignature];
         $this->actingAs($user->fresh())
             ->putJson(route('anwesenheitsliste.PA.digital.draft.store'), $scope + ['payload' => $payload])
-            ->assertOk();
+            ->assertOk()
+            ->assertJsonPath('payload', null);
+
+        $payloadAfterDelta = PaAttendanceListDraft::query()->firstOrFail()->payload;
+        $this->assertSame(
+            $preservedCiphertext,
+            $payloadAfterDelta['signatures'][$preservedSignatureKey]
+        );
+        $this->assertStringStartsWith('enc:v1:', $payloadAfterDelta['signatures'][$signatureKey]);
 
         $versions = PaAttendanceSignatureVersion::query()->orderBy('version')->get();
         $this->assertCount(2, $versions);

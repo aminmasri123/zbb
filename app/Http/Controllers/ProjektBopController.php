@@ -1247,7 +1247,7 @@ class ProjektBopController extends Controller
         $incomingPayload = $this->sanitizePaDraftPayload((array) $request->input('payload', []));
         $userId = auth()->id();
 
-        [$draft, $payload] = DB::transaction(function () use ($scope, $incomingPayload, $userId, $request) {
+        [$draft, $responsePayload] = DB::transaction(function () use ($scope, $incomingPayload, $userId, $request) {
             $now = now();
 
             PaAttendanceListDraft::query()->insertOrIgnore([
@@ -1270,33 +1270,48 @@ class ProjektBopController extends Controller
                 ->lockForUpdate()
                 ->first();
 
-            $storedPayload = $this->decryptPaDraftPayloadSignatures($draft?->payload ?? []);
+            // Signaturen bleiben beim normalen Speichern verschlüsselt. Dadurch
+            // müssen hunderte Base64-Bilder nicht gleichzeitig entschlüsselt,
+            // kopiert, erneut verschlüsselt und als Antwort serialisiert werden.
+            $draftPayload = $draft?->payload;
+            $storedPayload = is_array($draftPayload) ? $draftPayload : [];
+            unset($draftPayload);
             $existingPayload = $storedPayload;
             $legacyDraft = $this->legacyPaDraft($scope);
             if ($legacyDraft) {
+                $legacyPayload = $legacyDraft->payload;
                 $existingPayload = $this->restoreLegacySignatures(
                     $existingPayload,
-                    $this->decryptPaDraftPayloadSignatures($legacyDraft->payload ?? [])
+                    is_array($legacyPayload) ? $legacyPayload : []
                 );
+                unset($legacyPayload);
             }
-            $payload = $this->mergePaDraftPayload($existingPayload, $incomingPayload);
             $restoredLegacySignatures = $storedPayload !== $existingPayload;
+            [$payload, $signatureChanges] = $this->mergeEncryptedPaDraftPayload(
+                $existingPayload,
+                $incomingPayload
+            );
+
+            if ($restoredLegacySignatures) {
+                $payload = $this->encryptPaDraftPayloadSignatures($payload);
+            }
 
             if (! $restoredLegacySignatures && ! $this->draftPayloadHasChanges($existingPayload, $payload)) {
-                return [$draft, $existingPayload];
+                return [$draft, null];
             }
 
             $payload['saved_at'] = now()->toIso8601String();
 
-            $draft->payload = $this->encryptPaDraftPayloadSignatures($payload);
+            $draft->payload = $payload;
             $draft->revision = ($draft->revision ?: 0) + 1;
             $draft->user_update = $userId;
-            $this->paSignatureHistory->recordChanges(
+            $historyPayload = $payload;
+            unset($historyPayload['signatures']);
+            $this->paSignatureHistory->recordSignatureChanges(
                 $draft,
                 $scope,
-                $existingPayload,
-                $incomingPayload,
-                $payload,
+                $historyPayload,
+                $signatureChanges,
                 $request
             );
             $draft->save();
@@ -1305,12 +1320,20 @@ class ProjektBopController extends Controller
                 PaAttendanceListDraft::whereIn('draft_hash', $scope['legacy_draft_hashes'])->delete();
             }
 
-            return [$draft, $payload];
+            // Nur eine seltene Altdatenübernahme benötigt den vollständigen
+            // Rückgabestand. Normale Delta-Saves behalten den Browserzustand und
+            // vermeiden eine weitere große Klartextkopie aller Unterschriften.
+            return [
+                $draft,
+                $restoredLegacySignatures
+                    ? $this->decryptPaDraftPayloadSignatures($payload)
+                    : null,
+            ];
         });
 
         return response()->json([
             'success' => true,
-            'payload' => $payload,
+            'payload' => $responsePayload,
             'revision' => $draft->revision,
             'updated_at' => $draft->updated_at?->toIso8601String(),
             'expires_at' => $draft->expires_at?->toIso8601String(),
@@ -1985,6 +2008,61 @@ class ProjektBopController extends Controller
         $payload['signatures'] = $signatures;
 
         return $payload;
+    }
+
+    /**
+     * Verarbeitet ausschließlich die übermittelten Signaturänderungen. Bereits
+     * gespeicherte Ciphertexte bleiben unverändert, damit große Entwürfe weder
+     * unnötig kopiert noch versehentlich durch einen Teil-Request entfernt werden.
+     *
+     * @return array{0:array,1:array<string,array{previous:?string,current:?string}>}
+     */
+    private function mergeEncryptedPaDraftPayload(array $existingPayload, array $incomingPayload): array
+    {
+        $incomingSignatures = is_array($incomingPayload['signatures'] ?? null)
+            ? $incomingPayload['signatures']
+            : [];
+        $incomingPayload['signatures'] = [];
+        $payload = $this->mergePaDraftPayload($existingPayload, $incomingPayload);
+        $signatures = is_array($existingPayload['signatures'] ?? null)
+            ? $existingPayload['signatures']
+            : [];
+        $changes = [];
+
+        foreach ($incomingSignatures as $key => $incomingValue) {
+            if (!is_string($key)) {
+                continue;
+            }
+
+            $storedValue = is_string($signatures[$key] ?? null)
+                ? $signatures[$key]
+                : null;
+            $previousValue = $storedValue !== null
+                ? $this->decryptPaSignature($storedValue)
+                : null;
+            $currentValue = is_string($incomingValue) && $incomingValue !== ''
+                ? $incomingValue
+                : null;
+
+            if ($previousValue === $currentValue) {
+                continue;
+            }
+
+            $changes[$key] = [
+                'previous' => $previousValue,
+                'current' => $currentValue,
+            ];
+
+            if ($currentValue === null) {
+                unset($signatures[$key]);
+            } else {
+                $signatures[$key] = $this->encryptPaSignature($currentValue);
+            }
+        }
+
+        $payload['signatures'] = $signatures;
+
+        return [$payload, $changes];
     }
 
     private function paPreviewPayload(
