@@ -5,6 +5,7 @@ namespace Tests\Unit\Services\Bop;
 use App\Models\Gruppe;
 use App\Models\Personen;
 use App\Services\Bop\PotenzialanalyseReportService;
+use App\Services\PotenzialanalyseProfileService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\File;
 use setasign\Fpdi\Fpdi;
@@ -22,7 +23,7 @@ class PotenzialanalyseGroupReportOrderTest extends TestCase
             new Personen(['id' => 1, 'vorname' => 'Anna', 'nachname' => 'Albrecht']),
         ]));
 
-        $service = new PotenzialanalyseReportService();
+        $service = new PotenzialanalyseReportService(app(PotenzialanalyseProfileService::class));
         $orderedNames = $service->orderedParticipants($gruppe)
             ->map(fn (Personen $person) => "{$person->nachname}, {$person->vorname}")
             ->all();
@@ -45,7 +46,7 @@ class PotenzialanalyseGroupReportOrderTest extends TestCase
             new Personen(['id' => 2, 'vorname' => 'Berta', 'nachname' => 'Müller']),
         ]));
 
-        $service = new class extends PotenzialanalyseReportService
+        $service = new class(app(PotenzialanalyseProfileService::class)) extends PotenzialanalyseReportService
         {
             public array $renderedPersonIds = [];
 
@@ -71,5 +72,13 @@ class PotenzialanalyseGroupReportOrderTest extends TestCase
         } finally {
             File::delete($result['path']);
         }
+    }
+
+    public function test_container_injects_the_profile_service_used_to_select_the_report_template(): void
+    {
+        $service = app(PotenzialanalyseReportService::class);
+        $property = new \ReflectionProperty($service, 'profiles');
+
+        $this->assertInstanceOf(PotenzialanalyseProfileService::class, $property->getValue($service));
     }
 }

@@ -37,7 +37,7 @@ class PotenzialanalyseReportService
     ];
 
     public function __construct(
-        private readonly ?PotenzialanalyseProfileService $profiles = null,
+        private readonly PotenzialanalyseProfileService $profiles,
     ) {
     }
 
@@ -56,7 +56,7 @@ class PotenzialanalyseReportService
         $selfRatings = ($ratings->get('selbst') ?? collect())->keyBy('merkmal');
         $coachRatings = ($ratings->get('anleiter') ?? collect())->keyBy('merkmal');
 
-        $definitions = collect($this->profiles?->competenciesForGroup($gruppe) ?? self::MERKMALE)
+        $definitions = collect($this->profiles->competenciesForGroup($gruppe))
             ->map(fn (array $competency) => [
                 'key' => $competency['key'],
                 'bereich' => $competency['category'] ?? $competency['bereich'],
@@ -136,7 +136,7 @@ class PotenzialanalyseReportService
             ->first();
 
         $school = $student?->schule ?: $gruppe->partner;
-        $profil = $this->profiles?->profileForGroup($gruppe);
+        $profil = $this->profiles->profileForGroup($gruppe);
 
         return [
             'person' => $person,
@@ -159,7 +159,7 @@ class PotenzialanalyseReportService
 
     public function renderPdf(Gruppe $gruppe, Personen $person): string
     {
-        if ($this->profiles?->profileForGroup($gruppe)) {
+        if ($this->profiles->profileForGroup($gruppe)) {
             return Pdf::loadView('pdf.bericht-pa-profil', $this->reportData($gruppe, $person))
                 ->setOption('isHtml5ParserEnabled', true)
                 ->setOption('isRemoteEnabled', true)
