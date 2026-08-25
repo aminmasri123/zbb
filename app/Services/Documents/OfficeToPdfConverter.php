@@ -5,6 +5,7 @@ namespace App\Services\Documents;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use RuntimeException;
+use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
 class OfficeToPdfConverter
@@ -71,23 +72,51 @@ class OfficeToPdfConverter
     {
         $configured = trim((string) config('services.libreoffice.binary'));
         if ($configured !== '') {
-            return $configured;
-        }
-
-        if (PHP_OS_FAMILY === 'Windows') {
-            foreach ([
-                'C:\\Program Files\\LibreOffice\\program\\soffice.com',
-                'C:\\Program Files (x86)\\LibreOffice\\program\\soffice.com',
-            ] as $candidate) {
-                if (is_file($candidate)) {
-                    return $candidate;
-                }
+            if (is_file($configured)) {
+                return $configured;
             }
 
-            return 'soffice.com';
+            $configuredBinary = (new ExecutableFinder())->find($configured);
+            if ($configuredBinary) {
+                return $configuredBinary;
+            }
+
+            throw new RuntimeException(
+                'Der konfigurierte LibreOffice-Pfad wurde nicht gefunden: ' . $configured
+            );
         }
 
-        return 'libreoffice';
+        $absoluteCandidates = PHP_OS_FAMILY === 'Windows'
+            ? [
+                'C:\\Program Files\\LibreOffice\\program\\soffice.com',
+                'C:\\Program Files (x86)\\LibreOffice\\program\\soffice.com',
+            ]
+            : [
+                '/usr/bin/libreoffice',
+                '/usr/bin/soffice',
+                '/usr/local/bin/libreoffice',
+                '/usr/local/bin/soffice',
+                '/opt/libreoffice/program/soffice',
+            ];
+
+        foreach ($absoluteCandidates as $candidate) {
+            if (is_file($candidate)) {
+                return $candidate;
+            }
+        }
+
+        $finder = new ExecutableFinder();
+        foreach (PHP_OS_FAMILY === 'Windows'
+            ? ['soffice.com', 'soffice.exe']
+            : ['libreoffice', 'soffice'] as $command) {
+            if ($binary = $finder->find($command)) {
+                return $binary;
+            }
+        }
+
+        throw new RuntimeException(
+            'Auf dem Webserver ist LibreOffice nicht installiert. Für layouttreue Word-PDF-Exporte wird LibreOffice Writer benötigt.'
+        );
     }
 
     private function fileUri(string $path): string

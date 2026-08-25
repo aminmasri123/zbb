@@ -113,7 +113,8 @@
             font-style: italic;
         }
 
-        .coach-row td {
+        .coach-row > .assessment-source,
+        .coach-row > .rating-cell {
             border-bottom: 0;
         }
 
@@ -130,16 +131,8 @@
             page-break-inside: avoid;
         }
 
-        .competency-detail {
-            padding: 0 !important;
-            border: 0 !important;
-        }
-
-        .competency-inner {
-            width: 100%;
-            margin: 0;
-            border-collapse: collapse;
-            table-layout: fixed;
+        .competency-category {
+            page-break-inside: avoid;
         }
 
         .category-columns {
@@ -228,60 +221,44 @@
             </tr>
         </thead>
         @foreach($merkmale as $bereich => $items)
-            <tbody>
+            <tbody class="competency-category">
                 <tr>
                     <th colspan="{{ $competencyColumnCount }}" class="category-title">{{ $bereich }}</th>
                 </tr>
                 <tr class="category-columns">
-                    <th class="column-title">Kompetenz</th>
+                    <th class="column-title competency-name">Kompetenz</th>
                     <th class="column-title assessment-source"></th>
                     @foreach(range(1, 5) as $rating)
                         <th class="column-title rating-heading">{{ $rating }}</th>
                     @endforeach
                     <th class="column-title">Beurteilung</th>
                 </tr>
-            </tbody>
-            @foreach($items as $item)
-                <tbody>
-                    <tr class="competency-pair">
-                        <td class="competency-name">{{ $item['label'] }}</td>
-                        <td colspan="7" class="competency-detail">
-                            <table class="competency-inner">
-                                <colgroup>
-                                    <col style="width: 6%;">
-                                    <col style="width: 4%;">
-                                    <col style="width: 4%;">
-                                    <col style="width: 4%;">
-                                    <col style="width: 4%;">
-                                    <col style="width: 4%;">
-                                    <col style="width: 74%;">
-                                </colgroup>
-                                <tr @if($selfAssessmentVisible) class="coach-row" @endif>
-                                    <td width="6%" class="assessment-source">TL</td>
-                                    @foreach(range(1, 5) as $rating)
-                                        <td width="4%" class="rating-cell">{{ (int) ($item['anleiter'] ?? 0) === $rating ? 'X' : '' }}</td>
-                                    @endforeach
-                                    <td width="74%" class="assessment-text">
-                                        {{ ($item['anleiter_beurteilung'] ?? null) ?: ($item['anleiter_bemerkung'] ?: '-') }}
-                                        @if(($item['anleiter_beurteilung'] ?? null) && $item['anleiter_bemerkung'])
-                                            <span class="assessment-note">Zusatz: {{ $item['anleiter_bemerkung'] }}</span>
-                                        @endif
-                                    </td>
-                                </tr>
-                                @if($selfAssessmentVisible)
-                                    <tr class="self-row">
-                                        <td width="6%" class="assessment-source">SE</td>
-                                        @foreach(range(1, 5) as $rating)
-                                            <td width="4%" class="rating-cell">{{ (int) ($item['selbst'] ?? 0) === $rating ? 'X' : '' }}</td>
-                                        @endforeach
-                                        <td width="74%" class="assessment-text"></td>
-                                    </tr>
-                                @endif
-                            </table>
+                @foreach($items as $item)
+                    <tr @if($selfAssessmentVisible) class="coach-row" @endif>
+                        <td @if($selfAssessmentVisible) rowspan="2" @endif class="competency-name">{{ $item['label'] }}</td>
+                        <td class="assessment-source">TL</td>
+                        @foreach(range(1, 5) as $rating)
+                            <td class="rating-cell">{{ (int) ($item['anleiter'] ?? 0) === $rating ? 'X' : '' }}</td>
+                        @endforeach
+                        <td @if($selfAssessmentVisible) rowspan="2" @endif class="assessment-text">
+                            {{ ($item['anleiter_beurteilung'] ?? null) ?: ($item['anleiter_bemerkung'] ?: '-') }}
+                            @if(($item['anleiter_beurteilung'] ?? null)
+                                && $item['anleiter_bemerkung']
+                                && trim($item['anleiter_beurteilung']) !== trim($item['anleiter_bemerkung']))
+                                <span class="assessment-note">Zusatz: {{ $item['anleiter_bemerkung'] }}</span>
+                            @endif
                         </td>
                     </tr>
-                </tbody>
-            @endforeach
+                    @if($selfAssessmentVisible)
+                        <tr class="self-row">
+                            <td class="assessment-source">SE</td>
+                            @foreach(range(1, 5) as $rating)
+                                <td class="rating-cell">{{ (int) ($item['selbst'] ?? 0) === $rating ? 'X' : '' }}</td>
+                            @endforeach
+                        </tr>
+                    @endif
+                @endforeach
+            </tbody>
         @endforeach
     </table>
 

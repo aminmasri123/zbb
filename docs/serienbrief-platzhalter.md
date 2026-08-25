@@ -62,6 +62,8 @@ Ab dieser Zelle schreibt das System die Spalten `Nr.`, `Vorname`, `Nachname`, `G
 
 PDF-Vorlagen koennen als feste Datei zentral verwaltet und Projekten/Kategorien zugeordnet werden. Fuer befuellte Ausgaben wird empfohlen, Word- oder Excel-Vorlagen zu verwenden und im Manager `PDF` als Ausgabeformat zu aktivieren.
 
+Word-PDF-Ausgaben werden zur Erhaltung des DOCX-Layouts mit LibreOffice Writer erzeugt. Auf Linux-Webservern muss deshalb `libreoffice` beziehungsweise mindestens LibreOffice Writer installiert sein. Ein abweichender Programmpfad kann über `LIBREOFFICE_BINARY` konfiguriert werden, zum Beispiel `/usr/bin/soffice`.
+
 ## Verfuegbare Platzhalter
 
 Teilnehmer:

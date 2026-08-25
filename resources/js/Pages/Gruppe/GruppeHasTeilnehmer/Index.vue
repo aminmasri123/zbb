@@ -619,6 +619,19 @@ const paUebungErgebnis = (personenId, uebungId) => {
 const paKompetenzBemerkungText = (merkmalKey, wert) =>
   paKompetenzBemerkungTexte[merkmalKey]?.[Number(wert) - 1] || ''
 
+// Bereits gespeicherte Bewertungen aus älteren Profilständen sollen ihren
+// inzwischen kompetenzspezifischen Text sofort anzeigen, ohne einen Umweg
+// über eine andere Bewertungsstufe zu verlangen.
+Object.values(paTeilnehmerDaten.value).forEach((eintrag) => {
+  paMerkmale.forEach((merkmal) => {
+    const bewertung = eintrag?.kompetenzen?.[merkmal.key]
+
+    if (!bewertung?.bewertung || String(bewertung.bemerkung || '').trim()) return
+
+    bewertung.bemerkung = paKompetenzBemerkungText(merkmal.key, bewertung.bewertung)
+  })
+})
+
 const setzePaBewertung = (personenId, feld, merkmalKey, wert, autoSave = true) => {
   if (!canEditPotenzialanalyse.value) return
   const eintrag = ensurePaEintrag(personenId)

@@ -12,6 +12,7 @@ use App\Models\PotenzialanalyseUebungErgebnis;
 use App\Models\Projekt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class PotenzialanalyseProfileService
 {
@@ -24,6 +25,51 @@ class PotenzialanalyseProfileService
         'praktisch' => ['label' => 'Praktische Kompetenzen', 'code' => 'PR'],
         'methodisch' => ['label' => 'Methodische Kompetenzen', 'code' => 'MP'],
         'sozial' => ['label' => 'Soziale Kompetenzen', 'code' => 'SP'],
+    ];
+
+    private const RATING_DESCRIPTION_KEY_ALIASES = [
+        'motivation' => 'motivation',
+        'motivation_leistungsbereitschaft' => 'motivation',
+        'geduld' => 'geduld',
+        'ausdauer_persistenz' => 'ausdauer_persistenz',
+        'durchhaltevermogen' => 'ausdauer_persistenz',
+        'kreativitat' => 'kreativitaet',
+        'kreativitaet' => 'kreativitaet',
+        'selbstreflexion' => 'selbstreflexionsfaehigkeit',
+        'selbstreflexionsfahigkeit' => 'selbstreflexionsfaehigkeit',
+        'selbstreflexionsfaehigkeit' => 'selbstreflexionsfaehigkeit',
+        'gewissenhaft' => 'gewissenhaftigkeit',
+        'gewissenhaftigkeit' => 'gewissenhaftigkeit',
+        'sorgfalt' => 'gewissenhaftigkeit',
+        'sorgfalt_und_genauigkeit' => 'gewissenhaftigkeit',
+        'grobmotorik' => 'grobmotorik',
+        'feinmotorik' => 'feinmotorik',
+        'handgeschicklichkeit' => 'feinmotorik',
+        'raumliches_vorstellungsvermogen' => 'raeumliches_vorstellungsvermoegen',
+        'raeumliches_vorstellungsvermoegen' => 'raeumliches_vorstellungsvermoegen',
+        'wahrnehmung_und_symmetrie' => 'raeumliches_vorstellungsvermoegen',
+        'wahrnehmung_symmetrie' => 'raeumliches_vorstellungsvermoegen',
+        'arbeitsplanung' => 'strukturierte_vorgehensweise',
+        'strukturierte_vorgehensweise' => 'strukturierte_vorgehensweise',
+        'strukturiertes_vorgehen' => 'strukturierte_vorgehensweise',
+        'analyse_problemloesefaehigkeit' => 'analyse_problemloesefaehigkeit',
+        'analyse_und_problemlosungsfahigkeit' => 'analyse_problemloesefaehigkeit',
+        'analysefahigkeit_und_problemlosung' => 'analyse_problemloesefaehigkeit',
+        'analysefahigkeit_problemloesung' => 'analyse_problemloesefaehigkeit',
+        'aufgabenverstandnis' => 'aufgabenverstaendnis',
+        'aufgabenverstaendnis' => 'aufgabenverstaendnis',
+        'aufgabenverstandnis_informationsverarbeitung' => 'aufgabenverstaendnis',
+        'aufgabenverstaendnis_informationsverarbeitung' => 'aufgabenverstaendnis',
+        'teamfahigkeit' => 'teamfaehigkeit',
+        'teamfaehigkeit' => 'teamfaehigkeit',
+        'kommunikation' => 'kommunikationsfaehigkeit',
+        'kommunikationsfahigkeit' => 'kommunikationsfaehigkeit',
+        'kommunikationsfaehigkeit' => 'kommunikationsfaehigkeit',
+        'achtsamkeit' => 'aufmerksamkeit_achtsamkeit',
+        'aufmerksamkeit_achtsamkeit' => 'aufmerksamkeit_achtsamkeit',
+        'aufmerksamkeit_und_achtsamkeit' => 'aufmerksamkeit_achtsamkeit',
+        'umgangsformen' => 'aufmerksamkeit_achtsamkeit',
+        'sprachkompetenz' => 'sprachkompetenz',
     ];
 
     /**
@@ -432,6 +478,7 @@ class PotenzialanalyseProfileService
                 'rating_descriptions' => $this->competencyRatingDescriptions(
                     $kompetenz->key,
                     $kompetenz->bewertungsbeschreibungen,
+                    $kompetenz->label,
                 ),
             ])
             ->all();
@@ -479,13 +526,32 @@ class PotenzialanalyseProfileService
         })->all();
     }
 
-    private function competencyRatingDescriptions(string $key, ?array $configured = null): array
+    public function competencyRatingDescriptions(string $key, ?array $configured = null, ?string $label = null): array
     {
-        $configured = array_values($configured ?? []);
+        $configured = array_slice(array_pad(array_values($configured ?? []), 5, null), 0, 5);
         $legacyGeneric = config('potenzialanalyse_kompetenzbeurteilungen.legacy_generic', []);
-        $defaults = config("potenzialanalyse_kompetenzbeurteilungen.competencies.{$key}", []);
+        $hasConfiguredText = collect($configured)->contains(fn ($text) => filled($text));
 
-        if ($configured === [] || $configured === $legacyGeneric) {
+        if ($hasConfiguredText && $configured !== $legacyGeneric) {
+            return $configured;
+        }
+
+        $canonicalKey = collect([$key, $label])
+            ->filter(fn ($candidate) => filled($candidate))
+            ->map(fn ($candidate) => Str::of((string) $candidate)
+                ->ascii()
+                ->lower()
+                ->replaceMatches('/[^a-z0-9]+/', '_')
+                ->trim('_')
+                ->toString())
+            ->map(fn (string $candidate) => self::RATING_DESCRIPTION_KEY_ALIASES[$candidate] ?? null)
+            ->first(fn ($candidate) => filled($candidate));
+
+        $defaults = $canonicalKey
+            ? config("potenzialanalyse_kompetenzbeurteilungen.competencies.{$canonicalKey}", [])
+            : [];
+
+        if ($defaults !== []) {
             return array_values($defaults);
         }
 

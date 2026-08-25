@@ -96,6 +96,19 @@ class PotenzialanalyseProfileTest extends TestCase
             config('potenzialanalyse_kompetenzbeurteilungen.competencies.motivation'),
             $normalizedMotivation['rating_descriptions'],
         );
+
+        $this->assertSame(
+            config('potenzialanalyse_kompetenzbeurteilungen.competencies.selbstreflexionsfaehigkeit'),
+            $service->competencyRatingDescriptions('selbstreflexion', [null, null, null, null, null]),
+        );
+        $this->assertSame(
+            config('potenzialanalyse_kompetenzbeurteilungen.competencies.gewissenhaftigkeit'),
+            $service->competencyRatingDescriptions('individuell', [], 'Gewissenhaft'),
+        );
+        $this->assertSame(
+            config('potenzialanalyse_kompetenzbeurteilungen.competencies.aufgabenverstaendnis'),
+            $service->competencyRatingDescriptions('aufgabenverstaendnis_informationsverarbeitung'),
+        );
     }
 
     #[Test]

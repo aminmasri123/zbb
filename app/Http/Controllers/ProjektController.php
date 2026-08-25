@@ -269,12 +269,25 @@ class ProjektController extends Controller
 
         $profileScoringConfig = data_get($projekt->potenzialanalyseProfil?->bericht_config, 'auswertung_config')
             ?? $projekt->potenzialanalyse_auswertung_config;
+        $paProfiles = app(PotenzialanalyseProfileService::class);
         $paProfilePayload = $projekt->potenzialanalyseProfil?->toArray();
         if ($paProfilePayload) {
             $reportConfig = $projekt->potenzialanalyseProfil->bericht_config ?? [];
-            $reportConfig['darstellung'] = app(PotenzialanalyseProfileService::class)
-                ->reportDisplayConfig($projekt->potenzialanalyseProfil);
+            $reportConfig['darstellung'] = $paProfiles->reportDisplayConfig($projekt->potenzialanalyseProfil);
             $paProfilePayload['bericht_config'] = $reportConfig;
+            $paProfilePayload['kompetenzen'] = $projekt->potenzialanalyseProfil->kompetenzen
+                ->map(function ($kompetenz) use ($paProfiles) {
+                    $payload = $kompetenz->toArray();
+                    $payload['bewertungsbeschreibungen'] = $paProfiles->competencyRatingDescriptions(
+                        $kompetenz->key,
+                        $kompetenz->bewertungsbeschreibungen,
+                        $kompetenz->label,
+                    );
+
+                    return $payload;
+                })
+                ->values()
+                ->all();
         }
 
         return Inertia::render('Projekt/Show', [
