@@ -475,6 +475,7 @@ const paZeitgrenzenAusConfig = (config = {}) => Object.fromEntries(paZeitstufen.
 const normalizePaUebung = (uebung) => ({
     ...uebung,
     auswertung_hervorheben: Boolean(uebung.auswertung_hervorheben),
+    im_bericht_anzeigen: uebung.im_bericht_anzeigen !== false,
     ergebnis_typ: uebung.ergebnis_typ || 'punkte',
     berechnungsregel: uebung.berechnungsregel || 'direkte_punkte',
     zeit_erfassen: uebung.berechnungsregel === 'zeit'
@@ -493,6 +494,7 @@ const paUebungForm = reactive({
     hoechstwert: null,
     auswertbar: false,
     auswertung_hervorheben: false,
+    im_bericht_anzeigen: true,
     ergebnis_typ: 'punkte',
     berechnungsregel: 'direkte_punkte',
     zeit_erfassen: false,
@@ -603,6 +605,7 @@ const resetUebungForm = () => {
     paUebungForm.hoechstwert = null;
     paUebungForm.auswertbar = false;
     paUebungForm.auswertung_hervorheben = false;
+    paUebungForm.im_bericht_anzeigen = true;
     paUebungForm.ergebnis_typ = 'punkte';
     paUebungForm.berechnungsregel = 'direkte_punkte';
     paUebungForm.zeit_erfassen = false;
@@ -652,6 +655,7 @@ const paPayload = (item) => ({
     hoechstwert: item.hoechstwert || null,
     auswertbar: Boolean(item.auswertbar),
     auswertung_hervorheben: Boolean(item.auswertung_hervorheben),
+    im_bericht_anzeigen: item.im_bericht_anzeigen !== false,
     ergebnis_typ: item.ergebnis_typ || 'punkte',
     berechnungsregel: item.berechnungsregel || 'direkte_punkte',
     zeit_erfassen: item.berechnungsregel === 'zeit' || Boolean(item.zeit_erfassen),
@@ -2070,6 +2074,10 @@ const formatLuvTemplateDate = (value) => value
                                 Pflichtauswertung
                             </label>
                             <label class="flex items-center gap-2 text-sm text-gray-600">
+                                <input v-model="paUebungForm.im_bericht_anzeigen" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
+                                Im Bericht anzeigen
+                            </label>
+                            <label class="flex items-center gap-2 text-sm text-gray-600">
                                 <input
                                     type="checkbox"
                                     :checked="paUebungForm.berechnungsregel === 'zeit' || paUebungForm.zeit_erfassen"
@@ -2147,6 +2155,10 @@ const formatLuvTemplateDate = (value) => value
                             <label class="mt-6 flex items-center gap-2 text-sm text-gray-600">
                                 <input v-model="uebung.auswertung_hervorheben" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
                                 Pflichtauswertung
+                            </label>
+                            <label class="mt-6 flex items-center gap-2 text-sm text-gray-600">
+                                <input v-model="uebung.im_bericht_anzeigen" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
+                                Im Bericht anzeigen
                             </label>
                             <label class="mt-6 flex items-center gap-2 text-sm text-gray-600">
                                 <input

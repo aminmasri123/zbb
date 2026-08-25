@@ -77,6 +77,7 @@ class PotenzialanalyseProfileService
                     'hoechstwert' => null,
                     'auswertbar' => false,
                     'auswertung_hervorheben' => false,
+                    'im_bericht_anzeigen' => true,
                     'ergebnis_typ' => 'punkte',
                     'berechnungsregel' => $exercise['berechnungsregel'],
                     'zeit_erfassen' => $exercise['berechnungsregel'] === 'zeit',
@@ -182,7 +183,8 @@ class PotenzialanalyseProfileService
                 $exerciseCopy = PotenzialanalyseUebung::query()->create([
                     ...$exercise->only([
                         'projekt_id', 'name', 'tag', 'beschreibung', 'hoechstwert',
-                        'auswertbar', 'auswertung_hervorheben', 'ergebnis_typ', 'berechnungsregel', 'fehler_abzug',
+                        'auswertbar', 'auswertung_hervorheben', 'im_bericht_anzeigen',
+                        'ergebnis_typ', 'berechnungsregel', 'fehler_abzug',
                         'zeit_erfassen', 'berechnungs_config', 'mindestwert', 'sort_order', 'aktiv',
                     ]),
                     'profil_id' => $copy->id,

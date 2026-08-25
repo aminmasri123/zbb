@@ -79,6 +79,7 @@ class PotenzialanalyseReportService
             ->with('uebung')
             ->where('gruppe_id', $gruppe->id)
             ->where('personen_id', $person->id)
+            ->whereHas('uebung', fn ($query) => $query->where('im_bericht_anzeigen', true))
             ->get()
             ->sortBy([
                 fn ($a, $b) => ((int) ($a->uebung?->tag ?? 0)) <=> ((int) ($b->uebung?->tag ?? 0)),

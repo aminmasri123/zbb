@@ -42,7 +42,28 @@ class PotenzialanalyseGewichtungsmatrixTest extends TestCase
             'name' => 'Auswertung ohne Zeit',
             'auswertbar' => true,
             'auswertung_hervorheben' => true,
+            'im_bericht_anzeigen' => true,
             'zeit_erfassen' => false,
+        ]);
+    }
+
+    public function test_an_exercise_can_be_hidden_from_the_report(): void
+    {
+        [$user, $projekt] = $this->context();
+
+        $this->actingAs($user)->postJson(
+            route('potenzialanalyse.projekt.uebungen.store', $projekt),
+            [
+                'name' => 'Interne Übung',
+                'im_bericht_anzeigen' => false,
+                'aktiv' => true,
+            ],
+        )->assertCreated();
+
+        $this->assertDatabaseHas('potenzialanalyse_uebungen', [
+            'projekt_id' => $projekt->id,
+            'name' => 'Interne Übung',
+            'im_bericht_anzeigen' => false,
         ]);
     }
 

@@ -17,6 +17,7 @@ use App\Models\Projekt;
 use App\Models\Raeume;
 use App\Models\Standort;
 use App\Models\User;
+use App\Services\Bop\PotenzialanalyseReportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use ReflectionMethod;
 use Tests\TestCase;
@@ -24,6 +25,31 @@ use Tests\TestCase;
 class PotenzialanalyseTabClearTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_report_lists_only_exercises_configured_for_display(): void
+    {
+        [$gruppe, $teilnehmer, $sichtbareUebung] = $this->paContext();
+        $sichtbareUebung->update(['im_bericht_anzeigen' => true]);
+        $verdeckteUebung = PotenzialanalyseUebung::query()->create([
+            'projekt_id' => $gruppe->projekt_id,
+            'name' => 'Interne Übung',
+            'im_bericht_anzeigen' => false,
+            'aktiv' => true,
+        ]);
+
+        foreach ([$sichtbareUebung, $verdeckteUebung] as $uebung) {
+            PotenzialanalyseUebungErgebnis::query()->create([
+                'gruppe_id' => $gruppe->id,
+                'personen_id' => $teilnehmer->id,
+                'uebung_id' => $uebung->id,
+                'punkte' => 10,
+            ]);
+        }
+
+        $report = app(PotenzialanalyseReportService::class)->reportData($gruppe, $teilnehmer);
+
+        $this->assertSame([$sichtbareUebung->name], $report['uebungen']->pluck('name')->all());
+    }
 
     public function test_exercise_results_ignore_submitted_time_when_time_capture_is_disabled(): void
     {

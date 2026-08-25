@@ -912,6 +912,7 @@ class BopImportService
                 'hoechstwert' => $exercise->hoechstwert,
                 'auswertbar' => (bool) $exercise->auswertbar,
                 'auswertung_hervorheben' => false,
+                'im_bericht_anzeigen' => true,
                 'zeit_erfassen' => true,
                 'sort_order' => (int) $exercise->id,
                 'aktiv' => true,

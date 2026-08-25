@@ -521,6 +521,7 @@ class GruppeHasTeilnehmerController extends Controller
                     'hoechstwert' => $uebung->hoechstwert,
                     'auswertbar' => $uebung->auswertbar,
                     'auswertung_hervorheben' => (bool) $uebung->auswertung_hervorheben,
+                    'im_bericht_anzeigen' => (bool) $uebung->im_bericht_anzeigen,
                     'ergebnis_typ' => $uebung->ergebnis_typ,
                     'berechnungsregel' => $uebung->berechnungsregel ?: 'direkte_punkte',
                     'zeit_erfassen' => (bool) $uebung->zeit_erfassen,
