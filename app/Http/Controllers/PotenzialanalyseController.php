@@ -23,6 +23,8 @@ use App\Services\PotenzialanalyseResultCalculator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\HeaderUtils;
@@ -138,16 +140,69 @@ class PotenzialanalyseController extends Controller
             'uebungsergebnisse_anzeigen' => ['required', 'boolean'],
             'selbsteinschaetzung_anzeigen' => ['required', 'boolean'],
             'staerkenprofil_anzeigen' => ['required', 'boolean'],
+            'logo_anzeigen' => ['nullable', 'boolean'],
+            'logo_entfernen' => ['nullable', 'boolean'],
+            'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048', 'dimensions:max_width=3000,max_height=3000'],
         ]);
 
         $config = $profil->bericht_config ?? [];
-        $config['darstellung'] = $validated;
+        $display = $this->profiles->reportDisplayConfig($profil);
+        unset($display['logo_url']);
+
+        $display = [
+            ...$display,
+            'titel' => $validated['titel'],
+            'untertitel' => $validated['untertitel'] ?? null,
+            'uebungsergebnisse_anzeigen' => (bool) $validated['uebungsergebnisse_anzeigen'],
+            'selbsteinschaetzung_anzeigen' => (bool) $validated['selbsteinschaetzung_anzeigen'],
+            'staerkenprofil_anzeigen' => (bool) $validated['staerkenprofil_anzeigen'],
+        ];
+
+        $oldLogoPath = $display['logo_path'] ?? null;
+        if ($validated['logo_entfernen'] ?? false) {
+            $display['logo_path'] = null;
+            $display['logo_anzeigen'] = false;
+            $this->deleteUnusedProfileLogo($oldLogoPath, $profil);
+        } elseif ($request->hasFile('logo')) {
+            $extension = strtolower($request->file('logo')->getClientOriginalExtension() ?: 'png');
+            $filename = 'profil-'.$profil->id.'-'.Str::uuid().'.'.$extension;
+            $display['logo_path'] = $request->file('logo')->storeAs(
+                'potenzialanalyse/logos',
+                $filename,
+                'public',
+            );
+            $display['logo_anzeigen'] = true;
+            $this->deleteUnusedProfileLogo($oldLogoPath, $profil);
+        } elseif (array_key_exists('logo_anzeigen', $validated)) {
+            $display['logo_anzeigen'] = (bool) $validated['logo_anzeigen'];
+        }
+
+        $config['darstellung'] = $display;
         $profil->update(['bericht_config' => $config]);
 
         return response()->json([
             'message' => 'Die Berichtsdarstellung wurde gespeichert.',
             'profil' => $this->profiles->profilePayload($profil->fresh('kompetenzen')),
         ]);
+    }
+
+    private function deleteUnusedProfileLogo(?string $path, PotenzialanalyseProfil $currentProfile): void
+    {
+        if (blank($path) || ! str_starts_with($path, 'potenzialanalyse/logos/')) {
+            return;
+        }
+
+        $usedByAnotherProfile = PotenzialanalyseProfil::query()
+            ->where($currentProfile->getKeyName(), '!=', $currentProfile->getKey())
+            ->get(['bericht_config'])
+            ->contains(fn (PotenzialanalyseProfil $profile) => data_get(
+                $profile->bericht_config,
+                'darstellung.logo_path',
+            ) === $path);
+
+        if (! $usedByAnotherProfile) {
+            Storage::disk('public')->delete($path);
+        }
     }
 
     public function storeProfilKompetenz(Request $request, PotenzialanalyseProfil $profil)

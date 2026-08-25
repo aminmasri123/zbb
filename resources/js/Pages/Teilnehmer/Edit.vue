@@ -188,6 +188,7 @@
                             <th class="px-4 py-2 border">Anfangsdatum</th>
                             <th class="px-4 py-2 border">Enddatum</th>
                             <th class="px-4 py-2 border">Starttermin</th>
+                            <th class="px-4 py-2 border">Uhrzeit</th>
                             <th class="px-4 py-2 border">Endtermin</th>
                             <th  class="px-4 py-2 border">*</th>
                             </tr>
@@ -229,6 +230,7 @@
                                     <td class="border px-4 py-2">{{ formatDate(zeit.anfangsdatum)  || '-' }}</td>
                                     <td class="border px-4 py-2">{{ formatDate(zeit.enddatum) || '-'  }}</td>
                                     <td class="border px-4 py-2">{{ formatDate(zeit.starttermin)  || '-' }}</td>
+                                    <td class="border px-4 py-2">{{ formatTime(zeit.startzeit) || '-' }}</td>
                                     <td class="border px-4 py-2">{{ formatDate(zeit.endtermin)  || '-' }}</td>
                                     <td class="border px-6 py-4 text-center">
                                         <!-- Dropdown für Aktion -->
@@ -265,7 +267,7 @@
                                     <td class="border px-4 py-2 bg-gray-50">{{ getProjektStandortName(projekt) }}</td>
                                     <td class="border px-4 py-2">{{ projekt.pivot_model.meta?.betreuer?.geschlecht == 'w' ? 'Frau' : (projekt.pivot_model.meta?.betreuer?.geschlecht == 'm' ? 'Herr' : '------') }} {{ projekt.pivot_model.meta?.betreuer?.vorname }} {{ projekt.pivot_model.meta?.betreuer?.nachname }}</td>
                                     <td class="border px-4 py-2 font-medium bg-gray-50">{{ projekt.pivot_model.meta?.projektbegleiter?.geschlecht == 'w' ? 'Frau' : 'Herr' }} {{ projekt.pivot_model.meta?.projektbegleiter?.vorname }} {{ projekt.pivot_model.meta?.projektbegleiter?.nachname }}</td>
-                                    <td colspan="5" class="border px-4 py-2 text-gray-500 italic"> Keine Zeiträume vorhanden</td>
+                                    <td colspan="6" class="border px-4 py-2 text-gray-500 italic"> Keine Zeiträume vorhanden</td>
                                     <td class="border px-6 py-4 text-center">
                                         <!-- Dropdown für Aktion -->
                                         <Dropdown>
@@ -1091,37 +1093,32 @@
                         <input type="text" v-model="exportSuche" placeholder="🔍 Dokument suchen..." class="w-3/4 rounded-md border-gray-300 text-sm px-3 py-2 focus:ring-zbb focus:border-zbb" />
                     </div>
 
-                    <div class="flex flex-wrap">
-                        <div v-for="dok in gefilterteDokumente" :key="dok.id" class="w-1/4 cursor-pointer" >
-                            <a
-                                v-if="dok && dok.dateipfadName"
-                                :href="route('export.' + dok.dateipfadName, { id: teilnehmer.id, pfad: dok.dateipfad })"
-                                class="block"
-                            >
-
-                                <div class="rounded-lg shadow m-2 py-6 px-8 min-h-32 flex items-center gap-4 border-4 border-zbb bg-gray-50 hover:bg-gray-100 transition">
-                                    <!-- Icon je nach Typ -->
-                                    <span class="text-5xl">
-                                        <span v-if="dok.typ === 'word'" >
-                                            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAAC/UlEQVR4nO1ZW0hUQRjeoJfojEtFPUgPLvXQ5amEXop6qTMLolBiRDfCQiK6PASCFaIEJmGIUIJmdeZ4SdMwMTRvabWleM0W0WorRNPcTNSzum3rOnH+3R1SFFwLdrT5YJh//ll+vm/nn38OMwaDgICAwLLEqv05oeiAGokwSZKwUo5kZcDAJfbVr1yNle1IVk5KMslAslIjYWUYYUJnt2BTNayLykGSmeyRZCUOyGJiQZg45yIbdAHGiPw1OlmElUuSrKhIVrqQTDwLJRt0AegviM7XTJnaolrYHc2ypAWYMrXAV08IwEIA5U5AoDAJAZjQ3efKWcDEe20zCHXafoDfPTVN10fmMf/NgnfgHxn/SUPMQU6htRG5dNI1BYTyq22MzIaofCDux94LT9lcmaUXfLWtX/nYA83ddiDU9v478+HLlTOW+3z6GzbX0zsKPn0lgp5CCBOaVdYNAR2TbpYSCVkt4NMmf0GfXd7DVszl9oDvaHI9HwLOpllY0G0nSsBX0vAFxjUt/dA3ddnBH37mCfvtlmPFfKTQrrgyRurQtVrw9X7TYHwxoxH6CaebGs0q/Os6hkac/JwDRrPKUuVKdgs1HS4Ce8zhohujH9Jp317eebqUJj9oB7uyqY+PMop87bV1CIKqzz7SmMQ6sJ+3D8CcrX8MxqdSXtDCuk9gp+S+5UvA7cddEFSvSDfyOsFOK/RWmeJ67364VWilHR+GwY72pRoXKYQwobGpL9nhVNHYB/bx6w0wd/VuK4yrmvvp+IQ31TYdKeJLwI7YUiCm5/vngXGwt/oqUkR8FYz7hhze3u7g51MC+Zpe/0c1Fwv+Z5UJPVhAPf6dTCmcxNwJQJjQho5BFnx2lfFvZB1J99vnFBDUFEKY0PRHVkZydpXxb2QdUQnVfApAS/FzGgkBZPmkkEkICABCAP53AsIytVf/3+XufNfrRlkJZ28BPF+vL+aBA2GSqr/GcPvAsXDQFSGyulkyqzFIJikSJhVIJoMBBBAQEBAwLA38BsvuGopgwMs1AAAAAElFTkSuQmCC" alt="ms-word">
-                                        </span>
-                                        <span v-else-if="dok.typ === 'excel'">
-                                            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAACAElEQVR4nGNgGAWjYBSMgiEJxCYEZ4hNCP4oNjHkP6lY81A96fhg3Uetg3Xp1PQAWY4n2wOHwPgD9TxApuMp9MD/UQ/AwKgHDo16YJh6gLvQooC70OILT5HFf4pwieV/oWaPAfHAF4odD8PFFv95GlwxsOSaVLIxAyFANcfD8KgHUkc98F+4zPb/ndeP/oNA1aZJcHGtlsD/P37/+v/t14//Oq3Bg9cDPEUW/yPmlYE98ObL+/8SlU5gsZVnd4LFGrZOH9wxwAPFu64fBzu4cduM/5Y9sf///vv7//arh+AYGhIeMOmM/P/rz+//7799+n/s3oX///79++81LXvw5wEeJDzl4Ir/MLD8zPahkYl5kPDCE5vgHlhxdgdBD4i7a2FgoWlBZGMGSjzgOTULnGxOPbj8/8jd82BP+M/MHxoeEC6z/X/jxX2wo0Hp3n5CEtgzD98++y9W4Tj4PdC9ZwHY8TuuHYWLbbp0ACzWu3fh4PaAWVcUuPQBFZvWvXFwccOOsP+///4BY6ve2MHrAR4K8KgHpo00D3AXmX+mmgcKzAfAA4XmeVTxRIH5P6Eo/W/i7prv0bFqhgPZmIFaQMJD6z+5WD3NnmzMMOoBKBj1QNqoB0a6B9y1PtLfA3bUm+CQ9NBKk/DQ+kA/D9h9UE2xT6WaB0bBKBgFo4CBGgAA6UC2Ig/cY8oAAAAASUVORK5CYII=" alt="microsoft-excel">
-                                        </span>
-                                        <span v-else-if="dok.typ === 'pdf'">
-                                            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAACHklEQVR4nO3Xz0uUQRzH8edf8ReJ2iGFDqZ4Euzg1UfLFikTTDxEBhJBCUFmt6gIsSB08SIeokAXEb2FoOlBaDMslFzGiCWy/LXuO8ZhfdLFInNmd2g+MDzPHha+r2e/83xnPc/FRW/wc9Gy6nK6rQUkW8+YQ6ABsP12luSVCjMILQARM4dAF8AUAp0AYQChHSA0I4wAhEaEMYDQhDAKEBoQxgFiPyIrAX+zPAfwHQD7AHdCsLIIP9Yg3G0h4EuMvSR3oLXcIsCl0qD4+dfq2nPZIsD5E7CTUIUvv7MQ4OfCh/mgfWQ6ay0DhO8FbZRIQKjYMkBzGWxtKMD7uSMXT0bnwMy4AkSnoT7PMkBDAcRXgzbqu2nhIJPZ3tq97A609iqLABNDqvDhhzAVUfexj9By2gJAcxlsfFezoK0SLp6C5QWFWHijfp1nt2HkOYwNQiQMj67BuYIsAQw9UMXKTSw/d9RAZIA/ZnI4CwBNJ+FbXBUUnQGxtL/I1J5IZWURlqLqfnM9wwB5hHjZl/5kZfu86IWuBmgsVENObuqDmZ3MEKA+H3pvwOdPQTGyQNnfhx0h5IHvcQe8egqj/er7oZIMAK5Wq435a+Tkla10lLeXbxJwqw7Wvqb3+PWzx1Y82gBy0qZaJi6CU+fg/WMtHm2AC0XpbxQ5vP7hzIPxFnrSqZ6+/PvYf/fQQZS9AN/M8hzAdwAc4L8GuLh4v81P2tZphAMmDCgAAAAASUVORK5CYII=" alt="pdf">
-                                        </span>
-
-                                        <span v-else>
-                                            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAtElEQVR4nO3WQQrCQBBE0TqFiPc/kiiepiQwCxFcRLpqkun60GQZHukhA6RzReE8AFxXgBDAC8DNCanOjqEY8vx4StdMDbkAuDu+DMUQuDA0QCwYmiByDI2QLRnGDZFhZkAkmFmQcozjz77nbrYEhBUvnB0DGQVSHAPpBmHx/CqQdqvlioF0g1B0uL8LpN1quWIg3SBc5YrCVSCuGMgokOIYyCiQ4hjIKJCjQniQ+btlIAnm3gBxwrjC8DB8AAAAAElFTkSuQmCC" alt="document--v1">                                </span>
-                                    </span>
-
-                                    <div>
-                                        <div class="text-l font-bold">{{ dok.name }}</div>
-                                        <div class="text-sm text-gray-600">Version: {{ dok.version }}</div>
-                                    </div>
+                    <div class="mx-auto max-w-6xl overflow-hidden rounded-xl border border-gray-200 bg-white">
+                        <div
+                            v-for="dok in gefilterteDokumente"
+                            :key="dok.id"
+                            class="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 px-5 py-4 last:border-b-0"
+                        >
+                            <div class="min-w-0">
+                                <div class="font-semibold text-gray-800">{{ dok.name }}</div>
+                                <div class="mt-1 flex flex-wrap gap-2 text-xs text-gray-500">
+                                    <span class="rounded bg-gray-100 px-2 py-1">{{ dok.typ?.toUpperCase() }}</span>
+                                    <span v-if="dok.version" class="rounded bg-gray-100 px-2 py-1">Version {{ dok.version }}</span>
                                 </div>
-                            </a>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <a
+                                    v-for="format in teilnehmerExportFormate(dok)"
+                                    :key="dok.id + '-' + format"
+                                    :href="teilnehmerExportHref(dok, format)"
+                                    class="inline-flex min-w-20 items-center justify-center rounded border border-zbb/30 px-4 py-2 text-sm font-semibold text-zbb hover:bg-zbb hover:text-white"
+                                >
+                                    {{ format.toUpperCase() }}
+                                </a>
+                            </div>
+                        </div>
+                        <div v-if="gefilterteDokumente.length === 0" class="px-5 py-10 text-center text-sm text-gray-500">
+                            Keine Export-Vorlagen für die Teilnehmerseite vorhanden.
                         </div>
                     </div>
                 </div>
@@ -1546,6 +1543,11 @@
                 <input type="date" v-model="neuesProjekt.starttermin" class="input" />
                 </div>
 
+                <div>
+                <label>Uhrzeit des Erstgesprächs</label>
+                <input type="time" v-model="neuesProjekt.startzeit" class="input" />
+                </div>
+
                 <!-- Endtermin -->
                 <div>
                 <label>Endtermin</label>
@@ -1647,6 +1649,11 @@
                         <DatePicker v-model="editForm.starttermin" dateFormat="dd.mm.yy" class="w-full" inputClass="w-full" :manualInput="true" showIcon iconDisplay="input" />
                         <label>Starttermin</label>
                     </FloatLabel>
+                </div>
+
+                <div class="mb-4 w-full mx-1">
+                    <label class="mb-1 block text-sm text-gray-600">Uhrzeit des Erstgesprächs</label>
+                    <input v-model="editForm.startzeit" type="time" class="input w-full" />
                 </div>
 
                 <div class="mb-4 w-full mx-1">
@@ -2403,6 +2410,7 @@ watchEffect(() => {
     const neuesProjekt = ref({
         antragsdatum: '',
         starttermin: '',
+        startzeit: '',
         endtermin: '',
         anfangsdatum: '',
         enddatum: '',
@@ -3327,6 +3335,7 @@ const addProjekt = () => {
               {
                 antragsdatum: neuesProjekt.value.antragsdatum || null,
                 starttermin: neuesProjekt.value.starttermin || null,
+                startzeit: neuesProjekt.value.startzeit || null,
                 endtermin: neuesProjekt.value.endtermin || null,
                 anfangsdatum: neuesProjekt.value.anfangsdatum || null,
                 enddatum: neuesProjekt.value.enddatum || null,
@@ -3352,6 +3361,7 @@ const addProjekt = () => {
       neuesProjekt.value = {
         antragsdatum: "",
         starttermin: "",
+        startzeit: "",
         endtermin: "",
         anfangsdatum: "",
         enddatum: "",
@@ -3387,6 +3397,7 @@ const editForm = ref({
     kostenstelle: "",
     antragsdatum: "",
     starttermin: "",
+    startzeit: "",
     anfangsdatum: "",
     endtermin: "",
     enddatum: "",
@@ -3404,6 +3415,7 @@ const openProjektEdit = (zeit, projekt) =>  {
         status: projekt.pivot_model.status ?? "aktiv",
         antragsdatum: formatDate(zeit?.antragsdatum),
         starttermin: formatDate(zeit?.starttermin),
+        startzeit: formatTime(zeit?.startzeit),
         anfangsdatum: formatDate(zeit?.anfangsdatum),
         endtermin: formatDate(zeit?.endtermin),
         enddatum: formatDate(zeit?.enddatum),
@@ -3420,6 +3432,7 @@ function saveEdit() {
         status: editForm.value.status,
         antragsdatum: toLocalDateString(editForm.value.antragsdatum),
         starttermin: toLocalDateString(editForm.value.starttermin),
+        startzeit: editForm.value.startzeit || null,
         endtermin: toLocalDateString(editForm.value.endtermin),
         anfangsdatum: toLocalDateString(editForm.value.anfangsdatum),
         enddatum: toLocalDateString(editForm.value.enddatum),
@@ -3517,6 +3530,19 @@ const gefilterteDokumente = computed(() => {
       d.typ.toLowerCase().includes(term) ||
       (d.version && d.version.toString().includes(term))
   );
+});
+
+const teilnehmerExportFormate = (dokument) => {
+  if (dokument.ausgabeformate?.length) return dokument.ausgabeformate;
+  if (dokument.typ === 'excel') return ['xlsx'];
+  if (dokument.typ === 'pdf') return ['pdf'];
+  return ['docx'];
+};
+
+const teilnehmerExportHref = (dokument, format) => route('teilnehmer.document.export', {
+  personen: teilnehmer.value.id,
+  dokument: dokument.id,
+  format,
 });
 
 // ====================== LuV ======================

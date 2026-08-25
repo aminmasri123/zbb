@@ -18,6 +18,7 @@ use App\Models\Kostenstelle;
 use App\Models\Anwesenheitsstatuten;
 use App\Notifications\ConfiguredEventNotification;
 use App\Services\NotificationRecipientService;
+use App\Services\PotenzialanalyseProfileService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -268,9 +269,17 @@ class ProjektController extends Controller
 
         $profileScoringConfig = data_get($projekt->potenzialanalyseProfil?->bericht_config, 'auswertung_config')
             ?? $projekt->potenzialanalyse_auswertung_config;
+        $paProfilePayload = $projekt->potenzialanalyseProfil?->toArray();
+        if ($paProfilePayload) {
+            $reportConfig = $projekt->potenzialanalyseProfil->bericht_config ?? [];
+            $reportConfig['darstellung'] = app(PotenzialanalyseProfileService::class)
+                ->reportDisplayConfig($projekt->potenzialanalyseProfil);
+            $paProfilePayload['bericht_config'] = $reportConfig;
+        }
 
         return Inertia::render('Projekt/Show', [
             'projekt' => array_merge($projekt->toArray(), [
+                'potenzialanalyse_profil' => $paProfilePayload,
                 'potenzialanalyse_auswertung_config' => $profileScoringConfig,
                 'features' => $projekt->featureSettings(),
                 'rules' => $projekt->ruleSettings(),

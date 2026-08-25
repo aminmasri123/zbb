@@ -26,15 +26,20 @@ class PotenzialanalyseProfileTest extends TestCase
         $this->assertSame($profile->id, $project->fresh()->potenzialanalyse_profil_id);
         $this->assertCount(0, $profile->kompetenzen);
         $this->assertCount(0, $profile->uebungen);
+        $this->assertTrue(data_get($profile->bericht_config, 'darstellung.logo_anzeigen'));
+        $this->assertSame(
+            PotenzialanalyseProfileService::DEFAULT_HAMET_LOGO_PATH,
+            data_get($profile->bericht_config, 'darstellung.logo_path'),
+        );
     }
 
     #[Test]
     public function hamet_eplus_is_only_a_editable_template_with_complete_configurable_weights(): void
     {
         $project = Projekt::factory()->create(['potenzialanalyse_aktiv' => true]);
+        $service = app(PotenzialanalyseProfileService::class);
 
-        $profile = app(PotenzialanalyseProfileService::class)
-            ->createHametEPlusProfile($project);
+        $profile = $service->createHametEPlusProfile($project);
 
         $this->assertSame('entwurf', $profile->status);
         $this->assertCount(16, $profile->kompetenzen);
@@ -61,6 +66,36 @@ class PotenzialanalyseProfileTest extends TestCase
         $this->assertFalse($pinsel->zeit_erfassen);
         $this->assertTrue($schrauben->zeit_erfassen);
         $this->assertFalse($pinsel->auswertbar, 'Die Vorlage darf ohne fachlich bestätigte Maximalpunkte nicht automatisch auswerten.');
+        $this->assertTrue(data_get($profile->bericht_config, 'darstellung.logo_anzeigen'));
+        $this->assertSame(
+            PotenzialanalyseProfileService::DEFAULT_HAMET_LOGO_PATH,
+            data_get($profile->bericht_config, 'darstellung.logo_path'),
+        );
+        $this->assertSame(
+            public_path(PotenzialanalyseProfileService::DEFAULT_HAMET_LOGO_PATH),
+            $service->reportLogoFile($profile),
+        );
+
+        $ratingDescriptions = $profile->kompetenzen->pluck('bewertungsbeschreibungen');
+        $this->assertTrue($ratingDescriptions->every(fn (array $descriptions) => count($descriptions) === 5));
+        $this->assertCount(16, $ratingDescriptions->map(fn (array $descriptions) => json_encode($descriptions))->unique());
+
+        $motivation = $profile->kompetenzen->firstWhere('key', 'motivation');
+        $selfReflection = $profile->kompetenzen->firstWhere('key', 'selbstreflexionsfaehigkeit');
+        $this->assertStringContainsString('Aufforderung', $motivation->bewertungsbeschreibungen[0]);
+        $this->assertStringContainsString('Eigeninitiative', $motivation->bewertungsbeschreibungen[4]);
+        $this->assertStringContainsString('realistisch einschätzen', $selfReflection->bewertungsbeschreibungen[0]);
+        $this->assertStringContainsString('sehr differenziert', $selfReflection->bewertungsbeschreibungen[4]);
+
+        $motivation->update([
+            'bewertungsbeschreibungen' => config('potenzialanalyse_kompetenzbeurteilungen.legacy_generic'),
+        ]);
+        $payload = $service->profilePayload($profile->fresh('kompetenzen'));
+        $normalizedMotivation = collect($payload['kompetenzen'])->firstWhere('key', 'motivation');
+        $this->assertSame(
+            config('potenzialanalyse_kompetenzbeurteilungen.competencies.motivation'),
+            $normalizedMotivation['rating_descriptions'],
+        );
     }
 
     #[Test]

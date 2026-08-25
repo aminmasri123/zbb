@@ -63,7 +63,15 @@ class ProjectParticipationLifecycleTest extends TestCase
         $this->actingAs($user)->putJson(route('projekthasteilnehmer.update'), [
             'id' => $activeParticipation->id,
             'status' => 'aufgenommen',
+            'starttermin' => '2027-02-15',
+            'startzeit' => '10:45',
         ])->assertOk()->assertJsonPath('status', 'aufgenommen');
+
+        $this->assertDatabaseHas('zeitraums', [
+            'model_type' => ProjektHasPersonen::class,
+            'model_id' => $activeParticipation->id,
+            'startzeit' => '10:45',
+        ]);
 
         $this->actingAs($user)->putJson(route('projekthasteilnehmer.update'), [
             'id' => $foreignParticipation->id,

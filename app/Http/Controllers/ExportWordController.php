@@ -492,6 +492,74 @@ class ExportWordController extends Controller
             : $this->downloadWordDocxZip($templateFile, $gruppe, $projekt, $dokument, $teilnehmer);
     }
 
+    public function teilnehmerDokument(
+        Request $request,
+        Personen $personen,
+        Dokumente $dokument,
+        ActiveProjectContext $activeProjectContext
+    )
+    {
+        $user = $request->user();
+        $projekt = $user ? $activeProjectContext->currentAvailableFor($user) : null;
+
+        abort_unless($projekt, 409, 'Bitte wählen Sie zuerst ein aktives Projekt aus.');
+        abort_unless(
+            Personen::query()
+                ->teilnehmer()
+                ->visibleForUser($user)
+                ->whereKey($personen->id)
+                ->whereHas('projekte', fn ($query) => $query->whereKey($projekt->id))
+                ->exists(),
+            403
+        );
+        abort_unless($dokument->aktiv !== false, 404);
+        abort_unless(($dokument->einsatzbereich ?? null) === 'teilnehmer', 404);
+        abort_unless(($dokument->kontext ?? null) === 'teilnehmer', 404);
+        abort_unless($this->isAssignedToProject($projekt, $dokument), 404);
+        abort_unless($this->canExportDocument($user, $dokument), 403);
+
+        if (!$dokument->dateipfad) {
+            return back()->with('error', 'Diese Vorlage hat keinen Dateipfad.');
+        }
+
+        $format = $this->requestedExportFormat($request, $dokument);
+        if (!$this->formatAllowed($dokument, $format)) {
+            return back()->with('error', 'Dieses Ausgabeformat ist für die Vorlage nicht freigegeben.');
+        }
+
+        $templateFile = $this->storageTemplatePath($dokument->dateipfad);
+        if (!file_exists($templateFile)) {
+            return back()->with('error', 'Die Vorlage wurde nicht gefunden: ' . $dokument->dateipfad);
+        }
+
+        $personen->loadMissing(['adresses', 'kontaktes.kontakttyp', 'sozialedaten']);
+
+        $teilnahme = ProjektHasPersonen::query()
+            ->with(['meta.betreuer', 'zeitraume'])
+            ->where('projekt_id', $projekt->id)
+            ->where('personen_id', $personen->id)
+            ->firstOrFail();
+
+        if ($dokument->typ === 'pdf') {
+            return response()->download(
+                $templateFile,
+                $this->safeFileName($dokument->name . '_' . $personen->vorname . '_' . $personen->nachname) . '.pdf'
+            );
+        }
+
+        $gruppe = $this->participantContextGroup($projekt, $personen);
+
+        return $this->downloadParticipantTemplate(
+            $templateFile,
+            $gruppe,
+            $projekt,
+            $personen,
+            $dokument,
+            $format,
+            $teilnahme
+        );
+    }
+
     public function partnerDokument(
         Request $request,
         Partner $partner,
@@ -616,6 +684,136 @@ class ExportWordController extends Controller
         $filename = $this->safeFileName($dokument->name . '_' . $partner->name) . '.' . $extension;
 
         return response()->download($outputPath, $filename)->deleteFileAfterSend(true);
+    }
+
+    private function downloadParticipantTemplate(
+        string $templateFile,
+        Gruppe $gruppe,
+        Projekt $projekt,
+        Personen $personen,
+        Dokumente $dokument,
+        string $format,
+        ProjektHasPersonen $teilnahme
+    ) {
+        $tempDir = storage_path('app/temp');
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0775, true);
+        }
+
+        $outputPath = null;
+        $docPath = null;
+
+        try {
+            if ($dokument->typ === 'word') {
+                $docPath = $tempDir . DIRECTORY_SEPARATOR . uniqid('teilnehmer_word_', true) . '.docx';
+                $processor = new TemplateProcessor($templateFile);
+                $values = $this->placeholderValues($gruppe, $projekt, $personen, 1, $teilnahme);
+                if ($error = $this->participantPlaceholderValidationError($processor->getVariables(), $values)) {
+                    return back()->with('error', $error);
+                }
+                $this->fillSerienbriefTemplate($processor, $gruppe, $projekt, $personen, 1, $teilnahme);
+                $processor->saveAs($docPath);
+
+                if ($format === 'pdf') {
+                    $outputPath = $tempDir . DIRECTORY_SEPARATOR . uniqid('teilnehmer_word_', true) . '.pdf';
+                    WordSettings::setPdfRendererName(WordSettings::PDF_RENDERER_DOMPDF);
+                    WordSettings::setPdfRendererPath(base_path('vendor/dompdf/dompdf'));
+                    $phpWord = WordIOFactory::load($docPath);
+                    WordIOFactory::createWriter($phpWord, 'PDF')->save($outputPath);
+                    @unlink($docPath);
+                } else {
+                    $outputPath = $docPath;
+                }
+            } elseif ($dokument->typ === 'excel') {
+                $spreadsheet = SpreadsheetIOFactory::load($templateFile);
+                $values = $this->placeholderValues($gruppe, $projekt, $personen, 1, $teilnahme);
+                if ($error = $this->participantPlaceholderValidationError(
+                    $this->spreadsheetPlaceholderVariables($spreadsheet),
+                    $values
+                )) {
+                    return back()->with('error', $error);
+                }
+                $this->fillParticipantSpreadsheetTemplate($spreadsheet, $gruppe, $projekt, $personen, $teilnahme);
+                $extension = $format === 'pdf' ? 'pdf' : 'xlsx';
+                $outputPath = $tempDir . DIRECTORY_SEPARATOR . uniqid('teilnehmer_excel_', true) . '.' . $extension;
+                SpreadsheetIOFactory::createWriter($spreadsheet, $format === 'pdf' ? 'Dompdf' : 'Xlsx')->save($outputPath);
+            } else {
+                return back()->with('error', 'Dieser Vorlagentyp wird für Teilnehmerexporte nicht unterstützt.');
+            }
+        } catch (Throwable $exception) {
+            foreach (array_unique(array_filter([$docPath, $outputPath])) as $path) {
+                if (file_exists($path)) {
+                    @unlink($path);
+                }
+            }
+
+            return back()->with('error', 'Teilnehmerdokument konnte nicht erstellt werden: ' . $exception->getMessage());
+        }
+
+        $extension = pathinfo($outputPath, PATHINFO_EXTENSION);
+        $filename = $this->safeFileName(
+            $dokument->name . '_' . $personen->vorname . '_' . $personen->nachname
+        ) . '.' . $extension;
+
+        return response()->download($outputPath, $filename)->deleteFileAfterSend(true);
+    }
+
+    private function participantContextGroup(Projekt $projekt, Personen $personen): Gruppe
+    {
+        $gruppe = Gruppe::query()
+            ->with([
+                'bereich',
+                'raum',
+                'betreuer',
+                'partner.adresses',
+                'partner.kontaktes.kontakttyp',
+                'partners.adresses',
+                'partners.kontaktes.kontakttyp',
+            ])
+            ->where('projekt_id', $projekt->id)
+            ->whereHas('teilnehmer', fn ($query) => $query->whereKey($personen->id))
+            ->orderByDesc('enddatum')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($gruppe) {
+            return $gruppe;
+        }
+
+        $gruppe = new Gruppe(['projekt_id' => $projekt->id]);
+        $gruppe->setRelation('bereich', null);
+        $gruppe->setRelation('raum', null);
+        $gruppe->setRelation('betreuer', null);
+        $gruppe->setRelation('partner', null);
+        $gruppe->setRelation('partners', collect());
+
+        return $gruppe;
+    }
+
+    private function fillParticipantSpreadsheetTemplate(
+        $spreadsheet,
+        Gruppe $gruppe,
+        Projekt $projekt,
+        Personen $personen,
+        ProjektHasPersonen $teilnahme
+    ): void {
+        $values = $this->placeholderValues($gruppe, $projekt, $personen, 1, $teilnahme);
+
+        foreach ($spreadsheet->getWorksheetIterator() as $sheet) {
+            foreach ($sheet->getCellCollection()->getCoordinates() as $coordinate) {
+                $cell = $sheet->getCell($coordinate);
+                $value = $cell->getValue();
+
+                if (!is_string($value)) {
+                    continue;
+                }
+
+                $replacedValue = $this->replacePlaceholderText($value, $values);
+                if ($replacedValue !== $value) {
+                    $cell->setValueExplicit($replacedValue, DataType::TYPE_STRING);
+                }
+            }
+        }
     }
 
     private function wordTemplateSupportsSingleGroupDocument(string $templateFile): bool
@@ -798,9 +996,16 @@ class ExportWordController extends Controller
         return response()->download($outputPath, $filename)->deleteFileAfterSend(true);
     }
 
-    private function fillSerienbriefTemplate(TemplateProcessor $processor, Gruppe $gruppe, Projekt $projekt, Personen $person, int $nummer): void
+    private function fillSerienbriefTemplate(
+        TemplateProcessor $processor,
+        Gruppe $gruppe,
+        Projekt $projekt,
+        Personen $person,
+        int $nummer,
+        ?ProjektHasPersonen $teilnahme = null
+    ): void
     {
-        $values = $this->placeholderValues($gruppe, $projekt, $person, $nummer);
+        $values = $this->placeholderValues($gruppe, $projekt, $person, $nummer, $teilnahme);
 
         foreach ($processor->getVariables() as $variable) {
             $processor->setValue($variable, $values[$variable] ?? $values[strtolower($variable)] ?? '');
@@ -882,10 +1087,21 @@ class ExportWordController extends Controller
             ->groupBy(fn ($variable) => (int) preg_replace('/^\D+/', '', (string) $variable));
     }
 
-    private function placeholderValues(Gruppe $gruppe, Projekt $projekt, ?Personen $person = null, int $nummer = 1): array
+    private function placeholderValues(
+        Gruppe $gruppe,
+        Projekt $projekt,
+        ?Personen $person = null,
+        int $nummer = 1,
+        ?ProjektHasPersonen $teilnahme = null
+    ): array
     {
         $adresse = $person?->adresses?->last();
-        $betreuer = $gruppe->betreuer;
+        $betreuer = $teilnahme ? $teilnahme->meta?->betreuer : $gruppe->betreuer;
+        $zeitraum = $teilnahme?->zeitraume?->sortByDesc('id')->first();
+        $terminDatum = $this->formatDate($zeitraum?->starttermin);
+        $terminUhrzeit = $this->formatPlaceholderTime($zeitraum?->startzeit);
+        $betreuerAnrede = $betreuer?->geschlecht === 'w' ? 'Frau' : ($betreuer?->geschlecht === 'm' ? 'Herr' : '');
+        $betreuerAnredeDativ = $betreuer?->geschlecht === 'w' ? 'Frau' : ($betreuer?->geschlecht === 'm' ? 'Herrn' : '');
         $raum = $gruppe->raum;
         $email = $person?->kontaktes?->first(fn ($kontakt) => strtolower($kontakt->kontakttyp?->name ?? '') === 'email');
         $telefon = $person?->kontaktes?->first(fn ($kontakt) => in_array(strtolower($kontakt->kontakttyp?->name ?? ''), ['telefon', 'mobile', 'mobil'], true));
@@ -915,7 +1131,7 @@ class ExportWordController extends Controller
             'kundennummer' => $person?->sozialedaten?->kundennummer,
             'projekt' => $projekt->name,
             'projekt_name' => $projekt->name,
-            'gruppe' => $gruppe->bereich?->name ?? ('Gruppe ' . $gruppe->id),
+            'gruppe' => $gruppe->bereich?->name ?? ($gruppe->exists ? 'Gruppe ' . $gruppe->id : ''),
             'gruppe_id' => $gruppe->id,
             'bereich' => $gruppe->bereich?->name,
             'raum' => $raum?->name ?? $gruppe->externer_ort,
@@ -927,8 +1143,16 @@ class ExportWordController extends Controller
             'startzeit' => substr((string) $gruppe->startzeit, 0, 5),
             'endzeit' => substr((string) $gruppe->endzeit, 0, 5),
             'betreuer' => trim(($betreuer?->vorname ?? '') . ' ' . ($betreuer?->nachname ?? '')),
+            'betreuer_name' => trim(($betreuer?->vorname ?? '') . ' ' . ($betreuer?->nachname ?? '')),
+            'betreuer_anrede' => $betreuerAnrede,
+            'betreuer_anrede_dativ' => $betreuerAnredeDativ,
             'betreuer_vorname' => $betreuer?->vorname,
             'betreuer_nachname' => $betreuer?->nachname,
+            'termin_datum' => $terminDatum,
+            'termin_uhrzeit' => $terminUhrzeit,
+            'termin' => $terminDatum && $terminUhrzeit ? $terminDatum . ' um ' . $terminUhrzeit . ' Uhr' : '',
+            'erstgespraech_datum' => $terminDatum,
+            'erstgespraech_uhrzeit' => $terminUhrzeit,
         ], $partnerValues);
     }
 
@@ -1731,6 +1955,57 @@ class ExportWordController extends Controller
         return $bereichIds->isEmpty() || $bereichIds->contains((int) $gruppe->bereich_id);
     }
 
+    private function spreadsheetPlaceholderVariables($spreadsheet): array
+    {
+        $variables = [];
+
+        foreach ($spreadsheet->getWorksheetIterator() as $sheet) {
+            foreach ($sheet->getCellCollection()->getCoordinates() as $coordinate) {
+                $value = $sheet->getCell($coordinate)->getValue();
+                if (!is_string($value)) {
+                    continue;
+                }
+
+                preg_match_all('/\$\{([^}]+)\}|\{\{([^}]+)\}\}/', $value, $matches, PREG_SET_ORDER);
+                foreach ($matches as $match) {
+                    $variables[] = $match[1] !== '' ? $match[1] : ($match[2] ?? '');
+                }
+            }
+        }
+
+        return array_values(array_unique(array_filter($variables)));
+    }
+
+    private function participantPlaceholderValidationError(array $variables, array $values): ?string
+    {
+        $requiredLabels = [
+            'termin_datum' => 'Termin-Datum',
+            'erstgespraech_datum' => 'Termin-Datum',
+            'termin_uhrzeit' => 'Termin-Uhrzeit',
+            'erstgespraech_uhrzeit' => 'Termin-Uhrzeit',
+            'termin' => 'Termin-Datum und Termin-Uhrzeit',
+            'betreuer' => 'Betreuer',
+            'betreuer_name' => 'Betreuer',
+            'betreuer_vorname' => 'Betreuer',
+            'betreuer_nachname' => 'Betreuer',
+            'betreuer_anrede' => 'Anrede/Geschlecht des Betreuers',
+            'betreuer_anrede_dativ' => 'Anrede/Geschlecht des Betreuers',
+        ];
+
+        $missing = collect($variables)
+            ->map(fn ($variable) => strtolower((string) $variable))
+            ->filter(fn ($variable) => isset($requiredLabels[$variable]) && trim((string) ($values[$variable] ?? '')) === '')
+            ->map(fn ($variable) => $requiredLabels[$variable])
+            ->unique()
+            ->values();
+
+        if ($missing->isEmpty()) {
+            return null;
+        }
+
+        return 'Bitte zuerst folgende Angaben in der Projektteilnahme ergänzen: ' . $missing->implode(', ') . '.';
+    }
+
     private function storageTemplatePath(string $path): string
     {
         return storage_path(ltrim($path, '/\\'));
@@ -1739,6 +2014,15 @@ class ExportWordController extends Controller
     private function formatDate($value): string
     {
         return $value ? date('d.m.Y', strtotime($value)) : '';
+    }
+
+    private function formatPlaceholderTime($value): string
+    {
+        if (!$value) {
+            return '';
+        }
+
+        return substr((string) $value, 0, 5);
     }
 
     private function safeFileName(string $value): string

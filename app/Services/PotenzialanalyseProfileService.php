@@ -11,10 +11,13 @@ use App\Models\PotenzialanalyseUebung;
 use App\Models\PotenzialanalyseUebungErgebnis;
 use App\Models\Projekt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class PotenzialanalyseProfileService
 {
     public const HAMET_EPLUS_KEY = 'hamet_eplus';
+
+    public const DEFAULT_HAMET_LOGO_PATH = 'img/hamet-eplus.png';
 
     public const CATEGORIES = [
         'persoenlich' => ['label' => 'Persönliche Kompetenzen', 'code' => 'PP'],
@@ -57,6 +60,8 @@ class PotenzialanalyseProfileService
                         'uebungsergebnisse_anzeigen' => true,
                         'selbsteinschaetzung_anzeigen' => true,
                         'staerkenprofil_anzeigen' => true,
+                        'logo_anzeigen' => true,
+                        'logo_path' => self::DEFAULT_HAMET_LOGO_PATH,
                     ],
                 ],
                 'veroeffentlicht_at' => null,
@@ -137,6 +142,8 @@ class PotenzialanalyseProfileService
                         'uebungsergebnisse_anzeigen' => true,
                         'selbsteinschaetzung_anzeigen' => true,
                         'staerkenprofil_anzeigen' => true,
+                        'logo_anzeigen' => true,
+                        'logo_path' => self::DEFAULT_HAMET_LOGO_PATH,
                     ],
                 ],
             ]);
@@ -330,6 +337,9 @@ class PotenzialanalyseProfileService
 
         $profil->loadMissing('kompetenzen');
 
+        $reportConfig = $profil->bericht_config ?? [];
+        $reportConfig['darstellung'] = $this->reportDisplayConfig($profil);
+
         return [
             'id' => $profil->id,
             'key' => $profil->key,
@@ -337,9 +347,67 @@ class PotenzialanalyseProfileService
             'version' => $profil->version,
             'status' => $profil->status,
             'aktiv' => $profil->aktiv,
-            'bericht_config' => $profil->bericht_config,
+            'bericht_config' => $reportConfig,
             'kompetenzen' => $this->profileCompetencies($profil),
         ];
+    }
+
+    public function reportDisplayConfig(?PotenzialanalyseProfil $profil): array
+    {
+        if (! $profil) {
+            return [];
+        }
+
+        $display = data_get($profil->bericht_config, 'darstellung', []);
+        if (! array_key_exists('logo_path', $display)) {
+            $display['logo_path'] = self::DEFAULT_HAMET_LOGO_PATH;
+        }
+        if (! array_key_exists('logo_anzeigen', $display)) {
+            $display['logo_anzeigen'] = filled($display['logo_path'] ?? null);
+        }
+
+        $display['logo_url'] = $this->reportLogoUrl($display['logo_path'] ?? null);
+
+        return $display;
+    }
+
+    public function reportLogoFile(?PotenzialanalyseProfil $profil): ?string
+    {
+        $display = $this->reportDisplayConfig($profil);
+        if (! ($display['logo_anzeigen'] ?? false)) {
+            return null;
+        }
+
+        return $this->resolveReportLogoFile($display['logo_path'] ?? null);
+    }
+
+    private function reportLogoUrl(?string $path): ?string
+    {
+        if (! $this->resolveReportLogoFile($path)) {
+            return null;
+        }
+
+        if (is_file(public_path((string) $path))) {
+            return asset($path);
+        }
+
+        return Storage::disk('public')->url($path);
+    }
+
+    private function resolveReportLogoFile(?string $path): ?string
+    {
+        if (blank($path)) {
+            return null;
+        }
+
+        $publicFile = public_path($path);
+        if (is_file($publicFile)) {
+            return $publicFile;
+        }
+
+        return Storage::disk('public')->exists($path)
+            ? Storage::disk('public')->path($path)
+            : null;
     }
 
     private function profileCompetencies(?PotenzialanalyseProfil $profil): array
@@ -361,7 +429,10 @@ class PotenzialanalyseProfileService
                 'category_code' => $kompetenz->kategorie_code,
                 'description' => $kompetenz->beschreibung,
                 'self_assessment_text' => $kompetenz->selbsteinschaetzung_text,
-                'rating_descriptions' => $kompetenz->bewertungsbeschreibungen ?? [],
+                'rating_descriptions' => $this->competencyRatingDescriptions(
+                    $kompetenz->key,
+                    $kompetenz->bewertungsbeschreibungen,
+                ),
             ])
             ->all();
     }
@@ -388,16 +459,8 @@ class PotenzialanalyseProfileService
         ];
 
         $categoryOrder = ['persoenlich' => 0, 'praktisch' => 100, 'methodisch' => 200, 'sozial' => 300];
-        $genericRatings = [
-            'Kaum erkennbar; umfassende Unterstützung ist erforderlich.',
-            'Teilweise erkennbar; häufige Unterstützung ist erforderlich.',
-            'Überwiegend angemessen; gelegentliche Unterstützung ist erforderlich.',
-            'Sicher, selbstständig und wiederholt erkennbar.',
-            'Besonders sicher, selbstständig und auch in anspruchsvollen Situationen erkennbar.',
-        ];
-
         $withinCategory = [];
-        return collect($definitions)->map(function (array $definition) use (&$withinCategory, $categoryOrder, $genericRatings) {
+        return collect($definitions)->map(function (array $definition) use (&$withinCategory, $categoryOrder) {
             [$key, $label, $category, $selfText] = $definition;
             $withinCategory[$category] = ($withinCategory[$category] ?? 0) + 1;
 
@@ -409,11 +472,24 @@ class PotenzialanalyseProfileService
                 'kategorie_code' => self::CATEGORIES[$category]['code'],
                 'beschreibung' => null,
                 'selbsteinschaetzung_text' => $selfText,
-                'bewertungsbeschreibungen' => $genericRatings,
+                'bewertungsbeschreibungen' => $this->competencyRatingDescriptions($key),
                 'sort_order' => $categoryOrder[$category] + $withinCategory[$category],
                 'aktiv' => true,
             ];
         })->all();
+    }
+
+    private function competencyRatingDescriptions(string $key, ?array $configured = null): array
+    {
+        $configured = array_values($configured ?? []);
+        $legacyGeneric = config('potenzialanalyse_kompetenzbeurteilungen.legacy_generic', []);
+        $defaults = config("potenzialanalyse_kompetenzbeurteilungen.competencies.{$key}", []);
+
+        if ($configured === [] || $configured === $legacyGeneric) {
+            return array_values($defaults);
+        }
+
+        return $configured;
     }
 
     private function hametExercises(): array

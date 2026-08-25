@@ -17,7 +17,9 @@ class Zeitraum extends Pivot //Model
     protected $fillable = [
         'antragsdatum',
         'starttermin',
+        'startzeit',
         'endtermin',
+        'endzeit',
         'anfangsdatum',
         'enddatum',
         'model_type',
@@ -36,7 +38,9 @@ class Zeitraum extends Pivot //Model
     protected $casts = [
         'antragsdatum' => 'date',
         'starttermin' => 'date',
+        'startzeit' => 'string',
         'endtermin' => 'date',
+        'endzeit' => 'string',
         'anfangsdatum' => 'date',
         'enddatum' => 'date',
     ];

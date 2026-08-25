@@ -51,7 +51,9 @@ class ProjektHasTeilnehmerController extends Controller
             'projekt_id'          => ['required', 'exists:projekts,id'],
             'antragsdatum'        => ['nullable', 'date'],
             'starttermin'         => ['nullable', 'date'],
+            'startzeit'           => ['nullable', 'date_format:H:i'],
             'endtermin'           => ['nullable', 'date'],
+            'endzeit'             => ['nullable', 'date_format:H:i'],
             'anfangsdatum'        => ['nullable', 'date'],
             'enddatum'            => ['nullable', 'date'],
             'standort_id'         => ['nullable', 'exists:standorts,id'],
@@ -88,7 +90,9 @@ class ProjektHasTeilnehmerController extends Controller
                 $zeitraum = Zeitraum::create([
                     'antragsdatum' => $validated['antragsdatum'] ?? null,
                     'starttermin'  => $validated['starttermin'] ?? null,
+                    'startzeit'    => $validated['startzeit'] ?? null,
                     'endtermin'    => $validated['endtermin'] ?? null,
+                    'endzeit'      => $validated['endzeit'] ?? null,
                     'anfangsdatum' => $validated['anfangsdatum'] ?? null,
                     'enddatum'     => $validated['enddatum'] ?? null,
                     'model_type'   => $validated['model_type'],
@@ -133,7 +137,9 @@ class ProjektHasTeilnehmerController extends Controller
             Zeitraum::create([
                 'antragsdatum' => $validated['antragsdatum'] ?? null,
                 'starttermin'  => $validated['starttermin'] ?? null,
+                'startzeit'    => $validated['startzeit'] ?? null,
                 'endtermin'    => $validated['endtermin'] ?? null,
+                'endzeit'      => $validated['endzeit'] ?? null,
                 'anfangsdatum' => $validated['anfangsdatum'] ?? null,
                 'enddatum'     => $validated['enddatum'] ?? null,
                 'model_type'   => $validated['model_type'],
@@ -183,7 +189,9 @@ class ProjektHasTeilnehmerController extends Controller
             'betreuer_id' => ['nullable', 'exists:personens,id'],
             'antragsdatum'  => ['nullable', 'date'],
             'starttermin'   => ['nullable', 'date'],
+            'startzeit'     => ['nullable', 'date_format:H:i'],
             'endtermin'     => ['nullable', 'date'],
+            'endzeit'       => ['nullable', 'date_format:H:i'],
             'anfangsdatum'  => ['nullable', 'date'],
             'enddatum'      => ['nullable', 'date'],
             'standort_id'   => ['nullable', 'exists:standorts,id'],
@@ -249,7 +257,9 @@ class ProjektHasTeilnehmerController extends Controller
             $hasZeitraumData = collect([
                 'antragsdatum',
                 'starttermin',
+                'startzeit',
                 'endtermin',
+                'endzeit',
                 'anfangsdatum',
                 'enddatum',
             ])->contains(fn ($field) => !empty($validated[$field]));
@@ -259,7 +269,9 @@ class ProjektHasTeilnehmerController extends Controller
                 $zeitraum->update([
                     'antragsdatum' => $validated['antragsdatum'] ?? $zeitraum->antragsdatum,
                     'starttermin'  => $validated['starttermin'] ?? $zeitraum->starttermin,
+                    'startzeit'    => array_key_exists('startzeit', $validated) ? $validated['startzeit'] : $zeitraum->startzeit,
                     'endtermin'    => $validated['endtermin'] ?? $zeitraum->endtermin,
+                    'endzeit'      => array_key_exists('endzeit', $validated) ? $validated['endzeit'] : $zeitraum->endzeit,
                     'anfangsdatum' => $validated['anfangsdatum'] ?? $zeitraum->anfangsdatum,
                     'enddatum'     => $validated['enddatum'] ?? $zeitraum->enddatum,
                 ]);
@@ -268,7 +280,9 @@ class ProjektHasTeilnehmerController extends Controller
             $zeitraum = Zeitraum::create([
                     'antragsdatum' => $validated['antragsdatum'] ?? null,
                     'starttermin'  => $validated['starttermin'] ?? null,
+                    'startzeit'    => $validated['startzeit'] ?? null,
                     'endtermin'    => $validated['endtermin'] ?? null,
+                    'endzeit'      => $validated['endzeit'] ?? null,
                     'anfangsdatum' => $validated['anfangsdatum'] ?? null,
                     'enddatum'     => $validated['enddatum'] ?? null,
                     'model_type'   => get_class($pivot),

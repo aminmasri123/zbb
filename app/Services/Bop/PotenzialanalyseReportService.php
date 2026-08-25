@@ -61,16 +61,22 @@ class PotenzialanalyseReportService
                 'key' => $competency['key'],
                 'bereich' => $competency['category'] ?? $competency['bereich'],
                 'label' => $competency['label'],
+                'rating_descriptions' => array_values($competency['rating_descriptions'] ?? []),
             ]);
 
         $merkmale = $definitions->map(function (array $merkmal) use ($selfRatings, $coachRatings) {
             $self = $selfRatings->get($merkmal['key']);
             $coach = $coachRatings->get($merkmal['key']);
+            $coachRating = is_numeric($coach?->bewertung) ? (int) $coach->bewertung : null;
+            $ratingDescription = $coachRating && $coachRating >= 1 && $coachRating <= 5
+                ? ($merkmal['rating_descriptions'][$coachRating - 1] ?? null)
+                : null;
 
             return $merkmal + [
                 'selbst' => $self?->bewertung,
                 'selbst_bemerkung' => $self?->bemerkung,
                 'anleiter' => $coach?->bewertung,
+                'anleiter_beurteilung' => filled($ratingDescription) ? trim($ratingDescription) : null,
                 'anleiter_bemerkung' => $coach?->bemerkung,
             ];
         })->groupBy('bereich');
@@ -148,7 +154,8 @@ class PotenzialanalyseReportService
             'kriterien' => $kriterien,
             'bericht' => $bericht,
             'profil' => $profil,
-            'berichtConfig' => data_get($profil?->bericht_config, 'darstellung', []),
+            'berichtConfig' => $this->profiles->reportDisplayConfig($profil),
+            'berichtLogoPath' => $this->profiles->reportLogoFile($profil),
             'statusLabel' => $this->statusLabel($bericht?->status),
             'zeitraum' => $this->dateRange($gruppe->anfangsdatum, $gruppe->enddatum),
             'erstelltAm' => $bericht?->fertiggestellt_at?->format('d.m.Y')

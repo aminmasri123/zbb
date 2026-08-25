@@ -7,6 +7,7 @@ use App\Models\Anwesenheitsstatuten;
 use App\Models\AppTask;
 use App\Models\AttendanceCorrectionRequest;
 use App\Models\Bereich;
+use App\Models\Dokumente;
 use App\Models\Fahrtarten;
 use App\Models\Gruppe;
 use App\Models\Kontakttypen;
@@ -604,7 +605,22 @@ class TeilnehmerController extends Controller
         }
 
         $thisProjekt = Projekt::where('id', auth()->user()->current_team_id)->first();
-        $dokumente = $thisProjekt?->dokumente;
+        $dokumente = $thisProjekt
+            ? Dokumente::query()
+                ->where('aktiv', true)
+                ->where('kontext', 'teilnehmer')
+                ->where('einsatzbereich', 'teilnehmer')
+                ->where(function ($query) use ($thisProjekt) {
+                    $query->whereHas('projekte', fn ($projects) => $projects->whereKey($thisProjekt->id))
+                        ->orWhereHas('kategorien.projekte', fn ($projects) => $projects->whereKey($thisProjekt->id));
+                })
+                ->orderBy('name')
+                ->get()
+                ->filter(fn (Dokumente $dokument) => $dokument->export_permission
+                    ? $user->can($dokument->export_permission)
+                    : $user->can('gruppe.export.serienbrief'))
+                ->values()
+            : collect();
         $activeParticipation = ProjektHasPersonen::query()
             ->where('projekt_id', $user->current_team_id)
             ->where('personen_id', $personen->id)

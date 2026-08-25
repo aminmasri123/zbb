@@ -47,7 +47,7 @@ class DokumenteController extends Controller
             'name' => ['required', 'string', 'max:150'],
             'typ' => ['required', 'string', 'in:word,excel,pdf'],
             'kontext' => ['required', 'string', 'in:teilnehmer,gruppe,partner'],
-            'einsatzbereich' => ['required', 'string', 'in:partner,gruppe'],
+            'einsatzbereich' => ['required', 'string', 'in:partner,gruppe,teilnehmer'],
             'version' => ['nullable', 'string', 'max:50'],
             'beschreibung' => ['nullable', 'string'],
             'datei' => ['required', 'file', 'max:30720', 'mimes:docx,xlsx,pdf'],
@@ -63,6 +63,8 @@ class DokumenteController extends Controller
             'serienbrief' => ['nullable', 'boolean'],
             'gruppen_export_modus' => ['nullable', 'string', 'in:kopf,eine_datei,einzelne_dateien'],
         ]);
+
+        $this->validateContextForTarget($validated);
 
         $file = $request->file('datei');
         $extension = strtolower($file->getClientOriginalExtension());
@@ -132,7 +134,7 @@ class DokumenteController extends Controller
             'name' => ['required', 'string', 'max:150'],
             'typ' => ['required', 'string', 'in:word,excel,pdf'],
             'kontext' => ['required', 'string', 'in:teilnehmer,gruppe,partner'],
-            'einsatzbereich' => ['required', 'string', 'in:partner,gruppe'],
+            'einsatzbereich' => ['required', 'string', 'in:partner,gruppe,teilnehmer'],
             'version' => ['nullable', 'string', 'max:50'],
             'beschreibung' => ['nullable', 'string'],
             'datei' => ['nullable', 'file', 'max:30720', 'mimes:docx,xlsx,pdf'],
@@ -148,6 +150,8 @@ class DokumenteController extends Controller
             'serienbrief' => ['nullable', 'boolean'],
             'gruppen_export_modus' => ['nullable', 'string', 'in:kopf,eine_datei,einzelne_dateien'],
         ]);
+
+        $this->validateContextForTarget($validated);
 
         $file = $request->file('datei');
         $storedPath = null;
@@ -360,8 +364,16 @@ class DokumenteController extends Controller
                 'gruppe' => 'Betreuung und Export',
                 'werte' => [
                     ['key' => 'betreuer', 'label' => 'Betreuer/-in vollständig'],
+                    ['key' => 'betreuer_name', 'label' => 'Betreuer/-in vollständig'],
+                    ['key' => 'betreuer_anrede', 'label' => 'Frau/Herr für den Betreuer'],
+                    ['key' => 'betreuer_anrede_dativ', 'label' => 'Frau/Herrn für Formulierungen mit „bei“'],
                     ['key' => 'betreuer_vorname', 'label' => 'Betreuer Vorname'],
                     ['key' => 'betreuer_nachname', 'label' => 'Betreuer Nachname'],
+                    ['key' => 'termin_datum', 'label' => 'Datum des Starttermins/Erstgesprächs'],
+                    ['key' => 'termin_uhrzeit', 'label' => 'Uhrzeit des Starttermins/Erstgesprächs'],
+                    ['key' => 'termin', 'label' => 'Starttermin als Datum und Uhrzeit'],
+                    ['key' => 'erstgespraech_datum', 'label' => 'Alias für das Datum des Erstgesprächs'],
+                    ['key' => 'erstgespraech_uhrzeit', 'label' => 'Alias für die Uhrzeit des Erstgesprächs'],
                     ['key' => 'datum', 'label' => 'Heutiges Datum'],
                     ['key' => 'heute', 'label' => 'Heutiges Datum'],
                     ['key' => 'nr', 'label' => 'laufende Nummer'],
@@ -462,6 +474,19 @@ class DokumenteController extends Controller
         if (!in_array($extension, $expected, true)) {
             throw ValidationException::withMessages([
                 'datei' => 'Dateityp und Vorlage passen nicht zusammen.',
+            ]);
+        }
+    }
+
+    private function validateContextForTarget(array $validated): void
+    {
+        if (($validated['einsatzbereich'] ?? null) !== 'teilnehmer') {
+            return;
+        }
+
+        if (($validated['kontext'] ?? null) !== 'teilnehmer') {
+            throw ValidationException::withMessages([
+                'kontext' => 'Für den Anzeigeort Teilnehmerseite muss der Datenbezug Teilnehmer gewählt sein.',
             ]);
         }
     }

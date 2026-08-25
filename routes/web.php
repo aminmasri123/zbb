@@ -610,6 +610,9 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
         Route::delete('/teilnehmer/entfernen', [TeilnehmerController::class, 'bulkDestroy'])->name('teilnehmer.bulkDestroy')->middleware('canAnyPermission:teilnehmer.bulkDestroy,teilnehmer.destroy');
         Route::delete('/teilnehmer/entfernen/{id}', [TeilnehmerController::class, 'destroy'])->name('teilnehmer.destroy')->can('teilnehmer.destroy');
         Route::get('/teilnehmer/bearbeiten/{id}', [TeilnehmerController::class, 'show'])->name('teilnehmer.edit')->can('teilnehmer.update');
+        Route::get('/teilnehmer/{personen}/export/{dokument}', [ExportWordController::class, 'teilnehmerDokument'])
+            ->name('teilnehmer.document.export')
+            ->can('teilnehmer.update');
         Route::get('/teilnehmer/{id}/pa-unterschriften', [TeilnehmerController::class, 'paSignatureHistories'])
             ->name('teilnehmer.pa-signatures.index')
             ->middleware('can:anwesenheit.abrechnung')

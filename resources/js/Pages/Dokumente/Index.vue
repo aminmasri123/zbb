@@ -89,16 +89,45 @@ const filteredDokumente = computed(() => {
 const setTyp = (typ) => {
   form.value.typ = typ;
   form.value.ausgabeformate = typ === 'excel' ? ['xlsx', 'pdf'] : (typ === 'pdf' ? ['pdf'] : ['docx', 'pdf']);
-  form.value.kontext = typ === 'word' ? 'teilnehmer' : 'gruppe';
+  form.value.kontext = form.value.einsatzbereich === 'teilnehmer'
+    ? 'teilnehmer'
+    : (form.value.einsatzbereich === 'partner' ? 'partner' : (typ === 'word' ? 'teilnehmer' : 'gruppe'));
   form.value.gruppen_export_modus = typ === 'word' && form.value.kontext === 'gruppe' ? 'eine_datei' : 'einzelne_dateien';
 };
 
 const setKontext = (event) => {
   form.value.kontext = event.target.value;
+  if (form.value.einsatzbereich === 'teilnehmer' && form.value.kontext !== 'teilnehmer') {
+    form.value.einsatzbereich = form.value.kontext === 'partner' ? 'partner' : 'gruppe';
+    form.value.gruppen_export = form.value.einsatzbereich === 'gruppe';
+  }
   if (form.value.typ === 'word') {
     form.value.gruppen_export_modus = form.value.kontext === 'gruppe' ? 'eine_datei' : 'einzelne_dateien';
   }
 };
+
+const setEinsatzbereich = (event) => {
+  form.value.einsatzbereich = event.target.value;
+
+  if (form.value.einsatzbereich === 'teilnehmer') {
+    form.value.kontext = 'teilnehmer';
+    form.value.gruppen_export = false;
+    form.value.serienbrief = true;
+    form.value.bereich_ids = [];
+  } else if (form.value.einsatzbereich === 'gruppe') {
+    form.value.gruppen_export = true;
+  } else if (form.value.einsatzbereich === 'partner') {
+    form.value.kontext = 'partner';
+    form.value.gruppen_export = false;
+    form.value.bereich_ids = [];
+  }
+};
+
+const einsatzbereichLabel = (einsatzbereich) => ({
+  partner: 'Partner / Schule',
+  teilnehmer: 'Teilnehmerseite',
+  gruppe: 'Gruppe',
+})[einsatzbereich] || 'Gruppe';
 
 const gruppenExportModusLabel = (modus) => ({
   kopf: 'Nur Kopf',
@@ -318,8 +347,9 @@ const token = (key) => '${' + key + '}';
 
             <label class="block">
               <span class="mb-1 block text-xs font-semibold uppercase text-gray-500">Anzeigeort</span>
-              <select v-model="form.einsatzbereich" class="w-full rounded border-gray-300 text-sm">
+              <select :value="form.einsatzbereich" class="w-full rounded border-gray-300 text-sm" @change="setEinsatzbereich">
                 <option value="gruppe">Gruppe</option>
+                <option value="teilnehmer">Teilnehmerseite</option>
                 <option value="partner">Partner / Schule</option>
               </select>
             </label>
@@ -414,7 +444,7 @@ const token = (key) => '${' + key + '}';
               </div>
             </div>
 
-            <div class="flex flex-wrap gap-4 text-sm">
+            <div v-if="form.einsatzbereich === 'gruppe'" class="flex flex-wrap gap-4 text-sm">
               <label class="inline-flex items-center gap-2">
                 <input v-model="form.gruppen_export" type="checkbox" class="rounded border-gray-300 text-zbb" />
                 Gruppen-Export
@@ -425,7 +455,7 @@ const token = (key) => '${' + key + '}';
               </label>
             </div>
 
-            <div v-if="form.typ === 'word' && form.gruppen_export" class="rounded border border-gray-200 p-3">
+            <div v-if="form.einsatzbereich === 'gruppe' && form.typ === 'word' && form.gruppen_export" class="rounded border border-gray-200 p-3">
               <div class="mb-2 text-xs font-semibold uppercase text-gray-500">Gruppenexport-Art</div>
               <div class="grid gap-2">
                 <label class="flex cursor-pointer gap-3 rounded border p-3 text-sm" :class="form.gruppen_export_modus === 'kopf' ? 'border-zbb bg-zbbTrp' : 'border-gray-200'">
@@ -520,9 +550,9 @@ const token = (key) => '${' + key + '}';
                   <td class="px-3 py-2 align-top">{{ dokument.typ }} / {{ dokument.kontext }}</td>
                   <td class="px-3 py-2 align-top">
                     <span class="rounded bg-gray-100 px-2 py-1 text-xs">
-                      {{ dokument.einsatzbereich === 'partner' ? 'Partner / Schule' : 'Gruppe' }}
+                      {{ einsatzbereichLabel(dokument.einsatzbereich) }}
                     </span>
-                    <span v-if="dokument.typ === 'word'" class="mt-1 inline-flex rounded bg-zbbTrp px-2 py-1 text-xs">
+                    <span v-if="dokument.einsatzbereich === 'gruppe' && dokument.typ === 'word'" class="mt-1 inline-flex rounded bg-zbbTrp px-2 py-1 text-xs">
                       {{ gruppenExportModusLabel(dokument.gruppen_export_modus) }}
                     </span>
                   </td>

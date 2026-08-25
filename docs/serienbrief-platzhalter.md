@@ -6,8 +6,11 @@ Zusatzlich hat jede Vorlage einen Anzeigeort:
 
 - `Partner / Schule`: erscheint nicht in Gruppen.
 - `Gruppe`: kann in Gruppen exportiert werden.
+- `Teilnehmerseite`: erscheint im Reiter `Exportieren` des Teilnehmerprofils und wird für genau einen Teilnehmer befüllt.
 
 Gruppen-Vorlagen koennen auf bestimmte Bereiche eingeschraenkt werden, zum Beispiel `Potenzialanalyse`. Wenn kein Bereich gesetzt ist, gilt die Vorlage fuer alle Bereiche des Projekts.
+
+Vorlagen fuer die Teilnehmerseite muessen den Datenbezug `Teilnehmer` verwenden. Sie werden angezeigt, wenn sie dem aktiven Projekt direkt oder ueber eine Dokumentkategorie zugeordnet sind und der angemeldete Benutzer die individuelle Exportberechtigung der Vorlage besitzt.
 
 ## Vorlage vorbereiten
 
@@ -98,8 +101,16 @@ Betreuung und Export:
 
 ```text
 ${betreuer}
+${betreuer_name}
+${betreuer_anrede}
+${betreuer_anrede_dativ}
 ${betreuer_vorname}
 ${betreuer_nachname}
+${termin_datum}
+${termin_uhrzeit}
+${termin}
+${erstgespraech_datum}
+${erstgespraech_uhrzeit}
 ${datum}
 ${heute}
 ${nr}

@@ -385,7 +385,13 @@ const paBerichtConfigForm = reactive({
     uebungsergebnisse_anzeigen: paProfil?.bericht_config?.darstellung?.uebungsergebnisse_anzeigen ?? true,
     selbsteinschaetzung_anzeigen: paProfil?.bericht_config?.darstellung?.selbsteinschaetzung_anzeigen ?? true,
     staerkenprofil_anzeigen: paProfil?.bericht_config?.darstellung?.staerkenprofil_anzeigen ?? true,
+    logo_anzeigen: paProfil?.bericht_config?.darstellung?.logo_anzeigen
+        ?? Boolean(paProfil?.bericht_config?.darstellung?.logo_url),
 });
+const paBerichtLogoInput = ref(null);
+const paBerichtLogoFile = ref(null);
+const paBerichtLogoPreview = ref(paProfil?.bericht_config?.darstellung?.logo_url || '');
+const paBerichtLogoEntfernen = ref(false);
 const paKompetenzForm = reactive({
     key: '',
     label: '',
@@ -739,10 +745,27 @@ const savePaBerichtConfig = async () => {
     if (!paProfil || !paProfilBearbeitbar.value) return;
     savingPa.value = true;
     try {
-        const response = await axios.put(
+        const formData = new FormData();
+        formData.append('_method', 'PUT');
+        formData.append('titel', paBerichtConfigForm.titel);
+        formData.append('untertitel', paBerichtConfigForm.untertitel || '');
+        formData.append('uebungsergebnisse_anzeigen', paBerichtConfigForm.uebungsergebnisse_anzeigen ? '1' : '0');
+        formData.append('selbsteinschaetzung_anzeigen', paBerichtConfigForm.selbsteinschaetzung_anzeigen ? '1' : '0');
+        formData.append('staerkenprofil_anzeigen', paBerichtConfigForm.staerkenprofil_anzeigen ? '1' : '0');
+        formData.append('logo_anzeigen', paBerichtConfigForm.logo_anzeigen ? '1' : '0');
+        formData.append('logo_entfernen', paBerichtLogoEntfernen.value ? '1' : '0');
+        if (paBerichtLogoFile.value) formData.append('logo', paBerichtLogoFile.value);
+
+        const response = await axios.post(
             route('potenzialanalyse.profile.bericht-config.update', paProfil.id),
-            JSON.parse(JSON.stringify(paBerichtConfigForm)),
+            formData,
         );
+        const display = response.data.profil?.bericht_config?.darstellung || {};
+        paBerichtLogoPreview.value = display.logo_url || '';
+        paBerichtConfigForm.logo_anzeigen = display.logo_anzeigen ?? false;
+        paBerichtLogoFile.value = null;
+        paBerichtLogoEntfernen.value = false;
+        if (paBerichtLogoInput.value) paBerichtLogoInput.value.value = '';
         Swal.fire('Gespeichert', response.data.message, 'success');
     } catch (error) {
         const errors = error.response?.data?.errors;
@@ -750,6 +773,26 @@ const savePaBerichtConfig = async () => {
     } finally {
         savingPa.value = false;
     }
+};
+
+const selectPaBerichtLogo = (event) => {
+    const file = event.target.files?.[0] || null;
+    paBerichtLogoFile.value = file;
+    paBerichtLogoEntfernen.value = false;
+    if (!file) return;
+
+    paBerichtConfigForm.logo_anzeigen = true;
+    const reader = new FileReader();
+    reader.onload = () => { paBerichtLogoPreview.value = reader.result; };
+    reader.readAsDataURL(file);
+};
+
+const removePaBerichtLogo = () => {
+    paBerichtLogoFile.value = null;
+    paBerichtLogoPreview.value = '';
+    paBerichtLogoEntfernen.value = true;
+    paBerichtConfigForm.logo_anzeigen = false;
+    if (paBerichtLogoInput.value) paBerichtLogoInput.value.value = '';
 };
 
 const createPaProfilVersion = async () => {
@@ -1845,6 +1888,28 @@ const formatLuvTemplateDate = (value) => value
                                     <label class="text-xs text-gray-600">Untertitel
                                         <input v-model="paBerichtConfigForm.untertitel" class="mt-1 w-full rounded border-gray-300 text-sm" />
                                     </label>
+                                </div>
+                                <div class="mt-3 rounded border border-gray-200 bg-gray-50 p-3">
+                                    <div class="flex flex-wrap items-center gap-4">
+                                        <div class="flex h-24 w-32 items-center justify-center rounded border border-gray-200 bg-white p-2">
+                                            <img v-if="paBerichtLogoPreview" :src="paBerichtLogoPreview" alt="Vorschau Berichtslogo" class="max-h-20 max-w-28 object-contain" />
+                                            <span v-else class="text-xs text-gray-400">Kein Logo</span>
+                                        </div>
+                                        <div class="min-w-[240px] flex-1 space-y-2">
+                                            <div>
+                                                <p class="text-sm font-semibold text-gray-800">Logo im Potenzialanalyse-Bericht</p>
+                                                <p class="text-xs text-gray-500">PNG, JPG oder WebP, maximal 2 MB. Die Einstellung gilt nur für dieses Profil.</p>
+                                            </div>
+                                            <input ref="paBerichtLogoInput" type="file" accept="image/png,image/jpeg,image/webp" class="block w-full text-xs text-gray-600 file:mr-3 file:rounded file:border-0 file:bg-indigo-100 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-indigo-800" @change="selectPaBerichtLogo" />
+                                            <div class="flex flex-wrap items-center gap-4">
+                                                <label class="flex items-center gap-2 text-sm text-gray-700">
+                                                    <input v-model="paBerichtConfigForm.logo_anzeigen" type="checkbox" class="rounded border-gray-300 text-zbb" />
+                                                    Logo anzeigen
+                                                </label>
+                                                <button v-if="paBerichtLogoPreview || paBerichtLogoFile" type="button" class="text-xs font-semibold text-red-600 hover:underline" @click="removePaBerichtLogo">Logo entfernen</button>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div class="mt-3 flex flex-wrap gap-4 text-sm text-gray-700">
                                     <label class="flex items-center gap-2"><input v-model="paBerichtConfigForm.uebungsergebnisse_anzeigen" type="checkbox" class="rounded border-gray-300 text-zbb" /> Übungsergebnisse anzeigen</label>

@@ -72,6 +72,7 @@ class TeilnehmerProjektWorkflowTest extends TestCase
             'model_type' => ProjektHasPersonen::class,
             'antragsdatum' => '2026-07-09',
             'starttermin' => '2026-08-01',
+            'startzeit' => '09:30',
             'endtermin' => '2026-12-31',
         ]);
 
@@ -87,6 +88,7 @@ class TeilnehmerProjektWorkflowTest extends TestCase
             'model_type' => ProjektHasPersonen::class,
             'model_id' => $pivot->id,
             'starttermin' => '2026-08-01 00:00:00',
+            'startzeit' => '09:30',
             'endtermin' => '2026-12-31 00:00:00',
         ]);
     }
