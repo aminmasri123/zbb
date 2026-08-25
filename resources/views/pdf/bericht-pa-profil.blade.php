@@ -132,6 +132,16 @@
             page-break-inside: avoid;
         }
 
+        .competency-block .coach-row td {
+            height: 1.65cm;
+        }
+
+        .competency-block .coach-row .assessment-text {
+            padding-top: 5px;
+            padding-bottom: 12px;
+            vertical-align: top !important;
+        }
+
         .competency-block .self-row td:not(.competency-name) {
             height: 0.24cm;
             padding-top: 1px;

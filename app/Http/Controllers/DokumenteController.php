@@ -2,10 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\DokumentKategorie;
-use App\Models\Dokumente;
-use App\Models\Projekt;
 use App\Models\Bereich;
+use App\Models\Dokumente;
+use App\Models\DokumentKategorie;
+use App\Models\DokumentPaket;
+use App\Models\Projekt;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -35,6 +36,10 @@ class DokumenteController extends Controller
             'bereiche' => Bereich::query()
                 ->orderBy('name')
                 ->get(['id', 'name', 'code']),
+            'pakete' => DokumentPaket::query()
+                ->with(['dokumente:id,name,typ,kontext,einsatzbereich,ausgabeformate,aktiv', 'projekte:id,name'])
+                ->orderBy('name')
+                ->get(),
             'platzhalter' => self::platzhalterDefinitionen(),
         ]);
     }
@@ -75,7 +80,7 @@ class DokumenteController extends Controller
             $validated['ausgabeformate'] ?? null
         );
 
-        $storedName = Str::uuid() . '_' . Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)) . '.' . $extension;
+        $storedName = Str::uuid().'_'.Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)).'.'.$extension;
         $storedPath = $file->storeAs('export-vorlagen', $storedName);
         $gruppenExport = (bool) ($validated['gruppen_export'] ?? true);
         $serienbrief = (bool) ($validated['serienbrief'] ?? false);
@@ -88,7 +93,7 @@ class DokumenteController extends Controller
                 'einsatzbereich' => $validated['einsatzbereich'],
                 'ausgabeformate' => $formats,
                 'version' => $validated['version'] ?? null,
-                'dateipfad' => '/app/' . str_replace('\\', '/', $storedPath),
+                'dateipfad' => '/app/'.str_replace('\\', '/', $storedPath),
                 'dateipfadName' => $file->getClientOriginalName(),
                 'beschreibung' => $validated['beschreibung'] ?? null,
                 'aktiv' => true,
@@ -161,7 +166,7 @@ class DokumenteController extends Controller
             $extension = strtolower($file->getClientOriginalExtension());
             $this->validateTypMatchesExtension($validated['typ'], $extension);
 
-            $storedName = Str::uuid() . '_' . Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)) . '.' . $extension;
+            $storedName = Str::uuid().'_'.Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)).'.'.$extension;
             $storedPath = $file->storeAs('export-vorlagen', $storedName);
             $originalName = $file->getClientOriginalName();
         } else {
@@ -189,7 +194,7 @@ class DokumenteController extends Controller
             ];
 
             if ($storedPath) {
-                $payload['dateipfad'] = '/app/' . str_replace('\\', '/', $storedPath);
+                $payload['dateipfad'] = '/app/'.str_replace('\\', '/', $storedPath);
                 $payload['dateipfadName'] = $originalName;
             }
 
@@ -235,7 +240,7 @@ class DokumenteController extends Controller
         abort_unless(auth()->user()?->can('dokumente.download'), 403);
 
         $path = $this->resolvedStoragePath($dokument->dateipfad);
-        if (!$path) {
+        if (! $path) {
             return back()->with('error', 'Die Vorlagendatei wurde nicht gefunden.');
         }
 
@@ -257,6 +262,50 @@ class DokumenteController extends Controller
             'message' => 'Kategorie wurde angelegt.',
             'kategorie' => $kategorie,
         ], 201);
+    }
+
+    public function storePaket(Request $request)
+    {
+        $this->authorizeManager();
+        $validated = $this->validatePaket($request);
+
+        $paket = DB::transaction(function () use ($validated) {
+            $paket = DokumentPaket::create([
+                'name' => $validated['name'],
+                'beschreibung' => $validated['beschreibung'] ?? null,
+                'aktiv' => $validated['aktiv'] ?? true,
+            ]);
+            $this->syncPaket($paket, $validated);
+
+            return $paket;
+        });
+
+        return redirect()->route('dokumente.index')->with('success', 'Dokumentenpaket wurde angelegt.');
+    }
+
+    public function updatePaket(Request $request, DokumentPaket $paket)
+    {
+        $this->authorizeManager();
+        $validated = $this->validatePaket($request);
+
+        DB::transaction(function () use ($paket, $validated) {
+            $paket->update([
+                'name' => $validated['name'],
+                'beschreibung' => $validated['beschreibung'] ?? null,
+                'aktiv' => $validated['aktiv'] ?? true,
+            ]);
+            $this->syncPaket($paket, $validated);
+        });
+
+        return redirect()->route('dokumente.index')->with('success', 'Dokumentenpaket wurde aktualisiert.');
+    }
+
+    public function destroyPaket(DokumentPaket $paket)
+    {
+        $this->authorizeManager();
+        $paket->delete();
+
+        return redirect()->route('dokumente.index')->with('success', 'Dokumentenpaket wurde gelöscht.');
     }
 
     public function updateProjektKategorien(Request $request, Projekt $projekt)
@@ -399,14 +448,75 @@ class DokumenteController extends Controller
     private function authorizeManager(): void
     {
         $user = auth()->user();
-        if (!$user?->can('projekt.update') && !$user?->can('projekt.store') && !$user?->can('projekt.index')) {
+        if (! $user?->can('projekt.update') && ! $user?->can('projekt.store') && ! $user?->can('projekt.index')) {
             abort(403);
         }
     }
 
+    private function validatePaket(Request $request): array
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:150'],
+            'beschreibung' => ['nullable', 'string'],
+            'aktiv' => ['nullable', 'boolean'],
+            'projekt_ids' => ['required', 'array', 'min:1'],
+            'projekt_ids.*' => ['integer', 'exists:projekts,id'],
+            'dokument_ids' => ['required', 'array', 'min:1'],
+            'dokument_ids.*' => ['integer', 'distinct', 'exists:dokumentes,id'],
+        ]);
+
+        $documents = Dokumente::query()
+            ->whereIn('id', $validated['dokument_ids'])
+            ->where('aktiv', true)
+            ->where('kontext', 'teilnehmer')
+            ->where('einsatzbereich', 'teilnehmer')
+            ->with(['projekte:id,name', 'kategorien.projekte:id,name'])
+            ->get()
+            ->filter(fn (Dokumente $dokument) => in_array('pdf', $dokument->ausgabeformate ?? [], true));
+
+        if ($documents->count() !== count($validated['dokument_ids'])) {
+            throw ValidationException::withMessages([
+                'dokument_ids' => 'Ein Paket darf nur aktive Teilnehmer-Vorlagen enthalten, die PDF als Ausgabe erlauben.',
+            ]);
+        }
+
+        $projects = Projekt::query()->whereIn('id', $validated['projekt_ids'])->get(['id', 'name']);
+        $missingAssignments = [];
+        foreach ($projects as $project) {
+            foreach ($documents as $document) {
+                $assigned = $document->projekte->contains('id', $project->id)
+                    || $document->kategorien->contains(
+                        fn (DokumentKategorie $category) => $category->projekte->contains('id', $project->id)
+                    );
+                if (!$assigned) {
+                    $missingAssignments[] = $document->name.' → '.$project->name;
+                }
+            }
+        }
+
+        if ($missingAssignments !== []) {
+            throw ValidationException::withMessages([
+                'dokument_ids' => 'Diese Vorlagen sind dem ausgewählten Projekt nicht zugeordnet: '.implode(', ', $missingAssignments).'.',
+            ]);
+        }
+
+        return $validated;
+    }
+
+    private function syncPaket(DokumentPaket $paket, array $validated): void
+    {
+        $dokumentSync = collect($validated['dokument_ids'])
+            ->values()
+            ->mapWithKeys(fn ($id, $index) => [(int) $id => ['sort_order' => $index]])
+            ->all();
+
+        $paket->dokumente()->sync($dokumentSync);
+        $paket->projekte()->sync(collect($validated['projekt_ids'])->unique()->values()->all());
+    }
+
     private function ensureDocumentExportPermission(Dokumente $dokument): string
     {
-        $permissionName = $dokument->export_permission ?: 'dokumente.export.' . $dokument->id;
+        $permissionName = $dokument->export_permission ?: 'dokumente.export.'.$dokument->id;
         $categoryId = $this->documentExportCategoryId();
 
         $permissionId = DB::table('permissions')
@@ -416,7 +526,7 @@ class DokumenteController extends Controller
 
         $payload = [
             'berechtigungskategorie_id' => $categoryId,
-            'beschreibung' => 'Erlaubt den Export der Dokumentvorlage "' . $dokument->name . '".',
+            'beschreibung' => 'Erlaubt den Export der Dokumentvorlage "'.$dokument->name.'".',
             'updated_at' => now(),
         ];
 
@@ -471,7 +581,7 @@ class DokumenteController extends Controller
             'pdf' => ['pdf'],
         ][$typ] ?? [];
 
-        if (!in_array($extension, $expected, true)) {
+        if (! in_array($extension, $expected, true)) {
             throw ValidationException::withMessages([
                 'datei' => 'Dateityp und Vorlage passen nicht zusammen.',
             ]);
@@ -523,18 +633,18 @@ class DokumenteController extends Controller
 
     private function resolvedStoragePath(?string $path): ?string
     {
-        if (!$path || str_contains($path, "\0")) {
+        if (! $path || str_contains($path, "\0")) {
             return null;
         }
 
         $storageRoot = realpath(storage_path());
         $resolvedPath = realpath(storage_path(ltrim($path, '/\\')));
 
-        if (!$storageRoot || !$resolvedPath || !is_file($resolvedPath)) {
+        if (! $storageRoot || ! $resolvedPath || ! is_file($resolvedPath)) {
             return null;
         }
 
-        $rootPrefix = rtrim(str_replace('\\', '/', $storageRoot), '/') . '/';
+        $rootPrefix = rtrim(str_replace('\\', '/', $storageRoot), '/').'/';
         $normalisedPath = str_replace('\\', '/', $resolvedPath);
 
         if (PHP_OS_FAMILY === 'Windows') {

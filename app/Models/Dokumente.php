@@ -47,4 +47,13 @@ class Dokumente extends Model
             ->orderBy('bereiches.name');
     }
 
+    public function pakete()
+    {
+        return $this->belongsToMany(
+            DokumentPaket::class,
+            'dokument_paket_has_dokumentes',
+            'dokument_id',
+            'dokument_paket_id'
+        )->withPivot('sort_order');
+    }
 }

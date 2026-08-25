@@ -1093,6 +1093,27 @@
                         <input type="text" v-model="exportSuche" placeholder="🔍 Dokument suchen..." class="w-3/4 rounded-md border-gray-300 text-sm px-3 py-2 focus:ring-zbb focus:border-zbb" />
                     </div>
 
+                    <div v-if="gefiltertePakete.length" class="mx-auto mb-5 max-w-6xl">
+                        <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Dokumentenpakete</div>
+                        <div class="grid gap-3 md:grid-cols-2">
+                            <div v-for="paket in gefiltertePakete" :key="paket.id" class="rounded-xl border border-zbb/20 bg-zbbTrp/30 p-4">
+                                <div class="font-semibold text-gray-800">{{ paket.name }}</div>
+                                <div v-if="paket.beschreibung" class="mt-1 text-xs text-gray-500">{{ paket.beschreibung }}</div>
+                                <ol class="mt-3 list-decimal space-y-1 pl-5 text-xs text-gray-600">
+                                    <li v-for="dokument in paket.dokumente" :key="dokument.id">{{ dokument.name }}</li>
+                                </ol>
+                                <div class="mt-4 flex flex-wrap gap-2">
+                                    <a :href="teilnehmerPaketHref(paket, 'pdf')" class="inline-flex items-center justify-center rounded bg-zbb px-4 py-2 text-sm font-semibold text-white hover:bg-zbb/80">
+                                        Eine PDF
+                                    </a>
+                                    <a :href="teilnehmerPaketHref(paket, 'zip')" class="inline-flex items-center justify-center rounded border border-zbb px-4 py-2 text-sm font-semibold text-zbb hover:bg-zbb hover:text-white">
+                                        Alle als ZIP
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="mx-auto max-w-6xl overflow-hidden rounded-xl border border-gray-200 bg-white">
                         <div
                             v-for="dok in gefilterteDokumente"
@@ -1117,7 +1138,7 @@
                                 </a>
                             </div>
                         </div>
-                        <div v-if="gefilterteDokumente.length === 0" class="px-5 py-10 text-center text-sm text-gray-500">
+                        <div v-if="gefilterteDokumente.length === 0 && gefiltertePakete.length === 0" class="px-5 py-10 text-center text-sm text-gray-500">
                             Keine Export-Vorlagen für die Teilnehmerseite vorhanden.
                         </div>
                     </div>
@@ -2121,6 +2142,7 @@
         notiztypen:Array,
         fahrtarten: Array,
         dokumente: Array,
+        dokumentPakete: { type: Array, default: () => [] },
         zeitraum: Object,
         bereiche: Array,
         arbeitsvermittler: Array,
@@ -3532,6 +3554,16 @@ const gefilterteDokumente = computed(() => {
   );
 });
 
+const gefiltertePakete = computed(() => {
+  const term = exportSuche.value.trim().toLowerCase();
+  return (props.dokumentPakete || []).filter((paket) =>
+    !term
+    || paket.name?.toLowerCase().includes(term)
+    || paket.beschreibung?.toLowerCase().includes(term)
+    || (paket.dokumente || []).some((dokument) => dokument.name?.toLowerCase().includes(term))
+  );
+});
+
 const teilnehmerExportFormate = (dokument) => {
   if (dokument.ausgabeformate?.length) return dokument.ausgabeformate;
   if (dokument.typ === 'excel') return ['xlsx'];
@@ -3542,6 +3574,12 @@ const teilnehmerExportFormate = (dokument) => {
 const teilnehmerExportHref = (dokument, format) => route('teilnehmer.document.export', {
   personen: teilnehmer.value.id,
   dokument: dokument.id,
+  format,
+});
+
+const teilnehmerPaketHref = (paket, format) => route('teilnehmer.document-package.export', {
+  personen: teilnehmer.value.id,
+  paket: paket.id,
   format,
 });
 

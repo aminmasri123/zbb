@@ -13,6 +13,7 @@ const props = defineProps({
   projekte: { type: Array, default: () => [] },
   kategorien: { type: Array, default: () => [] },
   bereiche: { type: Array, default: () => [] },
+  pakete: { type: Array, default: () => [] },
   platzhalter: { type: Array, default: () => [] },
 });
 
@@ -20,11 +21,14 @@ const dokumentListe = ref([...(props.dokumente || [])]);
 const projektListe = ref([...(props.projekte || [])]);
 const kategorieListe = ref([...(props.kategorien || [])]);
 const bereichListe = ref([...(props.bereiche || [])]);
+const paketListe = ref([...(props.pakete || [])]);
 const saving = ref(false);
 const categorySaving = ref(false);
 const search = ref('');
 const editingDokument = ref(null);
 const showDokumentModal = ref(false);
+const showPaketModal = ref(false);
+const editingPaket = ref(null);
 const fileInputKey = ref(0);
 const { can } = usePermissions();
 const canStoreDokument = computed(() => can('dokumente.store'));
@@ -53,6 +57,25 @@ const defaultForm = () => ({
 });
 
 const form = ref(defaultForm());
+
+const defaultPaketForm = () => ({
+  name: '',
+  beschreibung: '',
+  aktiv: true,
+  projekt_ids: [],
+  dokument_ids: [],
+});
+const paketForm = ref(defaultPaketForm());
+const paketSaving = ref(false);
+const paketDokumente = computed(() => dokumentListe.value.filter((dokument) =>
+  dokument.aktiv !== false
+  && dokument.kontext === 'teilnehmer'
+  && dokument.einsatzbereich === 'teilnehmer'
+  && (dokument.ausgabeformate || []).includes('pdf')
+));
+const selectedPaketDokumente = computed(() => paketForm.value.dokument_ids
+  .map((id) => paketDokumente.value.find((dokument) => Number(dokument.id) === Number(id)))
+  .filter(Boolean));
 
 const neueKategorie = ref({
   name: '',
@@ -173,6 +196,72 @@ const refreshFromPage = (page) => {
   projektListe.value = [...(page.props.projekte || [])];
   kategorieListe.value = [...(page.props.kategorien || [])];
   bereichListe.value = [...(page.props.bereiche || [])];
+  paketListe.value = [...(page.props.pakete || [])];
+};
+
+const openCreatePaket = () => {
+  editingPaket.value = null;
+  paketForm.value = defaultPaketForm();
+  showPaketModal.value = true;
+};
+
+const editPaket = (paket) => {
+  editingPaket.value = paket;
+  paketForm.value = {
+    name: paket.name || '',
+    beschreibung: paket.beschreibung || '',
+    aktiv: paket.aktiv !== false,
+    projekt_ids: (paket.projekte || []).map((projekt) => Number(projekt.id)),
+    dokument_ids: (paket.dokumente || []).map((dokument) => Number(dokument.id)),
+  };
+  showPaketModal.value = true;
+};
+
+const togglePaketDokument = (id) => toggleArrayValue(paketForm.value.dokument_ids, id);
+const movePaketDokument = (index, direction) => {
+  const target = index + direction;
+  if (target < 0 || target >= paketForm.value.dokument_ids.length) return;
+  const ids = [...paketForm.value.dokument_ids];
+  [ids[index], ids[target]] = [ids[target], ids[index]];
+  paketForm.value.dokument_ids = ids;
+};
+
+const submitPaket = () => {
+  paketSaving.value = true;
+  const target = editingPaket.value
+    ? route('dokumente.pakete.update', editingPaket.value.id)
+    : route('dokumente.pakete.store');
+  const payload = editingPaket.value ? { ...paketForm.value, _method: 'put' } : paketForm.value;
+
+  router.post(target, payload, {
+    preserveScroll: true,
+    onSuccess: (page) => {
+      refreshFromPage(page);
+      showPaketModal.value = false;
+      editingPaket.value = null;
+      paketForm.value = defaultPaketForm();
+      Swal.fire('Erfolg', 'Dokumentenpaket wurde gespeichert.', 'success');
+    },
+    onError: (errors) => Swal.fire('Fehler', Object.values(errors)[0] || 'Dokumentenpaket konnte nicht gespeichert werden.', 'error'),
+    onFinish: () => { paketSaving.value = false; },
+  });
+};
+
+const deletePaket = async (paket) => {
+  const result = await Swal.fire({
+    title: 'Dokumentenpaket löschen?',
+    text: paket.name,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Löschen',
+    cancelButtonText: 'Abbrechen',
+  });
+  if (!result.isConfirmed) return;
+  router.delete(route('dokumente.pakete.destroy', paket.id), {
+    preserveScroll: true,
+    onSuccess: (page) => refreshFromPage(page),
+    onError: (errors) => Swal.fire('Fehler', Object.values(errors)[0] || 'Dokumentenpaket konnte nicht gelöscht werden.', 'error'),
+  });
 };
 
 const editDokument = (dokument) => {
@@ -498,6 +587,81 @@ const token = (key) => '${' + key + '}';
         </form>
         </Dialog>
 
+        <Dialog
+          v-model:visible="showPaketModal"
+          modal
+          :header="editingPaket ? 'Dokumentenpaket bearbeiten' : 'Dokumentenpaket anlegen'"
+          :style="{ width: '760px', maxWidth: '94vw' }"
+          :contentStyle="{ maxHeight: '76vh', overflowY: 'auto' }"
+          :draggable="false"
+          appendTo="body"
+        >
+          <form class="space-y-4" @submit.prevent="submitPaket">
+            <label class="block">
+              <span class="mb-1 block text-xs font-semibold uppercase text-gray-500">Bezeichnung</span>
+              <input v-model="paketForm.name" required class="w-full rounded border-gray-300 text-sm" placeholder="z.B. TLN Empfang" />
+            </label>
+            <label class="block">
+              <span class="mb-1 block text-xs font-semibold uppercase text-gray-500">Beschreibung</span>
+              <textarea v-model="paketForm.beschreibung" rows="2" class="w-full rounded border-gray-300 text-sm"></textarea>
+            </label>
+
+            <div class="rounded border border-gray-200 p-3">
+              <div class="mb-2 text-xs font-semibold uppercase text-gray-500">Projekte</div>
+              <div class="max-h-36 overflow-y-auto">
+                <label v-for="projekt in projektListe" :key="projekt.id" class="mb-1 flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    class="rounded border-gray-300 text-zbb"
+                    :checked="paketForm.projekt_ids.includes(Number(projekt.id))"
+                    @change="toggleArrayValue(paketForm.projekt_ids, projekt.id)"
+                  />
+                  {{ projekt.name }}
+                </label>
+              </div>
+            </div>
+
+            <div class="rounded border border-gray-200 p-3">
+              <div class="mb-2 text-xs font-semibold uppercase text-gray-500">Teilnehmer-Vorlagen</div>
+              <p class="mb-3 text-xs text-gray-500">Es werden nur Vorlagen angeboten, die auf der Teilnehmerseite erscheinen und PDF erlauben.</p>
+              <div class="grid max-h-52 gap-2 overflow-y-auto md:grid-cols-2">
+                <label v-for="dokument in paketDokumente" :key="dokument.id" class="flex items-start gap-2 rounded border border-gray-100 p-2 text-sm">
+                  <input
+                    type="checkbox"
+                    class="mt-1 rounded border-gray-300 text-zbb"
+                    :checked="paketForm.dokument_ids.includes(Number(dokument.id))"
+                    @change="togglePaketDokument(dokument.id)"
+                  />
+                  <span>{{ dokument.name }}</span>
+                </label>
+              </div>
+            </div>
+
+            <div v-if="selectedPaketDokumente.length" class="rounded border border-gray-200 p-3">
+              <div class="mb-2 text-xs font-semibold uppercase text-gray-500">Export-Reihenfolge</div>
+              <div v-for="(dokument, index) in selectedPaketDokumente" :key="dokument.id" class="mb-1 flex items-center justify-between rounded bg-gray-50 px-3 py-2 text-sm">
+                <span><strong class="mr-2 text-gray-400">{{ index + 1 }}.</strong>{{ dokument.name }}</span>
+                <span class="flex gap-1">
+                  <button type="button" class="rounded border px-2 py-1 disabled:opacity-30" :disabled="index === 0" @click="movePaketDokument(index, -1)" aria-label="Nach oben">↑</button>
+                  <button type="button" class="rounded border px-2 py-1 disabled:opacity-30" :disabled="index === selectedPaketDokumente.length - 1" @click="movePaketDokument(index, 1)" aria-label="Nach unten">↓</button>
+                </span>
+              </div>
+            </div>
+
+            <label class="inline-flex items-center gap-2 text-sm">
+              <input v-model="paketForm.aktiv" type="checkbox" class="rounded border-gray-300 text-zbb" />
+              Paket auf der Teilnehmerseite anzeigen
+            </label>
+
+            <div class="flex gap-2">
+              <button type="submit" class="flex-1 rounded bg-zbb px-4 py-2 text-white disabled:opacity-60" :disabled="paketSaving">
+                {{ paketSaving ? 'Speichert...' : 'Speichern' }}
+              </button>
+              <button type="button" class="rounded border border-gray-300 px-4 py-2 text-gray-600" @click="showPaketModal = false">Abbrechen</button>
+            </div>
+          </form>
+        </Dialog>
+
         <div class="rounded border bg-white p-4 shadow-sm">
           <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
             <input v-model="search" class="w-full rounded border-gray-300 text-sm" placeholder="Vorlagen suchen" />
@@ -509,6 +673,15 @@ const token = (key) => '${' + key + '}';
             >
               <i class="las la-plus mr-2"></i>
               Neue Vorlage
+            </button>
+            <button
+              v-if="canStoreDokument"
+              type="button"
+              class="inline-flex h-10 shrink-0 items-center justify-center rounded border border-zbb px-4 text-sm font-semibold text-zbb hover:bg-zbb hover:text-white"
+              @click="openCreatePaket"
+            >
+              <i class="las la-layer-group mr-2"></i>
+              Neues Paket
             </button>
           </div>
 
@@ -613,6 +786,38 @@ const token = (key) => '${' + key + '}';
               </tbody>
             </table>
           </div>
+        </div>
+      </section>
+
+      <section class="rounded border bg-white p-4 shadow-sm">
+        <div class="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h2 class="text-base font-semibold text-gray-700">Dokumentenpakete</h2>
+            <p class="mt-1 text-xs text-gray-500">Mehrere Teilnehmer-Vorlagen gemeinsam als eine PDF oder als ZIP exportieren.</p>
+          </div>
+          <button v-if="canStoreDokument" type="button" class="rounded border border-zbb px-3 py-2 text-sm font-semibold text-zbb" @click="openCreatePaket">Paket anlegen</button>
+        </div>
+        <div class="grid gap-3 lg:grid-cols-2">
+          <div v-for="paket in paketListe" :key="paket.id" class="rounded border border-gray-200 p-4">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="font-semibold text-gray-800">{{ paket.name }}</div>
+                <div v-if="paket.beschreibung" class="mt-1 text-xs text-gray-500">{{ paket.beschreibung }}</div>
+              </div>
+              <span class="rounded px-2 py-1 text-xs" :class="paket.aktiv ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'">{{ paket.aktiv ? 'Aktiv' : 'Inaktiv' }}</span>
+            </div>
+            <ol class="mt-3 list-decimal space-y-1 pl-5 text-sm text-gray-700">
+              <li v-for="dokument in paket.dokumente" :key="dokument.id">{{ dokument.name }}</li>
+            </ol>
+            <div class="mt-3 flex flex-wrap gap-1">
+              <span v-for="projekt in paket.projekte" :key="projekt.id" class="rounded bg-zbbTrp px-2 py-1 text-xs text-zbb">{{ projekt.name }}</span>
+            </div>
+            <div v-if="canUpdateDokument" class="mt-4 flex gap-2">
+              <button type="button" class="rounded border border-zbb px-3 py-1 text-sm text-zbb" @click="editPaket(paket)">Bearbeiten</button>
+              <button type="button" class="rounded border border-red-200 px-3 py-1 text-sm text-red-600" @click="deletePaket(paket)">Löschen</button>
+            </div>
+          </div>
+          <div v-if="paketListe.length === 0" class="rounded border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500">Noch keine Dokumentenpakete vorhanden.</div>
         </div>
       </section>
 

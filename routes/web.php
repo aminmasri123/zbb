@@ -549,6 +549,9 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::get('/dokumente/{dokument}/download', [DokumenteController::class, 'download'])->name('dokumente.download');
     Route::put('/dokumente/{dokument}', [DokumenteController::class, 'update'])->name('dokumente.update');
     Route::post('/dokumente/kategorien', [DokumenteController::class, 'storeKategorie'])->name('dokumente.kategorien.store');
+    Route::post('/dokumente/pakete', [DokumenteController::class, 'storePaket'])->name('dokumente.pakete.store');
+    Route::put('/dokumente/pakete/{paket}', [DokumenteController::class, 'updatePaket'])->name('dokumente.pakete.update');
+    Route::delete('/dokumente/pakete/{paket}', [DokumenteController::class, 'destroyPaket'])->name('dokumente.pakete.destroy');
     Route::put('/dokumente/projekt-kategorien/{projekt}', [DokumenteController::class, 'updateProjektKategorien'])->name('dokumente.projekt-kategorien.update');
 
     // Gruppe
@@ -612,6 +615,9 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
         Route::get('/teilnehmer/bearbeiten/{id}', [TeilnehmerController::class, 'show'])->name('teilnehmer.edit')->can('teilnehmer.update');
         Route::get('/teilnehmer/{personen}/export/{dokument}', [ExportWordController::class, 'teilnehmerDokument'])
             ->name('teilnehmer.document.export')
+            ->can('teilnehmer.update');
+        Route::get('/teilnehmer/{personen}/export-paket/{paket}', [ExportWordController::class, 'teilnehmerDokumentPaket'])
+            ->name('teilnehmer.document-package.export')
             ->can('teilnehmer.update');
         Route::get('/teilnehmer/{id}/pa-unterschriften', [TeilnehmerController::class, 'paSignatureHistories'])
             ->name('teilnehmer.pa-signatures.index')

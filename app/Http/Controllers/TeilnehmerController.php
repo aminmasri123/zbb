@@ -8,6 +8,7 @@ use App\Models\AppTask;
 use App\Models\AttendanceCorrectionRequest;
 use App\Models\Bereich;
 use App\Models\Dokumente;
+use App\Models\DokumentPaket;
 use App\Models\Fahrtarten;
 use App\Models\Gruppe;
 use App\Models\Kontakttypen;
@@ -36,8 +37,8 @@ use App\Models\RoleDataAccessSetting;
 use App\Models\Standort;
 use App\Models\User;
 use App\Notifications\ConfiguredEventNotification;
-use App\Services\NotificationRecipientService;
 use App\Services\Bop\PaAttendanceSignatureHistoryService;
+use App\Services\NotificationRecipientService;
 use App\Services\Participants\ParticipantOverviewService;
 use App\Services\Projects\ActiveProjectContext;
 use Carbon\Carbon;
@@ -621,6 +622,35 @@ class TeilnehmerController extends Controller
                     : $user->can('gruppe.export.serienbrief'))
                 ->values()
             : collect();
+        $dokumentPakete = $thisProjekt
+            ? DokumentPaket::query()
+                ->where('aktiv', true)
+                ->whereHas('projekte', fn ($projects) => $projects->whereKey($thisProjekt->id))
+                ->with('dokumente')
+                ->orderBy('name')
+                ->get()
+                ->filter(function (DokumentPaket $paket) use ($thisProjekt, $user) {
+                    if ($paket->dokumente->isEmpty()) {
+                        return false;
+                    }
+
+                    return $paket->dokumente->every(function (Dokumente $dokument) use ($thisProjekt, $user) {
+                        $assigned = $dokument->projekte()->whereKey($thisProjekt->id)->exists()
+                            || $dokument->kategorien()->whereHas('projekte', fn ($projects) => $projects->whereKey($thisProjekt->id))->exists();
+                        $permitted = $dokument->export_permission
+                            ? $user->can($dokument->export_permission)
+                            : $user->can('gruppe.export.serienbrief');
+
+                        return $dokument->aktiv !== false
+                            && $dokument->kontext === 'teilnehmer'
+                            && $dokument->einsatzbereich === 'teilnehmer'
+                            && $assigned
+                            && $permitted
+                            && in_array('pdf', $dokument->ausgabeformate ?? [], true);
+                    });
+                })
+                ->values()
+            : collect();
         $activeParticipation = ProjektHasPersonen::query()
             ->where('projekt_id', $user->current_team_id)
             ->where('personen_id', $personen->id)
@@ -735,6 +765,7 @@ class TeilnehmerController extends Controller
             'gruppen' => $gruppen,
             'standorte' => $standorte,
             'dokumente' => $dokumente,
+            'dokumentPakete' => $dokumentPakete,
             'bereiche' => $bereiche,
             'arbeitsvermittler' => $arbeitsvermittler,
             'activeParticipationId' => $activeParticipation?->id,

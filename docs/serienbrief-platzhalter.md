@@ -34,6 +34,24 @@ Vor jedem befuellten Word- oder Excel-Export liest das System die tatsaechlich i
 
 Fehlende Angaben werden vor der Dateierzeugung in einer Fehlermeldung aufgelistet. Statische PDF-Dateien enthalten keine befuellbaren Platzhalter und werden deshalb unveraendert heruntergeladen.
 
+## Dokumentenpakete
+
+Im Dokumentenmanager koennen mehrere Teilnehmer-Vorlagen zu einem benannten Paket wie `TLN Empfang` verbunden werden.
+
+1. `Neues Paket` waehlen und einen Namen vergeben.
+2. Ein oder mehrere Projekte auswaehlen.
+3. Die Teilnehmer-Vorlagen markieren und ihre Export-Reihenfolge festlegen.
+4. Das Paket speichern.
+
+Im Teilnehmerprofil erscheint das Paket im Reiter `Exportieren`. Dort stehen zwei Ausgaben zur Wahl:
+
+- `Eine PDF`: Alle enthaltenen PDFs werden in der festgelegten Reihenfolge zu einer Datei verbunden.
+- `Alle als ZIP`: Jede enthaltene Vorlage wird als eigene PDF in eine ZIP-Datei geschrieben.
+
+Ein Paket kann nur aktive Vorlagen enthalten, die auf der Teilnehmerseite angezeigt werden und PDF als Ausgabe erlauben. Vor der Erzeugung prueft das System zuerst saemtliche enthaltenen Vorlagen. Fehlt auch nur eine angeforderte Angabe, wird das gesamte Paket gestoppt und die betroffene Vorlage zusammen mit den fehlenden Daten genannt.
+
+Word-Dokumente innerhalb eines Pakets benoetigen fuer ihre PDF-Erzeugung ebenfalls LibreOffice Writer. Der ZIP-Export ist ausserdem die Ausweichmoeglichkeit, falls eine bereits hochgeladene PDF technisch nicht mit den anderen PDFs zusammengefuehrt werden kann.
+
 ## Word
 
 Word-Vorlagen werden pro Teilnehmer gefuellt. Der Gruppen-Export erzeugt eine ZIP-Datei mit einem Dokument pro Teilnehmer. Als Ausgabe sind `DOCX` und, wenn aktiviert, `PDF` moeglich.

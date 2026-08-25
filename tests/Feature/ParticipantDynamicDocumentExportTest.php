@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Berechtigungskategorie;
 use App\Models\Dokumente;
 use App\Models\DokumentKategorie;
+use App\Models\DokumentPaket;
 use App\Models\Personen;
 use App\Models\Projekt;
 use App\Models\ProjektHasPersonen;
@@ -20,6 +21,7 @@ use PhpOffice\PhpSpreadsheet\IOFactory as SpreadsheetIOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpWord\IOFactory as WordIOFactory;
 use PhpOffice\PhpWord\PhpWord;
+use setasign\Fpdi\Fpdi;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -68,7 +70,7 @@ class ParticipantDynamicDocumentExportTest extends TestCase
         $this->givePermission($user, $document->export_permission);
 
         $path = storage_path('app/temp/participant-document-test.pdf');
-        if (!is_dir(dirname($path))) {
+        if (! is_dir(dirname($path))) {
             mkdir(dirname($path), 0775, true);
         }
         file_put_contents($path, '%PDF-1.4 test');
@@ -133,7 +135,7 @@ class ParticipantDynamicDocumentExportTest extends TestCase
         $this->givePermission($user, $document->export_permission);
 
         $templatePath = storage_path('app/temp/participant-document-test.docx');
-        $word = new PhpWord();
+        $word = new PhpWord;
         $word->addSection()->addText(
             '${vorname} ${nachname} – ${projekt} – ${termin_datum} – ${termin_uhrzeit} – ${betreuer_anrede_dativ} ${betreuer_nachname}'
         );
@@ -153,7 +155,7 @@ class ParticipantDynamicDocumentExportTest extends TestCase
                 ->assertDownload('Personlicher_Brief_Ada_Lovelace.docx');
 
             $outputPath = $response->baseResponse->getFile()->getPathname();
-            $zip = new ZipArchive();
+            $zip = new ZipArchive;
             $this->assertTrue($zip->open($outputPath) === true);
             $documentXml = $zip->getFromName('word/document.xml');
             $zip->close();
@@ -183,7 +185,7 @@ class ParticipantDynamicDocumentExportTest extends TestCase
         $this->givePermission($user, $document->export_permission);
 
         $templatePath = storage_path('app/temp/participant-document-missing-fields.docx');
-        $word = new PhpWord();
+        $word = new PhpWord;
         $word->addSection()->addText(
             '${termin_datum} ${termin_uhrzeit} ${betreuer_anrede_dativ} ${betreuer_nachname}'
         );
@@ -221,7 +223,7 @@ class ParticipantDynamicDocumentExportTest extends TestCase
         $this->givePermission($user, $document->export_permission);
 
         $templatePath = storage_path('app/temp/participant-document-address.docx');
-        $word = new PhpWord();
+        $word = new PhpWord;
         $word->addSection()->addText('${voller_name} ${strasse} ${hausnummer} ${plz} ${stadt}');
         WordIOFactory::createWriter($word, 'Word2007')->save($templatePath);
         $document->update(['dateipfad' => '/app/temp/participant-document-address.docx']);
@@ -260,7 +262,7 @@ class ParticipantDynamicDocumentExportTest extends TestCase
         $this->givePermission($user, $document->export_permission);
 
         $templatePath = storage_path('app/temp/participant-document-completeness.docx');
-        $word = new PhpWord();
+        $word = new PhpWord;
         $word->addSection()->addText(
             '${geburtsdatum} ${kundennummer} ${email} ${telefon} ${nicht_vorhanden}'
         );
@@ -301,7 +303,7 @@ class ParticipantDynamicDocumentExportTest extends TestCase
         $this->givePermission($user, $document->export_permission);
 
         $templatePath = storage_path('app/temp/participant-document-office-pdf.docx');
-        $word = new PhpWord();
+        $word = new PhpWord;
         $word->addSection()->addText('${voller_name}');
         WordIOFactory::createWriter($word, 'Word2007')->save($templatePath);
         $document->update(['dateipfad' => '/app/temp/participant-document-office-pdf.docx']);
@@ -310,7 +312,7 @@ class ParticipantDynamicDocumentExportTest extends TestCase
         $converter->shouldReceive('convert')
             ->once()
             ->andReturnUsing(function (string $docPath, string $outputDirectory): string {
-                $pdfPath = $outputDirectory . DIRECTORY_SEPARATOR . pathinfo($docPath, PATHINFO_FILENAME) . '.pdf';
+                $pdfPath = $outputDirectory.DIRECTORY_SEPARATOR.pathinfo($docPath, PATHINFO_FILENAME).'.pdf';
                 file_put_contents($pdfPath, '%PDF-1.4 layout-test');
 
                 return $pdfPath;
@@ -343,7 +345,7 @@ class ParticipantDynamicDocumentExportTest extends TestCase
         $this->givePermission($user, $document->export_permission);
 
         $templatePath = storage_path('app/temp/participant-document-test.xlsx');
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $spreadsheet->getActiveSheet()->setCellValue('A1', '${vorname} ${nachname}');
         $spreadsheet->getActiveSheet()->setCellValue('B1', '${projekt}');
         SpreadsheetIOFactory::createWriter($spreadsheet, 'Xlsx')->save($templatePath);
@@ -374,13 +376,135 @@ class ParticipantDynamicDocumentExportTest extends TestCase
         }
     }
 
+    public function test_participant_page_lists_an_authorized_document_package(): void
+    {
+        [$user, $project, $participant] = $this->participantContext();
+        $document = $this->document('Empfangsbestätigung', 'teilnehmer', 'dokumente.export.participant-package-list');
+        $project->dokumente()->attach($document->id);
+        $this->givePermission($user, $document->export_permission);
+
+        $package = DokumentPaket::query()->create(['name' => 'TLN Empfang', 'aktiv' => true]);
+        $package->projekte()->attach($project->id);
+        $package->dokumente()->attach($document->id, ['sort_order' => 0]);
+
+        $this->actingAs($user)
+            ->get(route('teilnehmer.edit', $participant))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Teilnehmer/Edit')
+                ->has('dokumentPakete', 1)
+                ->where('dokumentPakete.0.name', 'TLN Empfang')
+                ->where('dokumentPakete.0.dokumente.0.name', 'Empfangsbestätigung'));
+    }
+
+    public function test_document_package_checks_all_templates_before_creating_files(): void
+    {
+        [$user, $project, $participant] = $this->participantContext();
+        $valid = $this->document('Infoblatt', 'teilnehmer', 'dokumente.export.participant-package-valid');
+        $invalid = $this->document('Adressvertrag', 'teilnehmer', 'dokumente.export.participant-package-invalid');
+        $invalid->update(['typ' => 'word']);
+        $project->dokumente()->attach([$valid->id, $invalid->id]);
+        $this->givePermission($user, $valid->export_permission);
+        $this->givePermission($user, $invalid->export_permission);
+
+        $pdfPath = storage_path('app/temp/package-preflight-valid.pdf');
+        $wordPath = storage_path('app/temp/package-preflight-invalid.docx');
+        if (! is_dir(dirname($pdfPath))) {
+            mkdir(dirname($pdfPath), 0775, true);
+        }
+        $this->createPdf($pdfPath, 'Infoblatt');
+        $word = new PhpWord;
+        $word->addSection()->addText('${strasse} ${hausnummer} ${plz} ${stadt}');
+        WordIOFactory::createWriter($word, 'Word2007')->save($wordPath);
+        $valid->update(['dateipfad' => '/app/temp/package-preflight-valid.pdf']);
+        $invalid->update(['dateipfad' => '/app/temp/package-preflight-invalid.docx']);
+
+        $package = DokumentPaket::query()->create(['name' => 'TLN Empfang', 'aktiv' => true]);
+        $package->projekte()->attach($project->id);
+        $package->dokumente()->attach($valid->id, ['sort_order' => 0]);
+        $package->dokumente()->attach($invalid->id, ['sort_order' => 1]);
+
+        try {
+            $this->actingAs($user)
+                ->from(route('teilnehmer.edit', $participant))
+                ->get(route('teilnehmer.document-package.export', [
+                    'personen' => $participant,
+                    'paket' => $package,
+                    'format' => 'pdf',
+                ]))
+                ->assertRedirect(route('teilnehmer.edit', $participant))
+                ->assertSessionHas('error', fn (string $message) => str_contains($message, 'Das Paket kann nicht exportiert werden')
+                    && str_contains($message, 'Adressvertrag')
+                    && str_contains($message, 'Adresse des Teilnehmers'));
+        } finally {
+            @unlink($pdfPath);
+            @unlink($wordPath);
+        }
+    }
+
+    public function test_document_package_exports_static_pdfs_as_one_pdf_and_as_zip(): void
+    {
+        [$user, $project, $participant] = $this->participantContext();
+        $first = $this->document('Erstes Blatt', 'teilnehmer', 'dokumente.export.participant-package-first');
+        $second = $this->document('Zweites Blatt', 'teilnehmer', 'dokumente.export.participant-package-second');
+        $project->dokumente()->attach([$first->id, $second->id]);
+        $this->givePermission($user, $first->export_permission);
+        $this->givePermission($user, $second->export_permission);
+
+        $firstPath = storage_path('app/temp/package-first.pdf');
+        $secondPath = storage_path('app/temp/package-second.pdf');
+        if (! is_dir(dirname($firstPath))) {
+            mkdir(dirname($firstPath), 0775, true);
+        }
+        $this->createPdf($firstPath, 'Erste Seite');
+        $this->createPdf($secondPath, 'Zweite Seite');
+        $first->update(['dateipfad' => '/app/temp/package-first.pdf']);
+        $second->update(['dateipfad' => '/app/temp/package-second.pdf']);
+
+        $package = DokumentPaket::query()->create(['name' => 'TLN Empfang', 'aktiv' => true]);
+        $package->projekte()->attach($project->id);
+        $package->dokumente()->attach($second->id, ['sort_order' => 1]);
+        $package->dokumente()->attach($first->id, ['sort_order' => 0]);
+        $mergedPath = null;
+        $zipPath = null;
+
+        try {
+            $mergedResponse = $this->actingAs($user)->get(route('teilnehmer.document-package.export', [
+                'personen' => $participant,
+                'paket' => $package,
+                'format' => 'pdf',
+            ]))->assertOk()->assertDownload('TLN_Empfang_Ada_Lovelace.pdf');
+            $mergedPath = $mergedResponse->baseResponse->getFile()->getPathname();
+            $reader = new Fpdi;
+            $this->assertSame(2, $reader->setSourceFile($mergedPath));
+
+            $zipResponse = $this->actingAs($user)->get(route('teilnehmer.document-package.export', [
+                'personen' => $participant,
+                'paket' => $package,
+                'format' => 'zip',
+            ]))->assertOk()->assertDownload('TLN_Empfang_Ada_Lovelace.zip');
+            $zipPath = $zipResponse->baseResponse->getFile()->getPathname();
+            $zip = new ZipArchive;
+            $this->assertTrue($zip->open($zipPath) === true);
+            $this->assertSame('Erstes_Blatt.pdf', $zip->getNameIndex(0));
+            $this->assertSame('Zweites_Blatt.pdf', $zip->getNameIndex(1));
+            $zip->close();
+        } finally {
+            foreach ([$firstPath, $secondPath, $mergedPath, $zipPath] as $path) {
+                if ($path) {
+                    @unlink($path);
+                }
+            }
+        }
+    }
+
     private function participantContext(): array
     {
         $user = User::factory()->create();
         $this->givePermission($user, 'teilnehmer.update');
 
         $role = Role::query()->create([
-            'name' => 'Teilnehmerexport-' . uniqid(),
+            'name' => 'Teilnehmerexport-'.uniqid(),
             'guard_name' => 'web',
             'color' => '#123456',
         ]);
@@ -407,6 +531,15 @@ class ParticipantDynamicDocumentExportTest extends TestCase
         $user->update(['current_team_id' => $project->id]);
 
         return [$user, $project, $participant];
+    }
+
+    private function createPdf(string $path, string $text): void
+    {
+        $pdf = new \FPDF;
+        $pdf->AddPage();
+        $pdf->SetFont('Arial', '', 12);
+        $pdf->Cell(40, 10, $text);
+        $pdf->Output('F', $path);
     }
 
     private function document(string $name, string $target, string $permission): Dokumente

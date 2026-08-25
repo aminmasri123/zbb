@@ -1,22 +1,7 @@
 <?php
 
 namespace App\Models;
-use App\Models\Abteilung;
-use App\Models\Bereich;
-use App\Models\DokumentKategorie;
-use App\Models\Dokumente;
-use App\Models\Kostenstelle;
-use App\Models\Partner;
-use App\Models\PartnerHasPartnerschaftstypen;
-use App\Models\Personen;
-use App\Models\PotenzialanalyseUebung;
-use App\Models\ProjektHasAnsprechpartner;
-use App\Models\ProjektHasPartner;
-use App\Models\ProjektHasPersonen;
-use App\Models\Raeume;
-use App\Models\Standort;
-use App\Models\User;
-use App\Models\Zeitraum;
+
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -26,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 class Projekt extends Model
 {
     use HasFactory;
+
     protected $fillable = [
         'id',
         'project_type_id',
@@ -295,7 +281,7 @@ class Projekt extends Model
         // Bestehende BOP-Projekte arbeiteten schon vor der konfigurierbaren
         // Regel mit Teil 1, Teil 2 usw. Dieses Verhalten bleibt standardmäßig
         // erhalten, bis es im Projekt ausdrücklich deaktiviert wird.
-        if (!array_key_exists('participant_parts_enabled', $this->rule_settings ?? [])) {
+        if (! array_key_exists('participant_parts_enabled', $this->rule_settings ?? [])) {
             $settings['participant_parts_enabled'] = $this->usesBopParticipantOverviewPreset();
         }
 
@@ -329,12 +315,12 @@ class Projekt extends Model
     {
         $settings = $this->configuredFeatureSettings();
 
-        if (!(bool) ($settings[$key] ?? false)) {
+        if (! (bool) ($settings[$key] ?? false)) {
             return false;
         }
 
         foreach (self::FEATURE_DEPENDENCIES[$key] ?? [] as $dependency) {
-            if (!$this->featureEnabled($dependency)) {
+            if (! $this->featureEnabled($dependency)) {
                 return false;
             }
         }
@@ -372,7 +358,7 @@ class Projekt extends Model
         $settings = $this->rule_settings ?? [];
         $configured = self::normalizeParticipantOverviewColumns($settings['participant_overview_columns'] ?? null);
 
-        if (!empty($configured)) {
+        if (! empty($configured)) {
             return $configured;
         }
 
@@ -389,7 +375,7 @@ class Projekt extends Model
             return (bool) $settings['participant_overview_show_metrics'];
         }
 
-        return !$this->usesBopParticipantOverviewPreset();
+        return ! $this->usesBopParticipantOverviewPreset();
     }
 
     public function usesBopParticipantOverviewPreset(): bool
@@ -399,7 +385,6 @@ class Projekt extends Model
         return str_contains($name, 'BOP')
             || str_contains($name, 'BERUFSORIENTIERUNG');
     }
-
 
     public function scopeAktiv($query)
     {
@@ -411,11 +396,11 @@ class Projekt extends Model
         return $this->belongsTo(ProjectType::class, 'project_type_id');
     }
 
-
     public function abteilung()
     {
         return $this->belongsTo(Abteilung::class, 'abteilung_id', 'id');
     }
+
     public function projektHasAnsprechpartner()
     {
         return $this->hasMany(ProjektHasAnsprechpartner::class, 'projekt_id', 'id');
@@ -453,17 +438,16 @@ class Projekt extends Model
             'projekt_id',                            // FK auf Projekt
             'ansprechpartner_id'                     // FK auf PartnerHasPartnerschaftstypen
         )
-        ->join('partners', 'partner_has_partnerschaftstypens.partner_id', '=', 'partners.id')
-        ->select('partners.*');                     // gibt nur Partner zurück
+            ->join('partners', 'partner_has_partnerschaftstypens.partner_id', '=', 'partners.id')
+            ->select('partners.*');                     // gibt nur Partner zurück
     }
-
-
 
     public function kostenstellen()
     {
         return $this->belongsToMany(Kostenstelle::class, 'projekt_has_kostenstelles', 'projekt_id', 'kostenstelle_id')
             ->withPivot(['gueltig_von', 'gueltig_bis']);
     }
+
     public function teilnehmer()
     {
         return $this->belongsToMany(Personen::class, 'projekt_has_personens', 'projekt_id', 'personen_id');
@@ -481,7 +465,8 @@ class Projekt extends Model
             ->withPivot(['standort_id', 'status']);
     }
 
-    public function standorte(){
+    public function standorte()
+    {
         return $this->belongsToMany(Standort::class, 'projekt_has_personens', 'projekt_id', 'standort_id')
             ->withPivot(['personen_id']);
     }
@@ -495,10 +480,12 @@ class Projekt extends Model
     {
         return $this->belongsToMany(Bereich::class, 'projekt_has_bereiches', 'projekt_id', 'bereich_id');
     }
+
     public function raeume()
     {
         return $this->belongsToMany(Raeume::class, 'projekt_has_raeumes', 'projekt_id', 'raum_id');
     }
+
     public function dokumente()
     {
         return $this->belongsToMany(Dokumente::class, 'projekt_has_dokumentes', 'projekt_id', 'dokument_id')
@@ -511,6 +498,16 @@ class Projekt extends Model
     {
         return $this->belongsToMany(DokumentKategorie::class, 'projekt_has_dokument_kategories', 'projekt_id', 'dokument_kategorie_id')
             ->orderBy('dokument_kategories.name');
+    }
+
+    public function dokumentPakete()
+    {
+        return $this->belongsToMany(
+            DokumentPaket::class,
+            'projekt_has_dokument_paketes',
+            'projekt_id',
+            'dokument_paket_id'
+        )->orderBy('dokument_pakete.name');
     }
 
     public function potenzialanalyseUebungen()
@@ -551,7 +548,4 @@ class Projekt extends Model
     {
         return $this->morphMany(Zeitraum::class, 'model')->orderBy('antragsdatum', 'desc');
     }
-
-
-
 }
