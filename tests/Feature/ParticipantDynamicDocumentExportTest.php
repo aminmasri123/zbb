@@ -13,6 +13,7 @@ use App\Models\RoleDataAccessSetting;
 use App\Models\Standort;
 use App\Models\User;
 use App\Models\Zeitraum;
+use App\Services\Documents\OfficeToPdfConverter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use PhpOffice\PhpSpreadsheet\IOFactory as SpreadsheetIOFactory;
@@ -203,6 +204,128 @@ class ParticipantDynamicDocumentExportTest extends TestCase
                         && str_contains($message, 'Termin-Uhrzeit')
                         && str_contains($message, 'Betreuer');
                 });
+        } finally {
+            @unlink($templatePath);
+        }
+    }
+
+    public function test_participant_export_stops_when_template_uses_an_incomplete_address(): void
+    {
+        [$user, $project, $participant] = $this->participantContext();
+        $document = $this->document('BvB Reha - Bildungsvertrag', 'teilnehmer', 'dokumente.export.participant-address');
+        $document->update([
+            'typ' => 'word',
+            'ausgabeformate' => ['docx', 'pdf'],
+        ]);
+        $project->dokumente()->attach($document->id);
+        $this->givePermission($user, $document->export_permission);
+
+        $templatePath = storage_path('app/temp/participant-document-address.docx');
+        $word = new PhpWord();
+        $word->addSection()->addText('${voller_name} ${strasse} ${hausnummer} ${plz} ${stadt}');
+        WordIOFactory::createWriter($word, 'Word2007')->save($templatePath);
+        $document->update(['dateipfad' => '/app/temp/participant-document-address.docx']);
+
+        try {
+            $this->actingAs($user)
+                ->from(route('teilnehmer.edit', $participant))
+                ->get(route('teilnehmer.document.export', [
+                    'personen' => $participant,
+                    'dokument' => $document,
+                    'format' => 'pdf',
+                ]))
+                ->assertRedirect(route('teilnehmer.edit', $participant))
+                ->assertSessionHas('error', function (string $message): bool {
+                    return str_contains($message, 'Export kann nicht durchgeführt werden')
+                        && str_contains($message, 'Adresse des Teilnehmers')
+                        && str_contains($message, 'Straße')
+                        && str_contains($message, 'Hausnummer')
+                        && str_contains($message, 'PLZ')
+                        && str_contains($message, 'Stadt');
+                });
+        } finally {
+            @unlink($templatePath);
+        }
+    }
+
+    public function test_participant_export_checks_every_requested_placeholder_and_reports_unknown_ones(): void
+    {
+        [$user, $project, $participant] = $this->participantContext();
+        $document = $this->document('Vollständigkeitsprüfung', 'teilnehmer', 'dokumente.export.participant-completeness');
+        $document->update([
+            'typ' => 'word',
+            'ausgabeformate' => ['docx'],
+        ]);
+        $project->dokumente()->attach($document->id);
+        $this->givePermission($user, $document->export_permission);
+
+        $templatePath = storage_path('app/temp/participant-document-completeness.docx');
+        $word = new PhpWord();
+        $word->addSection()->addText(
+            '${geburtsdatum} ${kundennummer} ${email} ${telefon} ${nicht_vorhanden}'
+        );
+        WordIOFactory::createWriter($word, 'Word2007')->save($templatePath);
+        $document->update(['dateipfad' => '/app/temp/participant-document-completeness.docx']);
+
+        try {
+            $this->actingAs($user)
+                ->from(route('teilnehmer.edit', $participant))
+                ->get(route('teilnehmer.document.export', [
+                    'personen' => $participant,
+                    'dokument' => $document,
+                    'format' => 'docx',
+                ]))
+                ->assertRedirect(route('teilnehmer.edit', $participant))
+                ->assertSessionHas('error', function (string $message): bool {
+                    return str_contains($message, 'Geburtsdatum')
+                        && str_contains($message, 'Kundennummer')
+                        && str_contains($message, 'E-Mail')
+                        && str_contains($message, 'Telefon')
+                        && str_contains($message, '${nicht_vorhanden}')
+                        && str_contains($message, 'Unbekannte Platzhalter');
+                });
+        } finally {
+            @unlink($templatePath);
+        }
+    }
+
+    public function test_participant_word_pdf_uses_the_office_converter(): void
+    {
+        [$user, $project, $participant] = $this->participantContext();
+        $document = $this->document('Layouttreuer Vertrag', 'teilnehmer', 'dokumente.export.participant-office-pdf');
+        $document->update([
+            'typ' => 'word',
+            'ausgabeformate' => ['pdf'],
+        ]);
+        $project->dokumente()->attach($document->id);
+        $this->givePermission($user, $document->export_permission);
+
+        $templatePath = storage_path('app/temp/participant-document-office-pdf.docx');
+        $word = new PhpWord();
+        $word->addSection()->addText('${voller_name}');
+        WordIOFactory::createWriter($word, 'Word2007')->save($templatePath);
+        $document->update(['dateipfad' => '/app/temp/participant-document-office-pdf.docx']);
+
+        $converter = \Mockery::mock(OfficeToPdfConverter::class);
+        $converter->shouldReceive('convert')
+            ->once()
+            ->andReturnUsing(function (string $docPath, string $outputDirectory): string {
+                $pdfPath = $outputDirectory . DIRECTORY_SEPARATOR . pathinfo($docPath, PATHINFO_FILENAME) . '.pdf';
+                file_put_contents($pdfPath, '%PDF-1.4 layout-test');
+
+                return $pdfPath;
+            });
+        $this->app->instance(OfficeToPdfConverter::class, $converter);
+
+        try {
+            $this->actingAs($user)
+                ->get(route('teilnehmer.document.export', [
+                    'personen' => $participant,
+                    'dokument' => $document,
+                    'format' => 'pdf',
+                ]))
+                ->assertOk()
+                ->assertDownload('Layouttreuer_Vertrag_Ada_Lovelace.pdf');
         } finally {
             @unlink($templatePath);
         }

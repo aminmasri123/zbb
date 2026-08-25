@@ -54,4 +54,9 @@ return [
         'timeout' => (int) env('ZBB_AI_WORKSPACE_TIMEOUT', 300),
     ],
 
+    'libreoffice' => [
+        'binary' => env('LIBREOFFICE_BINARY'),
+        'timeout' => (int) env('LIBREOFFICE_CONVERSION_TIMEOUT', 120),
+    ],
+
 ];

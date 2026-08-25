@@ -9,6 +9,8 @@ use App\Models\Projekt;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
+use PhpOffice\PhpWord\IOFactory as WordIOFactory;
+use PhpOffice\PhpWord\PhpWord;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -75,6 +77,48 @@ class PartnerDynamicDocumentExportTest extends TestCase
                 ]))
                 ->assertOk()
                 ->assertDownload('Partner_Vorlage_Testschule.pdf');
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    public function test_partner_export_checks_requested_partner_contact_and_address_data(): void
+    {
+        [$user, $project, $partner] = $this->projectContext();
+        $document = $this->partnerDocument($project, 'dokumente.export.partner-completeness');
+        $document->update([
+            'typ' => 'word',
+            'ausgabeformate' => ['docx'],
+        ]);
+        $this->givePermission($user, $document->export_permission);
+
+        $path = storage_path('app/temp/partner-document-completeness.docx');
+        $word = new PhpWord();
+        $word->addSection()->addText(
+            '${partner_name} ${partner_strasse} ${partner_hausnummer} ${partner_plz} ${partner_stadt} ${partner_email}'
+        );
+        WordIOFactory::createWriter($word, 'Word2007')->save($path);
+        $document->update(['dateipfad' => '/app/temp/partner-document-completeness.docx']);
+
+        try {
+            $this->actingAs($user)
+                ->from(route('partner.index'))
+                ->get(route('partner.document.export', [
+                    'partner' => $partner,
+                    'dokument' => $document,
+                    'schuljahr' => '2026/2027',
+                    'teil' => '1',
+                    'format' => 'docx',
+                ]))
+                ->assertRedirect(route('partner.index'))
+                ->assertSessionHas('error', function (string $message): bool {
+                    return str_contains($message, 'Adresse des Partners')
+                        && str_contains($message, 'Straße')
+                        && str_contains($message, 'Hausnummer')
+                        && str_contains($message, 'PLZ')
+                        && str_contains($message, 'Stadt')
+                        && str_contains($message, 'E-Mail');
+                });
         } finally {
             @unlink($path);
         }

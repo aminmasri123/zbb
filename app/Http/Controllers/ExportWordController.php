@@ -12,6 +12,7 @@ use App\Models\PaAttendanceListDraft;
 use App\Models\PersonenIstSchueler;
 use App\Models\Partner;
 use App\Models\BopRun;
+use App\Services\Documents\OfficeToPdfConverter;
 use App\Services\Projects\ActiveProjectContext;
 
 use Carbon\Carbon;
@@ -22,8 +23,6 @@ use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\IOFactory as SpreadsheetIOFactory;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
-use PhpOffice\PhpWord\IOFactory as WordIOFactory;
-use PhpOffice\PhpWord\Settings as WordSettings;
 use App\Models\ProjektHasPersonen;
 use PhpOffice\PhpWord\TemplateProcessor;
 use Throwable;
@@ -647,21 +646,37 @@ class ExportWordController extends Controller
             if ($dokument->typ === 'word') {
                 $docPath = $tempDir . DIRECTORY_SEPARATOR . uniqid('partner_word_', true) . '.docx';
                 $processor = new TemplateProcessor($templateFile);
+                if ($error = $this->groupPlaceholderValidationError(
+                    $processor->getVariables(),
+                    $gruppe,
+                    $projekt,
+                    collect(),
+                    false,
+                    false
+                )) {
+                    return back()->with('error', $error);
+                }
                 $this->fillGroupTemplate($processor, $gruppe, $projekt, collect(), false);
                 $processor->saveAs($docPath);
 
                 if ($format === 'pdf') {
-                    $outputPath = $tempDir . DIRECTORY_SEPARATOR . uniqid('partner_word_', true) . '.pdf';
-                    WordSettings::setPdfRendererName(WordSettings::PDF_RENDERER_DOMPDF);
-                    WordSettings::setPdfRendererPath(base_path('vendor/dompdf/dompdf'));
-                    $phpWord = WordIOFactory::load($docPath);
-                    WordIOFactory::createWriter($phpWord, 'PDF')->save($outputPath);
+                    $outputPath = app(OfficeToPdfConverter::class)->convert($docPath, $tempDir);
                     @unlink($docPath);
                 } else {
                     $outputPath = $docPath;
                 }
             } elseif ($dokument->typ === 'excel') {
                 $spreadsheet = SpreadsheetIOFactory::load($templateFile);
+                if ($error = $this->groupPlaceholderValidationError(
+                    $this->spreadsheetPlaceholderVariables($spreadsheet),
+                    $gruppe,
+                    $projekt,
+                    collect(),
+                    false,
+                    true
+                )) {
+                    return back()->with('error', $error);
+                }
                 $this->fillSpreadsheetTemplate($spreadsheet, $gruppe, $projekt, collect());
                 $extension = $format === 'pdf' ? 'pdf' : 'xlsx';
                 $outputPath = $tempDir . DIRECTORY_SEPARATOR . uniqid('partner_excel_', true) . '.' . $extension;
@@ -708,18 +723,14 @@ class ExportWordController extends Controller
                 $docPath = $tempDir . DIRECTORY_SEPARATOR . uniqid('teilnehmer_word_', true) . '.docx';
                 $processor = new TemplateProcessor($templateFile);
                 $values = $this->placeholderValues($gruppe, $projekt, $personen, 1, $teilnahme);
-                if ($error = $this->participantPlaceholderValidationError($processor->getVariables(), $values)) {
+                if ($error = $this->singleParticipantPlaceholderValidationError($processor->getVariables(), $values, $personen)) {
                     return back()->with('error', $error);
                 }
                 $this->fillSerienbriefTemplate($processor, $gruppe, $projekt, $personen, 1, $teilnahme);
                 $processor->saveAs($docPath);
 
                 if ($format === 'pdf') {
-                    $outputPath = $tempDir . DIRECTORY_SEPARATOR . uniqid('teilnehmer_word_', true) . '.pdf';
-                    WordSettings::setPdfRendererName(WordSettings::PDF_RENDERER_DOMPDF);
-                    WordSettings::setPdfRendererPath(base_path('vendor/dompdf/dompdf'));
-                    $phpWord = WordIOFactory::load($docPath);
-                    WordIOFactory::createWriter($phpWord, 'PDF')->save($outputPath);
+                    $outputPath = app(OfficeToPdfConverter::class)->convert($docPath, $tempDir);
                     @unlink($docPath);
                 } else {
                     $outputPath = $docPath;
@@ -727,9 +738,10 @@ class ExportWordController extends Controller
             } elseif ($dokument->typ === 'excel') {
                 $spreadsheet = SpreadsheetIOFactory::load($templateFile);
                 $values = $this->placeholderValues($gruppe, $projekt, $personen, 1, $teilnahme);
-                if ($error = $this->participantPlaceholderValidationError(
+                if ($error = $this->singleParticipantPlaceholderValidationError(
                     $this->spreadsheetPlaceholderVariables($spreadsheet),
-                    $values
+                    $values,
+                    $personen
                 )) {
                     return back()->with('error', $error);
                 }
@@ -838,20 +850,25 @@ class ExportWordController extends Controller
 
         $extension = $format === 'pdf' ? 'pdf' : 'docx';
         $docPath = $tempDir . DIRECTORY_SEPARATOR . uniqid('gruppe_word_', true) . '.docx';
-        $outputPath = $format === 'pdf'
-            ? $tempDir . DIRECTORY_SEPARATOR . uniqid('gruppe_word_', true) . '.pdf'
-            : $docPath;
+        $outputPath = $docPath;
 
         try {
             $processor = new TemplateProcessor($templateFile);
+            if ($error = $this->groupPlaceholderValidationError(
+                $processor->getVariables(),
+                $gruppe,
+                $projekt,
+                $teilnehmer,
+                $fillParticipants,
+                false
+            )) {
+                return back()->with('error', $error);
+            }
             $this->fillGroupTemplate($processor, $gruppe, $projekt, $teilnehmer, $fillParticipants);
             $processor->saveAs($docPath);
 
             if ($format === 'pdf') {
-                WordSettings::setPdfRendererName(WordSettings::PDF_RENDERER_DOMPDF);
-                WordSettings::setPdfRendererPath(base_path('vendor/dompdf/dompdf'));
-                $phpWord = WordIOFactory::load($docPath);
-                WordIOFactory::createWriter($phpWord, 'PDF')->save($outputPath);
+                $outputPath = app(OfficeToPdfConverter::class)->convert($docPath, $tempDir);
 
                 register_shutdown_function(static function () use ($docPath) {
                     if (file_exists($docPath)) {
@@ -879,6 +896,18 @@ class ExportWordController extends Controller
         $tempDir = storage_path('app/temp');
         if (!is_dir($tempDir)) {
             mkdir($tempDir, 0775, true);
+        }
+
+        $variables = (new TemplateProcessor($templateFile))->getVariables();
+        if ($error = $this->groupPlaceholderValidationError(
+            $variables,
+            $gruppe,
+            $projekt,
+            $teilnehmer,
+            true,
+            false
+        )) {
+            return back()->with('error', $error);
         }
 
         $zipPath = tempnam($tempDir, 'gruppe_serienbrief_');
@@ -918,6 +947,18 @@ class ExportWordController extends Controller
             mkdir($tempDir, 0775, true);
         }
 
+        $variables = (new TemplateProcessor($templateFile))->getVariables();
+        if ($error = $this->groupPlaceholderValidationError(
+            $variables,
+            $gruppe,
+            $projekt,
+            $teilnehmer,
+            true,
+            false
+        )) {
+            return back()->with('error', $error);
+        }
+
         $zipPath = tempnam($tempDir, 'gruppe_pdf_');
         $zip = new ZipArchive();
 
@@ -926,19 +967,14 @@ class ExportWordController extends Controller
         }
 
         try {
-            WordSettings::setPdfRendererName(WordSettings::PDF_RENDERER_DOMPDF);
-            WordSettings::setPdfRendererPath(base_path('vendor/dompdf/dompdf'));
-
             foreach ($teilnehmer as $index => $person) {
                 $processor = new TemplateProcessor($templateFile);
                 $this->fillSerienbriefTemplate($processor, $gruppe, $projekt, $person, $index + 1);
 
                 $docPath = $tempDir . DIRECTORY_SEPARATOR . uniqid('serienbrief_pdf_', true) . '.docx';
-                $pdfPath = $tempDir . DIRECTORY_SEPARATOR . uniqid('serienbrief_pdf_', true) . '.pdf';
                 $processor->saveAs($docPath);
 
-                $phpWord = WordIOFactory::load($docPath);
-                WordIOFactory::createWriter($phpWord, 'PDF')->save($pdfPath);
+                $pdfPath = app(OfficeToPdfConverter::class)->convert($docPath, $tempDir);
 
                 $pdfName = $this->safeFileName(($index + 1) . '_' . $person->nachname . '_' . $person->vorname . '_' . $dokument->name) . '.pdf';
                 $zip->addFile($pdfPath, $pdfName);
@@ -977,6 +1013,16 @@ class ExportWordController extends Controller
 
         try {
             $spreadsheet = SpreadsheetIOFactory::load($templateFile);
+            if ($error = $this->groupPlaceholderValidationError(
+                $this->spreadsheetPlaceholderVariables($spreadsheet),
+                $gruppe,
+                $projekt,
+                $teilnehmer,
+                true,
+                true
+            )) {
+                return back()->with('error', $error);
+            }
             $this->fillSpreadsheetTemplate($spreadsheet, $gruppe, $projekt, $teilnehmer);
 
             $extension = $format === 'pdf' ? 'pdf' : 'xlsx';
@@ -1976,9 +2022,236 @@ class ExportWordController extends Controller
         return array_values(array_unique(array_filter($variables)));
     }
 
-    private function participantPlaceholderValidationError(array $variables, array $values): ?string
+    private function singleParticipantPlaceholderValidationError(
+        array $variables,
+        array $values,
+        Personen $participant
+    ): ?string {
+        $result = $this->missingPlaceholderData($variables, $values);
+
+        if ($result['missing']->isEmpty() && $result['unknown']->isEmpty()) {
+            return null;
+        }
+
+        return $this->placeholderValidationMessage(
+            $result,
+            'Teilnehmer ' . trim($participant->vorname . ' ' . $participant->nachname)
+        );
+    }
+
+    private function groupPlaceholderValidationError(
+        array $variables,
+        Gruppe $gruppe,
+        Projekt $projekt,
+        $participants,
+        bool $fillParticipants,
+        bool $spreadsheet
+    ): ?string {
+        $variables = collect($variables)
+            ->map(fn ($variable) => mb_strtolower(trim((string) $variable)))
+            ->filter()
+            ->unique()
+            ->values();
+        $participants = collect($participants)->values();
+        $participantKeys = collect([
+            'nr', 'nummer', 'vorname', 'nachname', 'name', 'voller_name', 'teilnehmer',
+            'geburtsdatum', 'geschlecht', 'anrede', 'kundennummer', 'strasse',
+            'hausnummer', 'plz', 'stadt', 'ort', 'adresse', 'email', 'telefon',
+        ]);
+        $structuralVariables = collect();
+        if ($spreadsheet) {
+            $structuralVariables->push('teilnehmer_tabelle');
+        }
+        if ($spreadsheet && $variables->contains('pa_klassen_tabelle')) {
+            $structuralVariables->push('pa_klassen_tabelle', 'pa_klasse');
+        }
+
+        $indexedVariables = $variables
+            ->map(function (string $variable) use ($participantKeys) {
+                if (preg_match('/^([a-z_]+)(\d+)$/', $variable, $matches) !== 1
+                    || ! $participantKeys->contains($matches[1])) {
+                    return null;
+                }
+
+                return ['original' => $variable, 'key' => $matches[1], 'index' => (int) $matches[2]];
+            })
+            ->filter()
+            ->values();
+
+        $participantVariables = $fillParticipants
+            ? $variables->filter(fn ($variable) => $participantKeys->contains($variable))->values()
+            : collect();
+
+        if ($fillParticipants && $spreadsheet && $variables->contains('teilnehmer_tabelle')) {
+            $participantVariables = $participantVariables->merge([
+                'vorname', 'nachname', 'geburtsdatum', 'strasse', 'hausnummer',
+                'plz', 'stadt', 'telefon', 'email',
+            ])->unique()->values();
+        }
+
+        $groupVariables = $variables
+            ->reject(fn ($variable) => $structuralVariables->contains($variable))
+            ->reject(fn ($variable) => $fillParticipants && $participantKeys->contains($variable))
+            ->reject(fn ($variable) => $indexedVariables->contains(fn ($indexed) => $indexed['original'] === $variable))
+            ->values();
+        $groupResult = $this->missingPlaceholderData(
+            $groupVariables->all(),
+            $this->placeholderValues($gruppe, $projekt)
+        );
+
+        $participantFailures = collect();
+        if ($fillParticipants) {
+            foreach ($participants as $position => $participant) {
+                $requestedForParticipant = $participantVariables->merge(
+                    $indexedVariables
+                        ->where('index', $position + 1)
+                        ->pluck('key')
+                )->unique()->values();
+
+                if ($requestedForParticipant->isEmpty()) {
+                    continue;
+                }
+
+                $result = $this->missingPlaceholderData(
+                    $requestedForParticipant->all(),
+                    $this->placeholderValues($gruppe, $projekt, $participant, $position + 1)
+                );
+                if ($result['missing']->isNotEmpty() || $result['unknown']->isNotEmpty()) {
+                    $participantFailures->push([
+                        'name' => trim($participant->vorname . ' ' . $participant->nachname),
+                        'result' => $result,
+                    ]);
+                }
+            }
+        }
+
+        $dynamicMissing = collect();
+        if ($spreadsheet && $variables->contains('pa_klassen_tabelle')) {
+            $schedule = $this->paClassSchedule($gruppe, $projekt);
+            if ($schedule->isEmpty()) {
+                $dynamicMissing->push('PA-Klassen und PA-Termine');
+            } else {
+                if ($schedule->contains(fn ($entry) => trim((string) ($entry['class'] ?? '')) === '')) {
+                    $dynamicMissing->push('PA-Klasse');
+                }
+                if ($schedule->contains(fn ($entry) => trim((string) ($entry['dates'] ?? '')) === '')) {
+                    $dynamicMissing->push('PA-Termine je Klasse');
+                }
+            }
+        }
+
+        if ($groupResult['missing']->isEmpty()
+            && $groupResult['unknown']->isEmpty()
+            && $participantFailures->isEmpty()
+            && $dynamicMissing->isEmpty()) {
+            return null;
+        }
+
+        $messages = ['Der Export kann nicht durchgeführt werden, weil angeforderte Daten fehlen.'];
+        if ($groupResult['missing']->isNotEmpty()) {
+            $messages[] = 'Projekt/Gruppe/Partner: ' . $groupResult['missing']->implode(', ') . '.';
+        }
+        if ($dynamicMissing->isNotEmpty()) {
+            $messages[] = 'Dynamische Exportdaten: ' . $dynamicMissing->unique()->implode(', ') . '.';
+        }
+        foreach ($participantFailures as $failure) {
+            $details = $failure['result']['missing']->merge(
+                $failure['result']['unknown']->map(fn ($key) => '${' . $key . '} (unbekannt)')
+            )->unique()->implode(', ');
+            $messages[] = 'Teilnehmer ' . $failure['name'] . ': ' . $details . '.';
+        }
+        if ($groupResult['unknown']->isNotEmpty()) {
+            $messages[] = 'Unbekannte Platzhalter in der Vorlage: '
+                . $groupResult['unknown']->map(fn ($key) => '${' . $key . '}')->implode(', ') . '.';
+        }
+
+        return implode(' ', $messages);
+    }
+
+    /** @return array{missing:\Illuminate\Support\Collection, unknown:\Illuminate\Support\Collection} */
+    private function missingPlaceholderData(array $variables, array $values): array
     {
-        $projectLabels = [
+        $variables = collect($variables)
+            ->map(fn ($variable) => mb_strtolower(trim((string) $variable)))
+            ->filter()
+            ->unique()
+            ->values();
+        $labels = $this->placeholderLabels();
+        $missing = collect();
+        $unknown = collect();
+        $participantAddressVariables = collect(['strasse', 'hausnummer', 'plz', 'stadt', 'ort', 'adresse']);
+        $partnerAddressVariables = collect([
+            'partner_adresse', 'partner_strasse', 'partner_hausnummer', 'partner_plz', 'partner_stadt',
+        ]);
+
+        if ($variables->contains(fn ($variable) => $participantAddressVariables->contains($variable))) {
+            foreach (['strasse' => 'Straße', 'hausnummer' => 'Hausnummer', 'plz' => 'PLZ', 'stadt' => 'Stadt'] as $field => $label) {
+                if ($this->placeholderValueMissing($values[$field] ?? null)) {
+                    $missing->push('Adresse des Teilnehmers – ' . $label);
+                }
+            }
+        }
+
+        if ($variables->contains(fn ($variable) => $partnerAddressVariables->contains($variable))) {
+            foreach ([
+                'partner_strasse' => 'Straße',
+                'partner_hausnummer' => 'Hausnummer',
+                'partner_plz' => 'PLZ',
+                'partner_stadt' => 'Stadt',
+            ] as $field => $label) {
+                if ($this->placeholderValueMissing($values[$field] ?? null)) {
+                    $missing->push('Adresse des Partners – ' . $label);
+                }
+            }
+        }
+
+        foreach ($variables as $variable) {
+            if ($participantAddressVariables->contains($variable)
+                || $partnerAddressVariables->contains($variable)) {
+                continue;
+            }
+
+            if (! array_key_exists($variable, $values)) {
+                $unknown->push($variable);
+                continue;
+            }
+
+            if ($this->placeholderValueMissing($values[$variable])) {
+                $missing->push($labels[$variable] ?? Str::headline($variable));
+            }
+        }
+
+        return [
+            'missing' => $missing->filter()->unique()->values(),
+            'unknown' => $unknown->filter()->unique()->values(),
+        ];
+    }
+
+    private function placeholderValidationMessage(array $result, string $subject): string
+    {
+        $messages = ['Der Export kann nicht durchgeführt werden, weil angeforderte Daten fehlen.'];
+        if ($result['missing']->isNotEmpty()) {
+            $messages[] = $subject . ': ' . $result['missing']->implode(', ') . '.';
+        }
+        if ($result['unknown']->isNotEmpty()) {
+            $messages[] = 'Unbekannte Platzhalter in der Vorlage: '
+                . $result['unknown']->map(fn ($key) => '${' . $key . '}')->implode(', ') . '.';
+        }
+
+        return implode(' ', $messages);
+    }
+
+    private function placeholderLabels(): array
+    {
+        $labels = [];
+        foreach (DokumenteController::platzhalterDefinitionen() as $group) {
+            foreach ($group['werte'] as $placeholder) {
+                $labels[$placeholder['key']] ??= $placeholder['label'];
+            }
+        }
+
+        return array_merge($labels, [
+            'teilnehmer' => 'Teilnehmername',
             'termin_datum' => 'Termin-Datum',
             'erstgespraech_datum' => 'Termin-Datum',
             'termin_uhrzeit' => 'Termin-Uhrzeit',
@@ -1986,38 +2259,16 @@ class ExportWordController extends Controller
             'termin' => 'Termin-Datum und Termin-Uhrzeit',
             'betreuer' => 'Betreuer',
             'betreuer_name' => 'Betreuer',
-            'betreuer_vorname' => 'Betreuer',
-            'betreuer_nachname' => 'Betreuer',
-        ];
-        $salutationVariables = ['betreuer_anrede', 'betreuer_anrede_dativ'];
+            'betreuer_vorname' => 'Betreuer-Vorname',
+            'betreuer_nachname' => 'Betreuer-Nachname',
+            'betreuer_anrede' => 'Anrede/Geschlecht des Betreuers',
+            'betreuer_anrede_dativ' => 'Anrede/Geschlecht des Betreuers',
+        ]);
+    }
 
-        $missingVariables = collect($variables)
-            ->map(fn ($variable) => strtolower((string) $variable))
-            ->unique()
-            ->values();
-        $missingProjectData = $missingVariables
-            ->filter(fn ($variable) => isset($projectLabels[$variable]) && trim((string) ($values[$variable] ?? '')) === '')
-            ->map(fn ($variable) => $projectLabels[$variable])
-            ->unique()
-            ->values();
-        $missingSalutation = $missingVariables->contains(
-            fn ($variable) => in_array($variable, $salutationVariables, true)
-                && trim((string) ($values[$variable] ?? '')) === ''
-        );
-
-        if ($missingProjectData->isEmpty() && ! $missingSalutation) {
-            return null;
-        }
-
-        $messages = [];
-        if ($missingProjectData->isNotEmpty()) {
-            $messages[] = 'Bitte in der Projektteilnahme ergänzen: ' . $missingProjectData->implode(', ') . '.';
-        }
-        if ($missingSalutation) {
-            $messages[] = 'Bitte unter „Personal“ beim ausgewählten Betreuer die Anrede Frau oder Herr hinterlegen.';
-        }
-
-        return implode(' ', $messages);
+    private function placeholderValueMissing(mixed $value): bool
+    {
+        return $value === null || (is_string($value) && trim($value) === '');
     }
 
     private function storageTemplatePath(string $path): string

@@ -22,6 +22,18 @@ Vorlagen fuer die Teilnehmerseite muessen den Datenbezug `Teilnehmer` verwenden.
 6. Bei Gruppen-Vorlagen optional Bereiche auswaehlen.
 7. `Gruppen-Export` und `Platzhalter fuellen` aktivieren, wenn die Vorlage in Gruppen sichtbar sein soll.
 
+## Vollstaendigkeitspruefung vor dem Export
+
+Vor jedem befuellten Word- oder Excel-Export liest das System die tatsaechlich in der Vorlage verwendeten Platzhalter aus. Der Export startet nur, wenn alle dafuer benoetigten Daten vorhanden sind.
+
+- Teilnehmerexporte pruefen die angeforderten Stamm-, Sozial-, Adress-, Kontakt-, Termin- und Betreuungsdaten.
+- Gruppenexporte pruefen Gruppen- und Partnerdaten sowie die angeforderten Felder fuer jeden betroffenen Teilnehmer einzeln.
+- Partnerexporte pruefen alle verwendeten Partner-, Schul- und Terminangaben.
+- Unbekannte oder falsch geschriebene Platzhalter werden gemeldet und nicht stillschweigend leer exportiert.
+- Bei Adressplatzhaltern wird eine vollstaendige Postanschrift aus Strasse, Hausnummer, PLZ und Stadt verlangt.
+
+Fehlende Angaben werden vor der Dateierzeugung in einer Fehlermeldung aufgelistet. Statische PDF-Dateien enthalten keine befuellbaren Platzhalter und werden deshalb unveraendert heruntergeladen.
+
 ## Word
 
 Word-Vorlagen werden pro Teilnehmer gefuellt. Der Gruppen-Export erzeugt eine ZIP-Datei mit einem Dokument pro Teilnehmer. Als Ausgabe sind `DOCX` und, wenn aktiviert, `PDF` moeglich.

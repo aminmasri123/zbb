@@ -213,11 +213,11 @@ const submit = () => {
                 </div>
 
                 <div>
-                    <InputLabel for="geschlecht" value="Anrede" />
+                    <InputLabel for="geschlecht" value="Geschlecht" />
                     <select id="geschlecht" v-model="form.geschlecht" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" required>
-                        <option value="w">Frau</option>
-                        <option value="m">Herr</option>
-                        <option value="d">Keine Frau-/Herr-Anrede</option>
+                        <option value="w">weiblich</option>
+                        <option value="m">männlich</option>
+                        <option value="d">divers</option>
                     </select>
                     <InputError class="mt-2" :message="form.errors.geschlecht" />
                 </div>
