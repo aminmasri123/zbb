@@ -113,30 +113,31 @@
             font-style: italic;
         }
 
-        .coach-row > .assessment-source,
-        .coach-row > .rating-cell {
-            border-bottom: 0;
-        }
-
-        .self-row td {
-            border-top: 0;
-        }
-
-        .self-row .rating-cell,
-        .self-row .assessment-source {
-            border-top: 1px solid #000;
-        }
-
         .competency-pair {
             page-break-inside: avoid;
         }
 
-        .competency-category {
+        .competency-section,
+        .competency-category-table,
+        .competency-block {
+            margin-bottom: 0;
+        }
+
+        .competency-category-table {
+            page-break-after: avoid;
+        }
+
+        .competency-block {
+            margin-top: -1px;
             page-break-inside: avoid;
         }
 
-        .category-columns {
-            page-break-after: avoid;
+        .competency-block .self-row td:not(.competency-name) {
+            height: 0.24cm;
+            padding-top: 1px;
+            padding-bottom: 1px;
+            font-size: 8.5pt;
+            line-height: 1;
         }
 
         .center {
@@ -156,24 +157,6 @@
             white-space: pre-line;
         }
 
-        .signatures {
-            width: 100%;
-            margin-top: 30px;
-            border: 0;
-            border-collapse: collapse;
-        }
-
-        .signatures td {
-            width: 46%;
-            padding-top: 4px;
-            border-top: 1px solid #000;
-            font-size: 9pt;
-        }
-
-        .signatures .spacer {
-            width: 8%;
-            border-top: 0;
-        }
     </style>
 </head>
 <body>
@@ -214,33 +197,37 @@
         </tr>
     </table>
 
-    <table class="report-table">
-        <thead>
+    <table class="report-table competency-section">
+        <tr>
+            <th class="section-title">2. Kompetenzbereiche</th>
+        </tr>
+    </table>
+
+    @foreach($merkmale as $bereich => $items)
+        <table class="report-table competency-category-table">
             <tr>
-                <th colspan="{{ $competencyColumnCount }}" class="section-title">2. Kompetenzbereiche</th>
+                <th colspan="{{ $competencyColumnCount }}" class="category-title">{{ $bereich }}</th>
             </tr>
-        </thead>
-        @foreach($merkmale as $bereich => $items)
-            <tbody class="competency-category">
-                <tr>
-                    <th colspan="{{ $competencyColumnCount }}" class="category-title">{{ $bereich }}</th>
-                </tr>
-                <tr class="category-columns">
-                    <th class="column-title competency-name">Kompetenz</th>
-                    <th class="column-title assessment-source"></th>
-                    @foreach(range(1, 5) as $rating)
-                        <th class="column-title rating-heading">{{ $rating }}</th>
-                    @endforeach
-                    <th class="column-title">Beurteilung</th>
-                </tr>
-                @foreach($items as $item)
-                    <tr @if($selfAssessmentVisible) class="coach-row" @endif>
-                        <td @if($selfAssessmentVisible) rowspan="2" @endif class="competency-name">{{ $item['label'] }}</td>
-                        <td class="assessment-source">TL</td>
+            <tr>
+                <th width="33%" class="column-title competency-name">Kompetenz</th>
+                <th width="5%" class="column-title assessment-source"></th>
+                @foreach(range(1, 5) as $rating)
+                    <th width="3.8%" class="column-title rating-heading">{{ $rating }}</th>
+                @endforeach
+                <th width="43%" class="column-title">Beurteilung</th>
+            </tr>
+        </table>
+
+        @foreach($items as $item)
+            <table class="report-table competency-block">
+                <tbody class="competency-pair">
+                    <tr class="coach-row">
+                        <td width="33%" @if($selfAssessmentVisible) rowspan="2" @endif class="competency-name">{{ $item['label'] }}</td>
+                        <td width="5%" class="assessment-source">TL</td>
                         @foreach(range(1, 5) as $rating)
-                            <td class="rating-cell">{{ (int) ($item['anleiter'] ?? 0) === $rating ? 'X' : '' }}</td>
+                            <td width="3.8%" class="rating-cell">{{ (int) ($item['anleiter'] ?? 0) === $rating ? 'X' : '' }}</td>
                         @endforeach
-                        <td @if($selfAssessmentVisible) rowspan="2" @endif class="assessment-text">
+                        <td width="43%" class="assessment-text">
                             {{ ($item['anleiter_beurteilung'] ?? null) ?: ($item['anleiter_bemerkung'] ?: '-') }}
                             @if(($item['anleiter_beurteilung'] ?? null)
                                 && $item['anleiter_bemerkung']
@@ -251,16 +238,17 @@
                     </tr>
                     @if($selfAssessmentVisible)
                         <tr class="self-row">
-                            <td class="assessment-source">SE</td>
+                            <td width="5%" class="assessment-source">SE</td>
                             @foreach(range(1, 5) as $rating)
-                                <td class="rating-cell">{{ (int) ($item['selbst'] ?? 0) === $rating ? 'X' : '' }}</td>
+                                <td width="3.8%" class="rating-cell">{{ (int) ($item['selbst'] ?? 0) === $rating ? 'X' : '' }}</td>
                             @endforeach
+                            <td width="43%" class="assessment-text"></td>
                         </tr>
                     @endif
-                @endforeach
-            </tbody>
+                </tbody>
+            </table>
         @endforeach
-    </table>
+    @endforeach
 
     <div class="competency-legend">
         1 = im entwicklungsfähigen Maße vorhanden, 2 = im erkennbaren Maße vorhanden,
@@ -306,12 +294,5 @@
         </table>
     @endif
 
-    <table class="signatures">
-        <tr>
-            <td>Teilnehmer/in</td>
-            <td class="spacer"></td>
-            <td>Beobachter/in</td>
-        </tr>
-    </table>
 </body>
 </html>
