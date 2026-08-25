@@ -911,6 +911,8 @@ class BopImportService
                 'beschreibung' => $exercise->beschreibung,
                 'hoechstwert' => $exercise->hoechstwert,
                 'auswertbar' => (bool) $exercise->auswertbar,
+                'auswertung_hervorheben' => false,
+                'zeit_erfassen' => true,
                 'sort_order' => (int) $exercise->id,
                 'aktiv' => true,
                 'updated_at' => $exercise->updated_at ?? now(),

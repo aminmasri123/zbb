@@ -91,7 +91,7 @@ class PotenzialanalyseReportService
                 'punkte' => $result->berechnete_punkte ?? $result->punkte,
                 'fehler' => $result->fehler,
                 'hoechstwert' => $result->uebung?->hoechstwert,
-                'zeit' => $result->uebung?->berechnungsregel === 'zeit'
+                'zeit' => ($result->uebung?->berechnungsregel === 'zeit' || $result->uebung?->zeit_erfassen)
                     ? $this->formatDuration((int) ($result->zeit ?? 0))
                     : '',
             ]);

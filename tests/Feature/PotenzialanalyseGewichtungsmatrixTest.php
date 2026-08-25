@@ -18,6 +18,34 @@ class PotenzialanalyseGewichtungsmatrixTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_an_evaluable_exercise_can_be_created_without_time_capture(): void
+    {
+        [$user, $projekt] = $this->context();
+
+        $this->actingAs($user)->postJson(
+            route('potenzialanalyse.projekt.uebungen.store', $projekt),
+            [
+                'name' => 'Auswertung ohne Zeit',
+                'auswertbar' => true,
+                'auswertung_hervorheben' => true,
+                'ergebnis_typ' => 'punkte',
+                'berechnungsregel' => 'direkte_punkte',
+                'zeit_erfassen' => false,
+                'mindestwert' => 0,
+                'hoechstwert' => 20,
+                'aktiv' => true,
+            ],
+        )->assertCreated();
+
+        $this->assertDatabaseHas('potenzialanalyse_uebungen', [
+            'projekt_id' => $projekt->id,
+            'name' => 'Auswertung ohne Zeit',
+            'auswertbar' => true,
+            'auswertung_hervorheben' => true,
+            'zeit_erfassen' => false,
+        ]);
+    }
+
     public function test_complete_weighting_matrix_is_saved_for_the_project(): void
     {
         [$user, $projekt] = $this->context();

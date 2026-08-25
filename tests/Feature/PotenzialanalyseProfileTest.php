@@ -53,8 +53,12 @@ class PotenzialanalyseProfileTest extends TestCase
         $this->assertTrue($weightSums->every(fn (float $sum) => $sum === 100.0));
 
         $pinsel = $profile->uebungen->firstWhere('name', 'Pinsel');
+        $schrauben = $profile->uebungen->firstWhere('name', 'Schrauben');
         $this->assertSame('fehler_abzug', $pinsel->berechnungsregel);
         $this->assertSame(['fehler', 'qualitaet'], $pinsel->berechnungs_config['rohwerte']);
+        $this->assertFalse($pinsel->auswertung_hervorheben);
+        $this->assertFalse($pinsel->zeit_erfassen);
+        $this->assertTrue($schrauben->zeit_erfassen);
         $this->assertFalse($pinsel->auswertbar, 'Die Vorlage darf ohne fachlich bestätigte Maximalpunkte nicht automatisch auswerten.');
     }
 
@@ -78,6 +82,8 @@ class PotenzialanalyseProfileTest extends TestCase
             'profil_id' => $profile->id,
             'name' => 'Neue Aufgabe',
             'berechnungsregel' => 'direkte_punkte',
+            'auswertung_hervorheben' => true,
+            'zeit_erfassen' => true,
             'hoechstwert' => 10,
             'auswertbar' => true,
             'aktiv' => true,
@@ -97,6 +103,8 @@ class PotenzialanalyseProfileTest extends TestCase
         $this->assertSame('entwurf', $newVersion->status);
         $this->assertSame('Lernflexibilität', $published->fresh('kompetenzen')->kompetenzen->first()->label);
         $this->assertSame('Anpassungs- und Lernfähigkeit', $newVersion->fresh('kompetenzen')->kompetenzen->first()->label);
+        $this->assertTrue($newVersion->uebungen->first()->auswertung_hervorheben);
+        $this->assertTrue($newVersion->uebungen->first()->zeit_erfassen);
     }
 
     #[Test]

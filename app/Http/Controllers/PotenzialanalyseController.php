@@ -711,8 +711,10 @@ class PotenzialanalyseController extends Controller
             'beschreibung' => ['nullable', 'string'],
             'hoechstwert' => ['nullable', 'numeric', 'min:0', 'max:100000'],
             'auswertbar' => ['nullable', 'boolean'],
+            'auswertung_hervorheben' => ['nullable', 'boolean'],
             'ergebnis_typ' => ['nullable', Rule::in(['punkte', 'prozent', 'skala'])],
             'berechnungsregel' => ['nullable', Rule::in(['direkte_punkte', 'fehler_abzug', 'zeit', 'beobachtung'])],
+            'zeit_erfassen' => ['nullable', 'boolean'],
             'fehler_abzug' => ['nullable', 'numeric', 'min:0', 'max:100000'],
             'berechnungs_config' => ['nullable', 'array'],
             'berechnungs_config.zeitgrenzen' => ['nullable', 'array'],
@@ -730,8 +732,10 @@ class PotenzialanalyseController extends Controller
         ]) + [
             'hoechstwert' => null,
             'auswertbar' => false,
+            'auswertung_hervorheben' => false,
             'ergebnis_typ' => 'punkte',
             'berechnungsregel' => 'direkte_punkte',
+            'zeit_erfassen' => false,
             'fehler_abzug' => 1,
             'berechnungs_config' => null,
             'mindestwert' => 0,
@@ -753,6 +757,7 @@ class PotenzialanalyseController extends Controller
         }
 
         if ($validated['berechnungsregel'] === 'zeit') {
+            $validated['zeit_erfassen'] = true;
             $keys = ['stufe_5_bis', 'stufe_4_bis', 'stufe_3_bis', 'stufe_2_bis'];
             $timeThresholds = data_get($validated, 'berechnungs_config.zeitgrenzen', []);
             $configured = collect($keys)->filter(fn (string $key) => filled($timeThresholds[$key] ?? null));
@@ -873,9 +878,7 @@ class PotenzialanalyseController extends Controller
                 }
             }
 
-            // Fehler-/Qualitätsübungen und Beobachtung sind bewusst zeitunabhängig.
-            // Direkte Punkte behalten für bestehende BOP-Übungen das bisherige Verhalten.
-            $zeit = in_array($uebung->berechnungsregel, ['zeit', 'direkte_punkte'], true)
+            $zeit = $uebung->berechnungsregel === 'zeit' || $uebung->zeit_erfassen
                 ? $this->normalizeUebungZeit($entry)
                 : 0;
 

@@ -668,11 +668,14 @@ const normalisierePaZahl = (value, { min = 0, max = null } = {}) => {
   return normalisiert
 }
 
+const paUebungErfasstZeit = (uebung) =>
+  uebung?.berechnungsregel === 'zeit' || Boolean(uebung?.zeit_erfassen)
+
 const normalisierePaUebungswerte = (personenId) => {
   paUebungen.value.forEach((uebung) => {
     const ergebnis = paUebungErgebnis(personenId, uebung.id)
     const maxPunkte = Number(uebung.hoechstwert)
-    const zeitRelevant = ['zeit', 'direkte_punkte'].includes(uebung.berechnungsregel)
+    const zeitRelevant = paUebungErfasstZeit(uebung)
 
     ergebnis.zeit_min = zeitRelevant
       ? (normalisierePaZahl(ergebnis.zeit_min, { min: 0, max: 999 }) ?? 0)
@@ -808,7 +811,7 @@ const paUebungenPayload = (eintrag) =>
 
     const istZeit = uebung.berechnungsregel === 'zeit'
     const istQualitaet = uebung.berechnungsregel === 'fehler_abzug'
-    const zeitRelevant = istZeit || uebung.berechnungsregel === 'direkte_punkte'
+    const zeitRelevant = paUebungErfasstZeit(uebung)
 
     payload[key] = {
       punkte: istZeit || istQualitaet || uebung.berechnungsregel === 'beobachtung' ? null : normalisierePaZahl(wert.punkte, {
@@ -2748,7 +2751,10 @@ const exportMitTag = async () => {
                     <tr v-for="uebung in paUebungen" :key="'pa-uebung-' + uebung.id" class="border-b last:border-b-0">
                       <td class="px-3 py-3 align-top">
                         <div class="flex flex-wrap items-center gap-2">
-                          <p class="font-medium text-gray-800">{{ uebung.name }}</p>
+                          <p
+                            class="text-gray-800"
+                            :class="uebung.auswertung_hervorheben ? 'font-bold' : 'font-medium'"
+                          >{{ uebung.name }}</p>
                           <span v-if="uebung.tag" class="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-500">Tag {{ uebung.tag }}</span>
                           <span class="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-500">{{ uebung.berechnungsregel || 'direkte_punkte' }}</span>
                           <span v-if="uebung.auswertbar" class="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">Auswertbar</span>
@@ -2797,7 +2803,7 @@ const exportMitTag = async () => {
                         </div>
                       </td>
                       <td class="px-3 py-3 align-top">
-                        <span v-if="['fehler_abzug', 'beobachtung'].includes(uebung.berechnungsregel)" class="text-xs text-gray-400">nicht relevant</span>
+                        <span v-if="!paUebungErfasstZeit(uebung)" class="text-xs text-gray-400">nicht relevant</span>
                         <div v-else class="flex items-center gap-2">
                           <InputText
                             v-model.number="paUebungErgebnis(selectedPaTeilnehmer.id, uebung.id).zeit_min"

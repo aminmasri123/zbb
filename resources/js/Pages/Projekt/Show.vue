@@ -474,8 +474,11 @@ const paZeitgrenzenAusConfig = (config = {}) => Object.fromEntries(paZeitstufen.
 ]));
 const normalizePaUebung = (uebung) => ({
     ...uebung,
+    auswertung_hervorheben: Boolean(uebung.auswertung_hervorheben),
     ergebnis_typ: uebung.ergebnis_typ || 'punkte',
     berechnungsregel: uebung.berechnungsregel || 'direkte_punkte',
+    zeit_erfassen: uebung.berechnungsregel === 'zeit'
+        || Boolean(uebung.zeit_erfassen ?? (uebung.berechnungsregel === 'direkte_punkte')),
     fehler_abzug: Number(uebung.fehler_abzug ?? 1),
     berechnungs_config: uebung.berechnungs_config || {},
     zeitgrenzen: paZeitgrenzenAusConfig(uebung.berechnungs_config || {}),
@@ -489,8 +492,10 @@ const paUebungForm = reactive({
     beschreibung: '',
     hoechstwert: null,
     auswertbar: false,
+    auswertung_hervorheben: false,
     ergebnis_typ: 'punkte',
     berechnungsregel: 'direkte_punkte',
+    zeit_erfassen: false,
     fehler_abzug: 1,
     berechnungs_config: {},
     zeitgrenzen: paZeitgrenzenAusConfig(),
@@ -597,8 +602,10 @@ const resetUebungForm = () => {
     paUebungForm.beschreibung = '';
     paUebungForm.hoechstwert = null;
     paUebungForm.auswertbar = false;
+    paUebungForm.auswertung_hervorheben = false;
     paUebungForm.ergebnis_typ = 'punkte';
     paUebungForm.berechnungsregel = 'direkte_punkte';
+    paUebungForm.zeit_erfassen = false;
     paUebungForm.fehler_abzug = 1;
     paUebungForm.berechnungs_config = {};
     paUebungForm.zeitgrenzen = paZeitgrenzenAusConfig();
@@ -644,8 +651,10 @@ const paPayload = (item) => ({
     beschreibung: item.beschreibung || null,
     hoechstwert: item.hoechstwert || null,
     auswertbar: Boolean(item.auswertbar),
+    auswertung_hervorheben: Boolean(item.auswertung_hervorheben),
     ergebnis_typ: item.ergebnis_typ || 'punkte',
     berechnungsregel: item.berechnungsregel || 'direkte_punkte',
+    zeit_erfassen: item.berechnungsregel === 'zeit' || Boolean(item.zeit_erfassen),
     fehler_abzug: Number(item.fehler_abzug ?? 1),
     berechnungs_config: item.berechnungsregel === 'zeit'
         ? {
@@ -1935,7 +1944,7 @@ const formatLuvTemplateDate = (value) => value
                                             class="sticky left-0 z-10 border-b border-r border-gray-200 px-3 py-2 text-left font-medium"
                                             :class="uebung.aktiv ? 'bg-white text-gray-800' : 'bg-gray-50 text-gray-400'"
                                         >
-                                            <span class="block">{{ uebung.name }}</span>
+                                            <span class="block" :class="uebung.auswertung_hervorheben ? 'font-bold' : ''">{{ uebung.name }}</span>
                                             <span class="mt-0.5 block text-xs font-normal text-gray-400">
                                                 {{ uebung.tag ? `Tag ${uebung.tag}` : 'Ohne PA-Tag' }}{{ uebung.aktiv ? '' : ' · Inaktiv' }}
                                             </span>
@@ -2056,6 +2065,20 @@ const formatLuvTemplateDate = (value) => value
                                 <input v-model="paUebungForm.auswertbar" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
                                 Auswertbar
                             </label>
+                            <label class="flex items-center gap-2 text-sm text-gray-600">
+                                <input v-model="paUebungForm.auswertung_hervorheben" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
+                                Pflichtauswertung
+                            </label>
+                            <label class="flex items-center gap-2 text-sm text-gray-600">
+                                <input
+                                    type="checkbox"
+                                    :checked="paUebungForm.berechnungsregel === 'zeit' || paUebungForm.zeit_erfassen"
+                                    :disabled="paUebungForm.berechnungsregel === 'zeit'"
+                                    class="rounded border-gray-300 text-zbb focus:ring-zbb disabled:bg-gray-100"
+                                    @change="paUebungForm.zeit_erfassen = $event.target.checked"
+                                />
+                                Zeit erfassen
+                            </label>
                             <button
                                 type="button"
                                 class="rounded bg-zbb px-4 py-2 text-sm text-white disabled:opacity-60"
@@ -2120,6 +2143,20 @@ const formatLuvTemplateDate = (value) => value
                             <label class="mt-6 flex items-center gap-2 text-sm text-gray-600">
                                 <input v-model="uebung.auswertbar" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
                                 Auswertbar
+                            </label>
+                            <label class="mt-6 flex items-center gap-2 text-sm text-gray-600">
+                                <input v-model="uebung.auswertung_hervorheben" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
+                                Pflichtauswertung
+                            </label>
+                            <label class="mt-6 flex items-center gap-2 text-sm text-gray-600">
+                                <input
+                                    type="checkbox"
+                                    :checked="uebung.berechnungsregel === 'zeit' || uebung.zeit_erfassen"
+                                    :disabled="uebung.berechnungsregel === 'zeit'"
+                                    class="rounded border-gray-300 text-zbb focus:ring-zbb disabled:bg-gray-100"
+                                    @change="uebung.zeit_erfassen = $event.target.checked"
+                                />
+                                Zeit erfassen
                             </label>
                             <label class="mt-6 flex items-center gap-2 text-sm text-gray-600">
                                 <input v-model="uebung.aktiv" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />

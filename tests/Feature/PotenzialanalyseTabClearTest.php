@@ -25,6 +25,32 @@ class PotenzialanalyseTabClearTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_exercise_results_ignore_submitted_time_when_time_capture_is_disabled(): void
+    {
+        [$gruppe, $teilnehmer, $uebung] = $this->paContext();
+        $user = User::factory()->create();
+        $this->actingAs($user);
+        $uebung->update([
+            'berechnungsregel' => 'direkte_punkte',
+            'zeit_erfassen' => false,
+            'hoechstwert' => 20,
+            'auswertbar' => true,
+        ]);
+
+        $controller = app(PotenzialanalyseController::class);
+        $this->invokePrivate($controller, 'syncUebungErgebnisse', [[
+            $uebung->id => ['punkte' => 15, 'zeit_min' => 1, 'zeit_sec' => 30],
+        ], $gruppe, $teilnehmer, collect([$uebung->id => $uebung->fresh()])]);
+
+        $this->assertDatabaseHas('potenzialanalyse_uebung_ergebnisse', [
+            'gruppe_id' => $gruppe->id,
+            'personen_id' => $teilnehmer->id,
+            'uebung_id' => $uebung->id,
+            'punkte' => 15,
+            'zeit' => 0,
+        ]);
+    }
+
     public function test_all_pa_tabs_are_really_deleted_by_an_empty_full_snapshot(): void
     {
         [$gruppe, $teilnehmer, $uebung, $kriterium] = $this->paContext();
