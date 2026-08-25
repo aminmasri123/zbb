@@ -30,6 +30,7 @@ const errors = ref({});
 const form = reactive({
     first_name: '',
     last_name: '',
+    geschlecht: 'd',
     username: '',
     email: '',
     account_setup_method: 'email_invitation',
@@ -174,6 +175,16 @@ const submit = async () => {
                         required
                     />
                     <InputError class="mt-2" :message="errorFor('last_name')" />
+                </div>
+
+                <div>
+                    <InputLabel for="geschlecht" value="Anrede" />
+                    <select id="geschlecht" v-model="form.geschlecht" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" required>
+                        <option value="w">Frau</option>
+                        <option value="m">Herr</option>
+                        <option value="d">Keine Frau-/Herr-Anrede</option>
+                    </select>
+                    <InputError class="mt-2" :message="errorFor('geschlecht')" />
                 </div>
 
                 <div>

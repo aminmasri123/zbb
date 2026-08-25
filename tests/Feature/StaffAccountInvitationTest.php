@@ -34,6 +34,7 @@ class StaffAccountInvitationTest extends TestCase
 
         $employee = User::query()->where('email', 'neue.kraft@example.test')->firstOrFail();
         $this->assertTrue(Hash::check('SicheresPasswort2026', $employee->password));
+        $this->assertSame('w', $employee->person->geschlecht);
         $this->assertDatabaseCount('staff_account_invitations', 0);
         Notification::assertNotSentTo($employee, StaffAccountInvitationNotification::class);
     }
@@ -148,6 +149,7 @@ class StaffAccountInvitationTest extends TestCase
         return array_merge([
             'first_name' => 'Neue',
             'last_name' => 'Kraft',
+            'geschlecht' => 'w',
             'username' => 'neue.kraft',
             'email' => 'neue.kraft@example.test',
             'rollen' => [$role->id],

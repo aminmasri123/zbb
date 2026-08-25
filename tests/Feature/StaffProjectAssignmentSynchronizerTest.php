@@ -151,6 +151,7 @@ class StaffProjectAssignmentSynchronizerTest extends TestCase
         $this->actingAs($actor)->put(route('user.update', $target), [
             'first_name' => $target->person->vorname,
             'last_name' => $target->person->nachname,
+            'geschlecht' => 'm',
             'username' => $target->username,
             'email' => $target->email,
             'rollen' => [$role->id],
@@ -165,6 +166,7 @@ class StaffProjectAssignmentSynchronizerTest extends TestCase
             'id' => $meta->id,
             'projekt_person_id' => $assignment->id,
         ]);
+        $this->assertSame('m', $target->person->fresh()->geschlecht);
     }
 
     public function test_personal_update_preserves_unchanged_assignment_identity(): void
@@ -190,6 +192,7 @@ class StaffProjectAssignmentSynchronizerTest extends TestCase
         $this->actingAs($actor)->put(route('personal.update', $target->person_id), [
             'first_name' => $target->person->vorname,
             'last_name' => $target->person->nachname,
+            'geschlecht' => 'w',
             'username' => $target->username,
             'email' => $target->email,
             'rollen' => [$role->id],
@@ -200,6 +203,7 @@ class StaffProjectAssignmentSynchronizerTest extends TestCase
         ])->assertRedirect(route('personal.index'));
 
         $this->assertDatabaseHas('projekt_has_personens', ['id' => $assignment->id]);
+        $this->assertSame('w', $target->person->fresh()->geschlecht);
     }
 
     public function test_one_person_can_have_separate_participations_in_different_projects(): void

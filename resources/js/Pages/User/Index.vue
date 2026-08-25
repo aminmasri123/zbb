@@ -36,6 +36,7 @@ let userList = ref([...users.data]);
 const emptyUser = () => ({
     first_name: '',
     last_name: '',
+    geschlecht: 'd',
     username: '',
     email: '',
     account_setup_method: 'email_invitation',

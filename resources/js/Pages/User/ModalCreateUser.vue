@@ -144,6 +144,14 @@ watch(() => props.newUser.account_setup_method, (method) => {
           </div>
         </div>
         <div class="mb-4 w-full mx-1 pr-2">
+          <label for="new-user-geschlecht" class="mb-1 block text-sm text-gray-700">Anrede</label>
+          <select id="new-user-geschlecht" v-model="newUser.geschlecht" class="w-full rounded-md border-gray-300 shadow-sm" required>
+            <option value="w">Frau</option>
+            <option value="m">Herr</option>
+            <option value="d">Keine Frau-/Herr-Anrede</option>
+          </select>
+        </div>
+        <div class="mb-4 w-full mx-1 pr-2">
             <FloatLabel variant="on">
               <InputText v-model="newUser.username" class="w-full" />
               <label>Benutzername</label>

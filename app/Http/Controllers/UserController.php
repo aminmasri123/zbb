@@ -223,6 +223,7 @@ class UserController extends Controller
             $validatedData = Validator::make($request->all(), [
                 'first_name' => ['required', 'string', 'max:50'],
                 'last_name' => ['required', 'string', 'max:50'],
+                'geschlecht' => ['nullable', Rule::in(['w', 'm', 'd'])],
                 'email' => ['required', 'string', 'max:255', 'email', 'unique:users,email'],
                 'username' => ['required', 'string', 'max:50', 'unique:users,username'],
                 'account_setup_method' => ['required', Rule::in(['manual', 'email_invitation'])],
@@ -255,7 +256,7 @@ class UserController extends Controller
                 $person = Personen::create([
                     'vorname' => $validatedData['first_name'],
                     'nachname' => $validatedData['last_name'],
-                    'geschlecht' => $request->input('geschlecht', 'd'),
+                    'geschlecht' => $validatedData['geschlecht'] ?? 'd',
                     'typ' => 'mitarbeiter',
                     'aktiv' => true,
                 ]);
@@ -383,6 +384,7 @@ class UserController extends Controller
         $validated = $request->validate([
             'first_name' => 'required|string|max:255',
             'last_name'  => 'required|string|max:255',
+            'geschlecht' => ['sometimes', Rule::in(['w', 'm', 'd'])],
             'username'   => 'required|string|max:255|unique:users,username,' . $user->id,
             'email'      => 'required|email|max:255|unique:users,email,' . $user->id,
             'password'   => 'nullable|string|min:8|confirmed',
@@ -415,6 +417,7 @@ class UserController extends Controller
             $person->update([
                 'vorname' => $validated['first_name'],
                 'nachname' => $validated['last_name'],
+                'geschlecht' => $validated['geschlecht'] ?? $person->geschlecht,
                 'typ' => $person->typ ?: 'mitarbeiter',
             ]);
 

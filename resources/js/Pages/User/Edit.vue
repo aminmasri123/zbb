@@ -36,6 +36,7 @@ const form = useForm({
     id: props.user.id || '',
     first_name: props.user.person?.vorname || '',
     last_name: props.user.person?.nachname || '',
+    geschlecht: props.user.person?.geschlecht || 'd',
     username: props.user.username || '',
     email: props.user.email || '',
     password: '',
@@ -209,6 +210,16 @@ const submit = () => {
                         autofocus
                     />
                     <InputError class="mt-2" :message="form.errors.last_name" />
+                </div>
+
+                <div>
+                    <InputLabel for="geschlecht" value="Anrede" />
+                    <select id="geschlecht" v-model="form.geschlecht" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" required>
+                        <option value="w">Frau</option>
+                        <option value="m">Herr</option>
+                        <option value="d">Keine Frau-/Herr-Anrede</option>
+                    </select>
+                    <InputError class="mt-2" :message="form.errors.geschlecht" />
                 </div>
 
                 <div>

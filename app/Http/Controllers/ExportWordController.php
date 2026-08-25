@@ -1978,7 +1978,7 @@ class ExportWordController extends Controller
 
     private function participantPlaceholderValidationError(array $variables, array $values): ?string
     {
-        $requiredLabels = [
+        $projectLabels = [
             'termin_datum' => 'Termin-Datum',
             'erstgespraech_datum' => 'Termin-Datum',
             'termin_uhrzeit' => 'Termin-Uhrzeit',
@@ -1988,22 +1988,36 @@ class ExportWordController extends Controller
             'betreuer_name' => 'Betreuer',
             'betreuer_vorname' => 'Betreuer',
             'betreuer_nachname' => 'Betreuer',
-            'betreuer_anrede' => 'Anrede/Geschlecht des Betreuers',
-            'betreuer_anrede_dativ' => 'Anrede/Geschlecht des Betreuers',
         ];
+        $salutationVariables = ['betreuer_anrede', 'betreuer_anrede_dativ'];
 
-        $missing = collect($variables)
+        $missingVariables = collect($variables)
             ->map(fn ($variable) => strtolower((string) $variable))
-            ->filter(fn ($variable) => isset($requiredLabels[$variable]) && trim((string) ($values[$variable] ?? '')) === '')
-            ->map(fn ($variable) => $requiredLabels[$variable])
             ->unique()
             ->values();
+        $missingProjectData = $missingVariables
+            ->filter(fn ($variable) => isset($projectLabels[$variable]) && trim((string) ($values[$variable] ?? '')) === '')
+            ->map(fn ($variable) => $projectLabels[$variable])
+            ->unique()
+            ->values();
+        $missingSalutation = $missingVariables->contains(
+            fn ($variable) => in_array($variable, $salutationVariables, true)
+                && trim((string) ($values[$variable] ?? '')) === ''
+        );
 
-        if ($missing->isEmpty()) {
+        if ($missingProjectData->isEmpty() && ! $missingSalutation) {
             return null;
         }
 
-        return 'Bitte zuerst folgende Angaben in der Projektteilnahme ergänzen: ' . $missing->implode(', ') . '.';
+        $messages = [];
+        if ($missingProjectData->isNotEmpty()) {
+            $messages[] = 'Bitte in der Projektteilnahme ergänzen: ' . $missingProjectData->implode(', ') . '.';
+        }
+        if ($missingSalutation) {
+            $messages[] = 'Bitte unter „Personal“ beim ausgewählten Betreuer die Anrede Frau oder Herr hinterlegen.';
+        }
+
+        return implode(' ', $messages);
     }
 
     private function storageTemplatePath(string $path): string

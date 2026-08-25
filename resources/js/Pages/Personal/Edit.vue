@@ -32,6 +32,7 @@ const form = useForm({
     id: props.person.id ?? '',
     first_name: props.person.vorname ?? '',
     last_name: props.person.nachname ?? '',
+    geschlecht: props.person.geschlecht ?? 'd',
     username: props.person.user.username ?? '',
     email: props.person.user.email ?? '',
     password: '',
@@ -216,6 +217,16 @@ const submit = () => {
                         required
                     />
                     <InputError :message="form.errors.last_name" class="mt-2" />
+                </div>
+
+                <div>
+                    <InputLabel for="geschlecht" value="Anrede" />
+                    <select id="geschlecht" v-model="form.geschlecht" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" required>
+                        <option value="w">Frau</option>
+                        <option value="m">Herr</option>
+                        <option value="d">Keine Frau-/Herr-Anrede</option>
+                    </select>
+                    <InputError :message="form.errors.geschlecht" class="mt-2" />
                 </div>
 
                 <!-- Passwort -->

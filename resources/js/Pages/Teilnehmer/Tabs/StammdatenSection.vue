@@ -36,21 +36,6 @@
 
 
 
-      <div>
-            <label for="startDate">
-                Betreuer <span class="text-red-500">*</span>
-            </label>
-            <Select
-            filter
-                v-model="form.betreuer"
-                :options="betreuer"
-                :optionLabel="(v) => `${v.nachname} ${v.vorname}`"
-                optionValue="id"
-                class="w-[200px] text-sm w-full px-4 py-1 border !border-gray-300 rounded-lg focus:!ring-1 focus:!ring-zbb focus:!border-zbb transition-colors"
-                >
-            </Select>
-        </div>
-
       <div class="md:col-span-3">
         <label>Bemerkungen</label>
         <textarea v-model="teilnehmer.bemerkungen" rows="2" class="input"></textarea>
@@ -63,12 +48,10 @@
 import { ref } from "vue";
 import { router } from "@inertiajs/vue3";
 import Swal from "sweetalert2";
-import Select from 'primevue/select';
 import dayjs from "dayjs";
 
 const props = defineProps({
   teilnehmer: Object,
-  betreuer: Array,
 });
 
 const teilnehmer = ref(JSON.parse(JSON.stringify(props.teilnehmer)));
@@ -77,7 +60,6 @@ const form = ref({
   geburtsdatum: teilnehmer.value.geburtsdatum
     ? dayjs(teilnehmer.value.geburtsdatum).format("YYYY-MM-DD")
     : "",
-  betreuer: teilnehmer.value.betreuer_id || "",
 });
 const loadingSave = ref(false);
 
@@ -98,7 +80,6 @@ const saveStammdaten = () => {
     nachname: teilnehmer.value.nachname,
     geschlecht: teilnehmer.value.geschlecht,
     geburtsdatum: form.value.geburtsdatum,
-    betreuer: form.value.betreuer,
     bemerkungen: teilnehmer.value.bemerkungen,
   };
 

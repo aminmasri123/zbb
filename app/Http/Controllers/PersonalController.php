@@ -178,6 +178,7 @@ class PersonalController extends Controller
     $validated = $request->validate([
         'first_name' => ['required', 'string', 'max:255'],
         'last_name'  => ['required', 'string', 'max:255'],
+        'geschlecht' => ['sometimes', 'in:w,m,d'],
         'username'   => ['required', 'string', 'max:255'],
         'email'      => ['required', 'email', 'max:255'],
         'password'   => ['nullable', 'string', 'min:8', 'confirmed'],
@@ -207,6 +208,7 @@ class PersonalController extends Controller
         // ► PERSON aktualisieren
         $person->vorname   = $validated['first_name'];
         $person->nachname  = $validated['last_name'];
+        $person->geschlecht = $validated['geschlecht'] ?? $person->geschlecht;
         $person->save();
 
         // ► USER aktualisieren
