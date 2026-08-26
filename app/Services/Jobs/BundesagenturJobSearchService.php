@@ -42,13 +42,14 @@ class BundesagenturJobSearchService
 
     private function mapJob(array $job): array
     {
+        $externalRef = (string) ($job['referenznummer'] ?? $job['refnr'] ?? '');
         $workplace = Arr::get($job, 'stellenlokationen.0.adresse', $job['arbeitsort'] ?? []);
         $location = is_array($workplace)
             ? trim(implode(' ', array_filter([Arr::get($workplace, 'plz'), Arr::get($workplace, 'ort'), Arr::get($workplace, 'region')])))
             : (string) $workplace;
 
         return [
-            'external_ref' => (string) ($job['referenznummer'] ?? $job['refnr'] ?? ''),
+            'external_ref' => $externalRef,
             'title' => (string) ($job['stellenangebotsTitel'] ?? $job['titel'] ?? $job['beruf'] ?? 'Stellenangebot'),
             'employer' => (string) ($job['arbeitgeber'] ?? $job['firma'] ?? ''),
             'location' => $location,
@@ -57,7 +58,10 @@ class BundesagenturJobSearchService
                 ?? $job['aktuelleVeroeffentlichungsdatum']
                 ?? $job['veroeffentlichtAm']
                 ?? null,
-            'source_url' => $job['externeURL'] ?? $job['externeUrl'] ?? $job['url'] ?? null,
+            'source_url' => $job['externeURL']
+                ?? $job['externeUrl']
+                ?? $job['url']
+                ?? ($externalRef !== '' ? 'https://www.arbeitsagentur.de/jobsuche/jobdetail/'.rawurlencode($externalRef) : null),
         ];
     }
 }

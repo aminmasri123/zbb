@@ -38,7 +38,7 @@ class PortalJobSearchTest extends TestCase
 
         Http::fake([
             'https://rest.arbeitsagentur.de/*' => Http::response([
-                'maxErgebnisse' => 1,
+                'maxErgebnisse' => 2,
                 'ergebnisliste' => [[
                     'referenznummer' => '10000-TEST-S',
                     'stellenangebotsTitel' => 'Gärtner/in',
@@ -48,6 +48,14 @@ class PortalJobSearchTest extends TestCase
                     ]],
                     'veroeffentlichungszeitraum' => ['von' => '2026-07-10'],
                     'externeURL' => 'https://example.test/job',
+                ], [
+                    'referenznummer' => '10001-BA-ONLY-S',
+                    'stellenangebotsTitel' => 'Fachlagerist/in',
+                    'firma' => 'BA Musterbetrieb',
+                    'stellenlokationen' => [[
+                        'adresse' => ['plz' => '66115', 'ort' => 'Saarbrücken'],
+                    ]],
+                    'datumErsteVeroeffentlichung' => '2026-07-09',
                 ]],
             ], 200),
         ]);
@@ -63,7 +71,8 @@ class PortalJobSearchTest extends TestCase
             ->assertJsonPath('items.0.employer', 'Musterbetrieb GmbH')
             ->assertJsonPath('items.0.location', '66111 Saarbrücken')
             ->assertJsonPath('items.0.published_at', '2026-07-10')
-            ->assertJsonPath('items.0.source_url', 'https://example.test/job');
+            ->assertJsonPath('items.0.source_url', 'https://example.test/job')
+            ->assertJsonPath('items.1.source_url', 'https://www.arbeitsagentur.de/jobsuche/jobdetail/10001-BA-ONLY-S');
 
         Http::assertSent(fn ($request) => str_contains($request->url(), '/pc/v6/jobs?')
             && $request->hasHeader('X-API-Key', 'jobboerse-jobsuche')
