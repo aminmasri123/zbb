@@ -43,6 +43,7 @@ class User extends Authenticatable
         'username',
         'email',
         'email_verified_at',
+        'portal_last_login_at',
         'password',
         'person_id',
         'lang',
@@ -75,6 +76,7 @@ class User extends Authenticatable
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'portal_last_login_at' => 'datetime',
     ];
 
     /**

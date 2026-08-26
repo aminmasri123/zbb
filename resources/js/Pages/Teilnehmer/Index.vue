@@ -767,6 +767,15 @@ const sortByColumn = (column) => {
                 Praktikant:innen
             </Link>
 
+            <Link
+                v-if="$page.props.enabledModules?.participant_portal"
+                :href="route('teilnehmer.portal-users.index')"
+                class="border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-zbb hover:border-orange-500 hover:bg-zbb hover:text-white"
+            >
+                <i class="las la-users mr-2"></i>
+                Portal-Nutzer
+            </Link>
+
 
             <label for="simple-search" class="sr-only">Search</label>
             <input

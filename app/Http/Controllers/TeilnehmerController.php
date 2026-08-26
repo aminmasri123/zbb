@@ -20,6 +20,7 @@ use App\Models\ParticipantCvEntry;
 use App\Models\ParticipantCvVersion;
 use App\Models\ParticipantDataRequest;
 use App\Models\ParticipantJobRecommendation;
+use App\Models\ParticipantPortalInvitation;
 use App\Models\ParticipantPortalDocument;
 use App\Models\ParticipantPortalMessage;
 use App\Models\ParticipantPortalProfile;
@@ -222,6 +223,96 @@ class TeilnehmerController extends Controller
                 'sort' => $sortierung,
                 'direction' => $richtung,
                 'period' => $overviewPeriod,
+            ],
+        ]);
+    }
+
+    public function portalUsers(Request $request)
+    {
+        $user = $request->user();
+        $project = $this->activeProjectContext->currentAvailableFor($user);
+        abort_unless($project, 409, 'Bitte wählen Sie zuerst ein aktives Projekt aus.');
+
+        $participantIds = Personen::query()
+            ->teilnehmer()
+            ->aktiv()
+            ->visibleForUser($user)
+            ->whereHas('projekte', fn ($query) => $query->whereKey($project->id))
+            ->pluck('personens.id');
+
+        $accounts = User::query()
+            ->join('personens', 'personens.id', '=', 'users.person_id')
+            ->whereIn('users.person_id', $participantIds)
+            ->orderBy('personens.nachname')
+            ->orderBy('personens.vorname')
+            ->get([
+                'users.id',
+                'users.person_id',
+                'users.email',
+                'users.created_at',
+                'users.portal_last_login_at',
+                'personens.vorname',
+                'personens.nachname',
+            ])
+            ->map(fn (User $account) => [
+                'id' => 'account-'.$account->id,
+                'user_id' => $account->id,
+                'participant_id' => $account->person_id,
+                'participant_name' => trim($account->vorname.' '.$account->nachname),
+                'email' => $account->email,
+                'status' => $account->portal_last_login_at ? 'active_used' : 'active_never',
+                'account_created_at' => $account->created_at,
+                'last_login_at' => $account->portal_last_login_at,
+                'invited_at' => null,
+                'invitation_expires_at' => null,
+            ]);
+
+        $accountPersonIds = $accounts->pluck('participant_id');
+        $participationIds = ProjektHasPersonen::query()
+            ->where('projekt_id', $project->id)
+            ->whereIn('personen_id', $participantIds)
+            ->pluck('id');
+
+        $invitations = ParticipantPortalInvitation::query()
+            ->whereIn('project_person_id', $participationIds)
+            ->whereNull('accepted_at')
+            ->with('participation.teilnehmer:id,vorname,nachname')
+            ->latest('created_at')
+            ->get()
+            ->unique('project_person_id')
+            ->reject(fn (ParticipantPortalInvitation $invitation) => $accountPersonIds->contains($invitation->participation?->personen_id))
+            ->map(function (ParticipantPortalInvitation $invitation) {
+                $participant = $invitation->participation?->teilnehmer;
+
+                return [
+                    'id' => 'invitation-'.$invitation->id,
+                    'user_id' => null,
+                    'participant_id' => $invitation->participation?->personen_id,
+                    'participant_name' => trim(($participant?->vorname ?? '').' '.($participant?->nachname ?? '')),
+                    'email' => $invitation->email,
+                    'status' => $invitation->expires_at->isFuture() ? 'invited' : 'expired',
+                    'account_created_at' => null,
+                    'last_login_at' => null,
+                    'invited_at' => $invitation->created_at,
+                    'invitation_expires_at' => $invitation->expires_at,
+                ];
+            })
+            ->values();
+
+        $rows = $accounts
+            ->concat($invitations)
+            ->sortBy('participant_name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
+
+        return Inertia::render('Teilnehmer/PortalUsers', [
+            'project' => $project->only(['id', 'name']),
+            'portalUsers' => $rows,
+            'stats' => [
+                'accounts' => $accounts->count(),
+                'used' => $accounts->where('status', 'active_used')->count(),
+                'never_used' => $accounts->where('status', 'active_never')->count(),
+                'pending_invitations' => $invitations->where('status', 'invited')->count(),
+                'expired_invitations' => $invitations->where('status', 'expired')->count(),
             ],
         ]);
     }
@@ -691,7 +782,12 @@ class TeilnehmerController extends Controller
             ? ParticipationCompletionReport::query()->where('project_person_id', $activeParticipation->id)
                 ->with(['creator:id,name', 'approver:id,name'])->orderByDesc('version')->get()
             : collect();
-        $portalUser = User::query()->where('person_id', $personen->id)->first(['id', 'email', 'created_at']);
+        $portalUser = User::query()->where('person_id', $personen->id)->first([
+            'id',
+            'email',
+            'created_at',
+            'portal_last_login_at',
+        ]);
         $portalInvitation = $activeParticipation
             ? $activeParticipation->portalInvitations()->latest()->first(['id', 'email', 'expires_at', 'accepted_at', 'created_at'])
             : null;

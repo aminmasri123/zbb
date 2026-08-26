@@ -59,6 +59,7 @@ class ParticipantPortalAccountTest extends TestCase
 
         $portalUser = User::query()->where('person_id', $participant->id)->firstOrFail();
         $this->assertAuthenticatedAs($portalUser);
+        $this->assertNotNull($portalUser->portal_last_login_at);
         $this->assertNotNull(ParticipantPortalInvitation::query()->firstOrFail()->accepted_at);
         $this->assertDatabaseHas('participant_portal_profiles', ['person_id' => $participant->id]);
 

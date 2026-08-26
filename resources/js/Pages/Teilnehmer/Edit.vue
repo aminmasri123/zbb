@@ -309,7 +309,13 @@
                             </div>
                             <div class="flex items-center gap-3 text-right">
                                 <div v-if="$page.props.enabledModules?.participant_portal">
-                                    <span v-if="props.portalAccess?.account" class="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">Portal aktiv · {{ props.portalAccess.account.email }}</span>
+                                    <div v-if="props.portalAccess?.account">
+                                        <span class="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">Portal aktiv · {{ props.portalAccess.account.email }}</span>
+                                        <p class="mt-2 text-xs text-gray-500">
+                                            Letzte Anmeldung:
+                                            {{ props.portalAccess.account.portal_last_login_at ? formatDateTime(props.portalAccess.account.portal_last_login_at) : 'seit Einführung noch nicht erfasst' }}
+                                        </p>
+                                    </div>
                                     <button v-else type="button" class="rounded border border-zbb px-3 py-2 text-xs font-semibold text-zbb" @click="createPortalInvitation">Portalzugang einladen</button>
                                 </div>
                                 <div>

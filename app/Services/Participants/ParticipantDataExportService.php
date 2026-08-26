@@ -37,7 +37,13 @@ class ParticipantDataExportService
         ]);
         $participations = ProjektHasPersonen::query()->where('personen_id', $person->id)->with(['projekt:id,name', 'standort:id,name'])->get();
         $participationIds = $participations->pluck('id');
-        $portalUser = User::query()->where('person_id', $person->id)->first(['id', 'email', 'email_verified_at', 'created_at']);
+        $portalUser = User::query()->where('person_id', $person->id)->first([
+            'id',
+            'email',
+            'email_verified_at',
+            'portal_last_login_at',
+            'created_at',
+        ]);
 
         return [
             'export' => ['generated_at' => now()->toISOString(), 'format_version' => 2, 'subject_person_id' => $person->id],

@@ -606,6 +606,10 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     // Teilnehmer
     Route::middleware(['module:participant_management', 'projectFeature:participant_management'])->group(function () {
         Route::get('/teilnehmer', [TeilnehmerController::class, 'index'])->name('teilnehmer.index')->can('teilnehmer.index');
+        Route::get('/teilnehmer/portal-nutzer', [TeilnehmerController::class, 'portalUsers'])
+            ->name('teilnehmer.portal-users.index')
+            ->middleware('module:participant_portal')
+            ->can('teilnehmer.index');
         Route::get('/teilnehmer/anlegen', [TeilnehmerController::class, 'create'])->name('teilnehmer.create')->can('teilnehmer.store');
         Route::post('/teilnehmer/anlegen', [TeilnehmerController::class, 'store'])->name('teilnehmer.store')->can('teilnehmer.store');
         Route::post('/teilnehmer/import', [TeilnehmerController::class, 'import'])->name('teilnehmer.import')->middleware('canAnyPermission:teilnehmer.import,teilnehmer.store');
