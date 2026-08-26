@@ -609,7 +609,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
         Route::get('/teilnehmer/portal-nutzer', [TeilnehmerController::class, 'portalUsers'])
             ->name('teilnehmer.portal-users.index')
             ->middleware('module:aa1d5sfjktq9e-wruiov')
-            ->can('teilnehmer.index');
+            ->can('teilnehmer.portal.overview');
         Route::get('/teilnehmer/anlegen', [TeilnehmerController::class, 'create'])->name('teilnehmer.create')->can('teilnehmer.store');
         Route::post('/teilnehmer/anlegen', [TeilnehmerController::class, 'store'])->name('teilnehmer.store')->can('teilnehmer.store');
         Route::post('/teilnehmer/import', [TeilnehmerController::class, 'import'])->name('teilnehmer.import')->middleware('canAnyPermission:teilnehmer.import,teilnehmer.store');
@@ -641,7 +641,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
         Route::post('/teilnehmer/teilnahme/{participation}/abschlussbericht', [ParticipationCompletionController::class, 'submit'])->name('teilnehmer.completion-reports.submit')->middleware('projectFeature:completion_management')->can('teilnehmer.update');
         Route::put('/teilnehmer/abschlussbericht/{report}/entscheidung', [ParticipationCompletionController::class, 'decide'])->name('teilnehmer.completion-reports.decide')->middleware('projectFeature:completion_management')->can('teilnehmer.update');
         Route::get('/teilnehmer/abschlussbericht/{report}/export', [ParticipationCompletionController::class, 'export'])->name('teilnehmer.completion-reports.export')->middleware('projectFeature:completion_management')->can('teilnehmer.update');
-        Route::post('/teilnehmer/teilnahme/{participation}/portal-einladung', [ParticipantPortalController::class, 'invite'])->name('teilnehmer.portal.invite')->middleware('module:participant_portal')->can('teilnehmer.update');
+        Route::post('/teilnehmer/teilnahme/{participation}/portal-einladung', [ParticipantPortalController::class, 'invite'])->name('teilnehmer.portal.invite')->middleware('module:aa1d5sfjktq9e-wruiov')->can('teilnehmer.portal.invite');
         Route::post('/teilnehmer/teilnahme/{participation}/aufgaben', [ParticipationTaskController::class, 'store'])->name('teilnehmer.tasks.store')->can('teilnehmer.update');
         Route::put('/teilnehmer/aufgaben/{task}', [ParticipationTaskController::class, 'update'])->name('teilnehmer.tasks.update')->can('teilnehmer.update');
         Route::delete('/teilnehmer/aufgaben/{task}', [ParticipationTaskController::class, 'destroy'])->name('teilnehmer.tasks.destroy')->can('teilnehmer.update');

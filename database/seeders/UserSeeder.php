@@ -1105,6 +1105,8 @@ class UserSeeder extends Seeder
             $this->permission('teilnehmer.store', 5, 'Erlaubt das Anlegen neuer Teilnehmer inklusive Stammdaten und erster Zuordnungen.'),
             $this->permission('teilnehmer.import', 5, 'Erlaubt den Import von Teilnehmerdaten aus Dateien oder Sammelquellen.'),
             $this->permission('teilnehmer.update', 5, 'Erlaubt das Bearbeiten von Teilnehmerdaten inklusive Stammdaten, Sozialdaten, Projektzuordnungen, Kontakten, Adressen, Bankdaten und Zusatzinformationen.'),
+            $this->permission('teilnehmer.portal.invite', 5, 'Erlaubt das Versenden von Teilnehmerportal-Einladungen im aktiven Projekt für berechtigte Teilnehmer.'),
+            $this->permission('teilnehmer.portal.overview', 5, 'Erlaubt den Zugriff auf die Portal-Nutzer-Übersicht mit Konten und Einladungen im aktiven Projekt.'),
             $this->permission('teilnehmer.elterneinverstaendnis.update', 5, 'Erlaubt das Umschalten der Elterneinverstaendniserklaerung fuer schulbezogene Teilnehmer im aktiven Projekt.'),
             $this->permission('teilnehmer.data-request.manage', 5, 'Erlaubt das Pruefen, Bearbeiten und Abschliessen von Datenauskunftsanfragen eines Teilnehmers innerhalb des rollenbezogen erlaubten Projekt- und Teilnehmerbereichs.'),
             $this->permission('teilnehmer.destroy', 5, 'Erlaubt das Loeschen einzelner Teilnehmer. Diese Berechtigung ist wegen personenbezogener Daten besonders kritisch.'),

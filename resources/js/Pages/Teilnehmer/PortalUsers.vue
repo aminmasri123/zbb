@@ -3,6 +3,8 @@ import { computed, ref } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { usePermissions } from '@/utils/permissions';
+import axios from 'axios';
+import Swal from 'sweetalert2';
 
 const props = defineProps({
     project: { type: Object, required: true },
@@ -45,6 +47,49 @@ const lastLoginText = (row) => {
     if (row.status === 'active_never') return 'Seit Einführung noch nicht erfasst';
     if (!row.last_login_at) return '–';
     return formatDateTime(row.last_login_at);
+};
+
+const sendInvite = async (row) => {
+    if (!can('teilnehmer.portal.invite') || !row?.participation_id) return;
+
+    const emailDefault = row.email || '';
+    const result = await Swal.fire({
+        title: 'Einladung verschicken',
+        input: 'email',
+        inputLabel: 'E-Mail-Adresse',
+        inputValue: emailDefault,
+        inputPlaceholder: 'name@beispiel.de',
+        showCancelButton: true,
+        confirmButtonText: 'Einladung senden',
+        cancelButtonText: 'Abbrechen',
+        confirmButtonColor: '#f97316',
+        allowOutsideClick: false,
+        preConfirm: (value) => {
+            if (!value) {
+                Swal.showValidationMessage('Bitte eine gültige E-Mail-Adresse angeben.');
+                return false;
+            }
+            return value;
+        },
+    });
+
+    if (!result.isConfirmed || !result.value) return;
+
+    try {
+        const { data } = await axios.post(route('teilnehmer.portal.invite', row.participation_id), { email: result.value });
+        await Swal.fire({
+            title: 'Gesendet',
+            text: data?.message || 'Portal-Einladung wurde erstellt.',
+            icon: 'success',
+        });
+        window.location.reload();
+    } catch (error) {
+        await Swal.fire({
+            title: 'Fehler',
+            text: error.response?.data?.message || 'Einladung konnte nicht gesendet werden.',
+            icon: 'error',
+        });
+    }
 };
 </script>
 
@@ -111,6 +156,7 @@ const lastLoginText = (row) => {
                                 <th class="px-4 py-3">Status</th>
                                 <th class="px-4 py-3">Konto/Einladung seit</th>
                                 <th class="px-4 py-3">Letzte Anmeldung</th>
+                                <th v-if="can('teilnehmer.portal.invite')" class="px-4 py-3">Aktion</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -133,9 +179,20 @@ const lastLoginText = (row) => {
                                     <p v-if="row.status === 'invited'" class="mt-1 text-xs text-amber-700">Gültig bis {{ formatDateTime(row.invitation_expires_at) }}</p>
                                 </td>
                                 <td class="px-4 py-3 font-medium text-gray-700">{{ lastLoginText(row) }}</td>
+                                <td v-if="can('teilnehmer.portal.invite')" class="px-4 py-3">
+                                    <button
+                                        v-if="row.participation_id && row.status !== 'active_used' && row.status !== 'active_never'"
+                                        type="button"
+                                        class="rounded border border-zbb px-3 py-2 text-xs font-medium text-zbb hover:bg-zbb hover:text-white"
+                                        @click="sendInvite(row)"
+                                    >
+                                        Einladung senden
+                                    </button>
+                                    <span v-else class="text-xs text-gray-400">Bereits Konto vorhanden</span>
+                                </td>
                             </tr>
                             <tr v-if="filteredRows.length === 0">
-                                <td colspan="5" class="px-4 py-12 text-center text-gray-500">Keine passenden Portal-Nutzer oder Einladungen gefunden.</td>
+                                <td :colspan="can('teilnehmer.portal.invite') ? 6 : 5" class="px-4 py-12 text-center text-gray-500">Keine passenden Portal-Nutzer oder Einladungen gefunden.</td>
                             </tr>
                         </tbody>
                     </table>

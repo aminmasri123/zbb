@@ -248,6 +248,10 @@ class TeilnehmerController extends Controller
             ->visibleForUser($user)
             ->whereHas('projekte', fn ($query) => $query->whereKey($project->id))
             ->pluck('personens.id');
+        $participations = ProjektHasPersonen::query()
+            ->where('projekt_id', $project->id)
+            ->whereIn('personen_id', $participantIds)
+            ->pluck('id', 'personen_id');
 
         $accounts = User::query()
             ->join('personens', 'personens.id', '=', 'users.person_id')
@@ -269,6 +273,7 @@ class TeilnehmerController extends Controller
                 'participant_id' => $account->person_id,
                 'participant_name' => trim($account->vorname.' '.$account->nachname),
                 'email' => $account->email,
+                'participation_id' => $participations[$account->person_id] ?? null,
                 'status' => $account->portal_last_login_at ? 'active_used' : 'active_never',
                 'account_created_at' => $account->created_at,
                 'last_login_at' => $account->portal_last_login_at,
@@ -297,6 +302,7 @@ class TeilnehmerController extends Controller
                     'id' => 'invitation-'.$invitation->id,
                     'user_id' => null,
                     'participant_id' => $invitation->participation?->personen_id,
+                    'participation_id' => $invitation->project_person_id,
                     'participant_name' => trim(($participant?->vorname ?? '').' '.($participant?->nachname ?? '')),
                     'email' => $invitation->email,
                     'status' => $invitation->expires_at->isFuture() ? 'invited' : 'expired',
