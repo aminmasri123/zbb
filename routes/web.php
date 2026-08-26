@@ -609,7 +609,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
         Route::get('/teilnehmer/portal-nutzer', [TeilnehmerController::class, 'portalUsers'])
             ->name('teilnehmer.portal-users.index')
             ->middleware('module:participant_portal')
-            ->middleware('projectFeature:portal_users_overview')
+            ->middleware('projectFeature:participant_portal')
             ->can('teilnehmer.portal.overview');
         Route::get('/teilnehmer/anlegen', [TeilnehmerController::class, 'create'])->name('teilnehmer.create')->can('teilnehmer.store');
         Route::post('/teilnehmer/anlegen', [TeilnehmerController::class, 'store'])->name('teilnehmer.store')->can('teilnehmer.store');
@@ -630,13 +630,13 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
             ->can('teilnehmer.update');
         Route::patch('/teilnehmer/update/{id}', [TeilnehmerController::class, 'update'])->name('teilnehmer.update')->can('teilnehmer.update');
         Route::patch('/teilnehmer/{person}/elterneinverstaendnis', [TeilnehmerController::class, 'updateParentalConsent'])->name('teilnehmer.elterneinverstaendnis.update')->middleware(['module:participant_management', 'projectFeature:participant_management'])->can('teilnehmer.elterneinverstaendnis.update');
-        Route::get('/teilnehmer/{person}/lebenslauf', [ParticipantCvController::class, 'staffIndex'])->name('teilnehmer.resume.index')->middleware('module:participant_portal')->can('teilnehmer.update');
-        Route::post('/teilnehmer/{person}/lebenslauf/eintraege', [ParticipantCvController::class, 'store'])->name('teilnehmer.resume.entries.store')->middleware('module:participant_portal')->can('teilnehmer.update');
-        Route::post('/teilnehmer/{person}/lebenslauf/versionen', [ParticipantCvController::class, 'createVersion'])->name('teilnehmer.resume.versions.store')->middleware('module:participant_portal')->can('teilnehmer.update');
-        Route::put('/teilnehmer/lebenslauf/eintraege/{entry}', [ParticipantCvController::class, 'update'])->name('teilnehmer.resume.entries.update')->middleware('module:participant_portal')->can('teilnehmer.update');
-        Route::delete('/teilnehmer/lebenslauf/eintraege/{entry}', [ParticipantCvController::class, 'destroy'])->name('teilnehmer.resume.entries.destroy')->middleware('module:participant_portal')->can('teilnehmer.update');
-        Route::get('/teilnehmer/lebenslauf/versionen/{version}/download', [ParticipantCvController::class, 'download'])->name('teilnehmer.resume.versions.download')->middleware('module:participant_portal')->can('teilnehmer.update');
-        Route::get('/teilnehmer/lebenslauf/versionen/{version}/vorschau', [ParticipantCvController::class, 'print'])->name('teilnehmer.resume.versions.print')->middleware('module:participant_portal')->can('teilnehmer.update');
+        Route::get('/teilnehmer/{person}/lebenslauf', [ParticipantCvController::class, 'staffIndex'])->name('teilnehmer.resume.index')->middleware(['module:participant_portal', 'projectFeature:participant_portal'])->can('teilnehmer.update');
+        Route::post('/teilnehmer/{person}/lebenslauf/eintraege', [ParticipantCvController::class, 'store'])->name('teilnehmer.resume.entries.store')->middleware(['module:participant_portal', 'projectFeature:participant_portal'])->can('teilnehmer.update');
+        Route::post('/teilnehmer/{person}/lebenslauf/versionen', [ParticipantCvController::class, 'createVersion'])->name('teilnehmer.resume.versions.store')->middleware(['module:participant_portal', 'projectFeature:participant_portal'])->can('teilnehmer.update');
+        Route::put('/teilnehmer/lebenslauf/eintraege/{entry}', [ParticipantCvController::class, 'update'])->name('teilnehmer.resume.entries.update')->middleware(['module:participant_portal', 'projectFeature:participant_portal'])->can('teilnehmer.update');
+        Route::delete('/teilnehmer/lebenslauf/eintraege/{entry}', [ParticipantCvController::class, 'destroy'])->name('teilnehmer.resume.entries.destroy')->middleware(['module:participant_portal', 'projectFeature:participant_portal'])->can('teilnehmer.update');
+        Route::get('/teilnehmer/lebenslauf/versionen/{version}/download', [ParticipantCvController::class, 'download'])->name('teilnehmer.resume.versions.download')->middleware(['module:participant_portal', 'projectFeature:participant_portal'])->can('teilnehmer.update');
+        Route::get('/teilnehmer/lebenslauf/versionen/{version}/vorschau', [ParticipantCvController::class, 'print'])->name('teilnehmer.resume.versions.print')->middleware(['module:participant_portal', 'projectFeature:participant_portal'])->can('teilnehmer.update');
         Route::put('/teilnehmer/teilnahme/{participation}/aufnahmecheckliste/{item}', [IntakeChecklistController::class, 'updateCompletion'])->name('teilnehmer.intake-checklist.update')->can('teilnehmer.update');
         Route::put('/teilnehmer/teilnahme/{participation}/abschlusscheckliste/{item}', [ParticipationCompletionController::class, 'updateCompletion'])->name('teilnehmer.completion-checklist.update')->middleware('projectFeature:completion_management')->can('teilnehmer.update');
         Route::post('/teilnehmer/teilnahme/{participation}/abschlussbericht', [ParticipationCompletionController::class, 'submit'])->name('teilnehmer.completion-reports.submit')->middleware('projectFeature:completion_management')->can('teilnehmer.update');
@@ -645,22 +645,22 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
         Route::post('/teilnehmer/teilnahme/{participation}/portal-einladung', [ParticipantPortalController::class, 'invite'])
             ->name('teilnehmer.portal.invite')
             ->middleware('module:participant_portal')
-            ->middleware('projectFeature:portal_users_overview')
+            ->middleware('projectFeature:participant_portal')
             ->can('teilnehmer.portal.invite');
         Route::post('/teilnehmer/teilnahme/{participation}/aufgaben', [ParticipationTaskController::class, 'store'])->name('teilnehmer.tasks.store')->can('teilnehmer.update');
         Route::put('/teilnehmer/aufgaben/{task}', [ParticipationTaskController::class, 'update'])->name('teilnehmer.tasks.update')->can('teilnehmer.update');
         Route::delete('/teilnehmer/aufgaben/{task}', [ParticipationTaskController::class, 'destroy'])->name('teilnehmer.tasks.destroy')->can('teilnehmer.update');
-        Route::put('/teilnehmer/bewerbungen/{application}', [ParticipationApplicationController::class, 'update'])->name('teilnehmer.applications.update')->middleware('module:participant_portal')->can('teilnehmer.update');
-        Route::put('/teilnehmer/bewerbungen/{application}/dokumente', [ParticipantApplicationPackageController::class, 'staffSync'])->name('teilnehmer.applications.documents.sync')->middleware('module:participant_portal')->can('teilnehmer.update');
-        Route::post('/teilnehmer/bewerbungen/{application}/freigabe', [ParticipantApplicationPackageController::class, 'staffApprove'])->name('teilnehmer.applications.package.approve')->middleware('module:participant_portal')->can('teilnehmer.update');
-        Route::post('/teilnehmer/teilnahme/{participation}/stellenempfehlungen', [ParticipantJobRecommendationController::class, 'staffStore'])->name('teilnehmer.recommendations.store')->middleware('module:participant_portal')->can('teilnehmer.update');
-        Route::put('/teilnehmer/anwesenheit/korrekturen/{correction}', [AttendanceCorrectionController::class, 'resolve'])->name('teilnehmer.attendance.corrections.resolve')->middleware('module:participant_portal')->can('teilnehmer.update');
-        Route::post('/teilnehmer/teilnahme/{participation}/portal-dokumente', [ParticipantDocumentController::class, 'store'])->name('teilnehmer.portal-documents.store')->middleware('module:participant_portal')->can('teilnehmer.update');
-        Route::put('/teilnehmer/portal-dokumente/{document}/pruefen', [ParticipantDocumentController::class, 'review'])->name('teilnehmer.portal-documents.review')->middleware('module:participant_portal')->can('teilnehmer.update');
-        Route::get('/teilnehmer/portal-dokumente/{document}/download', [ParticipantDocumentController::class, 'download'])->name('teilnehmer.portal-documents.download')->middleware('module:participant_portal')->can('teilnehmer.update');
-        Route::post('/teilnehmer/teilnahme/{participation}/nachrichten', [ParticipantMessageController::class, 'staffStore'])->name('teilnehmer.messages.store')->middleware('module:participant_portal')->can('teilnehmer.update');
-        Route::put('/teilnehmer/teilnahme/{participation}/nachrichten/gelesen', [ParticipantMessageController::class, 'staffRead'])->name('teilnehmer.messages.read')->middleware('module:participant_portal')->can('teilnehmer.update');
-        Route::put('/teilnehmer/datenauskunft/{dataRequest}', [ParticipantDataRequestController::class, 'resolve'])->name('teilnehmer.data-requests.resolve')->middleware('module:participant_portal')->middleware('canAnyPermission:teilnehmer.data-request.manage,teilnehmer.update');
+        Route::put('/teilnehmer/bewerbungen/{application}', [ParticipationApplicationController::class, 'update'])->name('teilnehmer.applications.update')->middleware(['module:participant_portal', 'projectFeature:participant_portal'])->can('teilnehmer.update');
+        Route::put('/teilnehmer/bewerbungen/{application}/dokumente', [ParticipantApplicationPackageController::class, 'staffSync'])->name('teilnehmer.applications.documents.sync')->middleware(['module:participant_portal', 'projectFeature:participant_portal'])->can('teilnehmer.update');
+        Route::post('/teilnehmer/bewerbungen/{application}/freigabe', [ParticipantApplicationPackageController::class, 'staffApprove'])->name('teilnehmer.applications.package.approve')->middleware(['module:participant_portal', 'projectFeature:participant_portal'])->can('teilnehmer.update');
+        Route::post('/teilnehmer/teilnahme/{participation}/stellenempfehlungen', [ParticipantJobRecommendationController::class, 'staffStore'])->name('teilnehmer.recommendations.store')->middleware(['module:participant_portal', 'projectFeature:participant_portal'])->can('teilnehmer.update');
+        Route::put('/teilnehmer/anwesenheit/korrekturen/{correction}', [AttendanceCorrectionController::class, 'resolve'])->name('teilnehmer.attendance.corrections.resolve')->middleware(['module:participant_portal', 'projectFeature:participant_portal'])->can('teilnehmer.update');
+        Route::post('/teilnehmer/teilnahme/{participation}/portal-dokumente', [ParticipantDocumentController::class, 'store'])->name('teilnehmer.portal-documents.store')->middleware(['module:participant_portal', 'projectFeature:participant_portal'])->can('teilnehmer.update');
+        Route::put('/teilnehmer/portal-dokumente/{document}/pruefen', [ParticipantDocumentController::class, 'review'])->name('teilnehmer.portal-documents.review')->middleware(['module:participant_portal', 'projectFeature:participant_portal'])->can('teilnehmer.update');
+        Route::get('/teilnehmer/portal-dokumente/{document}/download', [ParticipantDocumentController::class, 'download'])->name('teilnehmer.portal-documents.download')->middleware(['module:participant_portal', 'projectFeature:participant_portal'])->can('teilnehmer.update');
+        Route::post('/teilnehmer/teilnahme/{participation}/nachrichten', [ParticipantMessageController::class, 'staffStore'])->name('teilnehmer.messages.store')->middleware(['module:participant_portal', 'projectFeature:participant_portal'])->can('teilnehmer.update');
+        Route::put('/teilnehmer/teilnahme/{participation}/nachrichten/gelesen', [ParticipantMessageController::class, 'staffRead'])->name('teilnehmer.messages.read')->middleware(['module:participant_portal', 'projectFeature:participant_portal'])->can('teilnehmer.update');
+        Route::put('/teilnehmer/datenauskunft/{dataRequest}', [ParticipantDataRequestController::class, 'resolve'])->name('teilnehmer.data-requests.resolve')->middleware(['module:participant_portal', 'projectFeature:participant_portal'])->middleware('canAnyPermission:teilnehmer.data-request.manage,teilnehmer.update');
         Route::patch('/teilnehmer/{person}/sozialdaten', [TeilnehmerController::class, 'updateSozialdaten'])->name('person.sozialdaten.update')->middleware('canAnyPermission:person.sozialdaten.update,teilnehmer.update');
         Route::get('/teilnehmer/{id}', [TeilnehmerController::class, 'indexNachProjekt'])->name('teilnehmer.projekt.index')->middleware('canAnyPermission:teilnehmer.projekt.index,teilnehmer.index');
 

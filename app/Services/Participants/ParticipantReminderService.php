@@ -19,7 +19,7 @@ class ParticipantReminderService
         $preferences = $this->preferences($user)->keyBy('category');
         $enabled = fn (string $category) => (bool) ($preferences->get($category)?->{$channel.'_enabled'} ?? ($channel === 'in_app'));
         $days = fn (string $category) => (int) ($preferences->get($category)?->days_before ?? 14);
-        $participations = ProjektHasPersonen::query()->where('personen_id', $user->person_id)->with(['projekt:id,name,portal_feature_settings','standort:id,name','tasks' => fn ($query) => $query->where('visible_to_participant',true)->where('status','!=','done')->orderBy('due_at')])->get()->each(fn($p)=>$p->setAttribute('portal_features',$p->projekt->portalFeatureSettings()));
+        $participations = ProjektHasPersonen::query()->where('personen_id', $user->person_id)->with(['projekt:id,name,feature_settings,portal_feature_settings','standort:id,name','tasks' => fn ($query) => $query->where('visible_to_participant',true)->where('status','!=','done')->orderBy('due_at')])->get()->filter(fn($p)=>$p->projekt?->featureEnabled('participant_portal'))->values()->each(fn($p)=>$p->setAttribute('portal_features',$p->projekt->portalFeatureSettings()));
         $ids=$participations->pluck('id');$reminders=collect();
 
         if($enabled('task'))foreach($participations->flatMap->tasks as $task)if($task->due_at&&$task->due_at->lte(now()->addDays($days('task'))))$reminders->push(['type'=>'task','title'=>$task->title,'detail'=>'Aufgabe ist bis '.$task->due_at->format('d.m.Y').' fällig.','at'=>$task->due_at->toISOString(),'href'=>route('participant-portal.dashboard')]);

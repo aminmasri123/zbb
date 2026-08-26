@@ -754,10 +754,11 @@ class TeilnehmerController extends Controller
             ->first();
         $activeParticipation?->loadMissing('projekt');
         $portalProject = $activeParticipation?->projekt;
-        $portalProfileEnabled = (bool) $portalProject?->portalFeatureEnabled('profile');
-        $portalTasksEnabled = (bool) $portalProject?->portalFeatureEnabled('tasks_and_appointments');
-        $portalApplicationsEnabled = (bool) ($portalProject?->portalFeatureEnabled('job_search') || $portalProject?->portalFeatureEnabled('application_management'));
-        $portalAttendanceEnabled = (bool) $portalProject?->portalFeatureEnabled('attendance_self_service');
+        $projectPortalEnabled = (bool) $portalProject?->featureEnabled('participant_portal');
+        $portalProfileEnabled = $projectPortalEnabled && (bool) $portalProject?->portalFeatureEnabled('profile');
+        $portalTasksEnabled = $projectPortalEnabled && (bool) $portalProject?->portalFeatureEnabled('tasks_and_appointments');
+        $portalApplicationsEnabled = $projectPortalEnabled && (bool) ($portalProject?->portalFeatureEnabled('job_search') || $portalProject?->portalFeatureEnabled('application_management'));
+        $portalAttendanceEnabled = $projectPortalEnabled && (bool) $portalProject?->portalFeatureEnabled('attendance_self_service');
         $intakeChecklist = $activeParticipation
             ? ProjectIntakeChecklistItem::query()
                 ->where('project_id', $user->current_team_id)
@@ -788,13 +789,13 @@ class TeilnehmerController extends Controller
             ? ParticipationCompletionReport::query()->where('project_person_id', $activeParticipation->id)
                 ->with(['creator:id,name', 'approver:id,name'])->orderByDesc('version')->get()
             : collect();
-        $portalUser = User::query()->where('person_id', $personen->id)->first([
+        $portalUser = $projectPortalEnabled ? User::query()->where('person_id', $personen->id)->first([
             'id',
             'email',
             'created_at',
             'portal_last_login_at',
-        ]);
-        $portalInvitation = $activeParticipation
+        ]) : null;
+        $portalInvitation = $projectPortalEnabled && $activeParticipation
             ? $activeParticipation->portalInvitations()->latest()->first(['id', 'email', 'expires_at', 'accepted_at', 'created_at'])
             : null;
         $participationApplications = $activeParticipation && $portalApplicationsEnabled
@@ -815,14 +816,14 @@ class TeilnehmerController extends Controller
             ? ParticipantPortalDocument::query()->where('project_person_id', $activeParticipation->id)
                 ->with(['uploader:id,username', 'reviewer:id,username'])->latest()->get()
             : collect();
-        $portalMessages = $activeParticipation && $activeParticipation->projekt->portalFeatureEnabled('messaging')
+        $portalMessages = $projectPortalEnabled && $activeParticipation && $activeParticipation->projekt->portalFeatureEnabled('messaging')
             ? ParticipantPortalMessage::query()
                 ->where('project_person_id', $activeParticipation->id)
                 ->with(['sender:id,username,person_id', 'sender.person:id,vorname,nachname'])
                 ->oldest()
                 ->get()
             : collect();
-        $consentDefinitions = $activeParticipation && $activeParticipation->projekt->portalFeatureEnabled('consents_and_approvals')
+        $consentDefinitions = $projectPortalEnabled && $activeParticipation && $activeParticipation->projekt->portalFeatureEnabled('consents_and_approvals')
             ? ProjectConsentDefinition::query()->where('project_id', $activeParticipation->projekt_id)
                 ->orderByDesc('version')->get()->groupBy('key')->map->first()->values()
             : collect();

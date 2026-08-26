@@ -768,7 +768,7 @@ const sortByColumn = (column) => {
             </Link>
 
             <Link
-                v-if="$page.props.currentProjekt?.features?.portal_users_overview === true && can('teilnehmer.portal.overview')"
+                v-if="$page.props.currentProjekt?.features?.participant_portal === true && can('teilnehmer.portal.overview')"
                 :href="route('teilnehmer.portal-users.index')"
                 class="border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-zbb hover:border-orange-500 hover:bg-zbb hover:text-white"
             >

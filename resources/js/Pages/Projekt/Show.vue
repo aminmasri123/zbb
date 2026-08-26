@@ -141,7 +141,7 @@ const featureDefinitions = [
     { key: 'attendance_management', label: 'Anwesenheit', description: 'Anwesenheiten innerhalb dieses Projekts erfassen' },
     { key: 'internship_management', label: 'Praktika', description: 'Praktikums- und Bildungsmaßnahmen verwalten' },
     { key: 'completion_management', label: 'Abschlüsse', description: 'Abschlüsse der Projektteilnehmer verwalten' },
-    { key: 'portal_users_overview', label: 'Portal-Nutzerübersicht', description: 'Zeigt im Teilnehmerbereich die Übersicht „Portal-Nutzer“ an.' },
+    { key: 'participant_portal', label: 'Teilnehmerportal', description: 'Aktiviert für dieses Projekt Portalzugänge, Einladungen, Lebenslauf und weitere Portal-Funktionen.' },
     { key: 'classbook_management', label: 'Klassenbuch', description: 'Projektbezogene Klassenbücher und Wochenberichte' },
     { key: 'potential_analysis', label: 'Potenzialanalyse', description: 'PA-Übungen, Kriterien und Bewertungen' },
 ];
@@ -1378,17 +1378,18 @@ const formatLuvTemplateDate = (value) => value
                 <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h2 class="text-lg font-semibold">Teilnehmerportal-Funktionen</h2>
-                        <p class="mt-1 text-sm text-gray-500">Diese Freigaben gelten nur für Teilnehmer dieses Projekts. Zusätzlich muss das globale Modul „Teilnehmerportal“ aktiv sein.</p>
+                        <p class="mt-1 text-sm text-gray-500">Diese Freigaben gelten nur für Teilnehmer dieses Projekts. Der Projektschalter „Teilnehmerportal“ und das globale Modul müssen ebenfalls aktiv sein.</p>
                     </div>
-                    <button v-if="can('projekt.update')" type="button" class="rounded bg-zbb px-4 py-2 text-sm text-white disabled:opacity-50" :disabled="portalFeaturesSaving" @click="savePortalFeatures">
+                    <button v-if="can('projekt.update')" type="button" class="rounded bg-zbb px-4 py-2 text-sm text-white disabled:opacity-50" :disabled="portalFeaturesSaving || !projectFeatures.participant_portal" @click="savePortalFeatures">
                         {{ portalFeaturesSaving ? 'Speichert …' : 'Portal-Funktionen speichern' }}
                     </button>
-                    <Link v-if="portalFeatures.learning && can('projekt.update')" :href="route('projekt.courses.index', projekt.id)" class="rounded border border-zbb px-4 py-2 text-sm text-zbb">Kurse verwalten</Link>
-                    <Link v-if="portalFeatures.consents_and_approvals && can('projekt.update')" :href="route('projekt.consents.index', projekt.id)" class="rounded border border-zbb px-4 py-2 text-sm text-zbb">Einwilligungen verwalten</Link>
+                    <Link v-if="projectFeatures.participant_portal && portalFeatures.learning && can('projekt.update')" :href="route('projekt.courses.index', projekt.id)" class="rounded border border-zbb px-4 py-2 text-sm text-zbb">Kurse verwalten</Link>
+                    <Link v-if="projectFeatures.participant_portal && portalFeatures.consents_and_approvals && can('projekt.update')" :href="route('projekt.consents.index', projekt.id)" class="rounded border border-zbb px-4 py-2 text-sm text-zbb">Einwilligungen verwalten</Link>
                 </div>
+                <p v-if="!projectFeatures.participant_portal" class="mb-4 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Aktivieren und speichern Sie zuerst unter „Funktionen &amp; Regeln“ das Modul „Teilnehmerportal“ für dieses Projekt.</p>
                 <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                     <label v-for="feature in portalFeatureDefinitions" :key="feature.key" class="flex items-start gap-3 rounded border p-4" :class="portalFeatures[feature.key] ? 'border-blue-200 bg-blue-50' : 'border-gray-200 bg-gray-50'">
-                        <input v-model="portalFeatures[feature.key]" type="checkbox" class="mt-1 rounded border-gray-300 text-zbb focus:ring-zbb" :disabled="!can('projekt.update')" />
+                        <input v-model="portalFeatures[feature.key]" type="checkbox" class="mt-1 rounded border-gray-300 text-zbb focus:ring-zbb" :disabled="!can('projekt.update') || !projectFeatures.participant_portal" />
                         <span><span class="block font-semibold text-gray-800">{{ feature.label }}</span><span class="mt-1 block text-xs text-gray-500">{{ feature.description }}</span></span>
                     </label>
                 </div>

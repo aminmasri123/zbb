@@ -43,7 +43,15 @@ class ParticipantPortalController extends Controller
             ->whereHas('person', fn ($query) => $query->where('typ', 'teilnehmer')->where('aktiv', true))
             ->first();
 
-        if (!$user || !Hash::check($credentials['password'], $user->password)) {
+        $portalEnabled = $user?->person_id
+            ? ProjektHasPersonen::query()
+                ->where('personen_id', $user->person_id)
+                ->with('projekt:id,feature_settings')
+                ->get()
+                ->contains(fn (ProjektHasPersonen $participation) => $participation->projekt?->featureEnabled('participant_portal'))
+            : false;
+
+        if (!$user || !$portalEnabled || !Hash::check($credentials['password'], $user->password)) {
             return back()->withErrors(['email' => 'Die Zugangsdaten sind ungültig.'])->onlyInput('email');
         }
 
@@ -88,7 +96,8 @@ class ParticipantPortalController extends Controller
 
     public function invitation(string $token)
     {
-        $invitation = $this->validInvitation($token)->load('participation.teilnehmer:id,vorname,nachname');
+        $invitation = $this->validInvitation($token)->load('participation.teilnehmer:id,vorname,nachname', 'participation.projekt');
+        abort_unless($invitation->participation->projekt?->featureEnabled('participant_portal'), 404);
 
         return Inertia::render('ParticipantPortal/AcceptInvitation', [
             'token' => $token,
@@ -100,7 +109,8 @@ class ParticipantPortalController extends Controller
 
     public function acceptInvitation(Request $request, string $token)
     {
-        $invitation = $this->validInvitation($token)->load('participation.teilnehmer');
+        $invitation = $this->validInvitation($token)->load('participation.teilnehmer', 'participation.projekt');
+        abort_unless($invitation->participation->projekt?->featureEnabled('participant_portal'), 404);
         $validated = $request->validate([
             'password' => ['required', 'confirmed', Password::min(10)->letters()->mixedCase()->numbers()],
         ]);

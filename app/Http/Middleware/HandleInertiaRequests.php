@@ -195,7 +195,8 @@ class HandleInertiaRequests extends Middleware
         if (!$user?->person_id || $user->person?->typ !== 'teilnehmer') return null;
 
         $features = ProjektHasPersonen::query()->where('personen_id', $user->person_id)
-            ->with('projekt:id,portal_feature_settings')->get()
+            ->with('projekt:id,feature_settings,portal_feature_settings')->get()
+            ->filter(fn ($participation) => $participation->projekt?->featureEnabled('participant_portal'))
             ->map(fn ($participation) => $participation->projekt->portalFeatureSettings());
 
         $enabled = fn (string $key) => $features->contains(fn (array $settings) => (bool) ($settings[$key] ?? false));

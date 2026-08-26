@@ -48,7 +48,7 @@ class Projekt extends Model
         'attendance_management' => true,
         'internship_management' => true,
         'completion_management' => true,
-        'portal_users_overview' => false,
+        'participant_portal' => false,
     ];
 
     public const FEATURE_DEPENDENCIES = [
@@ -58,7 +58,7 @@ class Projekt extends Model
         'completion_management' => ['participant_management'],
         'classbook_management' => ['group_management'],
         'potential_analysis' => ['participant_management', 'group_management'],
-        'portal_users_overview' => ['participant_management'],
+        'participant_portal' => ['participant_management'],
     ];
 
     public const RULE_DEFAULTS = [

@@ -2185,7 +2185,10 @@ watchEffect(() => {
     const featurePage = usePage();
     const projectFeatures = computed(() => featurePage.props.currentProjekt?.features || {});
     const portalFeatures = computed(() => featurePage.props.currentProjekt?.portal_features || {});
-    const portalEnabled = computed(() => Boolean(featurePage.props.enabledModules?.participant_portal));
+    const portalEnabled = computed(() => Boolean(
+        featurePage.props.enabledModules?.participant_portal
+        && featurePage.props.currentProjekt?.features?.participant_portal
+    ));
     const projectFeatureEnabled = (key) => projectFeatures.value[key] !== false;
     const portalFeatureEnabled = (key) => portalEnabled.value && portalFeatures.value[key] === true;
     const participantTabDefinitions = computed(() => new Map(
