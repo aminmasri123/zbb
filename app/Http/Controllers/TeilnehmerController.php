@@ -140,7 +140,7 @@ class TeilnehmerController extends Controller
             ->teilnehmer()
             ->aktiv()
             ->visibleForUser($benutzer)   // <-- dein globaler Berechtigungsscope
-            ->with(['projekte.abteilung', 'standorte']);
+            ->with(['projekte.abteilung', 'standorte', 'kontaktes.kontakttyp']);
 
         if ($defaultProjekt) {
             $abfrage->whereHas('projekte', function ($query) use ($defaultProjekt, $standortId) {

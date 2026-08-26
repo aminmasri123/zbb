@@ -6,9 +6,11 @@ use App\Models\GruppeHasPersonen;
 use App\Models\AppTask;
 use App\Models\Personen;
 use App\Models\PersonenIstSchueler;
+use App\Models\ParticipantPortalInvitation;
 use App\Models\Projekt;
 use App\Models\ProjektHasPersonen;
 use App\Models\PersonenHasBildungsmassnahmen;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
@@ -39,6 +41,8 @@ class ParticipantOverviewService
         if ($participantIds->isEmpty()) {
             return;
         }
+
+        $participants->loadMissing('kontaktes.kontakttyp');
 
         $participations = ProjektHasPersonen::query()
             ->with(['standort:id,name', 'meta.betreuer:id,vorname,nachname', 'meta.projektbegleiter:id,vorname,nachname'])
@@ -75,6 +79,19 @@ class ParticipantOverviewService
             ->get(['id', 'projekt_person_id', 'typ', 'traeger', 'status', 'end', 'next_follow_up_at'])
             ->groupBy('projekt_person_id');
 
+        $portalAccountPersonIds = User::query()
+            ->whereIn('person_id', $participantIds)
+            ->pluck('person_id')
+            ->map(fn ($id) => (int) $id)
+            ->flip();
+        $latestPortalInvitations = ParticipantPortalInvitation::query()
+            ->whereIn('project_person_id', $participations->pluck('id'))
+            ->whereNull('accepted_at')
+            ->latest('created_at')
+            ->get(['id', 'project_person_id', 'email', 'expires_at', 'created_at'])
+            ->unique('project_person_id')
+            ->keyBy('project_person_id');
+
         $project = Projekt::query()->with('partners:id,name')->find($projectId);
         $partnerIds = $project?->partners?->pluck('id')->filter()->values() ?? collect();
         $schoolRowsByParticipant = PersonenIstSchueler::query()
@@ -85,8 +102,9 @@ class ParticipantOverviewService
             ->sortByDesc(fn ($row) => sprintf('%s|%s', $row->schuljahr ?? '', $row->teil ?? ''))
             ->groupBy('person_id');
 
-        $participants->each(function (Personen $participant) use ($participations, $attendanceByParticipant, $tasksByParticipation, $measuresByParticipation, $schoolRowsByParticipant, $period): void {
+        $participants->each(function (Personen $participant) use ($participations, $attendanceByParticipant, $tasksByParticipation, $measuresByParticipation, $schoolRowsByParticipant, $portalAccountPersonIds, $latestPortalInvitations, $period): void {
             $participation = $participations->get($participant->id);
+            $portalInvitation = $participation ? $latestPortalInvitations->get($participation->id) : null;
             $attendance = $attendanceByParticipant->get($participant->id, collect());
             $schoolRows = $schoolRowsByParticipant->get($participant->id, collect());
             $tasks = $participation ? $tasksByParticipation->get($participation->id, collect()) : collect();
@@ -102,6 +120,13 @@ class ParticipantOverviewService
                 'location' => $participation?->standort?->name,
                 'supervisor' => $this->personName($participation?->meta?->betreuer),
                 'project_coordinator' => $this->personName($participation?->meta?->projektbegleiter),
+                'participation_id' => $participation?->id,
+                'portal_account_exists' => $portalAccountPersonIds->has((int) $participant->id),
+                'portal_invitation_email' => $portalInvitation?->email,
+                'portal_invitation_expires_at' => $portalInvitation?->expires_at?->toISOString(),
+                'participant_email' => $participant->kontaktes
+                    ?->first(fn ($contact) => in_array(mb_strtolower(trim((string) $contact->kontakttyp?->name)), ['email', 'e-mail'], true))
+                    ?->wert,
                 'groups' => $groups,
                 'open_tasks' => $tasks->count(),
                 'overdue_tasks' => $tasks->filter(fn ($task) => $task->due_at && $task->due_at->isBefore(today()))->count(),

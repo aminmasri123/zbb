@@ -93,9 +93,41 @@ const canImportParticipant = computed(() => can('teilnehmer.import') || can('tei
 const canUpdateParticipant = computed(() => can('teilnehmer.update'));
 const canDeleteParticipant = computed(() => can('teilnehmer.destroy'));
 const canBulkDeleteParticipant = computed(() => can('teilnehmer.bulkDestroy') || can('teilnehmer.destroy'));
+const canInviteToPortal = computed(() => can('teilnehmer.portal.invite'));
 const canAssignParticipantToGroup = computed(() => can('gruppeHasTeilnehmer.store'));
 const canUseSelectionActions = computed(() => canAssignParticipantToGroup.value || canBulkDeleteParticipant.value || canUpdateParticipant.value);
-const canManageParticipantRows = computed(() => canUpdateParticipant.value || canDeleteParticipant.value);
+const canManageParticipantRows = computed(() => canUpdateParticipant.value || canDeleteParticipant.value || canInviteToPortal.value);
+
+const inviteToPortal = async (teilnehmer) => {
+    if (!canInviteToPortal.value || !teilnehmer?.overview?.participation_id || teilnehmer?.overview?.portal_account_exists) return;
+
+    const savedEmail = teilnehmer.overview.participant_email || '';
+    const invitationEmail = teilnehmer.overview.portal_invitation_email || '';
+    const result = await Swal.fire({
+        title: invitationEmail ? 'Portal-Einladung erneut senden' : 'Zum Portal einladen',
+        html: !savedEmail && !invitationEmail
+            ? '<div class="rounded border border-amber-200 bg-amber-50 p-3 text-left text-sm text-amber-800">Beim Teilnehmer ist keine E-Mail-Adresse gespeichert. Sie können die Adresse hier nur für die Einladung eintragen oder den Vorgang abbrechen und die E-Mail im Teilnehmerprofil speichern.</div>'
+            : undefined,
+        input: 'email',
+        inputLabel: 'E-Mail-Adresse des Teilnehmers',
+        inputValue: invitationEmail || savedEmail,
+        inputPlaceholder: 'name@beispiel.de',
+        showCancelButton: true,
+        confirmButtonText: invitationEmail ? 'Einladung erneut senden' : 'Einladung senden',
+        cancelButtonText: 'Abbrechen',
+        inputValidator: (value) => !value ? 'Bitte eine E-Mail-Adresse angeben.' : undefined,
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+        const { data } = await axios.post(route('teilnehmer.portal.invite', teilnehmer.overview.participation_id), { email: result.value });
+        await Swal.fire('Einladung erstellt', data?.message || 'Die Portal-Einladung wurde erstellt.', 'success');
+        router.reload({ only: ['teilnehmers'] });
+    } catch (error) {
+        await Swal.fire('Fehler', error.response?.data?.message || 'Die Einladung konnte nicht erstellt werden.', 'error');
+    }
+};
 
 const importTeilnehmer = () => {
     if (!canImportParticipant.value) return;
@@ -1017,6 +1049,14 @@ const sortByColumn = (column) => {
                                     </template>
 
                                     <template #content>
+                                        <span
+                                            v-if="$page.props.enabledModules?.participant_portal && $page.props.currentProjekt?.features?.participant_portal === true && canInviteToPortal && teilnehmer.overview?.participation_id && !teilnehmer.overview?.portal_account_exists"
+                                            class="flex cursor-pointer items-center justify-between gap-4 px-6 py-1 hover:bg-gray-100"
+                                            @click="inviteToPortal(teilnehmer)"
+                                        >
+                                            {{ teilnehmer.overview?.portal_invitation_email ? 'Einladung erneut senden' : 'Einladung senden' }}
+                                            <i class="las la-paper-plane"></i>
+                                        </span>
                                         <span v-if="canDeleteParticipant" class="flex justify-between cursor-pointer py-1 px-6 items-center hover:bg-gray-100" @click="confirmDelete(teilnehmer)">
                                             {{ $t('Loeschen') }} <i class="las la-trash-alt"></i>
                                         </span>

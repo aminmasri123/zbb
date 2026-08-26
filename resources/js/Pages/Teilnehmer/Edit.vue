@@ -15,7 +15,18 @@
           </span>
           <p class="text-gray-500 text-xs">{{ $t("Verwaltung & Übersicht") }}</p>
         </div>
-        <div>
+        <div class="flex items-center gap-2">
+          <button
+            v-if="portalEnabled && can('teilnehmer.portal.invite') && props.activeParticipationId && !props.portalAccess?.account"
+            type="button"
+            class="rounded-lg border border-zbb bg-white px-3 py-2 text-sm font-semibold text-zbb hover:bg-zbb hover:text-white"
+            @click="createPortalInvitation"
+          >
+            {{ props.portalAccess?.latest_invitation ? 'Portal-Einladung erneut senden' : 'Zum Portal einladen' }}
+          </button>
+          <span v-else-if="portalEnabled && props.portalAccess?.account" class="rounded-lg bg-green-100 px-3 py-2 text-sm font-semibold text-green-700">
+            Portal aktiv
+          </span>
           <p class="bg-zbb text-white py-1 px-2 rounded-lg text-sm">
             ID: {{ teilnehmer.id }}
           </p>
@@ -308,7 +319,7 @@
                                 <p class="text-sm text-gray-500">Prüfstand der Teilnahme im aktuell gewählten Projekt.</p>
                             </div>
                             <div class="flex items-center gap-3 text-right">
-                                <div v-if="$page.props.enabledModules?.participant_portal">
+                                <div v-if="portalEnabled && can('teilnehmer.portal.invite')">
                                     <div v-if="props.portalAccess?.account">
                                         <span class="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">Portal aktiv · {{ props.portalAccess.account.email }}</span>
                                         <p class="mt-2 text-xs text-gray-500">
@@ -2409,11 +2420,16 @@ watchEffect(() => {
     };
 
     const createPortalInvitation = async () => {
+        const savedEmail = props.teilnehmer?.kontaktes?.find((contact) => ['email', 'e-mail'].includes((contact.kontakttyp?.name || '').trim().toLowerCase()))?.wert || '';
+        const invitationEmail = props.portalAccess?.latest_invitation?.email || '';
         const result = await Swal.fire({
             title: 'Portalzugang einladen',
+            html: !savedEmail && !invitationEmail
+                ? '<div class="rounded border border-amber-200 bg-amber-50 p-3 text-left text-sm text-amber-800">Beim Teilnehmer ist keine E-Mail-Adresse gespeichert. Sie können die Adresse hier nur für die Einladung eintragen oder den Vorgang abbrechen und die E-Mail unter „Kontaktdaten“ speichern.</div>'
+                : undefined,
             input: 'email',
             inputLabel: 'E-Mail-Adresse des Teilnehmers',
-            inputValue: props.portalAccess?.latest_invitation?.email || '',
+            inputValue: invitationEmail || savedEmail,
             showCancelButton: true,
             confirmButtonText: 'Einladung erstellen',
             cancelButtonText: 'Abbrechen',
