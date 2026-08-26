@@ -49,7 +49,7 @@ createInertiaApp({
     title: (title) => `${title} - ${appName}`,
     resolve: async (name) => {
         const page = await resolvePageComponent(`./Pages/${name}.vue`, import.meta.glob('./Pages/**/*.vue'));
-        const ownLayout = ['ParticipantPortal/Dashboard','ParticipantPortal/Documents','ParticipantPortal/Jobs','ParticipantPortal/Messages'];
+        const ownLayout = ['ParticipantPortal/Dashboard','ParticipantPortal/Documents','ParticipantPortal/Jobs','ParticipantPortal/Messages','ParticipantPortal/Notifications'];
         const publicOrPrint = ['ParticipantPortal/Welcome','ParticipantPortal/Login','ParticipantPortal/AcceptInvitation','ParticipantPortal/ResumePrint'];
         if (name.startsWith('ParticipantPortal/') && !ownLayout.includes(name) && !publicOrPrint.includes(name)) {
             page.default.layout = page.default.layout || ((h, child) => h(ParticipantPortalLayout, { showHeader: false }, () => child));

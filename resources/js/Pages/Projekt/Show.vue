@@ -27,6 +27,7 @@ const administrationTabs = computed(() => [
     { key: 'overview', label: 'Übersicht' },
     ...(canUpdateProjekt.value ? [{ key: 'areas', label: 'Bereiche' }] : []),
     { key: 'participants', label: 'Teilnehmerprofil' },
+    ...(projectFeatures.participant_portal ? [{ key: 'participant_portal', label: 'Teilnehmerportal' }] : []),
     { key: 'features', label: 'Funktionen & Regeln' },
     ...(canUpdateProjekt.value ? [{ key: 'luv', label: 'LuV & KI' }] : []),
     ...(canManagePotenzialanalyse.value ? [{ key: 'potential_analysis', label: 'Potenzialanalyse' }] : []),
@@ -60,6 +61,11 @@ const saveAreaAssignment = async () => {
 };
 
 const projectFeatures = reactive({ ...(props.projekt.features || {}) });
+watch(() => projectFeatures.participant_portal, (enabled) => {
+    if (!enabled && activeAdministrationTab.value === 'participant_portal') {
+        activeAdministrationTab.value = 'features';
+    }
+});
 const featureSaving = ref(false);
 const featureErrors = ref({});
 const paTage = ref(props.projekt.potenzialanalyse_tage || null);
@@ -1374,7 +1380,7 @@ const formatLuvTemplateDate = (value) => value
                 </div>
             </section>
 
-            <section v-if="activeAdministrationTab === 'participants' && projectFeatures.participant_management" class="bg-white p-5 shadow-sm">
+            <section v-if="activeAdministrationTab === 'participant_portal' && projectFeatures.participant_management && projectFeatures.participant_portal" class="bg-white p-5 shadow-sm">
                 <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h2 class="text-lg font-semibold">Teilnehmerportal-Funktionen</h2>

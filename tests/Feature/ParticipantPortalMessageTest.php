@@ -29,7 +29,7 @@ class ParticipantPortalMessageTest extends TestCase
         $this->grantStaffPermission($staff);
         $this->enablePortal($staff);
         $location = Standort::factory()->create();
-        $project = Projekt::factory()->create(['portal_feature_settings' => ['messaging' => true]]);
+        $project = Projekt::factory()->create(['feature_settings' => ['participant_management' => true, 'participant_portal' => true], 'portal_feature_settings' => ['messaging' => true]]);
         $this->assign($project, $staff->person, $location);
         $staff->update(['current_team_id' => $project->id]);
         $participant = Personen::factory()->create(['typ' => 'teilnehmer']);
@@ -67,7 +67,7 @@ class ParticipantPortalMessageTest extends TestCase
         $this->grantStaffPermission($staff);
         $this->enablePortal($staff);
         $location = Standort::factory()->create();
-        $project = Projekt::factory()->create(['portal_feature_settings' => ['messaging' => false]]);
+        $project = Projekt::factory()->create(['feature_settings' => ['participant_management' => true, 'participant_portal' => true], 'portal_feature_settings' => ['messaging' => false]]);
         $this->assign($project, $staff->person, $location);
         $staff->update(['current_team_id' => $project->id]);
         $participant = Personen::factory()->create(['typ' => 'teilnehmer']);
@@ -85,7 +85,7 @@ class ParticipantPortalMessageTest extends TestCase
         $this->actingAs($otherPortal)->postJson(route('participant-portal.messages.store'), [
             'project_person_id' => $participation->id,
             'body' => 'Fremdzugriff',
-        ])->assertNotFound();
+        ])->assertForbidden();
         $this->assertDatabaseCount('participant_portal_messages', 0);
     }
 

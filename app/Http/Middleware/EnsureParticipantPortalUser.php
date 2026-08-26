@@ -15,6 +15,7 @@ class EnsureParticipantPortalUser
 
         $hasEnabledPortalProject = ProjektHasPersonen::query()
             ->where('personen_id', $request->user()->person_id)
+            ->where('status', 'aktiv')
             ->with('projekt:id,feature_settings')
             ->get()
             ->contains(fn (ProjektHasPersonen $participation) => $participation->projekt?->featureEnabled('participant_portal'));

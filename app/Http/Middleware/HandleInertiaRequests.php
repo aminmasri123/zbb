@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Models\AppPopup;
 use App\Models\AccountDeletionRequest;
 use App\Services\Modules\ModuleStateResolver;
+use App\Services\Participants\ParticipantReminderService;
 use App\Services\Projects\ActiveProjectContext;
 use App\Models\ProjektHasPersonen;
 use Illuminate\Database\Eloquent\Builder;
@@ -97,6 +98,7 @@ class HandleInertiaRequests extends Middleware
             'staffChatUnreadCount' => fn () => $this->staffChatUnreadCount($request),
 
             'participantPortalNavigation' => fn () => $this->participantPortalNavigation($request),
+            'participantPortalUnreadCount' => fn () => $this->participantPortalUnreadCount($request),
 
            /*  'auth' => [
                 'user' => fn () => $request->user()
@@ -195,6 +197,7 @@ class HandleInertiaRequests extends Middleware
         if (!$user?->person_id || $user->person?->typ !== 'teilnehmer') return null;
 
         $features = ProjektHasPersonen::query()->where('personen_id', $user->person_id)
+            ->where('status', 'aktiv')
             ->with('projekt:id,feature_settings,portal_feature_settings')->get()
             ->filter(fn ($participation) => $participation->projekt?->featureEnabled('participant_portal'))
             ->map(fn ($participation) => $participation->projekt->portalFeatureSettings());
@@ -204,11 +207,24 @@ class HandleInertiaRequests extends Middleware
         return [
             'profile' => $enabled('profile'),
             'attendance' => $enabled('attendance_self_service') || $enabled('tasks_and_appointments'),
+            'attendance_self_service' => $enabled('attendance_self_service'),
+            'tasks_and_appointments' => $enabled('tasks_and_appointments'),
             'jobs' => $enabled('job_search') || $enabled('application_management'),
+            'applications' => $enabled('application_management'),
             'learning' => $enabled('learning'),
             'messaging' => $enabled('messaging'),
             'consents' => $enabled('consents_and_approvals'),
         ];
+    }
+
+    private function participantPortalUnreadCount(Request $request): int
+    {
+        $user = $request->user();
+        if (! $user || $user->person?->typ !== 'teilnehmer') return 0;
+
+        app(ParticipantReminderService::class)->syncInAppNotifications($user);
+
+        return $user->unreadNotifications()->count();
     }
 
     private function staffChatUnreadCount(Request $request): int

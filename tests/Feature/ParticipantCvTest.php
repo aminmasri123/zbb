@@ -1,12 +1,12 @@
 <?php
 namespace Tests\Feature;
-use App\Models\ParticipantCvEntry;use App\Models\ParticipantCvVersion;use App\Models\Personen;use App\Models\SystemModule;use App\Models\User;use App\Services\Modules\ModuleStateResolver;use Illuminate\Foundation\Testing\RefreshDatabase;use Tests\TestCase;
+use App\Models\ParticipantCvEntry;use App\Models\ParticipantCvVersion;use App\Models\Personen;use App\Models\Projekt;use App\Models\ProjektHasPersonen;use App\Models\Standort;use App\Models\SystemModule;use App\Models\User;use App\Services\Modules\ModuleStateResolver;use Illuminate\Foundation\Testing\RefreshDatabase;use Tests\TestCase;
 class ParticipantCvTest extends TestCase
 {
  use RefreshDatabase;
  public function test_structured_entries_create_immutable_version_and_export():void
  {
-  $person=Personen::factory()->create(['typ'=>'teilnehmer','vorname'=>'Mina','nachname'=>'Muster']);$portal=User::factory()->create(['person_id'=>$person->id]);app(ModuleStateResolver::class)->set(SystemModule::where('key','participant_portal')->firstOrFail(),true,null,$portal->id);
+  $person=Personen::factory()->create(['typ'=>'teilnehmer','vorname'=>'Mina','nachname'=>'Muster']);$portal=User::factory()->create(['person_id'=>$person->id]);$this->enablePortalFor($portal,$person);
   $created=$this->actingAs($portal)->postJson(route('participant-portal.resume.entries.store'),['type'=>'experience','title'=>'Verkäuferin','organization'=>'Muster GmbH','location'=>'Saarbrücken','starts_at'=>'2024-01-01','ends_at'=>null,'current'=>true,'description'=>'Kundenberatung','proficiency'=>null,'sort_order'=>0])->assertCreated();$entry=ParticipantCvEntry::findOrFail($created->json('entry.id'));
   $versionResponse=$this->actingAs($portal)->postJson(route('participant-portal.resume.versions.store'),['label'=>'Bewerbung Juli'])->assertCreated()->assertJsonPath('version.version',1);$version=ParticipantCvVersion::findOrFail($versionResponse->json('version.id'));$originalHash=$version->snapshot_sha256;$this->assertSame('Verkäuferin',$version->snapshot['entries'][0]['title']);
   $this->actingAs($portal)->putJson(route('participant-portal.resume.entries.update',$entry),['type'=>'experience','title'=>'Teamleiterin','organization'=>'Muster GmbH','location'=>'Saarbrücken','starts_at'=>'2024-01-01','ends_at'=>null,'current'=>true,'description'=>'Teamleitung','proficiency'=>null,'sort_order'=>0])->assertOk();$this->assertSame('Verkäuferin',$version->fresh()->snapshot['entries'][0]['title']);$this->assertSame($originalHash,$version->fresh()->snapshot_sha256);
@@ -15,13 +15,17 @@ class ParticipantCvTest extends TestCase
  }
  public function test_foreign_entries_and_versions_are_hidden():void
  {
-  $ownerPerson=Personen::factory()->create(['typ'=>'teilnehmer']);$owner=User::factory()->create(['person_id'=>$ownerPerson->id]);app(ModuleStateResolver::class)->set(SystemModule::where('key','participant_portal')->firstOrFail(),true,null,$owner->id);$entry=ParticipantCvEntry::query()->create(['person_id'=>$ownerPerson->id,'type'=>'skill','title'=>'Excel','current'=>false,'sort_order'=>0]);$version=ParticipantCvVersion::query()->create(['person_id'=>$ownerPerson->id,'version'=>1,'snapshot'=>['entries'=>[]],'snapshot_sha256'=>hash('sha256','x'),'created_by_user_id'=>$owner->id,'created_at'=>now()]);$otherPerson=Personen::factory()->create(['typ'=>'teilnehmer']);$other=User::factory()->create(['person_id'=>$otherPerson->id]);$payload=['type'=>'skill','title'=>'Manipuliert','organization'=>null,'location'=>null,'starts_at'=>null,'ends_at'=>null,'current'=>false,'description'=>null,'proficiency'=>null,'sort_order'=>0];$this->actingAs($other)->putJson(route('participant-portal.resume.entries.update',$entry),$payload)->assertNotFound();$this->actingAs($other)->deleteJson(route('participant-portal.resume.entries.destroy',$entry))->assertNotFound();$this->actingAs($other)->get(route('participant-portal.resume.versions.download',$version))->assertNotFound();$this->assertSame('Excel',$entry->fresh()->title);
+  $ownerPerson=Personen::factory()->create(['typ'=>'teilnehmer']);$owner=User::factory()->create(['person_id'=>$ownerPerson->id]);$this->enablePortalFor($owner,$ownerPerson);$entry=ParticipantCvEntry::query()->create(['person_id'=>$ownerPerson->id,'type'=>'skill','title'=>'Excel','current'=>false,'sort_order'=>0]);$version=ParticipantCvVersion::query()->create(['person_id'=>$ownerPerson->id,'version'=>1,'snapshot'=>['entries'=>[]],'snapshot_sha256'=>hash('sha256','x'),'created_by_user_id'=>$owner->id,'created_at'=>now()]);$otherPerson=Personen::factory()->create(['typ'=>'teilnehmer']);$other=User::factory()->create(['person_id'=>$otherPerson->id]);$this->enablePortalFor($other,$otherPerson);$payload=['type'=>'skill','title'=>'Manipuliert','organization'=>null,'location'=>null,'starts_at'=>null,'ends_at'=>null,'current'=>false,'description'=>null,'proficiency'=>null,'sort_order'=>0];$this->actingAs($other)->putJson(route('participant-portal.resume.entries.update',$entry),$payload)->assertNotFound();$this->actingAs($other)->deleteJson(route('participant-portal.resume.entries.destroy',$entry))->assertNotFound();$this->actingAs($other)->get(route('participant-portal.resume.versions.download',$version))->assertNotFound();$this->assertSame('Excel',$entry->fresh()->title);
  }
  public function test_participant_can_persist_portal_color_palette():void
  {
-  $person=Personen::factory()->create(['typ'=>'teilnehmer','aktiv'=>true]);$portal=User::factory()->create(['person_id'=>$person->id,'theme'=>'air']);app(ModuleStateResolver::class)->set(SystemModule::where('key','participant_portal')->firstOrFail(),true,null,$portal->id);
+  $person=Personen::factory()->create(['typ'=>'teilnehmer','aktiv'=>true]);$portal=User::factory()->create(['person_id'=>$person->id,'theme'=>'air']);$this->enablePortalFor($portal,$person);
   $this->actingAs($portal)->postJson(route('participant-portal.theme.update'),['theme'=>'trail'])->assertOk()->assertJsonPath('theme','trail');
   $this->assertSame('trail',$portal->fresh()->theme);
   $this->actingAs($portal)->postJson(route('participant-portal.theme.update'),['theme'=>'unknown'])->assertUnprocessable();
+ }
+ private function enablePortalFor(User $user,Personen $person):void
+ {
+  app(ModuleStateResolver::class)->set(SystemModule::where('key','participant_portal')->firstOrFail(),true,null,$user->id);$project=Projekt::factory()->create(['feature_settings'=>['participant_management'=>true,'participant_portal'=>true],'portal_feature_settings'=>['profile'=>true]]);$location=Standort::factory()->create();ProjektHasPersonen::query()->create(['projekt_id'=>$project->id,'personen_id'=>$person->id,'standort_id'=>$location->id,'status'=>'aktiv']);
  }
 }

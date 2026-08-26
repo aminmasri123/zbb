@@ -78,5 +78,6 @@ class Kernel extends HttpKernel
         'module' => \App\Http\Middleware\EnsureModuleEnabled::class,
         'projectFeature' => \App\Http\Middleware\EnsureProjectFeatureEnabled::class,
         'participantPortalUser' => \App\Http\Middleware\EnsureParticipantPortalUser::class,
+        'participantPortalFeature' => \App\Http\Middleware\EnsureParticipantPortalFeatureEnabled::class,
     ];
 }

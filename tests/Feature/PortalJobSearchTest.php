@@ -31,6 +31,7 @@ class PortalJobSearchTest extends TestCase
         app(ModuleStateResolver::class)->set(SystemModule::where('key', 'participant_portal')->firstOrFail(), true, null, $user->id);
         $location = Standort::factory()->create();
         $project = Projekt::factory()->create([
+            'feature_settings' => ['participant_management' => true, 'participant_portal' => true],
             'portal_feature_settings' => ['job_search' => true, 'application_management' => true],
         ]);
         $participation = $this->assign($project, $participant, $location);
@@ -127,7 +128,7 @@ class PortalJobSearchTest extends TestCase
         $participant = Personen::factory()->create(['typ' => 'teilnehmer']);
         $user = User::factory()->create(['person_id' => $participant->id]);
         app(ModuleStateResolver::class)->set(SystemModule::where('key', 'participant_portal')->firstOrFail(), true, null, $user->id);
-        $project = Projekt::factory()->create(['portal_feature_settings' => ['job_search' => true]]);
+        $project = Projekt::factory()->create(['feature_settings' => ['participant_management' => true, 'participant_portal' => true], 'portal_feature_settings' => ['job_search' => true]]);
         $participation = $this->assign($project, $participant, Standort::factory()->create());
         Http::fake(['*' => Http::response(['error' => 'upstream'], 503)]);
 

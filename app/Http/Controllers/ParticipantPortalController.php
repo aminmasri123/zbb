@@ -48,6 +48,7 @@ class ParticipantPortalController extends Controller
         $portalEnabled = $user?->person_id
             ? ProjektHasPersonen::query()
                 ->where('personen_id', $user->person_id)
+                ->where('status', 'aktiv')
                 ->with('projekt:id,feature_settings')
                 ->get()
                 ->contains(fn (ProjektHasPersonen $participation) => $participation->projekt?->featureEnabled('participant_portal'))
@@ -68,6 +69,7 @@ class ParticipantPortalController extends Controller
         $project = $this->activeProjectContext->currentAvailableFor($request->user());
         abort_unless($project, 409, 'Bitte wählen Sie zuerst ein aktives Projekt aus.');
         abort_unless((int) $participation->projekt_id === (int) $project->id, 404);
+        abort_unless($participation->status === 'aktiv', 422, 'Der Teilnehmer ist in diesem Projekt nicht aktiv.');
         abort_unless(Personen::query()->teilnehmer()->visibleForUser($request->user())->whereKey($participation->personen_id)->exists(), 403);
         abort_if(User::query()->where('person_id', $participation->personen_id)->exists(), 422, 'Für diesen Teilnehmer besteht bereits ein Benutzerkonto.');
 
@@ -164,7 +166,7 @@ class ParticipantPortalController extends Controller
     public function dashboard(Request $request)
     {
         $person = $request->user()->person;
-        $dashboard = $this->reminderService->build($request->user());
+        $dashboard = $this->reminderService->syncInAppNotifications($request->user());
 
         return Inertia::render('ParticipantPortal/Dashboard', [
             'participant' => $person->only(['id', 'vorname', 'nachname', 'geburtsdatum']),

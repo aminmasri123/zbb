@@ -36,6 +36,9 @@ class ParticipantPortalUserOverviewTest extends TestCase
             null,
             $portalUser->id
         );
+        $location = Standort::factory()->create();
+        $project = Projekt::factory()->create(['feature_settings' => ['participant_management' => true, 'participant_portal' => true]]);
+        $this->assign($project, $participant, $location);
 
         $this->post(route('participant-portal.login.store'), [
             'email' => 'portal@example.test',
@@ -57,6 +60,7 @@ class ParticipantPortalUserOverviewTest extends TestCase
     {
         $staff = User::factory()->create();
         $this->grantTestPermission($staff, 'teilnehmer.index');
+        $this->grantTestPermission($staff, 'teilnehmer.portal.overview');
         $this->grantParticipantAccess($staff);
         app(ModuleStateResolver::class)->set(
             SystemModule::query()->where('key', 'participant_portal')->firstOrFail(),
@@ -66,7 +70,7 @@ class ParticipantPortalUserOverviewTest extends TestCase
         );
 
         $location = Standort::factory()->create();
-        $project = Projekt::factory()->create(['feature_settings' => ['participant_management' => true]]);
+        $project = Projekt::factory()->create(['feature_settings' => ['participant_management' => true, 'participant_portal' => true]]);
         $otherProject = Projekt::factory()->create(['feature_settings' => ['participant_management' => true]]);
         $this->assign($project, $staff->person, $location);
         $staff->update(['current_team_id' => $project->id]);

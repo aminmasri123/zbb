@@ -26,7 +26,7 @@ class PortalLearningTest extends TestCase
         $staff=User::factory()->create();$this->givePermission($staff,'projekt.update');
         app(ModuleStateResolver::class)->set(SystemModule::where('key','participant_portal')->firstOrFail(),true,null,$staff->id);
         $location=Standort::factory()->create();
-        $project=Projekt::factory()->create(['portal_feature_settings'=>['learning'=>true]]);
+        $project=Projekt::factory()->create(['feature_settings'=>['participant_management'=>true,'participant_portal'=>true],'portal_feature_settings'=>['learning'=>true]]);
         $this->assign($project,$staff->person,$location);$staff->update(['current_team_id'=>$project->id]);
         $participant=Personen::factory()->create(['typ'=>'teilnehmer']);$participation=$this->assign($project,$participant,$location);
         $portalUser=User::factory()->create(['person_id'=>$participant->id]);
