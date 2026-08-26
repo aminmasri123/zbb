@@ -141,6 +141,7 @@ const featureDefinitions = [
     { key: 'attendance_management', label: 'Anwesenheit', description: 'Anwesenheiten innerhalb dieses Projekts erfassen' },
     { key: 'internship_management', label: 'Praktika', description: 'Praktikums- und Bildungsmaßnahmen verwalten' },
     { key: 'completion_management', label: 'Abschlüsse', description: 'Abschlüsse der Projektteilnehmer verwalten' },
+    { key: 'portal_users_overview', label: 'Portal-Nutzerübersicht', description: 'Zeigt im Teilnehmerbereich die Übersicht „Portal-Nutzer“ an.' },
     { key: 'classbook_management', label: 'Klassenbuch', description: 'Projektbezogene Klassenbücher und Wochenberichte' },
     { key: 'potential_analysis', label: 'Potenzialanalyse', description: 'PA-Übungen, Kriterien und Bewertungen' },
 ];

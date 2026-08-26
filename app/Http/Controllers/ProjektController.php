@@ -567,6 +567,7 @@ class ProjektController extends Controller
             'features.completion_management' => ['required', 'boolean'],
             'features.classbook_management' => ['required', 'boolean'],
             'features.potential_analysis' => ['required', 'boolean'],
+            'features.portal_users_overview' => ['required', 'boolean'],
             'potenzialanalyse_tage' => ['nullable', 'integer', 'min:1', 'max:60'],
         ]);
 
