@@ -7,6 +7,7 @@ use App\Notifications\ConfiguredEventNotification;
 use App\Services\NotificationRecipientService;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Route;
 use Symfony\Component\HttpFoundation\Response;
@@ -26,26 +27,37 @@ class DispatchConfiguredRouteNotification
             return $response;
         }
 
-        $recipients = app(NotificationRecipientService::class)->forEvent($routeName, [
-            'actor' => $request->user(),
-            'creator_user' => $request->user(),
-            'project_id' => $this->projectIdFromRequest($request),
-        ]);
+        try {
+            $recipients = app(NotificationRecipientService::class)->forEvent($routeName, [
+                'actor' => $request->user(),
+                'creator_user' => $request->user(),
+                'project_id' => $this->projectIdFromRequest($request),
+            ]);
 
-        if ($recipients->isEmpty()) {
-            return $response;
+            if ($recipients->isEmpty()) {
+                return $response;
+            }
+
+            Notification::send(
+                $recipients,
+                new ConfiguredEventNotification([
+                    'event_key' => $routeName,
+                    'message' => NotificationRule::labelForEvent($routeName) . '.',
+                    'link' => $this->indexLinkForEvent($routeName),
+                    'id' => $this->firstRouteParameterValue($request),
+                    'typ' => NotificationRule::moduleLabelForEvent($routeName),
+                ])
+            );
+        } catch (\Throwable $exception) {
+            // Die eigentliche Mutation ist bereits erfolgreich abgeschlossen.
+            // Ein optionaler Benachrichtigungsfehler darf ihre Antwort nicht in
+            // einen HTTP-Fehler verwandeln und den Benutzer dadurch täuschen.
+            Log::warning('Konfigurierte Routenbenachrichtigung konnte nicht versendet werden.', [
+                'route' => $routeName,
+                'user_id' => $request->user()?->id,
+                'exception' => $exception->getMessage(),
+            ]);
         }
-
-        Notification::send(
-            $recipients,
-            new ConfiguredEventNotification([
-                'event_key' => $routeName,
-                'message' => NotificationRule::labelForEvent($routeName) . '.',
-                'link' => $this->indexLinkForEvent($routeName),
-                'id' => $this->firstRouteParameterValue($request),
-                'typ' => NotificationRule::moduleLabelForEvent($routeName),
-            ])
-        );
 
         return $response;
     }

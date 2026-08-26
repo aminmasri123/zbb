@@ -122,7 +122,7 @@ const inviteToPortal = async (teilnehmer) => {
 
     try {
         const { data } = await axios.post(route('teilnehmer.portal.invite', teilnehmer.overview.participation_id), { email: result.value });
-        await Swal.fire('Einladung erstellt', data?.message || 'Die Portal-Einladung wurde erstellt.', 'success');
+        await Swal.fire('Einladung gesendet', data?.message || 'Die Portal-Einladung wurde per E-Mail gesendet.', 'success');
         router.reload({ only: ['teilnehmers'] });
     } catch (error) {
         await Swal.fire('Fehler', error.response?.data?.message || 'Die Einladung konnte nicht erstellt werden.', 'error');

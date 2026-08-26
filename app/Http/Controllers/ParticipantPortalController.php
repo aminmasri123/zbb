@@ -11,12 +11,14 @@ use App\Models\PortalCourseSession;
 use App\Models\Personen;
 use App\Models\ProjektHasPersonen;
 use App\Models\User;
+use App\Notifications\ParticipantPortalInvitationNotification;
 use App\Services\Projects\ActiveProjectContext;
 use App\Services\Participants\ParticipantReminderService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
@@ -72,24 +74,43 @@ class ParticipantPortalController extends Controller
         $validated = $request->validate(['email' => ['required', 'email', 'max:255', 'unique:users,email']]);
         $token = Str::random(64);
 
-        $invitation = DB::transaction(function () use ($request, $participation, $validated, $token) {
-            ParticipantPortalInvitation::query()
-                ->where('project_person_id', $participation->id)
-                ->whereNull('accepted_at')
-                ->update(['expires_at' => now()]);
-
-            return ParticipantPortalInvitation::query()->create([
+        $invitation = ParticipantPortalInvitation::query()->create([
                 'project_person_id' => $participation->id,
                 'email' => Str::lower($validated['email']),
                 'token_hash' => hash('sha256', $token),
                 'expires_at' => now()->addDays(7),
                 'invited_by_user_id' => $request->user()->id,
             ]);
-        });
+        $invitationUrl = route('participant-portal.invitation.show', $token);
+        $participant = $participation->teilnehmer()->first(['id', 'vorname', 'nachname']);
+
+        try {
+            Notification::route('mail', $invitation->email)->notify(
+                new ParticipantPortalInvitationNotification(
+                    $invitationUrl,
+                    trim(($participant?->vorname ?? '').' '.($participant?->nachname ?? '')),
+                    $project->name,
+                    $request->user()?->name,
+                )
+            );
+        } catch (\Throwable $exception) {
+            $invitation->delete();
+            report($exception);
+
+            return response()->json([
+                'message' => 'Die Portal-Einladung konnte nicht per E-Mail versendet werden. Bitte prüfen Sie die Mail-Einstellungen.',
+            ], 502);
+        }
+
+        ParticipantPortalInvitation::query()
+            ->where('project_person_id', $participation->id)
+            ->whereNull('accepted_at')
+            ->where('id', '!=', $invitation->id)
+            ->update(['expires_at' => now()]);
 
         return response()->json([
-            'message' => 'Portal-Einladung wurde erstellt.',
-            'invitation_url' => route('participant-portal.invitation.show', $token),
+            'message' => "Die Portal-Einladung wurde an {$invitation->email} gesendet.",
+            'invitation_url' => $invitationUrl,
             'expires_at' => $invitation->expires_at,
         ], 201);
     }

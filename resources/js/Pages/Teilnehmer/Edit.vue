@@ -2440,8 +2440,8 @@ watchEffect(() => {
             const response = await axios.post(route('teilnehmer.portal.invite', props.activeParticipationId), { email: result.value });
             await Swal.fire({
                 icon: 'success',
-                title: 'Einladung erstellt',
-                html: `<p class="mb-3">Der Link ist sieben Tage gültig.</p><input id="portal-invitation-url" class="swal2-input" value="${response.data.invitation_url}" readonly>`,
+                title: 'Einladung gesendet',
+                html: `<p class="mb-3">Die Einladung wurde per E-Mail gesendet. Der Link ist sieben Tage gültig.</p><input id="portal-invitation-url" class="swal2-input" value="${response.data.invitation_url}" readonly>`,
                 confirmButtonText: 'Link kopieren',
                 preConfirm: () => navigator.clipboard?.writeText(response.data.invitation_url),
             });

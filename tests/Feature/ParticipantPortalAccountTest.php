@@ -12,8 +12,10 @@ use App\Models\RoleDataAccessSetting;
 use App\Models\Standort;
 use App\Models\SystemModule;
 use App\Models\User;
+use App\Notifications\ParticipantPortalInvitationNotification;
 use App\Services\Modules\ModuleStateResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -24,13 +26,17 @@ class ParticipantPortalAccountTest extends TestCase
 
     public function test_invitation_activation_dashboard_and_self_service_profile_are_participant_bound(): void
     {
+        Notification::fake();
         $staff = User::factory()->create();
-        $this->givePermission($staff, 'teilnehmer.update');
+        $this->givePermission($staff, 'teilnehmer.portal.invite');
         $this->grantParticipantAccess($staff);
         app(ModuleStateResolver::class)->set(SystemModule::where('key', 'participant_portal')->firstOrFail(), true, null, $staff->id);
 
         $location = Standort::factory()->create();
-        $project = Projekt::factory()->create();
+        $project = Projekt::factory()->create(['feature_settings' => [
+            'participant_management' => true,
+            'participant_portal' => true,
+        ]]);
         $this->assign($project, $staff->person, $location);
         $staff->update(['current_team_id' => $project->id]);
         $participant = Personen::factory()->create(['typ' => 'teilnehmer']);
@@ -47,6 +53,11 @@ class ParticipantPortalAccountTest extends TestCase
             'project_person_id' => $participation->id,
             'email' => 'teilnehmer@example.test',
         ]);
+        Notification::assertSentOnDemand(
+            ParticipantPortalInvitationNotification::class,
+            fn ($notification, $channels, $notifiable) => $notifiable->routes['mail'] === 'teilnehmer@example.test'
+                && in_array('mail', $channels, true)
+        );
 
         $this->get(route('participant-portal.invitation.show', $token))
             ->assertOk()
