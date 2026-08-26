@@ -57,6 +57,15 @@ class ParticipationTaskTest extends TestCase
         $task = AppTask::query()->firstOrFail();
         $this->assertSame('project', $task->visibility);
 
+        $this->actingAs($user)->get(route('apps.tasks'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Apps/Workspace')
+                ->has('items', 1)
+                ->where('items.0.project_person_id', $activeParticipation->id)
+                ->where('items.0.participation.teilnehmer.id', $participant->id)
+                ->where('items.0.participation.projekt.name', $activeProject->name));
+
         $this->actingAs($user)->postJson(route('teilnehmer.tasks.store', $activeParticipation), [
             ...$payload,
             'assignee_person_id' => $foreignAssignee->id,

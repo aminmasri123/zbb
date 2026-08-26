@@ -54,6 +54,7 @@ const fileSearch = ref(props.fileFilters?.search || '');
 const fileType = ref(props.fileFilters?.type || 'all');
 const fileSort = ref(props.fileFilters?.sort || 'name');
 const fileDirection = ref(props.fileFilters?.direction || 'asc');
+const taskView = ref('general');
 const editFileForm = useForm({ name: '', notes: '', parent_id: '', visibility: 'private', project_id: '', team_id: '' });
 
 const baseVisibility = () => ({
@@ -99,10 +100,17 @@ const filteredShareTeams = computed(() => {
 });
 const canCreateInCurrentFolder = computed(() => !props.currentFolder || props.currentFolder?.can?.write);
 
+const generalTaskItems = computed(() => (props.items || []).filter((item) => !item.project_person_id));
+const participantTaskItems = computed(() => (props.items || []).filter((item) => item.project_person_id));
+const visibleTaskItems = computed(() => taskView.value === 'participant' ? participantTaskItems.value : generalTaskItems.value);
+const taskViewOptions = computed(() => [
+    { value: 'general', label: 'Allgemeine Aufgaben', count: generalTaskItems.value.length },
+    { value: 'participant', label: 'Teilnehmeraufgaben', count: participantTaskItems.value.length },
+]);
 const tasksByStatus = computed(() => {
     const grouped = {};
     (props.taskColumns || []).forEach((column) => grouped[column.value] = []);
-    (props.items || []).forEach((item) => {
+    visibleTaskItems.value.forEach((item) => {
         const key = grouped[item.status] ? item.status : 'open';
         grouped[key].push(item);
     });
@@ -494,6 +502,10 @@ function statusLabel(value) {
 
 function assigneeLabel(item) {
     return item.assignee ? `${item.assignee.nachname}, ${item.assignee.vorname}` : 'Nicht zugewiesen';
+}
+
+function participantTaskLabel(item) {
+    return item.participation?.teilnehmer ? personLabel(item.participation.teilnehmer) : 'Teilnehmer';
 }
 
 function priorityLabel(value) {
@@ -911,7 +923,21 @@ function ownerLabel(item) {
                                     <h2 class="text-lg font-semibold text-gray-900">Taskmanager Board</h2>
                                     <p class="text-sm text-gray-500">Aufgaben nach Status, Zuweisung, Projekt und Ersteller.</p>
                                 </div>
-                                <span class="text-sm text-gray-500">{{ items.length }} Aufgaben</span>
+                                <span class="text-sm text-gray-500">{{ visibleTaskItems.length }} Aufgaben</span>
+                            </div>
+
+                            <div class="flex flex-wrap gap-2 border-b bg-gray-50 px-4 py-3">
+                                <button
+                                    v-for="option in taskViewOptions"
+                                    :key="option.value"
+                                    type="button"
+                                    class="rounded border px-3 py-2 text-sm font-semibold transition"
+                                    :class="taskView === option.value ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-gray-200 bg-white text-gray-600 hover:border-orange-300'"
+                                    @click="taskView = option.value"
+                                >
+                                    {{ option.label }}
+                                    <span class="ml-1 rounded bg-white px-1.5 py-0.5 text-xs">{{ option.count }}</span>
+                                </button>
                             </div>
 
                             <div class="grid gap-3 p-4 xl:grid-cols-3">
@@ -932,6 +958,7 @@ function ownerLabel(item) {
                                         <article v-for="item in tasksByStatus[column.value]" :key="item.id" class="rounded border border-gray-200 bg-white p-3 shadow-sm">
                                             <div class="flex items-start justify-between gap-3">
                                                 <div class="min-w-0">
+                                                    <p v-if="item.project_person_id" class="mb-1 text-[11px] font-bold uppercase tracking-wide text-amber-700">Teilnehmeraufgabe</p>
                                                     <h3 class="break-words text-sm font-semibold text-gray-950">{{ item.title }}</h3>
                                                     <p v-if="item.workflow_template" class="mt-1 text-xs text-orange-700">{{ item.workflow_template.name }}</p>
                                                 </div>
@@ -943,6 +970,8 @@ function ownerLabel(item) {
                                             <p v-if="item.description" class="mt-2 line-clamp-3 text-sm text-gray-600">{{ item.description }}</p>
 
                                             <dl class="mt-3 space-y-1 text-xs text-gray-500">
+                                                <div v-if="item.project_person_id" class="flex justify-between gap-3"><dt>Teilnehmer</dt><dd class="text-right font-semibold text-gray-800">{{ participantTaskLabel(item) }}</dd></div>
+                                                <div v-if="item.project_person_id" class="flex justify-between gap-3"><dt>Projekt</dt><dd class="text-right text-gray-800">{{ item.participation?.projekt?.name || 'Nicht angegeben' }}</dd></div>
                                                 <div class="flex justify-between gap-3"><dt>Zugewiesen</dt><dd class="text-right text-gray-800">{{ assigneeLabel(item) }}</dd></div>
                                                 <div class="flex justify-between gap-3"><dt>Erstellt von</dt><dd class="text-right text-gray-800">{{ ownerLabel(item) }}</dd></div>
                                                 <div v-if="item.due_at" class="flex justify-between gap-3"><dt>Faellig</dt><dd class="text-right text-gray-800">{{ formatDate(item.due_at) }}</dd></div>

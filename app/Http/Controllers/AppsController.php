@@ -745,7 +745,7 @@ class AppsController extends Controller
     {
         return $this->workspace('tasks', [
             'items' => $this->visible(AppTask::query(), AppTask::class)
-                ->with(['owner:id,username,email', 'assignee:id,vorname,nachname', 'workflowTemplate:id,name', 'participation.teilnehmer:id,vorname,nachname', 'shares.person:id,vorname,nachname'])
+                ->with(['owner:id,username,email', 'assignee:id,vorname,nachname', 'workflowTemplate:id,name', 'participation.teilnehmer:id,vorname,nachname', 'participation.projekt:id,name', 'shares.person:id,vorname,nachname'])
                 ->orderByRaw("status = 'done' asc")
                 ->orderByRaw("priority = 'high' desc")
                 ->orderBy('due_at')
