@@ -3,12 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Models\Materialanforderung;
+use App\Models\ParticipantPortalMessage;
+use App\Models\ParticipantPortalStaffRead;
+use App\Models\Personen;
 use App\Models\Projekt;
+use App\Models\ProjektHasPersonen;
 use App\Models\StaffConversation;
 use App\Models\StaffMessage;
 use App\Models\StaffMessageAttachment;
 use App\Models\User;
 use App\Notifications\ConfiguredEventNotification;
+use App\Services\Modules\ModuleStateResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -20,11 +25,19 @@ use Inertia\Inertia;
 
 class StaffChatController extends Controller
 {
+    public function __construct(private readonly ModuleStateResolver $modules)
+    {
+    }
+
     public function index(Request $request)
     {
         $this->ensureCanUseChat($request);
         $user = $request->user();
         $search = trim((string) $request->query('search', ''));
+        $canUseParticipantMessages = $this->canUseParticipantMessages($user);
+        $section = $request->query('section') === 'participants' && $canUseParticipantMessages
+            ? 'participants'
+            : 'internal';
 
         $conversations = StaffConversation::query()
             ->whereHas('members', fn ($members) => $members->where('users.id', $user->id))
@@ -45,10 +58,10 @@ class StaffChatController extends Controller
 
         $selected = null;
         $selectedId = $request->integer('conversation');
-        if ($selectedId) {
+        if ($section === 'internal' && $selectedId) {
             $selected = $conversations->firstWhere('id', $selectedId);
             abort_unless($selected, 403);
-        } elseif ($conversations->isNotEmpty()) {
+        } elseif ($section === 'internal' && $conversations->isNotEmpty()) {
             $selected = $conversations->first();
         }
 
@@ -85,12 +98,19 @@ class StaffChatController extends Controller
             ->get(['projekts.id', 'projekts.name'])
             ->map(fn (Projekt $project) => ['id' => $project->id, 'name' => $project->name]);
 
+        $participantChat = $this->participantChatPayload($request, $section, $search);
+
         return Inertia::render('Chat/Index', [
+            'section' => $section,
             'conversations' => $conversations->map(fn (StaffConversation $conversation) => $this->conversationPayload($conversation, $user)),
             'selectedConversationId' => $selected?->id,
             'messages' => $messages->map(fn (StaffMessage $message) => $this->messagePayload($message)),
             'staff' => $staff,
             'projects' => $projects,
+            'canUseParticipantMessages' => $canUseParticipantMessages,
+            'participantConversations' => $participantChat['conversations'],
+            'selectedParticipantConversationId' => $participantChat['selected_id'],
+            'participantMessages' => $participantChat['messages'],
             'filters' => ['search' => $search],
             'prefillMaterialRequestId' => $request->integer('materialanforderung') ?: null,
             'privacy' => [
@@ -384,6 +404,121 @@ class StaffChatController extends Controller
     private function userPayload(User $user): array
     {
         return ['id' => $user->id, 'name' => $user->name ?: 'Ehemalige Person'];
+    }
+
+    private function participantChatPayload(Request $request, string $section, string $search): array
+    {
+        $empty = ['conversations' => [], 'selected_id' => null, 'messages' => []];
+        $user = $request->user();
+        if ($section !== 'participants' || ! $this->canUseParticipantMessages($user)) return $empty;
+
+        $project = Projekt::query()->find($user->current_team_id);
+        if (! $project
+            || ! $project->featureEnabled('participant_portal')
+            || ! $project->portalFeatureEnabled('messaging')) return $empty;
+
+        $visibleParticipantIds = Personen::query()
+            ->teilnehmer()
+            ->visibleForUser($user)
+            ->pluck('id');
+
+        $participations = ProjektHasPersonen::query()
+            ->where('projekt_id', $project->id)
+            ->where('status', 'aktiv')
+            ->whereIn('personen_id', $visibleParticipantIds)
+            ->whereHas('portalMessages')
+            ->when($search !== '', fn ($query) => $query->where(function ($filter) use ($search) {
+                $filter->whereHas('teilnehmer', fn ($people) => $people
+                    ->where('vorname', 'like', "%{$search}%")
+                    ->orWhere('nachname', 'like', "%{$search}%"))
+                    ->orWhereHas('portalMessages', fn ($messages) => $messages->where('body', 'like', "%{$search}%"));
+            }))
+            ->with([
+                'teilnehmer:id,vorname,nachname',
+                'projekt:id,name',
+                'portalMessages' => fn ($messages) => $messages->latest()->limit(1),
+            ])
+            ->withMax('portalMessages as last_message_at', 'created_at')
+            ->orderByDesc('last_message_at')
+            ->get();
+
+        $reads = ParticipantPortalStaffRead::query()
+            ->where('user_id', $user->id)
+            ->whereIn('project_person_id', $participations->pluck('id'))
+            ->get()
+            ->keyBy('project_person_id');
+
+        $conversations = $participations->map(function (ProjektHasPersonen $participation) use ($reads) {
+            $lastReadAt = $reads->get($participation->id)?->last_read_at;
+            $unread = $participation->portalMessages()
+                ->where('sender_kind', 'participant')
+                ->when($lastReadAt, fn ($messages) => $messages->where('created_at', '>', $lastReadAt))
+                ->count();
+            $lastMessage = $participation->portalMessages->first();
+
+            return [
+                'id' => $participation->id,
+                'title' => trim(($participation->teilnehmer?->vorname ?? '').' '.($participation->teilnehmer?->nachname ?? '')) ?: 'Teilnehmer',
+                'project' => ['id' => $participation->projekt_id, 'name' => $participation->projekt?->name],
+                'participant_id' => $participation->personen_id,
+                'unread_count' => $unread,
+                'last_message' => $lastMessage?->body,
+                'last_message_at' => $lastMessage?->created_at?->toISOString(),
+            ];
+        })->values();
+
+        $selectedId = $request->integer('participant');
+        $selected = $selectedId
+            ? $participations->firstWhere('id', $selectedId)
+            : $participations->first();
+        if ($selectedId) abort_unless($selected, 403);
+        if (! $selected) return ['conversations' => $conversations, 'selected_id' => null, 'messages' => []];
+
+        $messages = $selected->portalMessages()
+            ->with(['sender:id,username,person_id', 'sender.person:id,vorname,nachname'])
+            ->oldest()
+            ->limit(250)
+            ->get()
+            ->map(fn (ParticipantPortalMessage $message) => [
+                'id' => $message->id,
+                'sender_kind' => $message->sender_kind,
+                'sender' => $message->sender ? $this->userPayload($message->sender) : null,
+                'body' => $message->body,
+                'created_at' => $message->created_at?->toISOString(),
+            ]);
+
+        ParticipantPortalStaffRead::query()->updateOrCreate(
+            ['project_person_id' => $selected->id, 'user_id' => $user->id],
+            ['last_read_at' => now()],
+        );
+        $messageIds = $messages->pluck('id')->map(fn ($id) => (int) $id);
+        $user->unreadNotifications()
+            ->get()
+            ->filter(fn ($notification) => ($notification->data['event_key'] ?? null) === 'participant.message.created'
+                && $messageIds->contains((int) ($notification->data['id'] ?? 0)))
+            ->each->markAsRead();
+
+        return [
+            'conversations' => $conversations->map(fn (array $conversation) => $conversation['id'] === $selected->id
+                ? array_replace($conversation, ['unread_count' => 0])
+                : $conversation),
+            'selected_id' => $selected->id,
+            'messages' => $messages,
+        ];
+    }
+
+    private function canUseParticipantMessages(User $user): bool
+    {
+        if (! $user->can('teilnehmer.update')
+            || ! $user->current_team_id
+            || ! $this->modules->enabled('participant_portal')) return false;
+
+        $project = Projekt::query()->find($user->current_team_id);
+
+        return (bool) $project
+            && $user->projekte()->whereKey($project->id)->exists()
+            && $project->featureEnabled('participant_portal')
+            && $project->portalFeatureEnabled('messaging');
     }
 
     private function ensureCanUseChat(Request $request): void

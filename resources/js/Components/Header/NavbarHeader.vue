@@ -216,8 +216,8 @@
                         :href="route('chat.index')"
                         class="relative inline-flex items-center rounded-md border border-transparent px-2 py-2 text-sm font-medium leading-4 text-primary transition duration-150 ease-in-out hover:text-buttonPrimary focus:outline-none sm:mx-1"
                         :class="{ 'text-buttonPrimary': route().current('chat.*') }"
-                        title="Interner Chat"
-                        aria-label="Interner Chat"
+                        title="Nachrichten"
+                        aria-label="Nachrichten"
                     >
                         <i class="las la-comments text-xl" aria-hidden="true"></i>
                         <span v-if="$page.props.staffChatUnreadCount > 0" class="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-xs text-white">

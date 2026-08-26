@@ -4,6 +4,8 @@ namespace App\Http\Middleware;
 
 use App\Models\AppPopup;
 use App\Models\AccountDeletionRequest;
+use App\Models\Personen;
+use App\Models\Projekt;
 use App\Services\Modules\ModuleStateResolver;
 use App\Services\Participants\ParticipantReminderService;
 use App\Services\Projects\ActiveProjectContext;
@@ -96,6 +98,7 @@ class HandleInertiaRequests extends Middleware
             'canUseStaffChat' => fn () => (bool) $request->user()?->hasStoredPermission('chat.use'),
 
             'staffChatUnreadCount' => fn () => $this->staffChatUnreadCount($request),
+            'staffParticipantChatUnreadCount' => fn () => $this->staffParticipantChatUnreadCount($request),
 
             'participantPortalNavigation' => fn () => $this->participantPortalNavigation($request),
             'participantPortalUnreadCount' => fn () => $this->participantPortalUnreadCount($request),
@@ -234,7 +237,7 @@ class HandleInertiaRequests extends Middleware
             return 0;
         }
 
-        return DB::table('staff_messages as messages')
+        $internalUnread = DB::table('staff_messages as messages')
             ->join('staff_conversation_members as membership', function ($join) use ($user) {
                 $join->on('membership.conversation_id', '=', 'messages.conversation_id')
                     ->where('membership.user_id', '=', $user->id);
@@ -244,6 +247,46 @@ class HandleInertiaRequests extends Middleware
                     ->orWhere('messages.sender_user_id', '!=', $user->id);
             })
             ->whereRaw('messages.created_at > COALESCE(membership.last_read_at, membership.joined_at)')
+            ->count();
+
+        return $internalUnread + $this->staffParticipantChatUnreadCount($request);
+    }
+
+    private function staffParticipantChatUnreadCount(Request $request): int
+    {
+        $user = $request->user();
+        if (! $user
+            || ! $user->hasStoredPermission('chat.use')
+            || ! $user->can('teilnehmer.update')
+            || ! $user->current_team_id
+            || ! Schema::hasTable('participant_portal_staff_reads')
+            || ! app(ModuleStateResolver::class)->enabled('participant_portal')) {
+            return 0;
+        }
+
+        $project = Projekt::query()->find($user->current_team_id);
+        if (! $project
+            || ! $project->featureEnabled('participant_portal')
+            || ! $project->portalFeatureEnabled('messaging')) {
+            return 0;
+        }
+
+        $visibleParticipantIds = Personen::query()
+            ->teilnehmer()
+            ->visibleForUser($user)
+            ->pluck('id');
+
+        return DB::table('participant_portal_messages as portal_messages')
+            ->join('projekt_has_personens as participation', 'participation.id', '=', 'portal_messages.project_person_id')
+            ->leftJoin('participant_portal_staff_reads as portal_reads', function ($join) use ($user) {
+                $join->on('portal_reads.project_person_id', '=', 'participation.id')
+                    ->where('portal_reads.user_id', '=', $user->id);
+            })
+            ->where('participation.projekt_id', $project->id)
+            ->where('participation.status', 'aktiv')
+            ->whereIn('participation.personen_id', $visibleParticipantIds)
+            ->where('portal_messages.sender_kind', 'participant')
+            ->whereRaw("portal_messages.created_at > COALESCE(portal_reads.last_read_at, '1970-01-01 00:00:00')")
             ->count();
     }
 }

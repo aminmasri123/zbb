@@ -32,6 +32,10 @@ class ParticipantPortalMessageTest extends TestCase
         $project = Projekt::factory()->create(['feature_settings' => ['participant_management' => true, 'participant_portal' => true], 'portal_feature_settings' => ['messaging' => true]]);
         $this->assign($project, $staff->person, $location);
         $staff->update(['current_team_id' => $project->id]);
+        $secondStaff = User::factory()->create();
+        $this->grantStaffPermission($secondStaff);
+        $this->assign($project, $secondStaff->person, $location);
+        $secondStaff->update(['current_team_id' => $project->id]);
         $participant = Personen::factory()->create(['typ' => 'teilnehmer']);
         $participation = $this->assign($project, $participant, $location);
         $portal = User::factory()->create(['person_id' => $participant->id]);
@@ -43,6 +47,42 @@ class ParticipantPortalMessageTest extends TestCase
 
         $participantMessage = ParticipantPortalMessage::findOrFail($participantResponse->json('item.id'));
         $this->assertNull($participantMessage->staff_read_at);
+        $this->assertDatabaseHas('notifications', ['notifiable_id' => $staff->id]);
+        $this->assertDatabaseHas('notifications', ['notifiable_id' => $secondStaff->id]);
+
+        $this->actingAs($staff)->get(route('chat.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('section', 'internal')
+                ->where('canUseParticipantMessages', true)
+                ->where('staffParticipantChatUnreadCount', 1)
+                ->where('staffChatUnreadCount', 1));
+
+        $this->get(route('chat.index', ['section' => 'participants', 'participant' => $participation->id]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('section', 'participants')
+                ->has('participantConversations', 1)
+                ->where('selectedParticipantConversationId', $participation->id)
+                ->has('participantMessages', 1)
+                ->where('participantMessages.0.body', 'Ich habe eine Frage zu meinem Termin.')
+                ->where('staffParticipantChatUnreadCount', 0)
+                ->where('staffChatUnreadCount', 0));
+        $this->assertDatabaseHas('participant_portal_staff_reads', [
+            'project_person_id' => $participation->id,
+            'user_id' => $staff->id,
+        ]);
+        $this->assertNotNull($staff->notifications()->firstOrFail()->read_at);
+        $this->assertNull($secondStaff->notifications()->firstOrFail()->read_at);
+        $this->assertDatabaseMissing('participant_portal_staff_reads', [
+            'project_person_id' => $participation->id,
+            'user_id' => $secondStaff->id,
+        ]);
+
+        $this->actingAs($secondStaff)->get(route('chat.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->where('staffChatUnreadCount', 1));
+
         $this->actingAs($staff)->putJson(route('teilnehmer.messages.read', $participation))->assertOk();
         $this->assertNotNull($participantMessage->fresh()->staff_read_at);
 
@@ -73,6 +113,12 @@ class ParticipantPortalMessageTest extends TestCase
         $participant = Personen::factory()->create(['typ' => 'teilnehmer']);
         $participation = $this->assign($project, $participant, $location);
         $portal = User::factory()->create(['person_id' => $participant->id]);
+
+        $this->actingAs($staff)->get(route('chat.index', ['section' => 'participants']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('section', 'internal')
+                ->where('canUseParticipantMessages', false));
 
         $this->actingAs($portal)->postJson(route('participant-portal.messages.store'), [
             'project_person_id' => $participation->id,
@@ -112,14 +158,16 @@ class ParticipantPortalMessageTest extends TestCase
     private function grantStaffPermission(User $user): void
     {
         $category = Berechtigungskategorie::query()->firstOrCreate(['name' => 'Portal-Nachrichten'], ['beschreibung' => '']);
-        Permission::query()->updateOrCreate(
-            ['name' => 'teilnehmer.update', 'guard_name' => 'web'],
-            ['berechtigungskategorie_id' => $category->id, 'beschreibung' => null]
-        );
+        foreach (['teilnehmer.update', 'chat.use'] as $permission) {
+            Permission::query()->updateOrCreate(
+                ['name' => $permission, 'guard_name' => 'web'],
+                ['berechtigungskategorie_id' => $category->id, 'beschreibung' => null]
+            );
+        }
         app(PermissionRegistrar::class)->forgetCachedPermissions();
         $role = Role::query()->create(['name' => 'Nachrichten-' . uniqid(), 'guard_name' => 'web', 'color' => '#123456']);
         RoleDataAccessSetting::query()->create(['role_id' => $role->id, 'team_scope' => 'own_projects', 'participant_scope' => 'all']);
         $user->assignRole($role);
-        $user->givePermissionTo('teilnehmer.update');
+        $user->givePermissionTo(['teilnehmer.update', 'chat.use']);
     }
 }

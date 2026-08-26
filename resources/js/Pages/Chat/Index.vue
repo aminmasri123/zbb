@@ -1,15 +1,21 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
 import { Head, Link, router, useForm } from '@inertiajs/vue3'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import axios from 'axios'
 import Swal from 'sweetalert2'
 
 const props = defineProps({
+    section: { type: String, default: 'internal' },
     conversations: { type: Array, default: () => [] },
     selectedConversationId: Number,
     messages: { type: Array, default: () => [] },
     staff: { type: Array, default: () => [] },
     projects: { type: Array, default: () => [] },
+    canUseParticipantMessages: { type: Boolean, default: false },
+    participantConversations: { type: Array, default: () => [] },
+    selectedParticipantConversationId: Number,
+    participantMessages: { type: Array, default: () => [] },
     filters: { type: Object, default: () => ({}) },
     prefillMaterialRequestId: Number,
     privacy: { type: Object, default: () => ({}) },
@@ -19,7 +25,13 @@ const conversationPane = ref(null)
 const createOpen = ref(false)
 const search = ref(props.filters.search || '')
 const selectedConversation = computed(() => props.conversations.find((item) => item.id === props.selectedConversationId))
+const selectedParticipantConversation = computed(() => props.participantConversations.find((item) => item.id === props.selectedParticipantConversationId))
+const participantItems = ref([...(props.participantMessages || [])])
+const participantBody = ref('')
+const participantSending = ref(false)
 let pollTimer = null
+
+watch(() => props.participantMessages, (messages) => { participantItems.value = [...(messages || [])] })
 
 const conversationForm = useForm({
     type: 'direct',
@@ -37,6 +49,7 @@ const messageForm = useForm({
 
 function searchConversations() {
     router.get(route('chat.index'), {
+        section: props.section,
         search: search.value || undefined,
         materialanforderung: messageForm.materialanforderung_id || undefined,
     }, { preserveState: true, replace: true })
@@ -44,6 +57,7 @@ function searchConversations() {
 
 function openConversation(id) {
     router.get(route('chat.index'), {
+        section: 'internal',
         conversation: id,
         search: search.value || undefined,
         materialanforderung: messageForm.materialanforderung_id || undefined,
@@ -51,6 +65,46 @@ function openConversation(id) {
         preserveState: false,
         onSuccess: scrollDown,
     })
+}
+
+function openSection(section) {
+    router.get(route('chat.index'), {
+        section,
+        search: search.value || undefined,
+    }, { preserveState: false })
+}
+
+function openParticipant(id) {
+    router.get(route('chat.index'), {
+        section: 'participants',
+        participant: id,
+        search: search.value || undefined,
+    }, {
+        preserveState: false,
+        onSuccess: scrollDown,
+    })
+}
+
+async function sendParticipantMessage() {
+    if (!props.selectedParticipantConversationId || !participantBody.value.trim() || participantSending.value) return
+    participantSending.value = true
+    try {
+        const response = await axios.post(route('teilnehmer.messages.store', props.selectedParticipantConversationId), {
+            body: participantBody.value,
+        })
+        participantItems.value.push(response.data.item)
+        participantBody.value = ''
+        await scrollDown()
+        router.reload({
+            only: ['participantConversations', 'staffChatUnreadCount', 'flash'],
+            preserveState: true,
+            preserveScroll: true,
+        })
+    } catch (error) {
+        Swal.fire('Nicht gesendet', error.response?.data?.message || 'Die Nachricht konnte nicht gesendet werden.', 'error')
+    } finally {
+        participantSending.value = false
+    }
 }
 
 function createConversation() {
@@ -118,7 +172,7 @@ onMounted(() => {
     pollTimer = window.setInterval(() => {
         if (document.hidden || messageForm.processing || conversationForm.processing) return
         router.reload({
-            only: ['conversations', 'selectedConversationId', 'messages', 'staffChatUnreadCount', 'flash'],
+            only: ['conversations', 'selectedConversationId', 'messages', 'participantConversations', 'selectedParticipantConversationId', 'participantMessages', 'staffChatUnreadCount', 'flash'],
             preserveState: true,
             preserveScroll: true,
         })
@@ -131,12 +185,16 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <Head title="Interner Chat" />
+    <Head title="Nachrichten" />
     <AppLayout>
         <template #header>
             <div class="flex flex-wrap items-center justify-between gap-3">
-                <span>Interner Chat</span>
-                <div class="flex gap-2">
+                <div class="flex items-center gap-2">
+                    <span class="mr-2">Nachrichten</span>
+                    <button type="button" class="rounded-lg px-3 py-2 text-sm font-semibold" :class="section === 'internal' ? 'bg-slate-900 text-white' : 'border border-slate-300 bg-white text-slate-700'" @click="openSection('internal')">Team-Chat</button>
+                    <button v-if="canUseParticipantMessages" type="button" class="relative rounded-lg px-3 py-2 text-sm font-semibold" :class="section === 'participants' ? 'bg-cyan-700 text-white' : 'border border-slate-300 bg-white text-slate-700'" @click="openSection('participants')">Teilnehmer<span v-if="$page.props.staffParticipantChatUnreadCount" class="ml-2 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white">{{ $page.props.staffParticipantChatUnreadCount }}</span></button>
+                </div>
+                <div v-if="section === 'internal'" class="flex gap-2">
                     <a :href="route('chat.export')" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
                         <i class="las la-download mr-1"></i> Meine Daten
                     </a>
@@ -148,7 +206,7 @@ onBeforeUnmount(() => {
         </template>
 
         <div class="mx-auto max-w-7xl space-y-4 pb-8">
-            <div class="flex items-start gap-3 rounded-xl border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-950">
+            <div v-if="section === 'internal'" class="flex items-start gap-3 rounded-xl border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-950">
                 <i class="las la-user-shield mt-0.5 text-xl"></i>
                 <div>
                     <p class="font-semibold">Dienstliche, geschützte Kommunikation</p>
@@ -156,7 +214,7 @@ onBeforeUnmount(() => {
                 </div>
             </div>
 
-            <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div v-if="section === 'internal'" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div class="grid min-h-[680px] lg:grid-cols-[330px_1fr]">
                     <aside class="border-b border-slate-200 bg-slate-50 lg:border-b-0 lg:border-r">
                         <form class="border-b border-slate-200 p-4" @submit.prevent="searchConversations">
@@ -257,6 +315,84 @@ onBeforeUnmount(() => {
 
                     <section v-else class="grid min-h-[680px] place-items-center p-8 text-center text-slate-500">
                         <div><i class="las la-comment-dots text-6xl text-slate-300"></i><p class="mt-4 font-semibold">Unterhaltung auswählen oder neu erstellen</p></div>
+                    </section>
+                </div>
+            </div>
+
+            <div v-if="section === 'participants'" class="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
+                <i class="las la-user-lock mt-0.5 text-xl"></i>
+                <div>
+                    <p class="font-semibold">Nachrichten aus dem Teilnehmerportal</p>
+                    <p class="mt-1">Angezeigt werden ausschließlich aktive Teilnehmer des aktuell gewählten Projekts, für die Sie eine Zugriffsberechtigung haben.</p>
+                </div>
+            </div>
+
+            <div v-if="section === 'participants'" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div class="grid min-h-[680px] lg:grid-cols-[330px_1fr]">
+                    <aside class="border-b border-slate-200 bg-slate-50 lg:border-b-0 lg:border-r">
+                        <form class="border-b border-slate-200 p-4" @submit.prevent="searchConversations">
+                            <div class="flex gap-2">
+                                <input v-model="search" type="search" maxlength="100" placeholder="Teilnehmer oder Nachricht suchen …" class="min-w-0 flex-1 rounded-lg border-slate-300 text-sm" />
+                                <button class="rounded-lg bg-cyan-700 px-3 text-white" aria-label="Suchen"><i class="las la-search"></i></button>
+                            </div>
+                        </form>
+
+                        <div class="max-h-[620px] overflow-y-auto p-2">
+                            <button
+                                v-for="conversation in participantConversations"
+                                :key="conversation.id"
+                                type="button"
+                                class="mb-1 w-full rounded-xl p-3 text-left transition"
+                                :class="conversation.id === selectedParticipantConversationId ? 'bg-cyan-800 text-white shadow-md' : 'hover:bg-white'"
+                                @click="openParticipant(conversation.id)"
+                            >
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="min-w-0">
+                                        <p class="truncate text-sm font-bold">{{ conversation.title }}</p>
+                                        <p class="mt-0.5 truncate text-[11px]" :class="conversation.id === selectedParticipantConversationId ? 'text-cyan-100' : 'text-emerald-700'">{{ conversation.project?.name }}</p>
+                                        <p class="mt-1 truncate text-xs" :class="conversation.id === selectedParticipantConversationId ? 'text-cyan-100' : 'text-slate-500'">{{ conversation.last_message }}</p>
+                                    </div>
+                                    <span v-if="conversation.unread_count" class="shrink-0 rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">{{ conversation.unread_count }}</span>
+                                </div>
+                            </button>
+                            <div v-if="!participantConversations.length" class="px-4 py-12 text-center text-sm text-slate-500">Keine Teilnehmer-Unterhaltungen im aktiven Projekt.</div>
+                        </div>
+                    </aside>
+
+                    <section v-if="selectedParticipantConversation" class="flex min-w-0 flex-col">
+                        <header class="border-b border-slate-200 px-5 py-4">
+                            <div class="flex flex-wrap items-start justify-between gap-2">
+                                <div>
+                                    <h1 class="font-bold text-slate-900">{{ selectedParticipantConversation.title }}</h1>
+                                    <p class="mt-1 text-xs text-slate-500">{{ selectedParticipantConversation.project?.name }} · Teilnehmerportal</p>
+                                </div>
+                                <Link :href="route('teilnehmer.edit', selectedParticipantConversation.participant_id)" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700">Teilnehmerprofil öffnen</Link>
+                            </div>
+                        </header>
+
+                        <div ref="conversationPane" class="flex-1 space-y-4 overflow-y-auto bg-gradient-to-b from-cyan-50/40 to-white p-5">
+                            <article v-for="message in participantItems" :key="message.id" class="flex" :class="message.sender_kind === 'staff' ? 'justify-end' : 'justify-start'">
+                                <div class="max-w-[88%] sm:max-w-[72%]">
+                                    <div class="rounded-2xl px-4 py-3 shadow-sm" :class="message.sender_kind === 'staff' ? 'rounded-br-md bg-cyan-800 text-white' : 'rounded-bl-md border border-slate-200 bg-white text-slate-800'">
+                                        <p class="text-[11px] font-bold opacity-60">{{ message.sender_kind === 'staff' ? (message.sender?.name || 'Projektteam') : selectedParticipantConversation.title }}</p>
+                                        <p class="mt-1 whitespace-pre-wrap break-words text-sm leading-6">{{ message.body }}</p>
+                                        <p class="mt-2 text-right text-[10px] opacity-50">{{ dateTime(message.created_at) }}</p>
+                                    </div>
+                                </div>
+                            </article>
+                            <div v-if="!participantItems.length" class="grid min-h-80 place-items-center text-center text-slate-500"><div><i class="las la-comments text-5xl text-slate-300"></i><p class="mt-3 font-semibold">Noch keine Nachrichten</p></div></div>
+                        </div>
+
+                        <form class="border-t border-slate-200 bg-white p-4" @submit.prevent="sendParticipantMessage">
+                            <div class="flex items-end gap-2">
+                                <textarea v-model="participantBody" maxlength="5000" rows="2" placeholder="Nachricht an den Teilnehmer …" class="min-h-11 flex-1 resize-none rounded-xl border-slate-300 text-sm focus:border-cyan-500 focus:ring-cyan-500"></textarea>
+                                <button class="h-11 rounded-xl bg-cyan-700 px-5 text-sm font-bold text-white disabled:opacity-50" :disabled="participantSending || !participantBody.trim()">{{ participantSending ? 'Sendet …' : 'Senden' }}</button>
+                            </div>
+                        </form>
+                    </section>
+
+                    <section v-else class="grid min-h-[680px] place-items-center p-8 text-center text-slate-500">
+                        <div><i class="las la-user-friends text-6xl text-slate-300"></i><p class="mt-4 font-semibold">Teilnehmer-Unterhaltung auswählen</p></div>
                     </section>
                 </div>
             </div>

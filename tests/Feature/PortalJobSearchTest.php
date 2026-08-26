@@ -39,13 +39,15 @@ class PortalJobSearchTest extends TestCase
         Http::fake([
             'https://rest.arbeitsagentur.de/*' => Http::response([
                 'maxErgebnisse' => 1,
-                'stellenangebote' => [[
-                    'refnr' => '10000-TEST-S',
-                    'titel' => 'Gärtner/in',
-                    'arbeitgeber' => 'Musterbetrieb GmbH',
-                    'arbeitsort' => ['plz' => '66111', 'ort' => 'Saarbrücken'],
-                    'aktuelleVeroeffentlichungsdatum' => '2026-07-10',
-                    'externeUrl' => 'https://example.test/job',
+                'ergebnisliste' => [[
+                    'referenznummer' => '10000-TEST-S',
+                    'stellenangebotsTitel' => 'Gärtner/in',
+                    'firma' => 'Musterbetrieb GmbH',
+                    'stellenlokationen' => [[
+                        'adresse' => ['plz' => '66111', 'ort' => 'Saarbrücken'],
+                    ]],
+                    'veroeffentlichungszeitraum' => ['von' => '2026-07-10'],
+                    'externeURL' => 'https://example.test/job',
                 ]],
             ], 200),
         ]);
@@ -57,9 +59,15 @@ class PortalJobSearchTest extends TestCase
             'umkreis' => 25,
         ]))->assertOk()
             ->assertJsonPath('items.0.external_ref', '10000-TEST-S')
-            ->assertJsonPath('items.0.location', '66111 Saarbrücken');
+            ->assertJsonPath('items.0.title', 'Gärtner/in')
+            ->assertJsonPath('items.0.employer', 'Musterbetrieb GmbH')
+            ->assertJsonPath('items.0.location', '66111 Saarbrücken')
+            ->assertJsonPath('items.0.published_at', '2026-07-10')
+            ->assertJsonPath('items.0.source_url', 'https://example.test/job');
 
-        Http::assertSent(fn ($request) => $request->hasHeader('X-API-Key', 'jobboerse-jobsuche') && $request['was'] === 'Gärtner');
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/pc/v6/jobs?')
+            && $request->hasHeader('X-API-Key', 'jobboerse-jobsuche')
+            && $request['was'] === 'Gärtner');
         $job = $search->json('items.0');
 
         $this->postJson(route('participant-portal.jobs.bookmarks.store'), [

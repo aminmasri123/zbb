@@ -26,11 +26,11 @@ class BundesagenturJobSearchService
             ->withHeaders(['X-API-Key' => config('services.ba_jobsuche.api_key')])
             ->timeout(config('services.ba_jobsuche.timeout'))
             ->retry(2, 250, throw: false)
-            ->get('/pc/v4/jobs', $params);
+            ->get('/pc/v6/jobs', $params);
 
         $response->throw();
         $payload = $response->json();
-        $items = $payload['stellenangebote'] ?? $payload['jobs'] ?? [];
+        $items = $payload['ergebnisliste'] ?? $payload['stellenangebote'] ?? $payload['jobs'] ?? [];
 
         return [
             'items' => collect($items)->map(fn (array $job) => $this->mapJob($job))->filter(fn ($job) => $job['external_ref'])->values()->all(),
@@ -42,18 +42,22 @@ class BundesagenturJobSearchService
 
     private function mapJob(array $job): array
     {
-        $workplace = $job['arbeitsort'] ?? [];
+        $workplace = Arr::get($job, 'stellenlokationen.0.adresse', $job['arbeitsort'] ?? []);
         $location = is_array($workplace)
             ? trim(implode(' ', array_filter([Arr::get($workplace, 'plz'), Arr::get($workplace, 'ort'), Arr::get($workplace, 'region')])))
             : (string) $workplace;
 
         return [
-            'external_ref' => (string) ($job['refnr'] ?? $job['referenznummer'] ?? ''),
-            'title' => (string) ($job['titel'] ?? $job['beruf'] ?? $job['stellenangebotsTitel'] ?? 'Stellenangebot'),
+            'external_ref' => (string) ($job['referenznummer'] ?? $job['refnr'] ?? ''),
+            'title' => (string) ($job['stellenangebotsTitel'] ?? $job['titel'] ?? $job['beruf'] ?? 'Stellenangebot'),
             'employer' => (string) ($job['arbeitgeber'] ?? $job['firma'] ?? ''),
             'location' => $location,
-            'published_at' => $job['aktuelleVeroeffentlichungsdatum'] ?? $job['veroeffentlichtAm'] ?? null,
-            'source_url' => $job['externeUrl'] ?? $job['url'] ?? null,
+            'published_at' => Arr::get($job, 'veroeffentlichungszeitraum.von')
+                ?? $job['datumErsteVeroeffentlichung']
+                ?? $job['aktuelleVeroeffentlichungsdatum']
+                ?? $job['veroeffentlichtAm']
+                ?? null,
+            'source_url' => $job['externeURL'] ?? $job['externeUrl'] ?? $job['url'] ?? null,
         ];
     }
 }
