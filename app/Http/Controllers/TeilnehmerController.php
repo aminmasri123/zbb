@@ -57,6 +57,8 @@ use PhpOffice\PhpSpreadsheet\Shared\Date;
 
 class TeilnehmerController extends Controller
 {
+    private const PORTAL_USERS_REQUIRED_MODULE_KEY = 'aa1d5sfjktq9e-wruiov';
+
     public function __construct(
         private readonly ActiveProjectContext $activeProjectContext,
         private readonly ParticipantOverviewService $participantOverviewService,
@@ -232,6 +234,13 @@ class TeilnehmerController extends Controller
         $user = $request->user();
         $project = $this->activeProjectContext->currentAvailableFor($user);
         abort_unless($project, 409, 'Bitte wählen Sie zuerst ein aktives Projekt aus.');
+        $projectTypeModule = $project->loadMissing('projectType.module')->projectType?->module?->key;
+
+        abort_unless(
+            $projectTypeModule === self::PORTAL_USERS_REQUIRED_MODULE_KEY,
+            404,
+            'Diese Ansicht ist für das aktive Projekt nicht freigeschaltet.'
+        );
 
         $participantIds = Personen::query()
             ->teilnehmer()

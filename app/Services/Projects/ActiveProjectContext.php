@@ -44,6 +44,7 @@ class ActiveProjectContext
             'id' => $project->id,
             'name' => $project->name,
             'klassenbuch_aktiv' => (bool) ($project->klassenbuch_aktiv ?? false),
+            'module_key' => $project->loadMissing('projectType.module')->projectType?->module?->key,
             'features' => $project->featureSettings(),
             'rules' => $project->ruleSettings(),
             'portal_features' => $project->portalFeatureSettings(),
