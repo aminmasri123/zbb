@@ -176,6 +176,7 @@ Route::middleware(['module:participant_portal', 'auth', 'participantPortalUser']
     Route::post('/portal/kurse/quiz/{quiz}/versuch', [PortalCourseQuizController::class, 'submit'])->name('participant-portal.learning.quizzes.submit')->middleware('participantPortalFeature:learning');
     Route::get('/portal/kurse/quiz', [PortalCourseQuizController::class, 'index'])->name('participant-portal.learning.quizzes.index')->middleware('participantPortalFeature:learning');
     Route::get('/portal/meine-daten', [PortalSelfServiceController::class, 'index'])->name('participant-portal.self-service.index')->middleware('participantPortalFeature:attendance_self_service,tasks_and_appointments');
+    Route::get('/portal/aufgaben', [PortalSelfServiceController::class, 'tasks'])->name('participant-portal.tasks.index')->middleware('participantPortalFeature:tasks_and_appointments');
     Route::post('/portal/anwesenheit/{attendance}/korrektur', [PortalSelfServiceController::class, 'requestCorrection'])->name('participant-portal.attendance.corrections.store')->middleware('participantPortalFeature:attendance_self_service');
     Route::get('/portal/dokumente', [PortalDocumentController::class, 'index'])->name('participant-portal.documents.index')->middleware('participantPortalFeature:profile');
     Route::post('/portal/dokumente', [PortalDocumentController::class, 'store'])->name('participant-portal.documents.store')->middleware('participantPortalFeature:profile');

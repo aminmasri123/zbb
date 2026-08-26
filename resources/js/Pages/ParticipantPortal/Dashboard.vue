@@ -6,7 +6,8 @@ const enabled=(key)=>props.participations.some((item)=>item.portal_features?.[ke
 const cards=computed(()=>[
  {title:'Jobs & Bewerbungen',text:'Stellen finden, merken und Bewerbungen verfolgen.',route:'participant-portal.jobs.index',tone:'from-cyan-500 to-blue-600',icon:'↗',show:enabled('job_search')||enabled('application_management')},
  {title:'Kurse & Lernen',text:'Lektionen, Aufgaben, Quiz und Lernfortschritt.',route:'participant-portal.learning.index',tone:'from-violet-500 to-indigo-600',icon:'◇',show:enabled('learning')},
- {title:'Anwesenheit & Aufgaben',text:'Eigene Zeiten, Saldo, Termine und Korrekturanfragen.',route:'participant-portal.self-service.index',tone:'from-emerald-500 to-teal-600',icon:'✓',show:enabled('attendance_self_service')||enabled('tasks_and_appointments')},
+ {title:enabled('attendance_self_service')?'Anwesenheit & Termine':'Termine',text:'Eigene Zeiten, Saldo, Termine und Korrekturanfragen.',route:'participant-portal.self-service.index',tone:'from-emerald-500 to-teal-600',icon:'✓',show:enabled('attendance_self_service')||enabled('tasks_and_appointments')},
+ {title:'Aufgaben',text:'Offene, laufende und erledigte Aufgaben im Blick.',route:'participant-portal.tasks.index',tone:'from-amber-400 to-orange-500',icon:'☑',show:enabled('tasks_and_appointments')},
  {title:'Dokumente',text:'Unterlagen sicher hochladen und verwalten.',route:'participant-portal.documents.index',tone:'from-orange-400 to-rose-500',icon:'▤',show:enabled('profile')},
  {title:'Lebenslauf',text:'Berufliches Profil strukturiert vervollständigen.',route:'participant-portal.resume.index',tone:'from-slate-600 to-slate-800',icon:'◎',show:enabled('profile')},
  {title:'Bewerbungsstudio',text:'Lebenslauf, Deckblatt und Anschreiben erstellen.',route:'participant-portal.career-studio.index',tone:'from-cyan-500 to-indigo-600',icon:'✦',show:enabled('application_management')},
