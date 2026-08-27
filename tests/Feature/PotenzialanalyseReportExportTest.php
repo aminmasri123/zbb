@@ -92,6 +92,7 @@ class PotenzialanalyseReportExportTest extends TestCase
 
         $this->assertStringStartsWith('%PDF-', $output);
         $this->assertGreaterThan(1000, strlen($output));
+        $this->assertSame(2, $pdf->getDomPDF()->getCanvas()->get_page_count());
     }
 
     public function test_group_export_merges_thirty_original_four_page_reports(): void

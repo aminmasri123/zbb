@@ -143,11 +143,15 @@
         }
 
         .competency-block .self-row td:not(.competency-name) {
-            height: 0.24cm;
-            padding-top: 1px;
-            padding-bottom: 1px;
-            font-size: 8.5pt;
-            line-height: 1;
+            height: 0.16cm;
+            padding-top: 0;
+            padding-bottom: 0;
+            font-size: 7.5pt;
+            line-height: 0.85;
+        }
+
+        .page-break-before {
+            page-break-before: always;
         }
 
         .center {
@@ -268,6 +272,7 @@
     </div>
 
     @if(($berichtConfig['uebungsergebnisse_anzeigen'] ?? true) && $uebungen->isNotEmpty())
+        <div class="page-break-before"></div>
         <table class="report-table">
             <thead>
                 <tr>
