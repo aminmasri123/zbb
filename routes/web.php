@@ -4,9 +4,9 @@ use App\Http\Controllers\AbschlusseController;
 use App\Http\Controllers\AbteilungController;
 use App\Http\Controllers\AccessManagementController;
 use App\Http\Controllers\AccountDeletionRequestController;
+use App\Http\Controllers\AdresseController;
 use App\Http\Controllers\AiReportController;
 use App\Http\Controllers\AiWorkspaceController;
-use App\Http\Controllers\AdresseController;
 use App\Http\Controllers\AnwesenheitController;
 use App\Http\Controllers\AppsController;
 use App\Http\Controllers\AttendanceCorrectionController;
@@ -40,6 +40,8 @@ use App\Http\Controllers\GruppeHasTeilnehmerController;
 use App\Http\Controllers\IntakeChecklistController;
 use App\Http\Controllers\InternshipAttendanceController;
 use App\Http\Controllers\InternshipController;
+use App\Http\Controllers\InternshipEmailController;
+use App\Http\Controllers\InternshipEmailTemplateController;
 use App\Http\Controllers\ItServiceController;
 use App\Http\Controllers\KlassenbuchController;
 use App\Http\Controllers\KontaktController;
@@ -100,6 +102,7 @@ use App\Http\Controllers\StandortController;
 use App\Http\Controllers\TeilnehmerController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\UserPermissionController;
+use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -257,7 +260,7 @@ Route::get('/system/session-status', function () {
         'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
     ]);
 })->middleware('auth')
-    ->withoutMiddleware(\App\Http\Middleware\HandleInertiaRequests::class)
+    ->withoutMiddleware(HandleInertiaRequests::class)
     ->name('system.session-status');
 
 Route::post('/system/session-activity', function () {
@@ -275,7 +278,7 @@ Route::post('/system/session-activity', function () {
         'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
     ]);
 })->middleware(['auth', 'throttle:20,1'])
-    ->withoutMiddleware(\App\Http\Middleware\HandleInertiaRequests::class)
+    ->withoutMiddleware(HandleInertiaRequests::class)
     ->name('system.session-activity');
 
 // Geschützte Routen
@@ -451,6 +454,9 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::post('/rolle/anlegen', [RolleController::class, 'store'])->name('rolle.store')->middleware('canAnyPermission:rolle.store,berechtigung.store,berechtigung.update');
     Route::get('/einstellung/module', [ModuleSettingsController::class, 'index'])->name('module-settings.index')->can('berechtigung.update');
     Route::put('/einstellung/module/{module}', [ModuleSettingsController::class, 'update'])->name('module-settings.update')->can('berechtigung.update');
+    Route::get('/einstellung/praktikums-e-mails', [InternshipEmailTemplateController::class, 'index'])->name('internship-email-templates.index')->can('berechtigung.update');
+    Route::post('/einstellung/praktikums-e-mails/{templateKey}', [InternshipEmailTemplateController::class, 'update'])->name('internship-email-templates.update')->can('berechtigung.update');
+    Route::get('/einstellung/praktikums-e-mails/anhang/{template}', [InternshipEmailTemplateController::class, 'download'])->name('internship-email-templates.attachment.download')->middleware('canAnyPermission:teilnehmer.update,berechtigung.update');
 
     // Benutzer
     Route::get('/benutzer', [UserController::class, 'index'])->name('user.index')->can('benutzer.index');
@@ -679,6 +685,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
         Route::post('/teilnehmer/praktikum/anlegen', [PersonenHasBildungsmassnahmenController::class, 'store'])->name('teilnehmer.praktikum.store')->can('teilnehmer.update')->middleware('projectFeature:internship_management');
         Route::put('/teilnehmer/praktikum/{measure}', [PersonenHasBildungsmassnahmenController::class, 'update'])->name('teilnehmer.praktikum.update')->can('teilnehmer.update')->middleware('projectFeature:internship_management');
         Route::delete('/teilnehmer/praktikum/{measure}', [PersonenHasBildungsmassnahmenController::class, 'destroy'])->name('teilnehmer.praktikum.destroy')->can('teilnehmer.update')->middleware('projectFeature:internship_management');
+        Route::post('/teilnehmer/praktikum/{measure}/e-mail-vorbereiten', [InternshipEmailController::class, 'prepare'])->name('teilnehmer.praktikum.email.prepare')->can('teilnehmer.update')->middleware('projectFeature:internship_management');
         Route::get('/teilnehmer/praktikum/{measure}/vertrag', [InternshipController::class, 'contract'])->name('teilnehmer.praktikum.contract')->can('teilnehmer.index')->middleware('projectFeature:internship_management');
         Route::get('/teilnehmer/praktikum/{measure}/bescheinigung', [InternshipController::class, 'certificate'])->name('teilnehmer.praktikum.certificate')->can('teilnehmer.index')->middleware('projectFeature:internship_management');
         Route::put('/teilnehmer/praktikum/{measure}/anwesenheitswoche', [InternshipAttendanceController::class, 'updateWeek'])->name('teilnehmer.praktikum.attendance.week')->can('teilnehmer.update')->middleware('projectFeature:internship_management');

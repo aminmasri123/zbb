@@ -12,6 +12,10 @@ class RoutePermissionMap
     private const OVERRIDES = [
         'dashboard' => 'dashboard.index',
         'dashboard.preferences.update' => 'dashboard.index',
+        'internship-email-templates.index' => 'berechtigung.update',
+        'internship-email-templates.update' => 'berechtigung.update',
+        'internship-email-templates.attachment.download' => ['teilnehmer.update', 'berechtigung.update'],
+        'teilnehmer.praktikum.email.prepare' => 'teilnehmer.update',
         'ai.reports.draft' => 'ai.report.use',
         'ai.reports.status' => 'ai.report.use',
         'program-feedback.index' => [],

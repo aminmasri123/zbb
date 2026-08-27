@@ -210,7 +210,7 @@ class EducationMeasureWorkflowTest extends TestCase
         ]);
     }
 
-    public function test_contract_and_completed_certificate_can_be_downloaded(): void
+    public function test_contract_is_internal_only_and_completed_certificate_can_be_downloaded(): void
     {
         [$user, $project, $participant, $location] = $this->context();
         $participant->update(['geburtsdatum' => '2001-02-03', 'geschlecht' => 'w']);
@@ -220,9 +220,10 @@ class EducationMeasureWorkflowTest extends TestCase
             'plz' => '66111',
             'stadt' => 'Saarbrücken',
         ]);
-        $measure = PersonenHasBildungsmassnahmen::query()->create([
+        $participationId = ProjektHasPersonen::query()->where('projekt_id', $project->id)->where('personen_id', $participant->id)->value('id');
+        $externalMeasure = PersonenHasBildungsmassnahmen::query()->create([
             'person_id' => $participant->id,
-            'projekt_person_id' => ProjektHasPersonen::query()->where('projekt_id', $project->id)->where('personen_id', $participant->id)->value('id'),
+            'projekt_person_id' => $participationId,
             'typ' => 'Praktikum',
             'placement_type' => 'external',
             'traeger' => 'Muster GmbH',
@@ -238,11 +239,28 @@ class EducationMeasureWorkflowTest extends TestCase
             'result' => 'Erfolgreich abgeschlossen',
             'status' => 'abgeschlossen',
         ]);
+        $internalMeasure = PersonenHasBildungsmassnahmen::query()->create([
+            'person_id' => $participant->id,
+            'projekt_person_id' => $participationId,
+            'typ' => 'Praktikum',
+            'placement_type' => 'internal',
+            'traeger' => $project->name,
+            'host_project_id' => $project->id,
+            'supervisor_person_id' => $user->person_id,
+            'host_address' => 'Projektstandort Saarbrücken',
+            'start' => '2026-09-01',
+            'end' => '2026-09-30',
+            'weekly_hours' => 35,
+            'status' => 'geplant',
+        ]);
 
-        $this->actingAs($user)->get(route('teilnehmer.praktikum.contract', $measure))
+        $this->actingAs($user)->get(route('teilnehmer.praktikum.contract', $internalMeasure))
             ->assertOk()
             ->assertDownload();
-        $this->actingAs($user)->get(route('teilnehmer.praktikum.certificate', $measure))
+        $this->actingAs($user)->get(route('teilnehmer.praktikum.contract', $externalMeasure))
+            ->assertStatus(422)
+            ->assertSee('Ein Praktikumsvertrag kann nur für ein internes Praktikum exportiert werden.');
+        $this->actingAs($user)->get(route('teilnehmer.praktikum.certificate', $externalMeasure))
             ->assertOk()
             ->assertDownload();
     }

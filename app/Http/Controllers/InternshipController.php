@@ -238,6 +238,7 @@ class InternshipController extends Controller
     public function contract(Request $request, PersonenHasBildungsmassnahmen $measure)
     {
         $measure = $this->authorizedMeasure($request, $measure);
+        abort_unless($measure->placement_type === 'internal', 422, 'Ein Praktikumsvertrag kann nur für ein internes Praktikum exportiert werden.');
         abort_if(mb_strlen((string) $measure->bemerkung) > 600, 422, 'Die weiterführende Vereinbarung ist für die Vertragsvorlage zu lang. Bitte kürzen Sie die Bemerkung auf höchstens 600 Zeichen.');
 
         $values = $this->documentValues($measure);

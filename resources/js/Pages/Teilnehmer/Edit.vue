@@ -992,7 +992,13 @@
                                     <p v-if="praktikum.result" class="mt-2 text-sm"><span class="font-semibold">Ergebnis:</span> {{ praktikum.result }}</p>
                                 </div>
                                 <div class="flex flex-wrap gap-2">
-                                    <a v-if="praktikum.typ === 'Praktikum'" :href="route('teilnehmer.praktikum.contract', praktikum.id)" class="rounded border bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:border-zbb hover:text-zbb">Vertrag exportieren</a>
+                                    <template v-if="praktikum.typ === 'Praktikum' && praktikum.placement_type !== 'internal' && praktikum.contact_email">
+                                        <button type="button" class="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100" @click="prepareInternshipEmail(praktikum, 'initial')">Erste E-Mail</button>
+                                        <button type="button" class="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 hover:bg-amber-100" @click="prepareInternshipEmail(praktikum, 'reminder_1')">1. Erinnerung</button>
+                                        <button type="button" class="rounded border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-medium text-orange-700 hover:bg-orange-100" @click="prepareInternshipEmail(praktikum, 'reminder_2')">2. Erinnerung</button>
+                                    </template>
+                                    <span v-else-if="praktikum.typ === 'Praktikum' && praktikum.placement_type !== 'internal'" class="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">E-Mail-Adresse fehlt</span>
+                                    <a v-if="praktikum.typ === 'Praktikum' && praktikum.placement_type === 'internal'" :href="route('teilnehmer.praktikum.contract', praktikum.id)" class="rounded border bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:border-zbb hover:text-zbb">Vertrag exportieren</a>
                                     <a v-if="praktikum.typ === 'Praktikum' && praktikum.status === 'abgeschlossen'" :href="route('teilnehmer.praktikum.certificate', praktikum.id)" class="rounded border bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:border-zbb hover:text-zbb">Bescheinigung exportieren</a>
                                     <button type="button" class="rounded border bg-white px-3 py-2 text-xs text-zbb" @click="praktikum.editing = !praktikum.editing">Bearbeiten</button>
                                     <button type="button" class="rounded border border-red-200 bg-white px-3 py-2 text-xs text-red-600" @click="archivePraktikum(praktikum)">Archivieren</button>
@@ -2094,6 +2100,44 @@
         @close="showModalPraktikumCreate = false"
         @added="praktikumAdded"
     />
+
+    <!-- ================= Outlook-E-Mail ================= -->
+    <Modal v-if="internshipEmailComposer" @close="internshipEmailComposer = null">
+        <template #header>{{ internshipEmailComposer.label }} an Praktikumsbetrieb</template>
+
+        <template #body>
+            <div class="space-y-4">
+                <div class="grid gap-3 rounded-lg border bg-gray-50 p-4 text-sm md:grid-cols-2">
+                    <div><span class="font-semibold text-gray-700">Gewünschter Absender:</span> {{ internshipEmailComposer.sender_name }} &lt;{{ internshipEmailComposer.sender_email }}&gt;</div>
+                    <div><span class="font-semibold text-gray-700">An:</span> {{ internshipEmailComposer.recipient }}</div>
+                </div>
+                <p class="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">Outlook verwendet das dort ausgewählte Absenderkonto. Falls mehrere Konten eingerichtet sind, prüfen Sie vor dem Absenden bitte das Feld „Von“.</p>
+
+                <label class="block text-sm font-medium text-gray-700">
+                    Betreff
+                    <input v-model="internshipEmailComposer.subject" maxlength="255" class="mt-1 w-full rounded border-gray-300 text-sm" />
+                </label>
+
+                <label class="block text-sm font-medium text-gray-700">
+                    Nachricht
+                    <textarea v-model="internshipEmailComposer.body" rows="13" maxlength="10000" class="mt-1 w-full rounded border-gray-300 text-sm"></textarea>
+                </label>
+
+                <div v-if="internshipEmailComposer.attachment" class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                    <p class="font-semibold">Anhang manuell in Outlook einfügen</p>
+                    <p class="mt-1">Browser dürfen Anhänge nicht automatisch an Outlook übergeben. Laden Sie die Datei herunter und ziehen Sie sie anschließend in die geöffnete Nachricht.</p>
+                    <a :href="internshipEmailComposer.attachment.download_url" class="mt-3 inline-flex rounded border border-amber-400 bg-white px-3 py-2 font-medium text-amber-900 underline">
+                        {{ internshipEmailComposer.attachment.name }} herunterladen
+                    </a>
+                </div>
+            </div>
+        </template>
+
+        <template #footer>
+            <button type="button" class="rounded bg-zbb px-4 py-2 text-white" @click="openInternshipEmailInOutlook">In Outlook öffnen</button>
+            <button type="button" class="rounded border px-4 py-2" @click="internshipEmailComposer = null">Abbrechen</button>
+        </template>
+    </Modal>
 
 
 
@@ -3619,6 +3663,7 @@ const toggleLuv = (id) => {
 
 // ====================== Praktikum ======================
 const showModalPraktikumCreate = ref(false);
+const internshipEmailComposer = ref(null);
 
 const supervisorsForProject = (projectId) => (props.internshipHostProjects || [])
     .find((project) => project.id === projectId)?.mitarbeiter || [];
@@ -3639,6 +3684,24 @@ const praktikumAdded = (daten) => {
         teilnehmer.value.praktika = [];
     }
     teilnehmer.value.praktika.push(daten);  // ← "value" hinzufügen
+};
+
+const prepareInternshipEmail = async (praktikum, templateKey) => {
+    try {
+        const response = await axios.post(route('teilnehmer.praktikum.email.prepare', praktikum.id), {
+            template_key: templateKey,
+        });
+        internshipEmailComposer.value = response.data;
+    } catch (error) {
+        Swal.fire('E-Mail nicht möglich', error.response?.data?.message || 'Die E-Mail konnte nicht vorbereitet werden.', 'error');
+    }
+};
+
+const openInternshipEmailInOutlook = () => {
+    if (!internshipEmailComposer.value) return;
+    const email = internshipEmailComposer.value;
+    const mailto = `mailto:${encodeURIComponent(email.recipient)}?subject=${encodeURIComponent(email.subject)}&body=${encodeURIComponent(email.body)}`;
+    window.location.href = mailto;
 };
 
 const savePraktikum = async (praktikum) => {

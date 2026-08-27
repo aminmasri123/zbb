@@ -57,6 +57,11 @@
                             Module
                         </Link>
                     </li>
+                    <li v-if="can('berechtigung.update') || $page.component.startsWith('Einstellung/InternshipEmailTemplates')">
+                        <Link class="text-gray-400 hover:text-white transition duration-200" :href="route('internship-email-templates.index')">
+                            Praktikums-E-Mails
+                        </Link>
+                    </li>
                 </ul>
             </li>
 
