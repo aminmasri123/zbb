@@ -56,6 +56,8 @@ class BopPaAttendanceLayoutTest extends TestCase
         $this->assertStringContainsString('drawPdfSignature(doc, signature', $component);
         $this->assertStringContainsString('Unterschriftenliste zum Nachweis der Potenzialanalyse - PA/ Ausbilder/-innen', $component);
         $this->assertStringContainsString("headerPageY: (isPreparationPa.value ? 7 : 15) * widthScale", $component);
+        $this->assertStringContainsString('const preparationPageMargin = 15 * widthScale', $component);
+        $this->assertStringContainsString("headerX: (isPreparationPa.value ? 15 : 20) * widthScale", $component);
         $this->assertStringContainsString("doc.text('Zeitraum:', layout.headerPeriodX, layout.headerTitleY)", $component);
         $this->assertStringContainsString('const tableWidth = 201.6 * layout.widthScale', $component);
     }

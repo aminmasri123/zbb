@@ -1042,7 +1042,39 @@ const reloadScope = async () => {
 }
 
 const handleWordExport = async () => {
-  if (isPreparationPa.value) return
+  if (isPreparationPa.value) {
+    if (!selectedDays.value.length || (form.exportMode === 'klasse' && !form.klasse)) {
+      PaSwal.fire('Angaben fehlen', 'Bitte den Vorbereitungstermin und die Klasse prüfen.', 'warning')
+      return
+    }
+
+    exportingWord.value = true
+
+    try {
+      await flushDraftSave()
+      const response = await axios.post(route('anwesenheitsliste.PA.preparation.export.word'), {
+        ...draftScopePayload(),
+        exportFormat: form.exportFormat,
+      }, { responseType: 'blob' })
+      const disposition = response.headers['content-disposition'] || ''
+      const match = disposition.match(/filename="?([^";]+)"?/)
+      const filename = match?.[1] || `Anwesenheitsliste_Vorbereitung_PA_${form.klasse || 'alle'}.docx`
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      PaSwal.fire('Fehler', await readBlobError(error), 'error')
+    } finally {
+      exportingWord.value = false
+    }
+
+    return
+  }
 
   if (classScheduleOverview.value) {
     PaSwal.fire(
@@ -1171,14 +1203,17 @@ const pdfLayout = (doc) => {
   const pageHeight = doc.internal.pageSize.getHeight()
   const widthScale = pageWidth / 297
   const rowScale = form.exportFormat === 'A3' ? widthScale : 1
-  const tableWidth = (isPreparationPa.value ? 283 : 244.8) * widthScale
+  const preparationPageMargin = 15 * widthScale
+  const tableWidth = isPreparationPa.value
+    ? pageWidth - (2 * preparationPageMargin)
+    : 244.8 * widthScale
 
   return {
     pageWidth,
     pageHeight,
     widthScale,
     rowScale,
-    tableX: (pageWidth - tableWidth) / 2,
+    tableX: isPreparationPa.value ? preparationPageMargin : (pageWidth - tableWidth) / 2,
     tableY: (isPreparationPa.value ? 48 : 62) * widthScale,
     tableWidth,
     headHeight: (isPreparationPa.value ? 13.8 : 18) * rowScale,
@@ -1187,7 +1222,7 @@ const pdfLayout = (doc) => {
     firstParticipantPageRows: isPreparationPa.value ? 17 : 13,
     secondParticipantPageRows: isPreparationPa.value ? 17 : 21,
     secondPageTableY: 25 * widthScale,
-    headerX: (isPreparationPa.value ? 7 : 20) * widthScale,
+    headerX: (isPreparationPa.value ? 15 : 20) * widthScale,
     headerPageY: (isPreparationPa.value ? 7 : 15) * widthScale,
     headerTitleY: (isPreparationPa.value ? 14 : 28) * widthScale,
     headerFirstRowY: (isPreparationPa.value ? 22 : 36) * widthScale,
@@ -1222,17 +1257,14 @@ const pdfColumns = (layout) => {
   }
 
   const staticColumns = [
-    { key: 'nr', label: 'Nr.', width: 8 },
-    { key: 'nachname', label: 'Name', width: 34 },
-    { key: 'vorname', label: 'Vorname', width: 31 },
-    { key: 'klasse', label: 'Klasse', width: 17 },
+    { key: 'nr', label: 'Nr.', width: 8 * layout.widthScale },
+    { key: 'nachname', label: 'Name', width: 34 * layout.widthScale },
+    { key: 'vorname', label: 'Vorname', width: 31 * layout.widthScale },
+    { key: 'klasse', label: 'Klasse', width: 17 * layout.widthScale },
   ]
   const staticWidth = staticColumns.reduce((sum, column) => sum + column.width, 0)
   const dayCount = Math.max(selectedDays.value.length, 1)
-  const preparationSignatureWidth = form.exportFormat === 'A3' ? 75 : 60
-  const dayWidth = isPreparationPa.value
-    ? preparationSignatureWidth
-    : Math.max(18, (layout.tableWidth - staticWidth) / dayCount)
+  const dayWidth = Math.max(18 * layout.widthScale, (layout.tableWidth - staticWidth) / dayCount)
 
   return [
     ...staticColumns,
@@ -1885,7 +1917,6 @@ onBeforeUnmount(() => {
 
             <div class="flex flex-wrap gap-2">
               <button
-                v-if="!isPreparationPa"
                 type="button"
                 class="inline-flex items-center gap-2 rounded border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                 :disabled="exportingWord"

@@ -753,6 +753,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::put('/organisation/partner/edit/{id}', [PartnerController::class, 'update'])->name('partner.update');
     Route::get('/organisation/partner/ajax/fresh', [PartnerController::class, 'indexAjaxFresh'])->name('partner.indexAjaxFresh');
     Route::post('/organisation/partner/{partner}/bop-usb-stick-brief', [PartnerController::class, 'exportBopUsbStickLetter'])->name('partner.bop-usb-stick-letter.export');
+    Route::get('/organisation/partner/{partner}/bop-namensschilder', [BopGruppeExportController::class, 'partnerNamensschilder'])->name('partner.bop.export.namensschilder')->can('gruppe.bop.export.namensschilder');
     Route::get('/organisation/partner/{partner}/dokumente/{dokument}/export', [ExportWordController::class, 'partnerDokument'])->name('partner.document.export');
 
     // Kostenstelle
@@ -945,6 +946,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::delete('export-anwesenheitsliste/pa/draft', [ProjektBopController::class, 'anwesenheitslistePADraftDestroy'])->name('anwesenheitsliste.PA.digital.draft.destroy');
     Route::post('export-anwesenheitsliste/pa/archive-folder', [ProjektBopController::class, 'anwesenheitslistePAArchiveFolder'])->name('anwesenheitsliste.PA.digital.archive.folder');
     Route::post('export-anwesenheitsliste/pa/pdf-folder', [ProjektBopController::class, 'anwesenheitslistePASignedPdfStore'])->name('anwesenheitsliste.PA.digital.pdf.store');
+    Route::post('export-anwesenheitsliste/pa/vorbereitung/word', [ProjektBopController::class, 'anwesenheitslistePAPreparationExportWord'])->name('anwesenheitsliste.PA.preparation.export.word');
     Route::post('export-anwesenheitsliste/pa', [ProjektBopController::class, 'anwesenheitslistePAexportWord'])->name('anwesenheitsliste.PA.export.word');
     Route::get('/export-anwesenheitsliste-pobo/tag1/{partnerID}/{schuljahr}/{teil}/{klasse?}', [ProjektBopController::class, 'anwesenheitslistePOBOTag1'])->name('anwesenheitsliste.BoTag1.export');
     Route::get('/export/hausordnung/{partnerId}/{schuljahr}/{teil}/{sortBy}/{termin}', [ProjektBopController::class, 'hausordnungExportPdf'])->name('hausordnung.export.schule.pdf');

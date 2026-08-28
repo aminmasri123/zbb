@@ -18,6 +18,7 @@ use App\Models\PersonenIstSchueler;
 use App\Models\Projekt;
 use App\Services\Bop\AttendanceFooterService;
 use App\Services\Bop\PaAttendanceSignatureHistoryService;
+use App\Services\Bop\PaPreparationAttendanceWordExportService;
 use App\Services\Bop\PublicAreaSelectionAccess;
 use App\Services\Bop\RolandEvaluationPdfService;
 use App\Services\MyDatum;
@@ -70,6 +71,7 @@ class ProjektBopController extends Controller
         private readonly PublicAreaSelectionAccess $publicAreaSelection,
         private readonly AttendanceFooterService $attendanceFooter,
         private readonly PaAttendanceSignatureHistoryService $paSignatureHistory,
+        private readonly PaPreparationAttendanceWordExportService $paPreparationWordExport,
         private readonly ActiveProjectContext $activeProjectContext,
         private readonly RolandEvaluationPdfService $rolandEvaluationPdf,
     ) {
@@ -1663,6 +1665,72 @@ class ProjektBopController extends Controller
             'updated_at' => $draft?->updated_at?->toIso8601String(),
             'expires_at' => $draft?->expires_at?->toIso8601String() ?? $expiresAt->toIso8601String(),
         ]);
+    }
+
+    public function anwesenheitslistePAPreparationExportWord(Request $request)
+    {
+        $this->ensureMemoryLimit(512 * 1024 * 1024);
+        $scope = $this->paDraftScope($request);
+        abort_unless($scope['list_type'] === 'pa_preparation', 422, 'Dieser Export ist nur für die Vorbereitung PA verfügbar.');
+
+        $validated = $request->validate([
+            'exportFormat' => ['nullable', 'in:A4,A3'],
+        ]);
+        $draft = PaAttendanceListDraft::where('draft_hash', $scope['draft_hash'])->first();
+        $legacyDraft = $this->legacyPaDraft($scope);
+        $sourceDraft = $draft ?: $legacyDraft;
+        abort_unless($sourceDraft, 422, 'Bitte speichern Sie zuerst den Entwurf der Anwesenheitsliste.');
+
+        $payload = $this->decryptPaDraftPayloadSignatures($sourceDraft->payload ?? []);
+        if ($draft && $legacyDraft) {
+            $payload = $this->restoreLegacySignatures(
+                $payload,
+                $this->decryptPaDraftPayloadSignatures($legacyDraft->payload ?? [])
+            );
+        }
+
+        $day = collect($payload['days'] ?? [])
+            ->first(fn ($item) => is_array($item)
+                && ($item['selected'] ?? true)
+                && ($item['type'] ?? 'preparation') === 'preparation'
+                && !empty($item['date']));
+        abort_unless($day, 422, 'Bitte übernehmen Sie zuerst den Termin Vorbereitung PA.');
+
+        $participants = $this->paTeilnehmer(
+            $scope['partner_id'],
+            $scope['schuljahr'],
+            $scope['teil'],
+            $scope['export_mode'],
+            $scope['klasse'],
+            $scope['list_type']
+        );
+        abort_if($participants->isEmpty(), 422, 'Die Schule hat keine Teilnehmer für diese Auswahl.');
+
+        $school = Partner::findOrFail($scope['partner_id']);
+        $exportFormat = $validated['exportFormat'] ?? ($payload['form']['exportFormat'] ?? 'A4');
+        $classPart = $scope['export_mode'] === 'klasse' && $scope['klasse']
+            ? '_Klasse_' . $scope['klasse']
+            : '';
+        $filename = $this->bibbSafeName(
+            'Anwesenheitsliste_Vorbereitung_PA_' . $school->name . '_' . $scope['schuljahr']
+            . '_Teil_' . $scope['teil'] . $classPart
+        ) . '.docx';
+        $path = storage_path('exports/' . Str::uuid() . '_' . $filename);
+
+        $this->paPreparationWordExport->create(
+            $school,
+            $participants,
+            $day,
+            is_array($payload['signatures'] ?? null) ? $payload['signatures'] : [],
+            $scope['schuljahr'],
+            $scope['teil'],
+            $scope['export_mode'],
+            $scope['klasse'],
+            $exportFormat,
+            $path
+        );
+
+        return response()->download($path, $filename)->deleteFileAfterSend(true);
     }
 
     private function availablePaSignedPdfPath(string $folder, string $filename): array

@@ -5,9 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\Gruppe;
 use App\Models\Partner;
 use App\Models\Personen;
+use App\Models\PersonenIstSchueler;
 use App\Services\Bop\AttendanceFooterService;
+use App\Services\Projects\ActiveProjectContext;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\IOFactory as SpreadsheetIOFactory;
@@ -18,8 +22,10 @@ use ZipArchive;
 
 class BopGruppeExportController extends Controller
 {
-    public function __construct(private readonly AttendanceFooterService $attendanceFooter)
-    {
+    public function __construct(
+        private readonly AttendanceFooterService $attendanceFooter,
+        private readonly ActiveProjectContext $activeProjectContext,
+    ) {
     }
 
     public function namensschilder(Gruppe $gruppe)
@@ -31,25 +37,54 @@ class BopGruppeExportController extends Controller
             return back()->with('error', 'Die Gruppe verfuegt derzeit ueber keine Teilnehmer.');
         }
 
-        $phpWord = new PhpWord();
-        $section = $phpWord->addSection();
+        $filename = $this->safeFileName('Namensschilder_Gruppe_' . ($gruppe->bereich?->name ?? $gruppe->id)) . '.docx';
 
-        foreach ($teilnehmer as $index => $item) {
-            if ($index > 0) {
-                $section->addPageBreak();
-            }
+        return $this->namensschilderDownload($teilnehmer->pluck('voller_name'), $filename);
+    }
 
-            $section->addTextBreak(8);
-            $section->addText('-----------------------', ['size' => 40], ['alignment' => 'center']);
-            $section->addText($item['voller_name'], ['size' => 48], ['alignment' => 'center']);
-            $section->addText('-----------------------', ['size' => 40], ['alignment' => 'center']);
+    public function partnerNamensschilder(Request $request, Partner $partner)
+    {
+        $validated = $request->validate([
+            'schuljahr' => ['required', 'string'],
+            'teil' => ['required', 'string'],
+        ]);
+        $project = $this->activeProjectContext->currentAvailableFor($request->user());
+        abort_unless($project && str_contains(mb_strtoupper((string) $project->name), 'BOP'), 404, 'Diese Funktion ist nur im Projekt BOP verfügbar.');
+        abort_unless(
+            DB::table('projekt_has_partners')
+                ->where('projekt_id', $project->id)
+                ->where('partner_id', $partner->id)
+                ->exists(),
+            404
+        );
+
+        $names = PersonenIstSchueler::query()
+            ->filterSchueler($partner->id, $validated['schuljahr'], $validated['teil'])
+            ->with('person')
+            ->get()
+            ->unique('person_id')
+            ->sort(function ($a, $b) {
+                $lastName = strnatcasecmp((string) ($a->person?->nachname ?? ''), (string) ($b->person?->nachname ?? ''));
+
+                return $lastName !== 0
+                    ? $lastName
+                    : strnatcasecmp((string) ($a->person?->vorname ?? ''), (string) ($b->person?->vorname ?? ''));
+            })
+            ->map(fn (PersonenIstSchueler $student) => trim(
+                (string) ($student->person?->vorname ?? '') . ' ' . (string) ($student->person?->nachname ?? '')
+            ))
+            ->filter()
+            ->values();
+
+        if ($names->isEmpty()) {
+            return back()->with('error', 'Die Schule verfügt für diese Auswahl derzeit über keine Teilnehmer.');
         }
 
-        $filename = $this->safeFileName('Namensschilder_Gruppe_' . ($gruppe->bereich?->name ?? $gruppe->id)) . '.docx';
-        $path = $this->tmpPath($filename);
-        $phpWord->save($path);
+        $filename = $this->safeFileName(
+            'Namensschilder_' . $partner->name . '_' . $validated['schuljahr'] . '_Teil_' . $validated['teil']
+        ) . '.docx';
 
-        return response()->download($path, $filename)->deleteFileAfterSend(true);
+        return $this->namensschilderDownload($names, $filename);
     }
 
     public function hausordnung(Gruppe $gruppe)
@@ -255,6 +290,31 @@ class BopGruppeExportController extends Controller
         File::deleteDirectory($tmpDir);
 
         return response()->download($outputPath, $filename)->deleteFileAfterSend(true);
+    }
+
+    private function namensschilderDownload(Collection $names, string $filename)
+    {
+        $phpWord = new PhpWord();
+        $section = $phpWord->addSection([
+            'pageSizeW' => 11906,
+            'pageSizeH' => 16838,
+        ]);
+
+        foreach ($names->values() as $index => $name) {
+            if ($index > 0) {
+                $section->addPageBreak();
+            }
+
+            $section->addTextBreak(8);
+            $section->addText('-----------------------', ['size' => 40], ['alignment' => 'center']);
+            $section->addText((string) $name, ['size' => 48], ['alignment' => 'center']);
+            $section->addText('-----------------------', ['size' => 40], ['alignment' => 'center']);
+        }
+
+        $path = $this->tmpPath($filename);
+        $phpWord->save($path);
+
+        return response()->download($path, $filename)->deleteFileAfterSend(true);
     }
 
     private function mergeDocxFiles(array $documentPaths, string $outputPath): void

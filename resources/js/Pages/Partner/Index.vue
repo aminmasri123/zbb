@@ -686,6 +686,14 @@ const updatePartnerAPI = async (form) => {
                                                             Anwesenheitsliste Vorbereitung PA
                                                          </button>
 
+                                                        <a
+                                                            v-if="isBopProject && can('gruppe.bop.export.namensschilder')"
+                                                            :href="route('partner.bop.export.namensschilder', { partner: partner.id, schuljahr: jahr, teil })"
+                                                            class="block px-4 py-1 hover:bg-gray-200"
+                                                        >
+                                                            Namensschilder
+                                                        </a>
+
                                                         <!-- 🔽 Anwesenheitsliste BO Bibb -->
                                                         <a v-if="can('anwesenheit.abrechnung')" @click.prevent="openModal('anwesenheitslisteBoTagbibb', { jahr, teil, partnerId: partner.id })" class="block px-4 py-1 hover:bg-gray-200"> Anwesenheitsliste BO Bibb</a>
                                                         <a
