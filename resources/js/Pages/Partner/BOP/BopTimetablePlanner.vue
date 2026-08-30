@@ -13,6 +13,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'saved'])
 const loading = ref(false)
 const busy = ref(false)
+const exportBusy = ref(false)
 const error = ref('')
 const success = ref('')
 const options = ref({ areas: [], supervisors: [] })
@@ -21,6 +22,7 @@ const timetables = ref([])
 const breakDefaults = ref([])
 const preview = ref(null)
 const selectedArea = ref(null)
+const timelineExportRef = ref(null)
 const form = ref(emptyForm())
 
 function emptyForm() {
@@ -390,6 +392,97 @@ function entryTooltip(entry) {
   const action = entry.type === 'area' ? ' · Zum Tauschen anklicken' : ''
   return `${String(entry.start_time).slice(0, 5)}–${String(entry.end_time).slice(0, 5)} · ${entry.title} · ${typeLabel(entry.type)}${supervisor}${action}`
 }
+
+function exportFileName(extension) {
+  const school = String(props.schoolName || 'Schule').replace(/[^a-zA-Z0-9äöüÄÖÜß_-]+/g, '_')
+  const date = dateValue(form.value.schedule_date) || 'Zeitplan'
+  return `Zeitplan_${school}_${date}.${extension}`
+}
+
+function csvCell(value) {
+  let text = String(value ?? '')
+  if (/^[=+@-]/.test(text)) text = `'${text}`
+  return `"${text.replaceAll('"', '""')}"`
+}
+
+function exportCsv() {
+  if (!preview.value) return
+  const lines = [['Gruppe', 'Von', 'Bis', 'Aktivität', 'Art', 'Dauer (Minuten)', 'Anleiter']]
+  rows().forEach((row) => {
+    row.entries.forEach((entry) => {
+      lines.push([
+        row.group,
+        String(entry.start_time).slice(0, 5),
+        String(entry.end_time).slice(0, 5),
+        entry.title,
+        typeLabel(entry.type),
+        entryDuration(entry),
+        entry.meta?.supervisor_name || '',
+      ])
+    })
+  })
+  const csv = `\uFEFF${lines.map((line) => line.map(csvCell).join(';')).join('\r\n')}`
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = exportFileName('csv')
+  link.click()
+  URL.revokeObjectURL(url)
+  success.value = 'Der Zeitplan wurde als Excel-kompatible CSV-Datei exportiert.'
+}
+
+async function exportPdf() {
+  if (!timelineExportRef.value || exportBusy.value) return
+  exportBusy.value = true
+  error.value = ''
+  const scrollContainer = timelineExportRef.value.parentElement
+  const previousScrollLeft = scrollContainer?.scrollLeft || 0
+  try {
+    const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+      import('html2canvas'),
+      import('jspdf'),
+    ])
+    const element = timelineExportRef.value
+    if (scrollContainer) scrollContainer.scrollLeft = 0
+    const canvas = await html2canvas(element, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      width: element.scrollWidth,
+      height: element.scrollHeight,
+      windowWidth: element.scrollWidth,
+      logging: false,
+    })
+    const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' })
+    const margin = 8
+    const headerHeight = 16
+    const pageWidth = pdf.internal.pageSize.getWidth()
+    const pageHeight = pdf.internal.pageSize.getHeight()
+    const imageWidth = pageWidth - (margin * 2)
+    const pixelsPerMm = canvas.width / imageWidth
+    const availableHeight = pageHeight - margin - headerHeight
+    const sourceSliceHeight = Math.max(1, Math.floor(availableHeight * pixelsPerMm))
+
+    for (let sourceY = 0, page = 0; sourceY < canvas.height; sourceY += sourceSliceHeight, page++) {
+      if (page > 0) pdf.addPage('a3', 'landscape')
+      pdf.setFontSize(13)
+      pdf.text(`Zeitplan · ${props.schoolName || ''} · ${dateLabel(form.value.schedule_date)}`, margin, margin + 4)
+      const sliceHeight = Math.min(sourceSliceHeight, canvas.height - sourceY)
+      const slice = document.createElement('canvas')
+      slice.width = canvas.width
+      slice.height = sliceHeight
+      slice.getContext('2d').drawImage(canvas, 0, sourceY, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight)
+      pdf.addImage(slice.toDataURL('image/png'), 'PNG', margin, headerHeight, imageWidth, sliceHeight / pixelsPerMm)
+    }
+
+    pdf.save(exportFileName('pdf'))
+    success.value = 'Der Zeitplan wurde als PDF exportiert.'
+  } catch (exception) {
+    error.value = 'Der PDF-Export konnte nicht erstellt werden.'
+  } finally {
+    if (scrollContainer) scrollContainer.scrollLeft = previousScrollLeft
+    exportBusy.value = false
+  }
+}
 </script>
 
 <template>
@@ -448,13 +541,13 @@ function entryTooltip(entry) {
 
         <section v-if="preview" class="overflow-hidden rounded-lg border bg-white">
           <div class="border-b bg-gray-50 px-4 py-3">
-            <h3 class="font-bold">Zeitplan · {{ dateLabel(form.schedule_date) }}</h3>
+            <div class="flex flex-wrap items-center justify-between gap-2"><h3 class="font-bold">Zeitplan · {{ dateLabel(form.schedule_date) }}</h3><div class="flex gap-2"><button type="button" class="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-800 disabled:opacity-50" :disabled="exportBusy" @click="exportCsv">Excel/CSV</button><button type="button" class="rounded bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50" :disabled="exportBusy" @click="exportPdf">{{ exportBusy ? 'PDF wird erstellt …' : 'PDF exportieren' }}</button></div></div>
             <p class="text-xs font-semibold text-orange-700">Bereichsdauer: <template v-if="preview.config?.actual_area_duration_min_minutes !== preview.config?.actual_area_duration_max_minutes">{{ preview.config?.actual_area_duration_min_minutes }}–{{ preview.config?.actual_area_duration_max_minutes }} Minuten</template><template v-else>{{ preview.config?.actual_area_duration_min_minutes || preview.config?.calculated_area_duration_minutes || preview.config?.areas?.[0]?.duration_minutes || '–' }} Minuten</template></p>
             <div class="mt-2 flex flex-wrap items-center gap-2 rounded border border-cyan-200 bg-cyan-50 px-2.5 py-2 text-xs text-cyan-900"><span v-if="selectedArea" class="font-semibold">{{ selectedArea.title }} in {{ selectedArea.group }} ausgewählt – jetzt den Tauschbereich anklicken.</span><span v-else>Bereiche tauschen: zuerst den ersten, danach den zweiten Bereich derselben Gruppe anklicken.</span><button v-if="Object.keys(form.area_orders || {}).length" type="button" class="ml-auto rounded border border-cyan-300 bg-white px-2 py-1 font-semibold" :disabled="busy" @click="resetAreaOrders">Automatische Reihenfolge wiederherstellen</button></div>
             <div class="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-gray-600"><span class="font-semibold">Horizontal scrollen für den ganzen Tag</span><span class="inline-flex items-center gap-1"><i class="h-3 w-3 rounded-sm border border-orange-500 bg-orange-100"></i>Bereich</span><span class="inline-flex items-center gap-1"><i class="h-3 w-3 rounded-sm border border-slate-500 bg-slate-200"></i>Pause</span><span class="inline-flex items-center gap-1"><i class="h-3 w-3 rounded-sm border border-blue-500 bg-blue-100"></i>Gemeinsam</span><span class="inline-flex items-center gap-1"><i class="h-3 w-3 rounded-sm border border-violet-500 bg-violet-100"></i>Zusatz</span></div>
           </div>
           <div class="overflow-x-auto bg-white">
-            <div class="min-w-max" :style="{ width: `${timelineWidth() + timelineGroupWidth}px` }">
+            <div ref="timelineExportRef" class="min-w-max" :style="{ width: `${timelineWidth() + timelineGroupWidth}px` }">
               <div class="flex h-9 border-b border-gray-400 bg-amber-400 text-[11px] font-bold text-gray-950">
                 <div class="sticky left-0 z-30 flex w-[72px] shrink-0 items-center justify-center border-r border-gray-500 bg-amber-400">Gruppe</div>
                 <div class="relative h-full shrink-0" :style="{ width: `${timelineWidth()}px` }">
