@@ -212,6 +212,39 @@ class BopRunWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_partner_page_can_create_a_timetable_without_an_existing_bop_run(): void
+    {
+        $user = User::factory()->create();
+        $project = Projekt::factory()->create(['name' => 'BOP']);
+        $partner = Partner::query()->create(['name' => 'Neue Planschule']);
+        $user->projekte()->attach($project->id);
+        $user->update(['current_team_id' => $project->id]);
+        $project->partners()->attach($partner->id);
+        $this->givePermission($user, 'einteilung.planning');
+
+        $it = Bereich::query()->create(['name' => 'IT']);
+        $project->bereiche()->attach($it->id, ['aktiv' => true]);
+        $payload = [
+            'schuljahr' => '2026/2027', 'teil' => 'Teil 1',
+            'schedule_date' => '2026-11-03', 'start_time' => '09:00', 'end_time' => '11:00',
+            'slot_minutes' => 15, 'groups' => ['G1'],
+            'areas' => [['bereich_id' => $it->id, 'duration_minutes' => 60]],
+            'events' => [],
+        ];
+
+        $this->actingAs($user)->postJson(route('bop.run.timetable.generate', ['partner' => $partner]), [
+            ...$payload, 'persist' => false,
+        ])->assertOk()->assertJsonPath('persisted', false);
+        $this->assertDatabaseCount('bop_runs', 0);
+
+        $this->actingAs($user)->postJson(route('bop.run.timetable.generate', ['partner' => $partner]), [
+            ...$payload, 'persist' => true,
+        ])->assertOk()->assertJsonPath('persisted', true);
+        $this->assertDatabaseHas('bop_runs', ['partner_id' => $partner->id, 'teil' => 'Teil 1']);
+        $this->assertDatabaseHas('bop_phase_schedules', ['phase_type' => 'workshop_days']);
+        $this->assertDatabaseHas('bop_timetables', ['schedule_date' => '2026-11-03']);
+    }
+
     public function test_historical_school_year_without_plan_suggests_imported_classes_parts_and_counts(): void
     {
         $user = User::factory()->create();

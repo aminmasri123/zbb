@@ -389,14 +389,7 @@ class BopRunController extends Controller
             ->forSchuljahr($context['schuljahr'])
             ->whereIn('teil', [$context['teil'], '_all'])
             ->orderByRaw('CASE WHEN teil = ? THEN 0 ELSE 1 END', [$context['teil']])
-            ->firstOrFail();
-        $phase = $run->phases()->where('phase_type', 'workshop_days')->firstOrFail();
-
-        if (! in_array($context['schedule_date'], $phase->dates ?? [], true)) {
-            throw ValidationException::withMessages([
-                'schedule_date' => 'Der ausgewählte Tag gehört nicht zu den gespeicherten Werkstatttagen.',
-            ]);
-        }
+            ->first();
 
         $areaLookup = $project->bereiche->keyBy('id');
         $unknownAreaIds = collect($context['areas'])->pluck('bereich_id')->map(fn ($id) => (int) $id)->diff($areaLookup->keys());
@@ -441,7 +434,45 @@ class BopRunController extends Controller
             ]);
         }
 
-        $timetable = DB::transaction(function () use ($phase, $context, $generated) {
+        $timetable = DB::transaction(function () use ($run, $project, $partner, $context, $generated) {
+            $run ??= BopRun::query()->create([
+                'projekt_id' => $project->id,
+                'partner_id' => $partner->id,
+                'schuljahr' => $context['schuljahr'],
+                'teil' => $context['teil'],
+                'school_type' => 'Gemeinschaftsschule',
+                'parts' => [$context['teil'] === '_all'
+                    ? '1'
+                    : trim((string) preg_replace('/^Teil\s*/i', '', $context['teil']))],
+                'first_visit_date' => $context['schedule_date'],
+                'last_visit_date' => $context['schedule_date'],
+                'status' => 'planning',
+                'created_by_user_id' => Auth::id(),
+                'updated_by_user_id' => Auth::id(),
+            ]);
+            $phase = $run->phases()->firstOrCreate(
+                ['phase_type' => 'workshop_days'],
+                [
+                    'dates' => [],
+                    'scope_type' => 'school',
+                    'selected_classes' => [],
+                    'part_date_assignments' => [],
+                    'group_mode' => 'existing_assignment',
+                    'start_time' => $context['start_time'],
+                    'end_time' => $context['end_time'],
+                    'generate_groups' => false,
+                    'publish_to_calendar' => false,
+                ]
+            );
+            $dates = collect($phase->dates ?? [])->push($context['schedule_date'])->filter()->unique()->sort()->values();
+            $phase->update(['dates' => $dates->all()]);
+            $allDates = $run->phases()->get()->flatMap(fn (BopPhaseSchedule $item) => $item->dates ?? [])->filter()->sort()->values();
+            $run->update([
+                'first_visit_date' => $allDates->first(),
+                'last_visit_date' => $allDates->last(),
+                'updated_by_user_id' => Auth::id(),
+            ]);
+
             $timetable = BopTimetable::updateOrCreate(
                 [
                     'bop_phase_schedule_id' => $phase->id,

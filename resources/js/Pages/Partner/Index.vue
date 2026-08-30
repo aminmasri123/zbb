@@ -14,6 +14,7 @@ import ModalBoTag1 from './BOP/ModalBoTag1.vue'
 import ModalHausordnung from './BOP/ModalHausordnung.vue';
 import ModalUsbStickBrief from './BOP/ModalUsbStickBrief.vue';
 import BopRunPlanner from './BOP/BopRunPlanner.vue';
+import BopTimetablePlanner from './BOP/BopTimetablePlanner.vue';
 import { usePermissions } from '@/utils/permissions';
 
 // Props
@@ -677,6 +678,15 @@ const updatePartnerAPI = async (form) => {
 
                                                         <!-- Bearbeitet -->
 
+                                                        <button
+                                                            v-if="isBopProject && can('einteilung.planning')"
+                                                            type="button"
+                                                            class="block w-full bg-orange-50 px-4 py-2 text-left font-bold text-orange-800 hover:bg-orange-100"
+                                                            @click="openModal('bopTimetablePlanner', { jahr, teil, partnerId: partner.id, schoolName: partner.name })"
+                                                        >
+                                                            Zeitplan
+                                                        </button>
+
                                                          <button
                                                             v-if="can('anwesenheit.abrechnung')"
                                                             type="button"
@@ -962,6 +972,15 @@ const updatePartnerAPI = async (form) => {
             :school-name="modalData.schoolName"
             :school-years="modalData.schoolYears"
             @saved="handleBopPlanSaved"
+            @close="closeModal"
+        />
+        <BopTimetablePlanner
+            v-if="activeModal === 'bopTimetablePlanner'"
+            :visible="true"
+            :partner-id="modalData.partnerId"
+            :schuljahr="modalData.jahr"
+            :teil="modalData.teil"
+            :school-name="modalData.schoolName"
             @close="closeModal"
         />
 
