@@ -23,7 +23,7 @@ const form = ref(emptyForm())
 
 function emptyForm() {
   return {
-    schedule_date: '', start_time: '09:00', end_time: '15:00', slot_minutes: 15,
+    schedule_date: '', start_time: '09:00', end_time: '15:00', slot_minutes: 1,
     group_count: 4, areas: [], events: [],
   }
 }
@@ -79,7 +79,7 @@ function applyTimetable(timetable) {
     schedule_date: dateValue(timetable.schedule_date),
     start_time: String(config.start_time || '09:00').slice(0, 5),
     end_time: String(config.end_time || '15:00').slice(0, 5),
-    slot_minutes: Number(timetable.slot_minutes || 15),
+    slot_minutes: 1,
     group_count: Math.max(1, Number(config.groups?.length || 4)),
     areas: (config.areas || []).map((area) => ({
       bereich_id: Number(area.bereich_id),
@@ -215,11 +215,10 @@ function typeLabel(type) {
         <div v-if="success" class="rounded border border-green-200 bg-green-50 p-3 text-sm font-semibold text-green-700">{{ success }}</div>
 
         <section class="space-y-4 rounded-lg border bg-white p-4">
-          <div class="grid gap-3 md:grid-cols-4">
+          <div class="grid gap-3 md:grid-cols-3">
             <label class="text-xs font-semibold text-gray-700">Tag<input v-model="form.schedule_date" type="date" class="mt-1 w-full rounded border-gray-300 text-sm" @change="changeDate" /></label>
             <label class="text-xs font-semibold text-gray-700">Beginn<input v-model="form.start_time" type="time" class="mt-1 w-full rounded border-gray-300 text-sm" @input="preview = null" /></label>
             <label class="text-xs font-semibold text-gray-700">Ende<input v-model="form.end_time" type="time" class="mt-1 w-full rounded border-gray-300 text-sm" @input="preview = null" /></label>
-            <label class="text-xs font-semibold text-gray-700">Zeitraster<select v-model.number="form.slot_minutes" class="mt-1 w-full rounded border-gray-300 text-sm" @change="preview = null"><option :value="5">5 Minuten</option><option :value="10">10 Minuten</option><option :value="15">15 Minuten</option><option :value="30">30 Minuten</option></select></label>
           </div>
           <div v-if="workshopDates.length" class="flex flex-wrap gap-1"><button v-for="date in workshopDates" :key="date" type="button" class="rounded-full bg-orange-100 px-2 py-1 text-xs font-semibold text-orange-800" @click="form.schedule_date = date; changeDate()">{{ dateLabel(date) }}</button></div>
           <label class="block max-w-xs text-xs font-semibold text-gray-700">Anzahl Gruppen<input v-model.number="form.group_count" type="number" min="1" max="50" class="mt-1 w-full rounded border-gray-300 text-sm" @input="preview = null" /><span class="mt-1 block font-normal text-gray-500">Die Gruppen werden automatisch als G1, G2, G3 usw. angelegt.</span></label>

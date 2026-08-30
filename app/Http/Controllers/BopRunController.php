@@ -367,7 +367,7 @@ class BopRunController extends Controller
             'schedule_date' => ['required', 'date_format:Y-m-d'],
             'start_time' => ['required', 'date_format:H:i'],
             'end_time' => ['required', 'date_format:H:i', 'after:start_time'],
-            'slot_minutes' => ['required', 'integer', Rule::in([5, 10, 15, 30])],
+            'slot_minutes' => ['required', 'integer', Rule::in([1, 5, 10, 15, 30])],
             'groups' => ['required', 'array', 'min:1', 'max:50'],
             'groups.*' => ['required', 'string', 'max:80', 'distinct'],
             'areas' => ['required', 'array', 'min:1', 'max:50'],

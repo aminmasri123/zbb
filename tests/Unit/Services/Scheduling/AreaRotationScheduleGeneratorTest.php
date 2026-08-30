@@ -26,10 +26,10 @@ class AreaRotationScheduleGeneratorTest extends TestCase
         ]);
 
         $this->assertSame('automatic', $result['config']['duration_mode']);
-        $this->assertSame(60, $result['config']['calculated_area_duration_minutes']);
+        $this->assertSame(70, $result['config']['calculated_area_duration_minutes']);
         $this->assertSame(3, $result['config']['rotation_count']);
-        $this->assertSame(30, $result['config']['unallocated_minutes']);
-        $this->assertSame([60], array_values(array_unique(array_column($result['config']['areas'], 'duration_minutes'))));
+        $this->assertSame(0, $result['config']['unallocated_minutes']);
+        $this->assertSame([70], array_values(array_unique(array_column($result['config']['areas'], 'duration_minutes'))));
     }
 
     public function test_it_allows_shared_events_but_never_uses_an_area_twice_at_the_same_time(): void
@@ -123,7 +123,7 @@ class AreaRotationScheduleGeneratorTest extends TestCase
         $this->assertCount(2, $breaks);
         $this->assertSame(['G1', 'G2', 'G3'], $breaks[0]['meta']['group_labels']);
         $this->assertSame(['G4', 'G5', 'G6'], $breaks[1]['meta']['group_labels']);
-        $this->assertSame(30, $result['config']['calculated_area_duration_minutes']);
+        $this->assertSame(40, $result['config']['calculated_area_duration_minutes']);
 
         foreach ($result['config']['groups'] as $group) {
             $this->assertEqualsCanonicalizing(
@@ -143,6 +143,29 @@ class AreaRotationScheduleGeneratorTest extends TestCase
             in_array($entry['group_key'], ['G1', 'G2', 'G3'], true)
             && $entry['start_time'] <= '10:30' && $entry['end_time'] >= '11:00'
         ));
+    }
+
+    public function test_manual_event_times_do_not_have_to_match_the_selected_time_grid(): void
+    {
+        $result = (new AreaRotationScheduleGenerator)->generate([
+            'start_time' => '09:00',
+            'end_time' => '12:00',
+            'slot_minutes' => 15,
+            'groups' => ['G1'],
+            'areas' => [
+                ['bereich_id' => 1, 'name' => 'IT'],
+            ],
+            'events' => [
+                [
+                    'title' => 'Pause2 G1', 'type' => 'break', 'group_scope' => 'all',
+                    'start_time' => '11:30', 'end_time' => '11:50',
+                ],
+            ],
+        ]);
+
+        $this->assertSame('11:30', $result['config']['events'][0]['start_time']);
+        $this->assertSame('11:50', $result['config']['events'][0]['end_time']);
+        $this->assertSame(160, $result['config']['calculated_area_duration_minutes']);
     }
 
     public function test_it_reports_when_the_day_is_too_short(): void

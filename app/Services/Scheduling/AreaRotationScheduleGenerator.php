@@ -13,6 +13,7 @@ class AreaRotationScheduleGenerator
     public function generate(array $input): array
     {
         $slotMinutes = (int) ($input['slot_minutes'] ?? 15);
+        $planningStep = 1;
         $dayStart = $this->toMinutes((string) $input['start_time']);
         $dayEnd = $this->toMinutes((string) $input['end_time']);
         $groups = array_values(array_unique(array_map(
@@ -25,11 +26,8 @@ class AreaRotationScheduleGenerator
         if ($dayEnd <= $dayStart) {
             throw new DomainException('Die Endzeit muss nach der Startzeit liegen.');
         }
-        if (! in_array($slotMinutes, [5, 10, 15, 30], true)) {
-            throw new DomainException('Das Zeitraster muss 5, 10, 15 oder 30 Minuten betragen.');
-        }
-        if (($dayEnd - $dayStart) % $slotMinutes !== 0) {
-            throw new DomainException('Beginn und Ende des Planungstages müssen zum gewählten Zeitraster passen.');
+        if (! in_array($slotMinutes, [1, 5, 10, 15, 30], true)) {
+            throw new DomainException('Die Zeitgenauigkeit muss 1, 5, 10, 15 oder 30 Minuten betragen.');
         }
         if ($groups === []) {
             throw new DomainException('Bitte mindestens eine Gruppe angeben.');
@@ -42,7 +40,6 @@ class AreaRotationScheduleGenerator
             $input['events'] ?? [],
             $dayStart,
             $dayEnd,
-            $slotMinutes,
             $groups
         );
         usort($events, fn ($left, $right) => $left['start'] <=> $right['start']);
@@ -64,8 +61,8 @@ class AreaRotationScheduleGenerator
             $area['_index'] = $index;
 
             if (! $automaticDuration
-                && ($area['duration_minutes'] < $slotMinutes || $area['duration_minutes'] % $slotMinutes !== 0)) {
-                throw new DomainException("Die Dauer für {$area['name']} muss ein Vielfaches des Zeitrasters sein.");
+                && $area['duration_minutes'] < 1) {
+                throw new DomainException("Die Dauer für {$area['name']} muss mindestens eine Minute betragen.");
             }
             if (! $automaticDuration && $area['duration_minutes'] > ($dayEnd - $dayStart)) {
                 throw new DomainException("Die Dauer für {$area['name']} ist länger als der Planungstag.");
@@ -79,7 +76,7 @@ class AreaRotationScheduleGenerator
 
         $this->assertSupervisorAssignmentsAreUnique($areas, $groups);
 
-        $blockedSlots = $this->blockedSlots($groups, $events, $dayStart, $dayEnd, $slotMinutes);
+        $blockedSlots = $this->blockedSlots($groups, $events, $dayStart, $dayEnd, $planningStep);
         $slotAssignments = null;
         $calculatedDuration = null;
 
@@ -88,18 +85,18 @@ class AreaRotationScheduleGenerator
                 $groups,
                 $areas,
                 $blockedSlots,
-                intdiv($dayEnd - $dayStart, $slotMinutes)
+                intdiv($dayEnd - $dayStart, $planningStep)
             );
 
             for ($durationSlots = $largestDurationSlots; $durationSlots >= 1; $durationSlots--) {
                 foreach ($areas as &$area) {
-                    $area['duration_minutes'] = $durationSlots * $slotMinutes;
+                    $area['duration_minutes'] = $durationSlots * $planningStep;
                 }
                 unset($area);
 
-                $slotAssignments = $this->scheduleSlots($groups, $areas, $blockedSlots, $dayStart, $dayEnd, $slotMinutes);
+                $slotAssignments = $this->scheduleSlots($groups, $areas, $blockedSlots, $dayStart, $dayEnd, $planningStep);
                 if ($slotAssignments !== null) {
-                    $calculatedDuration = $durationSlots * $slotMinutes;
+                    $calculatedDuration = $durationSlots * $planningStep;
                     break;
                 }
             }
@@ -108,7 +105,7 @@ class AreaRotationScheduleGenerator
                 throw new DomainException('Nach Abzug der Pausen und Aktivitäten bleibt nicht genug Zeit für alle Bereichsrotationen.');
             }
         } else {
-            $slotAssignments = $this->scheduleSlots($groups, $areas, $blockedSlots, $dayStart, $dayEnd, $slotMinutes);
+            $slotAssignments = $this->scheduleSlots($groups, $areas, $blockedSlots, $dayStart, $dayEnd, $planningStep);
             if ($slotAssignments === null) {
                 throw new DomainException('Der Zeitraum reicht für alle Bereichsrotationen nicht aus. Bitte den Tag verlängern, Bereiche kürzen oder Gruppen reduzieren.');
             }
@@ -129,7 +126,7 @@ class AreaRotationScheduleGenerator
         ], $events);
         $entries = array_merge(
             $entries,
-            $this->areaEntriesFromSlots($slotAssignments, $groups, $areas, $dayStart, $slotMinutes)
+            $this->areaEntriesFromSlots($slotAssignments, $groups, $areas, $dayStart, $planningStep)
         );
 
         $this->assertGeneratedEntriesDoNotConflict($entries);
@@ -156,7 +153,7 @@ class AreaRotationScheduleGenerator
                 'duration_mode' => $automaticDuration ? 'automatic' : 'manual',
                 'calculated_area_duration_minutes' => $calculatedDuration,
                 'rotation_count' => max(count($groups), count($areas)),
-                'unallocated_minutes' => max(0, ($minimumFreeSlots * $slotMinutes) - $usedMinutesPerGroup),
+                'unallocated_minutes' => max(0, ($minimumFreeSlots * $planningStep) - $usedMinutesPerGroup),
                 'areas' => array_map(fn ($area) => array_diff_key($area, ['_index' => true]), $areas),
                 'events' => array_map(fn ($event) => [
                     'title' => $event['title'],
@@ -175,10 +172,9 @@ class AreaRotationScheduleGenerator
         array $events,
         int $dayStart,
         int $dayEnd,
-        int $slotMinutes,
         array $groups
     ): array {
-        return array_values(array_map(function (array $event) use ($dayStart, $dayEnd, $slotMinutes, $groups) {
+        return array_values(array_map(function (array $event) use ($dayStart, $dayEnd, $groups) {
             $start = $this->toMinutes((string) $event['start_time']);
             $end = $this->toMinutes((string) $event['end_time']);
             $title = trim((string) ($event['title'] ?? ''));
@@ -197,10 +193,6 @@ class AreaRotationScheduleGenerator
             if ($start < $dayStart || $end > $dayEnd || $end <= $start) {
                 throw new DomainException("Die Zeit für {$title} liegt außerhalb des Planungstages.");
             }
-            if (($start - $dayStart) % $slotMinutes !== 0 || ($end - $dayStart) % $slotMinutes !== 0) {
-                throw new DomainException("Die Zeit für {$title} muss zum gewählten Zeitraster passen.");
-            }
-
             $halfSize = (int) ceil(count($groups) / 2);
             $groupLabels = match ($groupScope) {
                 'first_half' => array_slice($groups, 0, $halfSize),
