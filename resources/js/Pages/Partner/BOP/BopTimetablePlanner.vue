@@ -404,8 +404,10 @@ function downloadBlob(blob, filename) {
   const link = document.createElement('a')
   link.href = url
   link.download = filename
+  document.body.appendChild(link)
   link.click()
-  URL.revokeObjectURL(url)
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 async function exportExcel() {
@@ -416,12 +418,29 @@ async function exportExcel() {
     const response = await axios.post(route('bop.run.timetable.export.excel', { partner: props.partnerId }), {
       schedule_date: dateValue(form.value.schedule_date),
       config: preview.value.config,
-      entries: preview.value.entries || [],
+      entries: (preview.value.entries || []).map((entry) => ({
+        group_key: entry.group_key || null,
+        type: entry.type,
+        title: entry.title,
+        start_time: String(entry.start_time || '').slice(0, 5),
+        end_time: String(entry.end_time || '').slice(0, 5),
+        bereich_id: entry.bereich_id || null,
+        meta: entry.meta || {},
+      })),
     }, { responseType: 'blob' })
     downloadBlob(response.data, exportFileName('xlsx'))
     success.value = 'Der farbige Zeitplan wurde als Excel-Datei im Querformat exportiert.'
   } catch (exception) {
-    error.value = 'Der Excel-Export konnte nicht erstellt werden.'
+    let message = 'Der Excel-Export konnte nicht erstellt werden.'
+    if (exception.response?.data instanceof Blob) {
+      try {
+        const payload = JSON.parse(await exception.response.data.text())
+        message = Object.values(payload.errors || {})[0]?.[0] || payload.message || message
+      } catch (_) {
+        // Die Antwort war keine lesbare JSON-Fehlermeldung.
+      }
+    }
+    error.value = message
   } finally {
     exportBusy.value = false
   }
