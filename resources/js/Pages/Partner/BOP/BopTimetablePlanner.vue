@@ -87,6 +87,7 @@ function applyTimetable(timetable) {
     })),
     events: (config.events || []).map((event) => ({
       title: event.title || '', type: event.type || 'shared',
+      group_scope: event.group_scope || 'all',
       start_time: String(event.start_time || '').slice(0, 5),
       end_time: String(event.end_time || '').slice(0, 5),
     })),
@@ -106,6 +107,15 @@ function groups() {
   return Array.from({ length: count }, (_, index) => `G${index + 1}`)
 }
 
+function halfLabel(scope) {
+  const labels = groups()
+  const halfSize = Math.ceil(labels.length / 2)
+  const selected = scope === 'first_half' ? labels.slice(0, halfSize) : labels.slice(halfSize)
+  if (!selected.length) return 'keine Gruppe'
+  if (selected.length <= 6) return selected.join(', ')
+  return `${selected[0]}–${selected[selected.length - 1]}`
+}
+
 function areaSetting(areaId) {
   return form.value.areas.find((area) => Number(area.bereich_id) === Number(areaId))
 }
@@ -119,7 +129,7 @@ function toggleArea(areaId) {
 }
 
 function addEvent() {
-  form.value.events.push({ title: '', type: 'shared', start_time: '', end_time: '' })
+  form.value.events.push({ title: '', type: 'shared', group_scope: 'all', start_time: '', end_time: '' })
   preview.value = null
 }
 
@@ -176,7 +186,11 @@ function rows() {
   const labels = preview.value.config?.groups || groups()
   return labels.map((group) => ({
     group,
-    entries: entries.filter((entry) => entry.group_key === group || !entry.group_key)
+    entries: entries.filter((entry) => {
+      if (entry.group_key) return entry.group_key === group
+      const eventGroups = entry.meta?.group_labels
+      return !Array.isArray(eventGroups) || eventGroups.includes(group)
+    })
       .sort((left, right) => String(left.start_time).localeCompare(String(right.start_time))),
   }))
 }
@@ -196,7 +210,7 @@ function typeLabel(type) {
 
       <div v-if="loading" class="flex-1 p-12 text-center text-gray-500">Zeitplandaten werden geladen …</div>
       <div v-else class="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
-        <div class="rounded border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900">Gemeinsame Termine dürfen bei allen Gruppen gleichzeitig stattfinden. Die Dauer der Bereiche wird automatisch aus der verbleibenden Tageszeit berechnet. Jeder normale Bereich und jeder Anleiter wird zeitgleich höchstens einmal eingeplant.</div>
+        <div class="rounded border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900">Gemeinsame Termine dürfen bei allen Gruppen gleichzeitig stattfinden. Pausen können für alle Gruppen oder gestaffelt für eine Gruppenhälfte geplant werden. Die Dauer der Bereiche wird automatisch aus der jeweils verbleibenden Tageszeit berechnet. Jeder normale Bereich und jeder Anleiter wird zeitgleich höchstens einmal eingeplant.</div>
         <div v-if="error" class="rounded border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{{ error }}</div>
         <div v-if="success" class="rounded border border-green-200 bg-green-50 p-3 text-sm font-semibold text-green-700">{{ success }}</div>
 
@@ -225,11 +239,12 @@ function typeLabel(type) {
         </section>
 
         <section class="rounded-lg border bg-white p-4">
-          <div class="mb-3 flex items-center justify-between gap-2"><div><h3 class="font-bold text-gray-900">Gemeinsame Aktivitäten</h3><p class="text-xs text-gray-500">Begrüßung, Pause, Standortbestimmung oder Zusatzaktivität</p></div><button type="button" class="rounded border px-3 py-1.5 text-xs font-semibold" @click="addEvent">+ Aktivität</button></div>
+          <div class="mb-3 flex items-center justify-between gap-2"><div><h3 class="font-bold text-gray-900">Aktivitäten und Pausen</h3><p class="text-xs text-gray-500">Für gestaffelte Pausen zwei Einträge anlegen: einmal Hälfte 1 und einmal Hälfte 2.</p></div><button type="button" class="rounded border px-3 py-1.5 text-xs font-semibold" @click="addEvent">+ Aktivität</button></div>
           <div class="space-y-2">
-            <div v-for="(event, index) in form.events" :key="index" class="grid gap-2 rounded border bg-gray-50 p-2 md:grid-cols-[1.4fr_9rem_8rem_8rem_auto]">
+            <div v-for="(event, index) in form.events" :key="index" class="grid gap-2 rounded border bg-gray-50 p-2 md:grid-cols-[1.4fr_8rem_10rem_8rem_8rem_auto]">
               <input v-model="event.title" class="rounded border-gray-300 text-sm" placeholder="Begrüßung" @input="preview = null" />
               <select v-model="event.type" class="rounded border-gray-300 text-xs" @change="preview = null"><option value="shared">Gemeinsam</option><option value="break">Pause</option><option value="extra">Zusatz</option></select>
+              <select v-model="event.group_scope" class="rounded border-gray-300 text-xs" @change="preview = null"><option value="all">Alle Gruppen</option><option value="first_half">Hälfte 1 ({{ halfLabel('first_half') }})</option><option value="second_half" :disabled="groups().length < 2">Hälfte 2 ({{ halfLabel('second_half') }})</option></select>
               <input v-model="event.start_time" type="time" class="rounded border-gray-300 text-sm" @input="preview = null" />
               <input v-model="event.end_time" type="time" class="rounded border-gray-300 text-sm" @input="preview = null" />
               <button type="button" class="px-2 font-bold text-red-600" @click="removeEvent(index)">×</button>

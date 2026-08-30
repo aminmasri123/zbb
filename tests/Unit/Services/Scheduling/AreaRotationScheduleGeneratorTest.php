@@ -93,6 +93,58 @@ class AreaRotationScheduleGeneratorTest extends TestCase
         ]);
     }
 
+    public function test_it_staggers_breaks_for_two_group_halves(): void
+    {
+        $result = (new AreaRotationScheduleGenerator)->generate([
+            'start_time' => '09:00',
+            'end_time' => '13:00',
+            'slot_minutes' => 30,
+            'groups' => ['G1', 'G2', 'G3', 'G4', 'G5', 'G6'],
+            'areas' => [
+                ['bereich_id' => 1, 'name' => 'IT'],
+                ['bereich_id' => 2, 'name' => 'Kunst'],
+                ['bereich_id' => 3, 'name' => 'Sport'],
+            ],
+            'events' => [
+                [
+                    'title' => 'Pause 1', 'type' => 'break', 'group_scope' => 'first_half',
+                    'start_time' => '10:00', 'end_time' => '10:30',
+                ],
+                [
+                    'title' => 'Pause 2', 'type' => 'break', 'group_scope' => 'second_half',
+                    'start_time' => '10:30', 'end_time' => '11:00',
+                ],
+            ],
+        ]);
+
+        $breaks = array_values(array_filter($result['entries'], fn ($entry) => $entry['type'] === 'break'));
+        $areaEntries = array_values(array_filter($result['entries'], fn ($entry) => $entry['type'] === 'area'));
+
+        $this->assertCount(2, $breaks);
+        $this->assertSame(['G1', 'G2', 'G3'], $breaks[0]['meta']['group_labels']);
+        $this->assertSame(['G4', 'G5', 'G6'], $breaks[1]['meta']['group_labels']);
+        $this->assertSame(30, $result['config']['calculated_area_duration_minutes']);
+
+        foreach ($result['config']['groups'] as $group) {
+            $this->assertEqualsCanonicalizing(
+                ['IT', 'Kunst', 'Sport'],
+                array_values(array_unique(array_column(
+                    array_filter($areaEntries, fn ($entry) => $entry['group_key'] === $group),
+                    'title'
+                )))
+            );
+        }
+
+        $this->assertNotEmpty(array_filter($areaEntries, fn ($entry) =>
+            in_array($entry['group_key'], ['G4', 'G5', 'G6'], true)
+            && $entry['start_time'] <= '10:00' && $entry['end_time'] >= '10:30'
+        ));
+        $this->assertNotEmpty(array_filter($areaEntries, fn ($entry) =>
+            in_array($entry['group_key'], ['G1', 'G2', 'G3'], true)
+            && $entry['start_time'] <= '10:30' && $entry['end_time'] >= '11:00'
+        ));
+    }
+
     public function test_it_reports_when_the_day_is_too_short(): void
     {
         $this->expectException(DomainException::class);
