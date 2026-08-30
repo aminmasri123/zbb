@@ -114,6 +114,16 @@ class AreaRotationScheduleGenerator
 
         if ($automaticDuration) {
             $slotAssignments = $this->fillIdleSlots($slotAssignments, $blockedSlots, count($groups));
+            $slotAssignments = $this->rescheduleWithBalancedDurations(
+                $slotAssignments,
+                $groups,
+                $areas,
+                $areaOrders,
+                $blockedSlots,
+                $dayStart,
+                $dayEnd,
+                $planningStep
+            ) ?? $this->balanceAreaDurations($slotAssignments, count($groups), count($areas));
         }
         $actualDurations = $this->actualAreaDurations($slotAssignments, $groups, $areas, $planningStep);
 
@@ -343,13 +353,15 @@ class AreaRotationScheduleGenerator
         array $blockedSlots,
         int $dayStart,
         int $dayEnd,
-        int $slotMinutes
+        int $slotMinutes,
+        ?array $durationSlotsByGroup = null
     ): ?array {
         $slotCount = intdiv($dayEnd - $dayStart, $slotMinutes);
         $remaining = [];
         foreach ($groups as $groupIndex => $group) {
             foreach ($areas as $areaIndex => $area) {
-                $remaining[$groupIndex][$areaIndex] = intdiv($area['duration_minutes'], $slotMinutes);
+                $remaining[$groupIndex][$areaIndex] = $durationSlotsByGroup[$groupIndex][$areaIndex]
+                    ?? intdiv($area['duration_minutes'], $slotMinutes);
             }
         }
 
@@ -523,6 +535,133 @@ class AreaRotationScheduleGenerator
         }
 
         return true;
+    }
+
+    /**
+     * Keep the number of already usable slots, but distribute them evenly over
+     * every area before scheduling the rotations again. Different offsets are
+     * tried so that the one-minute remainders do not create area conflicts.
+     */
+    private function rescheduleWithBalancedDurations(
+        array $filledAssignments,
+        array $groups,
+        array $areas,
+        array $areaOrders,
+        array $blockedSlots,
+        int $dayStart,
+        int $dayEnd,
+        int $slotMinutes
+    ): ?array {
+        $areaCount = count($areas);
+        $totals = array_fill(0, count($groups), 0);
+        foreach ($filledAssignments as $slotAssignments) {
+            foreach ($slotAssignments as $groupIndex => $areaIndex) {
+                $totals[$groupIndex]++;
+            }
+        }
+
+        $areaIndexById = array_flip(array_map(fn ($area) => (int) $area['bereich_id'], $areas));
+        for ($attempt = 0; $attempt < $areaCount; $attempt++) {
+            $durationSlots = [];
+            foreach ($groups as $groupIndex => $group) {
+                $base = intdiv($totals[$groupIndex], $areaCount);
+                $remainder = $totals[$groupIndex] % $areaCount;
+                $durationSlots[$groupIndex] = array_fill(0, $areaCount, $base);
+                $orderedIndexes = isset($areaOrders[$group])
+                    ? array_values(array_map(fn ($areaId) => $areaIndexById[$areaId], $areaOrders[$group]))
+                    : array_keys($areas);
+
+                for ($extra = 0; $extra < $remainder; $extra++) {
+                    $position = ($groupIndex + $attempt + $extra) % $areaCount;
+                    $durationSlots[$groupIndex][$orderedIndexes[$position]]++;
+                }
+            }
+
+            $assignments = $this->scheduleSlots(
+                $groups,
+                $areas,
+                $areaOrders,
+                $blockedSlots,
+                $dayStart,
+                $dayEnd,
+                $slotMinutes,
+                $durationSlots
+            );
+            if ($assignments !== null) {
+                return $assignments;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Move boundaries between two consecutive areas until their total durations
+     * differ by at most one slot wherever the area availability permits it.
+     */
+    private function balanceAreaDurations(array $assignments, int $groupCount, int $areaCount): array
+    {
+        $durations = array_fill(0, $groupCount, array_fill(0, $areaCount, 0));
+        foreach ($assignments as $slotAssignments) {
+            foreach ($slotAssignments as $groupIndex => $areaIndex) {
+                $durations[$groupIndex][$areaIndex]++;
+            }
+        }
+
+        $slotCount = count($assignments);
+        $maximumMoves = max(1, $slotCount * $groupCount * $areaCount);
+
+        for ($move = 0; $move < $maximumMoves; $move++) {
+            $best = null;
+
+            for ($groupIndex = 0; $groupIndex < $groupCount; $groupIndex++) {
+                for ($slot = 1; $slot < $slotCount; $slot++) {
+                    $leftArea = $assignments[$slot - 1][$groupIndex] ?? null;
+                    $rightArea = $assignments[$slot][$groupIndex] ?? null;
+                    if ($leftArea === null || $rightArea === null || $leftArea === $rightArea) {
+                        continue;
+                    }
+
+                    $rightToLeftDifference = $durations[$groupIndex][$rightArea]
+                        - $durations[$groupIndex][$leftArea];
+                    if ($rightToLeftDifference > 1
+                        && $this->areaIsFreeAtSlot($assignments, $slot, $leftArea, $groupIndex)
+                        && ($best === null || $rightToLeftDifference > $best['difference'])) {
+                        $best = [
+                            'slot' => $slot,
+                            'group' => $groupIndex,
+                            'from' => $rightArea,
+                            'to' => $leftArea,
+                            'difference' => $rightToLeftDifference,
+                        ];
+                    }
+
+                    $leftToRightDifference = $durations[$groupIndex][$leftArea]
+                        - $durations[$groupIndex][$rightArea];
+                    if ($leftToRightDifference > 1
+                        && $this->areaIsFreeAtSlot($assignments, $slot - 1, $rightArea, $groupIndex)
+                        && ($best === null || $leftToRightDifference > $best['difference'])) {
+                        $best = [
+                            'slot' => $slot - 1,
+                            'group' => $groupIndex,
+                            'from' => $leftArea,
+                            'to' => $rightArea,
+                            'difference' => $leftToRightDifference,
+                        ];
+                    }
+                }
+            }
+
+            if ($best === null) {
+                break;
+            }
+
+            $assignments[$best['slot']][$best['group']] = $best['to'];
+            $durations[$best['group']][$best['from']]--;
+            $durations[$best['group']][$best['to']]++;
+        }
+
+        return $assignments;
     }
 
     private function actualAreaDurations(array $assignments, array $groups, array $areas, int $slotMinutes): array

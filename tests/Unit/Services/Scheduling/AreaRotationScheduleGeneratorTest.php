@@ -229,8 +229,44 @@ class AreaRotationScheduleGeneratorTest extends TestCase
         ]);
 
         $this->assertSame(0, $result['config']['unallocated_minutes']);
-        $this->assertSame(58, $result['config']['actual_area_duration_min_minutes']);
-        $this->assertSame(61, $result['config']['actual_area_duration_max_minutes']);
+        $this->assertLessThanOrEqual(
+            1,
+            $result['config']['actual_area_duration_max_minutes']
+                - $result['config']['actual_area_duration_min_minutes']
+        );
+    }
+
+    public function test_it_balances_short_area_presentations_instead_of_giving_one_area_all_remaining_minutes(): void
+    {
+        $result = (new AreaRotationScheduleGenerator)->generate([
+            'start_time' => '08:30',
+            'end_time' => '12:45',
+            'slot_minutes' => 1,
+            'groups' => ['G1', 'G2'],
+            'areas' => array_map(fn ($id) => [
+                'bereich_id' => $id,
+                'name' => 'Bereich '.$id,
+            ], range(1, 7)),
+            'events' => [
+                ['title' => 'Begrüßung', 'type' => 'shared', 'group_scope' => 'all', 'start_time' => '08:30', 'end_time' => '09:00'],
+                ['title' => 'Pause 1 G1', 'type' => 'break', 'group_scope' => 'first_half', 'start_time' => '09:30', 'end_time' => '09:45'],
+                ['title' => 'Pause 1 G2', 'type' => 'break', 'group_scope' => 'second_half', 'start_time' => '10:00', 'end_time' => '10:15'],
+                ['title' => 'Rundgang G2', 'type' => 'extra', 'group_scope' => 'second_half', 'start_time' => '11:25', 'end_time' => '11:55'],
+                ['title' => 'Pause 2 G1', 'type' => 'break', 'group_scope' => 'first_half', 'start_time' => '11:30', 'end_time' => '11:50'],
+                ['title' => 'Rundgang G1', 'type' => 'extra', 'group_scope' => 'first_half', 'start_time' => '11:50', 'end_time' => '12:20'],
+                ['title' => 'Pause 2 G2', 'type' => 'break', 'group_scope' => 'second_half', 'start_time' => '11:55', 'end_time' => '12:15'],
+                ['title' => 'Bereichsauswahl G2', 'type' => 'extra', 'group_scope' => 'second_half', 'start_time' => '12:15', 'end_time' => '12:45'],
+                ['title' => 'Bereichsauswahl G1', 'type' => 'extra', 'group_scope' => 'first_half', 'start_time' => '12:20', 'end_time' => '12:45'],
+            ],
+        ]);
+
+        $difference = $result['config']['actual_area_duration_max_minutes']
+            - $result['config']['actual_area_duration_min_minutes'];
+
+        $this->assertSame(0, $result['config']['unallocated_minutes']);
+        // G1 and G2 have different fixed-event totals, so two minutes are the
+        // mathematically smallest possible difference across both groups.
+        $this->assertLessThanOrEqual(2, $difference);
     }
 
     public function test_it_reports_when_the_day_is_too_short(): void
