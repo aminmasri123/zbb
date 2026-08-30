@@ -50,10 +50,16 @@ class BopTimetableSpreadsheetExporterTest extends TestCase
             $this->assertStringContainsString('Testschule', $sheet->getCell('A1')->getValue());
             $this->assertSame('Gruppe', $sheet->getCell('A4')->getValue());
             $this->assertSame('G1', $sheet->getCell('A5')->getValue());
-            $this->assertStringContainsString('IT und Medien', $sheet->getCell('Q5')->getValue());
+            $timelineText = $sheet->getCell('Q5')->getValue()->getPlainText();
+            $this->assertStringStartsWith("08:45–09:15\n", $timelineText);
+            $this->assertStringContainsString('IT und Medien', $timelineText);
             $this->assertSame('CFFAFE', $sheet->getStyle('Q5')->getFill()->getStartColor()->getRGB());
             $this->assertSame(PageSetup::ORIENTATION_LANDSCAPE, $sheet->getPageSetup()->getOrientation());
             $this->assertSame(PageSetup::PAPERSIZE_A3, $sheet->getPageSetup()->getPaperSize());
+            $details = $spreadsheet->getSheetByName('Details');
+            $this->assertNotNull($details);
+            $this->assertSame('08:30', $details->getCell('B4')->getValue());
+            $this->assertSame('08:45', $details->getCell('C4')->getValue());
             $spreadsheet->disconnectWorksheets();
         } finally {
             @unlink($path);

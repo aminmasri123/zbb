@@ -315,7 +315,7 @@ function typeLabel(type) {
   return ({ shared: 'Gemeinsam', break: 'Pause', extra: 'Zusatz', area: 'Bereich' })[type] || type
 }
 
-const timelinePixelsPerMinute = 5
+const timelinePixelsPerMinute = 6
 const timelineGroupWidth = 72
 
 function timeMinutes(value) {
@@ -640,19 +640,26 @@ async function exportPdf() {
                   </div>
                 </div>
               </div>
-              <div v-for="row in rows()" :key="row.group" class="timetable-row flex h-14 border-b border-gray-300 last:border-b-0">
+              <div v-for="row in rows()" :key="row.group" class="timetable-row flex h-[68px] border-b border-gray-300 last:border-b-0">
                 <div class="sticky left-0 z-20 flex w-[72px] shrink-0 items-center justify-center border-r border-gray-500 bg-amber-400 text-sm font-extrabold text-gray-950">{{ row.group }}</div>
                 <div class="relative h-full shrink-0 bg-white" :style="timelineRowStyle()">
                   <div
                     v-for="entry in row.entries"
                     :key="`${row.group}-${entry.start_time}-${entry.end_time}-${entry.title}`"
-                    class="timetable-entry absolute top-1.5 flex h-11 items-center overflow-hidden rounded-sm border px-1.5 shadow-sm"
+                    class="timetable-entry absolute top-1.5 flex h-14 items-start overflow-hidden rounded-sm border px-1.5 py-1.5 shadow-sm"
                     :class="[timelineEntryClass(entry), entry.type === 'area' ? 'cursor-pointer hover:ring-2 hover:ring-cyan-500' : '', isSelectedArea(row.group, entry) ? 'z-10 ring-4 ring-cyan-600' : '']"
                     :style="timelineEntryStyle(entry)"
                     :title="entryTooltip(entry)"
                     @click="selectAreaForSwap(row.group, entry)"
                   >
-                    <div class="min-w-0 leading-tight"><div class="timetable-entry-title truncate text-xs font-bold">{{ entry.title }} <span class="font-normal">({{ entryDuration(entry) }})</span></div><div class="timetable-entry-details truncate text-[9px] font-semibold opacity-80">{{ String(entry.start_time).slice(0, 5) }}–{{ String(entry.end_time).slice(0, 5) }}<span v-if="entry.meta?.supervisor_name"> · {{ entry.meta.supervisor_name }}</span></div></div>
+                    <div class="w-full min-w-0 leading-tight">
+                      <div class="flex min-w-0 items-center gap-1 whitespace-nowrap">
+                        <span class="shrink-0 rounded-sm bg-white/75 px-1 py-0.5 text-[9px] font-extrabold">{{ entryDuration(entry) }} Min.</span>
+                        <span class="timetable-entry-details truncate text-[9px] font-bold opacity-85">{{ String(entry.start_time).slice(0, 5) }}–{{ String(entry.end_time).slice(0, 5) }}</span>
+                      </div>
+                      <div class="timetable-entry-title mt-1 truncate text-xs font-bold">{{ entry.title }}</div>
+                      <div v-if="entry.meta?.supervisor_name" class="truncate text-[9px] font-semibold opacity-75">{{ entry.meta.supervisor_name }}</div>
+                    </div>
                   </div>
                 </div>
               </div>
