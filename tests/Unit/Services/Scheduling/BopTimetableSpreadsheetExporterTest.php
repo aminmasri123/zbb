@@ -37,6 +37,24 @@ class BopTimetableSpreadsheetExporterTest extends TestCase
                     'bereich_id' => 2,
                     'meta' => ['supervisor_name' => 'Erika Beispiel'],
                 ],
+                [
+                    'group_key' => 'G1',
+                    'type' => 'break',
+                    'title' => 'Pause',
+                    'start_time' => '09:15',
+                    'end_time' => '09:30',
+                    'bereich_id' => null,
+                    'meta' => [],
+                ],
+                [
+                    'group_key' => 'G1',
+                    'type' => 'area',
+                    'title' => 'IT und Medien',
+                    'start_time' => '09:30',
+                    'end_time' => '09:45',
+                    'bereich_id' => 2,
+                    'meta' => ['supervisor_name' => 'Erika Beispiel'],
+                ],
             ],
         ], 'Testschule');
 
@@ -45,17 +63,27 @@ class BopTimetableSpreadsheetExporterTest extends TestCase
             $this->assertSame('PK', file_get_contents($path, false, null, 0, 2));
 
             $spreadsheet = IOFactory::load($path);
-            $sheet = $spreadsheet->getActiveSheet();
+            $this->assertSame('Bereichsplan', $spreadsheet->getActiveSheet()->getTitle());
+            $sheet = $spreadsheet->getSheetByName('Zeitplan');
+            $this->assertNotNull($sheet);
             $this->assertSame('Zeitplan', $sheet->getTitle());
             $this->assertStringContainsString('Testschule', $sheet->getCell('A1')->getValue());
             $this->assertSame('Gruppe', $sheet->getCell('A4')->getValue());
             $this->assertSame('G1', $sheet->getCell('A5')->getValue());
             $timelineText = $sheet->getCell('Q5')->getValue()->getPlainText();
-            $this->assertStringStartsWith("08:45–09:15\n", $timelineText);
+            $this->assertStringStartsWith("08:45–09:15 · 30 Min.\n", $timelineText);
             $this->assertStringContainsString('IT und Medien', $timelineText);
             $this->assertSame('CFFAFE', $sheet->getStyle('Q5')->getFill()->getStartColor()->getRGB());
             $this->assertSame(PageSetup::ORIENTATION_LANDSCAPE, $sheet->getPageSetup()->getOrientation());
             $this->assertSame(PageSetup::PAPERSIZE_A3, $sheet->getPageSetup()->getPaperSize());
+            $areaSchedule = $spreadsheet->getSheetByName('Bereichsplan');
+            $this->assertNotNull($areaSchedule);
+            $this->assertSame('IT und Medien', $areaSchedule->getCell('A5')->getValue());
+            $this->assertSame('Erika Beispiel', $areaSchedule->getCell('B5')->getValue());
+            $this->assertSame('G1', $areaSchedule->getCell('C5')->getValue());
+            $this->assertSame('08:45–09:15 / 09:30–09:45', $areaSchedule->getCell('D5')->getValue());
+            $this->assertSame('45 Minuten', $areaSchedule->getCell('E5')->getValue());
+            $this->assertSame(PageSetup::ORIENTATION_LANDSCAPE, $areaSchedule->getPageSetup()->getOrientation());
             $details = $spreadsheet->getSheetByName('Details');
             $this->assertNotNull($details);
             $this->assertSame('08:30', $details->getCell('B4')->getValue());

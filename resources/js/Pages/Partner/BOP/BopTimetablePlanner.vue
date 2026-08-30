@@ -388,6 +388,49 @@ function entryDuration(entry) {
   return Math.max(0, timeMinutes(entry.end_time) - timeMinutes(entry.start_time))
 }
 
+function areaScheduleRows() {
+  const schedules = new Map()
+
+  rows().forEach((row) => {
+    row.entries.filter((entry) => entry.type === 'area').forEach((entry) => {
+      const areaKey = entry.bereich_id ? `id-${entry.bereich_id}` : `title-${entry.title}`
+      const key = `${areaKey}-${row.group}`
+      if (!schedules.has(key)) {
+        schedules.set(key, {
+          key,
+          bereich_id: entry.bereich_id,
+          title: entry.title,
+          supervisor_name: entry.meta?.supervisor_name || '',
+          group: row.group,
+          segments: [],
+          duration_minutes: 0,
+          entry,
+        })
+      }
+
+      const schedule = schedules.get(key)
+      const duration = entryDuration(entry)
+      schedule.segments.push({
+        start_time: String(entry.start_time).slice(0, 5),
+        end_time: String(entry.end_time).slice(0, 5),
+        duration_minutes: duration,
+      })
+      schedule.duration_minutes += duration
+    })
+  })
+
+  return [...schedules.values()]
+    .map((schedule) => ({
+      ...schedule,
+      segments: schedule.segments.sort((left, right) => left.start_time.localeCompare(right.start_time)),
+    }))
+    .sort((left, right) => left.title.localeCompare(right.title, 'de') || left.group.localeCompare(right.group, 'de', { numeric: true }))
+}
+
+function areaScheduleTimeLabel(schedule, separator = ' / ') {
+  return schedule.segments.map((segment) => `${segment.start_time}-${segment.end_time}`).join(separator)
+}
+
 function entryTooltip(entry) {
   const supervisor = entry.meta?.supervisor_name ? ` · ${entry.meta.supervisor_name}` : ''
   const action = entry.type === 'area' ? ' · Zum Tauschen anklicken' : ''
@@ -457,12 +500,74 @@ function pdfEntryFill(entry) {
   ][Math.abs(Number(entry.bereich_id || 0)) % 5]
 }
 
+function addPdfAreaOverviewPages(pdf) {
+  const margin = 8
+  const pageWidth = pdf.internal.pageSize.getWidth()
+  const pageHeight = pdf.internal.pageSize.getHeight()
+  const columns = [112, 78, 28, 150, pageWidth - (margin * 2) - 368]
+  const headings = ['Bereich / Ort', 'Anleiter', 'Gruppe', 'Von - Bis (alle Abschnitte)', 'Dauer gesamt']
+  const schedules = areaScheduleRows()
+  let y = 0
+
+  const drawCell = (x, width, height, fill, value, bold = false) => {
+    pdf.setFillColor(...fill)
+    pdf.setDrawColor(148, 163, 184)
+    pdf.rect(x, y, width, height, 'FD')
+    pdf.setTextColor(17, 24, 39)
+    pdf.setFont('helvetica', bold ? 'bold' : 'normal')
+    pdf.text(value, x + 1.5, y + 4.6)
+  }
+
+  const startPage = () => {
+    pdf.addPage('a3', 'landscape')
+    pdf.setTextColor(17, 24, 39)
+    pdf.setFont('helvetica', 'bold')
+    pdf.setFontSize(14)
+    pdf.text(`Bereichs- und Anleiterplan · ${props.schoolName || ''} · ${dateLabel(form.value.schedule_date)}`, margin, margin + 4)
+    pdf.setFont('helvetica', 'normal')
+    pdf.setFontSize(8)
+    pdf.text('Jede Zeile zeigt vollständig, welche Gruppe wann in welchem Bereich erwartet wird.', margin, margin + 9)
+    y = margin + 14
+    let x = margin
+    pdf.setFontSize(8)
+    headings.forEach((heading, index) => {
+      drawCell(x, columns[index], 9, [251, 191, 36], [heading], true)
+      x += columns[index]
+    })
+    y += 9
+  }
+
+  startPage()
+  schedules.forEach((schedule) => {
+    const supervisor = schedule.supervisor_name || 'Nicht festgelegt'
+    const values = [
+      pdf.splitTextToSize(String(schedule.title || ''), columns[0] - 3),
+      pdf.splitTextToSize(supervisor, columns[1] - 3),
+      [schedule.group],
+      pdf.splitTextToSize(areaScheduleTimeLabel(schedule), columns[3] - 3),
+      [`${schedule.duration_minutes} Minuten`],
+    ]
+    const lineCount = Math.max(...values.map((value) => value.length))
+    const rowHeight = Math.max(11, (lineCount * 4) + 3)
+    if (y + rowHeight > pageHeight - margin) startPage()
+
+    let x = margin
+    const fill = pdfEntryFill(schedule.entry)
+    pdf.setFontSize(8.5)
+    values.forEach((value, index) => {
+      drawCell(x, columns[index], rowHeight, fill, value, index === 0 || index === 2 || index === 4)
+      x += columns[index]
+    })
+    y += rowHeight
+  })
+}
+
 function addPdfDetailPages(pdf) {
   const margin = 8
   const pageWidth = pdf.internal.pageSize.getWidth()
   const pageHeight = pdf.internal.pageSize.getHeight()
   const columns = [18, 38, 142, 28, 24, pageWidth - (margin * 2) - 250]
-  const headings = ['Gruppe', 'Von–Bis', 'Aktivität', 'Art', 'Min.', 'Anleiter']
+  const headings = ['Gruppe', 'Von - Bis', 'Aktivität', 'Art', 'Min.', 'Anleiter']
   let y = 0
 
   const startPage = () => {
@@ -474,9 +579,13 @@ function addPdfDetailPages(pdf) {
     y = margin + 10
     let x = margin
     pdf.setFillColor(251, 191, 36)
+    pdf.setDrawColor(180, 83, 9)
     pdf.setFontSize(8)
     headings.forEach((heading, index) => {
+      pdf.setFillColor(251, 191, 36)
+      pdf.setDrawColor(180, 83, 9)
       pdf.rect(x, y, columns[index], 8, 'FD')
+      pdf.setTextColor(17, 24, 39)
       pdf.text(heading, x + 1.5, y + 5.2)
       x += columns[index]
     })
@@ -488,7 +597,7 @@ function addPdfDetailPages(pdf) {
     row.entries.forEach((entry) => {
       const values = [
         [row.group],
-        [`${String(entry.start_time).slice(0, 5)}–${String(entry.end_time).slice(0, 5)}`],
+        [`${String(entry.start_time).slice(0, 5)}-${String(entry.end_time).slice(0, 5)}`],
         pdf.splitTextToSize(String(entry.title || ''), columns[2] - 3),
         [typeLabel(entry.type)],
         [String(entryDuration(entry))],
@@ -500,11 +609,13 @@ function addPdfDetailPages(pdf) {
 
       let x = margin
       const fill = pdfEntryFill(entry)
-      pdf.setFillColor(...fill)
       pdf.setFont('helvetica', 'normal')
       pdf.setFontSize(7.5)
       values.forEach((value, index) => {
+        pdf.setFillColor(...fill)
+        pdf.setDrawColor(148, 163, 184)
         pdf.rect(x, y, columns[index], rowHeight, 'FD')
+        pdf.setTextColor(17, 24, 39)
         pdf.text(value, x + 1.5, y + 4.3)
         x += columns[index]
       })
@@ -558,9 +669,10 @@ async function exportPdf() {
       pdf.addImage(slice.toDataURL('image/png'), 'PNG', margin, headerHeight, imageWidth, sliceHeight / pixelsPerMm)
     }
 
+    addPdfAreaOverviewPages(pdf)
     addPdfDetailPages(pdf)
     pdf.save(exportFileName('pdf'))
-    success.value = 'Der Zeitplan wurde vollständig als PDF exportiert. Zusätzliche Detailseiten zeigen alle Texte ungekürzt.'
+    success.value = 'Der Zeitplan wurde vollständig exportiert. Der Bereichs- und Anleiterplan zeigt alle Einsatzzeiten druckfertig.'
   } catch (exception) {
     error.value = 'Der PDF-Export konnte nicht erstellt werden.'
   } finally {
@@ -666,6 +778,38 @@ async function exportPdf() {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+          <div class="border-t bg-slate-50 p-4">
+            <div class="mb-3">
+              <h4 class="font-bold text-gray-950">Bereichs- und Anleiterplan</h4>
+              <p class="text-xs text-gray-600">Vollständige Einsatzzeiten nach Bereich – geeignet zum direkten Ausdrucken und Verteilen.</p>
+            </div>
+            <div class="overflow-x-auto rounded border border-slate-300 bg-white">
+              <table class="min-w-full text-left text-xs">
+                <thead class="bg-amber-400 text-gray-950">
+                  <tr>
+                    <th class="px-3 py-2 font-extrabold">Bereich / Ort</th>
+                    <th class="px-3 py-2 font-extrabold">Anleiter</th>
+                    <th class="px-3 py-2 text-center font-extrabold">Gruppe</th>
+                    <th class="px-3 py-2 font-extrabold">Von - Bis</th>
+                    <th class="px-3 py-2 text-center font-extrabold">Dauer gesamt</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                  <tr v-for="schedule in areaScheduleRows()" :key="schedule.key" class="bg-white">
+                    <td class="min-w-56 px-3 py-2.5 font-bold text-gray-950">{{ schedule.title }}</td>
+                    <td class="min-w-44 px-3 py-2.5" :class="schedule.supervisor_name ? 'font-semibold text-gray-800' : 'font-semibold text-amber-800'">{{ schedule.supervisor_name || 'Nicht festgelegt' }}</td>
+                    <td class="px-3 py-2.5 text-center text-sm font-extrabold text-gray-950">{{ schedule.group }}</td>
+                    <td class="min-w-64 px-3 py-2.5">
+                      <div class="flex flex-wrap gap-1.5">
+                        <span v-for="segment in schedule.segments" :key="`${segment.start_time}-${segment.end_time}`" class="whitespace-nowrap rounded border border-cyan-300 bg-cyan-50 px-2 py-1 text-sm font-extrabold text-cyan-950">{{ segment.start_time }}-{{ segment.end_time }}</span>
+                      </div>
+                    </td>
+                    <td class="whitespace-nowrap px-3 py-2.5 text-center text-sm font-extrabold text-gray-950">{{ schedule.duration_minutes }} Minuten</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </section>

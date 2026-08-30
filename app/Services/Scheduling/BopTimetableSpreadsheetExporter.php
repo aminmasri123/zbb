@@ -107,8 +107,9 @@ class BopTimetableSpreadsheetExporter
 
                 $supervisor = trim((string) data_get($entry, 'meta.supervisor_name', ''));
                 $time = substr($entry['start_time'], 0, 5).'–'.substr($entry['end_time'], 0, 5);
+                $duration = $entryEnd - $entryStart;
                 $text = new RichText();
-                $timeRun = $text->createTextRun($time."\n");
+                $timeRun = $text->createTextRun($time.' · '.$duration." Min.\n");
                 $timeRun->getFont()->setBold(true)->setSize(8)->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FF172033'));
                 $titleRun = $text->createTextRun($entry['title']);
                 $titleRun->getFont()->setBold(true)->setSize(8)->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FF172033'));
@@ -145,14 +146,108 @@ class BopTimetableSpreadsheetExporter
         $sheet->getPageMargins()->setTop(0.3)->setRight(0.25)->setBottom(0.3)->setLeft(0.25);
         $sheet->getHeaderFooter()->setOddFooter('&LZeitplan · '.$schoolName.'&RSeite &P von &N');
 
+        $this->addAreaScheduleSheet($spreadsheet, $groups, $entries, $schoolName, $timetable['schedule_date']);
         $this->addDetailsSheet($spreadsheet, $groups, $entries, $schoolName, $timetable['schedule_date']);
-        $spreadsheet->setActiveSheetIndex(0);
+        $spreadsheet->setActiveSheetIndexByName('Bereichsplan');
 
         $path = tempnam(sys_get_temp_dir(), 'bop-zeitplan-');
         (new Xlsx($spreadsheet))->save($path);
         $spreadsheet->disconnectWorksheets();
 
         return $path;
+    }
+
+    private function addAreaScheduleSheet(
+        Spreadsheet $spreadsheet,
+        array $groups,
+        array $entries,
+        string $schoolName,
+        string $scheduleDate
+    ): void {
+        $sheet = $spreadsheet->createSheet();
+        $sheet->setTitle('Bereichsplan');
+        $sheet->setShowGridlines(false);
+        $sheet->getSheetView()->setZoomScale(90);
+
+        $sheet->mergeCells('A1:E1');
+        $sheet->setCellValue('A1', 'Bereichs- und Anleiterplan · '.$schoolName.' · '.$this->dateLabel($scheduleDate));
+        $sheet->getStyle('A1')->applyFromArray([
+            'font' => ['bold' => true, 'size' => 16, 'color' => ['rgb' => '111827']],
+            'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
+        ]);
+        $sheet->getRowDimension(1)->setRowHeight(28);
+
+        $sheet->mergeCells('A2:E2');
+        $sheet->setCellValue('A2', 'Jede Zeile zeigt vollständig, welche Gruppe wann in welchem Bereich erwartet wird.');
+        $sheet->getStyle('A2')->applyFromArray([
+            'font' => ['italic' => true, 'color' => ['rgb' => '475569']],
+            'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
+        ]);
+        $sheet->getRowDimension(2)->setRowHeight(20);
+
+        $headings = ['Bereich / Ort', 'Anleiter', 'Gruppe', 'Von - Bis (alle Abschnitte)', 'Dauer gesamt'];
+        foreach ($headings as $index => $heading) {
+            $sheet->setCellValue(Coordinate::stringFromColumnIndex($index + 1).'4', $heading);
+        }
+        $sheet->getStyle('A4:E4')->applyFromArray([
+            'font' => ['bold' => true, 'color' => ['rgb' => '111827']],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FBBF24']],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_LEFT, 'vertical' => Alignment::VERTICAL_CENTER],
+            'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'B45309']]],
+        ]);
+        $sheet->getStyle('C4:E4')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getRowDimension(4)->setRowHeight(25);
+
+        $row = 5;
+        foreach ($this->areaScheduleRows($groups, $entries) as $schedule) {
+            $values = [
+                $schedule['title'],
+                $schedule['supervisor_name'] ?: 'Nicht festgelegt',
+                $schedule['group'],
+                implode(' / ', array_map(
+                    fn (array $segment) => $segment['start_time'].'–'.$segment['end_time'],
+                    $schedule['segments']
+                )),
+                $schedule['duration_minutes'].' Minuten',
+            ];
+            foreach ($values as $index => $value) {
+                $cell = Coordinate::stringFromColumnIndex($index + 1).$row;
+                $sheet->setCellValueExplicit($cell, (string) $value, DataType::TYPE_STRING);
+            }
+
+            $colours = $this->colours($schedule['entry']);
+            $sheet->getStyle("A{$row}:E{$row}")->applyFromArray([
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => $colours['fill']]],
+                'alignment' => ['vertical' => Alignment::VERTICAL_CENTER, 'wrapText' => true],
+                'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => $colours['border']]]],
+            ]);
+            $sheet->getStyle("A{$row}")->getFont()->setBold(true)->setSize(10);
+            $sheet->getStyle("C{$row}:E{$row}")->applyFromArray([
+                'font' => ['bold' => true],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER, 'wrapText' => true],
+            ]);
+            if (! $schedule['supervisor_name']) {
+                $sheet->getStyle("B{$row}")->getFont()->setBold(true)->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('FF92400E'));
+            }
+            $sheet->getRowDimension($row)->setRowHeight(32);
+            $row++;
+        }
+
+        foreach ([42, 30, 12, 44, 20] as $index => $width) {
+            $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($index + 1))->setWidth($width);
+        }
+        $lastRow = max(4, $row - 1);
+        $sheet->setAutoFilter("A4:E{$lastRow}");
+        $sheet->freezePane('A5');
+        $sheet->getPageSetup()
+            ->setOrientation(PageSetup::ORIENTATION_LANDSCAPE)
+            ->setPaperSize(PageSetup::PAPERSIZE_A4)
+            ->setFitToWidth(1)
+            ->setFitToHeight(0);
+        $sheet->getPageSetup()->setRowsToRepeatAtTopByStartAndEnd(1, 4);
+        $sheet->getPageSetup()->setPrintArea("A1:E{$lastRow}");
+        $sheet->getPageMargins()->setTop(0.35)->setRight(0.3)->setBottom(0.35)->setLeft(0.3);
+        $sheet->getHeaderFooter()->setOddFooter('&LBereichs- und Anleiterplan · '.$schoolName.'&RSeite &P von &N');
     }
 
     private function addDetailsSheet(
@@ -246,6 +341,59 @@ class BopTimetableSpreadsheetExporter
         usort($filtered, fn (array $left, array $right) => strcmp($left['start_time'], $right['start_time']));
 
         return $filtered;
+    }
+
+    private function areaScheduleRows(array $groups, array $entries): array
+    {
+        $schedules = [];
+
+        foreach ($groups as $group) {
+            foreach ($this->entriesForGroup($entries, $group) as $entry) {
+                if (($entry['type'] ?? null) !== 'area') {
+                    continue;
+                }
+
+                $areaKey = ! empty($entry['bereich_id'])
+                    ? 'id-'.(int) $entry['bereich_id']
+                    : 'title-'.mb_strtolower((string) $entry['title']);
+                $key = $areaKey.'-'.$group;
+
+                if (! isset($schedules[$key])) {
+                    $schedules[$key] = [
+                        'title' => (string) $entry['title'],
+                        'supervisor_name' => trim((string) data_get($entry, 'meta.supervisor_name', '')),
+                        'group' => (string) $group,
+                        'segments' => [],
+                        'duration_minutes' => 0,
+                        'entry' => $entry,
+                    ];
+                }
+
+                $start = substr((string) $entry['start_time'], 0, 5);
+                $end = substr((string) $entry['end_time'], 0, 5);
+                $duration = max(0, $this->minutes($end) - $this->minutes($start));
+                $schedules[$key]['segments'][] = [
+                    'start_time' => $start,
+                    'end_time' => $end,
+                    'duration_minutes' => $duration,
+                ];
+                $schedules[$key]['duration_minutes'] += $duration;
+            }
+        }
+
+        foreach ($schedules as &$schedule) {
+            usort($schedule['segments'], fn (array $left, array $right) => strcmp($left['start_time'], $right['start_time']));
+        }
+        unset($schedule);
+
+        $rows = array_values($schedules);
+        usort($rows, function (array $left, array $right) {
+            $titleComparison = strnatcasecmp($left['title'], $right['title']);
+
+            return $titleComparison !== 0 ? $titleComparison : strnatcasecmp($left['group'], $right['group']);
+        });
+
+        return $rows;
     }
 
     private function colours(array $entry): array
