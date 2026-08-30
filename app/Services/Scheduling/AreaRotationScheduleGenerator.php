@@ -113,9 +113,14 @@ class AreaRotationScheduleGenerator
         }
 
         if ($automaticDuration) {
-            $slotAssignments = $this->fillIdleSlots($slotAssignments, $blockedSlots, count($groups), 5);
-            $slotAssignments = $this->rescheduleWithBalancedDurations(
+            $fullyUsedAssignments = $this->fillIdleSlots(
                 $slotAssignments,
+                $blockedSlots,
+                count($groups),
+                $dayEnd - $dayStart
+            );
+            $balancedAssignments = $this->rescheduleWithBalancedDurations(
+                $fullyUsedAssignments,
                 $groups,
                 $areas,
                 $areaOrders,
@@ -123,7 +128,26 @@ class AreaRotationScheduleGenerator
                 $dayStart,
                 $dayEnd,
                 $planningStep
-            ) ?? $this->balanceAreaDurations($slotAssignments, count($groups), count($areas));
+            );
+            if ($balancedAssignments !== null) {
+                $slotAssignments = $balancedAssignments;
+            } else {
+                $slotAssignments = $this->fillIdleSlots($slotAssignments, $blockedSlots, count($groups), 5);
+                $slotAssignments = $this->balanceAreaDurations($slotAssignments, count($groups), count($areas));
+            }
+            $slotAssignments = $this->distributeRemainingIdleSlots(
+                $slotAssignments,
+                $blockedSlots,
+                count($groups),
+                count($areas),
+                5
+            );
+            $slotAssignments = $this->fillIdleSlots(
+                $slotAssignments,
+                $blockedSlots,
+                count($groups),
+                5
+            );
         }
         $actualDurations = $this->actualAreaDurations($slotAssignments, $groups, $areas, $planningStep);
 
@@ -615,7 +639,93 @@ class AreaRotationScheduleGenerator
             }
         }
 
+        if ($areaCount <= 10 && count($groups) <= 4) {
+            $choices = [];
+            foreach ($groups as $groupIndex => $group) {
+                $orderedIndexes = isset($areaOrders[$group])
+                    ? array_values(array_map(fn ($areaId) => $areaIndexById[$areaId], $areaOrders[$group]))
+                    : array_keys($areas);
+                $choices[$groupIndex] = $this->combinations(
+                    $orderedIndexes,
+                    $totals[$groupIndex] % $areaCount
+                );
+            }
+
+            $attempts = 0;
+            $search = function (int $groupIndex, array $durationSlots) use (
+                &$search,
+                &$attempts,
+                $choices,
+                $totals,
+                $areaCount,
+                $groups,
+                $areas,
+                $areaOrders,
+                $blockedSlots,
+                $dayStart,
+                $dayEnd,
+                $slotMinutes
+            ): ?array {
+                if ($attempts >= 5000) {
+                    return null;
+                }
+                if ($groupIndex === count($groups)) {
+                    $attempts++;
+
+                    return $this->scheduleSlots(
+                        $groups, $areas, $areaOrders, $blockedSlots,
+                        $dayStart, $dayEnd, $slotMinutes, $durationSlots
+                    );
+                }
+
+                $base = intdiv($totals[$groupIndex], $areaCount);
+                foreach ($choices[$groupIndex] as $extraAreas) {
+                    $next = $durationSlots;
+                    $next[$groupIndex] = array_fill(0, $areaCount, $base);
+                    foreach ($extraAreas as $areaIndex) {
+                        $next[$groupIndex][$areaIndex]++;
+                    }
+                    $result = $search($groupIndex + 1, $next);
+                    if ($result !== null) {
+                        return $result;
+                    }
+                }
+
+                return null;
+            };
+
+            $assignments = $search(0, []);
+            if ($assignments !== null) {
+                return $assignments;
+            }
+        }
+
         return null;
+    }
+
+    private function combinations(array $values, int $take): array
+    {
+        if ($take === 0) {
+            return [[]];
+        }
+        if ($take >= count($values)) {
+            return [$values];
+        }
+
+        $result = [];
+        $build = function (int $offset, array $selected) use (&$build, &$result, $values, $take): void {
+            if (count($selected) === $take) {
+                $result[] = $selected;
+                return;
+            }
+            $needed = $take - count($selected);
+            for ($index = $offset; $index <= count($values) - $needed; $index++) {
+                $build($index + 1, [...$selected, $values[$index]]);
+            }
+        };
+        $build(0, []);
+
+        return $result;
     }
 
     /**
@@ -682,6 +792,116 @@ class AreaRotationScheduleGenerator
             $assignments[$best['slot']][$best['group']] = $best['to'];
             $durations[$best['group']][$best['from']]--;
             $durations[$best['group']][$best['to']]++;
+        }
+
+        return $assignments;
+    }
+
+    /**
+     * Consume idle minutes at the end of a rotation window by moving every
+     * following boundary one slot. This gives the minute to a short earlier
+     * area without changing the area order or concentrating the remainder on
+     * the final area.
+     */
+    private function distributeRemainingIdleSlots(
+        array $assignments,
+        array $blockedSlots,
+        int $groupCount,
+        int $areaCount,
+        int $maximumDifference
+    ): array {
+        $durations = array_fill(0, $groupCount, array_fill(0, $areaCount, 0));
+        foreach ($assignments as $slotAssignments) {
+            foreach ($slotAssignments as $groupIndex => $areaIndex) {
+                $durations[$groupIndex][$areaIndex]++;
+            }
+        }
+        $maximumDuration = min(array_merge(...array_map('array_values', $durations))) + $maximumDifference;
+        $slotCount = count($assignments);
+
+        for ($pass = 0; $pass < $slotCount; $pass++) {
+            $changed = false;
+            for ($groupIndex = 0; $groupIndex < $groupCount; $groupIndex++) {
+                for ($bufferSlot = 1; $bufferSlot < $slotCount; $bufferSlot++) {
+                    if ($blockedSlots[$groupIndex][$bufferSlot]
+                        || isset($assignments[$bufferSlot][$groupIndex])
+                        || ! isset($assignments[$bufferSlot - 1][$groupIndex])) {
+                        continue;
+                    }
+
+                    $windowStart = 0;
+                    for ($slot = $bufferSlot - 1; $slot >= 0; $slot--) {
+                        if ($blockedSlots[$groupIndex][$slot]
+                            && $blockedSlots[$groupIndex][$slot] !== 'break') {
+                            $windowStart = $slot + 1;
+                            break;
+                        }
+                    }
+
+                    $sequence = [];
+                    $firstSlots = [];
+                    $hasInternalGap = false;
+                    for ($slot = $windowStart; $slot < $bufferSlot; $slot++) {
+                        if ($blockedSlots[$groupIndex][$slot]) {
+                            continue;
+                        }
+                        $areaIndex = $assignments[$slot][$groupIndex] ?? null;
+                        if ($areaIndex === null) {
+                            if ($sequence !== []) {
+                                $hasInternalGap = true;
+                            }
+                            continue;
+                        }
+                        if (! in_array($areaIndex, $sequence, true)) {
+                            $sequence[] = $areaIndex;
+                            $firstSlots[$areaIndex] = $slot;
+                        }
+                    }
+                    if ($hasInternalGap || $sequence === []) {
+                        continue;
+                    }
+
+                    $candidateIndexes = array_keys($sequence);
+                    usort($candidateIndexes, fn ($left, $right) => [
+                        $durations[$groupIndex][$sequence[$left]], $left,
+                    ] <=> [
+                        $durations[$groupIndex][$sequence[$right]], $right,
+                    ]);
+
+                    foreach ($candidateIndexes as $recipientIndex) {
+                        $recipientArea = $sequence[$recipientIndex];
+                        if ($durations[$groupIndex][$recipientArea] >= $maximumDuration) {
+                            continue;
+                        }
+                        $changes = [];
+                        for ($index = $recipientIndex; $index < count($sequence) - 1; $index++) {
+                            $changes[$firstSlots[$sequence[$index + 1]]] = $sequence[$index];
+                        }
+                        $changes[$bufferSlot] = $sequence[array_key_last($sequence)];
+
+                        $valid = true;
+                        foreach ($changes as $slot => $areaIndex) {
+                            if (! $this->areaIsFreeAtSlot($assignments, $slot, $areaIndex, $groupIndex)) {
+                                $valid = false;
+                                break;
+                            }
+                        }
+                        if (! $valid) {
+                            continue;
+                        }
+
+                        foreach ($changes as $slot => $areaIndex) {
+                            $assignments[$slot][$groupIndex] = $areaIndex;
+                        }
+                        $durations[$groupIndex][$recipientArea]++;
+                        $changed = true;
+                        break 2;
+                    }
+                }
+            }
+            if (! $changed) {
+                break;
+            }
         }
 
         return $assignments;

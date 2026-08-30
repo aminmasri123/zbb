@@ -269,10 +269,6 @@ class AreaRotationScheduleGeneratorTest extends TestCase
 
         $this->assertSame(0, $result['config']['unallocated_minutes']);
         $this->assertLessThanOrEqual(5, $difference);
-        $this->assertNotEmpty(array_filter(
-            $result['entries'],
-            fn ($entry) => $entry['type'] === 'buffer'
-        ));
     }
 
     public function test_it_reports_when_the_day_is_too_short(): void
