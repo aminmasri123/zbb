@@ -9,6 +9,7 @@ use App\Models\AppCalendarEventAttendee;
 use App\Models\BopPhaseParticipant;
 use App\Models\BopPhaseSchedule;
 use App\Models\BopRun;
+use App\Models\BopTimetable;
 use App\Models\EinteilungSetting;
 use App\Models\Gruppe;
 use App\Models\GruppeHasPersonen;
@@ -20,7 +21,9 @@ use App\Models\User;
 use App\Models\Zeiten;
 use App\Notifications\ConfiguredEventNotification;
 use App\Services\Projects\ActiveProjectContext;
+use App\Services\Scheduling\AreaRotationScheduleGenerator;
 use Carbon\Carbon;
+use DomainException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -53,17 +56,17 @@ class BopRunController extends Controller
         $teil = $context['teil'];
         $project = $this->bopProject($request, $partner);
         $students = $this->students($partner, $schuljahr, $teil);
-        $run = BopRun::with(['phases.participants'])
+        $run = BopRun::with(['phases.participants', 'phases.timetables.entries'])
             ->where('projekt_id', $project->id)
             ->where('partner_id', $partner->id)
             ->forSchuljahr($schuljahr)
             ->where('teil', $teil)
-            ->first() ?? ($teil !== '_all' ? BopRun::with(['phases.participants'])
-                ->where('projekt_id', $project->id)
-                ->where('partner_id', $partner->id)
-                ->forSchuljahr($schuljahr)
-                ->where('teil', '_all')
-                ->first() : null);
+            ->first() ?? ($teil !== '_all' ? BopRun::with(['phases.participants', 'phases.timetables.entries'])
+            ->where('projekt_id', $project->id)
+            ->where('partner_id', $partner->id)
+            ->forSchuljahr($schuljahr)
+            ->where('teil', '_all')
+            ->first() : null);
 
         return response()->json($this->payload($project, $partner, $schuljahr, $teil, $students, $run));
     }
@@ -113,7 +116,7 @@ class BopRunController extends Controller
             'phases.*.notes' => ['nullable', 'string', 'max:3000'],
         ]);
 
-        if (!$project->rule('participant_parts_enabled', false)) {
+        if (! $project->rule('participant_parts_enabled', false)) {
             $data['parts'] = ['1'];
             $data['planned_classes'] = collect($data['planned_classes'] ?? [])
                 ->map(fn ($class) => [...$class, 'part' => '1'])
@@ -221,6 +224,12 @@ class BopRunController extends Controller
                     ]
                 );
 
+                if ($dates === []) {
+                    $phase->timetables()->delete();
+                } else {
+                    $phase->timetables()->whereNotIn('schedule_date', $dates)->delete();
+                }
+
                 $this->syncParticipants($phase, $students->whereIn('id', $participantIds)->values());
 
                 if ($phase->generate_groups && ! in_array($phase->group_mode, ['none', 'existing_assignment'], true) && $dates !== []) {
@@ -240,7 +249,7 @@ class BopRunController extends Controller
             return $run;
         });
 
-        $run->load(['phases.participants']);
+        $run->load(['phases.participants', 'phases.timetables.entries']);
 
         return response()->json([
             'message' => 'BOP-Ablauf, Termine, Teilnehmer und Gruppen wurden gespeichert.',
@@ -285,6 +294,7 @@ class BopRunController extends Controller
             foreach ($run->phases as $phase) {
                 AppCalendarEvent::where('source_type', BopPhaseSchedule::class)->where('source_id', $phase->id)->delete();
                 if ($data['mode'] === 'dates') {
+                    $phase->timetables()->delete();
                     $phase->update([
                         'dates' => [], 'class_date_assignments' => [], 'part_date_assignments' => [],
                         'publish_to_calendar' => false, 'calendar_event_id' => null, 'generate_groups' => false,
@@ -303,7 +313,8 @@ class BopRunController extends Controller
         });
 
         $students = $this->students($partner, $data['schuljahr'], $teil);
-        $freshRun = $data['mode'] === 'full' ? null : BopRun::with(['phases.participants'])->find($run->id);
+        $freshRun = $data['mode'] === 'full' ? null : BopRun::with(['phases.participants', 'phases.timetables.entries'])->find($run->id);
+
         return response()->json([
             ...$this->payload($project, $partner, $data['schuljahr'], $teil, $students, $freshRun),
             'reset' => true, 'reset_mode' => $data['mode'],
@@ -342,6 +353,116 @@ class BopRunController extends Controller
         return response()->json([
             'message' => 'Die Anwesenheitsgruppen wurden aus dem gespeicherten BOP-Ablauf erzeugt.',
             'groups' => $phase->groups()->count(),
+        ]);
+    }
+
+    public function generateTimetable(
+        Request $request,
+        Partner $partner,
+        AreaRotationScheduleGenerator $generator
+    ) {
+        $context = $request->validate([
+            'schuljahr' => ['required', 'string', 'max:20'],
+            'teil' => ['required', 'string', 'max:40'],
+            'schedule_date' => ['required', 'date_format:Y-m-d'],
+            'start_time' => ['required', 'date_format:H:i'],
+            'end_time' => ['required', 'date_format:H:i', 'after:start_time'],
+            'slot_minutes' => ['required', 'integer', Rule::in([5, 10, 15, 30])],
+            'groups' => ['required', 'array', 'min:1', 'max:50'],
+            'groups.*' => ['required', 'string', 'max:80', 'distinct'],
+            'areas' => ['required', 'array', 'min:1', 'max:50'],
+            'areas.*.bereich_id' => ['required', 'integer', 'distinct', 'exists:bereiches,id'],
+            'areas.*.duration_minutes' => ['required', 'integer', 'min:5', 'max:480'],
+            'areas.*.supervisor_person_id' => ['nullable', 'integer', 'exists:personens,id'],
+            'events' => ['nullable', 'array', 'max:30'],
+            'events.*.title' => ['required', 'string', 'max:150'],
+            'events.*.type' => ['required', Rule::in(['shared', 'break', 'extra'])],
+            'events.*.start_time' => ['required', 'date_format:H:i'],
+            'events.*.end_time' => ['required', 'date_format:H:i'],
+            'persist' => ['nullable', 'boolean'],
+        ]);
+
+        $project = $this->bopProject($request, $partner);
+        $run = BopRun::query()
+            ->where('projekt_id', $project->id)
+            ->where('partner_id', $partner->id)
+            ->forSchuljahr($context['schuljahr'])
+            ->whereIn('teil', [$context['teil'], '_all'])
+            ->orderByRaw('CASE WHEN teil = ? THEN 0 ELSE 1 END', [$context['teil']])
+            ->firstOrFail();
+        $phase = $run->phases()->where('phase_type', 'workshop_days')->firstOrFail();
+
+        if (! in_array($context['schedule_date'], $phase->dates ?? [], true)) {
+            throw ValidationException::withMessages([
+                'schedule_date' => 'Der ausgewählte Tag gehört nicht zu den gespeicherten Werkstatttagen.',
+            ]);
+        }
+
+        $areaLookup = $project->bereiche->keyBy('id');
+        $unknownAreaIds = collect($context['areas'])->pluck('bereich_id')->map(fn ($id) => (int) $id)->diff($areaLookup->keys());
+        if ($unknownAreaIds->isNotEmpty()) {
+            throw ValidationException::withMessages(['areas' => 'Mindestens ein Bereich gehört nicht zum aktiven BOP-Projekt.']);
+        }
+
+        $supervisorLookup = $project->mitarbeiter->keyBy('id');
+        $unknownSupervisorIds = collect($context['areas'])->pluck('supervisor_person_id')->filter()
+            ->map(fn ($id) => (int) $id)->diff($supervisorLookup->keys());
+        if ($unknownSupervisorIds->isNotEmpty()) {
+            throw ValidationException::withMessages(['areas' => 'Mindestens ein Anleiter gehört nicht zum aktiven BOP-Projekt.']);
+        }
+
+        $generatorInput = [
+            ...$context,
+            'areas' => collect($context['areas'])->map(function (array $area) use ($areaLookup, $supervisorLookup) {
+                $supervisorId = $area['supervisor_person_id'] ?? null;
+                $supervisor = $supervisorId ? $supervisorLookup->get((int) $supervisorId) : null;
+
+                return [
+                    ...$area,
+                    'name' => $areaLookup->get((int) $area['bereich_id'])?->name,
+                    'supervisor_name' => $supervisor
+                        ? trim(($supervisor->vorname ?? '').' '.($supervisor->nachname ?? '')) : null,
+                ];
+            })->values()->all(),
+            'events' => array_values($context['events'] ?? []),
+        ];
+
+        try {
+            $generated = $generator->generate($generatorInput);
+        } catch (DomainException $exception) {
+            throw ValidationException::withMessages(['timetable' => $exception->getMessage()]);
+        }
+
+        if (! ($context['persist'] ?? false)) {
+            return response()->json([
+                'message' => 'Die Zeitplanvorschau wurde konfliktfrei erzeugt.',
+                'persisted' => false,
+                'timetable' => $generated,
+            ]);
+        }
+
+        $timetable = DB::transaction(function () use ($phase, $context, $generated) {
+            $timetable = BopTimetable::updateOrCreate(
+                [
+                    'bop_phase_schedule_id' => $phase->id,
+                    'schedule_date' => $context['schedule_date'],
+                ],
+                [
+                    'slot_minutes' => $generated['slot_minutes'],
+                    'config' => $generated['config'],
+                    'generated_by_user_id' => Auth::id(),
+                ]
+            );
+            $timetable->entries()->delete();
+            $timetable->entries()->createMany($generated['entries']);
+
+            return $timetable->fresh('entries');
+        });
+
+        return response()->json([
+            'message' => 'Der Zeitplan wurde konfliktfrei erzeugt und gespeichert.',
+            'persisted' => true,
+            'timetable' => $timetable,
         ]);
     }
 
@@ -385,7 +506,7 @@ class BopRunController extends Controller
             $groupKey = match ($phase->group_mode) {
                 'school' => 'Gesamte Schule',
                 'class' => $student->klasse ?: 'Ohne Klasse',
-                'balanced' => 'Gruppe ' . (($index % $groupCount) + 1),
+                'balanced' => 'Gruppe '.(($index % $groupCount) + 1),
                 default => null,
             };
             BopPhaseParticipant::updateOrCreate(
@@ -415,7 +536,7 @@ class BopRunController extends Controller
 
         foreach ($phase->participants->groupBy(fn ($participant) => $participant->group_key ?: 'BOP-Gruppe') as $groupKey => $participants) {
             $group = Gruppe::updateOrCreate(
-                ['bop_phase_schedule_id' => $phase->id, 'bemerkung' => 'BOP: ' . $this->phaseLabel($phase->phase_type) . ' · ' . $groupKey],
+                ['bop_phase_schedule_id' => $phase->id, 'bemerkung' => 'BOP: '.$this->phaseLabel($phase->phase_type).' · '.$groupKey],
                 [
                     'personen_id' => $supervisorId,
                     'bereich_id' => $bereichId,
@@ -435,7 +556,9 @@ class BopRunController extends Controller
                 $plannedClass = collect($phase->run->planned_classes ?? [])->firstWhere('name', $className);
                 $part = (string) ($plannedClass['part'] ?? '1');
                 $assignedDates = collect($phase->part_date_assignments[$part] ?? [])->filter()->sort()->values();
-                if ($assignedDates->isNotEmpty()) $groupDates = $assignedDates;
+                if ($assignedDates->isNotEmpty()) {
+                    $groupDates = $assignedDates;
+                }
             } elseif ($phase->scope_type === 'classes' && $phase->group_mode === 'class') {
                 $className = $participants->pluck('class_name')->filter()->unique()->sole();
                 $assignedDates = collect($phase->class_date_assignments[$className] ?? [])->filter()->sort()->values();
@@ -448,7 +571,9 @@ class BopRunController extends Controller
                 $day = Carbon::parse($date);
                 $tag = Tage::firstOrCreate(['datum' => $date], ['wochentag' => $day->locale('de')->dayName]);
                 foreach ($participants as $participant) {
-                    if (! $participant->student?->person_id) continue;
+                    if (! $participant->student?->person_id) {
+                        continue;
+                    }
                     GruppeHasPersonen::firstOrCreate(
                         ['personen_id' => $participant->student->person_id, 'gruppe_id' => $group->id, 'tage_id' => $tag->id],
                         [
@@ -472,6 +597,7 @@ class BopRunController extends Controller
                 AppCalendarEvent::whereKey($phase->calendar_event_id)->delete();
                 $phase->update(['calendar_event_id' => null]);
             }
+
             return;
         }
 
@@ -484,8 +610,8 @@ class BopRunController extends Controller
         );
         $eventLookup = ['source_type' => BopPhaseSchedule::class, 'source_id' => $phase->id];
         $existingEvent = AppCalendarEvent::where($eventLookup)->first();
-        $nextStart = $dates->first() . ' ' . ($phase->start_time ?: '08:00') . ':00';
-        $nextEnd = $dates->last() . ' ' . ($phase->end_time ?: '16:00') . ':00';
+        $nextStart = $dates->first().' '.($phase->start_time ?: '08:00').':00';
+        $nextEnd = $dates->last().' '.($phase->end_time ?: '16:00').':00';
         $materiallyChanged = ! $existingEvent
             || Carbon::parse($existingEvent->starts_at)->toDateTimeString() !== Carbon::parse($nextStart)->toDateTimeString()
             || Carbon::parse($existingEvent->ends_at ?: $existingEvent->starts_at)->toDateTimeString() !== Carbon::parse($nextEnd)->toDateTimeString();
@@ -520,7 +646,7 @@ class BopRunController extends Controller
             );
             if ($materiallyChanged || ! $existingAttendee) {
                 Notification::send([$user], new ConfiguredEventNotification([
-                    'message' => 'Du wurdest fuer „' . $event->title . '“ eingeplant. Bitte sage im Kalender zu oder ab.',
+                    'message' => 'Du wurdest fuer „'.$event->title.'“ eingeplant. Bitte sage im Kalender zu oder ab.',
                     'link' => route('apps.calendar', ['year' => Carbon::parse($event->starts_at)->year]),
                     'id' => $event->id, 'typ' => 'Kalender', 'event_key' => 'apps.calendar.assignment',
                 ]));
@@ -567,10 +693,11 @@ class BopRunController extends Controller
             'suggested_planned_classes' => $suggestedClasses,
             'students' => $students->map(fn ($student) => [
                 'id' => $student->id, 'person_id' => $student->person_id, 'class_name' => $student->klasse, 'part' => $student->teil,
-                'name' => trim(($student->person?->nachname ?? '') . ', ' . ($student->person?->vorname ?? '')),
+                'name' => trim(($student->person?->nachname ?? '').', '.($student->person?->vorname ?? '')),
             ]),
             'phases' => collect(self::PHASES)->map(function ($type) use ($phaseMap) {
                 $phase = $phaseMap->get($type);
+
                 return $phase ? [
                     ...$phase->toArray(),
                     'participant_ids' => $phase->participants->pluck('personen_ist_schueler_id')->map(fn ($id) => (int) $id)->values(),
@@ -579,7 +706,7 @@ class BopRunController extends Controller
             'options' => [
                 'areas' => $project->bereiche->map->only(['id', 'name'])->values(),
                 'rooms' => $project->raeume->map->only(['id', 'name'])->values(),
-                'supervisors' => $project->mitarbeiter->map(fn ($person) => ['id' => $person->id, 'name' => trim($person->vorname . ' ' . $person->nachname)])->values(),
+                'supervisors' => $project->mitarbeiter->map(fn ($person) => ['id' => $person->id, 'name' => trim($person->vorname.' '.$person->nachname)])->values(),
             ],
         ];
     }
@@ -637,7 +764,9 @@ class BopRunController extends Controller
 
     private function validatedPartDateAssignments(array $phase, array $dates, Collection $parts, bool $requireComplete): array
     {
-        if (($phase['phase_type'] ?? null) !== 'workshop_days') return [];
+        if (($phase['phase_type'] ?? null) !== 'workshop_days') {
+            return [];
+        }
 
         $validDates = collect($dates);
         $assignments = collect($phase['part_date_assignments'] ?? [])->only($parts->all())
@@ -654,6 +783,7 @@ class BopRunController extends Controller
                 }
             }
         }
+
         return $assignments->all();
     }
 
@@ -691,6 +821,6 @@ class BopRunController extends Controller
             default => $this->phaseLabel($type),
         };
 
-        return trim($prefix . ' ' . $schoolName);
+        return trim($prefix.' '.$schoolName);
     }
 }

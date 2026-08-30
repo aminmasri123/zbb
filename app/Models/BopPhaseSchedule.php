@@ -45,4 +45,9 @@ class BopPhaseSchedule extends Model
     {
         return $this->hasMany(Gruppe::class);
     }
+
+    public function timetables()
+    {
+        return $this->hasMany(BopTimetable::class)->orderBy('schedule_date');
+    }
 }

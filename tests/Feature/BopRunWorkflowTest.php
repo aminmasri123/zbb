@@ -2,8 +2,9 @@
 
 namespace Tests\Feature;
 
-use App\Models\Berechtigungskategorie;
 use App\Models\AppCalendarEvent;
+use App\Models\Berechtigungskategorie;
+use App\Models\Bereich;
 use App\Models\BopPhaseSchedule;
 use App\Models\BopRun;
 use App\Models\Partner;
@@ -142,6 +143,73 @@ class BopRunWorkflowTest extends TestCase
         $this->actingAs($user)->getJson(route('bop.run.show', [
             'partner' => $partner, 'schuljahr' => '2026/2027', 'teil' => 'Teil 1',
         ]))->assertNotFound();
+    }
+
+    public function test_workshop_timetable_can_be_previewed_and_then_persisted(): void
+    {
+        $user = User::factory()->create();
+        $project = Projekt::factory()->create(['name' => 'BOP']);
+        $partner = Partner::query()->create(['name' => 'Planschule']);
+        $user->projekte()->attach($project->id);
+        $user->update(['current_team_id' => $project->id]);
+        $project->partners()->attach($partner->id);
+        $this->givePermission($user, 'einteilung.planning');
+
+        $it = Bereich::query()->create(['name' => 'IT']);
+        $kunst = Bereich::query()->create(['name' => 'Kunst']);
+        $project->bereiche()->attach([$it->id => ['aktiv' => true], $kunst->id => ['aktiv' => true]]);
+
+        $run = BopRun::query()->create([
+            'projekt_id' => $project->id,
+            'partner_id' => $partner->id,
+            'schuljahr' => '2026/2027',
+            'teil' => '_all',
+            'school_type' => 'Gemeinschaftsschule',
+            'status' => 'planning',
+        ]);
+        $run->phases()->create([
+            'phase_type' => 'workshop_days',
+            'dates' => ['2026-10-02'],
+            'scope_type' => 'school',
+            'group_mode' => 'existing_assignment',
+            'start_time' => '09:00',
+            'end_time' => '12:00',
+        ]);
+
+        $payload = [
+            'schuljahr' => '2026/2027',
+            'teil' => '_all',
+            'schedule_date' => '2026-10-02',
+            'start_time' => '09:00',
+            'end_time' => '12:00',
+            'slot_minutes' => 15,
+            'groups' => ['G1', 'G2'],
+            'areas' => [
+                ['bereich_id' => $it->id, 'duration_minutes' => 45],
+                ['bereich_id' => $kunst->id, 'duration_minutes' => 45],
+            ],
+            'events' => [
+                ['title' => 'Begrüßung', 'type' => 'shared', 'start_time' => '09:00', 'end_time' => '09:30'],
+            ],
+        ];
+
+        $this->actingAs($user)->postJson(route('bop.run.timetable.generate', ['partner' => $partner]), [
+            ...$payload, 'persist' => false,
+        ])->assertOk()
+            ->assertJsonPath('persisted', false)
+            ->assertJsonCount(5, 'timetable.entries');
+        $this->assertDatabaseCount('bop_timetables', 0);
+
+        $this->actingAs($user)->postJson(route('bop.run.timetable.generate', ['partner' => $partner]), [
+            ...$payload, 'persist' => true,
+        ])->assertOk()
+            ->assertJsonPath('persisted', true)
+            ->assertJsonPath('timetable.config.groups.0', 'G1');
+        $this->assertDatabaseCount('bop_timetables', 1);
+        $this->assertDatabaseCount('bop_timetable_entries', 5);
+        $this->assertDatabaseHas('bop_timetable_entries', [
+            'group_key' => null, 'type' => 'shared', 'title' => 'Begrüßung',
+        ]);
     }
 
     public function test_historical_school_year_without_plan_suggests_imported_classes_parts_and_counts(): void

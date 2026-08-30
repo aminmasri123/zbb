@@ -954,6 +954,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::get('/bereichsauswahl/{partnerId}/{schuljahr}/{teil}', [ProjektBopController::class, 'bereichsauswahl'])->name('bereichsauswahl.index');
     Route::put('/bop/durchlauf/teilnehmer/{participant}/status', [BopRunController::class, 'updateParticipantStatus'])->name('bop.run.participant.status');
     Route::post('/bop/durchlauf/{partner}/gruppen/{phaseType}', [BopRunController::class, 'generateGroups'])->name('bop.run.groups.generate');
+    Route::post('/bop/durchlauf/{partner}/zeitplan/generieren', [BopRunController::class, 'generateTimetable'])->name('bop.run.timetable.generate');
     Route::get('/bop/durchlauf/{partner}', [BopRunController::class, 'show'])->name('bop.run.show');
     Route::put('/bop/durchlauf/{partner}', [BopRunController::class, 'update'])->name('bop.run.update');
     Route::delete('/bop/durchlauf/{partner}', [BopRunController::class, 'reset'])->name('bop.run.reset');
