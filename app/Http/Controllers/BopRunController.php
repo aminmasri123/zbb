@@ -22,6 +22,7 @@ use App\Models\Zeiten;
 use App\Notifications\ConfiguredEventNotification;
 use App\Services\Projects\ActiveProjectContext;
 use App\Services\Scheduling\AreaRotationScheduleGenerator;
+use App\Services\Scheduling\BopTimetableSpreadsheetExporter;
 use Carbon\Carbon;
 use DomainException;
 use Illuminate\Database\Eloquent\Builder;
@@ -511,6 +512,40 @@ class BopRunController extends Controller
             'timetable' => $timetable,
             'break_defaults' => $breakDefaults,
         ]);
+    }
+
+    public function exportTimetableExcel(
+        Request $request,
+        Partner $partner,
+        BopTimetableSpreadsheetExporter $exporter
+    ) {
+        $data = $request->validate([
+            'schedule_date' => ['required', 'date_format:Y-m-d'],
+            'config' => ['required', 'array'],
+            'config.start_time' => ['required', 'date_format:H:i'],
+            'config.end_time' => ['required', 'date_format:H:i', 'after:config.start_time'],
+            'config.groups' => ['required', 'array', 'min:1', 'max:50'],
+            'config.groups.*' => ['required', 'string', 'max:80', 'distinct'],
+            'entries' => ['required', 'array', 'max:5000'],
+            'entries.*.group_key' => ['nullable', 'string', 'max:80'],
+            'entries.*.type' => ['required', Rule::in(['shared', 'break', 'extra', 'area'])],
+            'entries.*.title' => ['required', 'string', 'max:150'],
+            'entries.*.start_time' => ['required', 'date_format:H:i'],
+            'entries.*.end_time' => ['required', 'date_format:H:i'],
+            'entries.*.bereich_id' => ['nullable', 'integer'],
+            'entries.*.meta' => ['nullable', 'array'],
+            'entries.*.meta.group_labels' => ['nullable', 'array'],
+            'entries.*.meta.group_labels.*' => ['string', 'max:80'],
+            'entries.*.meta.supervisor_name' => ['nullable', 'string', 'max:150'],
+        ]);
+        $this->bopProject($request, $partner);
+        $path = $exporter->create($data, $partner->name);
+        $safeSchoolName = preg_replace('/[^a-zA-Z0-9_-]+/', '_', $partner->name) ?: 'Schule';
+        $filename = "Zeitplan_{$safeSchoolName}_{$data['schedule_date']}.xlsx";
+
+        return response()->download($path, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
     }
 
     private function bopProject(Request $request, Partner $partner): Projekt

@@ -249,6 +249,40 @@ class BopRunWorkflowTest extends TestCase
         $this->assertDatabaseHas('bop_timetables', ['schedule_date' => '2026-11-03']);
     }
 
+    public function test_timetable_can_be_exported_as_a_real_xlsx_file(): void
+    {
+        $user = User::factory()->create();
+        $project = Projekt::factory()->create(['name' => 'BOP']);
+        $partner = Partner::query()->create(['name' => 'Excel Testschule']);
+        $user->projekte()->attach($project->id);
+        $user->update(['current_team_id' => $project->id]);
+        $project->partners()->attach($partner->id);
+
+        $response = $this->actingAs($user)->post(route('bop.run.timetable.export.excel', ['partner' => $partner]), [
+            'schedule_date' => '2026-08-31',
+            'config' => [
+                'start_time' => '08:30',
+                'end_time' => '10:00',
+                'groups' => ['G1'],
+            ],
+            'entries' => [[
+                'group_key' => 'G1',
+                'type' => 'area',
+                'title' => 'IT und Medien',
+                'start_time' => '08:30',
+                'end_time' => '09:00',
+                'bereich_id' => 1,
+                'meta' => ['supervisor_name' => 'Erika Beispiel'],
+            ]],
+        ]);
+
+        $response->assertOk()
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $path = $response->baseResponse->getFile()->getPathname();
+        $this->assertSame('PK', file_get_contents($path, false, null, 0, 2));
+        @unlink($path);
+    }
+
     public function test_historical_school_year_without_plan_suggests_imported_classes_parts_and_counts(): void
     {
         $user = User::factory()->create();

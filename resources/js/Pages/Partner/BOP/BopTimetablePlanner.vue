@@ -399,51 +399,114 @@ function exportFileName(extension) {
   return `Zeitplan_${school}_${date}.${extension}`
 }
 
-function csvCell(value) {
-  let text = String(value ?? '')
-  if (/^[=+@-]/.test(text)) text = `'${text}`
-  return `"${text.replaceAll('"', '""')}"`
-}
-
-function exportCsv() {
-  if (!preview.value) return
-  const lines = [['Gruppe', 'Von', 'Bis', 'Aktivität', 'Art', 'Dauer (Minuten)', 'Anleiter']]
-  rows().forEach((row) => {
-    row.entries.forEach((entry) => {
-      lines.push([
-        row.group,
-        String(entry.start_time).slice(0, 5),
-        String(entry.end_time).slice(0, 5),
-        entry.title,
-        typeLabel(entry.type),
-        entryDuration(entry),
-        entry.meta?.supervisor_name || '',
-      ])
-    })
-  })
-  const csv = `\uFEFF${lines.map((line) => line.map(csvCell).join(';')).join('\r\n')}`
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = exportFileName('csv')
+  link.download = filename
   link.click()
   URL.revokeObjectURL(url)
-  success.value = 'Der Zeitplan wurde als Excel-kompatible CSV-Datei exportiert.'
+}
+
+async function exportExcel() {
+  if (!preview.value || exportBusy.value) return
+  exportBusy.value = true
+  error.value = ''
+  try {
+    const response = await axios.post(route('bop.run.timetable.export.excel', { partner: props.partnerId }), {
+      schedule_date: dateValue(form.value.schedule_date),
+      config: preview.value.config,
+      entries: preview.value.entries || [],
+    }, { responseType: 'blob' })
+    downloadBlob(response.data, exportFileName('xlsx'))
+    success.value = 'Der farbige Zeitplan wurde als Excel-Datei im Querformat exportiert.'
+  } catch (exception) {
+    error.value = 'Der Excel-Export konnte nicht erstellt werden.'
+  } finally {
+    exportBusy.value = false
+  }
+}
+
+function pdfEntryFill(entry) {
+  if (entry.type === 'break') return [226, 232, 240]
+  if (entry.type === 'shared') return [219, 234, 254]
+  if (entry.type === 'extra') return [237, 233, 254]
+  return [
+    [255, 237, 213], [209, 250, 229], [207, 250, 254], [254, 243, 199], [255, 228, 230],
+  ][Math.abs(Number(entry.bereich_id || 0)) % 5]
+}
+
+function addPdfDetailPages(pdf) {
+  const margin = 8
+  const pageWidth = pdf.internal.pageSize.getWidth()
+  const pageHeight = pdf.internal.pageSize.getHeight()
+  const columns = [18, 38, 142, 28, 24, pageWidth - (margin * 2) - 250]
+  const headings = ['Gruppe', 'Von–Bis', 'Aktivität', 'Art', 'Min.', 'Anleiter']
+  let y = 0
+
+  const startPage = () => {
+    pdf.addPage('a3', 'landscape')
+    pdf.setTextColor(17, 24, 39)
+    pdf.setFont('helvetica', 'bold')
+    pdf.setFontSize(13)
+    pdf.text(`Detailübersicht · ${props.schoolName || ''} · ${dateLabel(form.value.schedule_date)}`, margin, margin + 4)
+    y = margin + 10
+    let x = margin
+    pdf.setFillColor(251, 191, 36)
+    pdf.setFontSize(8)
+    headings.forEach((heading, index) => {
+      pdf.rect(x, y, columns[index], 8, 'FD')
+      pdf.text(heading, x + 1.5, y + 5.2)
+      x += columns[index]
+    })
+    y += 8
+  }
+
+  startPage()
+  rows().forEach((row) => {
+    row.entries.forEach((entry) => {
+      const values = [
+        [row.group],
+        [`${String(entry.start_time).slice(0, 5)}–${String(entry.end_time).slice(0, 5)}`],
+        pdf.splitTextToSize(String(entry.title || ''), columns[2] - 3),
+        [typeLabel(entry.type)],
+        [String(entryDuration(entry))],
+        pdf.splitTextToSize(String(entry.meta?.supervisor_name || '–'), columns[5] - 3),
+      ]
+      const lineCount = Math.max(...values.map((value) => value.length))
+      const rowHeight = Math.max(9, (lineCount * 3.5) + 3)
+      if (y + rowHeight > pageHeight - margin) startPage()
+
+      let x = margin
+      const fill = pdfEntryFill(entry)
+      pdf.setFillColor(...fill)
+      pdf.setFont('helvetica', 'normal')
+      pdf.setFontSize(7.5)
+      values.forEach((value, index) => {
+        pdf.rect(x, y, columns[index], rowHeight, 'FD')
+        pdf.text(value, x + 1.5, y + 4.3)
+        x += columns[index]
+      })
+      y += rowHeight
+    })
+  })
 }
 
 async function exportPdf() {
   if (!timelineExportRef.value || exportBusy.value) return
   exportBusy.value = true
   error.value = ''
-  const scrollContainer = timelineExportRef.value.parentElement
+  const element = timelineExportRef.value
+  const scrollContainer = element.parentElement
   const previousScrollLeft = scrollContainer?.scrollLeft || 0
   try {
     const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
       import('html2canvas'),
       import('jspdf'),
     ])
-    const element = timelineExportRef.value
     if (scrollContainer) scrollContainer.scrollLeft = 0
+    element.classList.add('timeline-export-pdf')
+    await new Promise((resolve) => requestAnimationFrame(resolve))
     const canvas = await html2canvas(element, {
       scale: 2,
       backgroundColor: '#ffffff',
@@ -474,11 +537,13 @@ async function exportPdf() {
       pdf.addImage(slice.toDataURL('image/png'), 'PNG', margin, headerHeight, imageWidth, sliceHeight / pixelsPerMm)
     }
 
+    addPdfDetailPages(pdf)
     pdf.save(exportFileName('pdf'))
-    success.value = 'Der Zeitplan wurde als PDF exportiert.'
+    success.value = 'Der Zeitplan wurde vollständig als PDF exportiert. Zusätzliche Detailseiten zeigen alle Texte ungekürzt.'
   } catch (exception) {
     error.value = 'Der PDF-Export konnte nicht erstellt werden.'
   } finally {
+    element.classList.remove('timeline-export-pdf')
     if (scrollContainer) scrollContainer.scrollLeft = previousScrollLeft
     exportBusy.value = false
   }
@@ -541,7 +606,7 @@ async function exportPdf() {
 
         <section v-if="preview" class="overflow-hidden rounded-lg border bg-white">
           <div class="border-b bg-gray-50 px-4 py-3">
-            <div class="flex flex-wrap items-center justify-between gap-2"><h3 class="font-bold">Zeitplan · {{ dateLabel(form.schedule_date) }}</h3><div class="flex gap-2"><button type="button" class="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-800 disabled:opacity-50" :disabled="exportBusy" @click="exportCsv">Excel/CSV</button><button type="button" class="rounded bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50" :disabled="exportBusy" @click="exportPdf">{{ exportBusy ? 'PDF wird erstellt …' : 'PDF exportieren' }}</button></div></div>
+            <div class="flex flex-wrap items-center justify-between gap-2"><h3 class="font-bold">Zeitplan · {{ dateLabel(form.schedule_date) }}</h3><div class="flex gap-2"><button type="button" class="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-800 disabled:opacity-50" :disabled="exportBusy" @click="exportExcel">Excel exportieren</button><button type="button" class="rounded bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50" :disabled="exportBusy" @click="exportPdf">{{ exportBusy ? 'Export wird erstellt …' : 'PDF exportieren' }}</button></div></div>
             <p class="text-xs font-semibold text-orange-700">Bereichsdauer: <template v-if="preview.config?.actual_area_duration_min_minutes !== preview.config?.actual_area_duration_max_minutes">{{ preview.config?.actual_area_duration_min_minutes }}–{{ preview.config?.actual_area_duration_max_minutes }} Minuten</template><template v-else>{{ preview.config?.actual_area_duration_min_minutes || preview.config?.calculated_area_duration_minutes || preview.config?.areas?.[0]?.duration_minutes || '–' }} Minuten</template></p>
             <div class="mt-2 flex flex-wrap items-center gap-2 rounded border border-cyan-200 bg-cyan-50 px-2.5 py-2 text-xs text-cyan-900"><span v-if="selectedArea" class="font-semibold">{{ selectedArea.title }} in {{ selectedArea.group }} ausgewählt – jetzt den Tauschbereich anklicken.</span><span v-else>Bereiche tauschen: zuerst den ersten, danach den zweiten Bereich derselben Gruppe anklicken.</span><button v-if="Object.keys(form.area_orders || {}).length" type="button" class="ml-auto rounded border border-cyan-300 bg-white px-2 py-1 font-semibold" :disabled="busy" @click="resetAreaOrders">Automatische Reihenfolge wiederherstellen</button></div>
             <div class="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-gray-600"><span class="font-semibold">Horizontal scrollen für den ganzen Tag</span><span class="inline-flex items-center gap-1"><i class="h-3 w-3 rounded-sm border border-orange-500 bg-orange-100"></i>Bereich</span><span class="inline-flex items-center gap-1"><i class="h-3 w-3 rounded-sm border border-slate-500 bg-slate-200"></i>Pause</span><span class="inline-flex items-center gap-1"><i class="h-3 w-3 rounded-sm border border-blue-500 bg-blue-100"></i>Gemeinsam</span><span class="inline-flex items-center gap-1"><i class="h-3 w-3 rounded-sm border border-violet-500 bg-violet-100"></i>Zusatz</span></div>
@@ -556,19 +621,19 @@ async function exportPdf() {
                   </div>
                 </div>
               </div>
-              <div v-for="row in rows()" :key="row.group" class="flex h-14 border-b border-gray-300 last:border-b-0">
+              <div v-for="row in rows()" :key="row.group" class="timetable-row flex h-14 border-b border-gray-300 last:border-b-0">
                 <div class="sticky left-0 z-20 flex w-[72px] shrink-0 items-center justify-center border-r border-gray-500 bg-amber-400 text-sm font-extrabold text-gray-950">{{ row.group }}</div>
                 <div class="relative h-full shrink-0 bg-white" :style="timelineRowStyle()">
                   <div
                     v-for="entry in row.entries"
                     :key="`${row.group}-${entry.start_time}-${entry.end_time}-${entry.title}`"
-                    class="absolute top-1.5 flex h-11 items-center overflow-hidden rounded-sm border px-1.5 shadow-sm"
+                    class="timetable-entry absolute top-1.5 flex h-11 items-center overflow-hidden rounded-sm border px-1.5 shadow-sm"
                     :class="[timelineEntryClass(entry), entry.type === 'area' ? 'cursor-pointer hover:ring-2 hover:ring-cyan-500' : '', isSelectedArea(row.group, entry) ? 'z-10 ring-4 ring-cyan-600' : '']"
                     :style="timelineEntryStyle(entry)"
                     :title="entryTooltip(entry)"
                     @click="selectAreaForSwap(row.group, entry)"
                   >
-                    <div class="min-w-0 leading-tight"><div class="truncate text-xs font-bold">{{ entry.title }} <span class="font-normal">({{ entryDuration(entry) }})</span></div><div class="truncate text-[9px] font-semibold opacity-80">{{ String(entry.start_time).slice(0, 5) }}–{{ String(entry.end_time).slice(0, 5) }}<span v-if="entry.meta?.supervisor_name"> · {{ entry.meta.supervisor_name }}</span></div></div>
+                    <div class="min-w-0 leading-tight"><div class="timetable-entry-title truncate text-xs font-bold">{{ entry.title }} <span class="font-normal">({{ entryDuration(entry) }})</span></div><div class="timetable-entry-details truncate text-[9px] font-semibold opacity-80">{{ String(entry.start_time).slice(0, 5) }}–{{ String(entry.end_time).slice(0, 5) }}<span v-if="entry.meta?.supervisor_name"> · {{ entry.meta.supervisor_name }}</span></div></div>
                   </div>
                 </div>
               </div>
@@ -579,3 +644,24 @@ async function exportPdf() {
     </section>
   </div>
 </template>
+
+<style scoped>
+.timeline-export-pdf .timetable-row {
+  height: 76px !important;
+}
+
+.timeline-export-pdf .timetable-entry {
+  top: 6px !important;
+  height: 64px !important;
+  align-items: flex-start !important;
+  padding-top: 8px;
+  padding-bottom: 6px;
+}
+
+.timeline-export-pdf .timetable-entry-title,
+.timeline-export-pdf .timetable-entry-details {
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+}
+</style>
