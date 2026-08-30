@@ -18,6 +18,7 @@ const success = ref('')
 const options = ref({ areas: [], supervisors: [] })
 const workshopDates = ref([])
 const timetables = ref([])
+const breakDefaults = ref([])
 const preview = ref(null)
 const form = ref(emptyForm())
 
@@ -44,6 +45,7 @@ async function load() {
     options.value = response.data.options || { areas: [], supervisors: [] }
     workshopDates.value = workshop.dates || []
     timetables.value = workshop.timetables || []
+    breakDefaults.value = response.data.run?.break_defaults || []
 
     const firstSaved = timetables.value[0] || null
     if (firstSaved) {
@@ -56,6 +58,7 @@ async function load() {
         start_time: String(workshop.start_time || '09:00').slice(0, 5),
         end_time: String(workshop.end_time || '15:00').slice(0, 5),
         group_count: suggestedGroupCount,
+        events: breakDefaults.value.map(normaliseBreakDefault),
       }
     }
   } catch (exception) {
@@ -116,6 +119,42 @@ function halfLabel(scope) {
   return `${selected[0]}–${selected[selected.length - 1]}`
 }
 
+function normaliseBreakDefault(event) {
+  return {
+    title: event.title || 'Pause',
+    type: 'break',
+    group_scope: event.group_scope || 'all',
+    start_time: String(event.start_time || '').slice(0, 5),
+    end_time: String(event.end_time || '').slice(0, 5),
+  }
+}
+
+function eventGroups(event) {
+  const labels = groups()
+  const halfSize = Math.ceil(labels.length / 2)
+  if (event.group_scope === 'first_half') return labels.slice(0, halfSize)
+  if (event.group_scope === 'second_half') return labels.slice(halfSize)
+  return labels
+}
+
+function groupBreakCount(group) {
+  return form.value.events.filter((event) => event.type === 'break' && eventGroups(event).includes(group)).length
+}
+
+function everyGroupHasTwoBreaks() {
+  return groups().every((group) => groupBreakCount(group) === 2)
+}
+
+function applyBreakDefaults() {
+  if (!breakDefaults.value.length) return
+  form.value.events = [
+    ...form.value.events.filter((event) => event.type !== 'break'),
+    ...breakDefaults.value.map(normaliseBreakDefault),
+  ]
+  preview.value = null
+  success.value = 'Die gespeicherten Standardpausen wurden übernommen.'
+}
+
 function areaSetting(areaId) {
   return form.value.areas.find((area) => Number(area.bereich_id) === Number(areaId))
 }
@@ -157,6 +196,11 @@ function requestPayload(persist) {
 }
 
 async function generate(persist = false) {
+  if (!everyGroupHasTwoBreaks()) {
+    error.value = 'Bitte für jede Gruppe genau zwei Pausen festlegen.'
+    success.value = ''
+    return
+  }
   busy.value = true
   error.value = ''
   success.value = ''
@@ -165,6 +209,9 @@ async function generate(persist = false) {
     preview.value = response.data.timetable
     success.value = response.data.message
     if (persist) {
+      breakDefaults.value = response.data.break_defaults || (response.data.timetable.config?.events || [])
+        .filter((event) => event.type === 'break')
+        .map(normaliseBreakDefault)
       timetables.value = [
         ...timetables.value.filter((item) => dateValue(item.schedule_date) !== form.value.schedule_date),
         response.data.timetable,
@@ -315,7 +362,7 @@ function entryTooltip(entry) {
         </section>
 
         <section class="rounded-lg border bg-white p-4">
-          <div class="mb-3 flex items-center justify-between gap-2"><div><h3 class="font-bold text-gray-900">Aktivitäten und Pausen</h3><p class="text-xs text-gray-500">Für gestaffelte Pausen zwei Einträge anlegen: einmal Hälfte 1 und einmal Hälfte 2.</p></div><button type="button" class="rounded border px-3 py-1.5 text-xs font-semibold" @click="addEvent">+ Aktivität</button></div>
+          <div class="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h3 class="font-bold text-gray-900">Aktivitäten und Pausen</h3><p class="text-xs text-gray-500">Jede Gruppe erhält genau zwei Pausen. Beim Speichern werden diese Zeiten automatisch als Standard gespeichert.</p></div><div class="flex gap-2"><button v-if="breakDefaults.length" type="button" class="rounded border border-orange-300 bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-800" @click="applyBreakDefaults">Standardpausen übernehmen</button><button type="button" class="rounded border px-3 py-1.5 text-xs font-semibold" @click="addEvent">+ Aktivität</button></div></div>
           <div class="space-y-2">
             <div v-for="(event, index) in form.events" :key="index" class="grid gap-2 rounded border bg-gray-50 p-2 md:grid-cols-[1.4fr_8rem_10rem_8rem_8rem_auto]">
               <input v-model="event.title" class="rounded border-gray-300 text-sm" placeholder="Begrüßung" @input="preview = null" />
@@ -326,6 +373,7 @@ function entryTooltip(entry) {
               <button type="button" class="px-2 font-bold text-red-600" @click="removeEvent(index)">×</button>
             </div>
           </div>
+          <div class="mt-3 rounded border px-3 py-2 text-xs" :class="everyGroupHasTwoBreaks() ? 'border-green-200 bg-green-50 text-green-800' : 'border-amber-200 bg-amber-50 text-amber-900'"><span v-if="everyGroupHasTwoBreaks()">✓ Jede Gruppe hat zwei Pausen.</span><span v-else>Bitte für jede Gruppe genau zwei Pausen festlegen.<template v-for="group in groups()" :key="group"><span v-if="groupBreakCount(group) !== 2" class="ml-2 font-semibold">{{ group }}: {{ groupBreakCount(group) }}</span></template></span></div>
         </section>
 
         <div class="flex flex-wrap gap-2"><button type="button" class="rounded bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="busy" @click="generate(false)">{{ busy ? 'Berechnet …' : 'Vorschau erzeugen' }}</button><button type="button" class="rounded bg-orange-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="busy || !preview" @click="generate(true)">Zeitplan speichern</button></div>

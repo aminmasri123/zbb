@@ -427,6 +427,16 @@ class BopRunController extends Controller
             throw ValidationException::withMessages(['timetable' => $exception->getMessage()]);
         }
 
+        $breakDefaults = collect($generated['config']['events'] ?? [])
+            ->where('type', 'break')
+            ->map(fn (array $event) => [
+                'title' => $event['title'],
+                'type' => 'break',
+                'group_scope' => $event['group_scope'] ?? 'all',
+                'start_time' => $event['start_time'],
+                'end_time' => $event['end_time'],
+            ])->values()->all();
+
         if (! ($context['persist'] ?? false)) {
             return response()->json([
                 'message' => 'Die Zeitplanvorschau wurde konfliktfrei erzeugt.',
@@ -435,7 +445,7 @@ class BopRunController extends Controller
             ]);
         }
 
-        $timetable = DB::transaction(function () use ($run, $project, $partner, $context, $generated) {
+        $timetable = DB::transaction(function () use ($run, $project, $partner, $context, $generated, $breakDefaults) {
             $run ??= BopRun::query()->create([
                 'projekt_id' => $project->id,
                 'partner_id' => $partner->id,
@@ -471,6 +481,7 @@ class BopRunController extends Controller
             $run->update([
                 'first_visit_date' => $allDates->first(),
                 'last_visit_date' => $allDates->last(),
+                'break_defaults' => $breakDefaults,
                 'updated_by_user_id' => Auth::id(),
             ]);
 
@@ -495,6 +506,7 @@ class BopRunController extends Controller
             'message' => 'Der Zeitplan wurde konfliktfrei erzeugt und gespeichert.',
             'persisted' => true,
             'timetable' => $timetable,
+            'break_defaults' => $breakDefaults,
         ]);
     }
 

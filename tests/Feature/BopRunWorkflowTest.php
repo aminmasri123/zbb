@@ -190,6 +190,8 @@ class BopRunWorkflowTest extends TestCase
             ],
             'events' => [
                 ['title' => 'Begrüßung', 'type' => 'shared', 'start_time' => '09:00', 'end_time' => '09:30'],
+                ['title' => 'Pause 1', 'type' => 'break', 'group_scope' => 'all', 'start_time' => '10:15', 'end_time' => '10:25'],
+                ['title' => 'Pause 2', 'type' => 'break', 'group_scope' => 'all', 'start_time' => '11:15', 'end_time' => '11:25'],
             ],
         ];
 
@@ -197,19 +199,21 @@ class BopRunWorkflowTest extends TestCase
             ...$payload, 'persist' => false,
         ])->assertOk()
             ->assertJsonPath('persisted', false)
-            ->assertJsonCount(5, 'timetable.entries');
+            ->assertJsonCount(7, 'timetable.entries');
         $this->assertDatabaseCount('bop_timetables', 0);
 
         $this->actingAs($user)->postJson(route('bop.run.timetable.generate', ['partner' => $partner]), [
             ...$payload, 'persist' => true,
         ])->assertOk()
             ->assertJsonPath('persisted', true)
+            ->assertJsonCount(2, 'break_defaults')
             ->assertJsonPath('timetable.config.groups.0', 'G1');
         $this->assertDatabaseCount('bop_timetables', 1);
-        $this->assertDatabaseCount('bop_timetable_entries', 5);
+        $this->assertDatabaseCount('bop_timetable_entries', 7);
         $this->assertDatabaseHas('bop_timetable_entries', [
             'group_key' => null, 'type' => 'shared', 'title' => 'Begrüßung',
         ]);
+        $this->assertCount(2, $run->fresh()->break_defaults);
     }
 
     public function test_partner_page_can_create_a_timetable_without_an_existing_bop_run(): void

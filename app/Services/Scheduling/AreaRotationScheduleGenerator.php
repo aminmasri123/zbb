@@ -266,7 +266,7 @@ class AreaRotationScheduleGenerator
             foreach ($event['group_labels'] as $group) {
                 $groupIndex = $groupIndexes[$group];
                 for ($slot = $firstSlot; $slot < $lastSlot; $slot++) {
-                    $blocked[$groupIndex][$slot] = true;
+                    $blocked[$groupIndex][$slot] = $event['type'];
                 }
             }
         }
@@ -324,12 +324,27 @@ class AreaRotationScheduleGenerator
         }
 
         $assignments = array_fill(0, $slotCount, []);
-        $previousArea = array_fill(0, count($groups), null);
+        $activeArea = array_fill(0, count($groups), null);
+        $completedAreas = array_fill(0, count($groups), 0);
 
         for ($slot = 0; $slot < $slotCount; $slot++) {
+            $currentArea = array_fill(0, count($groups), null);
+            $reservedAreas = [];
+
+            foreach ($activeArea as $groupIndex => $areaIndex) {
+                if ($areaIndex === null) {
+                    continue;
+                }
+                $reservedAreas[$areaIndex] = $groupIndex;
+                if (! $blockedSlots[$groupIndex][$slot]) {
+                    $currentArea[$groupIndex] = $areaIndex;
+                }
+            }
+
             $availableGroups = array_values(array_filter(
                 array_keys($groups),
                 fn ($groupIndex) => ! $blockedSlots[$groupIndex][$slot]
+                    && $activeArea[$groupIndex] === null
                     && array_sum($remaining[$groupIndex]) > 0
             ));
             usort($availableGroups, function ($left, $right) use ($futureFree, $remaining, $slot) {
@@ -339,25 +354,48 @@ class AreaRotationScheduleGenerator
                 return [$leftSlack, $left] <=> [$rightSlack, $right];
             });
 
-            $areaToGroup = [];
             foreach ($availableGroups as $groupIndex) {
-                $seenAreas = [];
-                $this->matchGroupToArea(
-                    $groupIndex,
-                    $areaToGroup,
-                    $seenAreas,
-                    $remaining,
-                    $previousArea
-                );
+                $candidateAreas = array_values(array_filter(
+                    array_keys($areas),
+                    fn ($areaIndex) => $remaining[$groupIndex][$areaIndex] > 0
+                        && ! isset($reservedAreas[$areaIndex])
+                ));
+                $preferredArea = ($groupIndex + $completedAreas[$groupIndex]) % count($areas);
+                usort($candidateAreas, fn ($left, $right) => [
+                    ($left - $preferredArea + count($areas)) % count($areas),
+                    $left,
+                ] <=> [
+                    ($right - $preferredArea + count($areas)) % count($areas),
+                    $right,
+                ]);
+
+                foreach ($candidateAreas as $areaIndex) {
+                    if (! $this->canCompleteBeforeNonBreakEvent(
+                        $groupIndex,
+                        $slot,
+                        $remaining[$groupIndex][$areaIndex],
+                        $blockedSlots
+                    )) {
+                        continue;
+                    }
+                    $activeArea[$groupIndex] = $areaIndex;
+                    $reservedAreas[$areaIndex] = $groupIndex;
+                    $currentArea[$groupIndex] = $areaIndex;
+                    break;
+                }
             }
 
-            $currentArea = array_fill(0, count($groups), null);
-            foreach ($areaToGroup as $areaIndex => $groupIndex) {
+            foreach ($currentArea as $groupIndex => $areaIndex) {
+                if ($areaIndex === null) {
+                    continue;
+                }
                 $assignments[$slot][$groupIndex] = $areaIndex;
                 $remaining[$groupIndex][$areaIndex]--;
-                $currentArea[$groupIndex] = $areaIndex;
+                if ($remaining[$groupIndex][$areaIndex] === 0) {
+                    $activeArea[$groupIndex] = null;
+                    $completedAreas[$groupIndex]++;
+                }
             }
-            $previousArea = $currentArea;
         }
 
         foreach ($remaining as $groupRemaining) {
@@ -369,40 +407,22 @@ class AreaRotationScheduleGenerator
         return $assignments;
     }
 
-    private function matchGroupToArea(
+    private function canCompleteBeforeNonBreakEvent(
         int $groupIndex,
-        array &$areaToGroup,
-        array &$seenAreas,
-        array $remaining,
-        array $previousArea
+        int $startSlot,
+        int $requiredSlots,
+        array $blockedSlots
     ): bool {
-        $candidateAreas = array_values(array_filter(
-            array_keys($remaining[$groupIndex]),
-            fn ($areaIndex) => $remaining[$groupIndex][$areaIndex] > 0
-        ));
-        usort($candidateAreas, function ($left, $right) use ($groupIndex, $remaining, $previousArea) {
-            $leftPrevious = $previousArea[$groupIndex] === $left ? 0 : 1;
-            $rightPrevious = $previousArea[$groupIndex] === $right ? 0 : 1;
-
-            return [$leftPrevious, -$remaining[$groupIndex][$left], $left]
-                <=> [$rightPrevious, -$remaining[$groupIndex][$right], $right];
-        });
-
-        foreach ($candidateAreas as $areaIndex) {
-            if (isset($seenAreas[$areaIndex])) {
-                continue;
+        $availableSlots = 0;
+        for ($slot = $startSlot; $slot < count($blockedSlots[$groupIndex]); $slot++) {
+            $blockType = $blockedSlots[$groupIndex][$slot];
+            if ($blockType && $blockType !== 'break') {
+                return false;
             }
-            $seenAreas[$areaIndex] = true;
-
-            if (! isset($areaToGroup[$areaIndex]) || $this->matchGroupToArea(
-                $areaToGroup[$areaIndex],
-                $areaToGroup,
-                $seenAreas,
-                $remaining,
-                $previousArea
-            )) {
-                $areaToGroup[$areaIndex] = $groupIndex;
-
+            if (! $blockType) {
+                $availableSlots++;
+            }
+            if ($availableSlots >= $requiredSlots) {
                 return true;
             }
         }

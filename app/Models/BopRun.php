@@ -11,6 +11,7 @@ class BopRun extends Model
 
     protected $fillable = [
         'projekt_id', 'partner_id', 'schuljahr', 'teil', 'school_type', 'parts', 'planned_classes',
+        'break_defaults',
         'first_visit_date', 'last_visit_date', 'status',
         'created_by_user_id', 'updated_by_user_id',
     ];
@@ -20,6 +21,7 @@ class BopRun extends Model
         'last_visit_date' => 'date',
         'planned_classes' => 'array',
         'parts' => 'array',
+        'break_defaults' => 'array',
     ];
 
     public function scopeForSchuljahr($query, $schuljahr)

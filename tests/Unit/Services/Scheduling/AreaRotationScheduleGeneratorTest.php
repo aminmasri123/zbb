@@ -123,7 +123,7 @@ class AreaRotationScheduleGeneratorTest extends TestCase
         $this->assertCount(2, $breaks);
         $this->assertSame(['G1', 'G2', 'G3'], $breaks[0]['meta']['group_labels']);
         $this->assertSame(['G4', 'G5', 'G6'], $breaks[1]['meta']['group_labels']);
-        $this->assertSame(40, $result['config']['calculated_area_duration_minutes']);
+        $this->assertSame(35, $result['config']['calculated_area_duration_minutes']);
 
         foreach ($result['config']['groups'] as $group) {
             $this->assertEqualsCanonicalizing(
@@ -137,12 +137,22 @@ class AreaRotationScheduleGeneratorTest extends TestCase
 
         $this->assertNotEmpty(array_filter($areaEntries, fn ($entry) =>
             in_array($entry['group_key'], ['G4', 'G5', 'G6'], true)
-            && $entry['start_time'] <= '10:00' && $entry['end_time'] >= '10:30'
+            && $entry['start_time'] < '10:30' && $entry['end_time'] > '10:00'
         ));
-        $this->assertNotEmpty(array_filter($areaEntries, fn ($entry) =>
-            in_array($entry['group_key'], ['G1', 'G2', 'G3'], true)
-            && $entry['start_time'] <= '10:30' && $entry['end_time'] >= '11:00'
-        ));
+        foreach ($result['config']['groups'] as $group) {
+            $groupEntries = array_values(array_filter($areaEntries, fn ($entry) => $entry['group_key'] === $group));
+            foreach (array_unique(array_column($groupEntries, 'bereich_id')) as $areaId) {
+                $segments = array_values(array_filter($groupEntries, fn ($entry) => $entry['bereich_id'] === $areaId));
+                usort($segments, fn ($left, $right) => $left['start_time'] <=> $right['start_time']);
+                for ($index = 1; $index < count($segments); $index++) {
+                    $this->assertNotEmpty(array_filter($breaks, fn ($break) =>
+                        in_array($group, $break['meta']['group_labels'], true)
+                        && $break['start_time'] === $segments[$index - 1]['end_time']
+                        && $break['end_time'] === $segments[$index]['start_time']
+                    ), "{$group} darf einen Bereich nur wegen einer Pause unterbrechen.");
+                }
+            }
+        }
     }
 
     public function test_manual_event_times_do_not_have_to_match_the_selected_time_grid(): void
