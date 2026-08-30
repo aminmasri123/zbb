@@ -312,7 +312,7 @@ function rows() {
 }
 
 function typeLabel(type) {
-  return ({ shared: 'Gemeinsam', break: 'Pause', extra: 'Zusatz', area: 'Bereich' })[type] || type
+  return ({ shared: 'Gemeinsam', break: 'Pause', extra: 'Zusatz', area: 'Bereich', buffer: 'Puffer' })[type] || type
 }
 
 const timelinePixelsPerMinute = 6
@@ -373,6 +373,7 @@ function timelineEntryClass(entry) {
   if (entry.type === 'break') return 'border-slate-500 bg-slate-200 text-slate-900'
   if (entry.type === 'shared') return 'border-blue-500 bg-blue-100 text-blue-950'
   if (entry.type === 'extra') return 'border-violet-500 bg-violet-100 text-violet-950'
+  if (entry.type === 'buffer') return 'border-gray-400 bg-gray-100 text-gray-700'
   const colors = [
     'border-orange-500 bg-orange-100 text-orange-950',
     'border-emerald-500 bg-emerald-100 text-emerald-950',
@@ -450,6 +451,7 @@ function pdfEntryFill(entry) {
   if (entry.type === 'break') return [226, 232, 240]
   if (entry.type === 'shared') return [219, 234, 254]
   if (entry.type === 'extra') return [237, 233, 254]
+  if (entry.type === 'buffer') return [243, 244, 246]
   return [
     [255, 237, 213], [209, 250, 229], [207, 250, 254], [254, 243, 199], [255, 228, 230],
   ][Math.abs(Number(entry.bereich_id || 0)) % 5]
@@ -627,8 +629,9 @@ async function exportPdf() {
           <div class="border-b bg-gray-50 px-4 py-3">
             <div class="flex flex-wrap items-center justify-between gap-2"><h3 class="font-bold">Zeitplan · {{ dateLabel(form.schedule_date) }}</h3><div class="flex gap-2"><button type="button" class="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-800 disabled:opacity-50" :disabled="exportBusy" @click="exportExcel">Excel exportieren</button><button type="button" class="rounded bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50" :disabled="exportBusy" @click="exportPdf">{{ exportBusy ? 'Export wird erstellt …' : 'PDF exportieren' }}</button></div></div>
             <p class="text-xs font-semibold text-orange-700">Bereichsdauer: <template v-if="preview.config?.actual_area_duration_min_minutes !== preview.config?.actual_area_duration_max_minutes">{{ preview.config?.actual_area_duration_min_minutes }}–{{ preview.config?.actual_area_duration_max_minutes }} Minuten</template><template v-else>{{ preview.config?.actual_area_duration_min_minutes || preview.config?.calculated_area_duration_minutes || preview.config?.areas?.[0]?.duration_minutes || '–' }} Minuten</template></p>
+            <p v-if="preview.config?.buffer_minutes" class="mt-1 text-[11px] font-semibold text-gray-600">Nicht fair verteilbare Restzeit wird als Wechsel-/Pufferzeit angezeigt (maximal {{ preview.config.buffer_minutes }} Minuten je Gruppe).</p>
             <div class="mt-2 flex flex-wrap items-center gap-2 rounded border border-cyan-200 bg-cyan-50 px-2.5 py-2 text-xs text-cyan-900"><span v-if="selectedArea" class="font-semibold">{{ selectedArea.title }} in {{ selectedArea.group }} ausgewählt – jetzt den Tauschbereich anklicken.</span><span v-else>Bereiche tauschen: zuerst den ersten, danach den zweiten Bereich derselben Gruppe anklicken.</span><button v-if="Object.keys(form.area_orders || {}).length" type="button" class="ml-auto rounded border border-cyan-300 bg-white px-2 py-1 font-semibold" :disabled="busy" @click="resetAreaOrders">Automatische Reihenfolge wiederherstellen</button></div>
-            <div class="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-gray-600"><span class="font-semibold">Horizontal scrollen für den ganzen Tag</span><span class="inline-flex items-center gap-1"><i class="h-3 w-3 rounded-sm border border-orange-500 bg-orange-100"></i>Bereich</span><span class="inline-flex items-center gap-1"><i class="h-3 w-3 rounded-sm border border-slate-500 bg-slate-200"></i>Pause</span><span class="inline-flex items-center gap-1"><i class="h-3 w-3 rounded-sm border border-blue-500 bg-blue-100"></i>Gemeinsam</span><span class="inline-flex items-center gap-1"><i class="h-3 w-3 rounded-sm border border-violet-500 bg-violet-100"></i>Zusatz</span></div>
+            <div class="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-gray-600"><span class="font-semibold">Horizontal scrollen für den ganzen Tag</span><span class="inline-flex items-center gap-1"><i class="h-3 w-3 rounded-sm border border-orange-500 bg-orange-100"></i>Bereich</span><span class="inline-flex items-center gap-1"><i class="h-3 w-3 rounded-sm border border-slate-500 bg-slate-200"></i>Pause</span><span class="inline-flex items-center gap-1"><i class="h-3 w-3 rounded-sm border border-blue-500 bg-blue-100"></i>Gemeinsam</span><span class="inline-flex items-center gap-1"><i class="h-3 w-3 rounded-sm border border-violet-500 bg-violet-100"></i>Zusatz</span><span class="inline-flex items-center gap-1"><i class="h-3 w-3 rounded-sm border border-gray-400 bg-gray-100"></i>Puffer</span></div>
           </div>
           <div class="overflow-x-auto bg-white">
             <div ref="timelineExportRef" class="min-w-max" :style="{ width: `${timelineWidth() + timelineGroupWidth}px` }">

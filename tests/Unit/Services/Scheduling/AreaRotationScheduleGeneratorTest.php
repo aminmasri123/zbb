@@ -247,6 +247,10 @@ class AreaRotationScheduleGeneratorTest extends TestCase
                 'bereich_id' => $id,
                 'name' => 'Bereich '.$id,
             ], range(1, 7)),
+            'area_orders' => [
+                'G1' => [1, 2, 3, 4, 5, 6, 7],
+                'G2' => [7, 1, 2, 3, 4, 5, 6],
+            ],
             'events' => [
                 ['title' => 'Begrüßung', 'type' => 'shared', 'group_scope' => 'all', 'start_time' => '08:30', 'end_time' => '09:00'],
                 ['title' => 'Pause 1 G1', 'type' => 'break', 'group_scope' => 'first_half', 'start_time' => '09:30', 'end_time' => '09:45'],
@@ -264,9 +268,11 @@ class AreaRotationScheduleGeneratorTest extends TestCase
             - $result['config']['actual_area_duration_min_minutes'];
 
         $this->assertSame(0, $result['config']['unallocated_minutes']);
-        // G1 and G2 have different fixed-event totals, so two minutes are the
-        // mathematically smallest possible difference across both groups.
-        $this->assertLessThanOrEqual(2, $difference);
+        $this->assertLessThanOrEqual(5, $difference);
+        $this->assertNotEmpty(array_filter(
+            $result['entries'],
+            fn ($entry) => $entry['type'] === 'buffer'
+        ));
     }
 
     public function test_it_reports_when_the_day_is_too_short(): void

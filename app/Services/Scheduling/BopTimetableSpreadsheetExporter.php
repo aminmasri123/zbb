@@ -254,6 +254,7 @@ class BopTimetableSpreadsheetExporter
             'break' => ['fill' => 'E2E8F0', 'border' => '64748B'],
             'shared' => ['fill' => 'DBEAFE', 'border' => '3B82F6'],
             'extra' => ['fill' => 'EDE9FE', 'border' => '8B5CF6'],
+            'buffer' => ['fill' => 'F3F4F6', 'border' => '9CA3AF'],
             default => self::AREA_COLOURS[abs((int) ($entry['bereich_id'] ?? 0)) % count(self::AREA_COLOURS)],
         };
     }
@@ -264,6 +265,7 @@ class BopTimetableSpreadsheetExporter
             'shared' => 'Gemeinsam',
             'break' => 'Pause',
             'extra' => 'Zusatz',
+            'buffer' => 'Puffer',
             default => 'Bereich',
         };
     }

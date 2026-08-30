@@ -528,7 +528,7 @@ class BopRunController extends Controller
             'config.groups.*' => ['required', 'string', 'max:80', 'distinct'],
             'entries' => ['required', 'array', 'max:5000'],
             'entries.*.group_key' => ['nullable', 'string', 'max:80'],
-            'entries.*.type' => ['required', Rule::in(['shared', 'break', 'extra', 'area'])],
+            'entries.*.type' => ['required', Rule::in(['shared', 'break', 'extra', 'area', 'buffer'])],
             'entries.*.title' => ['required', 'string', 'max:150'],
             'entries.*.start_time' => ['required', 'date_format:H:i,H:i:s'],
             'entries.*.end_time' => ['required', 'date_format:H:i,H:i:s'],

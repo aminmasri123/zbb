@@ -113,7 +113,7 @@ class AreaRotationScheduleGenerator
         }
 
         if ($automaticDuration) {
-            $slotAssignments = $this->fillIdleSlots($slotAssignments, $blockedSlots, count($groups));
+            $slotAssignments = $this->fillIdleSlots($slotAssignments, $blockedSlots, count($groups), 5);
             $slotAssignments = $this->rescheduleWithBalancedDurations(
                 $slotAssignments,
                 $groups,
@@ -142,7 +142,10 @@ class AreaRotationScheduleGenerator
         ], $events);
         $entries = array_merge(
             $entries,
-            $this->areaEntriesFromSlots($slotAssignments, $groups, $areas, $dayStart, $planningStep)
+            $this->areaEntriesFromSlots($slotAssignments, $groups, $areas, $dayStart, $planningStep),
+            $automaticDuration
+                ? $this->bufferEntriesFromSlots($slotAssignments, $blockedSlots, $groups, $dayStart, $planningStep)
+                : []
         );
 
         $this->assertGeneratedEntriesDoNotConflict($entries);
@@ -154,7 +157,7 @@ class AreaRotationScheduleGenerator
         ]);
         $generatedAreaOrders = $this->areaOrdersFromEntries($entries, $groups);
 
-        $unallocatedMinutes = max(array_map(function ($groupIndex) use ($slotAssignments, $blockedSlots, $planningStep) {
+        $idleMinutes = max(array_map(function ($groupIndex) use ($slotAssignments, $blockedSlots, $planningStep) {
             $idleSlots = 0;
             foreach ($blockedSlots[$groupIndex] as $slot => $blocked) {
                 if (! $blocked && ! isset($slotAssignments[$slot][$groupIndex])) {
@@ -177,7 +180,8 @@ class AreaRotationScheduleGenerator
                 'actual_area_duration_min_minutes' => min($actualDurations),
                 'actual_area_duration_max_minutes' => max($actualDurations),
                 'rotation_count' => max(count($groups), count($areas)),
-                'unallocated_minutes' => $unallocatedMinutes,
+                'unallocated_minutes' => $automaticDuration ? 0 : $idleMinutes,
+                'buffer_minutes' => $automaticDuration ? $idleMinutes : 0,
                 'areas' => array_map(fn ($area) => array_diff_key($area, ['_index' => true]), $areas),
                 'area_orders' => $generatedAreaOrders,
                 'events' => array_map(fn ($event) => [
@@ -493,9 +497,22 @@ class AreaRotationScheduleGenerator
         return false;
     }
 
-    private function fillIdleSlots(array $assignments, array $blockedSlots, int $groupCount): array
+    private function fillIdleSlots(
+        array $assignments,
+        array $blockedSlots,
+        int $groupCount,
+        int $maximumDurationDifference = 5
+    ): array
     {
         $slotCount = count($assignments);
+        $durations = [];
+        foreach ($assignments as $slotAssignments) {
+            foreach ($slotAssignments as $groupIndex => $areaIndex) {
+                $durations[$groupIndex][$areaIndex] = ($durations[$groupIndex][$areaIndex] ?? 0) + 1;
+            }
+        }
+        $baseDuration = min(array_merge(...array_map('array_values', $durations)));
+        $maximumDuration = $baseDuration + $maximumDurationDifference;
 
         for ($pass = 0; $pass < 2; $pass++) {
             for ($groupIndex = 0; $groupIndex < $groupCount; $groupIndex++) {
@@ -504,8 +521,11 @@ class AreaRotationScheduleGenerator
                         continue;
                     }
                     $previousArea = $assignments[$slot - 1][$groupIndex] ?? null;
-                    if ($previousArea !== null && $this->areaIsFreeAtSlot($assignments, $slot, $previousArea, $groupIndex)) {
+                    if ($previousArea !== null
+                        && ($durations[$groupIndex][$previousArea] ?? 0) < $maximumDuration
+                        && $this->areaIsFreeAtSlot($assignments, $slot, $previousArea, $groupIndex)) {
                         $assignments[$slot][$groupIndex] = $previousArea;
+                        $durations[$groupIndex][$previousArea]++;
                     }
                 }
             }
@@ -516,8 +536,11 @@ class AreaRotationScheduleGenerator
                         continue;
                     }
                     $nextArea = $assignments[$slot + 1][$groupIndex] ?? null;
-                    if ($nextArea !== null && $this->areaIsFreeAtSlot($assignments, $slot, $nextArea, $groupIndex)) {
+                    if ($nextArea !== null
+                        && ($durations[$groupIndex][$nextArea] ?? 0) < $maximumDuration
+                        && $this->areaIsFreeAtSlot($assignments, $slot, $nextArea, $groupIndex)) {
                         $assignments[$slot][$groupIndex] = $nextArea;
+                        $durations[$groupIndex][$nextArea]++;
                     }
                 }
             }
@@ -740,6 +763,47 @@ class AreaRotationScheduleGenerator
 
                 $activeArea = $areaIndex;
                 $segmentStart = $slot;
+            }
+        }
+
+        return $entries;
+    }
+
+    private function bufferEntriesFromSlots(
+        array $assignments,
+        array $blockedSlots,
+        array $groups,
+        int $dayStart,
+        int $slotMinutes
+    ): array {
+        $entries = [];
+        $slotCount = count($assignments);
+
+        foreach ($groups as $groupIndex => $group) {
+            $segmentStart = null;
+            for ($slot = 0; $slot <= $slotCount; $slot++) {
+                $isBuffer = $slot < $slotCount
+                    && ! $blockedSlots[$groupIndex][$slot]
+                    && ! isset($assignments[$slot][$groupIndex]);
+                if ($isBuffer && $segmentStart === null) {
+                    $segmentStart = $slot;
+                    continue;
+                }
+                if ($isBuffer || $segmentStart === null) {
+                    continue;
+                }
+
+                $entries[] = [
+                    'group_key' => $group,
+                    'type' => 'buffer',
+                    'title' => 'Wechsel-/Pufferzeit',
+                    'bereich_id' => null,
+                    'supervisor_person_id' => null,
+                    'start_time' => $this->formatMinutes($dayStart + ($segmentStart * $slotMinutes)),
+                    'end_time' => $this->formatMinutes($dayStart + ($slot * $slotMinutes)),
+                    'meta' => ['automatically_created' => true],
+                ];
+                $segmentStart = null;
             }
         }
 
