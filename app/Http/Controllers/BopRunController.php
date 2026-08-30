@@ -380,6 +380,9 @@ class BopRunController extends Controller
             'events.*.group_scope' => ['nullable', Rule::in(['all', 'first_half', 'second_half'])],
             'events.*.start_time' => ['required', 'date_format:H:i'],
             'events.*.end_time' => ['required', 'date_format:H:i'],
+            'area_orders' => ['nullable', 'array'],
+            'area_orders.*' => ['array'],
+            'area_orders.*.*' => ['integer'],
             'persist' => ['nullable', 'boolean'],
         ]);
 

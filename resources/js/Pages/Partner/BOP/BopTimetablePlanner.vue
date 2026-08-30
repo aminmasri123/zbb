@@ -20,12 +20,13 @@ const workshopDates = ref([])
 const timetables = ref([])
 const breakDefaults = ref([])
 const preview = ref(null)
+const selectedArea = ref(null)
 const form = ref(emptyForm())
 
 function emptyForm() {
   return {
     schedule_date: '', start_time: '09:00', end_time: '15:00', slot_minutes: 1,
-    group_count: 4, areas: [], events: [],
+    group_count: 4, areas: [], events: [], area_orders: {},
   }
 }
 
@@ -94,7 +95,11 @@ function applyTimetable(timetable) {
       start_time: String(event.start_time || '').slice(0, 5),
       end_time: String(event.end_time || '').slice(0, 5),
     })),
+    area_orders: Object.fromEntries(Object.entries(config.area_orders || {}).map(([group, areaIds]) => [
+      group, areaIds.map(Number),
+    ])),
   }
+  selectedArea.value = null
   preview.value = timetable
 }
 
@@ -165,6 +170,7 @@ function toggleArea(areaId) {
     ? form.value.areas.filter((area) => Number(area.bereich_id) !== Number(areaId))
     : [...form.value.areas, { bereich_id: Number(areaId), supervisor_person_id: null }]
   preview.value = null
+  form.value.area_orders = {}
 }
 
 function addEvent() {
@@ -191,6 +197,7 @@ function requestPayload(persist) {
       supervisor_person_id: area.supervisor_person_id ? Number(area.supervisor_person_id) : null,
     })),
     events: form.value.events.map((event) => ({ ...event })),
+    area_orders: form.value.area_orders || {},
     persist,
   }
 }
@@ -199,7 +206,7 @@ async function generate(persist = false) {
   if (!everyGroupHasTwoBreaks()) {
     error.value = 'Bitte für jede Gruppe genau zwei Pausen festlegen.'
     success.value = ''
-    return
+    return false
   }
   busy.value = true
   error.value = ''
@@ -219,12 +226,72 @@ async function generate(persist = false) {
       if (!workshopDates.value.includes(form.value.schedule_date)) workshopDates.value.push(form.value.schedule_date)
       emit('saved', response.data)
     }
+    return true
   } catch (exception) {
     const validation = exception.response?.data?.errors
     error.value = validation ? Object.values(validation)[0]?.[0] : (exception.response?.data?.message || 'Der Zeitplan konnte nicht erzeugt werden.')
+    return false
   } finally {
     busy.value = false
   }
+}
+
+function currentAreaOrder(group) {
+  const configured = preview.value?.config?.area_orders?.[group]
+  if (Array.isArray(configured) && configured.length) return configured.map(Number)
+  const row = rows().find((item) => item.group === group)
+  return [...new Set((row?.entries || []).filter((entry) => entry.type === 'area').map((entry) => Number(entry.bereich_id)))]
+}
+
+function isSelectedArea(group, entry) {
+  return entry.type === 'area'
+    && selectedArea.value?.group === group
+    && Number(selectedArea.value?.bereich_id) === Number(entry.bereich_id)
+}
+
+async function selectAreaForSwap(group, entry) {
+  if (entry.type !== 'area' || busy.value) return
+  const areaId = Number(entry.bereich_id)
+  if (!selectedArea.value) {
+    selectedArea.value = { group, bereich_id: areaId, title: entry.title }
+    success.value = `${entry.title} in ${group} ausgewählt. Jetzt den zweiten Bereich anklicken.`
+    error.value = ''
+    return
+  }
+  if (selectedArea.value.group !== group) {
+    error.value = `Bitte den zweiten Bereich ebenfalls in ${selectedArea.value.group} auswählen.`
+    return
+  }
+  if (Number(selectedArea.value.bereich_id) === areaId) {
+    selectedArea.value = null
+    success.value = ''
+    return
+  }
+
+  const oldPreview = preview.value
+  const oldOrders = Object.fromEntries(Object.entries(form.value.area_orders || {}).map(([key, ids]) => [key, [...ids]]))
+  const nextOrders = Object.fromEntries((preview.value?.config?.groups || groups()).map((label) => [
+    label, [...currentAreaOrder(label)],
+  ]))
+  const order = nextOrders[group]
+  const firstIndex = order.indexOf(Number(selectedArea.value.bereich_id))
+  const secondIndex = order.indexOf(areaId)
+  ;[order[firstIndex], order[secondIndex]] = [order[secondIndex], order[firstIndex]]
+  form.value.area_orders = nextOrders
+  selectedArea.value = null
+
+  if (!await generate(false)) {
+    form.value.area_orders = oldOrders
+    preview.value = oldPreview
+  } else {
+    success.value = 'Die beiden Bereiche wurden getauscht und der Zeitplan wurde neu geprüft.'
+  }
+}
+
+async function resetAreaOrders() {
+  form.value.area_orders = {}
+  selectedArea.value = null
+  await generate(false)
 }
 
 function rows() {
@@ -246,7 +313,7 @@ function typeLabel(type) {
   return ({ shared: 'Gemeinsam', break: 'Pause', extra: 'Zusatz', area: 'Bereich' })[type] || type
 }
 
-const timelinePixelsPerMinute = 4
+const timelinePixelsPerMinute = 5
 const timelineGroupWidth = 72
 
 function timeMinutes(value) {
@@ -320,7 +387,8 @@ function entryDuration(entry) {
 
 function entryTooltip(entry) {
   const supervisor = entry.meta?.supervisor_name ? ` · ${entry.meta.supervisor_name}` : ''
-  return `${String(entry.start_time).slice(0, 5)}–${String(entry.end_time).slice(0, 5)} · ${entry.title} · ${typeLabel(entry.type)}${supervisor}`
+  const action = entry.type === 'area' ? ' · Zum Tauschen anklicken' : ''
+  return `${String(entry.start_time).slice(0, 5)}–${String(entry.end_time).slice(0, 5)} · ${entry.title} · ${typeLabel(entry.type)}${supervisor}${action}`
 }
 </script>
 
@@ -381,7 +449,8 @@ function entryTooltip(entry) {
         <section v-if="preview" class="overflow-hidden rounded-lg border bg-white">
           <div class="border-b bg-gray-50 px-4 py-3">
             <h3 class="font-bold">Zeitplan · {{ dateLabel(form.schedule_date) }}</h3>
-            <p class="text-xs font-semibold text-orange-700">Berechnete Bereichsdauer: {{ preview.config?.calculated_area_duration_minutes || preview.config?.areas?.[0]?.duration_minutes || '–' }} Minuten</p>
+            <p class="text-xs font-semibold text-orange-700">Bereichsdauer: <template v-if="preview.config?.actual_area_duration_min_minutes !== preview.config?.actual_area_duration_max_minutes">{{ preview.config?.actual_area_duration_min_minutes }}–{{ preview.config?.actual_area_duration_max_minutes }} Minuten</template><template v-else>{{ preview.config?.actual_area_duration_min_minutes || preview.config?.calculated_area_duration_minutes || preview.config?.areas?.[0]?.duration_minutes || '–' }} Minuten</template></p>
+            <div class="mt-2 flex flex-wrap items-center gap-2 rounded border border-cyan-200 bg-cyan-50 px-2.5 py-2 text-xs text-cyan-900"><span v-if="selectedArea" class="font-semibold">{{ selectedArea.title }} in {{ selectedArea.group }} ausgewählt – jetzt den Tauschbereich anklicken.</span><span v-else>Bereiche tauschen: zuerst den ersten, danach den zweiten Bereich derselben Gruppe anklicken.</span><button v-if="Object.keys(form.area_orders || {}).length" type="button" class="ml-auto rounded border border-cyan-300 bg-white px-2 py-1 font-semibold" :disabled="busy" @click="resetAreaOrders">Automatische Reihenfolge wiederherstellen</button></div>
             <div class="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-gray-600"><span class="font-semibold">Horizontal scrollen für den ganzen Tag</span><span class="inline-flex items-center gap-1"><i class="h-3 w-3 rounded-sm border border-orange-500 bg-orange-100"></i>Bereich</span><span class="inline-flex items-center gap-1"><i class="h-3 w-3 rounded-sm border border-slate-500 bg-slate-200"></i>Pause</span><span class="inline-flex items-center gap-1"><i class="h-3 w-3 rounded-sm border border-blue-500 bg-blue-100"></i>Gemeinsam</span><span class="inline-flex items-center gap-1"><i class="h-3 w-3 rounded-sm border border-violet-500 bg-violet-100"></i>Zusatz</span></div>
           </div>
           <div class="overflow-x-auto bg-white">
@@ -401,11 +470,12 @@ function entryTooltip(entry) {
                     v-for="entry in row.entries"
                     :key="`${row.group}-${entry.start_time}-${entry.end_time}-${entry.title}`"
                     class="absolute top-1.5 flex h-11 items-center overflow-hidden rounded-sm border px-1.5 shadow-sm"
-                    :class="timelineEntryClass(entry)"
+                    :class="[timelineEntryClass(entry), entry.type === 'area' ? 'cursor-pointer hover:ring-2 hover:ring-cyan-500' : '', isSelectedArea(row.group, entry) ? 'z-10 ring-4 ring-cyan-600' : '']"
                     :style="timelineEntryStyle(entry)"
                     :title="entryTooltip(entry)"
+                    @click="selectAreaForSwap(row.group, entry)"
                   >
-                    <div class="min-w-0 leading-tight"><div class="truncate text-xs font-bold">{{ entry.title }} <span class="font-normal">({{ entryDuration(entry) }})</span></div><div v-if="entry.meta?.supervisor_name" class="truncate text-[10px] opacity-75">{{ entry.meta.supervisor_name }}</div></div>
+                    <div class="min-w-0 leading-tight"><div class="truncate text-xs font-bold">{{ entry.title }} <span class="font-normal">({{ entryDuration(entry) }})</span></div><div class="truncate text-[9px] font-semibold opacity-80">{{ String(entry.start_time).slice(0, 5) }}–{{ String(entry.end_time).slice(0, 5) }}<span v-if="entry.meta?.supervisor_name"> · {{ entry.meta.supervisor_name }}</span></div></div>
                   </div>
                 </div>
               </div>

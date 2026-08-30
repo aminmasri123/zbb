@@ -178,6 +178,61 @@ class AreaRotationScheduleGeneratorTest extends TestCase
         $this->assertSame(160, $result['config']['calculated_area_duration_minutes']);
     }
 
+    public function test_it_respects_a_manually_swapped_area_order(): void
+    {
+        $result = (new AreaRotationScheduleGenerator)->generate([
+            'start_time' => '09:00',
+            'end_time' => '13:00',
+            'slot_minutes' => 1,
+            'groups' => ['G1', 'G2'],
+            'areas' => [
+                ['bereich_id' => 1, 'name' => 'IT', 'duration_minutes' => 45],
+                ['bereich_id' => 2, 'name' => 'Kunst', 'duration_minutes' => 45],
+                ['bereich_id' => 3, 'name' => 'Sport', 'duration_minutes' => 45],
+            ],
+            'events' => [],
+            'area_orders' => [
+                'G1' => [3, 1, 2],
+            ],
+        ]);
+
+        $g1Entries = array_values(array_filter(
+            $result['entries'],
+            fn ($entry) => $entry['type'] === 'area' && $entry['group_key'] === 'G1'
+        ));
+
+        $this->assertSame(['Sport', 'IT', 'Kunst'], array_column($g1Entries, 'title'));
+        $this->assertSame([3, 1, 2], $result['config']['area_orders']['G1']);
+    }
+
+    public function test_it_distributes_remaining_minutes_to_adjacent_areas(): void
+    {
+        $result = (new AreaRotationScheduleGenerator)->generate([
+            'start_time' => '08:30',
+            'end_time' => '13:30',
+            'slot_minutes' => 1,
+            'groups' => ['G1', 'G2'],
+            'areas' => [
+                ['bereich_id' => 1, 'name' => 'IT'],
+                ['bereich_id' => 2, 'name' => 'Kunst'],
+                ['bereich_id' => 3, 'name' => 'Sport'],
+                ['bereich_id' => 4, 'name' => 'Holz'],
+            ],
+            'events' => [
+                ['title' => 'Begrüßung', 'type' => 'shared', 'group_scope' => 'all', 'start_time' => '08:30', 'end_time' => '08:45'],
+                ['title' => 'Pause 1 G1', 'type' => 'break', 'group_scope' => 'first_half', 'start_time' => '09:30', 'end_time' => '09:45'],
+                ['title' => 'Pause 1 G2', 'type' => 'break', 'group_scope' => 'second_half', 'start_time' => '10:00', 'end_time' => '10:15'],
+                ['title' => 'Pause 2 G1', 'type' => 'break', 'group_scope' => 'first_half', 'start_time' => '11:30', 'end_time' => '11:50'],
+                ['title' => 'Pause 2 G2', 'type' => 'break', 'group_scope' => 'second_half', 'start_time' => '11:55', 'end_time' => '12:15'],
+                ['title' => 'Standort', 'type' => 'extra', 'group_scope' => 'all', 'start_time' => '13:15', 'end_time' => '13:30'],
+            ],
+        ]);
+
+        $this->assertSame(0, $result['config']['unallocated_minutes']);
+        $this->assertSame(58, $result['config']['actual_area_duration_min_minutes']);
+        $this->assertSame(61, $result['config']['actual_area_duration_max_minutes']);
+    }
+
     public function test_it_reports_when_the_day_is_too_short(): void
     {
         $this->expectException(DomainException::class);

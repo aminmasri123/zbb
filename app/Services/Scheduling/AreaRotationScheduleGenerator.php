@@ -75,6 +75,7 @@ class AreaRotationScheduleGenerator
         }
 
         $this->assertSupervisorAssignmentsAreUnique($areas, $groups);
+        $areaOrders = $this->normaliseAreaOrders($input['area_orders'] ?? [], $groups, $areas);
 
         $blockedSlots = $this->blockedSlots($groups, $events, $dayStart, $dayEnd, $planningStep);
         $slotAssignments = null;
@@ -94,7 +95,7 @@ class AreaRotationScheduleGenerator
                 }
                 unset($area);
 
-                $slotAssignments = $this->scheduleSlots($groups, $areas, $blockedSlots, $dayStart, $dayEnd, $planningStep);
+                $slotAssignments = $this->scheduleSlots($groups, $areas, $areaOrders, $blockedSlots, $dayStart, $dayEnd, $planningStep);
                 if ($slotAssignments !== null) {
                     $calculatedDuration = $durationSlots * $planningStep;
                     break;
@@ -105,11 +106,16 @@ class AreaRotationScheduleGenerator
                 throw new DomainException('Nach Abzug der Pausen und Aktivitäten bleibt nicht genug Zeit für alle Bereichsrotationen.');
             }
         } else {
-            $slotAssignments = $this->scheduleSlots($groups, $areas, $blockedSlots, $dayStart, $dayEnd, $planningStep);
+            $slotAssignments = $this->scheduleSlots($groups, $areas, $areaOrders, $blockedSlots, $dayStart, $dayEnd, $planningStep);
             if ($slotAssignments === null) {
                 throw new DomainException('Der Zeitraum reicht für alle Bereichsrotationen nicht aus. Bitte den Tag verlängern, Bereiche kürzen oder Gruppen reduzieren.');
             }
         }
+
+        if ($automaticDuration) {
+            $slotAssignments = $this->fillIdleSlots($slotAssignments, $blockedSlots, count($groups));
+        }
+        $actualDurations = $this->actualAreaDurations($slotAssignments, $groups, $areas, $planningStep);
 
         $entries = array_map(fn ($event) => [
             'group_key' => null,
@@ -136,12 +142,18 @@ class AreaRotationScheduleGenerator
         ] <=> [
             $right['start_time'], $right['group_key'] ?? '', $right['title'],
         ]);
+        $generatedAreaOrders = $this->areaOrdersFromEntries($entries, $groups);
 
-        $minimumFreeSlots = min(array_map(
-            fn ($groupIndex) => count(array_filter($blockedSlots[$groupIndex], fn ($blocked) => ! $blocked)),
-            array_keys($groups)
-        ));
-        $usedMinutesPerGroup = array_sum(array_column($areas, 'duration_minutes'));
+        $unallocatedMinutes = max(array_map(function ($groupIndex) use ($slotAssignments, $blockedSlots, $planningStep) {
+            $idleSlots = 0;
+            foreach ($blockedSlots[$groupIndex] as $slot => $blocked) {
+                if (! $blocked && ! isset($slotAssignments[$slot][$groupIndex])) {
+                    $idleSlots++;
+                }
+            }
+
+            return $idleSlots * $planningStep;
+        }, array_keys($groups)));
 
         return [
             'schedule_date' => $input['schedule_date'] ?? null,
@@ -152,9 +164,12 @@ class AreaRotationScheduleGenerator
                 'groups' => $groups,
                 'duration_mode' => $automaticDuration ? 'automatic' : 'manual',
                 'calculated_area_duration_minutes' => $calculatedDuration,
+                'actual_area_duration_min_minutes' => min($actualDurations),
+                'actual_area_duration_max_minutes' => max($actualDurations),
                 'rotation_count' => max(count($groups), count($areas)),
-                'unallocated_minutes' => max(0, ($minimumFreeSlots * $planningStep) - $usedMinutesPerGroup),
+                'unallocated_minutes' => $unallocatedMinutes,
                 'areas' => array_map(fn ($area) => array_diff_key($area, ['_index' => true]), $areas),
+                'area_orders' => $generatedAreaOrders,
                 'events' => array_map(fn ($event) => [
                     'title' => $event['title'],
                     'type' => $event['type'],
@@ -274,6 +289,28 @@ class AreaRotationScheduleGenerator
         return $blocked;
     }
 
+    private function normaliseAreaOrders(array $orders, array $groups, array $areas): array
+    {
+        $areaIds = array_map(fn ($area) => (int) $area['bereich_id'], $areas);
+        $normalised = [];
+
+        foreach ($orders as $group => $orderedIds) {
+            if (! in_array((string) $group, $groups, true) || ! is_array($orderedIds)) {
+                continue;
+            }
+            $validIds = array_values(array_unique(array_map('intval', array_filter(
+                $orderedIds,
+                fn ($areaId) => in_array((int) $areaId, $areaIds, true)
+            ))));
+            $normalised[(string) $group] = array_values(array_merge(
+                $validIds,
+                array_values(array_diff($areaIds, $validIds))
+            ));
+        }
+
+        return $normalised;
+    }
+
     private function largestAutomaticDurationInSlots(
         array $groups,
         array $areas,
@@ -302,6 +339,7 @@ class AreaRotationScheduleGenerator
     private function scheduleSlots(
         array $groups,
         array $areas,
+        array $areaOrders,
         array $blockedSlots,
         int $dayStart,
         int $dayEnd,
@@ -355,19 +393,32 @@ class AreaRotationScheduleGenerator
             });
 
             foreach ($availableGroups as $groupIndex) {
-                $candidateAreas = array_values(array_filter(
-                    array_keys($areas),
-                    fn ($areaIndex) => $remaining[$groupIndex][$areaIndex] > 0
-                        && ! isset($reservedAreas[$areaIndex])
-                ));
-                $preferredArea = ($groupIndex + $completedAreas[$groupIndex]) % count($areas);
-                usort($candidateAreas, fn ($left, $right) => [
-                    ($left - $preferredArea + count($areas)) % count($areas),
-                    $left,
-                ] <=> [
-                    ($right - $preferredArea + count($areas)) % count($areas),
-                    $right,
-                ]);
+                $orderedAreaIds = $areaOrders[$groups[$groupIndex]] ?? null;
+                if ($orderedAreaIds !== null) {
+                    $nextAreaId = collect($orderedAreaIds)->first(fn ($areaId) => collect($areas)->contains(
+                        fn ($area, $areaIndex) => $area['bereich_id'] === $areaId
+                            && $remaining[$groupIndex][$areaIndex] > 0
+                    ));
+                    $candidateAreas = array_values(array_filter(
+                        array_keys($areas),
+                        fn ($areaIndex) => $areas[$areaIndex]['bereich_id'] === $nextAreaId
+                            && ! isset($reservedAreas[$areaIndex])
+                    ));
+                } else {
+                    $candidateAreas = array_values(array_filter(
+                        array_keys($areas),
+                        fn ($areaIndex) => $remaining[$groupIndex][$areaIndex] > 0
+                            && ! isset($reservedAreas[$areaIndex])
+                    ));
+                    $preferredArea = ($groupIndex + $completedAreas[$groupIndex]) % count($areas);
+                    usort($candidateAreas, fn ($left, $right) => [
+                        ($left - $preferredArea + count($areas)) % count($areas),
+                        $left,
+                    ] <=> [
+                        ($right - $preferredArea + count($areas)) % count($areas),
+                        $right,
+                    ]);
+                }
 
                 foreach ($candidateAreas as $areaIndex) {
                     if (! $this->canCompleteBeforeNonBreakEvent(
@@ -428,6 +479,85 @@ class AreaRotationScheduleGenerator
         }
 
         return false;
+    }
+
+    private function fillIdleSlots(array $assignments, array $blockedSlots, int $groupCount): array
+    {
+        $slotCount = count($assignments);
+
+        for ($pass = 0; $pass < 2; $pass++) {
+            for ($groupIndex = 0; $groupIndex < $groupCount; $groupIndex++) {
+                for ($slot = 1; $slot < $slotCount; $slot++) {
+                    if ($blockedSlots[$groupIndex][$slot] || isset($assignments[$slot][$groupIndex])) {
+                        continue;
+                    }
+                    $previousArea = $assignments[$slot - 1][$groupIndex] ?? null;
+                    if ($previousArea !== null && $this->areaIsFreeAtSlot($assignments, $slot, $previousArea, $groupIndex)) {
+                        $assignments[$slot][$groupIndex] = $previousArea;
+                    }
+                }
+            }
+
+            for ($groupIndex = 0; $groupIndex < $groupCount; $groupIndex++) {
+                for ($slot = $slotCount - 2; $slot >= 0; $slot--) {
+                    if ($blockedSlots[$groupIndex][$slot] || isset($assignments[$slot][$groupIndex])) {
+                        continue;
+                    }
+                    $nextArea = $assignments[$slot + 1][$groupIndex] ?? null;
+                    if ($nextArea !== null && $this->areaIsFreeAtSlot($assignments, $slot, $nextArea, $groupIndex)) {
+                        $assignments[$slot][$groupIndex] = $nextArea;
+                    }
+                }
+            }
+        }
+
+        return $assignments;
+    }
+
+    private function areaIsFreeAtSlot(array $assignments, int $slot, int $areaIndex, int $exceptGroup): bool
+    {
+        foreach ($assignments[$slot] as $groupIndex => $assignedArea) {
+            if ($groupIndex !== $exceptGroup && $assignedArea === $areaIndex) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function actualAreaDurations(array $assignments, array $groups, array $areas, int $slotMinutes): array
+    {
+        $durations = [];
+        foreach (array_keys($groups) as $groupIndex) {
+            foreach (array_keys($areas) as $areaIndex) {
+                $slots = count(array_filter(
+                    $assignments,
+                    fn ($slotAssignments) => ($slotAssignments[$groupIndex] ?? null) === $areaIndex
+                ));
+                $durations[] = $slots * $slotMinutes;
+            }
+        }
+
+        return $durations;
+    }
+
+    private function areaOrdersFromEntries(array $entries, array $groups): array
+    {
+        $orders = [];
+        foreach ($groups as $group) {
+            $orders[$group] = [];
+            foreach ($entries as $entry) {
+                if ($entry['type'] !== 'area' || $entry['group_key'] !== $group) {
+                    continue;
+                }
+                $areaId = (int) $entry['bereich_id'];
+                if (! in_array($areaId, $orders[$group], true)) {
+                    $orders[$group][] = $areaId;
+                }
+            }
+        }
+
+        return $orders;
     }
 
     private function areaEntriesFromSlots(
