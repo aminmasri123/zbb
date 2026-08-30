@@ -198,6 +198,83 @@ function rows() {
 function typeLabel(type) {
   return ({ shared: 'Gemeinsam', break: 'Pause', extra: 'Zusatz', area: 'Bereich' })[type] || type
 }
+
+const timelinePixelsPerMinute = 4
+const timelineGroupWidth = 72
+
+function timeMinutes(value) {
+  const [hours, minutes] = String(value || '00:00').slice(0, 5).split(':').map(Number)
+  return (hours * 60) + minutes
+}
+
+function timelineStart() {
+  return timeMinutes(preview.value?.config?.start_time || form.value.start_time)
+}
+
+function timelineEnd() {
+  return timeMinutes(preview.value?.config?.end_time || form.value.end_time)
+}
+
+function timelineWidth() {
+  return Math.max(1, timelineEnd() - timelineStart()) * timelinePixelsPerMinute
+}
+
+function timelineMarks() {
+  const start = timelineStart()
+  const end = timelineEnd()
+  const marks = []
+  for (let minute = start; minute <= end; minute += 15) {
+    marks.push({ minute, label: `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}` })
+  }
+  if (marks.at(-1)?.minute !== end) {
+    marks.push({ minute: end, label: `${String(Math.floor(end / 60)).padStart(2, '0')}:${String(end % 60).padStart(2, '0')}` })
+  }
+  return marks.map((mark) => ({
+    ...mark,
+    offset: (mark.minute - start) * timelinePixelsPerMinute,
+    isEnd: mark.minute === end,
+  }))
+}
+
+function timelineRowStyle() {
+  const stepWidth = 15 * timelinePixelsPerMinute
+  return {
+    width: `${timelineWidth()}px`,
+    backgroundImage: `repeating-linear-gradient(to right, transparent 0, transparent ${stepWidth - 1}px, #d1d5db ${stepWidth - 1}px, #d1d5db ${stepWidth}px)`,
+  }
+}
+
+function timelineEntryStyle(entry) {
+  const start = timeMinutes(entry.start_time)
+  const end = timeMinutes(entry.end_time)
+  return {
+    left: `${Math.max(0, start - timelineStart()) * timelinePixelsPerMinute + 1}px`,
+    width: `${Math.max(3, (end - start) * timelinePixelsPerMinute - 2)}px`,
+  }
+}
+
+function timelineEntryClass(entry) {
+  if (entry.type === 'break') return 'border-slate-500 bg-slate-200 text-slate-900'
+  if (entry.type === 'shared') return 'border-blue-500 bg-blue-100 text-blue-950'
+  if (entry.type === 'extra') return 'border-violet-500 bg-violet-100 text-violet-950'
+  const colors = [
+    'border-orange-500 bg-orange-100 text-orange-950',
+    'border-emerald-500 bg-emerald-100 text-emerald-950',
+    'border-cyan-500 bg-cyan-100 text-cyan-950',
+    'border-amber-500 bg-amber-100 text-amber-950',
+    'border-rose-500 bg-rose-100 text-rose-950',
+  ]
+  return colors[Math.abs(Number(entry.bereich_id || 0)) % colors.length]
+}
+
+function entryDuration(entry) {
+  return Math.max(0, timeMinutes(entry.end_time) - timeMinutes(entry.start_time))
+}
+
+function entryTooltip(entry) {
+  const supervisor = entry.meta?.supervisor_name ? ` · ${entry.meta.supervisor_name}` : ''
+  return `${String(entry.start_time).slice(0, 5)}–${String(entry.end_time).slice(0, 5)} · ${entry.title} · ${typeLabel(entry.type)}${supervisor}`
+}
 </script>
 
 <template>
@@ -254,8 +331,38 @@ function typeLabel(type) {
         <div class="flex flex-wrap gap-2"><button type="button" class="rounded bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="busy" @click="generate(false)">{{ busy ? 'Berechnet …' : 'Vorschau erzeugen' }}</button><button type="button" class="rounded bg-orange-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="busy || !preview" @click="generate(true)">Zeitplan speichern</button></div>
 
         <section v-if="preview" class="overflow-hidden rounded-lg border bg-white">
-          <div class="border-b bg-gray-50 px-4 py-3"><h3 class="font-bold">Zeitplan · {{ dateLabel(form.schedule_date) }}</h3><p class="text-xs font-semibold text-orange-700">Berechnete Bereichsdauer: {{ preview.config?.calculated_area_duration_minutes || preview.config?.areas?.[0]?.duration_minutes || '–' }} Minuten</p><p class="text-xs text-gray-500">Gemeinsame Einträge werden pro Gruppe angezeigt, aber nur einmal gespeichert.</p></div>
-          <div class="overflow-x-auto"><table class="min-w-full divide-y text-sm"><thead class="bg-gray-50 text-left text-xs uppercase text-gray-500"><tr><th class="px-3 py-2">Gruppe</th><th class="px-3 py-2">Zeit</th><th class="px-3 py-2">Aktivität</th><th class="px-3 py-2">Art / Anleiter</th></tr></thead><tbody class="divide-y"><template v-for="row in rows()" :key="row.group"><tr v-for="(entry, index) in row.entries" :key="`${row.group}-${entry.start_time}-${entry.title}`" :class="entry.type === 'area' ? 'bg-white' : 'bg-blue-50'"><td class="px-3 py-2 font-bold text-orange-800">{{ index === 0 ? row.group : '' }}</td><td class="whitespace-nowrap px-3 py-2 font-mono text-xs">{{ String(entry.start_time).slice(0, 5) }}–{{ String(entry.end_time).slice(0, 5) }}</td><td class="px-3 py-2 font-semibold">{{ entry.title }}</td><td class="px-3 py-2 text-xs text-gray-600">{{ typeLabel(entry.type) }}<span v-if="entry.meta?.supervisor_name"> · {{ entry.meta.supervisor_name }}</span></td></tr></template></tbody></table></div>
+          <div class="border-b bg-gray-50 px-4 py-3">
+            <h3 class="font-bold">Zeitplan · {{ dateLabel(form.schedule_date) }}</h3>
+            <p class="text-xs font-semibold text-orange-700">Berechnete Bereichsdauer: {{ preview.config?.calculated_area_duration_minutes || preview.config?.areas?.[0]?.duration_minutes || '–' }} Minuten</p>
+            <div class="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-gray-600"><span class="font-semibold">Horizontal scrollen für den ganzen Tag</span><span class="inline-flex items-center gap-1"><i class="h-3 w-3 rounded-sm border border-orange-500 bg-orange-100"></i>Bereich</span><span class="inline-flex items-center gap-1"><i class="h-3 w-3 rounded-sm border border-slate-500 bg-slate-200"></i>Pause</span><span class="inline-flex items-center gap-1"><i class="h-3 w-3 rounded-sm border border-blue-500 bg-blue-100"></i>Gemeinsam</span><span class="inline-flex items-center gap-1"><i class="h-3 w-3 rounded-sm border border-violet-500 bg-violet-100"></i>Zusatz</span></div>
+          </div>
+          <div class="overflow-x-auto bg-white">
+            <div class="min-w-max" :style="{ width: `${timelineWidth() + timelineGroupWidth}px` }">
+              <div class="flex h-9 border-b border-gray-400 bg-amber-400 text-[11px] font-bold text-gray-950">
+                <div class="sticky left-0 z-30 flex w-[72px] shrink-0 items-center justify-center border-r border-gray-500 bg-amber-400">Gruppe</div>
+                <div class="relative h-full shrink-0" :style="{ width: `${timelineWidth()}px` }">
+                  <div v-for="mark in timelineMarks()" :key="mark.minute" class="absolute inset-y-0 border-l border-amber-700" :style="{ left: `${mark.offset}px` }">
+                    <span class="absolute top-2 whitespace-nowrap" :class="mark.isEnd ? '-translate-x-full pr-1' : 'pl-1'">{{ mark.label }}</span>
+                  </div>
+                </div>
+              </div>
+              <div v-for="row in rows()" :key="row.group" class="flex h-14 border-b border-gray-300 last:border-b-0">
+                <div class="sticky left-0 z-20 flex w-[72px] shrink-0 items-center justify-center border-r border-gray-500 bg-amber-400 text-sm font-extrabold text-gray-950">{{ row.group }}</div>
+                <div class="relative h-full shrink-0 bg-white" :style="timelineRowStyle()">
+                  <div
+                    v-for="entry in row.entries"
+                    :key="`${row.group}-${entry.start_time}-${entry.end_time}-${entry.title}`"
+                    class="absolute top-1.5 flex h-11 items-center overflow-hidden rounded-sm border px-1.5 shadow-sm"
+                    :class="timelineEntryClass(entry)"
+                    :style="timelineEntryStyle(entry)"
+                    :title="entryTooltip(entry)"
+                  >
+                    <div class="min-w-0 leading-tight"><div class="truncate text-xs font-bold">{{ entry.title }} <span class="font-normal">({{ entryDuration(entry) }})</span></div><div v-if="entry.meta?.supervisor_name" class="truncate text-[10px] opacity-75">{{ entry.meta.supervisor_name }}</div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
       </div>
     </section>
