@@ -24,7 +24,7 @@ const form = ref(emptyForm())
 function emptyForm() {
   return {
     schedule_date: '', start_time: '09:00', end_time: '15:00', slot_minutes: 15,
-    group_labels: 'G1, G2, G3, G4', areas: [], events: [],
+    group_count: 4, areas: [], events: [],
   }
 }
 
@@ -49,15 +49,13 @@ async function load() {
     if (firstSaved) {
       applyTimetable(firstSaved)
     } else {
-      const suggestedGroups = response.data.suggested_planned_classes?.length
-        ? response.data.suggested_planned_classes.map((item, index) => `G${index + 1}`)
-        : ['G1', 'G2', 'G3', 'G4']
+      const suggestedGroupCount = response.data.suggested_planned_classes?.length || 4
       form.value = {
         ...emptyForm(),
         schedule_date: workshopDates.value[0] || '',
         start_time: String(workshop.start_time || '09:00').slice(0, 5),
         end_time: String(workshop.end_time || '15:00').slice(0, 5),
-        group_labels: suggestedGroups.join(', '),
+        group_count: suggestedGroupCount,
       }
     }
   } catch (exception) {
@@ -82,10 +80,9 @@ function applyTimetable(timetable) {
     start_time: String(config.start_time || '09:00').slice(0, 5),
     end_time: String(config.end_time || '15:00').slice(0, 5),
     slot_minutes: Number(timetable.slot_minutes || 15),
-    group_labels: (config.groups || []).join(', '),
+    group_count: Math.max(1, Number(config.groups?.length || 4)),
     areas: (config.areas || []).map((area) => ({
       bereich_id: Number(area.bereich_id),
-      duration_minutes: Number(area.duration_minutes || 60),
       supervisor_person_id: area.supervisor_person_id ? Number(area.supervisor_person_id) : null,
     })),
     events: (config.events || []).map((event) => ({
@@ -105,7 +102,8 @@ function changeDate() {
 }
 
 function groups() {
-  return [...new Set(String(form.value.group_labels || '').split(/[,;\n]+/).map((value) => value.trim()).filter(Boolean))]
+  const count = Math.max(1, Math.min(50, Number(form.value.group_count || 1)))
+  return Array.from({ length: count }, (_, index) => `G${index + 1}`)
 }
 
 function areaSetting(areaId) {
@@ -116,7 +114,7 @@ function toggleArea(areaId) {
   const existing = areaSetting(areaId)
   form.value.areas = existing
     ? form.value.areas.filter((area) => Number(area.bereich_id) !== Number(areaId))
-    : [...form.value.areas, { bereich_id: Number(areaId), duration_minutes: 60, supervisor_person_id: null }]
+    : [...form.value.areas, { bereich_id: Number(areaId), supervisor_person_id: null }]
   preview.value = null
 }
 
@@ -141,7 +139,6 @@ function requestPayload(persist) {
     groups: groups(),
     areas: form.value.areas.map((area) => ({
       bereich_id: Number(area.bereich_id),
-      duration_minutes: Number(area.duration_minutes),
       supervisor_person_id: area.supervisor_person_id ? Number(area.supervisor_person_id) : null,
     })),
     events: form.value.events.map((event) => ({ ...event })),
@@ -199,7 +196,7 @@ function typeLabel(type) {
 
       <div v-if="loading" class="flex-1 p-12 text-center text-gray-500">Zeitplandaten werden geladen …</div>
       <div v-else class="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
-        <div class="rounded border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900">Gemeinsame Termine dürfen bei allen Gruppen gleichzeitig stattfinden. Jeder normale Bereich und jeder Anleiter wird zeitgleich höchstens einmal eingeplant.</div>
+        <div class="rounded border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900">Gemeinsame Termine dürfen bei allen Gruppen gleichzeitig stattfinden. Die Dauer der Bereiche wird automatisch aus der verbleibenden Tageszeit berechnet. Jeder normale Bereich und jeder Anleiter wird zeitgleich höchstens einmal eingeplant.</div>
         <div v-if="error" class="rounded border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{{ error }}</div>
         <div v-if="success" class="rounded border border-green-200 bg-green-50 p-3 text-sm font-semibold text-green-700">{{ success }}</div>
 
@@ -211,7 +208,7 @@ function typeLabel(type) {
             <label class="text-xs font-semibold text-gray-700">Zeitraster<select v-model.number="form.slot_minutes" class="mt-1 w-full rounded border-gray-300 text-sm" @change="preview = null"><option :value="5">5 Minuten</option><option :value="10">10 Minuten</option><option :value="15">15 Minuten</option><option :value="30">30 Minuten</option></select></label>
           </div>
           <div v-if="workshopDates.length" class="flex flex-wrap gap-1"><button v-for="date in workshopDates" :key="date" type="button" class="rounded-full bg-orange-100 px-2 py-1 text-xs font-semibold text-orange-800" @click="form.schedule_date = date; changeDate()">{{ dateLabel(date) }}</button></div>
-          <label class="block text-xs font-semibold text-gray-700">Gruppen<textarea v-model="form.group_labels" rows="2" class="mt-1 w-full rounded border-gray-300 text-sm" placeholder="G1, G2, G3, G4" @input="preview = null"></textarea><span class="font-normal text-gray-500">Mit Komma, Semikolon oder Zeilenumbruch trennen.</span></label>
+          <label class="block max-w-xs text-xs font-semibold text-gray-700">Anzahl Gruppen<input v-model.number="form.group_count" type="number" min="1" max="50" class="mt-1 w-full rounded border-gray-300 text-sm" @input="preview = null" /><span class="mt-1 block font-normal text-gray-500">Die Gruppen werden automatisch als G1, G2, G3 usw. angelegt.</span></label>
         </section>
 
         <section class="rounded-lg border bg-white p-4">
@@ -219,8 +216,8 @@ function typeLabel(type) {
           <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
             <div v-for="area in options.areas" :key="area.id" class="rounded border p-3">
               <label class="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" :checked="Boolean(areaSetting(area.id))" @change="toggleArea(area.id)" />{{ area.name }}</label>
-              <div v-if="areaSetting(area.id)" class="mt-2 grid grid-cols-[7rem_1fr] gap-2">
-                <label class="text-[11px] text-gray-600">Dauer<input v-model.number="areaSetting(area.id).duration_minutes" type="number" :step="form.slot_minutes" :min="form.slot_minutes" max="480" class="mt-1 w-full rounded border-gray-300 text-xs" @input="preview = null" /></label>
+              <div v-if="areaSetting(area.id)" class="mt-2">
+                <p class="mb-2 text-[11px] font-semibold text-orange-700">Dauer wird automatisch berechnet</p>
                 <label class="text-[11px] text-gray-600">Anleiter<select v-model="areaSetting(area.id).supervisor_person_id" class="mt-1 w-full rounded border-gray-300 text-xs" @change="preview = null"><option :value="null">Nicht festgelegt</option><option v-for="person in options.supervisors" :key="person.id" :value="person.id">{{ person.name }}</option></select></label>
               </div>
             </div>
@@ -243,7 +240,7 @@ function typeLabel(type) {
         <div class="flex flex-wrap gap-2"><button type="button" class="rounded bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="busy" @click="generate(false)">{{ busy ? 'Berechnet …' : 'Vorschau erzeugen' }}</button><button type="button" class="rounded bg-orange-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="busy || !preview" @click="generate(true)">Zeitplan speichern</button></div>
 
         <section v-if="preview" class="overflow-hidden rounded-lg border bg-white">
-          <div class="border-b bg-gray-50 px-4 py-3"><h3 class="font-bold">Zeitplan · {{ dateLabel(form.schedule_date) }}</h3><p class="text-xs text-gray-500">Gemeinsame Einträge werden pro Gruppe angezeigt, aber nur einmal gespeichert.</p></div>
+          <div class="border-b bg-gray-50 px-4 py-3"><h3 class="font-bold">Zeitplan · {{ dateLabel(form.schedule_date) }}</h3><p class="text-xs font-semibold text-orange-700">Berechnete Bereichsdauer: {{ preview.config?.calculated_area_duration_minutes || preview.config?.areas?.[0]?.duration_minutes || '–' }} Minuten</p><p class="text-xs text-gray-500">Gemeinsame Einträge werden pro Gruppe angezeigt, aber nur einmal gespeichert.</p></div>
           <div class="overflow-x-auto"><table class="min-w-full divide-y text-sm"><thead class="bg-gray-50 text-left text-xs uppercase text-gray-500"><tr><th class="px-3 py-2">Gruppe</th><th class="px-3 py-2">Zeit</th><th class="px-3 py-2">Aktivität</th><th class="px-3 py-2">Art / Anleiter</th></tr></thead><tbody class="divide-y"><template v-for="row in rows()" :key="row.group"><tr v-for="(entry, index) in row.entries" :key="`${row.group}-${entry.start_time}-${entry.title}`" :class="entry.type === 'area' ? 'bg-white' : 'bg-blue-50'"><td class="px-3 py-2 font-bold text-orange-800">{{ index === 0 ? row.group : '' }}</td><td class="whitespace-nowrap px-3 py-2 font-mono text-xs">{{ String(entry.start_time).slice(0, 5) }}–{{ String(entry.end_time).slice(0, 5) }}</td><td class="px-3 py-2 font-semibold">{{ entry.title }}</td><td class="px-3 py-2 text-xs text-gray-600">{{ typeLabel(entry.type) }}<span v-if="entry.meta?.supervisor_name"> · {{ entry.meta.supervisor_name }}</span></td></tr></template></tbody></table></div>
         </section>
       </div>

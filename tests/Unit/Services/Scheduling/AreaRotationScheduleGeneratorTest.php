@@ -8,6 +8,30 @@ use PHPUnit\Framework\TestCase;
 
 class AreaRotationScheduleGeneratorTest extends TestCase
 {
+    public function test_it_calculates_the_area_duration_from_the_remaining_day(): void
+    {
+        $result = (new AreaRotationScheduleGenerator)->generate([
+            'start_time' => '09:00',
+            'end_time' => '13:00',
+            'slot_minutes' => 15,
+            'groups' => ['G1', 'G2', 'G3'],
+            'areas' => [
+                ['bereich_id' => 1, 'name' => 'IT'],
+                ['bereich_id' => 2, 'name' => 'Kunst'],
+                ['bereich_id' => 3, 'name' => 'Sport'],
+            ],
+            'events' => [
+                ['title' => 'Begrüßung', 'type' => 'shared', 'start_time' => '09:00', 'end_time' => '09:30'],
+            ],
+        ]);
+
+        $this->assertSame('automatic', $result['config']['duration_mode']);
+        $this->assertSame(60, $result['config']['calculated_area_duration_minutes']);
+        $this->assertSame(3, $result['config']['rotation_count']);
+        $this->assertSame(30, $result['config']['unallocated_minutes']);
+        $this->assertSame([60], array_values(array_unique(array_column($result['config']['areas'], 'duration_minutes'))));
+    }
+
     public function test_it_allows_shared_events_but_never_uses_an_area_twice_at_the_same_time(): void
     {
         $result = (new AreaRotationScheduleGenerator)->generate([

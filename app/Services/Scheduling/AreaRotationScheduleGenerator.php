@@ -36,12 +36,22 @@ class AreaRotationScheduleGenerator
         }
 
         $events = $this->normaliseEvents($input['events'] ?? [], $dayStart, $dayEnd, $slotMinutes);
+        usort($events, fn ($left, $right) => $left['start'] <=> $right['start']);
         $this->assertEventsDoNotOverlap($events);
+
+        $roundCount = max(count($groups), count($areas));
+        $automaticDuration = count(array_filter(
+            $areas,
+            fn ($area) => ! isset($area['duration_minutes']) || (int) $area['duration_minutes'] <= 0
+        )) > 0;
+        $calculatedDuration = $automaticDuration
+            ? $this->automaticRoundDuration($dayStart, $dayEnd, $events, $roundCount, $slotMinutes)
+            : null;
 
         foreach ($areas as $index => &$area) {
             $area['bereich_id'] = (int) $area['bereich_id'];
             $area['name'] = trim((string) ($area['name'] ?? ('Bereich '.$area['bereich_id'])));
-            $area['duration_minutes'] = (int) ($area['duration_minutes'] ?? 60);
+            $area['duration_minutes'] = $calculatedDuration ?? (int) $area['duration_minutes'];
             $area['supervisor_person_id'] = ($area['supervisor_person_id'] ?? null) !== null
                 && ($area['supervisor_person_id'] ?? '') !== ''
                 ? (int) $area['supervisor_person_id'] : null;
@@ -61,8 +71,11 @@ class AreaRotationScheduleGenerator
             throw new DomainException('Ein Bereich wurde mehrfach ausgewählt.');
         }
 
-        $roundCount = max(count($groups), count($areas));
         $roundDuration = max(array_column($areas, 'duration_minutes'));
+        $availableMinutes = ($dayEnd - $dayStart) - array_sum(array_map(
+            fn ($event) => $event['end'] - $event['start'],
+            $events
+        ));
         $cursor = $dayStart;
         $entries = array_map(fn ($event) => [
             'group_key' => null,
@@ -119,6 +132,10 @@ class AreaRotationScheduleGenerator
                 'start_time' => $this->formatMinutes($dayStart),
                 'end_time' => $this->formatMinutes($dayEnd),
                 'groups' => $groups,
+                'duration_mode' => $automaticDuration ? 'automatic' : 'manual',
+                'calculated_area_duration_minutes' => $automaticDuration ? $roundDuration : null,
+                'rotation_count' => $roundCount,
+                'unallocated_minutes' => max(0, $availableMinutes - ($roundCount * $roundDuration)),
                 'areas' => array_map(fn ($area) => array_diff_key($area, ['_index' => true]), $areas),
                 'events' => array_map(fn ($event) => [
                     'title' => $event['title'],
@@ -129,6 +146,33 @@ class AreaRotationScheduleGenerator
             ],
             'entries' => $entries,
         ];
+    }
+
+    private function automaticRoundDuration(
+        int $dayStart,
+        int $dayEnd,
+        array $events,
+        int $roundCount,
+        int $slotMinutes
+    ): int {
+        $blockedMinutes = array_sum(array_map(fn ($event) => $event['end'] - $event['start'], $events));
+        $availableMinutes = ($dayEnd - $dayStart) - $blockedMinutes;
+        $largestCandidate = intdiv(intdiv($availableMinutes, $roundCount), $slotMinutes) * $slotMinutes;
+
+        for ($duration = $largestCandidate; $duration >= $slotMinutes; $duration -= $slotMinutes) {
+            $cursor = $dayStart;
+            try {
+                for ($round = 0; $round < $roundCount; $round++) {
+                    $cursor = $this->nextAvailableWindow($cursor, $duration, $events, $dayEnd) + $duration;
+                }
+
+                return $duration;
+            } catch (DomainException) {
+                // Try the next smaller duration when fixed activities fragment the day.
+            }
+        }
+
+        throw new DomainException('Nach Abzug der Pausen und gemeinsamen Aktivitäten bleibt nicht genug Zeit für alle Bereichsrotationen.');
     }
 
     private function normaliseEvents(array $events, int $dayStart, int $dayEnd, int $slotMinutes): array

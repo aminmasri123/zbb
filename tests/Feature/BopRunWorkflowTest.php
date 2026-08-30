@@ -228,7 +228,7 @@ class BopRunWorkflowTest extends TestCase
             'schuljahr' => '2026/2027', 'teil' => 'Teil 1',
             'schedule_date' => '2026-11-03', 'start_time' => '09:00', 'end_time' => '11:00',
             'slot_minutes' => 15, 'groups' => ['G1'],
-            'areas' => [['bereich_id' => $it->id, 'duration_minutes' => 60]],
+            'areas' => [['bereich_id' => $it->id]],
             'events' => [],
         ];
 

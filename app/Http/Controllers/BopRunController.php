@@ -372,7 +372,7 @@ class BopRunController extends Controller
             'groups.*' => ['required', 'string', 'max:80', 'distinct'],
             'areas' => ['required', 'array', 'min:1', 'max:50'],
             'areas.*.bereich_id' => ['required', 'integer', 'distinct', 'exists:bereiches,id'],
-            'areas.*.duration_minutes' => ['required', 'integer', 'min:5', 'max:480'],
+            'areas.*.duration_minutes' => ['nullable', 'integer', 'min:5', 'max:480'],
             'areas.*.supervisor_person_id' => ['nullable', 'integer', 'exists:personens,id'],
             'events' => ['nullable', 'array', 'max:30'],
             'events.*.title' => ['required', 'string', 'max:150'],
