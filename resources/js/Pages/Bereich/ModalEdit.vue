@@ -8,7 +8,8 @@ import Textarea from 'primevue/textarea';
 
 const props = defineProps({
   visible: Boolean,
-  toEdit: { type: Object, default: null }
+  toEdit: { type: Object, default: null },
+  unterweisungThemen: { type: Array, default: () => [] },
 });
 
 const emit = defineEmits(['close', 'updated']);
@@ -17,13 +18,14 @@ let editBereich = ref({
   id: null,
   name: '',
   code: '',
-  beschreibung: ''
+  beschreibung: '',
+  unterweisung_themen: [],
 });
 
 // Wenn sich toEdit ändert → Formular befüllen
 watch(() => props.toEdit, (value) => {
   if (value) {
-    editBereich.value = { ...value };
+    editBereich.value = { ...value, unterweisung_themen: [...(value.unterweisung_themen || [])] };
   }
 }, { immediate: true });
 
@@ -38,6 +40,7 @@ const save = async () => {
       name: editBereich.value.name,
       code: editBereich.value.code,
       beschreibung: editBereich.value.beschreibung,
+      unterweisung_themen: editBereich.value.unterweisung_themen,
     });
 
     Swal.fire({
@@ -77,6 +80,16 @@ const save = async () => {
           <label for="edit-code">Abkürzung</label>
         </FloatLabel>
       </div>
+      <fieldset class="rounded border border-gray-200 p-3">
+        <legend class="px-1 text-sm font-semibold text-gray-700">Standardkreuze Unterweisungsnachweis</legend>
+        <p class="mb-3 text-xs text-gray-500">Diese Auswahl wird für jede Gruppe dieses Bereichs übernommen – unabhängig vom Projekt.</p>
+        <div class="grid gap-2 sm:grid-cols-2">
+          <label v-for="thema in props.unterweisungThemen" :key="thema.key" class="flex items-start gap-2 text-sm text-gray-700">
+            <input v-model="editBereich.unterweisung_themen" type="checkbox" :value="thema.key" class="mt-0.5 rounded border-gray-300 text-zbb focus:ring-zbb">
+            <span>{{ thema.label }}</span>
+          </label>
+        </div>
+      </fieldset>
       <div class="mb-4">
         <FloatLabel variant="on">
           <Textarea id="beschreibung" v-model="editBereich.beschreibung" rows="4" class="w-full" />

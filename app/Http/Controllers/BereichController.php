@@ -2,16 +2,18 @@
 
 namespace App\Http\Controllers;
 
-use Inertia\Inertia;
 use App\Models\Bereich;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+use Inertia\Inertia;
 
 class BereichController extends Controller
 {
     /**
      * Display a listing of the resource.
      *
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function index(Request $request)
     {
@@ -33,8 +35,10 @@ class BereichController extends Controller
         // Standardmäßige Rückgabe für die Inertia-Ansicht
         return Inertia::render('Bereich/Index', [
             'bereiche' => $bereiche,
+            'unterweisungThemen' => $this->unterweisungThemen(),
         ]);
     }
+
     public function indexAjaxFresh(Request $request)
     {
         $search = $request->input('search'); // Benutze input(), um den Suchparameter abzurufen
@@ -57,7 +61,8 @@ class BereichController extends Controller
             return response()->json([
                 'bereiche' => $bereiche,
             ]);
-        };
+        }
+
         // Standardmäßige Rückgabe für die Inertia-Ansicht
         return Inertia::render('Bereich/Index', [
             'bereiche' => $bereiche,
@@ -67,7 +72,7 @@ class BereichController extends Controller
     /**
      * Show the form for creating a new resource.
      *
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function create()
     {
@@ -81,6 +86,8 @@ class BereichController extends Controller
             'name' => 'required|string|max:30',
             'code' => 'nullable|string|max:10',
             'beschreibung' => 'nullable|string|max:200',
+            'unterweisung_themen' => ['nullable', 'array'],
+            'unterweisung_themen.*' => ['string', 'in:'.implode(',', array_keys(config('unterweisung.themen', [])))],
         ]);
 
         try {
@@ -89,12 +96,13 @@ class BereichController extends Controller
                 'name' => trim($validatedData['name']),
                 'code' => $this->nullableTrimmedValue($validatedData['code'] ?? null),
                 'beschreibung' => $this->nullableTrimmedValue($validatedData['beschreibung'] ?? null),
+                'unterweisung_themen' => array_values(array_unique($validatedData['unterweisung_themen'] ?? [])),
             ]);
 
-            //Ajax Automatisch anzeigen
+            // Ajax Automatisch anzeigen
             return response()->json([
                 'message' => 'Bereich erfolgreich erstellt.',
-                'bereich' => $bereich
+                'bereich' => $bereich,
             ], 201);
 
         } catch (\Exception $e) {
@@ -107,7 +115,7 @@ class BereichController extends Controller
      * Display the specified resource.
      *
      * @param  int  $id
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function show($id)
     {
@@ -118,7 +126,7 @@ class BereichController extends Controller
      * Show the form for editing the specified resource.
      *
      * @param  int  $id
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function edit($id)
     {
@@ -126,32 +134,34 @@ class BereichController extends Controller
     }
 
     public function update(Request $request, $id)
-{
-    $validated = $request->validate([
-        'name' => 'required|string|max:30',
-        'code' => 'nullable|string|max:10',
-        'beschreibung' => 'nullable|string|max:200',
-    ]);
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:30',
+            'code' => 'nullable|string|max:10',
+            'beschreibung' => 'nullable|string|max:200',
+            'unterweisung_themen' => ['nullable', 'array'],
+            'unterweisung_themen.*' => ['string', 'in:'.implode(',', array_keys(config('unterweisung.themen', [])))],
+        ]);
 
-    $bereich = Bereich::findOrFail($id);
-    $bereich->update([
-        'name' => trim($validated['name']),
-        'code' => $this->nullableTrimmedValue($validated['code'] ?? null),
-        'beschreibung' => $this->nullableTrimmedValue($validated['beschreibung'] ?? null),
-    ]);
+        $bereich = Bereich::findOrFail($id);
+        $bereich->update([
+            'name' => trim($validated['name']),
+            'code' => $this->nullableTrimmedValue($validated['code'] ?? null),
+            'beschreibung' => $this->nullableTrimmedValue($validated['beschreibung'] ?? null),
+            'unterweisung_themen' => array_values(array_unique($validated['unterweisung_themen'] ?? [])),
+        ]);
 
-    return response()->json([
-        'message' => 'Bereich erfolgreich aktualisiert',
-        'bereich' => $bereich
-    ]);
-}
-
+        return response()->json([
+            'message' => 'Bereich erfolgreich aktualisiert',
+            'bereich' => $bereich,
+        ]);
+    }
 
     /**
      * Remove the specified resource from storage.
      *
      * @param  int  $id
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function destroy($id)
     {
@@ -164,12 +174,12 @@ class BereichController extends Controller
             $bereich->delete(); // Lösche die Abteilung
 
             return response()->json(['message' => 'Abteilung erfolgreich gelöscht!'], 200);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        } catch (ModelNotFoundException $e) {
             return response()->json(['message' => 'Abteilung nicht gefunden.'], 404);
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
+            return response()->json(['message' => 'Ein Fehler ist aufgetreten: '.$e->getMessage()], 500);
         }
-}
+    }
 
     private function nullableTrimmedValue(?string $value): ?string
     {
@@ -178,4 +188,11 @@ class BereichController extends Controller
         return $value === '' ? null : $value;
     }
 
+    private function unterweisungThemen(): array
+    {
+        return collect(config('unterweisung.themen', []))
+            ->map(fn (string $label, string $key) => ['key' => $key, 'label' => $label])
+            ->values()
+            ->all();
+    }
 }

@@ -815,6 +815,14 @@ class GruppeHasTeilnehmerController extends Controller
 
         $items = [
             [
+                'id' => 'bop-gruppe-unterweisungsnachweis',
+                'name' => 'Unterweisungsnachweis',
+                'format' => 'PDF',
+                'typ' => 'BOP Gruppe',
+                'method' => 'get',
+                'url' => route('gruppe.bop.export.unterweisungsnachweis', $gruppe->id),
+            ],
+            [
                 'id' => 'bop-pa-zertifikat-gruppe',
                 'name' => 'Zertifikat PA Gruppe',
                 'format' => 'DOCX',

@@ -24,7 +24,7 @@
     const canManageBereich = computed(() => canUpdateBereich.value || canDeleteBereich.value);
 
      // Definiere die Props direkt
-    const props = defineProps({ bereiche: Object, }); // props wird hier definiert
+    const props = defineProps({ bereiche: Object, unterweisungThemen: { type: Array, default: () => [] } }); // props wird hier definiert
     // Lokale Kopie der Bereiche erstellen
 
 
@@ -280,8 +280,8 @@ export default {
          <!-- Modal für neue Bereich -->
 
 
-        <ModalCreate v-if="canCreateBereich" :visible="isModalCreateOpen" @close="closeModalCreate" @add-bereich="addBereich"/>
-        <ModalEdit v-if="canUpdateBereich" :visible="isModalEditOpen" :toEdit="bereichToEdit" @close="closeModalEdit" @updated="updateBereich"/>
+        <ModalCreate v-if="canCreateBereich" :visible="isModalCreateOpen" :unterweisung-themen="props.unterweisungThemen" @close="closeModalCreate" @add-bereich="addBereich"/>
+        <ModalEdit v-if="canUpdateBereich" :visible="isModalEditOpen" :toEdit="bereichToEdit" :unterweisung-themen="props.unterweisungThemen" @close="closeModalEdit" @updated="updateBereich"/>
         <!-- Modal für die Löschung des Bereiches-->
         <template v-if="canDeleteBereich">
         <ModalDestroy v-if="showModalLöschen" @delete="handleDelete" @close="showModalLöschen = false" :seite="seite"  :toDelete="bereichToDelete"></ModalDestroy>

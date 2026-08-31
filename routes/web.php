@@ -14,6 +14,7 @@ use App\Http\Controllers\BaenkeController;
 use App\Http\Controllers\BerechtigungController;
 use App\Http\Controllers\BereichController;
 use App\Http\Controllers\BopGruppeExportController;
+use App\Http\Controllers\UnterweisungSignatureController;
 use App\Http\Controllers\BopLegacyFunctionController;
 use App\Http\Controllers\BopRunController;
 use App\Http\Controllers\BriefController;
@@ -330,6 +331,10 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
 
     Route::post('/konto/loeschantrag', [AccountDeletionRequestController::class, 'store'])
         ->name('account-deletion-requests.store');
+    Route::post('/profil/unterweisung-unterschrift', [UnterweisungSignatureController::class, 'update'])
+        ->name('profile.unterweisung-signature.update');
+    Route::delete('/profil/unterweisung-unterschrift', [UnterweisungSignatureController::class, 'destroy'])
+        ->name('profile.unterweisung-signature.destroy');
 
     Route::get('/dashboard', [DashbaordController::class, 'dashboard'])->name('dashboard');
     Route::put('/dashboard/einstellungen', [DashbaordController::class, 'updatePreferences'])->name('dashboard.preferences.update');
@@ -577,6 +582,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
         Route::get('/gruppe/{gruppe}/export/serienbrief/{dokument}', [ExportWordController::class, 'gruppeSerienbrief'])->name('gruppe.export.serienbrief');
         Route::get('/gruppe/{gruppe}/bop-export/namensschilder', [BopGruppeExportController::class, 'namensschilder'])->name('gruppe.bop.export.namensschilder')->can('gruppe.bop.export.namensschilder');
         Route::get('/gruppe/{gruppe}/bop-export/anwesenheitsliste', [BopGruppeExportController::class, 'anwesenheitsliste'])->name('gruppe.bop.export.anwesenheitsliste')->can('anwesenheit.export');
+        Route::get('/gruppe/{gruppe}/bop-export/unterweisungsnachweis', [BopGruppeExportController::class, 'unterweisungsnachweis'])->name('gruppe.bop.export.unterweisungsnachweis');
         Route::get('/gruppe/{gruppe}/bop-export/hausordnung', [BopGruppeExportController::class, 'hausordnung'])->name('gruppe.bop.export.hausordnung')->can('gruppe.bop.export.hausordnung');
         Route::get('/gruppe/{gruppe}/bop-export/berufsfelderprobung', [BopGruppeExportController::class, 'berufsfelderprobung'])->name('gruppe.bop.export.berufsfelderprobung')->can('gruppe.bop.export.berufsfelderprobung');
         Route::get('/gruppe/{gruppe}/bop-export/auswertungsbogen-bop', [BopGruppeExportController::class, 'auswertungsbogenBop'])->name('gruppe.bop.export.auswertungsbogen-bop')->can('gruppe.bop.export.auswertungsbogen-bop');

@@ -8,6 +8,7 @@ import Textarea from 'primevue/textarea';
 
 const props = defineProps({
   visible: Boolean,
+  unterweisungThemen: { type: Array, default: () => [] },
 });
 
 const emit = defineEmits(['close', 'add-bereich']);
@@ -16,10 +17,11 @@ let newBereich = ref({
   name: '',
   code: '',
   beschreibung: '',
+  unterweisung_themen: [],
 });
 
 const resetForm = () => {
-  newBereich.value = { name: '', code: '', beschreibung: '' };
+  newBereich.value = { name: '', code: '', beschreibung: '', unterweisung_themen: [] };
 };
 
 const save = () => {
@@ -56,6 +58,16 @@ const close = () => {
           <label for="code">Abkürzung</label>
         </FloatLabel>
       </div>
+      <fieldset class="rounded border border-gray-200 p-3">
+        <legend class="px-1 text-sm font-semibold text-gray-700">Standardkreuze Unterweisungsnachweis</legend>
+        <p class="mb-3 text-xs text-gray-500">Diese Auswahl gilt projektübergreifend für alle Gruppen dieses Bereichs.</p>
+        <div class="grid gap-2 sm:grid-cols-2">
+          <label v-for="thema in props.unterweisungThemen" :key="thema.key" class="flex items-start gap-2 text-sm text-gray-700">
+            <input v-model="newBereich.unterweisung_themen" type="checkbox" :value="thema.key" class="mt-0.5 rounded border-gray-300 text-zbb focus:ring-zbb">
+            <span>{{ thema.label }}</span>
+          </label>
+        </div>
+      </fieldset>
       <div class="mb-4">
         <FloatLabel variant="on">
           <Textarea id="beschreibung" v-model="newBereich.beschreibung" rows="4" class="w-full" style="resize: none"/>

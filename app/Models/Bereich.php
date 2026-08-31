@@ -2,20 +2,24 @@
 
 namespace App\Models;
 
-use App\Models\Projekt;
-use App\Models\BereichHasPersonen;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
 class Bereich extends Model
 {
     use HasFactory;
+
     protected $fillable = [
         'id',
         'name',
         'aktiv',
         'code',
         'beschreibung',
+        'unterweisung_themen',
+    ];
+
+    protected $casts = [
+        'unterweisung_themen' => 'array',
     ];
 
     public function projekte()
@@ -25,7 +29,7 @@ class Bereich extends Model
 
     public function bereichHasPersonen()
     {
-       return $this->hasMany(BereichHasPersonen::class, 'bereich_id', 'id');
+        return $this->hasMany(BereichHasPersonen::class, 'bereich_id', 'id');
     }
 
     public function dokumente()

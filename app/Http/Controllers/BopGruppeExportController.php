@@ -8,11 +8,13 @@ use App\Models\Personen;
 use App\Models\PersonenIstSchueler;
 use App\Services\Bop\AttendanceFooterService;
 use App\Services\Projects\ActiveProjectContext;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\IOFactory as SpreadsheetIOFactory;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -25,8 +27,7 @@ class BopGruppeExportController extends Controller
     public function __construct(
         private readonly AttendanceFooterService $attendanceFooter,
         private readonly ActiveProjectContext $activeProjectContext,
-    ) {
-    }
+    ) {}
 
     public function namensschilder(Gruppe $gruppe)
     {
@@ -37,7 +38,7 @@ class BopGruppeExportController extends Controller
             return back()->with('error', 'Die Gruppe verfuegt derzeit ueber keine Teilnehmer.');
         }
 
-        $filename = $this->safeFileName('Namensschilder_Gruppe_' . ($gruppe->bereich?->name ?? $gruppe->id)) . '.docx';
+        $filename = $this->safeFileName('Namensschilder_Gruppe_'.($gruppe->bereich?->name ?? $gruppe->id)).'.docx';
 
         return $this->namensschilderDownload($teilnehmer->pluck('voller_name'), $filename);
     }
@@ -71,7 +72,7 @@ class BopGruppeExportController extends Controller
                     : strnatcasecmp((string) ($a->person?->vorname ?? ''), (string) ($b->person?->vorname ?? ''));
             })
             ->map(fn (PersonenIstSchueler $student) => trim(
-                (string) ($student->person?->vorname ?? '') . ' ' . (string) ($student->person?->nachname ?? '')
+                (string) ($student->person?->vorname ?? '').' '.(string) ($student->person?->nachname ?? '')
             ))
             ->filter()
             ->values();
@@ -81,8 +82,8 @@ class BopGruppeExportController extends Controller
         }
 
         $filename = $this->safeFileName(
-            'Namensschilder_' . $partner->name . '_' . $validated['schuljahr'] . '_Teil_' . $validated['teil']
-        ) . '.docx';
+            'Namensschilder_'.$partner->name.'_'.$validated['schuljahr'].'_Teil_'.$validated['teil']
+        ).'.docx';
 
         return $this->namensschilderDownload($names, $filename);
     }
@@ -92,7 +93,7 @@ class BopGruppeExportController extends Controller
         return $this->combinedTemplateExport(
             $gruppe,
             $this->wordTemplate('Hausordnung_BOP.docx'),
-            'Hausordnung_Gruppe_' . $gruppe->id,
+            'Hausordnung_Gruppe_'.$gruppe->id,
             fn (TemplateProcessor $processor, array $item) => $this->fillTemplate($processor, $item)
         );
     }
@@ -102,7 +103,7 @@ class BopGruppeExportController extends Controller
         return $this->combinedTemplateExport(
             $gruppe,
             $this->wordTemplate('Berufsfelderprobung_Schueler_BOP.docx'),
-            'Berufsfelderprobung_Gruppe_' . $gruppe->id,
+            'Berufsfelderprobung_Gruppe_'.$gruppe->id,
             fn (TemplateProcessor $processor, array $item) => $this->fillTemplate($processor, $item)
         );
     }
@@ -112,7 +113,7 @@ class BopGruppeExportController extends Controller
         return $this->combinedTemplateExport(
             $gruppe,
             $this->wordTemplate('Auswertungsbogen_BOP.docx'),
-            'Auswertungsbogen_BOP_Gruppe_' . $gruppe->id,
+            'Auswertungsbogen_BOP_Gruppe_'.$gruppe->id,
             fn (TemplateProcessor $processor, array $item) => $this->fillTemplate($processor, $item)
         );
     }
@@ -127,7 +128,7 @@ class BopGruppeExportController extends Controller
         }
 
         $templateFile = storage_path('vorlage/projekte/bop/excel/Anwesenheitsliste.xlsx');
-        if (!file_exists($templateFile)) {
+        if (! file_exists($templateFile)) {
             return back()->with('error', 'Die Anwesenheitsliste-Vorlage wurde nicht gefunden.');
         }
 
@@ -143,25 +144,84 @@ class BopGruppeExportController extends Controller
         $bereich = $gruppe->bereich?->name ?? '';
 
         $sheet->setCellValue('B3', $start->format('Y'));
-        $sheet->setCellValue('B6', $start->weekOfYear . 'KW');
-        $sheet->setCellValue('C2', 'Praxisbereich: ' . $bereich . '          ' . $school);
+        $sheet->setCellValue('B6', $start->weekOfYear.'KW');
+        $sheet->setCellValue('C2', 'Praxisbereich: '.$bereich.'          '.$school);
         $this->writeAttendanceDayHeaders($sheet, $attendanceDays);
 
         $row = 8;
         foreach ($teilnehmer as $item) {
-            $sheet->setCellValue('B' . $row, $item['name']);
-            $sheet->setCellValueExplicit('D' . $row, $item['klasse'], DataType::TYPE_STRING);
-            $sheet->setCellValue('E' . $row, $item['geschlecht']);
+            $sheet->setCellValue('B'.$row, $item['name']);
+            $sheet->setCellValueExplicit('D'.$row, $item['klasse'], DataType::TYPE_STRING);
+            $sheet->setCellValue('E'.$row, $item['geschlecht']);
             $row++;
         }
 
         $sheet->setCellValue('D25', $first['anleiter_name'] ?? '');
 
-        $filename = $this->safeFileName('Anwesenheitsliste_' . ($bereich ?: 'Gruppe_' . $gruppe->id) . '_' . $start->format('d.m.Y') . '_' . $end->format('d.m.Y')) . '.xlsx';
+        $filename = $this->safeFileName('Anwesenheitsliste_'.($bereich ?: 'Gruppe_'.$gruppe->id).'_'.$start->format('d.m.Y').'_'.$end->format('d.m.Y')).'.xlsx';
         $path = $this->tmpPath($filename);
         (new Xlsx($spreadsheet))->save($path);
 
         return response()->download($path, $filename)->deleteFileAfterSend(true);
+    }
+
+    public function unterweisungsnachweis(Request $request, Gruppe $gruppe)
+    {
+        $gruppe = $this->gruppeMitDaten($gruppe);
+        $user = $request->user();
+
+        abort_unless((int) $gruppe->personen_id === (int) $user?->person_id, 403, 'Der Nachweis kann nur vom zugeordneten Anleiter unterschrieben werden.');
+
+        $unterschrift = $user->unterweisung_unterschrift;
+        if (empty($unterschrift['data']) || empty($unterschrift['mime'])) {
+            return back()->with('error', 'Bitte hinterlegen Sie zuerst Ihre Unterschrift unter „Mein Profil“.');
+        }
+
+        $teilnehmer = $this->teilnehmerDaten($gruppe);
+        if ($teilnehmer->isEmpty()) {
+            return back()->with('error', 'Die Gruppe verfügt derzeit über keine Teilnehmer.');
+        }
+
+        $themen = collect(config('unterweisung.themen', []));
+        $ausgewaehlteThemen = collect($gruppe->bereich?->unterweisung_themen ?? [])
+            ->filter(fn (string $key) => $themen->has($key))
+            ->values();
+        $ort = $gruppe->ort_typ === 'extern'
+            ? (string) $gruppe->externer_ort
+            : (string) ($gruppe->raum?->name ?? $gruppe->standort?->name ?? '');
+        $datum = $this->formatDate($gruppe->anfangsdatum ?: now());
+        $anleiter = trim(($user->person?->vorname ?? '').' '.($user->person?->nachname ?? '')) ?: $user->name;
+
+        $pdf = Pdf::loadView('pdf.unterweisungsnachweis', [
+            'gruppe' => $gruppe,
+            'teilnehmer' => $teilnehmer,
+            'themen' => $themen,
+            'ausgewaehlteThemen' => $ausgewaehlteThemen,
+            'ort' => $ort,
+            'datum' => $datum,
+            'anleiter' => $anleiter,
+            'unterschriftDataUrl' => 'data:'.$unterschrift['mime'].';base64,'.$unterschrift['data'],
+        ])->setPaper('a4', 'portrait');
+
+        $output = $pdf->output();
+        $filename = $this->safeFileName('Unterweisungsnachweis_'.($gruppe->bereich?->name ?: 'Gruppe_'.$gruppe->id).'_'.$datum).'.pdf';
+
+        Log::info('Unterweisungsnachweis als PDF exportiert', [
+            'user_id' => $user->id,
+            'personen_id' => $user->person_id,
+            'gruppe_id' => $gruppe->id,
+            'bereich_id' => $gruppe->bereich_id,
+            'themen' => $ausgewaehlteThemen->all(),
+            'teilnehmer_ids' => $gruppe->teilnehmer->pluck('id')->all(),
+            'sha256' => hash('sha256', $output),
+        ]);
+
+        return response($output, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, no-store, max-age=0',
+        ]);
     }
 
     public function toilettennutzungsliste(Gruppe $gruppe)
@@ -174,14 +234,14 @@ class BopGruppeExportController extends Controller
         }
 
         $templateFile = $this->wordTemplate('Toilettennutzungsliste.docx');
-        if (!file_exists($templateFile)) {
+        if (! file_exists($templateFile)) {
             return back()->with('error', 'Die Toilettennutzungsliste-Vorlage wurde nicht gefunden.');
         }
 
         $processor = new TemplateProcessor($templateFile);
         $this->fillTemplate($processor, $teilnehmer->first());
 
-        $filename = $this->safeFileName('Toilettennutzungsliste_' . ($teilnehmer->first()['schule'] ?: 'Gruppe_' . $gruppe->id)) . '.docx';
+        $filename = $this->safeFileName('Toilettennutzungsliste_'.($teilnehmer->first()['schule'] ?: 'Gruppe_'.$gruppe->id)).'.docx';
         $path = $this->tmpPath($filename);
         $processor->saveAs($path);
 
@@ -193,7 +253,7 @@ class BopGruppeExportController extends Controller
         return $this->combinedTemplateExport(
             $gruppe,
             null,
-            'Zertifikate_POBO_Gruppe_' . $gruppe->id,
+            'Zertifikate_POBO_Gruppe_'.$gruppe->id,
             function (TemplateProcessor $processor, array $item) {
                 $this->fillTemplate($processor, $item);
             },
@@ -206,7 +266,7 @@ class BopGruppeExportController extends Controller
         return $this->combinedTemplateExport(
             $gruppe,
             null,
-            'Teilnahmebescheinigung_POBO_Gruppe_' . $gruppe->id,
+            'Teilnahmebescheinigung_POBO_Gruppe_'.$gruppe->id,
             function (TemplateProcessor $processor, array $item) {
                 $this->fillTemplate($processor, $item);
             },
@@ -219,7 +279,7 @@ class BopGruppeExportController extends Controller
         return $this->combinedTemplateExport(
             $gruppe,
             null,
-            'Zertifikate_PA_Gruppe_' . $gruppe->id,
+            'Zertifikate_PA_Gruppe_'.$gruppe->id,
             fn (TemplateProcessor $processor, array $item) => $this->fillTemplate($processor, $item),
             fn (array $item) => $this->wordTemplate(strlen($item['voller_name']) <= 19 ? 'Zertifikat_Maske_PA.docx' : 'Zertifikat_Maske_PA_klein_text.docx')
         );
@@ -230,7 +290,7 @@ class BopGruppeExportController extends Controller
         return $this->combinedTemplateExport(
             $gruppe,
             $this->wordTemplate('Teilnahmebescheinigung_PA.docx'),
-            'Teilnahmebescheinigung_PA_Gruppe_' . $gruppe->id,
+            'Teilnahmebescheinigung_PA_Gruppe_'.$gruppe->id,
             fn (TemplateProcessor $processor, array $item) => $this->fillTemplate($processor, $item)
         );
     }
@@ -240,7 +300,7 @@ class BopGruppeExportController extends Controller
         return $this->combinedTemplateExport(
             $gruppe,
             $this->wordTemplate('Auswertung_PA.docx'),
-            'Auswertungsbogen_PA_Gruppe_' . $gruppe->id,
+            'Auswertungsbogen_PA_Gruppe_'.$gruppe->id,
             fn (TemplateProcessor $processor, array $item) => $this->fillTemplate($processor, $item)
         );
     }
@@ -259,32 +319,33 @@ class BopGruppeExportController extends Controller
             return back()->with('error', 'Die Gruppe verfuegt derzeit ueber keine Teilnehmer.');
         }
 
-        if ($templateFile && !file_exists($templateFile)) {
+        if ($templateFile && ! file_exists($templateFile)) {
             return back()->with('error', 'Die BOP-Vorlage wurde nicht gefunden.');
         }
 
-        $tmpDir = storage_path('app/tmp/bop_' . uniqid('', true));
+        $tmpDir = storage_path('app/tmp/bop_'.uniqid('', true));
         File::ensureDirectoryExists($tmpDir);
 
         $documentPaths = [];
 
         foreach ($teilnehmer as $item) {
             $currentTemplate = $templateFor ? $templateFor($item) : $templateFile;
-            if (!$currentTemplate || !file_exists($currentTemplate)) {
+            if (! $currentTemplate || ! file_exists($currentTemplate)) {
                 File::deleteDirectory($tmpDir);
+
                 return back()->with('error', 'Eine BOP-Vorlage wurde nicht gefunden.');
             }
 
             $processor = new TemplateProcessor($currentTemplate);
             $fill($processor, $item);
 
-            $fileName = count($documentPaths) . '.docx';
-            $filePath = $tmpDir . DIRECTORY_SEPARATOR . $fileName;
+            $fileName = count($documentPaths).'.docx';
+            $filePath = $tmpDir.DIRECTORY_SEPARATOR.$fileName;
             $processor->saveAs($filePath);
             $documentPaths[] = $filePath;
         }
 
-        $filename = $this->safeFileName($baseName) . '.docx';
+        $filename = $this->safeFileName($baseName).'.docx';
         $outputPath = $this->tmpPath($filename);
         $this->mergeDocxFiles($documentPaths, $outputPath);
         File::deleteDirectory($tmpDir);
@@ -294,7 +355,7 @@ class BopGruppeExportController extends Controller
 
     private function namensschilderDownload(Collection $names, string $filename)
     {
-        $phpWord = new PhpWord();
+        $phpWord = new PhpWord;
         $section = $phpWord->addSection([
             'pageSizeW' => 11906,
             'pageSizeH' => 16838,
@@ -321,12 +382,13 @@ class BopGruppeExportController extends Controller
     {
         if (count($documentPaths) === 1) {
             File::copy($documentPaths[0], $outputPath);
+
             return;
         }
 
         File::copy($documentPaths[0], $outputPath);
 
-        $baseZip = new ZipArchive();
+        $baseZip = new ZipArchive;
         if ($baseZip->open($outputPath) !== true) {
             throw new \RuntimeException('Sammel-DOCX konnte nicht geoeffnet werden.');
         }
@@ -337,7 +399,7 @@ class BopGruppeExportController extends Controller
         $pageBreak = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
 
         foreach (array_slice($documentPaths, 1) as $documentPath) {
-            $zip = new ZipArchive();
+            $zip = new ZipArchive;
             if ($zip->open($documentPath) !== true) {
                 continue;
             }
@@ -346,11 +408,11 @@ class BopGruppeExportController extends Controller
             $zip->close();
 
             $parts = $this->documentBodyParts($xml);
-            $combinedBody .= $pageBreak . $parts['content'];
+            $combinedBody .= $pageBreak.$parts['content'];
         }
 
         $newXml = preg_replace_callback('/(<w:body[^>]*>).*?(<\/w:body>)/s', function ($matches) use ($combinedBody, $baseParts) {
-            return $matches[1] . $combinedBody . $baseParts['sectPr'] . $matches[2];
+            return $matches[1].$combinedBody.$baseParts['sectPr'].$matches[2];
         }, $baseXml);
 
         $baseZip->deleteName('word/document.xml');
@@ -384,32 +446,34 @@ class BopGruppeExportController extends Controller
             'bereich',
             'betreuer',
             'projekt',
+            'raum',
+            'standort',
         ]);
     }
 
     private function teilnehmerDaten(Gruppe $gruppe): Collection
     {
         $context = $this->bopContext($gruppe);
-        $partner = !empty($context['partner_id']) ? Partner::find($context['partner_id']) : null;
+        $partner = ! empty($context['partner_id']) ? Partner::find($context['partner_id']) : null;
 
         return $gruppe->teilnehmer
             ->unique('id')
-            ->sortBy(fn (Personen $person) => strtolower(($person->nachname ?? '') . ' ' . ($person->vorname ?? '')))
+            ->sortBy(fn (Personen $person) => strtolower(($person->nachname ?? '').' '.($person->vorname ?? '')))
             ->values()
             ->map(function (Personen $person, int $index) use ($gruppe, $context, $partner) {
                 $schueler = $this->schuelerFuerPerson($person, $context);
                 $itemPartner = $partner ?: ($schueler?->schule_id ? Partner::find($schueler->schule_id) : null);
                 $bereich = $gruppe->bereich?->name ?? '';
                 $schule = $itemPartner?->name ?? '';
-                $anleiter = trim(($gruppe->betreuer?->vorname ?? '') . ' ' . ($gruppe->betreuer?->nachname ?? ''));
+                $anleiter = trim(($gruppe->betreuer?->vorname ?? '').' '.($gruppe->betreuer?->nachname ?? ''));
 
                 $values = [
                     'nr' => $index + 1,
                     'nummer' => $index + 1,
                     'vorname' => $person->vorname ?? '',
                     'nachname' => $person->nachname ?? '',
-                    'voller_name' => trim(($person->vorname ?? '') . ' ' . ($person->nachname ?? '')),
-                    'name' => trim(($person->nachname ?? '') . ', ' . ($person->vorname ?? '')),
+                    'voller_name' => trim(($person->vorname ?? '').' '.($person->nachname ?? '')),
+                    'name' => trim(($person->nachname ?? '').', '.($person->vorname ?? '')),
                     'geburtsdatum' => $this->formatDate($person->geburtsdatum),
                     'geschlecht' => $person->geschlecht ?? '',
                     'klasse' => $schueler?->klasse ?? '',
@@ -420,7 +484,7 @@ class BopGruppeExportController extends Controller
                     'teil' => $schueler?->teil ?? ($context['teil'] ?? ''),
                     'bereich' => $bereich,
                     'bereich_name' => $bereich,
-                    'gruppe' => $bereich ?: ('Gruppe ' . $gruppe->id),
+                    'gruppe' => $bereich ?: ('Gruppe '.$gruppe->id),
                     'anleiter' => $anleiter,
                     'anleiter_name' => $anleiter,
                     'betreuer' => $anleiter,
@@ -449,15 +513,15 @@ class BopGruppeExportController extends Controller
         $schueler = $person->schueler ?? collect();
 
         return $schueler->first(function ($item) use ($context) {
-            if (!empty($context['partner_id']) && (int) $item->schule_id !== (int) $context['partner_id']) {
+            if (! empty($context['partner_id']) && (int) $item->schule_id !== (int) $context['partner_id']) {
                 return false;
             }
 
-            if (!empty($context['schuljahr']) && (string) $item->schuljahr !== (string) $context['schuljahr']) {
+            if (! empty($context['schuljahr']) && (string) $item->schuljahr !== (string) $context['schuljahr']) {
                 return false;
             }
 
-            if (!empty($context['teil']) && (string) $item->teil !== (string) $context['teil']) {
+            if (! empty($context['teil']) && (string) $item->teil !== (string) $context['teil']) {
                 return false;
             }
 
@@ -485,7 +549,7 @@ class BopGruppeExportController extends Controller
 
         if ($schueler->isNotEmpty()) {
             $best = $schueler
-                ->groupBy(fn ($item) => $item->schule_id . '|' . $item->schuljahr . '|' . $item->teil)
+                ->groupBy(fn ($item) => $item->schule_id.'|'.$item->schuljahr.'|'.$item->teil)
                 ->sortByDesc(fn ($items) => $items->count())
                 ->first()
                 ?->first();
@@ -516,7 +580,7 @@ class BopGruppeExportController extends Controller
 
     private function schulform($schueler): string
     {
-        if (!$schueler) {
+        if (! $schueler) {
             return '';
         }
 
@@ -527,7 +591,7 @@ class BopGruppeExportController extends Controller
 
     private function wordTemplate(string $name): string
     {
-        return storage_path('vorlage/projekte/bop/word/' . $name);
+        return storage_path('vorlage/projekte/bop/word/'.$name);
     }
 
     private function attendanceDays(Carbon $start, Carbon $end): array
@@ -585,7 +649,7 @@ class BopGruppeExportController extends Controller
 
     private function canUseGroup($user, ?Gruppe $gruppe): bool
     {
-        if (!$user || !$gruppe) {
+        if (! $user || ! $gruppe) {
             return false;
         }
 
@@ -606,12 +670,12 @@ class BopGruppeExportController extends Controller
         $dir = storage_path('app/tmp');
         File::ensureDirectoryExists($dir);
 
-        return $dir . DIRECTORY_SEPARATOR . uniqid('', true) . '_' . $filename;
+        return $dir.DIRECTORY_SEPARATOR.uniqid('', true).'_'.$filename;
     }
 
     private function formatDate($value): string
     {
-        if (!$value) {
+        if (! $value) {
             return '';
         }
 

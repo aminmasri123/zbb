@@ -23,6 +23,8 @@ class AuthorizeProfileAccess
         'two-factor.recovery-codes',
         'two-factor.regenerate-recovery-codes',
         'current-user.destroy',
+        'profile.unterweisung-signature.update',
+        'profile.unterweisung-signature.destroy',
     ];
 
     /**
@@ -36,7 +38,7 @@ class AuthorizeProfileAccess
 
         $user = $request->user();
         if ($user && ! $user->can('user.profil')) {
-            throw new AuthorizationException();
+            throw new AuthorizationException;
         }
 
         return $next($request);
