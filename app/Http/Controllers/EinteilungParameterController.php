@@ -13,6 +13,7 @@ use App\Models\GruppeHasPersonen;
 use App\Models\Partner;
 use App\Models\PersonenIstSchueler;
 use App\Models\Projekt;
+use App\Models\ProjektHasPersonen;
 use App\Models\Tage;
 use App\Models\Zeiten;
 use Carbon\Carbon;
@@ -605,10 +606,10 @@ class EinteilungParameterController extends Controller
             'partner_id' => ['required', 'integer', 'exists:partners,id'],
             'schuljahr' => ['required', 'string'],
             'teil' => ['required', 'string'],
-            'raum_id' => ['nullable', 'integer', 'exists:raeumes,id'],
-            'betreuer_id' => ['nullable', 'integer', 'exists:personens,id'],
             'bereiche' => ['nullable', 'array'],
             'bereiche.*' => ['integer', 'exists:bereiches,id'],
+            'bereich_betreuer' => ['required', 'array'],
+            'bereich_betreuer.*' => ['required', 'integer', 'exists:personens,id'],
         ];
 
         $validated = $request->validate($rules);
@@ -624,15 +625,26 @@ class EinteilungParameterController extends Controller
             ]);
         }
 
-        $raumId = $validated['raum_id'] ?? $projekt->raeume->first()?->id;
-        $betreuerId = $validated['betreuer_id'] ?? Auth::user()->person_id ?? $projekt->mitarbeiter->first()?->id;
+        $bereichBetreuer = collect($validated['bereich_betreuer'])
+            ->mapWithKeys(fn ($personenId, $bereichId) => [(int) $bereichId => (int) $personenId]);
+        $fehlendeBetreuer = $bereiche
+            ->reject(fn ($bereich) => $bereichBetreuer->has((int) $bereich->id))
+            ->pluck('name');
 
-        if (!$raumId) {
-            throw ValidationException::withMessages(['raum_id' => 'Bitte einen Raum auswaehlen.']);
+        if ($fehlendeBetreuer->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'bereich_betreuer' => 'Bitte fuer jeden ausgewaehlten Bereich einen Anleiter waehlen: '.$fehlendeBetreuer->implode(', ').'.',
+            ]);
         }
 
-        if (!$betreuerId) {
-            throw ValidationException::withMessages(['betreuer_id' => 'Bitte einen Betreuer auswaehlen.']);
+        $ungueltigeBetreuer = $bereichBetreuer
+            ->only($bereiche->pluck('id')->map(fn ($id) => (int) $id)->all())
+            ->diff($projekt->mitarbeiter->pluck('id')->map(fn ($id) => (int) $id));
+
+        if ($ungueltigeBetreuer->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'bereich_betreuer' => 'Mindestens ein ausgewaehlter Anleiter gehoert nicht zum aktuellen Projekt.',
+            ]);
         }
 
         $status = $this->defaultAnwesenheitsstatus();
@@ -649,8 +661,7 @@ class EinteilungParameterController extends Controller
             $bereiche,
             $schuelerIds,
             $schuelerNachId,
-            $raumId,
-            $betreuerId,
+            $bereichBetreuer,
             $status,
             $runden,
             $rundentermine,
@@ -672,22 +683,30 @@ class EinteilungParameterController extends Controller
                 ]);
 
                 foreach ($bereiche as $bereich) {
-                    $gruppe = Gruppe::updateOrCreate(
-                        [
-                            'projekt_id' => $projekt->id,
-                            'bereich_id' => $bereich->id,
-                            'bemerkung' => $this->gruppenBemerkung((int) $validated['partner_id'], (string) $validated['schuljahr'], (string) $validated['teil'], $runde),
-                        ],
-                        [
-                            'personen_id' => $betreuerId,
-                            'raum_id' => $raumId,
-                            'partner_id' => (int) $validated['partner_id'],
-                            'anfangsdatum' => $start->toDateString(),
-                            'enddatum' => $end->toDateString(),
-                            'startzeit' => $termin->startzeit,
-                            'endzeit' => $termin->endzeit,
-                        ]
-                    );
+                    $betreuerId = $bereichBetreuer->get((int) $bereich->id);
+                    $gruppe = Gruppe::firstOrNew([
+                        'projekt_id' => $projekt->id,
+                        'bereich_id' => $bereich->id,
+                        'bemerkung' => $this->gruppenBemerkung((int) $validated['partner_id'], (string) $validated['schuljahr'], (string) $validated['teil'], $runde),
+                    ]);
+                    $gruppe->fill([
+                        'personen_id' => $betreuerId,
+                        'partner_id' => (int) $validated['partner_id'],
+                        'anfangsdatum' => $start->toDateString(),
+                        'enddatum' => $end->toDateString(),
+                        'startzeit' => $termin->startzeit,
+                        'endzeit' => $termin->endzeit,
+                    ]);
+
+                    // Neue Gruppen duerfen bewusst ohne Raum entstehen. Ein bereits
+                    // nachtraeglich eingetragener Raum bleibt bei erneuter Generierung erhalten.
+                    if (! $gruppe->exists) {
+                        $gruppe->raum_id = null;
+                        $gruppe->standort_id = null;
+                        $gruppe->ort_typ = 'raum';
+                    }
+
+                    $gruppe->save();
                     $gruppenAnzahl++;
 
                     $einteilungen = EinteilungBereiche::where('teilnehmende_type', PersonenIstSchueler::class)
@@ -854,9 +873,15 @@ class EinteilungParameterController extends Controller
             ->max('updated_at');
 
         $projektPartnerIds = $projekt->partners->pluck('id')->filter()->values();
-        $betreuer = $user?->can('projekt.mitarbeiter.view.all')
+        $betreuer = $user?->can('projekt.mitarbeiter.view.all') || $user?->can('einteilung.planning')
             ? $projekt->mitarbeiter
             : collect([$user?->person])->filter();
+        $betreuerBereiche = ProjektHasPersonen::query()
+            ->where('projekt_id', $projekt->id)
+            ->whereIn('personen_id', $betreuer->pluck('id'))
+            ->with('bereichZuweisungen:projekt_has_personen_id,bereich_id,is_default')
+            ->get()
+            ->groupBy(fn (ProjektHasPersonen $zuweisung) => (int) $zuweisung->personen_id);
 
         return [
             'abilities' => [
@@ -889,10 +914,18 @@ class EinteilungParameterController extends Controller
                 'id' => $raum->id,
                 'name' => $raum->name,
             ])->values(),
-            'betreuer' => $betreuer->map(fn ($person) => [
-                'id' => $person->id,
-                'name' => trim(($person->nachname ?? '') . ', ' . ($person->vorname ?? ''), ' ,'),
-            ])->values(),
+            'betreuer' => $betreuer->map(function ($person) use ($betreuerBereiche) {
+                $bereichZuweisungen = $betreuerBereiche
+                    ->get((int) $person->id, collect())
+                    ->flatMap(fn (ProjektHasPersonen $zuweisung) => $zuweisung->bereichZuweisungen);
+
+                return [
+                    'id' => $person->id,
+                    'name' => trim(($person->nachname ?? '') . ', ' . ($person->vorname ?? ''), ' ,'),
+                    'bereich_ids' => $bereichZuweisungen->pluck('bereich_id')->map(fn ($id) => (int) $id)->unique()->values(),
+                    'default_bereich_id' => $bereichZuweisungen->firstWhere('is_default', true)?->bereich_id,
+                ];
+            })->values(),
             'stats' => [
                 'schulen' => $projektPartnerIds->count() ?: 1,
                 'gruppen' => Gruppe::where('projekt_id', $projekt->id)->count(),

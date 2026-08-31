@@ -901,6 +901,24 @@ class UserSeeder extends Seeder
             }
         }
 
+        $anleiterRoleId = DB::table('roles')
+            ->where('name', 'Anleiter')
+            ->where('guard_name', 'web')
+            ->value('id');
+        $eigeneGruppenPermissionIds = DB::table('permissions')
+            ->whereIn('name', ['gruppe.index', 'gruppe.update'])
+            ->where('guard_name', 'web')
+            ->pluck('id');
+
+        if ($anleiterRoleId) {
+            foreach ($eigeneGruppenPermissionIds as $permissionId) {
+                DB::table('role_has_permissions')->insertOrIgnore([
+                    'permission_id' => $permissionId,
+                    'role_id' => $anleiterRoleId,
+                ]);
+            }
+        }
+
         $oldPaAuswertungsbogenPermissionId = DB::table('permissions')
             ->where('name', 'gruppe.bop.export.auswertungsbogen-pa')
             ->where('guard_name', 'web')
@@ -1196,7 +1214,7 @@ class UserSeeder extends Seeder
             $this->permission('einteilung.update', 12, 'Erlaubt das Bearbeiten bestehender Einteilungen und das manuelle Verschieben oder Neuzuordnen einzelner Teilnehmer zwischen Bereichen.'),
             $this->permission('einteilung.destroy', 12, 'Erlaubt das Zuruecksetzen oder Loeschen der Einteilungen eines Partner-, Schuljahr- und Teilabschnittskontexts. Bereits erzeugte Teilnehmerzuordnungen werden dabei synchron bereinigt.'),
             $this->permission('einteilung.export', 12, 'Erlaubt den Excel-Export einer Einteilung einschliesslich Runden, Bereiche und Teilnehmerzuordnungen. Das Recht erlaubt keine Aenderung der Einteilungsdaten.'),
-            $this->permission('einteilung.planning', 12, 'Erlaubt die administrative Einteilungsplanung: Rundenzahl und Kapazitaetsparameter festlegen, komplette Runden tauschen und aus einer fertigen Einteilung automatisch echte Gruppen mit Zeit-, Raum- und Betreuerzuordnung generieren.'),
+            $this->permission('einteilung.planning', 12, 'Erlaubt die administrative Einteilungsplanung: Rundenzahl und Kapazitaetsparameter festlegen, komplette Runden tauschen und aus einer fertigen Einteilung automatisch echte Gruppen mit Zeit- und Anleiterzuordnung je Bereich generieren. Raeume koennen die Anleiter anschliessend eintragen.'),
 
             // Auswertungen / Dokumentexporte
             $this->permission('export.info_teilnehmende', 10, 'Erlaubt den Word-Export der Teilnehmerinformation fuer einen Teilnehmer.'),

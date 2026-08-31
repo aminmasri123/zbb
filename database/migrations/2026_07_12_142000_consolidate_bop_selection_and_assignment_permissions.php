@@ -19,7 +19,7 @@ return new class extends Migration
         'einteilung.update' => ['Einteilung', 'Erlaubt das Bearbeiten bestehender Einteilungen und das manuelle Verschieben oder Neuzuordnen einzelner Teilnehmer zwischen Bereichen.'],
         'einteilung.destroy' => ['Einteilung', 'Erlaubt das Zuruecksetzen oder Loeschen der Einteilungen eines Partner-, Schuljahr- und Teilabschnittskontexts. Bereits erzeugte Teilnehmerzuordnungen werden dabei synchron bereinigt.'],
         'einteilung.export' => ['Einteilung', 'Erlaubt den Excel-Export einer Einteilung einschliesslich Runden, Bereiche und Teilnehmerzuordnungen. Das Recht erlaubt keine Aenderung der Einteilungsdaten.'],
-        'einteilung.planning' => ['Einteilung', 'Erlaubt die administrative Einteilungsplanung: Rundenzahl und Kapazitaetsparameter festlegen, komplette Runden tauschen und aus einer fertigen Einteilung automatisch echte Gruppen mit Zeit-, Raum- und Betreuerzuordnung generieren.'],
+        'einteilung.planning' => ['Einteilung', 'Erlaubt die administrative Einteilungsplanung: Rundenzahl und Kapazitaetsparameter festlegen, komplette Runden tauschen und aus einer fertigen Einteilung automatisch echte Gruppen mit Zeit- und Anleiterzuordnung je Bereich generieren. Raeume koennen die Anleiter anschliessend eintragen.'],
     ];
 
     private const LEGACY_MAP = [

@@ -398,11 +398,23 @@
       <template #header>Gruppen generieren</template>
       <template #body>
         <div class="space-y-5">
-          <div class="grid grid-cols-2 gap-2">
-            <label v-for="bereich in allBereiche" :key="bereich.id" class="flex items-center gap-2 text-sm text-gray-700">
-              <input v-model="gruppenForm.bereiche" type="checkbox" :value="bereich.id" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
-              <span>{{ bereich.name }}</span>
-            </label>
+          <div>
+            <h3 class="text-sm font-bold text-gray-800">Anleiter je Bereich</h3>
+            <p class="mt-1 text-sm text-gray-500">Wählen Sie die Bereiche und legen Sie vor der Generierung für jeden Bereich den zuständigen Anleiter fest.</p>
+            <div class="mt-3 space-y-2">
+              <div v-for="bereich in allBereiche" :key="bereich.id" class="grid items-center gap-3 rounded-lg border border-gray-200 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(15rem,1fr)]">
+                <label class="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                  <input v-model="gruppenForm.bereiche" type="checkbox" :value="bereich.id" class="rounded border-gray-300 text-zbb focus:ring-zbb" @change="onBereichSelectionChanged(bereich.id)" />
+                  <span>{{ bereich.name }}</span>
+                </label>
+                <select v-if="gruppenForm.bereiche.includes(bereich.id)" v-model="gruppenForm.bereich_betreuer[bereich.id]" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb sm:text-sm">
+                  <option :value="null">Anleiter wählen</option>
+                  <option v-for="person in betreuer" :key="person.id" :value="person.id">
+                    {{ person.name }}{{ person.bereich_ids?.includes(Number(bereich.id)) ? ' · diesem Bereich zugeordnet' : '' }}
+                  </option>
+                </select>
+              </div>
+            </div>
           </div>
           <div class="rounded-lg border border-orange-200 bg-orange-50 p-3">
             <p class="mb-2 text-sm font-bold text-orange-800">Gespeicherte Rundentermine</p>
@@ -413,21 +425,9 @@
               </div>
             </div>
           </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="mb-1 block text-sm font-semibold text-gray-700">Raum</label>
-              <select v-model="gruppenForm.raum_id" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb sm:text-sm">
-                <option :value="null">Raum waehlen</option>
-                <option v-for="raum in raeume" :key="raum.id" :value="raum.id">{{ raum.name }}</option>
-              </select>
-            </div>
-            <div>
-              <label class="mb-1 block text-sm font-semibold text-gray-700">Betreuer</label>
-              <select v-model="gruppenForm.betreuer_id" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb sm:text-sm">
-                <option :value="null">Betreuer waehlen</option>
-                <option v-for="person in betreuer" :key="person.id" :value="person.id">{{ person.name }}</option>
-              </select>
-            </div>
+          <div class="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
+            <p class="font-bold">Räume können später eingetragen werden</p>
+            <p class="mt-1">Die Gruppen werden auch ohne Raum angelegt. Der jeweils zugeordnete Anleiter kann den passenden Raum danach unter <span class="font-semibold">Gruppen → Verwalten</span> selbst eintragen.</p>
           </div>
         </div>
       </template>
@@ -667,9 +667,8 @@ const createForm = reactive({
   processing: false,
 })
 const gruppenForm = reactive({
-  raum_id: props.raeume?.[0]?.id ?? null,
-  betreuer_id: props.betreuer?.[0]?.id ?? null,
   bereiche: (props.alle_bereiche ?? []).map(b => b.id),
+  bereich_betreuer: {},
   processing: false,
 })
 const exportForm = reactive({
@@ -818,6 +817,29 @@ const utilizationTextForRound = (runde) => {
 
 const roundUtilizationText = computed(() => `Runde ${selectedRound.value}: ${utilizationTextForRound(selectedRound.value)}`)
 
+const empfohlenerBetreuer = (bereichId) => {
+  const numericBereichId = Number(bereichId)
+
+  return betreuer.value.find(person => Number(person.default_bereich_id) === numericBereichId)
+    ?? betreuer.value.find(person => (person.bereich_ids ?? []).map(Number).includes(numericBereichId))
+    ?? null
+}
+
+const ensureBereichBetreuer = () => {
+  gruppenForm.bereiche.forEach((bereichId) => {
+    const currentId = Number(gruppenForm.bereich_betreuer[bereichId] ?? 0)
+    if (currentId && betreuer.value.some(person => Number(person.id) === currentId)) return
+
+    gruppenForm.bereich_betreuer[bereichId] = empfohlenerBetreuer(bereichId)?.id ?? null
+  })
+}
+
+const onBereichSelectionChanged = (bereichId) => {
+  if (!gruppenForm.bereiche.includes(bereichId)) return
+
+  ensureBereichBetreuer()
+}
+
 const openParameterModal = () => {
   const current = normalizeParameter(parameter.value)
   parameterForm.runden_anzahl = current.runden_anzahl
@@ -865,8 +887,7 @@ const openGruppenModal = () => {
   if (!gruppenForm.bereiche.length) {
     gruppenForm.bereiche = allBereiche.value.map(b => b.id)
   }
-  gruppenForm.raum_id = gruppenForm.raum_id ?? raeume.value[0]?.id ?? null
-  gruppenForm.betreuer_id = gruppenForm.betreuer_id ?? betreuer.value[0]?.id ?? null
+  ensureBereichBetreuer()
   showGruppenModal.value = true
 }
 
@@ -980,13 +1001,26 @@ const submitDestroy = async () => {
 
 const submitGruppen = async () => {
   if (!canEinteilungPlanning.value) return
+  if (!gruppenForm.bereiche.length) {
+    setStatus('Bitte mindestens einen Bereich auswählen.', 'error')
+    return
+  }
+  const bereichOhneBetreuer = allBereiche.value.find(bereich =>
+    gruppenForm.bereiche.includes(bereich.id) && !gruppenForm.bereich_betreuer[bereich.id]
+  )
+  if (bereichOhneBetreuer) {
+    setStatus(`Bitte für den Bereich ${bereichOhneBetreuer.name} einen Anleiter wählen.`, 'error')
+    return
+  }
+
   gruppenForm.processing = true
   try {
     const response = await axios.post(route('gruppen.generieren'), {
       ...contextPayload(),
-      raum_id: gruppenForm.raum_id,
-      betreuer_id: gruppenForm.betreuer_id,
       bereiche: gruppenForm.bereiche,
+      bereich_betreuer: Object.fromEntries(
+        gruppenForm.bereiche.map(bereichId => [bereichId, gruppenForm.bereich_betreuer[bereichId]])
+      ),
     })
     replacePayload(response.data.payload)
     showGruppenModal.value = false

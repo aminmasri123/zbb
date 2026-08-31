@@ -357,7 +357,7 @@ watch(search, () => {
                     @click="openModalEdit(gruppe)"
                     class="rounded-md bg-zbb px-4 py-2 text-center text-sm font-medium text-white shadow-sm transition hover:bg-zbb/90"
                     >
-                    Verwalten
+                    {{ gruppe.raum || gruppe.ort_typ === 'extern' ? 'Verwalten' : 'Raum eintragen' }}
                     </button>
                     <button
                     v-if="canDeleteGroup"
