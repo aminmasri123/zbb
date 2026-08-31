@@ -2,30 +2,28 @@
 
 namespace App\Http\Controllers;
 
-use Exception;
-use Carbon\Carbon;
-use App\Models\Tage;
-use Inertia\Inertia;
-use App\Models\Gruppe;
-use App\Models\Zeiten;
-use App\Models\Personen;
-use App\Models\Standort;
-use Illuminate\Http\Request;
-use App\Models\GruppeHasPersonen;
-use App\Http\Controllers\Controller;
 use App\Models\Anwesenheitsstatuten;
+use App\Models\Gruppe;
+use App\Models\GruppeHasPersonen;
+use App\Models\Personen;
 use App\Models\PotenzialanalyseBericht;
 use App\Models\PotenzialanalyseBeurteilung;
 use App\Models\PotenzialanalyseKompetenzbewertung;
 use App\Models\PotenzialanalyseSelbsteinschaetzung;
 use App\Models\PotenzialanalyseUebungErgebnis;
-use App\Services\Projects\ActiveProjectContext;
-use App\Services\PotenzialanalyseScoringService;
+use App\Models\Tage;
+use App\Models\Zeiten;
 use App\Services\PotenzialanalyseProfileService;
+use App\Services\PotenzialanalyseScoringService;
+use App\Services\Projects\ActiveProjectContext;
 use App\Services\SaarlandWorkdayService;
+use Carbon\Carbon;
+use Exception;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
 
 class GruppeHasTeilnehmerController extends Controller
 {
@@ -34,15 +32,12 @@ class GruppeHasTeilnehmerController extends Controller
         private readonly SaarlandWorkdayService $workdays,
         private readonly PotenzialanalyseScoringService $paScoring,
         private readonly PotenzialanalyseProfileService $paProfiles,
-    ) {
-    }
+    ) {}
 
     /**
      * Display a listing of the resource.
      */
-    public function index()
-    {
-    }
+    public function index() {}
 
     /**
      * Show the form for creating a new resource.
@@ -52,10 +47,6 @@ class GruppeHasTeilnehmerController extends Controller
         //
     }
 
-
-
-
-
     public function store(Request $request)
     {
         $request->merge([
@@ -64,13 +55,13 @@ class GruppeHasTeilnehmerController extends Controller
         ]);
 
         $validated = $request->validate([
-            'gruppe_id'    => 'required|exists:gruppes,id',
-            'teilnehmer'   => 'required|array|min:1',
+            'gruppe_id' => 'required|exists:gruppes,id',
+            'teilnehmer' => 'required|array|min:1',
             'teilnehmer.*' => 'integer|exists:personens,id',
-            'startzeit'    => 'required|date_format:H:i',
-            'endzeit'      => 'required|date_format:H:i',
-            'startdatum'   => 'required|date',
-            'enddatum'     => 'required|date',
+            'startzeit' => 'required|date_format:H:i',
+            'endzeit' => 'required|date_format:H:i',
+            'startdatum' => 'required|date',
+            'enddatum' => 'required|date',
         ]);
 
         $ids = array_map('intval', $validated['teilnehmer']);
@@ -113,17 +104,16 @@ class GruppeHasTeilnehmerController extends Controller
             $projekt->rule('attendance_default_status', 'unentschuldigt')
         )->firstOrFail();
 
-
         // IDs, die bereits existieren
         // ⏰ geplante & tatsächliche Zeiten anlegen
         $zeitGeplant = Zeiten::firstOrCreate([
             'startzeit' => $validated['startzeit'],
-            'endzeit'   => $validated['endzeit'],
+            'endzeit' => $validated['endzeit'],
         ]);
 
         $zeitTatsaechlich = Zeiten::firstOrCreate([
             'startzeit' => $validated['startzeit'],
-            'endzeit'   => $validated['endzeit'],
+            'endzeit' => $validated['endzeit'],
         ]);
 
         // 📅 Alle Tage zwischen Start- und Enddatum ermitteln
@@ -193,16 +183,11 @@ class GruppeHasTeilnehmerController extends Controller
             'message' => count($new) > 0
                 ? 'Teilnehmer mit Zeiten und Tagen erfolgreich hinzugefügt.'
                 : 'Keine neuen Teilnehmer hinzugefügt.',
-            'added'   => $addedTeilnehmer,
+            'added' => $addedTeilnehmer,
             'already' => $alreadyTeilnehmer,
         ], 200);
 
     }
-
-
-
-
-
 
     /**
      * Display the specified resource.
@@ -309,6 +294,7 @@ class GruppeHasTeilnehmerController extends Controller
             ->orderBy('nachname')
             ->orderBy('vorname')
             ->get(['id', 'vorname', 'nachname', 'geschlecht']);
+
         return Inertia::render('Gruppe/GruppeHasTeilnehmer/Index', [
             'gruppe' => $gruppe,
             'teilnehmer' => $teilnehmer,
@@ -344,7 +330,7 @@ class GruppeHasTeilnehmerController extends Controller
      */
     public function destroy(string $id)
     {
-         try {
+        try {
             $gruppeHasPersonen = GruppeHasPersonen::findOrFail($id);
             abort_unless($this->canUseGroup(auth()->user(), $gruppeHasPersonen->gruppe), 403);
 
@@ -354,7 +340,7 @@ class GruppeHasTeilnehmerController extends Controller
         } catch (ModelNotFoundException $e) {
             return response()->json(['message' => 'Anwesenheit nicht gefunden.'], 404);
         } catch (Exception $e) {
-            return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
+            return response()->json(['message' => 'Ein Fehler ist aufgetreten: '.$e->getMessage()], 500);
         }
     }
 
@@ -377,12 +363,12 @@ class GruppeHasTeilnehmerController extends Controller
 
     private function canUseGroup($user, ?Gruppe $gruppe): bool
     {
-        if (!$user || !$gruppe) {
+        if (! $user || ! $gruppe) {
             return false;
         }
 
         $activeProject = $this->activeProjectContext->currentAvailableFor($user);
-        if (!$activeProject || (int) $gruppe->projekt_id !== (int) $activeProject->id) {
+        if (! $activeProject || (int) $gruppe->projekt_id !== (int) $activeProject->id) {
             return false;
         }
 
@@ -405,11 +391,11 @@ class GruppeHasTeilnehmerController extends Controller
 
         $value = trim((string) $value);
 
-        if (!preg_match('/^(\d{1,2}):(\d{2})(?::\d{2})?$/', $value, $matches)) {
+        if (! preg_match('/^(\d{1,2}):(\d{2})(?::\d{2})?$/', $value, $matches)) {
             return $value;
         }
 
-        return str_pad($matches[1], 2, '0', STR_PAD_LEFT) . ':' . $matches[2];
+        return str_pad($matches[1], 2, '0', STR_PAD_LEFT).':'.$matches[2];
     }
 
     private function userPersonId($user): ?int
@@ -699,18 +685,29 @@ class GruppeHasTeilnehmerController extends Controller
 
     private function bopLegacyExporte(Gruppe $gruppe): array
     {
-        if (!$this->istBopProjekt($gruppe)) {
-            return [];
+        $unterweisungsnachweis = $gruppe->bereich_id ? [[
+            'id' => 'gruppe-unterweisungsnachweis',
+            'name' => 'Unterweisungsnachweis',
+            'format' => 'PDF',
+            'typ' => 'Gruppe',
+            'method' => 'get',
+            'url' => route('gruppe.bop.export.unterweisungsnachweis', $gruppe->id),
+        ]] : [];
+
+        if (! $this->istBopProjekt($gruppe)) {
+            return $unterweisungsnachweis;
         }
 
         $context = $this->bopGruppenContext($gruppe);
-        if (!$context) {
-            return [];
+        if (! $context) {
+            return $unterweisungsnachweis;
         }
 
-        return $this->istPotenzialanalyseGruppe($gruppe)
+        $bopExporte = $this->istPotenzialanalyseGruppe($gruppe)
             ? $this->potenzialanalyseExporte($gruppe, $context)
             : $this->poboExporte($gruppe, $context);
+
+        return array_merge($unterweisungsnachweis, $bopExporte);
     }
 
     private function istBopProjekt(Gruppe $gruppe): bool
@@ -747,7 +744,7 @@ class GruppeHasTeilnehmerController extends Controller
     {
         $bemerkung = (string) $gruppe->bemerkung;
 
-        if (!preg_match('/BOP Einteilung Schule\s+(\d+)\s+Schuljahr\s+(.+?)\s+Teil\s+(.+?)\s+Runde\s+(\d+)/u', $bemerkung, $matches)) {
+        if (! preg_match('/BOP Einteilung Schule\s+(\d+)\s+Schuljahr\s+(.+?)\s+Teil\s+(.+?)\s+Runde\s+(\d+)/u', $bemerkung, $matches)) {
             return [];
         }
 
@@ -764,19 +761,19 @@ class GruppeHasTeilnehmerController extends Controller
         $schueler = $gruppe->teilnehmer
             ->flatMap(fn ($person) => $person->schueler ?? collect())
             ->filter(function ($item) use ($knownContext) {
-                if (!$item->schule_id || !$item->schuljahr || !$item->teil) {
+                if (! $item->schule_id || ! $item->schuljahr || ! $item->teil) {
                     return false;
                 }
 
-                if (!empty($knownContext['partner_id']) && (int) $item->schule_id !== (int) $knownContext['partner_id']) {
+                if (! empty($knownContext['partner_id']) && (int) $item->schule_id !== (int) $knownContext['partner_id']) {
                     return false;
                 }
 
-                if (!empty($knownContext['schuljahr']) && (string) $item->schuljahr !== (string) $knownContext['schuljahr']) {
+                if (! empty($knownContext['schuljahr']) && (string) $item->schuljahr !== (string) $knownContext['schuljahr']) {
                     return false;
                 }
 
-                if (!empty($knownContext['teil']) && (string) $item->teil !== (string) $knownContext['teil']) {
+                if (! empty($knownContext['teil']) && (string) $item->teil !== (string) $knownContext['teil']) {
                     return false;
                 }
 
@@ -788,12 +785,12 @@ class GruppeHasTeilnehmerController extends Controller
         }
 
         $gruppe = $schueler
-            ->groupBy(fn ($item) => $item->schule_id . '|' . $item->schuljahr . '|' . $item->teil)
+            ->groupBy(fn ($item) => $item->schule_id.'|'.$item->schuljahr.'|'.$item->teil)
             ->sortByDesc(fn ($items) => $items->count())
             ->first();
 
         $first = $gruppe?->first();
-        if (!$first) {
+        if (! $first) {
             return [];
         }
 
@@ -814,14 +811,6 @@ class GruppeHasTeilnehmerController extends Controller
         }
 
         $items = [
-            [
-                'id' => 'bop-gruppe-unterweisungsnachweis',
-                'name' => 'Unterweisungsnachweis',
-                'format' => 'PDF',
-                'typ' => 'BOP Gruppe',
-                'method' => 'get',
-                'url' => route('gruppe.bop.export.unterweisungsnachweis', $gruppe->id),
-            ],
             [
                 'id' => 'bop-pa-zertifikat-gruppe',
                 'name' => 'Zertifikat PA Gruppe',
@@ -880,7 +869,7 @@ class GruppeHasTeilnehmerController extends Controller
             ],
         ];
 
-        if (!empty($context['klasse']) && auth()->user()?->can('anwesenheit.abrechnung')) {
+        if (! empty($context['klasse']) && auth()->user()?->can('anwesenheit.abrechnung')) {
             array_unshift($items, [
                 'id' => 'bop-pa-anwesenheitsliste',
                 'name' => 'Anwesenheitsliste PA',
@@ -888,7 +877,7 @@ class GruppeHasTeilnehmerController extends Controller
                 'typ' => 'Potenzialanalyse',
                 'method' => 'post',
                 'url' => route('anwesenheitsliste.PA.export.word'),
-                'fileName' => 'Anwesenheitsliste_PA_' . $this->safeExportName((string) $context['klasse']) . '.docx',
+                'fileName' => 'Anwesenheitsliste_PA_'.$this->safeExportName((string) $context['klasse']).'.docx',
                 'payload' => [
                     'startDate' => $gruppe->anfangsdatum,
                     'endDate' => $gruppe->enddatum,

@@ -170,7 +170,9 @@ class BopGruppeExportController extends Controller
         $gruppe = $this->gruppeMitDaten($gruppe);
         $user = $request->user();
 
-        abort_unless((int) $gruppe->personen_id === (int) $user?->person_id, 403, 'Der Nachweis kann nur vom zugeordneten Anleiter unterschrieben werden.');
+        $istZugeordneterAnleiter = (int) $gruppe->personen_id === (int) $user?->person_id;
+        $darfVertreten = $user?->can('gruppe.view.all') || $user?->can('projekt.mitarbeiter.view.all');
+        abort_unless($istZugeordneterAnleiter || $darfVertreten, 403, 'Sie dürfen diese Gruppe nicht vertreten.');
 
         $unterschrift = $user->unterweisung_unterschrift;
         if (empty($unterschrift['data']) || empty($unterschrift['mime'])) {
@@ -214,6 +216,7 @@ class BopGruppeExportController extends Controller
             'themen' => $ausgewaehlteThemen->all(),
             'teilnehmer_ids' => $gruppe->teilnehmer->pluck('id')->all(),
             'sha256' => hash('sha256', $output),
+            'vertretung' => ! $istZugeordneterAnleiter,
         ]);
 
         return response($output, 200, [

@@ -85,6 +85,31 @@ class UnterweisungsnachweisExportTest extends TestCase
         $this->actingAs($other)->get(route('gruppe.bop.export.unterweisungsnachweis', $gruppe))->assertForbidden();
     }
 
+    public function test_authorized_representative_exports_with_own_signature(): void
+    {
+        [, $gruppe] = $this->context();
+        $representative = User::factory()->create([
+            'unterweisung_unterschrift' => [
+                'mime' => 'image/png',
+                'data' => base64_encode(base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL3WQAAAABJRU5ErkJggg==')),
+            ],
+        ]);
+        $this->grantTestPermission($representative, 'gruppe.view.all');
+        DB::table('projekt_has_personens')->insert([
+            'projekt_id' => $gruppe->projekt_id,
+            'personen_id' => $representative->person_id,
+            'status' => 'aktiv',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $representative->update(['current_team_id' => $gruppe->projekt_id]);
+
+        $this->actingAs($representative->fresh())
+            ->get(route('gruppe.bop.export.unterweisungsnachweis', $gruppe))
+            ->assertOk()
+            ->assertDownload();
+    }
+
     private function context(): array
     {
         $user = User::factory()->create();
