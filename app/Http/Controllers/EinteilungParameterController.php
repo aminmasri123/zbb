@@ -610,6 +610,8 @@ class EinteilungParameterController extends Controller
             'bereiche.*' => ['integer', 'exists:bereiches,id'],
             'bereich_betreuer' => ['required', 'array'],
             'bereich_betreuer.*' => ['required', 'integer', 'exists:personens,id'],
+            'bereich_raeume' => ['nullable', 'array'],
+            'bereich_raeume.*' => ['nullable', 'integer', 'exists:raeumes,id'],
         ];
 
         $validated = $request->validate($rules);
@@ -647,6 +649,21 @@ class EinteilungParameterController extends Controller
             ]);
         }
 
+        $bereichRaeume = collect($validated['bereich_raeume'] ?? [])
+            ->mapWithKeys(fn ($raumId, $bereichId) => [
+                (int) $bereichId => filled($raumId) ? (int) $raumId : null,
+            ]);
+        $ungueltigeRaeume = $bereichRaeume
+            ->only($bereiche->pluck('id')->map(fn ($id) => (int) $id)->all())
+            ->filter()
+            ->diff($projekt->raeume->pluck('id')->map(fn ($id) => (int) $id));
+
+        if ($ungueltigeRaeume->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'bereich_raeume' => 'Mindestens ein ausgewaehlter Raum gehoert nicht zum aktuellen Projekt.',
+            ]);
+        }
+
         $status = $this->defaultAnwesenheitsstatus();
         $schueler = $this->schuelerQuery($partnerId, $schuljahr, $teil)->get();
         $schuelerIds = $schueler->pluck('id');
@@ -662,6 +679,7 @@ class EinteilungParameterController extends Controller
             $schuelerIds,
             $schuelerNachId,
             $bereichBetreuer,
+            $bereichRaeume,
             $status,
             $runden,
             $rundentermine,
@@ -684,6 +702,7 @@ class EinteilungParameterController extends Controller
 
                 foreach ($bereiche as $bereich) {
                     $betreuerId = $bereichBetreuer->get((int) $bereich->id);
+                    $raumId = $bereichRaeume->get((int) $bereich->id);
                     $gruppe = Gruppe::firstOrNew([
                         'projekt_id' => $projekt->id,
                         'bereich_id' => $bereich->id,
@@ -701,9 +720,16 @@ class EinteilungParameterController extends Controller
                     // Neue Gruppen duerfen bewusst ohne Raum entstehen. Ein bereits
                     // nachtraeglich eingetragener Raum bleibt bei erneuter Generierung erhalten.
                     if (! $gruppe->exists) {
-                        $gruppe->raum_id = null;
-                        $gruppe->standort_id = null;
+                        $gruppe->raum_id = $raumId;
+                        $gruppe->standort_id = $raumId
+                            ? $projekt->raeume->firstWhere('id', $raumId)?->standort_id
+                            : null;
                         $gruppe->ort_typ = 'raum';
+                    } elseif ($raumId) {
+                        $gruppe->raum_id = $raumId;
+                        $gruppe->standort_id = $projekt->raeume->firstWhere('id', $raumId)?->standort_id;
+                        $gruppe->ort_typ = 'raum';
+                        $gruppe->externer_ort = null;
                     }
 
                     $gruppe->save();
@@ -729,7 +755,7 @@ class EinteilungParameterController extends Controller
                                     'tage_id' => $tagId,
                                 ],
                                 [
-                                    'user_id' => $betreuerId,
+                                    'user_id' => Auth::id(),
                                     'zeitgeplant_id' => $zeitGeplant->id,
                                     'zeittatsaechlich_id' => $zeitTatsaechlich->id,
                                     'anwesenheitsstatuten_id' => $status->id,
@@ -1410,7 +1436,7 @@ class EinteilungParameterController extends Controller
                     'tage_id' => $tagId,
                 ],
                 [
-                    'user_id' => $gruppe->personen_id,
+                    'user_id' => Auth::id(),
                     'zeitgeplant_id' => $zeitGeplant->id,
                     'zeittatsaechlich_id' => $zeitTatsaechlich->id,
                     'anwesenheitsstatuten_id' => $status->id,
