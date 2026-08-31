@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\ExportWordController;
 use App\Models\Anwesenheitsstatuten;
 use App\Models\Bereich;
 use App\Models\Gruppe;
@@ -17,8 +18,13 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use PhpOffice\PhpWord\IOFactory;
+use PhpOffice\PhpWord\PhpWord;
+use PhpOffice\PhpWord\TemplateProcessor;
+use ReflectionMethod;
 use Smalot\PdfParser\Parser;
 use Tests\TestCase;
+use ZipArchive;
 
 class UnterweisungsnachweisExportTest extends TestCase
 {
@@ -37,6 +43,40 @@ class UnterweisungsnachweisExportTest extends TestCase
         $this->assertNotSame('', $raw);
         $this->assertStringNotContainsString('image/png', $raw);
         $this->assertTrue($user->fresh()->has_unterweisung_unterschrift);
+    }
+
+    public function test_signature_placeholder_is_inserted_into_word_template(): void
+    {
+        $user = User::factory()->create([
+            'unterweisung_unterschrift' => [
+                'mime' => 'image/png',
+                'data' => base64_encode(base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL3WQAAAABJRU5ErkJggg==')),
+            ],
+        ]);
+        $this->actingAs($user);
+        $template = storage_path('app/temp/signature-placeholder-template.docx');
+        $output = storage_path('app/temp/signature-placeholder-output.docx');
+        @mkdir(dirname($template), 0775, true);
+
+        $word = new PhpWord;
+        $word->addSection()->addText('${unterschrift}');
+        IOFactory::createWriter($word)->save($template);
+
+        $processor = new TemplateProcessor($template);
+        $method = new ReflectionMethod(ExportWordController::class, 'fillSignaturePlaceholder');
+        $method->invoke(new ExportWordController, $processor);
+        $processor->saveAs($output);
+
+        $zip = new ZipArchive;
+        $this->assertTrue($zip->open($output) === true);
+        $media = collect(range(0, $zip->numFiles - 1))
+            ->map(fn (int $index) => $zip->getNameIndex($index))
+            ->filter(fn (?string $name) => str_starts_with((string) $name, 'word/media/'));
+        $zip->close();
+
+        $this->assertNotEmpty($media);
+        @unlink($template);
+        @unlink($output);
     }
 
     public function test_assigned_instructor_exports_pdf_with_area_defaults_and_participant_name(): void
@@ -65,6 +105,16 @@ class UnterweisungsnachweisExportTest extends TestCase
         $this->assertStringContainsString($teilnehmer->vorname, $text);
         $this->assertStringContainsString('Elektrische Geräte', $text);
         $this->assertStringContainsString('X', $text);
+    }
+
+    public function test_assigned_instructor_can_export_without_stored_signature(): void
+    {
+        [$user, $gruppe] = $this->context();
+
+        $this->actingAs($user)
+            ->get(route('gruppe.bop.export.unterweisungsnachweis', $gruppe))
+            ->assertOk()
+            ->assertDownload();
     }
 
     public function test_another_logged_in_user_cannot_sign_the_group_pdf(): void

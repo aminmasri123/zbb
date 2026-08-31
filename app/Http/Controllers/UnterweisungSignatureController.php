@@ -21,7 +21,7 @@ class UnterweisungSignatureController extends Controller
             'unterweisung_unterschrift_updated_at' => now(),
         ])->save();
 
-        return back()->with('success', 'Ihre Unterschrift wurde verschlüsselt gespeichert.');
+        return back()->with('success', 'Ihre Unterschrift für Dokumentplatzhalter wurde verschlüsselt gespeichert.');
     }
 
     public function destroy(Request $request)
@@ -31,6 +31,6 @@ class UnterweisungSignatureController extends Controller
             'unterweisung_unterschrift_updated_at' => null,
         ])->save();
 
-        return back()->with('success', 'Ihre gespeicherte Unterschrift wurde gelöscht.');
+        return back()->with('success', 'Ihre Unterschrift für Dokumentplatzhalter wurde gelöscht.');
     }
 }

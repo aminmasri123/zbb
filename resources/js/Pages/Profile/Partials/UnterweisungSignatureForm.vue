@@ -34,9 +34,9 @@ const remove = () => deleteForm.delete(route('profile.unterweisung-signature.des
 
 <template>
     <FormSection @submitted="save">
-        <template #title>Unterschrift für Unterweisungsnachweise</template>
+        <template #title>Unterschrift für Platzhalter</template>
         <template #description>
-            Ihre Unterschrift wird verschlüsselt gespeichert und beim PDF-Export Ihrer eigenen Gruppen automatisch eingesetzt.
+            Ihre Unterschrift wird verschlüsselt gespeichert und kann in Vorlagen des Dokumentenmanagers über den Platzhalter ${unterschrift} eingesetzt werden.
         </template>
         <template #form>
             <div class="col-span-6 sm:col-span-4">
@@ -48,7 +48,7 @@ const remove = () => deleteForm.delete(route('profile.unterweisung-signature.des
                     Eine Unterschrift ist sicher hinterlegt.
                 </div>
                 <div v-else class="mb-3 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                    Noch keine Unterschrift hinterlegt. Ohne Unterschrift ist der Export nicht möglich.
+                    Noch keine Unterschrift hinterlegt. Dokumente können trotzdem exportiert werden; der Platzhalter bleibt dann leer.
                 </div>
                 <SecondaryButton type="button" @click="selectFile">Bild auswählen</SecondaryButton>
                 <p class="mt-2 text-xs text-gray-500">PNG oder JPG, maximal 1 MB. Empfohlen: freigestellte PNG-Datei.</p>

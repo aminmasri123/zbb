@@ -35,7 +35,9 @@
             <td class="meta-label">Unterweisende/r (Vorname, Name, Unterschrift)</td>
             <td class="signature-cell">
                 {{ $anleiter }}
-                <img class="signature" src="{{ $unterschriftDataUrl }}" alt="Unterschrift">
+                @if($unterschriftDataUrl)
+                    <img class="signature" src="{{ $unterschriftDataUrl }}" alt="Unterschrift">
+                @endif
             </td>
         </tr>
     </table>

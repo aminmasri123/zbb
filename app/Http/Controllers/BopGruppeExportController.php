@@ -175,9 +175,6 @@ class BopGruppeExportController extends Controller
         abort_unless($istZugeordneterAnleiter || $darfVertreten, 403, 'Sie dürfen diese Gruppe nicht vertreten.');
 
         $unterschrift = $user->unterweisung_unterschrift;
-        if (empty($unterschrift['data']) || empty($unterschrift['mime'])) {
-            return back()->with('error', 'Bitte hinterlegen Sie zuerst Ihre Unterschrift unter „Mein Profil“.');
-        }
 
         $teilnehmer = $this->teilnehmerDaten($gruppe);
         if ($teilnehmer->isEmpty()) {
@@ -202,7 +199,9 @@ class BopGruppeExportController extends Controller
             'ort' => $ort,
             'datum' => $datum,
             'anleiter' => $anleiter,
-            'unterschriftDataUrl' => 'data:'.$unterschrift['mime'].';base64,'.$unterschrift['data'],
+            'unterschriftDataUrl' => ! empty($unterschrift['data']) && ! empty($unterschrift['mime'])
+                ? 'data:'.$unterschrift['mime'].';base64,'.$unterschrift['data']
+                : null,
         ])->setPaper('a4', 'portrait');
 
         $output = $pdf->output();

@@ -427,6 +427,7 @@ class DokumenteController extends Controller
                     ['key' => 'heute', 'label' => 'Heutiges Datum'],
                     ['key' => 'nr', 'label' => 'laufende Nummer'],
                     ['key' => 'nummer', 'label' => 'laufende Nummer'],
+                    ['key' => 'unterschrift', 'label' => 'Unterschrift des angemeldeten Benutzers (Bild; bleibt leer, wenn nicht hinterlegt)'],
                 ],
             ],
             [
@@ -488,7 +489,7 @@ class DokumenteController extends Controller
                     || $document->kategorien->contains(
                         fn (DokumentKategorie $category) => $category->projekte->contains('id', $project->id)
                     );
-                if (!$assigned) {
+                if (! $assigned) {
                     $missingAssignments[] = $document->name.' → '.$project->name;
                 }
             }

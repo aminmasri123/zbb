@@ -25,6 +25,7 @@ use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\IOFactory as SpreadsheetIOFactory;
+use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpWord\TemplateProcessor;
 use Throwable;
@@ -999,6 +1000,7 @@ class ExportWordController extends Controller
         Personen $personen,
         ProjektHasPersonen $teilnahme
     ): void {
+        $this->fillSpreadsheetSignaturePlaceholder($spreadsheet);
         $values = $this->placeholderValues($gruppe, $projekt, $personen, 1, $teilnahme);
 
         foreach ($spreadsheet->getWorksheetIterator() as $sheet) {
@@ -1240,6 +1242,7 @@ class ExportWordController extends Controller
         int $nummer,
         ?ProjektHasPersonen $teilnahme = null
     ): void {
+        $this->fillSignaturePlaceholder($processor);
         $values = $this->placeholderValues($gruppe, $projekt, $person, $nummer, $teilnahme);
 
         foreach ($processor->getVariables() as $variable) {
@@ -1249,6 +1252,7 @@ class ExportWordController extends Controller
 
     private function fillGroupTemplate(TemplateProcessor $processor, Gruppe $gruppe, Projekt $projekt, $teilnehmer, bool $fillParticipants = true): void
     {
+        $this->fillSignaturePlaceholder($processor);
         if ($fillParticipants) {
             $this->cloneWordParticipantRows($processor, $gruppe, $projekt, $teilnehmer);
         }
@@ -1346,6 +1350,7 @@ class ExportWordController extends Controller
         return array_merge([
             'nr' => $nummer,
             'nummer' => $nummer,
+            'unterschrift' => '',
             'datum' => now()->format('d.m.Y'),
             'heute' => now()->format('d.m.Y'),
             'vorname' => $person?->vorname,
@@ -1840,6 +1845,7 @@ class ExportWordController extends Controller
 
     private function fillSpreadsheetTemplate($spreadsheet, Gruppe $gruppe, Projekt $projekt, $teilnehmer): void
     {
+        $this->fillSpreadsheetSignaturePlaceholder($spreadsheet);
         $gruppeValues = $this->placeholderValues($gruppe, $projekt);
 
         foreach ($spreadsheet->getWorksheetIterator() as $sheet) {
@@ -2375,6 +2381,7 @@ class ExportWordController extends Controller
         $partnerAddressVariables = collect([
             'partner_adresse', 'partner_strasse', 'partner_hausnummer', 'partner_plz', 'partner_stadt',
         ]);
+        $optionalVariables = collect(['unterschrift']);
 
         if ($variables->contains(fn ($variable) => $participantAddressVariables->contains($variable))) {
             foreach (['strasse' => 'Straße', 'hausnummer' => 'Hausnummer', 'plz' => 'PLZ', 'stadt' => 'Stadt'] as $field => $label) {
@@ -2399,7 +2406,8 @@ class ExportWordController extends Controller
 
         foreach ($variables as $variable) {
             if ($participantAddressVariables->contains($variable)
-                || $partnerAddressVariables->contains($variable)) {
+                || $partnerAddressVariables->contains($variable)
+                || $optionalVariables->contains($variable)) {
                 continue;
             }
 
@@ -2457,6 +2465,86 @@ class ExportWordController extends Controller
             'betreuer_anrede' => 'Anrede/Geschlecht des Betreuers',
             'betreuer_anrede_dativ' => 'Anrede/Geschlecht des Betreuers',
         ]);
+    }
+
+    private function fillSignaturePlaceholder(TemplateProcessor $processor): void
+    {
+        $variable = collect($processor->getVariables())
+            ->first(fn ($name) => mb_strtolower((string) $name) === 'unterschrift');
+
+        if (! $variable) {
+            return;
+        }
+
+        $signature = auth()->user()?->unterweisung_unterschrift;
+        if (empty($signature['data']) || empty($signature['mime'])) {
+            $processor->setValue($variable, '');
+
+            return;
+        }
+
+        $extension = $signature['mime'] === 'image/png' ? 'png' : 'jpg';
+        $directory = storage_path('app/temp');
+        if (! is_dir($directory)) {
+            mkdir($directory, 0775, true);
+        }
+
+        $path = $directory.DIRECTORY_SEPARATOR.uniqid('signature_', true).'.'.$extension;
+        file_put_contents($path, base64_decode($signature['data'], true));
+        register_shutdown_function(static function () use ($path): void {
+            if (file_exists($path)) {
+                @unlink($path);
+            }
+        });
+
+        $processor->setImageValue($variable, [
+            'path' => $path,
+            'width' => 160,
+            'height' => 55,
+            'ratio' => true,
+        ]);
+    }
+
+    private function fillSpreadsheetSignaturePlaceholder($spreadsheet): void
+    {
+        $signature = auth()->user()?->unterweisung_unterschrift;
+        $path = null;
+
+        if (! empty($signature['data']) && ! empty($signature['mime'])) {
+            $extension = $signature['mime'] === 'image/png' ? 'png' : 'jpg';
+            $directory = storage_path('app/temp');
+            if (! is_dir($directory)) {
+                mkdir($directory, 0775, true);
+            }
+            $path = $directory.DIRECTORY_SEPARATOR.uniqid('signature_', true).'.'.$extension;
+            file_put_contents($path, base64_decode($signature['data'], true));
+            register_shutdown_function(static function () use ($path): void {
+                if (file_exists($path)) {
+                    @unlink($path);
+                }
+            });
+        }
+
+        foreach ($spreadsheet->getWorksheetIterator() as $sheet) {
+            foreach ($sheet->getCellCollection()->getCoordinates() as $coordinate) {
+                $cell = $sheet->getCell($coordinate);
+                if (mb_strtolower(trim((string) $cell->getValue())) !== '${unterschrift}') {
+                    continue;
+                }
+
+                $cell->setValue('');
+                if (! $path) {
+                    continue;
+                }
+
+                $drawing = new Drawing;
+                $drawing->setName('Unterschrift');
+                $drawing->setPath($path);
+                $drawing->setCoordinates($coordinate);
+                $drawing->setHeight(50);
+                $drawing->setWorksheet($sheet);
+            }
+        }
     }
 
     private function placeholderValueMissing(mixed $value): bool
