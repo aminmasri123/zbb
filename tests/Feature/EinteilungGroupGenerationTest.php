@@ -16,6 +16,7 @@ use App\Models\Raeume;
 use App\Models\Standort;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -84,14 +85,6 @@ class EinteilungGroupGenerationTest extends TestCase
             ['runde' => 2, 'anfangsdatum' => '2026-09-02', 'enddatum' => '2026-09-02', 'startzeit' => '08:00', 'endzeit' => '15:00'],
         ]);
 
-        $this->actingAs($user)->get(route('einteilung.show', [$partner->id, '2026-2027', 'Teil 1']))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->component('Teilnehmer/Einteilung/Index')
-                ->has('betreuer', 3)
-                ->where('betreuer', fn ($items) => collect($items)->pluck('id')->contains($holzAnleiter->id)
-                    && collect($items)->pluck('id')->contains($metallAnleiter->id)));
-
         $standort = Standort::factory()->create();
         $holzRaum = Raeume::query()->create([
             'standort_id' => $standort->id,
@@ -103,7 +96,19 @@ class EinteilungGroupGenerationTest extends TestCase
             'name' => 'Metallwerkstatt',
             'typ' => 'Werkstatt',
         ]);
-        $projekt->raeume()->attach([$holzRaum->id, $metallRaum->id]);
+        DB::table('projekt_has_personens')
+            ->where('projekt_id', $projekt->id)
+            ->whereIn('personen_id', [$holzAnleiter->id, $metallAnleiter->id])
+            ->update(['standort_id' => $standort->id]);
+
+        $this->actingAs($user)->get(route('einteilung.show', [$partner->id, '2026-2027', 'Teil 1']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Teilnehmer/Einteilung/Index')
+                ->has('betreuer', 3)
+                ->has('raeume', 2)
+                ->where('betreuer', fn ($items) => collect($items)->pluck('id')->contains($holzAnleiter->id)
+                    && collect($items)->pluck('id')->contains($metallAnleiter->id)));
 
         $payload = [
             'partner_id' => $partner->id,

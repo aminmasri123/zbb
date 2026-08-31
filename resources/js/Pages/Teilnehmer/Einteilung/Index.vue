@@ -402,21 +402,23 @@
             <h3 class="text-sm font-bold text-gray-800">Anleiter je Bereich</h3>
             <p class="mt-1 text-sm text-gray-500">Wählen Sie die Bereiche und legen Sie vor der Generierung für jeden Bereich den zuständigen Anleiter fest.</p>
             <div class="mt-3 space-y-2">
-              <div v-for="bereich in allBereiche" :key="bereich.id" class="grid items-center gap-3 rounded-lg border border-gray-200 p-3 lg:grid-cols-[minmax(0,1fr)_minmax(14rem,1fr)_minmax(14rem,1fr)]">
-                <label class="flex items-center gap-2 text-sm font-semibold text-gray-700">
+              <div v-for="bereich in allBereiche" :key="bereich.id" class="rounded-lg border border-gray-200 p-3">
+                <label class="flex min-w-0 items-start gap-2 text-sm font-semibold leading-5 text-gray-700">
                   <input v-model="gruppenForm.bereiche" type="checkbox" :value="bereich.id" class="rounded border-gray-300 text-zbb focus:ring-zbb" @change="onBereichSelectionChanged(bereich.id)" />
-                  <span>{{ bereich.name }}</span>
+                  <span class="min-w-0 whitespace-normal break-words">{{ bereich.name }}</span>
                 </label>
-                <select v-if="gruppenForm.bereiche.includes(bereich.id)" v-model="gruppenForm.bereich_betreuer[bereich.id]" :aria-label="`Anleiter für ${bereich.name}`" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb sm:text-sm">
-                  <option :value="null">Anleiter wählen</option>
-                  <option v-for="person in betreuer" :key="person.id" :value="person.id">
-                    {{ person.name }}{{ person.bereich_ids?.includes(Number(bereich.id)) ? ' · diesem Bereich zugeordnet' : '' }}
-                  </option>
-                </select>
-                <select v-if="gruppenForm.bereiche.includes(bereich.id)" v-model="gruppenForm.bereich_raeume[bereich.id]" :aria-label="`Raum für ${bereich.name}`" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb sm:text-sm">
-                  <option :value="null">Raum optional</option>
-                  <option v-for="raum in raeume" :key="raum.id" :value="raum.id">{{ raum.name }}</option>
-                </select>
+                <div v-if="gruppenForm.bereiche.includes(bereich.id)" class="mt-3 grid gap-2 sm:grid-cols-2">
+                  <select v-model="gruppenForm.bereich_betreuer[bereich.id]" :aria-label="`Anleiter für ${bereich.name}`" class="block min-w-0 w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb sm:text-sm">
+                    <option :value="null">Anleiter wählen</option>
+                    <option v-for="person in betreuer" :key="person.id" :value="person.id">
+                      {{ person.name }}{{ person.bereich_ids?.includes(Number(bereich.id)) ? ' · diesem Bereich zugeordnet' : '' }}
+                    </option>
+                  </select>
+                  <select v-model="gruppenForm.bereich_raeume[bereich.id]" :aria-label="`Raum für ${bereich.name}`" class="block min-w-0 w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb sm:text-sm">
+                    <option :value="null">Raum optional</option>
+                    <option v-for="raum in raeume" :key="raum.id" :value="raum.id">{{ raum.name }}</option>
+                  </select>
+                </div>
               </div>
             </div>
           </div>

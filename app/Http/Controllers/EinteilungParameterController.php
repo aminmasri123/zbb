@@ -14,6 +14,7 @@ use App\Models\Partner;
 use App\Models\PersonenIstSchueler;
 use App\Models\Projekt;
 use App\Models\ProjektHasPersonen;
+use App\Models\Raeume;
 use App\Models\Tage;
 use App\Models\Zeiten;
 use Carbon\Carbon;
@@ -938,7 +939,9 @@ class EinteilungParameterController extends Controller
             ])->values(),
             'raeume' => $projekt->raeume->map(fn ($raum) => [
                 'id' => $raum->id,
-                'name' => $raum->name,
+                'name' => $raum->standort?->name
+                    ? $raum->name.' · '.$raum->standort->name
+                    : $raum->name,
             ])->values(),
             'betreuer' => $betreuer->map(function ($person) use ($betreuerBereiche) {
                 $bereichZuweisungen = $betreuerBereiche
@@ -1014,7 +1017,32 @@ class EinteilungParameterController extends Controller
             ]);
         }
 
-        return Projekt::with(['bereiche', 'raeume', 'mitarbeiter', 'partners'])->findOrFail($projektId);
+        $projekt = Projekt::with([
+            'bereiche',
+            'raeume.standort',
+            'mitarbeiter',
+            'partners',
+            'standorte',
+        ])->findOrFail($projektId);
+
+        $raeume = $projekt->raeume
+            ->filter(fn ($raum) => $raum->aktiv !== false)
+            ->unique('id')
+            ->values();
+
+        if ($raeume->isEmpty()) {
+            $standortIds = $projekt->standorte->pluck('id')->filter()->unique()->values();
+            $raeume = Raeume::query()
+                ->with('standort:id,name')
+                ->where('aktiv', true)
+                ->when($standortIds->isNotEmpty(), fn ($query) => $query->whereIn('standort_id', $standortIds))
+                ->orderBy('name')
+                ->get();
+        }
+
+        $projekt->setRelation('raeume', $raeume);
+
+        return $projekt;
     }
 
     private function projektBereiche(?Projekt $projekt = null): Collection
