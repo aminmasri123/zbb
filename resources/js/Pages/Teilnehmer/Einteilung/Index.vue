@@ -450,15 +450,13 @@
     <Modal v-if="showExportModal" :show="showExportModal" @close="showExportModal = false">
       <template #header>Einteilung exportieren</template>
       <template #body>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="mb-1 block text-sm font-semibold text-gray-700">Anfangsdatum</label>
-            <input v-model="exportForm.eintritt" type="date" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb sm:text-sm" />
-          </div>
-          <div>
-            <label class="mb-1 block text-sm font-semibold text-gray-700">Enddatum</label>
-            <input v-model="exportForm.austritt" type="date" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb sm:text-sm" />
-          </div>
+        <div>
+          <label class="mb-1 block text-sm font-semibold text-gray-700">Runden exportieren</label>
+          <select v-model="exportForm.runde" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-zbb focus:ring-zbb sm:text-sm">
+            <option value="alle">Alle Runden wie im Vollbildmodus</option>
+            <option v-for="runde in runden" :key="`export-runde-${runde}`" :value="runde">Nur Runde {{ runde }}</option>
+          </select>
+          <p class="mt-2 text-xs text-gray-500">Die Excel-Datei enthält die Bereichsmatrix, Kapazitäten, Teilnehmer und Partnerlogos. Die Gesamtschülerzahl wird nicht ausgegeben.</p>
         </div>
       </template>
       <template #footer>
@@ -679,8 +677,7 @@ const gruppenForm = reactive({
   processing: false,
 })
 const exportForm = reactive({
-  eintritt: '',
-  austritt: '',
+  runde: 'alle',
   processing: false,
 })
 const parameterForm = reactive({
@@ -900,13 +897,6 @@ const openGruppenModal = () => {
 
 const openExportModal = () => {
   if (!canEinteilungExport.value) return
-  const termine = runden.value.map(roundSchedule)
-  if (!exportForm.eintritt) {
-    exportForm.eintritt = termine.map(termin => termin.anfangsdatum).filter(Boolean).sort()[0] ?? ''
-  }
-  if (!exportForm.austritt) {
-    exportForm.austritt = termine.map(termin => termin.enddatum).filter(Boolean).sort().at(-1) ?? ''
-  }
   showExportModal.value = true
 }
 
@@ -1048,8 +1038,7 @@ const submitExport = async () => {
   try {
     const response = await axios.post(route('einteilung.export.excel'), {
       ...contextPayload(),
-      eintritt: exportForm.eintritt,
-      austritt: exportForm.austritt,
+      runde: exportForm.runde,
     }, { responseType: 'blob' })
 
     const disposition = response.headers['content-disposition'] || ''

@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Anwesenheitsstatuten;
-use App\Models\Bereichsauswahl;
 use App\Models\BereichsauswahlSetting;
 use App\Models\EinteilungBereiche;
 use App\Models\EinteilungRundentermin;
@@ -31,15 +30,21 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class EinteilungParameterController extends Controller
 {
     private const DEFAULT_RUNDEN_ANZAHL = 3;
+
     private const DEFAULT_KAPAZITAET = 15;
+
     private const MIN_RUNDEN = 2;
+
     private const MAX_RUNDEN = 5;
+
     private const MIN_AUSWAHL = 2;
+
     private const MAX_AUSWAHL = 4;
 
     public function index($partnerId, $schuljahr, $teil)
@@ -57,7 +62,7 @@ class EinteilungParameterController extends Controller
             'partner_id' => ['required', 'integer', 'exists:partners,id'],
             'schuljahr' => ['required', 'string'],
             'teil' => ['required', 'string'],
-            'runden_anzahl' => ['required', 'integer', 'min:' . self::MIN_RUNDEN, 'max:' . self::MAX_RUNDEN],
+            'runden_anzahl' => ['required', 'integer', 'min:'.self::MIN_RUNDEN, 'max:'.self::MAX_RUNDEN],
             'standard_kapazitaet' => ['required', 'integer', 'min:0', 'max:999'],
             'kapazitaeten' => ['nullable', 'array'],
             'kapazitaeten.*' => ['nullable', 'integer', 'min:0', 'max:999'],
@@ -158,9 +163,10 @@ class EinteilungParameterController extends Controller
 
         $projekt = $this->currentProjekt();
         $setting = $this->einteilungSettingFor($projekt->id, $partnerId, $schuljahr, $teil, $projekt);
+        $setting->loadMissing(['kapazitaeten', 'rundentermine']);
         $runden = $this->rundenArray($setting->runden_anzahl);
 
-        if (!in_array($quelleRunde, $runden, true) || !in_array($zielRunde, $runden, true)) {
+        if (! in_array($quelleRunde, $runden, true) || ! in_array($zielRunde, $runden, true)) {
             throw ValidationException::withMessages([
                 'quelle_runde' => 'Diese Runde ist in den aktuellen Parametern nicht aktiv.',
             ]);
@@ -193,7 +199,7 @@ class EinteilungParameterController extends Controller
                 $quelleBereichId = $quelleEintrag ? (int) $quelleEintrag->bereich_id : null;
                 $zielBereichId = $zielEintrag ? (int) $zielEintrag->bereich_id : null;
 
-                if (!$quelleBereichId && !$zielBereichId) {
+                if (! $quelleBereichId && ! $zielBereichId) {
                     continue;
                 }
 
@@ -286,7 +292,7 @@ class EinteilungParameterController extends Controller
         DB::transaction(function () use ($schueler, $validated, $runden, $rundeValues) {
             foreach ($runden as $runde) {
                 $schueler->einteilungen()->create([
-                    'bereich_id' => $validated['runde_' . $runde],
+                    'bereich_id' => $validated['runde_'.$runde],
                     'runde' => $runde,
                 ]);
 
@@ -333,7 +339,7 @@ class EinteilungParameterController extends Controller
         $positiveBereiche = collect($kapazitaeten)->filter(fn ($plaetze) => (int) $plaetze > 0);
         if ($positiveBereiche->count() < count($runden)) {
             throw ValidationException::withMessages([
-                'kapazitaeten' => 'Fuer ' . count($runden) . ' Runden werden mindestens ' . count($runden) . ' Bereiche mit freien Plaetzen benoetigt.',
+                'kapazitaeten' => 'Fuer '.count($runden).' Runden werden mindestens '.count($runden).' Bereiche mit freien Plaetzen benoetigt.',
             ]);
         }
 
@@ -397,7 +403,7 @@ class EinteilungParameterController extends Controller
                     (int) $wahlSetting->auswahl_anzahl
                 );
 
-                if (!$hatAuswahl) {
+                if (! $hatAuswahl) {
                     $teilnehmerOhneAuswahl[] = $this->teilnehmerName($item);
                 }
 
@@ -408,7 +414,7 @@ class EinteilungParameterController extends Controller
                     $bereichId = $this->waehleBereich($gewaehlteBereiche, $belegung[$runde], $kapazitaeten, $verwendet)
                         ?? $this->waehleBereich($fallbackBereiche, $belegung[$runde], $kapazitaeten, $verwendet);
 
-                    if (!$bereichId) {
+                    if (! $bereichId) {
                         throw ValidationException::withMessages([
                             'kapazitaeten' => 'Die Kapazitaeten reichen nicht aus, um alle Teilnehmer eindeutig auf die Runden zu verteilen.',
                         ]);
@@ -437,8 +443,8 @@ class EinteilungParameterController extends Controller
         });
 
         $message = 'Teilnehmer wurden erfolgreich eingeteilt.';
-        if (!empty($teilnehmerOhneAuswahl)) {
-            $message .= ' Ohne Bereichsauswahl wurden zufaellig ausgeglichen: ' . implode(', ', $teilnehmerOhneAuswahl);
+        if (! empty($teilnehmerOhneAuswahl)) {
+            $message .= ' Ohne Bereichsauswahl wurden zufaellig ausgeglichen: '.implode(', ', $teilnehmerOhneAuswahl);
         }
 
         return response()->json([
@@ -744,7 +750,7 @@ class EinteilungParameterController extends Controller
 
                     foreach ($einteilungen as $einteilung) {
                         $schueler = $schuelerNachId->get($einteilung->teilnehmende_id);
-                        if (!$schueler?->person_id) {
+                        if (! $schueler?->person_id) {
                             continue;
                         }
 
@@ -787,8 +793,7 @@ class EinteilungParameterController extends Controller
             'partner_id' => ['required', 'integer', 'exists:partners,id'],
             'schuljahr' => ['required', 'string'],
             'teil' => ['required', 'string'],
-            'eintritt' => ['required', 'date'],
-            'austritt' => ['required', 'date', 'after_or_equal:eintritt'],
+            'runde' => ['nullable'],
         ]);
 
         $partnerId = (int) $validated['partner_id'];
@@ -797,64 +802,136 @@ class EinteilungParameterController extends Controller
         $projekt = $this->currentProjekt();
         $setting = $this->einteilungSettingFor($projekt->id, $partnerId, $schuljahr, $teil, $projekt);
         $runden = $this->rundenArray($setting->runden_anzahl);
+        $ausgewaehlteRunde = ($validated['runde'] ?? null) === null || $validated['runde'] === 'alle'
+            ? null
+            : (int) $validated['runde'];
+        if ($ausgewaehlteRunde !== null && ! in_array($ausgewaehlteRunde, $runden, true)) {
+            throw ValidationException::withMessages(['runde' => 'Die ausgewählte Runde ist nicht verfügbar.']);
+        }
+        $exportRunden = $ausgewaehlteRunde === null ? $runden : [$ausgewaehlteRunde];
         $partner = Partner::findOrFail($partnerId);
         $bereiche = $this->projektBereiche($projekt);
         $schueler = $this->schuelerQuery($partnerId, $schuljahr, $teil)
             ->with(['person', 'einteilungen.bereich'])
             ->get();
 
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Einteilung');
-        $sheet->setCellValue('A1', 'Einteilung');
-        $sheet->setCellValue('A2', 'Schule');
-        $sheet->setCellValue('B2', $partner->name);
-        $sheet->setCellValue('A3', 'Schuljahr');
-        $sheet->setCellValue('B3', $schuljahr);
-        $sheet->setCellValue('A4', 'Teil');
-        $sheet->setCellValue('B4', $teil);
-        $sheet->setCellValue('A5', 'Zeitraum');
-        $sheet->setCellValue('B5', Carbon::parse($validated['eintritt'])->format('d.m.Y') . ' - ' . Carbon::parse($validated['austritt'])->format('d.m.Y'));
+        $sheet->setShowGridlines(false);
+        $lastColumnIndex = $bereiche->count() + 1;
+        $lastColumn = Coordinate::stringFromColumnIndex($lastColumnIndex);
 
-        $headers = ['Runde', 'Bereich', 'Nachname', 'Vorname', 'Klasse', 'Geschlecht'];
-        foreach ($headers as $index => $header) {
-            $sheet->setCellValue([$index + 1, 7], $header);
+        $sheet->mergeCells("A1:{$lastColumn}1");
+        $sheet->setCellValue('A1', 'Einteilung · '.$partner->name);
+        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(18)->getColor()->setARGB('FF172033');
+        $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
+        $sheet->getRowDimension(1)->setRowHeight(30);
+
+        $sheet->mergeCells("A2:{$lastColumn}2");
+        $sheet->setCellValue('A2', 'Schuljahr '.$schuljahr.' · Teil '.$teil.' · '.($ausgewaehlteRunde ? 'Runde '.$ausgewaehlteRunde : 'Alle Runden'));
+        $sheet->getStyle('A2')->getFont()->setSize(10)->getColor()->setARGB('FF667085');
+        $sheet->getStyle('A2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getRowDimension(2)->setRowHeight(20);
+
+        $this->addEinteilungExportLogos($sheet, $lastColumnIndex);
+        $sheet->getRowDimension(3)->setRowHeight(58);
+
+        $headerRow = 4;
+        $sheet->setCellValue([1, $headerRow], 'RUNDE');
+        foreach ($bereiche->values() as $index => $bereich) {
+            $capacity = (int) ($setting->kapazitaeten->firstWhere('bereich_id', $bereich->id)?->plaetze ?? $setting->standard_kapazitaet);
+            $sheet->setCellValue([$index + 2, $headerRow], mb_strtoupper($bereich->name)."\nKapazität {$capacity}");
         }
+        $sheet->getStyle("A{$headerRow}:{$lastColumn}{$headerRow}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFF9F1F5');
+        $sheet->getStyle("A{$headerRow}:{$lastColumn}{$headerRow}")->getFont()->setBold(true)->setSize(9)->getColor()->setARGB('FF4A2438');
+        $sheet->getStyle("A{$headerRow}:{$lastColumn}{$headerRow}")->getAlignment()->setWrapText(true)->setVertical(Alignment::VERTICAL_CENTER)->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getRowDimension($headerRow)->setRowHeight(34);
 
-        $row = 8;
-        foreach ($runden as $runde) {
+        $row = $headerRow + 1;
+        foreach ($exportRunden as $runde) {
+            $termin = $setting->rundentermine->firstWhere('runde', $runde);
+            $dateLabel = $termin
+                ? Carbon::parse($termin->anfangsdatum)->format('d.m.').'-'.Carbon::parse($termin->enddatum)->format('d.m.')
+                : '';
+            $sheet->setCellValue([1, $row], "Runde {$runde}".($dateLabel ? "\n{$dateLabel}" : ''));
+            $maxParticipants = 1;
+
             foreach ($bereiche as $bereich) {
                 $items = $schueler
                     ->filter(fn ($item) => (int) ($item->einteilungen->firstWhere('runde', $runde)?->bereich_id) === (int) $bereich->id)
                     ->sortBy(fn ($item) => sprintf('%s|%s|%s', $item->klasse ?? '', $item->person?->nachname ?? '', $item->person?->vorname ?? ''))
                     ->values();
-
+                $capacity = (int) ($setting->kapazitaeten->firstWhere('bereich_id', $bereich->id)?->plaetze ?? $setting->standard_kapazitaet);
+                $lines = [count($items).' / '.$capacity];
                 foreach ($items as $item) {
-                    $sheet->setCellValue([1, $row], $runde);
-                    $sheet->setCellValue([2, $row], $bereich->name);
-                    $sheet->setCellValue([3, $row], $item->person?->nachname);
-                    $sheet->setCellValue([4, $row], $item->person?->vorname);
-                    $sheet->setCellValue([5, $row], $item->klasse);
-                    $sheet->setCellValue([6, $row], $item->person?->geschlecht);
-                    $row++;
+                    $lines[] = '• '.trim(($item->person?->nachname ?? '').', '.($item->person?->vorname ?? ''), ' ,')
+                        .($item->klasse ? '    '.$item->klasse : '');
                 }
+                if ($items->isEmpty()) {
+                    $lines[] = 'Nicht belegt';
+                }
+                $column = $bereiche->search(fn ($candidate) => (int) $candidate->id === (int) $bereich->id) + 2;
+                $sheet->setCellValue([$column, $row], implode("\n", $lines));
+                $maxParticipants = max($maxParticipants, $items->count());
             }
+            $sheet->getRowDimension($row)->setRowHeight(max(78, 18 + ($maxParticipants * 13)));
+            $row++;
         }
 
-        $lastColumn = Coordinate::stringFromColumnIndex(count($headers));
-        $lastRow = max(8, $row - 1);
-        $sheet->getStyle('A7:' . $lastColumn . '7')->getFont()->setBold(true);
-        $sheet->getStyle('A7:' . $lastColumn . '7')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFEFF3F7');
-        $sheet->getStyle('A7:' . $lastColumn . $lastRow)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB('FFD9DEE5');
-        $sheet->getStyle('A7:' . $lastColumn . $lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-        foreach (range(1, count($headers)) as $column) {
-            $sheet->getColumnDimensionByColumn($column)->setAutoSize(true);
+        $lastRow = $row - 1;
+        $sheet->getStyle("A{$headerRow}:{$lastColumn}{$lastRow}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB('FFE8DDE3');
+        $sheet->getStyle('A'.($headerRow + 1).":A{$lastRow}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFFF7ED');
+        $sheet->getStyle('A'.($headerRow + 1).":A{$lastRow}")->getFont()->setBold(true)->getColor()->setARGB('FFC2410C');
+        $sheet->getStyle('A'.($headerRow + 1).":A{$lastRow}")->getAlignment()->setWrapText(true)->setVertical(Alignment::VERTICAL_CENTER)->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('B'.($headerRow + 1).":{$lastColumn}{$lastRow}")->getAlignment()->setWrapText(true)->setVertical(Alignment::VERTICAL_TOP);
+        $sheet->getStyle('B'.($headerRow + 1).":{$lastColumn}{$lastRow}")->getFont()->setSize(8);
+        $sheet->getColumnDimension('A')->setWidth(13);
+        for ($column = 2; $column <= $lastColumnIndex; $column++) {
+            $sheet->getColumnDimensionByColumn($column)->setWidth(29);
         }
+        $sheet->freezePane('B5');
+        $sheet->getPageSetup()->setOrientation('landscape')->setFitToWidth(1)->setFitToHeight(0);
+        $sheet->getPageMargins()->setTop(0.3)->setRight(0.25)->setBottom(0.3)->setLeft(0.25);
+        $sheet->getPageSetup()->setRowsToRepeatAtTopByStartAndEnd(1, $headerRow);
+        $sheet->getHeaderFooter()->setOddFooter('&L'.$partner->name.'&CSeite &P von &N&R'.$schuljahr.' · Teil '.$teil);
 
         return $this->downloadSpreadsheet(
             $spreadsheet,
-            'Einteilung_' . $this->safeName($partner->name) . '_' . $this->safeName($schuljahr) . '_Teil_' . $this->safeName($teil) . '.xlsx'
+            'Einteilung_'.$this->safeName($partner->name).'_'.$this->safeName($schuljahr).'_Teil_'.$this->safeName($teil).'_'.($ausgewaehlteRunde ? 'Runde_'.$ausgewaehlteRunde : 'Alle_Runden').'.xlsx'
         );
+    }
+
+    private function addEinteilungExportLogos($sheet, int $lastColumnIndex): void
+    {
+        $partnerColumns = [
+            2,
+            max(2, (int) round($lastColumnIndex * 0.4)),
+            max(2, (int) round($lastColumnIndex * 0.65)),
+            max(2, (int) round($lastColumnIndex * 0.85)),
+        ];
+        $logos = [
+            [public_path('img/einteilung-export/zbb.png'), 'A3', 32, 'ZBB'],
+            [public_path('img/einteilung-export/partner-berufsorientierung.png'), Coordinate::stringFromColumnIndex($partnerColumns[0]).'3', 28, 'Berufsorientierung'],
+            [public_path('img/einteilung-export/partner-ministerium-saarland.png'), Coordinate::stringFromColumnIndex($partnerColumns[1]).'3', 34, 'Ministerium Saarland'],
+            [public_path('img/einteilung-export/partner-bundesministerium.png'), Coordinate::stringFromColumnIndex($partnerColumns[2]).'3', 34, 'Bundesministerium'],
+            [public_path('img/einteilung-export/partner-bibb.png'), Coordinate::stringFromColumnIndex($partnerColumns[3]).'3', 28, 'BIBB'],
+        ];
+
+        foreach ($logos as [$path, $coordinate, $height, $name]) {
+            if (! file_exists($path)) {
+                continue;
+            }
+            $drawing = new Drawing;
+            $drawing->setName($name);
+            $drawing->setDescription($name.' Logo');
+            $drawing->setPath($path);
+            $drawing->setCoordinates($coordinate);
+            $drawing->setHeight($height);
+            $drawing->setOffsetX(6);
+            $drawing->setOffsetY(3);
+            $drawing->setWorksheet($sheet);
+        }
     }
 
     private function pagePayload(int $partnerId, string $schuljahr, string $teil): array
@@ -887,7 +964,7 @@ class EinteilungParameterController extends Controller
             foreach ($item->einteilungen as $einteilung) {
                 $bereich = $einteilung->bereich;
                 $runde = (int) $einteilung->runde;
-                if (!$bereich || !isset($results[$bereich->name]) || !in_array($runde, $runden, true)) {
+                if (! $bereich || ! isset($results[$bereich->name]) || ! in_array($runde, $runden, true)) {
                     continue;
                 }
 
@@ -933,7 +1010,7 @@ class EinteilungParameterController extends Controller
             'parameter' => $this->parameterPayload($setting, $projekt, $partnerId, $schuljahr, $teil),
             'teilnehmerOptions' => $schueler->map(fn ($item) => [
                 'id' => $item->id,
-                'name' => trim(($item->person?->nachname ?? '') . ', ' . ($item->person?->vorname ?? ''), ' ,'),
+                'name' => trim(($item->person?->nachname ?? '').', '.($item->person?->vorname ?? ''), ' ,'),
                 'klasse' => $item->klasse,
                 'eingeteilt' => $item->einteilungen->isNotEmpty(),
             ])->values(),
@@ -950,7 +1027,7 @@ class EinteilungParameterController extends Controller
 
                 return [
                     'id' => $person->id,
-                    'name' => trim(($person->nachname ?? '') . ', ' . ($person->vorname ?? ''), ' ,'),
+                    'name' => trim(($person->nachname ?? '').', '.($person->vorname ?? ''), ' ,'),
                     'bereich_ids' => $bereichZuweisungen->pluck('bereich_id')->map(fn ($id) => (int) $id)->unique()->values(),
                     'default_bereich_id' => $bereichZuweisungen->firstWhere('is_default', true)?->bereich_id,
                 ];
@@ -1011,7 +1088,7 @@ class EinteilungParameterController extends Controller
     private function currentProjekt(): Projekt
     {
         $projektId = Auth::user()?->current_team_id;
-        if (!$projektId) {
+        if (! $projektId) {
             throw ValidationException::withMessages([
                 'projekt' => 'Bitte waehlen Sie ein Projekt aus.',
             ]);
@@ -1114,7 +1191,7 @@ class EinteilungParameterController extends Controller
             ]
         );
 
-        if (!$setting->public_token) {
+        if (! $setting->public_token) {
             $setting->update(['public_token' => $this->publicToken()]);
         }
 
@@ -1182,7 +1259,7 @@ class EinteilungParameterController extends Controller
 
         if ($fehlendeRunden->isNotEmpty()) {
             throw ValidationException::withMessages([
-                'rundentermine' => 'Bitte zuerst unter Parameter die Termine fuer Runde ' . $fehlendeRunden->implode(', ') . ' festlegen.',
+                'rundentermine' => 'Bitte zuerst unter Parameter die Termine fuer Runde '.$fehlendeRunden->implode(', ').' festlegen.',
             ]);
         }
     }
@@ -1217,7 +1294,7 @@ class EinteilungParameterController extends Controller
     {
         $rules = [];
         foreach ($runden as $runde) {
-            $rules['runde_' . $runde] = [$required ? 'required' : 'nullable', 'integer', 'exists:bereiches,id'];
+            $rules['runde_'.$runde] = [$required ? 'required' : 'nullable', 'integer', 'exists:bereiches,id'];
         }
 
         return $request->validate($rules);
@@ -1227,7 +1304,7 @@ class EinteilungParameterController extends Controller
     {
         $values = [];
         foreach ($runden as $runde) {
-            $value = $data['runde_' . $runde] ?? null;
+            $value = $data['runde_'.$runde] ?? null;
             if ($value !== null && $value !== '') {
                 $values[$runde] = (int) $value;
             }
@@ -1242,7 +1319,7 @@ class EinteilungParameterController extends Controller
 
         if ($required && count($werte) !== count($runden)) {
             throw ValidationException::withMessages([
-                'runde_1' => 'Bitte alle ' . count($runden) . ' Runden auswaehlen.',
+                'runde_1' => 'Bitte alle '.count($runden).' Runden auswaehlen.',
             ]);
         }
 
@@ -1281,7 +1358,7 @@ class EinteilungParameterController extends Controller
             $kapazitaet = (int) ($kapazitaeten[(int) $bereichId] ?? 0);
             if ($kapazitaet <= 0) {
                 throw ValidationException::withMessages([
-                    'runde_' . $runde => 'Dieser Bereich hat in den Parametern keine freien Plaetze.',
+                    'runde_'.$runde => 'Dieser Bereich hat in den Parametern keine freien Plaetze.',
                 ]);
             }
 
@@ -1296,7 +1373,7 @@ class EinteilungParameterController extends Controller
 
             if ($query->count() >= $kapazitaet) {
                 throw ValidationException::withMessages([
-                    'runde_' . $runde => 'Die Kapazitaet fuer diesen Bereich ist in Runde ' . $runde . ' bereits erreicht.',
+                    'runde_'.$runde => 'Die Kapazitaet fuer diesen Bereich ist in Runde '.$runde.' bereits erreicht.',
                 ]);
             }
         }
@@ -1397,7 +1474,7 @@ class EinteilungParameterController extends Controller
         ?int $alterBereichId,
         ?int $neuerBereichId
     ): void {
-        if (!$schueler->person_id || (int) $alterBereichId === (int) $neuerBereichId) {
+        if (! $schueler->person_id || (int) $alterBereichId === (int) $neuerBereichId) {
             return;
         }
 
@@ -1412,7 +1489,7 @@ class EinteilungParameterController extends Controller
 
                 if ($this->hasEvaluatedEntries($entries, (int) $defaultStatus->id)) {
                     throw ValidationException::withMessages([
-                        'gruppe' => 'Der Teilnehmer kann in Runde ' . $runde . ' nicht verschoben werden, weil die alte Gruppe bereits ausgewertet oder bearbeitet wurde.',
+                        'gruppe' => 'Der Teilnehmer kann in Runde '.$runde.' nicht verschoben werden, weil die alte Gruppe bereits ausgewertet oder bearbeitet wurde.',
                     ]);
                 }
 
@@ -1442,7 +1519,7 @@ class EinteilungParameterController extends Controller
 
     private function addSchuelerToGeneratedGroup(PersonenIstSchueler $schueler, Gruppe $gruppe, Anwesenheitsstatuten $status): void
     {
-        if (!$gruppe->anfangsdatum || !$gruppe->enddatum || !$gruppe->startzeit || !$gruppe->endzeit) {
+        if (! $gruppe->anfangsdatum || ! $gruppe->enddatum || ! $gruppe->startzeit || ! $gruppe->endzeit) {
             return;
         }
 
@@ -1496,7 +1573,7 @@ class EinteilungParameterController extends Controller
         $status = Anwesenheitsstatuten::where('status', 'unentschuldigt')->first()
             ?? Anwesenheitsstatuten::first();
 
-        if (!$status) {
+        if (! $status) {
             throw ValidationException::withMessages([
                 'anwesenheit' => 'Es wurde kein Anwesenheitsstatus gefunden.',
             ]);
@@ -1507,7 +1584,7 @@ class EinteilungParameterController extends Controller
 
     private function teilnehmerName(PersonenIstSchueler $item): string
     {
-        return trim(($item->person?->vorname ?? '') . ' ' . ($item->person?->nachname ?? '')) ?: 'Teilnehmer #' . $item->id;
+        return trim(($item->person?->vorname ?? '').' '.($item->person?->nachname ?? '')) ?: 'Teilnehmer #'.$item->id;
     }
 
     private function tageIds(Carbon $start, Carbon $end): array
@@ -1546,7 +1623,7 @@ class EinteilungParameterController extends Controller
 
     private function downloadSpreadsheet(Spreadsheet $spreadsheet, string $filename)
     {
-        $path = storage_path('app/tmp/' . Str::uuid() . '_' . $filename);
+        $path = storage_path('app/tmp/'.Str::uuid().'_'.$filename);
         File::ensureDirectoryExists(dirname($path));
         (new Xlsx($spreadsheet))->save($path);
 
