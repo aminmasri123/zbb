@@ -466,6 +466,19 @@ class ExportWordController extends Controller
             return back()->with('error', 'Dieser Vorlagentyp wird fuer Gruppen-Exporte noch nicht unterstuetzt.');
         }
 
+        // Die BOP-Hausordnung ist ein personalisierter Serienbrief, soll aber als
+        // ein zusammenhängendes Dokument (eine Seite je Teilnehmer) ausgegeben werden.
+        if ($this->isBopHausordnung($projekt, $dokument, $templateFile)) {
+            return $this->downloadWordCombinedSerienbrief(
+                $templateFile,
+                $gruppe,
+                $projekt,
+                $dokument,
+                $teilnehmer,
+                $format
+            );
+        }
+
         $groupExportMode = $dokument->gruppen_export_modus
             ?: ((($dokument->kontext ?? null) === 'gruppe' || $this->wordTemplateSupportsSingleGroupDocument($templateFile)) ? 'eine_datei' : 'einzelne_dateien');
 
@@ -1130,6 +1143,164 @@ class ExportWordController extends Controller
         $filename = $this->safeFileName('Serienbrief_'.$projekt->name.'_'.($gruppe->bereich?->name ?? 'Gruppe').'_'.$dokument->name).'.zip';
 
         return response()->download($zipPath, $filename)->deleteFileAfterSend(true);
+    }
+
+    private function isBopHausordnung(Projekt $projekt, Dokumente $dokument, string $templateFile): bool
+    {
+        if (! str_contains(mb_strtolower((string) $projekt->name), 'bop')) {
+            return false;
+        }
+
+        return str_contains(mb_strtolower((string) $dokument->name), 'hausordnung')
+            || str_contains(mb_strtolower(pathinfo($templateFile, PATHINFO_FILENAME)), 'hausordnung_bop');
+    }
+
+    private function downloadWordCombinedSerienbrief(
+        string $templateFile,
+        Gruppe $gruppe,
+        Projekt $projekt,
+        Dokumente $dokument,
+        $teilnehmer,
+        string $format
+    ) {
+        $tempDir = storage_path('app/temp');
+        if (! is_dir($tempDir)) {
+            mkdir($tempDir, 0775, true);
+        }
+
+        $variables = (new TemplateProcessor($templateFile))->getVariables();
+        if ($error = $this->groupPlaceholderValidationError(
+            $variables,
+            $gruppe,
+            $projekt,
+            $teilnehmer,
+            true,
+            false
+        )) {
+            return back()->with('error', $error);
+        }
+
+        $documentPaths = [];
+        $combinedPath = $tempDir.DIRECTORY_SEPARATOR.uniqid('serienbrief_gesamt_', true).'.docx';
+        $outputPath = $combinedPath;
+
+        try {
+            foreach ($teilnehmer as $index => $person) {
+                $processor = new TemplateProcessor($templateFile);
+                $this->fillSerienbriefTemplate($processor, $gruppe, $projekt, $person, $index + 1);
+
+                $documentPath = $tempDir.DIRECTORY_SEPARATOR.uniqid('serienbrief_seite_', true).'.docx';
+                $processor->saveAs($documentPath);
+                $documentPaths[] = $documentPath;
+            }
+
+            $this->mergePersonalizedWordDocuments($documentPaths, $combinedPath);
+
+            if ($format === 'pdf') {
+                $outputPath = app(OfficeToPdfConverter::class)->convert($combinedPath, $tempDir);
+                @unlink($combinedPath);
+            }
+        } catch (Throwable $exception) {
+            foreach (array_unique(array_merge($documentPaths, [$combinedPath, $outputPath])) as $path) {
+                if ($path && is_file($path)) {
+                    @unlink($path);
+                }
+            }
+
+            return back()->with('error', 'Hausordnung konnte nicht erstellt werden: '.$exception->getMessage());
+        } finally {
+            foreach ($documentPaths as $documentPath) {
+                if (is_file($documentPath)) {
+                    @unlink($documentPath);
+                }
+            }
+        }
+
+        $extension = $format === 'pdf' ? 'pdf' : 'docx';
+        $filename = $this->safeFileName(
+            'Hausordnung_'.$projekt->name.'_'.($gruppe->bereich?->name ?? 'Gruppe')
+        ).'.'.$extension;
+
+        return response()->download($outputPath, $filename)->deleteFileAfterSend(true);
+    }
+
+    private function mergePersonalizedWordDocuments(array $documentPaths, string $outputPath): void
+    {
+        if ($documentPaths === []) {
+            throw new \RuntimeException('Es wurden keine Teilnehmerseiten erstellt.');
+        }
+
+        if (count($documentPaths) === 1) {
+            if (! copy($documentPaths[0], $outputPath)) {
+                throw new \RuntimeException('Das Gesamtdokument konnte nicht erstellt werden.');
+            }
+
+            return;
+        }
+
+        if (! copy($documentPaths[0], $outputPath)) {
+            throw new \RuntimeException('Das Gesamtdokument konnte nicht vorbereitet werden.');
+        }
+
+        $baseZip = new ZipArchive;
+        if ($baseZip->open($outputPath) !== true) {
+            throw new \RuntimeException('Das Gesamtdokument konnte nicht geöffnet werden.');
+        }
+
+        try {
+            $baseXml = $baseZip->getFromName('word/document.xml');
+            if (! is_string($baseXml)) {
+                throw new \RuntimeException('Die Dokumentstruktur konnte nicht gelesen werden.');
+            }
+
+            $baseParts = $this->wordDocumentBodyParts($baseXml);
+            $combinedBody = $baseParts['content'];
+            $pageBreak = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+
+            foreach (array_slice($documentPaths, 1) as $documentPath) {
+                $zip = new ZipArchive;
+                if ($zip->open($documentPath) !== true) {
+                    throw new \RuntimeException('Eine Teilnehmerseite konnte nicht geöffnet werden.');
+                }
+
+                $xml = $zip->getFromName('word/document.xml');
+                $zip->close();
+                if (! is_string($xml)) {
+                    throw new \RuntimeException('Eine Teilnehmerseite ist unvollständig.');
+                }
+
+                $parts = $this->wordDocumentBodyParts($xml);
+                $combinedBody .= $pageBreak.$parts['content'];
+            }
+
+            $newXml = preg_replace_callback(
+                '/(<w:body[^>]*>).*?(<\/w:body>)/s',
+                fn ($matches) => $matches[1].$combinedBody.$baseParts['sectPr'].$matches[2],
+                $baseXml
+            );
+            if (! is_string($newXml)) {
+                throw new \RuntimeException('Die Teilnehmerseiten konnten nicht verbunden werden.');
+            }
+
+            $baseZip->deleteName('word/document.xml');
+            $baseZip->addFromString('word/document.xml', $newXml);
+        } finally {
+            $baseZip->close();
+        }
+    }
+
+    private function wordDocumentBodyParts(string $xml): array
+    {
+        preg_match('/<w:body[^>]*>(.*)<\/w:body>/s', $xml, $matches);
+        $body = $matches[1] ?? '';
+        $sectionProperties = '';
+
+        if (preg_match('/(<w:sectPr\b[^>]*(?:\/>|>.*<\/w:sectPr>))\s*$/s', $body, $sectionMatches)) {
+            $sectionProperties = $sectionMatches[1];
+            $body = substr($body, 0, -strlen($sectionMatches[0]));
+        }
+
+        return ['content' => $body, 'sectPr' => $sectionProperties];
     }
 
     private function downloadWordPdfZip(string $templateFile, Gruppe $gruppe, Projekt $projekt, Dokumente $dokument, $teilnehmer)
