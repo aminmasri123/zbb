@@ -962,6 +962,15 @@ class GruppeHasTeilnehmerController extends Controller
                 'url' => route('gruppe.bop.export.auswertungsbogen-bop', $gruppe->id),
             ],
             [
+                'id' => 'bop-gruppe-tagesauswertung',
+                'name' => 'Tagesauswertung BO-Tage',
+                'format' => 'PDF',
+                'typ' => 'BOP Gruppe',
+                'method' => 'get',
+                'requires_bo_day' => true,
+                'url' => route('gruppe.bop.export.tagesauswertung', $gruppe->id),
+            ],
+            [
                 'id' => 'bop-gruppe-toilettennutzungsliste',
                 'name' => 'Toilettennutzungsliste',
                 'format' => 'DOCX',
@@ -1210,6 +1219,7 @@ class GruppeHasTeilnehmerController extends Controller
             'bop-gruppe-hausordnung' => 'gruppe.bop.export.hausordnung',
             'bop-gruppe-berufsfelderprobung' => 'gruppe.bop.export.berufsfelderprobung',
             'bop-gruppe-auswertungsbogen' => 'gruppe.bop.export.auswertungsbogen-bop',
+            'bop-gruppe-tagesauswertung' => 'gruppe.bop.export.auswertungsbogen-bop',
             'bop-gruppe-toilettennutzungsliste' => 'gruppe.bop.export.toilettennutzungsliste',
             'bop-gruppe-zertifikat-pobo' => 'gruppe.bop.export.zertifikat-pobo',
             'bop-gruppe-teilnahme-pobo' => 'gruppe.bop.export.teilnahme-pobo',

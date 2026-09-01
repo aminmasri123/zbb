@@ -143,6 +143,7 @@ class RoutePermissionMap
         'anwesenheit.group.mark-present' => 'anwesenheit.manage',
         'gruppeHasPersonen.destroy' => 'gruppeHasTeilnehmer.destroyTeilnehmer',
         'gruppe.bop.export.anwesenheitsliste' => 'anwesenheit.export',
+        'gruppe.bop.export.tagesauswertung' => 'gruppe.bop.export.auswertungsbogen-bop',
         'export.anwesenheitslite_V1' => 'anwesenheit.export',
         'export.projekt.anwesenheit.periode' => 'anwesenheit.export',
         'index-anpassung-anwesenheitsdaten' => 'anwesenheit.abrechnung',

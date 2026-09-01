@@ -1824,6 +1824,30 @@ const downloadBlob = (response, fallbackName) => {
 const startBopLegacyExport = async (item) => {
   if (!item?.url) return
 
+  if (item.requires_bo_day) {
+    const result = await Swal.fire({
+      title: 'BO-Tag auswählen',
+      text: 'Für welchen Tag sollen die Tagesauswertungen aller Gruppenteilnehmer erstellt werden?',
+      input: 'select',
+      inputOptions: {
+        1: 'Erster BO-Tag',
+        2: 'Zweiter BO-Tag',
+        3: 'Dritter BO-Tag',
+        alle: 'Alle drei BO-Tage',
+      },
+      inputPlaceholder: 'Bitte BO-Tag auswählen',
+      showCancelButton: true,
+      confirmButtonText: 'PDF erstellen',
+      cancelButtonText: 'Abbrechen',
+      inputValidator: value => value ? undefined : 'Bitte einen BO-Tag auswählen.',
+    })
+    if (!result.isConfirmed || !result.value) return
+    const url = new URL(item.url, window.location.origin)
+    url.searchParams.set('bo_tag', result.value)
+    window.location.href = url.toString()
+    return
+  }
+
   if ((item.method || 'get').toLowerCase() !== 'post') {
     window.location.href = item.url
     return

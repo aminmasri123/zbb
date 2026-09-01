@@ -20,6 +20,7 @@ use PhpOffice\PhpSpreadsheet\IOFactory as SpreadsheetIOFactory;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpWord\PhpWord;
 use PhpOffice\PhpWord\TemplateProcessor;
+use setasign\Fpdi\Fpdi;
 use ZipArchive;
 
 class BopGruppeExportController extends Controller
@@ -116,6 +117,42 @@ class BopGruppeExportController extends Controller
             'Auswertungsbogen_BOP_Gruppe_'.$gruppe->id,
             fn (TemplateProcessor $processor, array $item) => $this->fillTemplate($processor, $item)
         );
+    }
+
+    public function tagesauswertungBop(Request $request, Gruppe $gruppe)
+    {
+        $validated = $request->validate([
+            'bo_tag' => ['required', 'in:1,2,3,alle'],
+        ]);
+        $gruppe = $this->gruppeMitDaten($gruppe);
+        abort_unless(str_contains(mb_strtolower((string) $gruppe->projekt?->name), 'bop'), 404, 'Diese Funktion ist nur im Projekt BOP verfügbar.');
+        $teilnehmer = $this->teilnehmerDaten($gruppe);
+        abort_if($teilnehmer->isEmpty(), 422, 'Die Gruppe verfügt derzeit über keine Teilnehmer.');
+
+        $template = $this->tagesauswertungTemplate((string) $gruppe->bereich?->name);
+        abort_unless($template && file_exists($template), 422, 'Für diesen BOP-Bereich ist keine Tagesauswertung hinterlegt.');
+        $tage = $validated['bo_tag'] === 'alle' ? [1, 2, 3] : [(int) $validated['bo_tag']];
+        $termine = $this->tagesauswertungTermine($gruppe);
+        $pdf = new Fpdi;
+        $pdf->SetAutoPageBreak(false);
+
+        foreach ($teilnehmer as $item) {
+            foreach ($tage as $tag) {
+                $pdf->setSourceFile($template);
+                $page = $pdf->importPage($tag);
+                $size = $pdf->getTemplateSize($page);
+                $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
+                $pdf->useTemplate($page);
+                $this->writeTagesauswertungHeader($pdf, $item, $termine[$tag] ?? '', str_contains(mb_strtolower((string) $gruppe->bereich?->name), 'holz'));
+            }
+        }
+
+        $tagLabel = $validated['bo_tag'] === 'alle' ? 'Alle_BO_Tage' : 'BO_Tag_'.$validated['bo_tag'];
+        $filename = $this->safeFileName('Tagesauswertung_'.($gruppe->bereich?->name ?: 'Gruppe_'.$gruppe->id).'_'.$tagLabel).'.pdf';
+        $path = $this->tmpPath($filename);
+        $pdf->Output('F', $path);
+
+        return response()->download($path, $filename)->deleteFileAfterSend(true);
     }
 
     public function anwesenheitsliste(Gruppe $gruppe)
@@ -634,6 +671,67 @@ class BopGruppeExportController extends Controller
             $sheet->setCellValue($blocks[$blockIndex]['weekday'], $this->weekdayShort($day));
             $sheet->setCellValueExplicit($blocks[$blockIndex]['date'], $day->format('d.m.Y'), DataType::TYPE_STRING);
         }
+    }
+
+    private function tagesauswertungTemplate(string $bereich): ?string
+    {
+        $name = mb_strtolower($bereich);
+        $file = match (true) {
+            str_contains($name, 'it') || str_contains($name, 'medien') => 'it.pdf',
+            str_contains($name, 'verkauf') => 'verkauf.pdf',
+            str_contains($name, 'metall') => 'metall.pdf',
+            str_contains($name, 'maler') || str_contains($name, 'lack') => 'maler.pdf',
+            str_contains($name, 'holz') => 'holztechnik.pdf',
+            str_contains($name, 'friseur') || str_contains($name, 'kosmetik') || str_contains($name, 'körperpflege') => 'friseur.pdf',
+            str_contains($name, 'elektro') => 'elektro.pdf',
+            str_contains($name, 'hauswirtschaft') => 'hauswirtschaft.pdf',
+            default => null,
+        };
+
+        return $file ? storage_path('vorlage/projekte/bop/pdf/tagesauswertung/'.$file) : null;
+    }
+
+    private function tagesauswertungTermine(Gruppe $gruppe): array
+    {
+        $start = Carbon::parse($gruppe->anfangsdatum ?: now());
+        $end = Carbon::parse($gruppe->enddatum ?: $start);
+        $excluded = collect($gruppe->non_working_dates ?? [])->map(fn ($date) => Carbon::parse($date)->toDateString())->all();
+        $dates = [];
+        for ($date = $start->copy(); $date->lte($end) && count($dates) < 3; $date->addDay()) {
+            if ($date->isWeekend() || in_array($date->toDateString(), $excluded, true)) {
+                continue;
+            }
+            $dates[] = $date->format('d.m.Y');
+        }
+
+        return [1 => $dates[0] ?? '', 2 => $dates[1] ?? '', 3 => $dates[2] ?? ''];
+    }
+
+    private function writeTagesauswertungHeader(Fpdi $pdf, array $item, string $datum, bool $combinedName): void
+    {
+        $pdf->SetTextColor(20, 31, 43);
+        if ($combinedName) {
+            $this->writePdfValue($pdf, 48, 27.3, trim($item['vorname'].' '.$item['nachname']), 48);
+        } else {
+            $this->writePdfValue($pdf, 48, 27.3, $item['vorname'], 28);
+            $this->writePdfValue($pdf, 108, 27.3, $item['nachname'], 20);
+        }
+        $this->writePdfValue($pdf, 151, 27.3, $datum, 28);
+        $this->writePdfValue($pdf, 48, 39.1, $item['schule'], 28);
+        $this->writePdfValue($pdf, 105, 39.1, $item['klasse'], 22);
+    }
+
+    private function writePdfValue(Fpdi $pdf, float $x, float $y, string $value, float $width): void
+    {
+        $encoded = iconv('UTF-8', 'windows-1252//TRANSLIT//IGNORE', $value) ?: '';
+        $fontSize = 7.0;
+        $pdf->SetFont('Helvetica', 'B', $fontSize);
+        while ($pdf->GetStringWidth($encoded) > $width && $fontSize > 5.0) {
+            $fontSize -= 0.5;
+            $pdf->SetFont('Helvetica', 'B', $fontSize);
+        }
+        $pdf->SetXY($x, $y);
+        $pdf->Cell($width, 4, $encoded, 0, 0, 'L', false);
     }
 
     private function weekdayShort(Carbon $date): string
