@@ -1518,7 +1518,9 @@ class ExportWordController extends Controller
         $telefon = $person?->kontaktes?->first(fn ($kontakt) => in_array(strtolower($kontakt->kontakttyp?->name ?? ''), ['telefon', 'mobile', 'mobil'], true));
         $partnerValues = $this->partnerPlaceholderValues($gruppe, $projekt);
 
-        return array_merge([
+        $participantClass = $this->participantClassForExport($person, $gruppe, $partnerValues);
+
+        $values = array_merge([
             'nr' => $nummer,
             'nummer' => $nummer,
             'unterschrift' => '',
@@ -1566,6 +1568,49 @@ class ExportWordController extends Controller
             'erstgespraech_datum' => $terminDatum,
             'erstgespraech_uhrzeit' => $terminUhrzeit,
         ], $partnerValues);
+
+        if ($person) {
+            // In personalisierten Dokumenten bezeichnet "klassen" die Klasse
+            // der aktuellen Person, nicht die schulweite Liste aller Klassen.
+            $values['klasse'] = $participantClass;
+            $values['klassen'] = $participantClass;
+        }
+
+        return $values;
+    }
+
+    private function participantClassForExport(?Personen $person, Gruppe $gruppe, array $partnerValues): string
+    {
+        if (! $person?->getKey()) {
+            return '';
+        }
+
+        $gruppe->loadMissing(['partner', 'partners']);
+        $partnerId = $gruppe->partner?->getKey() ?: $gruppe->partners->first()?->getKey();
+        $schuljahr = trim((string) ($partnerValues['schuljahr'] ?? ''));
+        $teil = trim((string) ($partnerValues['teil'] ?? ''));
+        $schuljahr = $schuljahr !== '' ? $schuljahr : trim((string) $gruppe->getAttribute('export_schuljahr'));
+        $teil = $teil !== '' ? $teil : trim((string) $gruppe->getAttribute('export_teil'));
+
+        $query = PersonenIstSchueler::query()
+            ->where('person_id', $person->getKey())
+            ->when($partnerId, fn ($builder) => $builder->where('schule_id', $partnerId))
+            ->when($schuljahr !== '', fn ($builder) => $builder->forSchuljahr($schuljahr))
+            ->when($teil !== '', fn ($builder) => $builder->where('teil', $teil));
+
+        $klasse = trim((string) $query->orderByDesc('id')->value('klasse'));
+
+        // Bei älteren Gruppen fehlen teilweise Schuljahr/Teil am Exportkontext.
+        // Dann ist die jüngste Schulzuordnung derselben Person die sichere Rückfallebene.
+        if ($klasse === '') {
+            $klasse = trim((string) PersonenIstSchueler::query()
+                ->where('person_id', $person->getKey())
+                ->when($partnerId, fn ($builder) => $builder->where('schule_id', $partnerId))
+                ->orderByDesc('id')
+                ->value('klasse'));
+        }
+
+        return $klasse;
     }
 
     private function partnerPlaceholderValues(Gruppe $gruppe, Projekt $projekt): array

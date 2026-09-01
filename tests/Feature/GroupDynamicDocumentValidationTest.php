@@ -8,7 +8,9 @@ use App\Models\Bereich;
 use App\Models\Dokumente;
 use App\Models\Gruppe;
 use App\Models\GruppeHasPersonen;
+use App\Models\Partner;
 use App\Models\Personen;
+use App\Models\PersonenIstSchueler;
 use App\Models\Projekt;
 use App\Models\ProjektHasPersonen;
 use App\Models\Raeume;
@@ -22,6 +24,7 @@ use PhpOffice\PhpWord\PhpWord;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
+use ZipArchive;
 
 class GroupDynamicDocumentValidationTest extends TestCase
 {
@@ -100,7 +103,7 @@ class GroupDynamicDocumentValidationTest extends TestCase
         ]);
 
         $templatePath = storage_path('app/temp/group-document-completeness.docx');
-        $word = new PhpWord();
+        $word = new PhpWord;
         $word->addSection()->addText('${vorname} ${nachname} ${geburtsdatum} ${email} ${telefon}');
         WordIOFactory::createWriter($word, 'Word2007')->save($templatePath);
 
@@ -119,6 +122,117 @@ class GroupDynamicDocumentValidationTest extends TestCase
                         && str_contains($message, 'E-Mail')
                         && str_contains($message, 'Telefon');
                 });
+        } finally {
+            @unlink($templatePath);
+        }
+    }
+
+    public function test_bop_hausordnung_uses_only_the_current_participants_class(): void
+    {
+        $user = User::factory()->create();
+        $project = Projekt::factory()->create([
+            'name' => 'BOP',
+            'feature_settings' => ['group_management' => true],
+        ]);
+        $user->projekte()->attach($project->id);
+        $user->update(['current_team_id' => $project->id]);
+        $location = Standort::factory()->create();
+        $partner = Partner::query()->create(['name' => 'Testschule']);
+        $area = Bereich::query()->create(['name' => 'Hauswirtschaft']);
+        $room = Raeume::query()->create([
+            'name' => 'Lehrküche',
+            'standort_id' => $location->id,
+            'typ' => 'Werkstatt',
+            'aktiv' => true,
+        ]);
+        $group = Gruppe::query()->create([
+            'personen_id' => $user->person_id,
+            'bereich_id' => $area->id,
+            'projekt_id' => $project->id,
+            'partner_id' => $partner->id,
+            'standort_id' => $location->id,
+            'raum_id' => $room->id,
+        ]);
+        $day = Tage::query()->create(['datum' => '2026-09-01', 'wochentag' => 'Dienstag']);
+        $time = Zeiten::query()->create(['startzeit' => '08:00', 'endzeit' => '14:00']);
+        $status = Anwesenheitsstatuten::query()->create([
+            'status' => 'anwesend',
+            'farben' => '#22c55e',
+            'abkuerzung' => 'A',
+        ]);
+
+        foreach ([['Anna', 'Erste', '7.1'], ['Ben', 'Zweite', '7.2']] as [$vorname, $nachname, $klasse]) {
+            $participant = Personen::factory()->create([
+                'typ' => 'teilnehmer',
+                'vorname' => $vorname,
+                'nachname' => $nachname,
+            ]);
+            ProjektHasPersonen::query()->create([
+                'projekt_id' => $project->id,
+                'personen_id' => $participant->id,
+                'standort_id' => $location->id,
+                'status' => 'aktiv',
+            ]);
+            PersonenIstSchueler::query()->create([
+                'person_id' => $participant->id,
+                'klasse' => $klasse,
+                'schuljahr' => '2026',
+                'teil' => '1',
+                'schule_id' => $partner->id,
+            ]);
+            GruppeHasPersonen::query()->create([
+                'personen_id' => $participant->id,
+                'user_id' => $user->person_id,
+                'gruppe_id' => $group->id,
+                'tage_id' => $day->id,
+                'zeitgeplant_id' => $time->id,
+                'zeittatsaechlich_id' => $time->id,
+                'anwesenheitsstatuten_id' => $status->id,
+            ]);
+        }
+
+        $permission = $this->permission('dokumente.export.bop-hausordnung-class');
+        $user->givePermissionTo($permission);
+        $document = Dokumente::query()->create([
+            'name' => 'Hausordnung BOP',
+            'typ' => 'word',
+            'kontext' => 'gruppe',
+            'einsatzbereich' => 'gruppe',
+            'ausgabeformate' => ['docx'],
+            'dateipfad' => '/app/temp/test-hausordnung-bop.docx',
+            'aktiv' => true,
+            'export_permission' => $permission->name,
+            'gruppen_export_modus' => 'einzelne_dateien',
+        ]);
+        $project->dokumente()->attach($document->id, [
+            'gruppen_export' => true,
+            'serienbrief' => true,
+            'sort_order' => 0,
+        ]);
+
+        $templatePath = storage_path('app/temp/test-hausordnung-bop.docx');
+        $word = new PhpWord;
+        $word->addSection()->addText('${nachname}: ${klassen}');
+        WordIOFactory::createWriter($word, 'Word2007')->save($templatePath);
+
+        try {
+            $response = $this->actingAs($user)->get(route('gruppe.export.serienbrief', [
+                'gruppe' => $group,
+                'dokument' => $document,
+                'format' => 'docx',
+            ]));
+
+            $response->assertOk();
+            $response->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+            $outputPath = $response->baseResponse->getFile()->getPathname();
+            $zip = new ZipArchive;
+            $this->assertTrue($zip->open($outputPath) === true);
+            $xml = (string) $zip->getFromName('word/document.xml');
+            $zip->close();
+
+            $this->assertStringContainsString('Erste: 7.1', $xml);
+            $this->assertStringContainsString('Zweite: 7.2', $xml);
+            $this->assertStringNotContainsString('7.1 + 7.2', $xml);
         } finally {
             @unlink($templatePath);
         }
