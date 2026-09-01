@@ -834,17 +834,13 @@ class EinteilungParameterController extends Controller
         $sheet->getStyle('A2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getRowDimension(2)->setRowHeight(20);
 
-        $this->addEinteilungExportLogos($sheet, $lastColumnIndex);
-        $sheet->getRowDimension(3)->setRowHeight(58);
-
-        $headerRow = 4;
+        $headerRow = 3;
         $sheet->setCellValue([1, $headerRow], 'RUNDE');
         foreach ($bereiche->values() as $index => $bereich) {
-            $capacity = (int) ($setting->kapazitaeten->firstWhere('bereich_id', $bereich->id)?->plaetze ?? $setting->standard_kapazitaet);
-            $sheet->setCellValue([$index + 2, $headerRow], mb_strtoupper($bereich->name)."\nKapazität {$capacity}");
+            $sheet->setCellValue([$index + 2, $headerRow], mb_strtoupper($bereich->name));
         }
-        $sheet->getStyle("A{$headerRow}:{$lastColumn}{$headerRow}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFF9F1F5');
-        $sheet->getStyle("A{$headerRow}:{$lastColumn}{$headerRow}")->getFont()->setBold(true)->setSize(9)->getColor()->setARGB('FF4A2438');
+        $sheet->getStyle("A{$headerRow}:{$lastColumn}{$headerRow}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFFE4C7');
+        $sheet->getStyle("A{$headerRow}:{$lastColumn}{$headerRow}")->getFont()->setBold(true)->setSize(10)->getColor()->setARGB('FF173B57');
         $sheet->getStyle("A{$headerRow}:{$lastColumn}{$headerRow}")->getAlignment()->setWrapText(true)->setVertical(Alignment::VERTICAL_CENTER)->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getRowDimension($headerRow)->setRowHeight(34);
 
@@ -862,8 +858,7 @@ class EinteilungParameterController extends Controller
                     ->filter(fn ($item) => (int) ($item->einteilungen->firstWhere('runde', $runde)?->bereich_id) === (int) $bereich->id)
                     ->sortBy(fn ($item) => sprintf('%s|%s|%s', $item->klasse ?? '', $item->person?->nachname ?? '', $item->person?->vorname ?? ''))
                     ->values();
-                $capacity = (int) ($setting->kapazitaeten->firstWhere('bereich_id', $bereich->id)?->plaetze ?? $setting->standard_kapazitaet);
-                $lines = [count($items).' / '.$capacity];
+                $lines = [];
                 foreach ($items as $item) {
                     $lines[] = '• '.trim(($item->person?->nachname ?? '').', '.($item->person?->vorname ?? ''), ' ,')
                         .($item->klasse ? '    '.$item->klasse : '');
@@ -884,13 +879,22 @@ class EinteilungParameterController extends Controller
         $sheet->getStyle('A'.($headerRow + 1).":A{$lastRow}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFFF7ED');
         $sheet->getStyle('A'.($headerRow + 1).":A{$lastRow}")->getFont()->setBold(true)->getColor()->setARGB('FFC2410C');
         $sheet->getStyle('A'.($headerRow + 1).":A{$lastRow}")->getAlignment()->setWrapText(true)->setVertical(Alignment::VERTICAL_CENTER)->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $pastelColors = ['FFF3F9FF', 'FFFFF7E8', 'FFF1FAF3', 'FFFFF2F7'];
+        for ($column = 2; $column <= $lastColumnIndex; $column++) {
+            $columnLetter = Coordinate::stringFromColumnIndex($column);
+            $sheet->getStyle($columnLetter.($headerRow + 1).":{$columnLetter}{$lastRow}")
+                ->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB($pastelColors[($column - 2) % count($pastelColors)]);
+        }
         $sheet->getStyle('B'.($headerRow + 1).":{$lastColumn}{$lastRow}")->getAlignment()->setWrapText(true)->setVertical(Alignment::VERTICAL_TOP);
-        $sheet->getStyle('B'.($headerRow + 1).":{$lastColumn}{$lastRow}")->getFont()->setSize(8);
+        $sheet->getStyle('B'.($headerRow + 1).":{$lastColumn}{$lastRow}")->getFont()->setSize(9)->getColor()->setARGB('FF243B53');
         $sheet->getColumnDimension('A')->setWidth(13);
         for ($column = 2; $column <= $lastColumnIndex; $column++) {
             $sheet->getColumnDimensionByColumn($column)->setWidth(29);
         }
-        $sheet->freezePane('B5');
+        $logoRow = $lastRow + 2;
+        $this->addEinteilungExportLogos($sheet, $lastColumnIndex, $logoRow);
+        $sheet->getRowDimension($logoRow)->setRowHeight(62);
+        $sheet->freezePane('B4');
         $sheet->getPageSetup()->setOrientation('landscape')->setFitToWidth(1)->setFitToHeight(0);
         $sheet->getPageMargins()->setTop(0.3)->setRight(0.25)->setBottom(0.3)->setLeft(0.25);
         $sheet->getPageSetup()->setRowsToRepeatAtTopByStartAndEnd(1, $headerRow);
@@ -902,7 +906,7 @@ class EinteilungParameterController extends Controller
         );
     }
 
-    private function addEinteilungExportLogos($sheet, int $lastColumnIndex): void
+    private function addEinteilungExportLogos($sheet, int $lastColumnIndex, int $logoRow): void
     {
         $partnerColumns = [
             2,
@@ -911,11 +915,11 @@ class EinteilungParameterController extends Controller
             max(2, (int) round($lastColumnIndex * 0.85)),
         ];
         $logos = [
-            [public_path('img/einteilung-export/zbb.png'), 'A3', 32, 'ZBB'],
-            [public_path('img/einteilung-export/partner-berufsorientierung.png'), Coordinate::stringFromColumnIndex($partnerColumns[0]).'3', 28, 'Berufsorientierung'],
-            [public_path('img/einteilung-export/partner-ministerium-saarland.png'), Coordinate::stringFromColumnIndex($partnerColumns[1]).'3', 34, 'Ministerium Saarland'],
-            [public_path('img/einteilung-export/partner-bundesministerium.png'), Coordinate::stringFromColumnIndex($partnerColumns[2]).'3', 34, 'Bundesministerium'],
-            [public_path('img/einteilung-export/partner-bibb.png'), Coordinate::stringFromColumnIndex($partnerColumns[3]).'3', 28, 'BIBB'],
+            [public_path('img/einteilung-export/zbb.png'), 'A'.$logoRow, 32, 'ZBB'],
+            [public_path('img/einteilung-export/partner-berufsorientierung.png'), Coordinate::stringFromColumnIndex($partnerColumns[0]).$logoRow, 28, 'Berufsorientierung'],
+            [public_path('img/einteilung-export/partner-ministerium-saarland.png'), Coordinate::stringFromColumnIndex($partnerColumns[1]).$logoRow, 34, 'Ministerium Saarland'],
+            [public_path('img/einteilung-export/partner-bundesministerium.png'), Coordinate::stringFromColumnIndex($partnerColumns[2]).$logoRow, 34, 'Bundesministerium'],
+            [public_path('img/einteilung-export/partner-bibb.png'), Coordinate::stringFromColumnIndex($partnerColumns[3]).$logoRow, 28, 'BIBB'],
         ];
 
         foreach ($logos as [$path, $coordinate, $height, $name]) {

@@ -10,6 +10,7 @@ import ModalDestroy from '@/Components/ModalDestroyForm.vue';
 import ModalEdit from '@/Pages/Partner/ModalEdit.vue';
 import ModalAnwesenheitslisteBIBB from './BOP/ModalAnwesenheitslisteBIBBDigital.vue';
 import ModalAnwesenheitslistePA from './BOP/ModalAnwesenheitslistePADigital.vue';
+import ModalSchulanwesenheitExport from './BOP/ModalSchulanwesenheitExport.vue';
 import ModalBoTag1 from './BOP/ModalBoTag1.vue'
 import ModalHausordnung from './BOP/ModalHausordnung.vue';
 import ModalUsbStickBrief from './BOP/ModalUsbStickBrief.vue';
@@ -796,8 +797,8 @@ const updatePartnerAPI = async (form) => {
 
 
                                                         <a href="#">________________________________________</a>
-                                                        <a v-if="can('anwesenheit.abrechnung')" :href="route('index-anpassung-anwesenheitsdaten', { schulId: partner.id, schuljahr: jahr, teil: teil })"
-                                                            class="block px-4 py-1 hover:bg-gray-200">Anwesenheitsdaten</a>
+                                                        <button v-if="can('anwesenheit.abrechnung')" type="button" @click="openModal('schulanwesenheitExport', { partnerId: partner.id, jahr, teil, schoolName: partner.name })"
+                                                            class="block w-full px-4 py-1 text-left hover:bg-gray-200">Anwesenheit für Schule exportieren</button>
 
                                                          <a v-if="can('teilnehmer.liste.export')" :href="route('export.teilnehmerliste.schule.excel', { schuleId: partner.id, schuljahr: jahr, teil: teil })"
                                                             class="block px-4 py-1 hover:bg-gray-200">Teilnehmerliste</a>
@@ -959,6 +960,7 @@ const updatePartnerAPI = async (form) => {
 
         <ModalAnwesenheitslisteBIBB v-if="activeModal === 'anwesenheitslisteBoTagbibb'" :visible="true" :partnerId="modalData.partnerId" :schuljahr="modalData.jahr" :teil="modalData.teil" @update:visible="closeModal" @close="closeModal"/>
         <ModalAnwesenheitslistePA v-if="activeModal === 'anwesenheitslistePATage'" :visible="true" :partnerId="modalData.partnerId" :schuljahr="modalData.jahr" :klasse="modalData.klasse" :klassen="modalData.klassen" :teil="modalData.teil" @update:visible="closeModal" @close="closeModal"/>
+        <ModalSchulanwesenheitExport v-if="activeModal === 'schulanwesenheitExport'" :visible="true" :partner-id="modalData.partnerId" :schuljahr="modalData.jahr" :teil="modalData.teil" @close="closeModal" />
         <ModalAnwesenheitslistePA v-if="activeModal === 'anwesenheitslisteVorbereitungPA'" :visible="true" :partnerId="modalData.partnerId" :schuljahr="modalData.jahr" :klasse="modalData.klasse" :klassen="modalData.klassen" :teil="modalData.teil" list-type="pa_preparation" @update:visible="closeModal" @close="closeModal"/>
         <ModalBoTag1 v-if="activeModal === 'boTag1Config'" :visible="true" :anzahlBereiche="props.anzahlBereiche" :jahr="modalData.jahr" :teil="modalData.teil" :klassen="modalData.klassen" :teilnehmerCount="modalData.teilnehmerCount" :partnerId="modalData.partnerId" @close="closeModal" @submit="handleBoTag1" />
         <ModalHausordnung v-if="activeModal === 'hausordnungConfig'" :visible="true" :partnerId="modalData.partnerId" :jahr="modalData.jahr" :teil="modalData.teil" @close="closeModal"/>

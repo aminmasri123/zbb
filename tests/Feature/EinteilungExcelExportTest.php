@@ -33,12 +33,14 @@ class EinteilungExcelExportTest extends TestCase
         $workbook = IOFactory::load($response->getFile()->getPathname());
         $sheet = $workbook->getActiveSheet();
 
-        $this->assertSame('RUNDE', $sheet->getCell('A4')->getValue());
-        $this->assertStringContainsString('HOLZTECHNIK', (string) $sheet->getCell('B4')->getValue());
-        $this->assertStringContainsString('Runde 1', (string) $sheet->getCell('A5')->getValue());
-        $this->assertStringContainsString('Runde 2', (string) $sheet->getCell('A6')->getValue());
-        $this->assertStringNotContainsString('TN', (string) $sheet->getCell('A5')->getValue());
-        $this->assertStringContainsString('Mustermann, Mia', (string) $sheet->getCell('B5')->getValue());
+        $this->assertSame('RUNDE', $sheet->getCell('A3')->getValue());
+        $this->assertSame('HOLZTECHNIK', $sheet->getCell('B3')->getValue());
+        $this->assertStringNotContainsString('Kapazität', (string) $sheet->getCell('B3')->getValue());
+        $this->assertStringContainsString('Runde 1', (string) $sheet->getCell('A4')->getValue());
+        $this->assertStringContainsString('Runde 2', (string) $sheet->getCell('A5')->getValue());
+        $this->assertStringNotContainsString('TN', (string) $sheet->getCell('A4')->getValue());
+        $this->assertStringContainsString('Mustermann, Mia', (string) $sheet->getCell('B4')->getValue());
+        $this->assertStringNotContainsString('1 / 15', (string) $sheet->getCell('B4')->getValue());
         $this->assertCount(5, $sheet->getDrawingCollection());
         $this->assertSame(
             ['ZBB', 'Berufsorientierung', 'Ministerium Saarland', 'Bundesministerium', 'BIBB'],
@@ -61,9 +63,10 @@ class EinteilungExcelExportTest extends TestCase
         $this->assertStringContainsString('Runde_2.xlsx', (string) $response->headers->get('content-disposition'));
         $sheet = IOFactory::load($response->getFile()->getPathname())->getActiveSheet();
 
-        $this->assertStringContainsString('Runde 2', (string) $sheet->getCell('A5')->getValue());
-        $this->assertSame(5, $sheet->getHighestDataRow());
-        $this->assertStringNotContainsString('Runde 1', implode(' ', $sheet->toArray()[4]));
+        $this->assertStringContainsString('Runde 2', (string) $sheet->getCell('A4')->getValue());
+        $this->assertSame('', (string) $sheet->getCell('A5')->getValue());
+        $this->assertGreaterThan(4, $sheet->getHighestDataRow());
+        $this->assertStringNotContainsString('Runde 1', implode(' ', $sheet->toArray()[3]));
     }
 
     private function exportContext(): array

@@ -2,32 +2,33 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\GruppeHasPersonen;
 use App\Models\Partner;
 use App\Models\PersonenIstSchueler;
 use App\Services\Bop\AttendanceFooterService;
 use App\Services\Bop\PotenzialanalyseReportService;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpWord\TemplateProcessor;
-use Barryvdh\DomPDF\Facade\Pdf;
 use ZipArchive;
 
 class BopLegacyFunctionController extends Controller
 {
-    public function __construct(private readonly AttendanceFooterService $attendanceFooter)
-    {
-    }
+    public function __construct(private readonly AttendanceFooterService $attendanceFooter) {}
 
     private function schueler(int $schuleId, string $schuljahr, string $teil)
     {
@@ -71,7 +72,7 @@ class BopLegacyFunctionController extends Controller
     private function baseFolder(int $schuleId, string $schuljahr, string $teil): string
     {
         $partner = $this->partner($schuleId);
-        $folder = storage_path('app/bop/' . $this->safeName($partner->name) . '/' . $this->safeName($schuljahr) . '/Teil_' . $this->safeName($teil));
+        $folder = storage_path('app/bop/'.$this->safeName($partner->name).'/'.$this->safeName($schuljahr).'/Teil_'.$this->safeName($teil));
 
         File::ensureDirectoryExists($folder);
 
@@ -82,7 +83,7 @@ class BopLegacyFunctionController extends Controller
     {
         $partner = $this->partner($schuleId);
         $schueler = $this->schueler($schuleId, $schuljahr, $teil);
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
 
         $sheet->setTitle(Str::limit($title, 31, ''));
@@ -123,7 +124,7 @@ class BopLegacyFunctionController extends Controller
 
     private function downloadSpreadsheet(Spreadsheet $spreadsheet, string $filename)
     {
-        $path = storage_path('app/tmp/' . Str::uuid() . '_' . $filename);
+        $path = storage_path('app/tmp/'.Str::uuid().'_'.$filename);
         File::ensureDirectoryExists(dirname($path));
         (new Xlsx($spreadsheet))->save($path);
 
@@ -213,7 +214,7 @@ class BopLegacyFunctionController extends Controller
                 return collect($summenTage)->filter(fn ($key) => ($studentStatus[$key] ?? $this->defaultAnwesenheitsdatenStatus($key)) === 'present')->count();
             });
 
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Anwesenheitsdaten');
 
@@ -264,18 +265,18 @@ class BopLegacyFunctionController extends Controller
         $lastColumn = count($headers);
         $lastColumnLetter = Coordinate::stringFromColumnIndex($lastColumn);
         $lastRow = max(8, $schueler->count() + 7);
-        $sheet->getStyle('A7:' . $lastColumnLetter . '7')->getFont()->setBold(true);
-        $sheet->getStyle('A7:' . $lastColumnLetter . '7')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFEFF3F7');
-        $sheet->getStyle('A7:' . $lastColumnLetter . $lastRow)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB('FFD9DEE5');
-        $sheet->getStyle('A7:' . $lastColumnLetter . $lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-        $sheet->getStyle('D8:' . $lastColumnLetter . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('A7:'.$lastColumnLetter.'7')->getFont()->setBold(true);
+        $sheet->getStyle('A7:'.$lastColumnLetter.'7')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFEFF3F7');
+        $sheet->getStyle('A7:'.$lastColumnLetter.$lastRow)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB('FFD9DEE5');
+        $sheet->getStyle('A7:'.$lastColumnLetter.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+        $sheet->getStyle('D8:'.$lastColumnLetter.$lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         foreach (range(1, $lastColumn) as $column) {
             $sheet->getColumnDimensionByColumn($column)->setAutoSize(true);
         }
 
         return $this->downloadSpreadsheet(
             $spreadsheet,
-            'Anwesenheitsdaten_' . $schulId . '_' . $this->safeName($schuljahr) . '_Teil_' . $this->safeName($teil) . '.xlsx'
+            'Anwesenheitsdaten_'.$schulId.'_'.$this->safeName($schuljahr).'_Teil_'.$this->safeName($teil).'.xlsx'
         );
     }
 
@@ -283,7 +284,7 @@ class BopLegacyFunctionController extends Controller
     {
         return $this->downloadSpreadsheet(
             $this->simpleSpreadsheet('Teilnehmerliste', $schuleId, $schuljahr, $teil),
-            'Teilnehmerliste_' . $schuleId . '_' . $this->safeName($schuljahr) . '_Teil_' . $this->safeName($teil) . '.xlsx'
+            'Teilnehmerliste_'.$schuleId.'_'.$this->safeName($schuljahr).'_Teil_'.$this->safeName($teil).'.xlsx'
         );
     }
 
@@ -291,10 +292,10 @@ class BopLegacyFunctionController extends Controller
     {
         $folder = $this->baseFolder($idSchule, $schuljahr, $teil);
         foreach (['Anwesenheit', 'Teilnehmerliste', 'Zertifikate_POBO', 'Auswertung_POBO', 'Auswertung_PA'] as $subfolder) {
-            File::ensureDirectoryExists($folder . DIRECTORY_SEPARATOR . $subfolder);
+            File::ensureDirectoryExists($folder.DIRECTORY_SEPARATOR.$subfolder);
         }
 
-        return back()->with('success', 'BOP-Ordner wurden angelegt: ' . $folder);
+        return back()->with('success', 'BOP-Ordner wurden angelegt: '.$folder);
     }
 
     public function anwesenheitslisteVorbereitung(Request $request, int $schuleId, string $schuljahr, string $teil)
@@ -308,12 +309,12 @@ class BopLegacyFunctionController extends Controller
             return back()->with('error', 'Die gewaehlte Schule verfuegt ueber keine Teilnehmer.');
         }
 
-        if (!$termin) {
+        if (! $termin) {
             return back()->with('error', 'Bitte waehle einen Termin fuer die Anwesenheitsliste BO Vorbereitung.');
         }
 
         $template = storage_path('vorlage/projekte/bop/excel/Anwesenheitsliste-Vorbereitung-BO-Tage.xlsx');
-        if (!file_exists($template)) {
+        if (! file_exists($template)) {
             return back()->with('error', 'Die Vorlage fuer die Anwesenheitsliste BO Vorbereitung wurde nicht gefunden.');
         }
 
@@ -326,7 +327,7 @@ class BopLegacyFunctionController extends Controller
             return back()->with('error', 'Es wurden keine Klassen fuer diesen Export gefunden.');
         }
 
-        if ($klasse && !$schueler->contains(fn ($item) => (string) $item->klasse === (string) $klasse)) {
+        if ($klasse && ! $schueler->contains(fn ($item) => (string) $item->klasse === (string) $klasse)) {
             return back()->with('error', 'Die gewaehlte Klasse wurde fuer diese Schule nicht gefunden.');
         }
 
@@ -343,11 +344,11 @@ class BopLegacyFunctionController extends Controller
 
             return $this->downloadSpreadsheet(
                 $spreadsheet,
-                'Anwesenheitsliste_Vorbereitung_BO_Tage_' . $this->safeName($partner->name) . '_' . $this->safeName($klasse) . '_' . $this->safeName($terminDatum) . '.xlsx'
+                'Anwesenheitsliste_Vorbereitung_BO_Tage_'.$this->safeName($partner->name).'_'.$this->safeName($klasse).'_'.$this->safeName($terminDatum).'.xlsx'
             );
         }
 
-        $tempDir = storage_path('app/tmp/' . Str::uuid());
+        $tempDir = storage_path('app/tmp/'.Str::uuid());
         File::ensureDirectoryExists($tempDir);
 
         foreach ($klassen as $klasseName) {
@@ -362,20 +363,21 @@ class BopLegacyFunctionController extends Controller
             );
 
             (new Xlsx($spreadsheet))->save(
-                $tempDir . DIRECTORY_SEPARATOR . 'Anwesenheitsliste_Vorbereitung_BO_Tage_' . $this->safeName($partner->name) . '_' . $this->safeName($klasseName) . '_' . $this->safeName($terminDatum) . '.xlsx'
+                $tempDir.DIRECTORY_SEPARATOR.'Anwesenheitsliste_Vorbereitung_BO_Tage_'.$this->safeName($partner->name).'_'.$this->safeName($klasseName).'_'.$this->safeName($terminDatum).'.xlsx'
             );
         }
 
-        $zipName = 'Anwesenheitslisten_Vorbereitung_BO_Tage_' . $this->safeName($partner->name) . '_' . $this->safeName($terminDatum) . '.zip';
-        $zipPath = storage_path('app/tmp/' . Str::uuid() . '_' . $zipName);
-        $zip = new ZipArchive();
+        $zipName = 'Anwesenheitslisten_Vorbereitung_BO_Tage_'.$this->safeName($partner->name).'_'.$this->safeName($terminDatum).'.zip';
+        $zipPath = storage_path('app/tmp/'.Str::uuid().'_'.$zipName);
+        $zip = new ZipArchive;
 
         if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
             File::deleteDirectory($tempDir);
+
             return back()->with('error', 'Das ZIP-Archiv konnte nicht erstellt werden.');
         }
 
-        foreach (glob($tempDir . DIRECTORY_SEPARATOR . '*.xlsx') as $file) {
+        foreach (glob($tempDir.DIRECTORY_SEPARATOR.'*.xlsx') as $file) {
             $zip->addFile($file, basename($file));
         }
 
@@ -407,12 +409,12 @@ class BopLegacyFunctionController extends Controller
         foreach ($schueler->sortBy(fn ($item) => $item->person?->nachname)->values() as $index => $item) {
             $person = $item->person;
 
-            $sheet->setCellValue('A' . $row, $index + 1);
-            $sheet->setCellValue('B' . $row, $person?->nachname);
-            $sheet->setCellValue('C' . $row, $person?->vorname);
-            $sheet->setCellValue('D' . $row, $person?->geschlecht);
+            $sheet->setCellValue('A'.$row, $index + 1);
+            $sheet->setCellValue('B'.$row, $person?->nachname);
+            $sheet->setCellValue('C'.$row, $person?->vorname);
+            $sheet->setCellValue('D'.$row, $person?->geschlecht);
 
-            $sheet->getStyle('A' . $row . ':E' . $row)->applyFromArray([
+            $sheet->getStyle('A'.$row.':E'.$row)->applyFromArray([
                 'borders' => [
                     'allBorders' => [
                         'borderStyle' => Border::BORDER_THIN,
@@ -455,7 +457,7 @@ class BopLegacyFunctionController extends Controller
 
     private function schulformFromSchueler($schueler): string
     {
-        if (!$schueler) {
+        if (! $schueler) {
             return '';
         }
 
@@ -477,20 +479,20 @@ class BopLegacyFunctionController extends Controller
 
         return $this->downloadSpreadsheet(
             $spreadsheet,
-            'Anwesenheitsliste_Rechnung_' . $idSchule . '_' . $this->safeName($schuljahr) . '_Teil_' . $this->safeName($teil) . '.xlsx'
+            'Anwesenheitsliste_Rechnung_'.$idSchule.'_'.$this->safeName($schuljahr).'_Teil_'.$this->safeName($teil).'.xlsx'
         );
     }
 
     public function zertifikatPobo(int $idSchule, string $schuljahr, string $teil)
     {
         $template = storage_path('vorlage/projekte/bop/word/Zertifikat_Maske_POBO.docx');
-        if (!file_exists($template)) {
+        if (! file_exists($template)) {
             return back()->with('error', 'POBO-Zertifikat-Vorlage wurde nicht gefunden.');
         }
 
         $partner = $this->partner($idSchule);
         $item = $this->schueler($idSchule, $schuljahr, $teil)->first();
-        if (!$item) {
+        if (! $item) {
             return back()->with('error', 'Es wurden keine Teilnehmer fuer dieses Zertifikat gefunden.');
         }
 
@@ -507,8 +509,8 @@ class BopLegacyFunctionController extends Controller
             $processor->setValue($key, $value ?? '');
         }
 
-        $fileName = 'Zertifikat_POBO_' . $this->safeName(($person?->nachname ?? 'Teilnehmer') . '_' . ($person?->vorname ?? $item->id)) . '.docx';
-        $path = storage_path('app/tmp/' . Str::uuid() . '_' . $fileName);
+        $fileName = 'Zertifikat_POBO_'.$this->safeName(($person?->nachname ?? 'Teilnehmer').'_'.($person?->vorname ?? $item->id)).'.docx';
+        $path = storage_path('app/tmp/'.Str::uuid().'_'.$fileName);
         File::ensureDirectoryExists(dirname($path));
         $processor->saveAs($path);
 
@@ -521,7 +523,7 @@ class BopLegacyFunctionController extends Controller
         $schueler = $this->schueler($schuleId, $schuljahr, $teil);
         $pdf = Pdf::loadView('bop.zertifikate-pobo', compact('partner', 'schueler', 'schuljahr', 'teil'))->setPaper('a4', 'landscape');
 
-        return $pdf->download('Zertifikate_POBO_' . $schuleId . '_' . $this->safeName($schuljahr) . '_Teil_' . $this->safeName($teil) . '.pdf');
+        return $pdf->download('Zertifikate_POBO_'.$schuleId.'_'.$this->safeName($schuljahr).'_Teil_'.$this->safeName($teil).'.pdf');
     }
 
     public function auswertungPobo(int $schulId, string $schuljahr, string $teil)
@@ -530,19 +532,19 @@ class BopLegacyFunctionController extends Controller
         $schueler = $this->schueler($schulId, $schuljahr, $teil);
         $pdf = Pdf::loadView('bop.auswertung-pobo', compact('partner', 'schueler', 'schuljahr', 'teil'));
 
-        return $pdf->download('Auswertung_POBO_' . $schulId . '_' . $this->safeName($schuljahr) . '_Teil_' . $this->safeName($teil) . '.pdf');
+        return $pdf->download('Auswertung_POBO_'.$schulId.'_'.$this->safeName($schuljahr).'_Teil_'.$this->safeName($teil).'.pdf');
     }
 
     public function auswertungPoboToFolder(int $schulId, string $schuljahr, string $teil)
     {
-        $folder = $this->baseFolder($schulId, $schuljahr, $teil) . DIRECTORY_SEPARATOR . 'Auswertung_POBO';
+        $folder = $this->baseFolder($schulId, $schuljahr, $teil).DIRECTORY_SEPARATOR.'Auswertung_POBO';
         File::ensureDirectoryExists($folder);
 
         foreach ($this->schueler($schulId, $schuljahr, $teil) as $item) {
             $partner = $this->partner($schulId);
             $schueler = collect([$item]);
             Pdf::loadView('bop.auswertung-pobo', compact('partner', 'schueler', 'schuljahr', 'teil'))
-                ->save($folder . DIRECTORY_SEPARATOR . $this->safeName($item->person?->nachname . '_' . $item->person?->vorname) . '.pdf');
+                ->save($folder.DIRECTORY_SEPARATOR.$this->safeName($item->person?->nachname.'_'.$item->person?->vorname).'.pdf');
         }
 
         return back()->with('success', 'POBO-Auswertungen wurden im Ordner generiert.');
@@ -553,8 +555,7 @@ class BopLegacyFunctionController extends Controller
         string $schuljahr,
         string $teil,
         PotenzialanalyseReportService $reports
-    )
-    {
+    ) {
         $partner = $this->partner($schulId);
         $projektId = (int) auth()->user()?->current_team_id;
         $assignments = $reports->schoolAssignments($schulId, $schuljahr, $teil, $projektId);
@@ -565,24 +566,151 @@ class BopLegacyFunctionController extends Controller
 
         $folder = storage_path(
             'app/public/files/Schulen/'
-            . $this->safeFolderSegment($partner->name)
-            . '/' . $this->safeFolderSegment($schuljahr)
+            .$this->safeFolderSegment($partner->name)
+            .'/'.$this->safeFolderSegment($schuljahr)
         );
 
         foreach ($assignments as $assignment) {
             $class = $this->safeFolderSegment((string) ($assignment['student']?->klasse ?? 'ohne Klasse'));
             $participant = $this->safeFolderSegment(trim(
-                ($assignment['person']->nachname ?? '') . ' ' . ($assignment['person']->vorname ?? '')
+                ($assignment['person']->nachname ?? '').' '.($assignment['person']->vorname ?? '')
             ));
-            $participantFolder = $folder . DIRECTORY_SEPARATOR . $class . DIRECTORY_SEPARATOR . $participant;
+            $participantFolder = $folder.DIRECTORY_SEPARATOR.$class.DIRECTORY_SEPARATOR.$participant;
 
             $reports->writePdf($assignment['gruppe'], $assignment['person'], $participantFolder);
         }
 
         return back()->with(
             'success',
-            $assignments->count() . ' PA-Bericht(e) wurden für ' . $partner->name . ' im Ordner generiert: ' . $folder
+            $assignments->count().' PA-Bericht(e) wurden für '.$partner->name.' im Ordner generiert: '.$folder
         );
+    }
+
+    public function schulAnwesenheitExport(Request $request, int $schulId, string $schuljahr, string $teil)
+    {
+        $validated = $request->validate([
+            'von' => ['required', 'date'],
+            'bis' => ['required', 'date', 'after_or_equal:von'],
+        ]);
+        $partner = $this->partner($schulId);
+        $von = Carbon::parse($validated['von'])->startOfDay();
+        $bis = Carbon::parse($validated['bis'])->startOfDay();
+        abort_if($von->diffInDays($bis) > 366, 422, 'Der Zeitraum darf höchstens 366 Tage umfassen.');
+
+        $schueler = $this->schueler($schulId, $schuljahr, $teil);
+        $klassenNachPerson = $schueler->pluck('klasse', 'person_id');
+        $projektId = (int) auth()->user()->current_team_id;
+        $eintraege = GruppeHasPersonen::query()
+            ->with(['teilnehmer', 'status', 'tag', 'zeitgeplant', 'zeittatsaechlich', 'gruppe.bereich'])
+            ->whereIn('personen_id', $schueler->pluck('person_id')->filter())
+            ->whereHas('gruppe', fn ($query) => $query->where('projekt_id', $projektId))
+            ->whereHas('tag', fn ($query) => $query->whereBetween('datum', [$von->toDateString(), $bis->toDateString()]))
+            ->get()
+            ->sortBy(fn ($entry) => sprintf(
+                '%s|%s|%s|%s',
+                $entry->tag?->datum,
+                $klassenNachPerson[$entry->personen_id] ?? '',
+                $entry->teilnehmer?->nachname ?? '',
+                $entry->teilnehmer?->vorname ?? ''
+            ))
+            ->values();
+
+        $spreadsheet = new Spreadsheet;
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Schulanwesenheit');
+        $sheet->setShowGridlines(false);
+        $sheet->mergeCells('A1:J1');
+        $sheet->setCellValue('A1', 'Anwesenheit · '.$partner->name);
+        $sheet->mergeCells('A2:J2');
+        $teilLabel = str_starts_with(mb_strtolower($teil), 'teil') ? $teil : 'Teil '.$teil;
+        $sheet->setCellValue('A2', 'Schuljahr '.$schuljahr.' · '.$teilLabel.' · '.$von->format('d.m.Y').($von->equalTo($bis) ? '' : ' - '.$bis->format('d.m.Y')));
+        $headers = ['Datum', 'Klasse', 'Nachname', 'Vorname', 'Bereich / Gruppe', 'Status', 'Geplant', 'Tatsächlich', 'Verspätung', 'Bemerkung'];
+        foreach ($headers as $index => $header) {
+            $sheet->setCellValue([$index + 1, 4], $header);
+        }
+
+        foreach ($eintraege as $index => $entry) {
+            $row = $index + 5;
+            $planned = $entry->zeitgeplant?->startzeit;
+            $actual = $entry->zeittatsaechlich?->startzeit;
+            $delay = $this->attendanceDelayMinutes($planned, $actual);
+            $sheet->setCellValue([1, $row], $entry->tag?->datum ? Carbon::parse($entry->tag->datum)->format('d.m.Y') : '');
+            $sheet->setCellValueExplicit([2, $row], (string) ($klassenNachPerson[$entry->personen_id] ?? ''), DataType::TYPE_STRING);
+            $sheet->setCellValue([3, $row], $entry->teilnehmer?->nachname ?? '');
+            $sheet->setCellValue([4, $row], $entry->teilnehmer?->vorname ?? '');
+            $sheet->setCellValue([5, $row], $entry->gruppe?->bereich?->name ?? ('Gruppe '.$entry->gruppe_id));
+            $sheet->setCellValue([6, $row], $entry->status?->status ?? 'Nicht erfasst');
+            $sheet->setCellValue([7, $row], $planned ? substr((string) $planned, 0, 5) : '');
+            $sheet->setCellValue([8, $row], $actual ? substr((string) $actual, 0, 5) : '');
+            $sheet->setCellValue([9, $row], $delay > 0 ? $delay.' Min.' : '');
+            $sheet->setCellValue([10, $row], $entry->bemerkung ?? '');
+        }
+
+        if ($eintraege->isEmpty()) {
+            $sheet->mergeCells('A5:J5');
+            $sheet->setCellValue('A5', 'Für den ausgewählten Zeitraum sind keine gespeicherten Gruppenanwesenheiten vorhanden.');
+        }
+        $lastRow = max(5, $eintraege->count() + 4);
+        $sheet->getStyle('A1:J1')->getFont()->setBold(true)->setSize(18)->getColor()->setARGB('FF173B57');
+        $sheet->getStyle('A1:J2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('A4:J4')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFFE4C7');
+        $sheet->getStyle('A4:J4')->getFont()->setBold(true)->getColor()->setARGB('FF173B57');
+        $sheet->getStyle('A4:J'.$lastRow)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB('FFD9E2EC');
+        $sheet->getStyle('A5:J'.$lastRow)->getAlignment()->setVertical(Alignment::VERTICAL_TOP)->setWrapText(true);
+        foreach ([1 => 13, 2 => 10, 3 => 20, 4 => 18, 5 => 24, 6 => 17, 7 => 11, 8 => 11, 9 => 13, 10 => 28] as $column => $width) {
+            $sheet->getColumnDimensionByColumn($column)->setWidth($width);
+        }
+        $sheet->freezePane('A5');
+        $logoRow = $lastRow + 2;
+        $this->addSchoolAttendanceLogos($sheet, $logoRow);
+        $sheet->getRowDimension($logoRow)->setRowHeight(62);
+        $sheet->getPageSetup()->setOrientation('landscape')->setFitToWidth(1)->setFitToHeight(0);
+        $sheet->getPageSetup()->setRowsToRepeatAtTopByStartAndEnd(1, 4);
+        $sheet->getPageSetup()->setPrintArea('A1:J'.$logoRow);
+        $sheet->getHeaderFooter()->setOddFooter('&L'.$partner->name.'&CSeite &P von &N&RStand: '.now()->format('d.m.Y H:i'));
+
+        return $this->downloadSpreadsheet(
+            $spreadsheet,
+            'Schulanwesenheit_'.$this->safeName($partner->name).'_'.$von->format('Y-m-d').($von->equalTo($bis) ? '' : '_bis_'.$bis->format('Y-m-d')).'.xlsx'
+        );
+    }
+
+    private function attendanceDelayMinutes(?string $planned, ?string $actual): int
+    {
+        if (! $planned || ! $actual) {
+            return 0;
+        }
+
+        $plannedAt = Carbon::createFromFormat('H:i:s', strlen($planned) === 5 ? $planned.':00' : $planned);
+        $actualAt = Carbon::createFromFormat('H:i:s', strlen($actual) === 5 ? $actual.':00' : $actual);
+
+        return max(0, $plannedAt->diffInMinutes($actualAt, false));
+    }
+
+    private function addSchoolAttendanceLogos($sheet, int $row): void
+    {
+        $logos = [
+            [public_path('img/einteilung-export/zbb.png'), 'B'.$row, 30, 'ZBB'],
+            [public_path('img/einteilung-export/partner-berufsorientierung.png'), 'C'.$row, 25, 'Berufsorientierung'],
+            [public_path('img/einteilung-export/partner-ministerium-saarland.png'), 'E'.$row, 31, 'Ministerium Saarland'],
+            [public_path('img/einteilung-export/partner-bundesministerium.png'), 'G'.$row, 31, 'Bundesministerium'],
+            [public_path('img/einteilung-export/partner-bibb.png'), 'I'.$row, 25, 'BIBB'],
+        ];
+
+        foreach ($logos as [$path, $coordinate, $height, $name]) {
+            if (! file_exists($path)) {
+                continue;
+            }
+            $drawing = new Drawing;
+            $drawing->setName($name);
+            $drawing->setDescription($name.' Logo');
+            $drawing->setPath($path);
+            $drawing->setCoordinates($coordinate);
+            $drawing->setHeight($height);
+            $drawing->setOffsetX(5);
+            $drawing->setOffsetY(5);
+            $drawing->setWorksheet($sheet);
+        }
     }
 
     public function auswertungPoboRunde(int $schuleId, string $schuljahr, string $teil, Request $request)
@@ -597,6 +725,6 @@ class BopLegacyFunctionController extends Controller
             'runde' => $request->query('runde', 'alle'),
         ]);
 
-        return $pdf->download('Auswertung_POBO_Runde_' . $schuleId . '_' . $this->safeName($schuljahr) . '_Teil_' . $this->safeName($teil) . '.pdf');
+        return $pdf->download('Auswertung_POBO_Runde_'.$schuleId.'_'.$this->safeName($schuljahr).'_Teil_'.$this->safeName($teil).'.pdf');
     }
 }

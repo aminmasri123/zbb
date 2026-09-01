@@ -456,7 +456,7 @@
             <option value="alle">Alle Runden wie im Vollbildmodus</option>
             <option v-for="runde in runden" :key="`export-runde-${runde}`" :value="runde">Nur Runde {{ runde }}</option>
           </select>
-          <p class="mt-2 text-xs text-gray-500">Die Excel-Datei enthält die Bereichsmatrix, Kapazitäten, Teilnehmer und Partnerlogos. Die Gesamtschülerzahl wird nicht ausgegeben.</p>
+          <p class="mt-2 text-xs text-gray-500">Die Excel-Datei enthält die kinderfreundliche Bereichsmatrix mit Namen und Klassen. Kapazitäten und Gruppenzahlen werden nicht ausgegeben; die Logos stehen unter der Tabelle.</p>
         </div>
       </template>
       <template #footer>

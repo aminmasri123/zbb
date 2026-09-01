@@ -986,6 +986,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     // zu bearbeiten
     Route::get('/anwesenheitsdaten/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'anwesenheitsdaten'])->name('index-anpassung-anwesenheitsdaten');
     Route::post('/anwesenheitsdaten/{schulId}/{schuljahr}/{teil}/export', [BopLegacyFunctionController::class, 'anwesenheitsdatenExport'])->name('export.anwesenheitsdaten.schule.excel');
+    Route::post('/schulanwesenheit/{schulId}/{schuljahr}/{teil}/export', [BopLegacyFunctionController::class, 'schulAnwesenheitExport'])->name('export.schulanwesenheit.excel');
     Route::get('/teilnehmerliste/excel/{schuleId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'teilnehmerliste'])->name('export.teilnehmerliste.schule.excel')->middleware(['module:participant_management', 'projectFeature:participant_management']);
     Route::get('/teilnehmerccliste/excel/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'index'])->name('teilnehmer.liste.schule')->middleware(['module:participant_management', 'projectFeature:participant_management']);
     Route::get('/alleTeilnehmer/folder/create/{idSchule}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'createFolderAll'])->name('alleTeilnehmer.folder.create');

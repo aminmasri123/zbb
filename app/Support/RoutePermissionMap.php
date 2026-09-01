@@ -147,6 +147,7 @@ class RoutePermissionMap
         'export.projekt.anwesenheit.periode' => 'anwesenheit.export',
         'index-anpassung-anwesenheitsdaten' => 'anwesenheit.abrechnung',
         'export.anwesenheitsdaten.schule.excel' => 'anwesenheit.abrechnung',
+        'export.schulanwesenheit.excel' => 'anwesenheit.abrechnung',
         'anwesenheitslisteVorBOTage' => 'anwesenheit.abrechnung',
         'export.anwesenheitsliste.rechnung' => 'anwesenheit.abrechnung',
         'anwesenheitsliste.POBO.bibb.preview' => 'anwesenheit.abrechnung',
