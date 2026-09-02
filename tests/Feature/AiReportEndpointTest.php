@@ -148,7 +148,11 @@ class AiReportEndpointTest extends TestCase
         $this->actingAs($user)->getJson('/ki/berichte/entwurf/'.$failedRun->run_uuid)
             ->assertOk()
             ->assertJsonPath('status', 'failed')
-            ->assertJsonPath('error_code', 'agent_unavailable');
+            ->assertJsonPath('error_code', 'agent_unavailable')
+            ->assertJsonPath(
+                'error_message',
+                'Der interne KI-Dienst ist nicht erreichbar. Bitte prüfen Sie den KI-Tunnel zum KI-Rechner.',
+            );
     }
 
     public function test_queued_status_reports_real_elapsed_time_and_worker_warning(): void
