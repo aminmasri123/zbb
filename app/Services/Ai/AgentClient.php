@@ -135,9 +135,14 @@ final class AgentClient
         $raw = $response->body();
         if (! $response->successful()) {
             $detail = $response->json('detail');
+            $encodedDetail = is_array($detail)
+                ? json_encode($detail, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                : null;
             $safeDetail = is_string($detail) && $detail !== ''
-                ? mb_substr($detail, 0, 500)
-                : 'keine Detailmeldung';
+                ? mb_substr($detail, 0, 1000)
+                : (is_string($encodedDetail) && $encodedDetail !== ''
+                    ? mb_substr($encodedDetail, 0, 1000)
+                    : 'keine Detailmeldung');
 
             throw new AgentUnavailableException(sprintf(
                 'Der KI-Agent antwortete mit HTTP %d (%s).',
