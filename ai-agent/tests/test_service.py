@@ -357,6 +357,6 @@ async def test_evidence_turn_uses_fast_report_model_and_bounded_json_output() ->
         "sections",
     }
     assert "tools" not in fake.payload
-    assert fake.payload["options"]["num_predict"] == 4800
+    assert fake.payload["options"]["num_predict"] == 2200
     assert fake.payload["options"]["num_ctx"] == 16384
-    assert "one section per requested form field" in fake.payload["messages"][0]["content"]
+    assert "only for form fields supported" in fake.payload["messages"][0]["content"]

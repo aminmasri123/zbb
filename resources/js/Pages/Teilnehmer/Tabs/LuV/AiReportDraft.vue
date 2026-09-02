@@ -404,7 +404,7 @@ const generate = async () => {
         const aiFields = fieldsForType(form.luv_type)
             .filter((field) => !['master_data', 'discussion'].includes(field.groupKey))
             .map((field) => `[${field.key}] ${field.label}`);
-        const structuredRequest = `${form.request}\n\nErstelle für jedes der folgenden Formularfelder genau einen eigenen Abschnitt. Die Abschnittsüberschrift muss exakt wie vorgegeben mit [Feldschlüssel] beginnen. Formuliere sachlich im Stil der BvB-Reha-Beispielformulare, als nachvollziehbare pädagogische Beobachtung. Keine Diagnose, keine Vermutung und keine Wiederholung. Fehlt ein Beleg, verwende den Status insufficient_data und den Text „Daten fehlen.“\n\nFormularfelder:\n${aiFields.join('\n')}`;
+        const structuredRequest = `${form.request}\n\nErstelle nur für Formularfelder mit mindestens einem konkreten Beleg einen eigenen Abschnitt; lasse unbelegte Felder vollständig weg, weil die Oberfläche sie automatisch als „Daten fehlen“ kennzeichnet. Die Abschnittsüberschrift muss exakt wie vorgegeben mit [Feldschlüssel] beginnen. Formuliere sachlich im Stil der BvB-Reha-Beispielformulare, als nachvollziehbare pädagogische Beobachtung. Keine Diagnose, keine Vermutung, keine Wiederholung und höchstens drei kurze Sätze je Feld.\n\nMögliche Formularfelder:\n${aiFields.join('\n')}`;
         const response = await axios.post(route('ai.reports.draft'), {
             participant_id: props.participantId,
             report_type: luvTypes.find((option) => option.value === form.luv_type)?.reportType || 'luv',

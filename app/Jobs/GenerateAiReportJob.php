@@ -93,6 +93,9 @@ class GenerateAiReportJob implements ShouldQueue
                 'error_message' => 'Nicht berechtigt, diesen Teilnehmer zu verarbeiten.',
             ]);
         } catch (AgentUnavailable $exception) {
+            $invalidResponse = str_contains($exception->getMessage(), 'HTTP 502')
+                || str_contains(mb_strtolower($exception->getMessage()), 'ungueltig')
+                || str_contains(mb_strtolower($exception->getMessage()), 'ungültig');
             Log::warning('AI report agent request failed', [
                 'run_uuid' => $this->runUuid,
                 'error' => $exception->getMessage(),
@@ -102,8 +105,10 @@ class GenerateAiReportJob implements ShouldQueue
                 'progress_percent' => 100,
                 'completed_at' => now(),
                 'duration_seconds' => $this->durationSeconds($run),
-                'error_code' => 'agent_unavailable',
-                'error_message' => 'Der KI-Dienst war nicht erreichbar oder lieferte eine ungültige Antwort.',
+                'error_code' => $invalidResponse ? 'agent_invalid_response' : 'agent_unavailable',
+                'error_message' => $invalidResponse
+                    ? 'Die KI-Antwort konnte nicht als LuV verarbeitet werden.'
+                    : 'Der KI-Dienst war nicht erreichbar.',
             ]);
         } catch (Throwable $exception) {
             Log::warning('AI report job failed unexpectedly', [

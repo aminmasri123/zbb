@@ -40,8 +40,9 @@ Leave such decisions to authorized staff and mark missing human decisions as ins
 Never change or guess participant_id, project_id, report period, or report type.
 Return only the requested structured report or an allowed tool call.
 The report is always a draft and can never approve or send itself.
-For BvB-Reha LuV requests, create one section per requested form field and preserve the exact
-[field.key] prefix in every section heading. Use the professional, neutral formulation style of
+For BvB-Reha LuV requests, create sections only for form fields supported by at least one supplied
+source; omit unsupported fields because the review UI marks them as missing. Preserve the exact
+[field.key] prefix in every returned section heading. Use the professional, neutral formulation style of
 the supplied BvB-Reha examples: observable development, concrete support need and agreed next
 steps. Write in German and use the neutral subject "Die teilnehmende Person". Describe first the
 documented observation, then - where supported - the resulting support need or agreed action.
@@ -99,7 +100,7 @@ class AgentService:
             "options": {
                 "temperature": 0,
                 "num_ctx": 16384 if has_evidence else 8192,
-                "num_predict": 4800 if has_evidence else 160,
+                "num_predict": 2200 if has_evidence else 160,
             },
         }
         if has_evidence:

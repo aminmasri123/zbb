@@ -140,6 +140,7 @@ final class AiReportController extends Controller
             $payload['error_code'] = (string) $runModel->error_code;
             $payload['error_message'] = match ((string) $runModel->error_code) {
                 'agent_unavailable' => 'Der interne KI-Dienst ist nicht erreichbar. Bitte prüfen Sie den KI-Tunnel zum KI-Rechner.',
+                'agent_invalid_response' => 'Die KI-Antwort war unvollständig oder formal ungültig. Bitte starten Sie den Entwurf erneut.',
                 'authorization_error' => 'Für diesen Teilnehmer oder das aktive Projekt fehlt die KI-Berechtigung.',
                 'missing_user' => 'Der KI-Auftrag besitzt keine gültige Benutzerzuordnung.',
                 'worker_failed' => 'Der Hintergrunddienst für die KI-Verarbeitung ist unerwartet beendet worden.',
