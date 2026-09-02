@@ -92,7 +92,11 @@ class GenerateAiReportJob implements ShouldQueue
                 'error_code' => 'authorization_error',
                 'error_message' => 'Nicht berechtigt, diesen Teilnehmer zu verarbeiten.',
             ]);
-        } catch (AgentUnavailable) {
+        } catch (AgentUnavailable $exception) {
+            Log::warning('AI report agent request failed', [
+                'run_uuid' => $this->runUuid,
+                'error' => $exception->getMessage(),
+            ]);
             $run->update([
                 'status' => 'failed',
                 'progress_percent' => 100,

@@ -133,8 +133,21 @@ final class AgentClient
         }
 
         $raw = $response->body();
-        if (! $response->successful() || strlen($raw) > $this->maxResponseBytes) {
-            throw new AgentUnavailableException('Der KI-Agent hat die Anfrage nicht erfolgreich verarbeitet.');
+        if (! $response->successful()) {
+            $detail = $response->json('detail');
+            $safeDetail = is_string($detail) && $detail !== ''
+                ? mb_substr($detail, 0, 500)
+                : 'keine Detailmeldung';
+
+            throw new AgentUnavailableException(sprintf(
+                'Der KI-Agent antwortete mit HTTP %d (%s).',
+                $response->status(),
+                $safeDetail,
+            ));
+        }
+
+        if (strlen($raw) > $this->maxResponseBytes) {
+            throw new AgentUnavailableException('Die Antwort des KI-Agenten war zu groß.');
         }
 
         try {
