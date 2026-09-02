@@ -8,6 +8,7 @@ _DESCRIPTIONS: dict[ToolName, str] = {
     ToolName.LUV_DATA: "Load authorized LuV facts for the immutable reporting period.",
     ToolName.ATTENDANCE: "Load an authorized attendance summary calculated by Laravel.",
     ToolName.DOCUMENTATION: "Load authorized documentation entries for the reporting period.",
+    ToolName.DEVELOPMENT: "Load authorized project-scoped internships, education outcomes, and consent facts.",
     ToolName.GOALS: "Load authorized goals and documented progress for the reporting period.",
     ToolName.PROJECT_RULES: "Load the approved project rules valid for the reporting period.",
     ToolName.TEMPLATE: "Load metadata for the approved report template valid for the period.",

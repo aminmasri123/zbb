@@ -182,6 +182,51 @@ class AiReportEndpointTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_completed_ai_run_can_be_adopted_once_as_a_versioned_luv_draft(): void
+    {
+        [$user, $project, $participant] = $this->context(true);
+        $run = AiReportRun::query()->create([
+            'run_uuid' => '123e4567-e89b-42d3-a456-426614174099',
+            'user_id' => $user->id,
+            'project_id' => $project->id,
+            'participant_id' => $participant->id,
+            'report_type' => 'interim',
+            'luv_type' => 'Verlauf',
+            'from_date' => '2026-01-01',
+            'until_date' => '2026-06-30',
+            'request' => 'Erstelle einen belegten Verlauf.',
+            'status' => 'completed',
+            'progress_percent' => 100,
+            'completed_at' => now(),
+            'report' => [
+                'report_type' => 'interim',
+                'title' => 'Verlauf-LuV Entwurf',
+                'sections' => [[
+                    'heading' => 'Individuelle Entwicklung',
+                    'claims' => [[
+                        'claim_id' => 'development-1',
+                        'text' => 'Die dokumentierte Entwicklung wurde zusammengefasst.',
+                        'status' => 'supported',
+                        'source_ids' => ['documentation-1'],
+                    ]],
+                ]],
+                'warnings' => ['Fachlich prüfen.'],
+            ],
+        ]);
+
+        $first = $this->actingAs($user)->postJson(route('ai.reports.adopt', $run->run_uuid))
+            ->assertCreated()
+            ->assertJsonPath('luv.typ', 'Verlauf')
+            ->assertJsonPath('luv.status', 'draft')
+            ->assertJsonPath('luv.payload.sections.0.claims.0.source_ids.0', 'documentation-1');
+
+        $second = $this->actingAs($user)->postJson(route('ai.reports.adopt', $run->run_uuid))
+            ->assertCreated();
+
+        $this->assertSame($first->json('luv.id'), $second->json('luv.id'));
+        $this->assertDatabaseCount('projekt_has_teilnehmer_luvs', 1);
+    }
+
     public function test_worker_sends_model_cast_dates_as_iso_dates(): void
     {
         [$user, $project, $participant] = $this->context(true);

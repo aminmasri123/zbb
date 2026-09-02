@@ -86,6 +86,22 @@ class Projekt extends Model
             ->where('is_active', true);
     }
 
+    public function activeLuvTemplateFor(string $type): ?ProjektLuvTemplate
+    {
+        $type = ProjektLuvTemplate::normalizeType($type);
+
+        return $this->luvTemplates()
+            ->where('is_active', true)
+            ->where('luv_type', $type)
+            ->latest('version')
+            ->first()
+            ?? $this->luvTemplates()
+                ->where('is_active', true)
+                ->whereNull('luv_type')
+                ->latest('version')
+                ->first();
+    }
+
     public const PARTICIPANT_OVERVIEW_COLUMN_DEFINITIONS = [
         'id' => [
             'label' => 'ID',

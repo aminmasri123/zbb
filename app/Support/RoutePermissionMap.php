@@ -18,6 +18,8 @@ class RoutePermissionMap
         'teilnehmer.praktikum.email.prepare' => 'teilnehmer.update',
         'ai.reports.draft' => 'ai.report.use',
         'ai.reports.status' => 'ai.report.use',
+        'ai.reports.adopt' => 'ai.report.use',
+        'projekthasteilnehmer.luv.workflow.update' => ['projekthasteilnehmer.luv.update', 'teilnehmer.update'],
         'program-feedback.index' => [],
         'program-feedback.store' => [],
         'program-feedback.update' => 'program-feedback.manage',

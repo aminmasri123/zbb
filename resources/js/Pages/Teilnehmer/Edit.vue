@@ -1169,7 +1169,7 @@
 
                 <!-- ================= LuV ================= -->
                 <div v-else-if="activeTab === 'LuV'">
-                    <AiReportDraft v-if="can('ai.report.use')" :participant-id="teilnehmer.id" />
+                    <AiReportDraft v-if="can('ai.report.use')" :participant-id="teilnehmer.id" @adopted="addLuvToActiveProject" />
                     <!-- Projekt hinzufügen -->
                     <button @click="showModalLuvCreate = true" class="bg-zbb text-white px-4  mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full" >
                         <span v-if="!loadingProjekt">➕ Luv erstellen</span>
@@ -1184,7 +1184,11 @@
                             @click="toggleLuv(luv.id)"
                             >
                             <div>
-                                <h3 class="font-semibold text-zbb">📄 {{ luv.typ }} </h3>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <h3 class="font-semibold text-zbb">📄 {{ luv.typ }}-LuV · Version {{ luv.version || 1 }}</h3>
+                                    <span class="rounded-full px-2 py-0.5 text-xs font-semibold" :class="luvStatusClass(luv.status)">{{ luvStatusLabel(luv.status) }}</span>
+                                    <span v-if="luv.ai_report_run_id" class="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-700">KI-Entwurf</span>
+                                </div>
 
                                 <h3 class="font-semibold text-zbb">Bericht vom {{ formatDate(luv.von) }} bis {{ formatDate(luv.bis) }}</h3>
                                 <p class="text-xs text-gray-500">Erstellt am: {{ formatDateTime(luv.updated_at) }}</p>
@@ -1192,6 +1196,7 @@
 
                             <div class="flex items-center space-x-3">
                                 <button
+                                v-if="luv.status !== 'approved'"
                                 @click.stop="showModalLuvBearbeiten = true"
                                 class="w-9 h-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition"
                                 title="Bearbeiten"
@@ -1199,7 +1204,8 @@
                                 ✏️
                                 </button>
                                 <button
-                                    @click="confirmDelete(luv, 'projekthasteilnehmer.luv')"
+                                    v-if="luv.status !== 'approved'"
+                                    @click.stop="confirmDelete(luv, 'projekthasteilnehmer.luv')"
                                 class="w-9 h-9 flex items-center justify-center bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition"
                                 title="Löschen"
                                 >
@@ -1223,6 +1229,20 @@
                                 v-if="expandedLuv === luv.id"
                                 class="mt-3 bg-white rounded-lg border border-gray-200 shadow-inner p-4 space-y-4"
                             >
+                                <template v-if="luv.payload?.sections?.length">
+                                    <div v-for="section in luv.payload.sections" :key="section.key || section.heading" class="border p-4 rounded bg-gray-50">
+                                        <h4 class="text-zbb font-semibold mb-1">{{ section.heading }}</h4>
+                                        <p class="text-gray-700 leading-relaxed text-sm whitespace-pre-line">{{ section.value || 'Keine belegten Angaben' }}</p>
+                                        <div v-if="section.claims?.some(claim => claim.status === 'insufficient_data')" class="mt-2 rounded bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                            Dieser Abschnitt enthält als unzureichend belegt markierte Angaben und muss fachlich geprüft werden.
+                                        </div>
+                                    </div>
+                                    <div v-if="luv.payload.warnings?.length" class="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                                        <div class="font-semibold">Prüfhinweise</div>
+                                        <ul class="mt-1 list-disc pl-5"><li v-for="warning in luv.payload.warnings" :key="warning">{{ warning }}</li></ul>
+                                    </div>
+                                </template>
+                                <template v-else>
                                 <div class="border p-4 rounded bg-blue-50">
                                 <h4 class="text-zbb font-semibold mb-1">🎯 Darstellung der individuellen Ausgangssituation</h4>
                                 <p class="text-gray-700 leading-relaxed text-sm leading-relaxed text-sm whitespace-pre-line">{{ luv.ausgangssituation || 'Keine Angaben' }}</p>
@@ -1236,6 +1256,19 @@
                                 <div class="border p-4 rounded bg-red-50">
                                 <h4 class="text-zbb font-semibold mb-1">🎓 Im Berichtszeitraum erworbene Qualifikationen</h4>
                                 <p class="text-gray-700 leading-relaxed text-sm">{{ luv.qualifikationen || 'Keine Angaben' }}</p>
+                                </div>
+                                </template>
+
+                                <div v-if="luv.status !== 'approved' && canAny(['projekthasteilnehmer.luv.update', 'teilnehmer.update'])" class="flex flex-wrap justify-end gap-2 border-t pt-4">
+                                    <button v-if="luv.status === 'draft'" type="button" class="rounded border border-blue-300 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50" @click="updateLuvWorkflow(luv, 'reviewed')">
+                                        Fachlich geprüft
+                                    </button>
+                                    <button type="button" class="rounded bg-zbb px-4 py-2 text-sm font-semibold text-white hover:bg-zbb/80" @click="updateLuvWorkflow(luv, 'approved')">
+                                        Besprechen & freigeben
+                                    </button>
+                                </div>
+                                <div v-else-if="luv.status === 'approved'" class="rounded bg-green-50 px-4 py-3 text-sm text-green-800">
+                                    Freigegeben am {{ formatDateTime(luv.approved_at) }} · Gespräch am {{ formatDate(luv.discussed_on) }}. Diese Version ist unveränderbar.
                                 </div>
                             </div>
                             </transition>
@@ -2088,6 +2121,7 @@
         :visible="showModalLuvCreate"
         :teilnehmer="props.teilnehmer"
         @close="showModalLuvCreate = false"
+        @added="addLuvToActiveProject"
     />
 
 
@@ -3658,6 +3692,64 @@ const showModalLuvCreate = ref(false);
 
 const toggleLuv = (id) => {
   expandedLuv.value = expandedLuv.value === id ? null : id;
+};
+
+const luvStatusLabel = (status) => ({
+  draft: 'Entwurf',
+  reviewed: 'Fachlich geprüft',
+  approved: 'Freigegeben',
+}[status] || 'Entwurf');
+
+const luvStatusClass = (status) => ({
+  draft: 'bg-amber-100 text-amber-800',
+  reviewed: 'bg-blue-100 text-blue-800',
+  approved: 'bg-green-100 text-green-800',
+}[status] || 'bg-gray-100 text-gray-700');
+
+const addLuvToActiveProject = (luv) => {
+  const currentProjectId = Number(featurePage.props.currentProjekt?.id || 0);
+  const project = teilnehmer.value.projekte?.find((entry) => Number(entry.id) === currentProjectId)
+    || teilnehmer.value.projekte?.[0];
+  if (!project?.pivot_model) return;
+  project.pivot_model.luv ||= [];
+  const index = project.pivot_model.luv.findIndex((entry) => Number(entry.id) === Number(luv.id));
+  if (index >= 0) project.pivot_model.luv[index] = luv;
+  else project.pivot_model.luv.push(luv);
+  expandedLuv.value = luv.id;
+};
+
+const updateLuvWorkflow = async (luv, status) => {
+  let payload = { status };
+  if (status === 'approved') {
+    const today = new Date().toISOString().slice(0, 10);
+    const result = await Swal.fire({
+      title: 'LuV besprechen und freigeben',
+      html: `<label class="block text-left text-sm font-semibold">Gesprächsdatum</label><input id="luv-discussed-on" type="date" value="${luv.discussed_on?.slice(0, 10) || today}" class="swal2-input !mx-0 !w-full"><label class="mt-4 flex items-start gap-2 text-left text-sm"><input id="luv-consent" type="checkbox" class="mt-1" ${luv.consent_confirmed ? 'checked' : ''}><span>Die dokumentierte Einwilligung der teilnehmenden Person liegt vor.</span></label>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Verbindlich freigeben',
+      cancelButtonText: 'Abbrechen',
+      preConfirm: () => {
+        const discussedOn = document.getElementById('luv-discussed-on')?.value;
+        const consentConfirmed = document.getElementById('luv-consent')?.checked;
+        if (!discussedOn || !consentConfirmed) {
+          Swal.showValidationMessage('Gesprächsdatum und dokumentierte Einwilligung sind erforderlich.');
+          return false;
+        }
+        return { discussed_on: discussedOn, consent_confirmed: true };
+      },
+    });
+    if (!result.isConfirmed) return;
+    payload = { ...payload, ...result.value };
+  }
+
+  try {
+    const response = await axios.put(route('projekthasteilnehmer.luv.workflow.update', luv.id), payload);
+    Object.assign(luv, response.data.luv);
+    Swal.fire({ icon: 'success', title: response.data.message, timer: 1800, showConfirmButton: false });
+  } catch (error) {
+    Swal.fire('LuV konnte nicht aktualisiert werden', error.response?.data?.message || 'Bitte Eingaben und Berechtigung prüfen.', 'error');
+  }
 };
 
 

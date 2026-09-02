@@ -20,8 +20,8 @@ use App\Models\ParticipantCvEntry;
 use App\Models\ParticipantCvVersion;
 use App\Models\ParticipantDataRequest;
 use App\Models\ParticipantJobRecommendation;
-use App\Models\ParticipantPortalInvitation;
 use App\Models\ParticipantPortalDocument;
+use App\Models\ParticipantPortalInvitation;
 use App\Models\ParticipantPortalMessage;
 use App\Models\ParticipantPortalProfile;
 use App\Models\ParticipationCompletionReport;
@@ -582,8 +582,7 @@ class TeilnehmerController extends Controller
                 fn ($gruppe) => $gruppe->where('projekt_id', $user->current_team_id)
             ),
             'standorte',
-            'gruppen',
-            'gruppen.bereich',
+            'gruppen' => fn ($query) => $query->where('gruppes.projekt_id', $user->current_team_id)->with('bereich'),
             'kontaktes.kontakttyp',
             'praktika' => fn ($query) => $query->whereHas(
                 'projektTeilnahme',
@@ -601,10 +600,9 @@ class TeilnehmerController extends Controller
             'fahrtabrechnungen.personal',
             'abschluesse',
             'sozialedaten',
-            'notizen.notizkategorie',
-            'notizen.notiztyp',
-            'notizen.notizprioritaet',
-            'notizen.user',
+            'notizen' => fn ($query) => $query
+                ->whereHas('projektTeilnahme', fn ($participation) => $participation->where('projekt_id', $user->current_team_id))
+                ->with(['notizkategorie', 'notiztyp', 'notizprioritaet', 'user']),
         ])->findOrFail($id);
 
         if (! $canViewAttendance) {

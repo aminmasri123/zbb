@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 final class AiReportRun extends Model
 {
@@ -13,6 +13,8 @@ final class AiReportRun extends Model
         'project_id',
         'participant_id',
         'report_type',
+        'luv_type',
+        'template_id',
         'from_date',
         'until_date',
         'request',
@@ -40,5 +42,9 @@ final class AiReportRun extends Model
     {
         return $this->belongsTo(User::class);
     }
-}
 
+    public function template(): BelongsTo
+    {
+        return $this->belongsTo(ProjektLuvTemplate::class, 'template_id');
+    }
+}

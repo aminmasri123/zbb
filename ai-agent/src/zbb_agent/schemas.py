@@ -23,6 +23,7 @@ class ToolName(StrEnum):
     LUV_DATA = "get_participant_luv_data"
     ATTENDANCE = "get_attendance_summary"
     DOCUMENTATION = "get_documentation_entries"
+    DEVELOPMENT = "get_participant_development_data"
     GOALS = "get_goals_and_progress"
     PROJECT_RULES = "get_project_report_rules"
     TEMPLATE = "get_report_template_metadata"

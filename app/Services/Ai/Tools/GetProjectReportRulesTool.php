@@ -32,12 +32,15 @@ final class GetProjectReportRulesTool implements AiTool
 
         $project = $this->authorizer->authorize($user, $context, self::PERMISSION);
 
+        $luvType = ProjektLuvTemplate::fromReportType($context->reportType);
+        $template = $project->activeLuvTemplateFor($luvType);
+
         return [
             'project_id' => (int) $project->id,
             'rules' => $project->ruleSettings(),
             'features' => $project->featureSettings(),
-            'luv_template' => $project->activeLuvTemplate?->aiConfiguration()
-                ?? ProjektLuvTemplate::defaultAiConfiguration(),
+            'luv_template' => $template?->aiConfiguration()
+                ?? ProjektLuvTemplate::defaultAiConfiguration($luvType),
         ];
     }
 }

@@ -16,6 +16,8 @@ final readonly class AiRunContext
         public ?int $participantId = null,
         public ?string $fromDate = null,
         public ?string $untilDate = null,
+        public string $reportType = 'luv',
+        public array $sourceSettings = [],
     ) {
         if ($this->userId < 1 || $this->projectId < 1) {
             throw new InvalidArgumentException('Benutzer- und Projekt-ID muessen positiv sein.');
@@ -37,6 +39,16 @@ final readonly class AiRunContext
 
         if ($this->participantId !== null && $this->participantId < 1) {
             throw new InvalidArgumentException('Die Teilnehmer-ID muss positiv sein.');
+        }
+
+        if (! in_array($this->reportType, ['luv', 'interim', 'final'], true)) {
+            throw new InvalidArgumentException('Der KI-Lauf enthält einen ungültigen Berichtstyp.');
+        }
+
+        foreach ($this->sourceSettings as $key => $enabled) {
+            if (! is_string($key) || ! is_bool($enabled)) {
+                throw new InvalidArgumentException('Die Quellenkonfiguration ist ungültig.');
+            }
         }
     }
 

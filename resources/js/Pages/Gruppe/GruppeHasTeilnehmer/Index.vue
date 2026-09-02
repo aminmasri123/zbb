@@ -1821,10 +1821,20 @@ const downloadBlob = (response, fallbackName) => {
   window.URL.revokeObjectURL(url)
 }
 
+const schliesseExportDialog = async () => {
+  showExportDialog.value = false
+
+  // PrimeVue entfernt Maske und Dialog erst nach der Ausblend-Animation.
+  // Erst danach darf SweetAlert geöffnet werden, sonst liegt es darunter.
+  await new Promise(resolve => window.setTimeout(resolve, 220))
+}
+
 const startBopLegacyExport = async (item) => {
   if (!item?.url) return
 
   if (item.requires_bo_day) {
+    await schliesseExportDialog()
+
     const result = await Swal.fire({
       title: 'BO-Tag auswählen',
       text: 'Für welchen Tag sollen die Tagesauswertungen aller Gruppenteilnehmer erstellt werden?',
@@ -2087,7 +2097,7 @@ const entferneTeilnehmer = async (teilnehmer) => {
 }
 
 const exportMitTag = async () => {
-    showExportDialog.value = false;
+    await schliesseExportDialog();
 
     const options = tage.value.map(t => ({
         value: t.date,

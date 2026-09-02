@@ -36,6 +36,21 @@
 
                 <div class="space-y-6 p-6">
                     <form v-if="!draft && !isWorking" class="space-y-5" @submit.prevent="generate">
+                        <div>
+                            <span class="mb-2 block text-sm font-semibold text-gray-700">Welche LuV soll erstellt werden?</span>
+                            <div class="grid grid-cols-3 gap-2 rounded-lg bg-gray-100 p-1">
+                                <button
+                                    v-for="option in luvTypes"
+                                    :key="option.value"
+                                    type="button"
+                                    class="rounded-md px-3 py-2 text-sm font-semibold transition"
+                                    :class="form.luv_type === option.value ? 'bg-white text-indigo-700 shadow' : 'text-gray-600 hover:text-gray-900'"
+                                    @click="selectLuvType(option.value)"
+                                >
+                                    {{ option.label }}
+                                </button>
+                            </div>
+                        </div>
                         <div class="grid gap-4 sm:grid-cols-2">
                             <label class="block">
                                 <span class="mb-1 block text-sm font-semibold text-gray-700">Berichtszeitraum von</span>
@@ -145,6 +160,9 @@
 
                         <div class="flex flex-wrap justify-end gap-3">
                             <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100" @click="reset">Neuen Entwurf erstellen</button>
+                            <button type="button" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-wait disabled:opacity-60" :disabled="adopting" @click="adoptDraft">
+                                {{ adopting ? 'Wird übernommen …' : 'Als LuV-Entwurf übernehmen' }}
+                            </button>
                             <button type="button" class="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800" @click="close">Schließen</button>
                         </div>
                     </div>
@@ -160,11 +178,18 @@
 
 <script setup>
 import axios from 'axios';
+import Swal from 'sweetalert2';
 import { computed, onBeforeUnmount, reactive, ref } from 'vue';
 
 const props = defineProps({
     participantId: { type: Number, required: true },
 });
+const emit = defineEmits(['adopted']);
+const luvTypes = [
+    { value: 'Start', label: 'Start-LuV', reportType: 'luv' },
+    { value: 'Verlauf', label: 'Verlauf-LuV', reportType: 'interim' },
+    { value: 'Abschluss', label: 'Abschluss-LuV', reportType: 'final' },
+];
 
 const today = new Date();
 const isoDate = (date) => date.toISOString().slice(0, 10);
@@ -172,6 +197,7 @@ const startOfYear = new Date(Date.UTC(today.getUTCFullYear(), 0, 1));
 
 const visible = ref(false);
 const loading = ref(false);
+const adopting = ref(false);
 const errorMessage = ref('');
 const draft = ref(null);
 const runId = ref('');
@@ -188,10 +214,16 @@ let pollTimer = null;
 let elapsedTimer = null;
 
 const form = reactive({
+    luv_type: 'Start',
     from_date: isoDate(startOfYear),
     until_date: isoDate(today),
-    request: 'Erstelle einen sachlichen LuV-Entwurf. Verwende ausschliesslich belegte Informationen und kennzeichne fehlende Daten deutlich.',
+    request: 'Erstelle einen sachlichen Start-LuV-Entwurf. Verwende ausschließlich belegte Informationen und kennzeichne fehlende Daten deutlich.',
 });
+
+const selectLuvType = (type) => {
+    form.luv_type = type;
+    form.request = `Erstelle einen sachlichen ${type}-LuV-Entwurf. Verwende ausschließlich belegte Informationen, keine Diagnosen, und kennzeichne fehlende Daten deutlich.`;
+};
 
 const isWorking = computed(() => runStatus.status === 'queued' || runStatus.status === 'running');
 const displayedElapsedSeconds = computed(() => Math.max(
@@ -315,6 +347,23 @@ const reset = () => {
 
 const reportTypeLabel = (type) => ({ luv: 'LuV-Bericht', interim: 'Zwischenbericht', final: 'Abschlussbericht' }[type] || type);
 
+const adoptDraft = async () => {
+    if (!runId.value || adopting.value) return;
+    adopting.value = true;
+    errorMessage.value = '';
+    try {
+        const response = await axios.post(route('ai.reports.adopt', { run: runId.value }));
+        emit('adopted', response.data.luv);
+        await Swal.fire({ icon: 'success', title: 'LuV-Entwurf übernommen', text: response.data.message, timer: 2500, showConfirmButton: false });
+        visible.value = false;
+        reset();
+    } catch (error) {
+        errorMessage.value = error.response?.data?.message || 'Der KI-Entwurf konnte nicht übernommen werden.';
+    } finally {
+        adopting.value = false;
+    }
+};
+
 const generate = async () => {
     loading.value = true;
     draft.value = null;
@@ -331,7 +380,8 @@ const generate = async () => {
     try {
         const response = await axios.post(route('ai.reports.draft'), {
             participant_id: props.participantId,
-            report_type: 'luv',
+            report_type: luvTypes.find((option) => option.value === form.luv_type)?.reportType || 'luv',
+            luv_type: form.luv_type,
             from_date: form.from_date,
             until_date: form.until_date,
             request: form.request,

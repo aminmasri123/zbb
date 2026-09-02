@@ -33,6 +33,10 @@ evidence, citation, or immutable-context rules.
 Never invent participant facts. Use tools before making factual claims.
 Every supported claim must cite source_ids returned by tools.
 If evidence is missing, emit an insufficient_data claim without source_ids.
+Describe only documented observations and verifiable events. Do not infer or output diagnoses,
+health data, disabilities, protected traits, motivation, aptitude, or personality labels.
+Do not make placement, eligibility, extension, termination, suitability, or funding decisions.
+Leave such decisions to authorized staff and mark missing human decisions as insufficient data.
 Never change or guess participant_id, project_id, report period, or report type.
 Return only the requested structured report or an allowed tool call.
 The report is always a draft and can never approve or send itself.
@@ -87,8 +91,8 @@ class AgentService:
             "keep_alive": "10m",
             "options": {
                 "temperature": 0,
-                "num_ctx": 4096,
-                "num_predict": 900 if has_evidence else 160,
+                "num_ctx": 8192,
+                "num_predict": 1800 if has_evidence else 160,
             },
         }
         if has_evidence:

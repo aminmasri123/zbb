@@ -2,18 +2,16 @@
 
 namespace App\Models;
 
-use App\Models\Personen;
-use App\Models\Notizvarianten;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
 class PersonenHasNotizen extends Model
 {
     use HasFactory;
 
-
     protected $fillable = [
         'person_id',
+        'projekt_person_id',
         'user_id',
         'notiztyp_id',
         'prioritaet_id',
@@ -22,15 +20,18 @@ class PersonenHasNotizen extends Model
         'notizinhalt',
     ];
 
-
-
-    public function notizkategorie(){
+    public function notizkategorie()
+    {
         return $this->hasOne(Notizvarianten::class, 'id', 'kategorie_id')->where('typ', 'kategorie');
     }
-    public function notiztyp(){
+
+    public function notiztyp()
+    {
         return $this->hasOne(Notizvarianten::class, 'id', 'notiztyp_id')->where('typ', 'typ');
     }
-    public function notizprioritaet(){
+
+    public function notizprioritaet()
+    {
         return $this->hasOne(Notizvarianten::class, 'id', 'prioritaet_id')->where('typ', 'prioritaet');
     }
 
@@ -38,5 +39,10 @@ class PersonenHasNotizen extends Model
     {
         return $this->belongsTo(Personen::class, 'user_id', 'id')
             ->select('id', 'vorname', 'nachname');
+    }
+
+    public function projektTeilnahme()
+    {
+        return $this->belongsTo(ProjektHasPersonen::class, 'projekt_person_id');
     }
 }

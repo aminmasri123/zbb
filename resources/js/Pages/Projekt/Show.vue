@@ -1141,24 +1141,53 @@ const addMitarbeiter = (person) => {
         });
 };
 
-const cloneLuvSections = (sections) => JSON.parse(JSON.stringify(
-    Array.isArray(sections) && sections.length ? sections : (props.projekt.luv_default_sections || [])
-));
+const deepClone = (value) => JSON.parse(JSON.stringify(value || {}));
+const luvTypes = props.projekt.luv_types || ['Start', 'Verlauf', 'Abschluss'];
 const luvTemplates = ref([...(props.projekt.luv_templates || [])]);
-const activeLuvTemplate = computed(() => luvTemplates.value.find((template) => template.is_active) || null);
+const selectedLuvType = ref(luvTypes[0]);
+const defaultLuvSections = (type) => props.projekt.luv_default_sections_by_type?.[type] || props.projekt.luv_default_sections || [];
+const activeLuvTemplate = computed(() => luvTemplates.value.find((template) => template.is_active && (template.luv_type || 'Start') === selectedLuvType.value) || null);
 const luvTemplateFile = ref(null);
 const luvTemplateSaving = ref(false);
 const luvTemplateActivating = ref(null);
 const luvTemplateForm = reactive({
-    name: activeLuvTemplate.value?.name || 'LuV ' + props.projekt.name,
+    luv_type: selectedLuvType.value,
+    name: `${selectedLuvType.value}-LuV ${props.projekt.name}`,
+    form_version: 'BA-BvB-2023',
     ai_instructions: activeLuvTemplate.value?.ai_instructions || '',
-    sections: cloneLuvSections(activeLuvTemplate.value?.sections),
+    sections: deepClone(defaultLuvSections(selectedLuvType.value)),
+    field_schema: deepClone(props.projekt.luv_default_field_schemas?.[selectedLuvType.value] || []),
+    source_settings: deepClone(props.projekt.luv_default_source_settings || {}),
+    schedule_settings: deepClone(props.projekt.luv_default_schedule_settings?.[selectedLuvType.value] || {}),
+});
+
+const loadLuvType = (type) => {
+    const template = luvTemplates.value.find((item) => item.is_active && (item.luv_type || 'Start') === type);
+    luvTemplateForm.luv_type = type;
+    luvTemplateForm.name = template?.name || `${type}-LuV ${props.projekt.name}`;
+    luvTemplateForm.form_version = template?.form_version || 'BA-BvB-2023';
+    luvTemplateForm.ai_instructions = template?.ai_instructions || '';
+    luvTemplateForm.sections = deepClone(template?.sections?.length ? template.sections : defaultLuvSections(type));
+    luvTemplateForm.field_schema = deepClone(template?.field_schema?.length ? template.field_schema : props.projekt.luv_default_field_schemas?.[type] || []);
+    luvTemplateForm.source_settings = deepClone({ ...(props.projekt.luv_default_source_settings || {}), ...(template?.source_settings || {}) });
+    luvTemplateForm.schedule_settings = deepClone({ ...(props.projekt.luv_default_schedule_settings?.[type] || {}), ...(template?.schedule_settings || {}) });
+    luvTemplateFile.value = null;
+};
+
+watch(selectedLuvType, (type) => {
+    if (luvTemplateForm.luv_type !== type) loadLuvType(type);
 });
 
 const editLuvTemplateVersion = (template) => {
+    selectedLuvType.value = template.luv_type || 'Start';
+    luvTemplateForm.luv_type = template.luv_type || 'Start';
     luvTemplateForm.name = template.name;
+    luvTemplateForm.form_version = template.form_version || 'BA-BvB-2023';
     luvTemplateForm.ai_instructions = template.ai_instructions || '';
-    luvTemplateForm.sections = cloneLuvSections(template.sections);
+    luvTemplateForm.sections = deepClone(template.sections);
+    luvTemplateForm.field_schema = deepClone(template.field_schema || props.projekt.luv_default_field_schemas?.[luvTemplateForm.luv_type] || []);
+    luvTemplateForm.source_settings = deepClone({ ...(props.projekt.luv_default_source_settings || {}), ...(template.source_settings || {}) });
+    luvTemplateForm.schedule_settings = deepClone({ ...(props.projekt.luv_default_schedule_settings?.[luvTemplateForm.luv_type] || {}), ...(template.schedule_settings || {}) });
 };
 
 const addLuvSection = () => {
@@ -1188,9 +1217,14 @@ const saveLuvTemplate = async () => {
     luvTemplateSaving.value = true;
     try {
         const data = new FormData();
+        data.append('luv_type', luvTemplateForm.luv_type);
         data.append('name', luvTemplateForm.name);
+        data.append('form_version', luvTemplateForm.form_version);
         data.append('ai_instructions', luvTemplateForm.ai_instructions || '');
         data.append('sections', JSON.stringify(luvTemplateForm.sections));
+        data.append('field_schema', JSON.stringify(luvTemplateForm.field_schema));
+        data.append('source_settings', JSON.stringify(luvTemplateForm.source_settings));
+        data.append('schedule_settings', JSON.stringify(luvTemplateForm.schedule_settings));
         if (luvTemplateFile.value) data.append('template', luvTemplateFile.value);
 
         const response = await axios.post(route('projekt.luv-templates.store', props.projekt.id), data);
@@ -1210,7 +1244,7 @@ const activateLuvTemplate = async (template) => {
     try {
         const response = await axios.put(route('projekt.luv-templates.activate', [props.projekt.id, template.id]));
         luvTemplates.value = response.data.templates;
-        editLuvTemplateVersion(luvTemplates.value.find((item) => item.is_active));
+        editLuvTemplateVersion(luvTemplates.value.find((item) => item.id === template.id));
         Swal.fire('Aktiviert', response.data.message, 'success');
     } catch (error) {
         Swal.fire('Fehler', error.response?.data?.message || 'Die Version konnte nicht aktiviert werden.', 'error');
@@ -1701,19 +1735,36 @@ const formatLuvTemplateDate = (value) => value
                                 Reihenfolge, Überschriften und Schreibregeln gelten nur für {{ projekt.name }}. Beim Speichern entsteht immer eine neue, sofort aktive Version; ältere Versionen bleiben wiederherstellbar.
                             </p>
                         </div>
-                        <span v-if="activeLuvTemplate" class="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">Aktiv: Version {{ activeLuvTemplate.version }}</span>
-                        <span v-else class="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">Globale Standardvorlage aktiv</span>
+                        <span v-if="activeLuvTemplate" class="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">{{ selectedLuvType }} aktiv: Version {{ activeLuvTemplate.version }}</span>
+                        <span v-else class="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">{{ selectedLuvType }}: Standardkonfiguration</span>
                     </div>
 
-                    <div class="grid gap-5 lg:grid-cols-2">
+                    <div class="mb-5 grid grid-cols-3 gap-2 rounded-lg bg-gray-100 p-1">
+                        <button
+                            v-for="type in luvTypes"
+                            :key="type"
+                            type="button"
+                            class="rounded-md px-3 py-2 text-sm font-semibold transition"
+                            :class="selectedLuvType === type ? 'bg-white text-zbb shadow' : 'text-gray-600 hover:text-gray-900'"
+                            @click="selectedLuvType = type"
+                        >
+                            {{ type }}-LuV
+                        </button>
+                    </div>
+
+                    <div class="grid gap-5 lg:grid-cols-3">
                         <label class="text-sm font-medium text-gray-700">
                             Name der neuen Version
                             <input v-model="luvTemplateForm.name" type="text" maxlength="120" class="mt-1 w-full rounded border-gray-300" />
                         </label>
                         <label class="text-sm font-medium text-gray-700">
-                            Word-Vorlage (DOCX, optional)
-                            <input type="file" accept=".docx" class="mt-1 block w-full rounded border border-gray-300 p-2 text-sm" @change="luvTemplateFile = $event.target.files?.[0] || null" />
-                            <span class="mt-1 block text-xs font-normal text-gray-500">Ohne neue Datei wird die Datei der aktiven Version weiterverwendet. Maximal 10 MB.</span>
+                            Fachliche Formularversion
+                            <input v-model="luvTemplateForm.form_version" type="text" maxlength="60" class="mt-1 w-full rounded border-gray-300" placeholder="z. B. BA-PRV-26.07" />
+                        </label>
+                        <label class="text-sm font-medium text-gray-700">
+                            Vorlage (DOCX oder PDF, optional)
+                            <input type="file" accept=".docx,.pdf" class="mt-1 block w-full rounded border border-gray-300 p-2 text-sm" @change="luvTemplateFile = $event.target.files?.[0] || null" />
+                            <span class="mt-1 block text-xs font-normal text-gray-500">Ohne neue Datei wird die Datei der aktiven {{ selectedLuvType }}-Version weiterverwendet. DOCX wird über Platzhalter befüllt; PDF dient als geschützte Formularreferenz, der Export wird als strukturiertes ZBB-PDF erzeugt. Maximal 15 MB.</span>
                         </label>
                     </div>
 
@@ -1722,6 +1773,40 @@ const formatLuvTemplateDate = (value) => value
                         <textarea v-model="luvTemplateForm.ai_instructions" rows="4" maxlength="4000" class="mt-1 w-full rounded border-gray-300" placeholder="Beispiel: Formell, wertschätzend und in kurzen Sätzen schreiben. Keine Diagnosen formulieren." />
                         <span class="mt-1 block text-xs font-normal text-gray-500">Diese Regeln ändern keine Sicherheits-, Quellen- oder Berechtigungsprüfung.</span>
                     </label>
+
+                    <div class="mt-5 grid gap-5 lg:grid-cols-2">
+                        <div class="rounded-lg border border-gray-200 p-4">
+                            <h3 class="font-semibold text-gray-800">Freigegebene KI-Datenquellen</h3>
+                            <p class="mt-1 text-xs text-gray-500">Es werden ausschließlich Daten der aktuellen Projektteilnahme verwendet.</p>
+                            <div class="mt-3 grid gap-2 sm:grid-cols-2">
+                                <label v-for="(enabled, key) in luvTemplateForm.source_settings" :key="key" class="inline-flex items-center gap-2 text-sm text-gray-700">
+                                    <input v-model="luvTemplateForm.source_settings[key]" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
+                                    {{ ({ identity: 'Stammdaten', attendance: 'Anwesenheit', documentation: 'Dokumentation', previous_luvs: 'Frühere LuV', internships: 'Praktika', education: 'Abschlüsse/Verlauf', consents: 'Einwilligungen' })[key] || key }}
+                                </label>
+                            </div>
+                        </div>
+                        <div class="rounded-lg border border-gray-200 p-4">
+                            <h3 class="font-semibold text-gray-800">Fälligkeit und Anlass</h3>
+                            <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                                <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+                                    <input v-model="luvTemplateForm.schedule_settings.enabled" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
+                                    Fristenregel aktiv
+                                </label>
+                                <label class="text-sm text-gray-700">
+                                    Versatz in Tagen
+                                    <input v-model.number="luvTemplateForm.schedule_settings.offset_days" type="number" min="-365" max="365" class="mt-1 w-full rounded border-gray-300" />
+                                </label>
+                                <label class="text-sm text-gray-700 sm:col-span-2">
+                                    Auslöser
+                                    <select v-model="luvTemplateForm.schedule_settings.trigger" class="mt-1 w-full rounded border-gray-300">
+                                        <option value="competency_analysis_end">Ende Kompetenzanalyse</option>
+                                        <option value="manual_or_due_date">Manuell / projektbezogener Termin</option>
+                                        <option value="participation_end">Teilnahmeende</option>
+                                    </select>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
 
                     <div class="mt-6 flex items-center justify-between gap-3">
                         <div>
@@ -1772,14 +1857,15 @@ const formatLuvTemplateDate = (value) => value
                     <div v-if="luvTemplates.length" class="mt-4 overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200 text-sm">
                             <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500">
-                                <tr><th class="px-3 py-2">Version</th><th class="px-3 py-2">Name</th><th class="px-3 py-2">Word-Datei</th><th class="px-3 py-2">Erstellt</th><th class="px-3 py-2 text-right">Aktion</th></tr>
+                                <tr><th class="px-3 py-2">Typ</th><th class="px-3 py-2">Version</th><th class="px-3 py-2">Name</th><th class="px-3 py-2">Vorlage</th><th class="px-3 py-2">Erstellt</th><th class="px-3 py-2 text-right">Aktion</th></tr>
                             </thead>
                             <tbody class="divide-y divide-gray-100">
                                 <tr v-for="template in luvTemplates" :key="template.id">
+                                    <td class="px-3 py-3 font-semibold">{{ template.luv_type || 'Start' }}</td>
                                     <td class="px-3 py-3"><span class="font-semibold">v{{ template.version }}</span><span v-if="template.is_active" class="ml-2 rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">aktiv</span></td>
-                                    <td class="px-3 py-3">{{ template.name }}</td>
+                                    <td class="px-3 py-3">{{ template.name }}<div class="text-xs text-gray-400">{{ template.form_version }}</div></td>
                                     <td class="px-3 py-3">
-                                        <a v-if="template.has_file" :href="route('projekt.luv-templates.download', [projekt.id, template.id])" class="text-zbb hover:underline">{{ template.original_filename || 'DOCX herunterladen' }}</a>
+                                        <a v-if="template.has_file" :href="route('projekt.luv-templates.download', [projekt.id, template.id])" class="text-zbb hover:underline">{{ template.original_filename || 'Vorlage herunterladen' }}</a>
                                         <span v-else class="text-gray-400">globale Vorlage</span>
                                     </td>
                                     <td class="px-3 py-3 text-gray-500">{{ formatLuvTemplateDate(template.created_at) }}</td>

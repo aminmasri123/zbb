@@ -137,13 +137,25 @@ class BopGruppeExportController extends Controller
         $pdf->SetAutoPageBreak(false);
 
         foreach ($teilnehmer as $item) {
+            $lastPageSize = null;
+
             foreach ($tage as $tag) {
                 $pdf->setSourceFile($template);
                 $page = $pdf->importPage($tag);
                 $size = $pdf->getTemplateSize($page);
+                $lastPageSize = $size;
                 $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
                 $pdf->useTemplate($page);
+                $this->writeTagesauswertungPartnerLogos($pdf);
                 $this->writeTagesauswertungHeader($pdf, $item, $termine[$tag] ?? '', str_contains(mb_strtolower((string) $gruppe->bereich?->name), 'holz'));
+            }
+
+            // Jeder Teilnehmer beginnt beim Duplexdruck auf einer neuen Vorderseite.
+            if (count($tage) % 2 === 1 && $lastPageSize !== null) {
+                $pdf->AddPage(
+                    $lastPageSize['orientation'],
+                    [$lastPageSize['width'], $lastPageSize['height']]
+                );
             }
         }
 
@@ -711,27 +723,44 @@ class BopGruppeExportController extends Controller
     {
         $pdf->SetTextColor(20, 31, 43);
         if ($combinedName) {
-            $this->writePdfValue($pdf, 48, 27.3, trim($item['vorname'].' '.$item['nachname']), 48);
+            $this->writePdfValue($pdf, 48, 27.3, trim($item['vorname'].' '.$item['nachname']), 91);
         } else {
-            $this->writePdfValue($pdf, 48, 27.3, $item['vorname'], 28);
-            $this->writePdfValue($pdf, 108, 27.3, $item['nachname'], 20);
+            $this->writePdfValue($pdf, 48, 27.3, $item['vorname'], 34);
+            $this->writePdfValue($pdf, 108, 27.3, $item['nachname'], 34);
         }
-        $this->writePdfValue($pdf, 151, 27.3, $datum, 28);
-        $this->writePdfValue($pdf, 48, 39.1, $item['schule'], 28);
-        $this->writePdfValue($pdf, 105, 39.1, $item['klasse'], 22);
+        $this->writePdfValue($pdf, 151, 27.3, $datum, 45);
+        $this->writePdfValue($pdf, 48, 39.1, $item['schule'], 30);
+        $this->writePdfValue($pdf, 105, 39.1, $item['klasse'], 37);
+    }
+
+    private function writeTagesauswertungPartnerLogos(Fpdi $pdf): void
+    {
+        $ministryLogo = public_path('img/einteilung-export/partner-bundesministerium.png');
+        $bibbLogo = public_path('img/einteilung-export/partner-bibb.png');
+
+        if (! is_file($ministryLogo) || ! is_file($bibbLogo)) {
+            return;
+        }
+
+        // Die Vorlagen enthalten noch die alten BMBF/BIBB-Grafiken. Der weiße
+        // Hintergrund entfernt diese gezielt, ohne das Berufsfeldmotiv anzutasten.
+        $pdf->SetFillColor(255, 255, 255);
+        $pdf->Rect(154, 240, 56, 57, 'F');
+        $pdf->Image($ministryLogo, 156, 241, 52, 32, 'PNG');
+        $pdf->Image($bibbLogo, 160, 277, 46, 0, 'PNG');
     }
 
     private function writePdfValue(Fpdi $pdf, float $x, float $y, string $value, float $width): void
     {
         $encoded = iconv('UTF-8', 'windows-1252//TRANSLIT//IGNORE', $value) ?: '';
-        $fontSize = 7.0;
+        $fontSize = 9.0;
         $pdf->SetFont('Helvetica', 'B', $fontSize);
-        while ($pdf->GetStringWidth($encoded) > $width && $fontSize > 5.0) {
-            $fontSize -= 0.5;
+        while ($pdf->GetStringWidth($encoded) > $width && $fontSize > 6.5) {
+            $fontSize -= 0.25;
             $pdf->SetFont('Helvetica', 'B', $fontSize);
         }
         $pdf->SetXY($x, $y);
-        $pdf->Cell($width, 4, $encoded, 0, 0, 'L', false);
+        $pdf->Cell($width, 4.5, $encoded, 0, 0, 'L', false);
     }
 
     private function weekdayShort(Carbon $date): string

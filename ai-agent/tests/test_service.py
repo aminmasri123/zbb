@@ -352,4 +352,4 @@ async def test_evidence_turn_uses_fast_report_model_and_bounded_json_output() ->
     assert fake.payload["model"] == "qwen3:1.7b"
     assert fake.payload["format"] == "json"
     assert "tools" not in fake.payload
-    assert fake.payload["options"]["num_predict"] == 900
+    assert fake.payload["options"]["num_predict"] == 1800

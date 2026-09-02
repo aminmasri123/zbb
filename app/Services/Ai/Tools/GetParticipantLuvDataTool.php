@@ -16,7 +16,7 @@ final class GetParticipantLuvDataTool implements AiTool
     public function execute(User $user, AiRunContext $context, array $arguments): array
     {
         $this->assertNoArguments($arguments); $participation=$this->participation($user,$context);
-        $entries=$participation->luv()->whereDate('bis','>=',$context->fromDate)->whereDate('von','<=',$context->untilDate)->orderBy('von')->get()->map(fn($luv)=>[
+        $entries=$participation->luv()->where('status', 'approved')->whereDate('von','<=',$context->untilDate)->orderByDesc('bis')->limit(20)->get()->sortBy('von')->values()->map(fn($luv)=>[
             'source_id'=>'luv-'.$luv->id,'type'=>$luv->typ,'from'=>$luv->von?->toDateString(),'until'=>$luv->bis?->toDateString(),'initial_situation'=>$luv->ausgangssituation,'goal_agreement'=>$luv->zielvereinbarung,'qualifications'=>$luv->qualifikationen,
         ])->all();
         return ['source_id'=>'luv-summary','period'=>['from'=>$context->fromDate,'until'=>$context->untilDate],'entries'=>$entries];

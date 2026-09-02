@@ -2,35 +2,37 @@
 
 namespace App\Http\Controllers;
 
-use Exception;
-use Inertia\Inertia;
+use App\Models\Abteilung;
+use App\Models\Anwesenheitsstatuten;
 use App\Models\Bereich;
-use App\Models\DokumentKategorie;
+use App\Models\BopRun;
 use App\Models\Dokumente;
+use App\Models\DokumentKategorie;
+use App\Models\Kostenstelle;
+use App\Models\Personen;
+use App\Models\PersonenIstSchueler;
 use App\Models\Projekt;
 use App\Models\ProjektLuvTemplate;
-use App\Models\BopRun;
-use App\Models\PersonenIstSchueler;
-use App\Models\Personen;
 use App\Models\Standort;
-use App\Models\Abteilung;
-use App\Models\Kostenstelle;
-use App\Models\Anwesenheitsstatuten;
 use App\Notifications\ConfiguredEventNotification;
 use App\Services\NotificationRecipientService;
 use App\Services\PotenzialanalyseProfileService;
+use Exception;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
 
 class ProjektController extends Controller
 {
     /**
      * Display a listing of the resource.
      *
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function index(Request $request)
     {
@@ -46,11 +48,11 @@ class ProjektController extends Controller
 
         // Hole die Projekte mit Suchfilter und lade die notwendigen Beziehungen
         $projekte = Projekt::query()
-        ->when($search, function ($query) use ($search) {
-            $query->where('projekts.name', 'like', "%{$search}%"); // Beachte: 'projekts.name' ist hier qualifiziert
-        })
+            ->when($search, function ($query) use ($search) {
+                $query->where('projekts.name', 'like', "%{$search}%"); // Beachte: 'projekts.name' ist hier qualifiziert
+            })
             ->with('abteilung')
-            //->with('projektzeitraume')
+            // ->with('projektzeitraume')
             ->with('zeitraume')
             ->with('bereiche')
             ->with('kostenstellen')
@@ -60,7 +62,7 @@ class ProjektController extends Controller
             ->paginate(100) // Paginierung
             ->withQueryString();
 
-            // Standardmäßige Rückgabe für die Inertia-Ansicht
+        // Standardmäßige Rückgabe für die Inertia-Ansicht
 
         return Inertia::render('Projekt/Index', [
             'projekte' => $projekte,
@@ -76,15 +78,16 @@ class ProjektController extends Controller
                 ->get(['id', 'name', 'beschreibung']),
         ]);
     }
+
     public function indexAjaxFresh(Request $request)
     {
         $search = $request->input('search'); // Benutze input(), um den Suchparameter abzurufen
         $abteilungen = Abteilung::select('id', 'name')->get();
 
         $projekte = Projekt::query()
-        ->when($search, function ($query) use ($search) {
-            $query->where('projekts.name', 'like', "%{$search}%"); // Beachte: 'projekts.name' ist hier qualifiziert
-        })
+            ->when($search, function ($query) use ($search) {
+                $query->where('projekts.name', 'like', "%{$search}%"); // Beachte: 'projekts.name' ist hier qualifiziert
+            })
             ->with('abteilung')
             ->with('zeitraume')
             ->with('bereiche')
@@ -99,32 +102,32 @@ class ProjektController extends Controller
                 'projekte' => $projekte,
                 'abteilungen' => $abteilungen,
             ]);
-        };
+        }
     }
 
     /**
      * Show the form for creating a new resource.
      *
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function create()
     {
         //
     }
 
-   public function store(Request $request)
+    public function store(Request $request)
     {
 
         // Validierung
         $validatedData = $request->validate([
-            'name'         => 'required|max:50',
+            'name' => 'required|max:50',
             'kostenstelle' => 'nullable|max:50',
-            'abteilung'    => 'required|exists:abteilungs,id',
+            'abteilung' => 'required|exists:abteilungs,id',
             'antragsdatum' => 'required|date',
-            'starttermin'  => 'required|date',
+            'starttermin' => 'required|date',
             'anfangsdatum' => 'required|date',
-            'endtermin'    => 'required|date',
-            'enddatum'     => 'required|date',
+            'endtermin' => 'required|date',
+            'enddatum' => 'required|date',
             'klassenbuch_aktiv' => 'sometimes|boolean',
             'potenzialanalyse_aktiv' => 'sometimes|boolean',
             'potenzialanalyse_tage' => 'nullable|integer|min:1|max:60',
@@ -132,8 +135,8 @@ class ProjektController extends Controller
             'kostenstellen.*.kostenstelle_id' => 'required_with:kostenstellen|integer|exists:kostenstelles,id',
             'kostenstellen.*.gueltig_von' => 'required_with:kostenstellen|date',
             'kostenstellen.*.gueltig_bis' => 'required_with:kostenstellen|date',
-            'bereiche'      => 'nullable|array',
-            'bereiche.*'    => 'integer|exists:bereiches,id',
+            'bereiche' => 'nullable|array',
+            'bereiche.*' => 'integer|exists:bereiches,id',
         ]);
 
         try {
@@ -154,25 +157,25 @@ class ProjektController extends Controller
             $potenzialanalyseConfig = $this->resolvePotenzialanalyseConfig($validatedData);
 
             $projekt = DB::transaction(function () use ($validatedData, $bereichSyncData, $kostenstelleSyncData, $potenzialanalyseConfig) {
-            // 1️⃣ Projekt erstellen
-            $projekt = Projekt::create([
-                'name'         => $validatedData['name'],
-                'abteilung_id' => $validatedData['abteilung'],
-                'klassenbuch_aktiv' => (bool) ($validatedData['klassenbuch_aktiv'] ?? false),
-                'potenzialanalyse_aktiv' => $potenzialanalyseConfig['potenzialanalyse_aktiv'],
-                'potenzialanalyse_tage' => $potenzialanalyseConfig['potenzialanalyse_tage'],
-            ]);
+                // 1️⃣ Projekt erstellen
+                $projekt = Projekt::create([
+                    'name' => $validatedData['name'],
+                    'abteilung_id' => $validatedData['abteilung'],
+                    'klassenbuch_aktiv' => (bool) ($validatedData['klassenbuch_aktiv'] ?? false),
+                    'potenzialanalyse_aktiv' => $potenzialanalyseConfig['potenzialanalyse_aktiv'],
+                    'potenzialanalyse_tage' => $potenzialanalyseConfig['potenzialanalyse_tage'],
+                ]);
 
-            // 2️⃣ Zeitraum anlegen
-            $projekt->zeitraume()->create([
-                'antragsdatum' => $validatedData['antragsdatum'],
-                'starttermin'  => $validatedData['starttermin'],
-                'anfangsdatum' => $validatedData['anfangsdatum'],
-                'endtermin'    => $validatedData['endtermin'],
-                'enddatum'     => $validatedData['enddatum'],
-                'model_type'   => Projekt::class,
-                'model_id'     => $projekt->id,
-            ]);
+                // 2️⃣ Zeitraum anlegen
+                $projekt->zeitraume()->create([
+                    'antragsdatum' => $validatedData['antragsdatum'],
+                    'starttermin' => $validatedData['starttermin'],
+                    'anfangsdatum' => $validatedData['anfangsdatum'],
+                    'endtermin' => $validatedData['endtermin'],
+                    'enddatum' => $validatedData['enddatum'],
+                    'model_type' => Projekt::class,
+                    'model_id' => $projekt->id,
+                ]);
 
                 $projekt->bereiche()->sync($bereichSyncData);
                 $projekt->kostenstellen()->sync($kostenstelleSyncData);
@@ -188,7 +191,7 @@ class ProjektController extends Controller
                 ]),
                 new ConfiguredEventNotification([
                     'event_key' => 'projekt.created',
-                    'message' => 'Neues Projekt "' . $projekt->name . '" wurde erstellt.',
+                    'message' => 'Neues Projekt "'.$projekt->name.'" wurde erstellt.',
                     'link' => route('projekt.show', $projekt->id),
                     'id' => $projekt->id,
                     'typ' => 'Projekt',
@@ -198,7 +201,7 @@ class ProjektController extends Controller
             // 3️⃣ Projekt mit Relationen zurückgeben
             return response()->json([
                 'message' => 'Projekt erfolgreich erstellt.',
-                'projekt' => $projekt->load(['abteilung', 'zeitraume', 'bereiche', 'kostenstellen'])
+                'projekt' => $projekt->load(['abteilung', 'zeitraume', 'bereiche', 'kostenstellen']),
             ], 201);
 
         } catch (ValidationException $e) {
@@ -206,18 +209,17 @@ class ProjektController extends Controller
         } catch (Exception $e) {
 
             return response()->json([
-                'error'   => 'Beim Erstellen des Projekts ist ein Fehler aufgetreten.',
-                'details' => $e->getMessage()
+                'error' => 'Beim Erstellen des Projekts ist ein Fehler aufgetreten.',
+                'details' => $e->getMessage(),
             ], 500);
         }
     }
-
 
     /**
      * Display the specified resource.
      *
      * @param  int  $id
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function show($id)
     {
@@ -303,15 +305,28 @@ class ProjektController extends Controller
                 'luv_templates' => $projekt->luvTemplates->map(fn (ProjektLuvTemplate $template) => [
                     'id' => $template->id,
                     'version' => $template->version,
+                    'luv_type' => $template->luv_type,
                     'name' => $template->name,
+                    'form_version' => $template->form_version,
                     'original_filename' => $template->original_filename,
+                    'template_format' => $template->template_format,
                     'has_file' => filled($template->file_path),
                     'sections' => $template->sections,
+                    'field_schema' => $template->field_schema,
+                    'source_settings' => $template->source_settings,
+                    'schedule_settings' => $template->schedule_settings,
                     'ai_instructions' => $template->ai_instructions,
                     'is_active' => $template->is_active,
                     'created_at' => $template->created_at?->toIso8601String(),
                 ])->values()->all(),
                 'luv_default_sections' => ProjektLuvTemplate::DEFAULT_SECTIONS,
+                'luv_default_sections_by_type' => ProjektLuvTemplate::DEFAULT_SECTIONS_BY_TYPE,
+                'luv_default_field_schemas' => collect(ProjektLuvTemplate::TYPES)
+                    ->mapWithKeys(fn (string $type) => [$type => ProjektLuvTemplate::defaultFieldSchemaFor($type)])
+                    ->all(),
+                'luv_default_source_settings' => ProjektLuvTemplate::DEFAULT_SOURCE_SETTINGS,
+                'luv_default_schedule_settings' => ProjektLuvTemplate::DEFAULT_SCHEDULE_SETTINGS,
+                'luv_types' => ProjektLuvTemplate::TYPES,
                 'luv_supported_placeholders' => ProjektLuvTemplate::SUPPORTED_PLACEHOLDERS,
             ]),
             'fehlendeMitarbeiter' => $fehlendeMitarbeiter,
@@ -349,7 +364,7 @@ class ProjektController extends Controller
      * Show the form for editing the specified resource.
      *
      * @param  int  $id
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function edit($id)
     {
@@ -359,9 +374,8 @@ class ProjektController extends Controller
     /**
      * Update the specified resource in storage.
      *
-     * @param  \Illuminate\Http\Request  $request
      * @param  int  $id
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function update(Request $request, $id)
     {
@@ -408,51 +422,51 @@ class ProjektController extends Controller
                 : null;
 
             $projekt = DB::transaction(function () use ($id, $request, $validatedData, $bereichSyncData, $kostenstelleSyncData, $potenzialanalyseConfig) {
-            // Projekt finden
-            $projekt = Projekt::findOrFail($id);
+                // Projekt finden
+                $projekt = Projekt::findOrFail($id);
 
-            // Basisdaten updaten
-            $payload = [
-                'name' => $validatedData['name'],
-                'abteilung_id' => $validatedData['abteilung'],
-            ];
+                // Basisdaten updaten
+                $payload = [
+                    'name' => $validatedData['name'],
+                    'abteilung_id' => $validatedData['abteilung'],
+                ];
 
-            if ($request->has('klassenbuch_aktiv')) {
-                $payload['klassenbuch_aktiv'] = (bool) $validatedData['klassenbuch_aktiv'];
-            }
-
-            if ($potenzialanalyseConfig !== null) {
-                $payload['potenzialanalyse_aktiv'] = $potenzialanalyseConfig['potenzialanalyse_aktiv'];
-                $payload['potenzialanalyse_tage'] = $potenzialanalyseConfig['potenzialanalyse_tage'];
-            }
-
-            $projekt->update($payload);
-
-            if ($request->has('zeitraume')) {
-                $this->syncProjektZeitraume($projekt, $validatedData['zeitraume']);
-            } else {
-                // Rueckwaertskompatibel fuer alte Formulare: nur den ersten Zeitraum aktualisieren.
-                $zeitraum = $projekt->zeitraume()->first();
-                if ($zeitraum) {
-                    $zeitraum->update([
-                        'antragsdatum' => $validatedData['antragsdatum'],
-                        'starttermin' => $validatedData['starttermin'],
-                        'anfangsdatum' => $validatedData['anfangsdatum'],
-                        'endtermin' => $validatedData['endtermin'],
-                        'enddatum' => $validatedData['enddatum'],
-                    ]);
-                } else {
-                    $projekt->zeitraume()->create([
-                        'antragsdatum' => $validatedData['antragsdatum'],
-                        'starttermin' => $validatedData['starttermin'],
-                        'anfangsdatum' => $validatedData['anfangsdatum'],
-                        'endtermin' => $validatedData['endtermin'],
-                        'enddatum' => $validatedData['enddatum'],
-                        'model_type' => Projekt::class,
-                        'model_id' => $projekt->id,
-                    ]);
+                if ($request->has('klassenbuch_aktiv')) {
+                    $payload['klassenbuch_aktiv'] = (bool) $validatedData['klassenbuch_aktiv'];
                 }
-            }
+
+                if ($potenzialanalyseConfig !== null) {
+                    $payload['potenzialanalyse_aktiv'] = $potenzialanalyseConfig['potenzialanalyse_aktiv'];
+                    $payload['potenzialanalyse_tage'] = $potenzialanalyseConfig['potenzialanalyse_tage'];
+                }
+
+                $projekt->update($payload);
+
+                if ($request->has('zeitraume')) {
+                    $this->syncProjektZeitraume($projekt, $validatedData['zeitraume']);
+                } else {
+                    // Rueckwaertskompatibel fuer alte Formulare: nur den ersten Zeitraum aktualisieren.
+                    $zeitraum = $projekt->zeitraume()->first();
+                    if ($zeitraum) {
+                        $zeitraum->update([
+                            'antragsdatum' => $validatedData['antragsdatum'],
+                            'starttermin' => $validatedData['starttermin'],
+                            'anfangsdatum' => $validatedData['anfangsdatum'],
+                            'endtermin' => $validatedData['endtermin'],
+                            'enddatum' => $validatedData['enddatum'],
+                        ]);
+                    } else {
+                        $projekt->zeitraume()->create([
+                            'antragsdatum' => $validatedData['antragsdatum'],
+                            'starttermin' => $validatedData['starttermin'],
+                            'anfangsdatum' => $validatedData['anfangsdatum'],
+                            'endtermin' => $validatedData['endtermin'],
+                            'enddatum' => $validatedData['enddatum'],
+                            'model_type' => Projekt::class,
+                            'model_id' => $projekt->id,
+                        ]);
+                    }
+                }
 
                 if ($request->has('bereiche')) {
                     $projekt->bereiche()->sync($bereichSyncData);
@@ -467,14 +481,14 @@ class ProjektController extends Controller
 
             return response()->json([
                 'message' => 'Projekt erfolgreich aktualisiert.',
-                'projekt' => $projekt->load(['zeitraume', 'abteilung', 'bereiche', 'kostenstellen']) // Relationen nachladen
+                'projekt' => $projekt->load(['zeitraume', 'abteilung', 'bereiche', 'kostenstellen']), // Relationen nachladen
             ], 200);
 
         } catch (ValidationException $e) {
             throw $e;
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return response()->json([
-                'error' => 'Update fehlgeschlagen: ' . $e->getMessage()
+                'error' => 'Update fehlgeschlagen: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -482,7 +496,7 @@ class ProjektController extends Controller
     public function updateDokumente(Request $request, Projekt $projekt)
     {
         $user = auth()->user();
-        if (!$user?->can('projekt.update') && !$user?->can('projekt.store') && !$user?->can('projekt.index')) {
+        if (! $user?->can('projekt.update') && ! $user?->can('projekt.store') && ! $user?->can('projekt.index')) {
             abort(403);
         }
 
@@ -518,7 +532,7 @@ class ProjektController extends Controller
     private function resolveKostenstelleSyncData(array $validatedData): array
     {
         $kostenstellen = collect($validatedData['kostenstellen'] ?? [])
-            ->filter(fn ($entry) => is_array($entry) && !empty($entry['kostenstelle_id']))
+            ->filter(fn ($entry) => is_array($entry) && ! empty($entry['kostenstelle_id']))
             ->values();
 
         if ($kostenstellen->isNotEmpty()) {
@@ -592,14 +606,14 @@ class ProjektController extends Controller
         ];
 
         foreach (Projekt::FEATURE_DEPENDENCIES as $feature => $dependencies) {
-            if (!$validated['features'][$feature]) {
+            if (! $validated['features'][$feature]) {
                 continue;
             }
 
             foreach ($dependencies as $dependency) {
-                if (!$validated['features'][$dependency]) {
+                if (! $validated['features'][$dependency]) {
                     throw ValidationException::withMessages([
-                        "features.{$feature}" => 'Diese Funktion benötigt „' . ($featureLabels[$dependency] ?? $dependency) . '“.',
+                        "features.{$feature}" => 'Diese Funktion benötigt „'.($featureLabels[$dependency] ?? $dependency).'“.',
                     ]);
                 }
             }
@@ -647,7 +661,7 @@ class ProjektController extends Controller
         $partsEnabled = (bool) ($validated['rules']['participant_parts_enabled']
             ?? $projekt->rule('participant_parts_enabled', false));
 
-        if (!$partsEnabled && $projekt->rule('participant_parts_enabled', false)) {
+        if (! $partsEnabled && $projekt->rule('participant_parts_enabled', false)) {
             $partnerIds = $projekt->partners()->pluck('partners.id');
             $hasNonDefaultParticipantParts = PersonenIstSchueler::query()
                 ->whereIn('schule_id', $partnerIds)
@@ -770,7 +784,7 @@ class ProjektController extends Controller
             ? (int) $validatedData['potenzialanalyse_tage']
             : null;
 
-        if ($aktiv && !$tage) {
+        if ($aktiv && ! $tage) {
             throw ValidationException::withMessages([
                 'potenzialanalyse_tage' => 'Bitte geben Sie an, wie viele Tage die Potenzialanalyse dauert.',
             ]);
@@ -803,7 +817,7 @@ class ProjektController extends Controller
 
             $zeitraumId = isset($zeitraumData['id']) ? (int) $zeitraumData['id'] : null;
 
-            if ($zeitraumId && !in_array($zeitraumId, $existingIds, true)) {
+            if ($zeitraumId && ! in_array($zeitraumId, $existingIds, true)) {
                 throw ValidationException::withMessages([
                     'zeitraume' => 'Ein Zeitraum gehoert nicht zu diesem Projekt.',
                 ]);
@@ -811,6 +825,7 @@ class ProjektController extends Controller
 
             if ($zeitraumId && in_array($zeitraumId, $existingIds, true)) {
                 $projekt->zeitraume()->whereKey($zeitraumId)->update($payload);
+
                 continue;
             }
 
@@ -821,8 +836,6 @@ class ProjektController extends Controller
             ]);
         }
     }
-
-
 
     public function destroy($id)
     {
@@ -835,10 +848,10 @@ class ProjektController extends Controller
             $projekt->delete(); // Lösche die Projekt
 
             return response()->json(['message' => 'Projekt erfolgreich gelöscht!'], 200);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        } catch (ModelNotFoundException $e) {
             return response()->json(['message' => 'Projekt nicht gefunden.'], 404);
-        } catch (\Exception $e) {
-            return response()->json(['message' => 'Ein Fehler ist aufgetreten: ' . $e->getMessage()], 500);
+        } catch (Exception $e) {
+            return response()->json(['message' => 'Ein Fehler ist aufgetreten: '.$e->getMessage()], 500);
         }
     }
 }

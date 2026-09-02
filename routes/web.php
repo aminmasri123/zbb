@@ -304,6 +304,9 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::get('/ki/berichte/entwurf/{run}', [AiReportController::class, 'show'])
         ->name('ai.reports.status')
         ->middleware('throttle:60,1');
+    Route::post('/ki/berichte/entwurf/{run}/uebernehmen', [AiReportController::class, 'adopt'])
+        ->name('ai.reports.adopt')
+        ->middleware('throttle:30,1');
 
     Route::prefix('chat')->name('chat.')->group(function () {
         Route::get('/', [StaffChatController::class, 'index'])->name('index');
@@ -738,6 +741,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
         // ProjektHasTeilnehmerLuv
         Route::post('/teilnehmer/projekt/luv/anlegen', [ProjektHasTeilnehmerLuvController::class, 'store'])->name('projekthasteilnehmer.luv.store')->middleware('canAnyPermission:projekthasteilnehmer.luv.store,teilnehmer.update');
         Route::put('/teilnehmer/projekt/luv/edit', [ProjektHasTeilnehmerLuvController::class, 'update'])->name('projekthasteilnehmer.luv.update')->middleware('canAnyPermission:projekthasteilnehmer.luv.update,teilnehmer.update');
+        Route::put('/teilnehmer/projekt/luv/{id}', [ProjektHasTeilnehmerLuvController::class, 'update'])->name('projekthasteilnehmer.luv.workflow.update')->middleware('canAnyPermission:projekthasteilnehmer.luv.update,teilnehmer.update');
         Route::delete('/teilnehmer/projekt/luv/entfernen/{id}', [ProjektHasTeilnehmerLuvController::class, 'destroy'])->name('projekthasteilnehmer.luv.destroy')->middleware('canAnyPermission:projekthasteilnehmer.luv.destroy,teilnehmer.update');
         Route::get('/teilnehmer/projekt/luv/export/{id}', [ProjektHasTeilnehmerLuvController::class, 'export'])->name('projekthasteilnehmer.luv.export')->middleware('canAnyPermission:projekthasteilnehmer.luv.export,teilnehmer.index');
     });

@@ -35,7 +35,7 @@ class BopDailyEvaluationExportTest extends TestCase
 
         $this->assertStringContainsString('BO_Tag_2.pdf', (string) $response->headers->get('content-disposition'));
         $pdf = new Fpdi;
-        $this->assertSame(2, $pdf->setSourceFile($response->getFile()->getPathname()));
+        $this->assertSame(4, $pdf->setSourceFile($response->getFile()->getPathname()));
     }
 
     public function test_all_three_bo_days_are_exported_for_every_group_participant(): void
@@ -48,7 +48,7 @@ class BopDailyEvaluationExportTest extends TestCase
         ]))->assertOk();
 
         $pdf = new Fpdi;
-        $this->assertSame(6, $pdf->setSourceFile($response->getFile()->getPathname()));
+        $this->assertSame(8, $pdf->setSourceFile($response->getFile()->getPathname()));
     }
 
     private function context(): array

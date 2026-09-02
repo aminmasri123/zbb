@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Personen;
 use App\Models\Projekt;
 use App\Models\ProjektHasPersonen;
+use App\Models\ProjektLuvTemplate;
 use App\Models\Role;
 use App\Models\RoleDataAccessSetting;
 use App\Models\User;
@@ -81,7 +82,7 @@ class AiReportOrchestratorTest extends TestCase
         Http::assertSent(function (Request $request) use ($project): bool {
             $results = $request->data()['tool_results'] ?? [];
 
-            return count($results) === 5
+            return count($results) === 6
                 && $results[0]['tool_name'] === GetProjectReportRulesTool::NAME
                 && $results[0]['content']['project_id'] === $project->id;
         });
@@ -106,6 +107,56 @@ class AiReportOrchestratorTest extends TestCase
         } catch (AuthorizationException) {
             Http::assertNothingSent();
         }
+    }
+
+    public function test_it_does_not_send_project_disabled_sources_to_the_agent(): void
+    {
+        [$user, $project, $participant] = $this->context();
+        ProjektLuvTemplate::query()->create([
+            'projekt_id' => $project->id,
+            'luv_type' => 'Start',
+            'version' => 1,
+            'name' => 'Datensparsame Vorlage',
+            'sections' => ProjektLuvTemplate::defaultSectionsFor('Start'),
+            'source_settings' => array_fill_keys(array_keys(ProjektLuvTemplate::DEFAULT_SOURCE_SETTINGS), false),
+            'is_active' => true,
+            'created_by' => $user->id,
+        ]);
+
+        Http::fake(function (Request $request) {
+            $payload = $request->data();
+
+            return Http::response([
+                'kind' => 'final',
+                'run_id' => $payload['run_id'],
+                'report' => [
+                    'report_type' => 'luv',
+                    'title' => 'Entwurf ohne Teilnehmerquellen',
+                    'sections' => [[
+                        'heading' => 'Datenlage',
+                        'claims' => [[
+                            'claim_id' => 'missing-1',
+                            'text' => 'Es wurden keine Teilnehmerquellen bereitgestellt.',
+                            'status' => 'insufficient_data',
+                            'source_ids' => [],
+                        ]],
+                    ]],
+                    'warnings' => [],
+                ],
+            ]);
+        });
+
+        app(AiReportOrchestrator::class)->draft(
+            $user,
+            $participant->id,
+            'luv',
+            '2026-01-01',
+            '2026-06-30',
+            'Erstelle einen belegten Entwurf.',
+        );
+
+        Http::assertSent(fn (Request $request): bool => collect($request->data()['tool_results'] ?? [])
+            ->pluck('tool_name')->all() === [GetProjectReportRulesTool::NAME]);
     }
 
     public function test_it_rejects_tool_calls_after_all_evidence_was_prefetched(): void
