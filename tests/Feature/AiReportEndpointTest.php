@@ -206,7 +206,7 @@ class AiReportEndpointTest extends TestCase
                 'report_type' => 'interim',
                 'title' => 'Verlauf-LuV Entwurf',
                 'sections' => [[
-                    'heading' => 'Individuelle Entwicklung',
+                    'heading' => '[development.notes] Ergänzende Erläuterungen',
                     'claims' => [[
                         'claim_id' => 'development-1',
                         'text' => 'Die dokumentierte Entwicklung wurde zusammengefasst.',
@@ -222,7 +222,13 @@ class AiReportEndpointTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('luv.typ', 'Verlauf')
             ->assertJsonPath('luv.status', 'draft')
+            ->assertJsonPath('luv.payload.schema', 'bvb-reha-2023')
             ->assertJsonPath('luv.payload.sections.0.claims.0.source_ids.0', 'documentation-1');
+
+        $this->assertSame(
+            'Die dokumentierte Entwicklung wurde zusammengefasst.',
+            $first->json('luv.payload.fields')['development.notes'],
+        );
 
         $second = $this->actingAs($user)->postJson(route('ai.reports.adopt', $run->run_uuid))
             ->assertCreated();

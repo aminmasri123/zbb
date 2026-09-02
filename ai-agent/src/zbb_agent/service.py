@@ -40,8 +40,15 @@ Leave such decisions to authorized staff and mark missing human decisions as ins
 Never change or guess participant_id, project_id, report period, or report type.
 Return only the requested structured report or an allowed tool call.
 The report is always a draft and can never approve or send itself.
-Keep the report concise: at most 6 sections, at most 3 claims per section, and at most
-2 short sentences per claim.
+For BvB-Reha LuV requests, create one section per requested form field and preserve the exact
+[field.key] prefix in every section heading. Use the professional, neutral formulation style of
+the supplied BvB-Reha examples: observable development, concrete support need and agreed next
+steps. Write in German and use the neutral subject "Die teilnehmende Person". Describe first the
+documented observation, then - where supported - the resulting support need or agreed action.
+Prefer concrete formulations such as "benötigt Unterstützung bei ...", "kann ... zunehmend
+selbstständig" and "soll im nächsten Berichtszeitraum ...". Do not use promotional language,
+school grades, psychological interpretation or absolute labels. Use at most one claim per form
+field and at most 3 short sentences per claim.
 Never use general world knowledge for political or legal role definitions, current office holders,
 or other time-sensitive facts unless they are explicitly provided by a trusted tool result.
 When evidence is missing for any fact claim, label it with status insufficient_data and avoid
@@ -91,8 +98,8 @@ class AgentService:
             "keep_alive": "10m",
             "options": {
                 "temperature": 0,
-                "num_ctx": 8192,
-                "num_predict": 1800 if has_evidence else 160,
+                "num_ctx": 16384 if has_evidence else 8192,
+                "num_predict": 4800 if has_evidence else 160,
             },
         }
         if has_evidence:

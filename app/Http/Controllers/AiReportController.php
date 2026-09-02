@@ -169,7 +169,8 @@ final class AiReportController extends Controller
             ->firstOrFail();
 
         $report = data_get($runModel->report, 'report', $runModel->report);
-        $sections = collect($report['sections'] ?? [])->map(function (array $section): array {
+        $fields = [];
+        $sections = collect($report['sections'] ?? [])->map(function (array $section) use (&$fields): array {
             $claims = collect($section['claims'] ?? [])->map(fn (array $claim) => [
                 'claim_id' => $claim['claim_id'] ?? (string) Str::uuid(),
                 'text' => trim((string) ($claim['text'] ?? '')),
@@ -177,10 +178,19 @@ final class AiReportController extends Controller
                 'source_ids' => array_values($claim['source_ids'] ?? []),
             ])->filter(fn (array $claim) => $claim['text'] !== '')->values();
 
+            $heading = (string) ($section['heading'] ?? 'Abschnitt');
+            $key = preg_match('/^\[([a-z][a-z0-9_.-]{0,119})\]/i', $heading, $match)
+                ? $match[1]
+                : Str::slug($heading, '_');
+            $value = $claims->pluck('text')->implode("\n\n");
+            if (str_contains($key, '.')) {
+                $fields[$key] = $value;
+            }
+
             return [
-                'key' => Str::slug((string) ($section['heading'] ?? 'Abschnitt'), '_'),
-                'heading' => (string) ($section['heading'] ?? 'Abschnitt'),
-                'value' => $claims->pluck('text')->implode("\n\n"),
+                'key' => $key,
+                'heading' => preg_replace('/^\[[^]]+\]\s*/', '', $heading),
+                'value' => $value,
                 'claims' => $claims->all(),
             ];
         })->filter(fn (array $section) => $section['value'] !== '')->values();
@@ -204,7 +214,7 @@ final class AiReportController extends Controller
         $sourceIds = $sections->flatMap(fn (array $section) => collect($section['claims'])->flatMap(fn (array $claim) => $claim['source_ids']))
             ->unique()->values()->all();
 
-        $luv = DB::transaction(function () use ($participation, $runModel, $report, $sections, $findText, $type, $template, $sourceIds, $request): ProjektHasTeilnehmerLuv {
+        $luv = DB::transaction(function () use ($participation, $runModel, $report, $sections, $fields, $findText, $type, $template, $sourceIds, $request): ProjektHasTeilnehmerLuv {
             $existing = ProjektHasTeilnehmerLuv::query()
                 ->where('ai_report_run_id', $runModel->id)
                 ->lockForUpdate()
@@ -232,9 +242,11 @@ final class AiReportController extends Controller
                 'zielvereinbarung' => $findText(['ziel', 'einglieder']),
                 'qualifikationen' => $findText(['qualifikation', 'praktika', 'förder']),
                 'payload' => [
+                    'schema' => 'bvb-reha-2023',
                     'report_type' => $runModel->report_type,
                     'luv_type' => $type,
                     'title' => $report['title'] ?? "{$type}-LuV",
+                    'fields' => $fields,
                     'sections' => $sections->all(),
                     'warnings' => array_values($report['warnings'] ?? []),
                 ],

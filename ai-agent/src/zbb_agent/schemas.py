@@ -105,7 +105,7 @@ class ReportSection(StrictModel):
 class DraftReport(StrictModel):
     report_type: ReportType
     title: Annotated[str, Field(min_length=1, max_length=300)]
-    sections: Annotated[list[ReportSection], Field(min_length=1, max_length=30)]
+    sections: Annotated[list[ReportSection], Field(min_length=1, max_length=60)]
     warnings: Annotated[list[str], Field(max_length=50)] = Field(default_factory=list)
 
 

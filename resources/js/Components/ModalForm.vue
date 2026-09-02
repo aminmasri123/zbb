@@ -5,7 +5,7 @@
         :class="inline
           ? 'px-4 py-4 sm:px-8'
           : scrollableLayout
-          ? 'flex max-h-[calc(100dvh-1rem)] max-w-3xl flex-col overflow-hidden sm:max-h-[calc(100dvh-2rem)]'
+          ? `flex max-h-[calc(100dvh-1rem)] ${wide ? 'max-w-6xl' : 'max-w-3xl'} flex-col overflow-hidden sm:max-h-[calc(100dvh-2rem)]`
           : 'max-h-[calc(100vh-2rem)] max-w-2xl overflow-y-auto px-4 py-4 sm:px-8 lg:w-1/3'"
       >
         <div class="flex items-center justify-between" :class="scrollableLayout ? 'shrink-0 px-4 pt-3 sm:px-6 sm:pt-4' : ''">
@@ -35,6 +35,10 @@
         default: false,
       },
       inline: {
+        type: Boolean,
+        default: false,
+      },
+      wide: {
         type: Boolean,
         default: false,
       },

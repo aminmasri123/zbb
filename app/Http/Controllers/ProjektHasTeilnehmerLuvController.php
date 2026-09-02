@@ -30,6 +30,18 @@ class ProjektHasTeilnehmerLuvController extends Controller
             'ausgangssituation' => ['nullable', 'string', 'max:30000'],
             'zielvereinbarung' => ['nullable', 'string', 'max:30000'],
             'qualifikationen' => ['nullable', 'string', 'max:30000'],
+            'discussed_on' => ['nullable', 'date'],
+            'payload' => ['nullable', 'array'],
+            'payload.schema' => ['nullable', 'string', 'max:60'],
+            'payload.luv_type' => ['nullable', Rule::in(ProjektLuvTemplate::TYPES)],
+            'payload.title' => ['nullable', 'string', 'max:200'],
+            'payload.fields' => ['nullable', 'array', 'max:120'],
+            'payload.sections' => ['nullable', 'array', 'min:1', 'max:20'],
+            'payload.sections.*.key' => ['required_with:payload.sections', 'string', 'max:120', 'regex:/^[a-z][a-z0-9_.-]*$/'],
+            'payload.sections.*.heading' => ['required_with:payload.sections', 'string', 'max:200'],
+            'payload.sections.*.value' => ['nullable', 'string', 'max:30000'],
+            'payload.warnings' => ['nullable', 'array', 'max:100'],
+            'payload.warnings.*' => ['string', 'max:1000'],
         ]);
 
         $participation = $this->participationFor($request, (int) $validated['teilnehmer_id']);
@@ -51,19 +63,11 @@ class ProjektHasTeilnehmerLuvController extends Controller
                 'form_version' => $template?->form_version,
                 'von' => Carbon::parse($validated['von'])->toDateString(),
                 'bis' => Carbon::parse($validated['bis'])->toDateString(),
-                'ausgangssituation' => $validated['ausgangssituation'] ?? null,
-                'zielvereinbarung' => $validated['zielvereinbarung'] ?? null,
-                'qualifikationen' => $validated['qualifikationen'] ?? null,
-                'payload' => [
-                    'luv_type' => $validated['typ'],
-                    'title' => $validated['typ'].'-LuV',
-                    'sections' => [
-                        ['key' => 'ausgangssituation', 'heading' => 'Ausgangssituation', 'value' => $validated['ausgangssituation'] ?? ''],
-                        ['key' => 'zielvereinbarung', 'heading' => 'Schritte zur Zielerreichung', 'value' => $validated['zielvereinbarung'] ?? ''],
-                        ['key' => 'qualifikationen', 'heading' => 'Qualifikationen', 'value' => $validated['qualifikationen'] ?? ''],
-                    ],
-                    'warnings' => [],
-                ],
+                'ausgangssituation' => $validated['ausgangssituation'] ?? '',
+                'zielvereinbarung' => $validated['zielvereinbarung'] ?? '',
+                'qualifikationen' => $validated['qualifikationen'] ?? '',
+                'payload' => $this->normalizeManualPayload($validated),
+                'discussed_on' => isset($validated['discussed_on']) ? Carbon::parse($validated['discussed_on'])->toDateString() : null,
                 'created_by' => $request->user()->getKey(),
             ]);
         });
@@ -88,6 +92,10 @@ class ProjektHasTeilnehmerLuvController extends Controller
             'zielvereinbarung' => ['sometimes', 'nullable', 'string', 'max:30000'],
             'qualifikationen' => ['sometimes', 'nullable', 'string', 'max:30000'],
             'payload' => ['sometimes', 'array'],
+            'payload.schema' => ['sometimes', 'nullable', 'string', 'max:60'],
+            'payload.luv_type' => ['sometimes', Rule::in(ProjektLuvTemplate::TYPES)],
+            'payload.title' => ['sometimes', 'nullable', 'string', 'max:200'],
+            'payload.fields' => ['sometimes', 'array', 'max:120'],
             'payload.sections' => ['required_with:payload', 'array', 'min:1', 'max:20'],
             'payload.sections.*.key' => ['required', 'string', 'max:120'],
             'payload.sections.*.heading' => ['required', 'string', 'max:200'],
@@ -251,6 +259,42 @@ class ProjektHasTeilnehmerLuvController extends Controller
             ->whereHas('teilnehmer', fn ($query) => $query->visibleForUser($request->user()))
             ->with('projekt')
             ->firstOrFail();
+    }
+
+    private function normalizeManualPayload(array $validated): array
+    {
+        $submitted = $validated['payload'] ?? [];
+        $fields = collect($submitted['fields'] ?? [])
+            ->filter(fn ($value, $key) => is_string($key)
+                && preg_match('/^[a-z][a-z0-9_.-]{0,119}$/', $key)
+                && (is_null($value) || is_bool($value) || is_string($value)))
+            ->map(fn ($value) => is_string($value) ? Str::limit($value, 30000, '') : $value)
+            ->all();
+
+        $sections = collect($submitted['sections'] ?? [])
+            ->filter(fn ($section) => is_array($section) && isset($section['key'], $section['heading']))
+            ->map(fn ($section) => [
+                'key' => $section['key'],
+                'heading' => $section['heading'],
+                'value' => $section['value'] ?? '',
+            ])->values()->all();
+
+        if ($sections === []) {
+            $sections = [
+                ['key' => 'ausgangssituation', 'heading' => 'Ausgangssituation', 'value' => $validated['ausgangssituation'] ?? ''],
+                ['key' => 'zielvereinbarung', 'heading' => 'Schritte zur Zielerreichung', 'value' => $validated['zielvereinbarung'] ?? ''],
+                ['key' => 'qualifikationen', 'heading' => 'Qualifikationen', 'value' => $validated['qualifikationen'] ?? ''],
+            ];
+        }
+
+        return [
+            'schema' => $submitted['schema'] ?? 'legacy',
+            'luv_type' => $validated['typ'],
+            'title' => $validated['typ'].'-LuV',
+            'fields' => $fields,
+            'sections' => $sections,
+            'warnings' => array_values($submitted['warnings'] ?? []),
+        ];
     }
 
     private function authorizedLuvQuery(Request $request): Builder

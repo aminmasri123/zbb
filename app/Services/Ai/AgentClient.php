@@ -196,7 +196,7 @@ final class AgentClient
             || ! is_array($report['sections'] ?? null)
             || ! array_is_list($report['sections'])
             || $report['sections'] === []
-            || count($report['sections']) > 30
+            || count($report['sections']) > 60
             || ! is_array($report['warnings'] ?? null)
             || ! array_is_list($report['warnings'])
             || count($report['warnings']) > 50) {

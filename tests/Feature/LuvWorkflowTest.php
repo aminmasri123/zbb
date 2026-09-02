@@ -85,6 +85,47 @@ class LuvWorkflowTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_structured_bvb_reha_payload_is_preserved_for_manual_luv(): void
+    {
+        [$user, , $participant] = $this->context();
+
+        $response = $this->actingAs($user)->postJson(route('projekthasteilnehmer.luv.store'), [
+            'teilnehmer_id' => $participant->id,
+            'typ' => 'Abschluss',
+            'von' => '2026-08-01',
+            'bis' => '2026-08-31',
+            'discussed_on' => '2026-09-01',
+            'payload' => [
+                'schema' => 'bvb-reha-2023',
+                'luv_type' => 'Abschluss',
+                'title' => 'Abschluss-LuV',
+                'fields' => [
+                    'completion.reason' => 'Reguläres Ende der Maßnahme',
+                    'results.training_maturity' => true,
+                    'support.required' => false,
+                ],
+                'sections' => [[
+                    'key' => 'results',
+                    'heading' => '2. Ergebnisse der BvB',
+                    'value' => "Allgemeine Ausbildungsreife erreicht: Ja\n\nWeiterer Unterstützungsbedarf: Nein",
+                ]],
+                'warnings' => [],
+            ],
+        ])->assertCreated()
+            ->assertJsonPath('luv.payload.schema', 'bvb-reha-2023')
+            ->assertJsonPath('luv.payload.luv_type', 'Abschluss')
+            ->assertJsonPath('luv.payload.sections.0.key', 'results')
+            ->assertJsonPath('luv.discussed_on', '2026-09-01T00:00:00.000000Z');
+
+        $this->assertTrue($response->json('luv.payload.fields')['results.training_maturity']);
+
+        $this->assertDatabaseHas('projekt_has_teilnehmer_luvs', [
+            'id' => $response->json('luv.id'),
+            'typ' => 'Abschluss',
+            'status' => 'draft',
+        ]);
+    }
+
     /** @return array{User, Projekt, Personen} */
     private function context(): array
     {

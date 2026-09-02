@@ -136,19 +136,24 @@
                             <p class="mt-1 text-xs text-gray-400">Lauf-ID: {{ runId }}</p>
                         </div>
 
-                        <section v-for="(section, sectionIndex) in draft.sections" :key="`${section.heading}-${sectionIndex}`" class="rounded-xl border border-gray-200 bg-gray-50 p-5">
-                            <h4 class="mb-4 text-lg font-semibold text-gray-900">{{ section.heading }}</h4>
-                            <div v-if="section.claims.length" class="space-y-3">
-                                <article v-for="claim in section.claims" :key="claim.claim_id" class="rounded-lg border bg-white p-4">
+                        <section v-for="group in reviewSchema" :key="group.key" class="rounded-xl border border-gray-200 bg-gray-50 p-5">
+                            <h4 class="mb-4 text-lg font-semibold text-gray-900">{{ group.heading }}</h4>
+                            <div class="grid gap-4 lg:grid-cols-2">
+                                <article v-for="field in group.fields" :key="field.key" class="rounded-lg border bg-white p-4">
+                                    <p class="mb-2 text-sm font-semibold text-gray-800">{{ field.label }}</p>
+                                    <template v-if="claimsForField(field.key).length">
+                                    <div v-for="claim in claimsForField(field.key)" :key="claim.claim_id">
                                     <div class="mb-2 flex items-center gap-2">
                                         <span v-if="claim.status === 'supported'" class="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-800">Belegt</span>
                                         <span v-else class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">Daten fehlen</span>
                                     </div>
                                     <p class="whitespace-pre-line text-sm leading-6 text-gray-800">{{ claim.text }}</p>
                                     <p v-if="claim.source_ids.length" class="mt-2 text-xs text-gray-500">Quellen: {{ claim.source_ids.join(', ') }}</p>
+                                    </div>
+                                    </template>
+                                    <p v-else class="text-sm italic text-amber-700">Daten fehlen.</p>
                                 </article>
                             </div>
-                            <p v-else class="text-sm italic text-gray-500">Dieser Abschnitt enthält keine Aussagen.</p>
                         </section>
 
                             <div v-if="draft.warnings.length" class="rounded-lg border border-orange-200 bg-orange-50 p-4">
@@ -177,6 +182,7 @@
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import { computed, onBeforeUnmount, reactive, ref } from 'vue';
+import { fieldsForType, manualLuvSchemas } from './luvManualSchemas';
 
 const props = defineProps({
     participantId: { type: Number, required: true },
@@ -223,6 +229,11 @@ const selectLuvType = (type) => {
 };
 
 const isWorking = computed(() => runStatus.status === 'queued' || runStatus.status === 'running');
+const reviewSchema = computed(() => manualLuvSchemas[form.luv_type] || manualLuvSchemas.Start);
+const fieldKeyFromHeading = (heading = '') => heading.match(/^\[([a-z][a-z0-9_.-]+)\]/i)?.[1] || '';
+const claimsForField = (key) => (draft.value?.sections || [])
+    .filter((section) => fieldKeyFromHeading(section.heading) === key)
+    .flatMap((section) => section.claims || []);
 const displayedElapsedSeconds = computed(() => Math.max(
     Number(runStatus.elapsed_seconds) || 0,
     clientElapsedSeconds.value,
@@ -390,13 +401,17 @@ const generate = async () => {
     clientElapsedSeconds.value = 0;
 
     try {
+        const aiFields = fieldsForType(form.luv_type)
+            .filter((field) => !['master_data', 'discussion'].includes(field.groupKey))
+            .map((field) => `[${field.key}] ${field.label}`);
+        const structuredRequest = `${form.request}\n\nErstelle für jedes der folgenden Formularfelder genau einen eigenen Abschnitt. Die Abschnittsüberschrift muss exakt wie vorgegeben mit [Feldschlüssel] beginnen. Formuliere sachlich im Stil der BvB-Reha-Beispielformulare, als nachvollziehbare pädagogische Beobachtung. Keine Diagnose, keine Vermutung und keine Wiederholung. Fehlt ein Beleg, verwende den Status insufficient_data und den Text „Daten fehlen.“\n\nFormularfelder:\n${aiFields.join('\n')}`;
         const response = await axios.post(route('ai.reports.draft'), {
             participant_id: props.participantId,
             report_type: luvTypes.find((option) => option.value === form.luv_type)?.reportType || 'luv',
             luv_type: form.luv_type,
             from_date: form.from_date,
             until_date: form.until_date,
-            request: form.request,
+            request: structuredRequest.slice(0, 4000),
         });
 
         runId.value = response.data.run_id || '';
