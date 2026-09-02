@@ -251,7 +251,7 @@ const formatDuration = (seconds) => {
 
 const stopPolling = () => {
     if (pollTimer !== null) {
-        clearInterval(pollTimer);
+        clearTimeout(pollTimer);
         pollTimer = null;
     }
 
@@ -259,6 +259,21 @@ const stopPolling = () => {
         clearInterval(elapsedTimer);
         elapsedTimer = null;
     }
+};
+
+const schedulePoll = () => {
+    if (!runId.value || !isWorking.value || pollTimer !== null) {
+        return;
+    }
+
+    pollTimer = window.setTimeout(async () => {
+        pollTimer = null;
+        await pollStatus();
+
+        if (loading.value && isWorking.value) {
+            schedulePoll();
+        }
+    }, 2500);
 };
 
 const pollStatus = async () => {
@@ -300,18 +315,18 @@ const pollStatus = async () => {
         }
 
         if (error.response?.status === 429) {
-            errorMessage.value = 'Zu viele KI-Anfragen. Bitte warte kurz und versuche es erneut.';
+            runStatus.queue_warning = 'Die Statusabfrage wurde kurz gebremst. Der KI-Auftrag läuft im Hintergrund weiter.';
             return;
         }
 
-        errorMessage.value = 'Der Status der KI-Verarbeitung konnte nicht abgefragt werden.';
+        runStatus.queue_warning = 'Der Status konnte vorübergehend nicht abgefragt werden. Die Abfrage wird automatisch wiederholt.';
         return;
     }
 };
 
 const startPolling = () => {
     stopPolling();
-    pollTimer = window.setInterval(pollStatus, 2500);
+    schedulePoll();
     elapsedTimer = window.setInterval(() => {
         clientElapsedSeconds.value += 1;
     }, 1000);

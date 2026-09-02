@@ -350,6 +350,11 @@ async def test_evidence_turn_uses_fast_report_model_and_bounded_json_output() ->
     await AgentService(settings, fake).next_turn(request(tool_results=tool_results))
 
     assert fake.payload["model"] == "qwen3:1.7b"
-    assert fake.payload["format"] == "json"
+    assert fake.payload["format"]["type"] == "object"
+    assert set(fake.payload["format"]["required"]) == {
+        "report_type",
+        "title",
+        "sections",
+    }
     assert "tools" not in fake.payload
     assert fake.payload["options"]["num_predict"] == 1800

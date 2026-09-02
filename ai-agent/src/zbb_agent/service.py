@@ -96,7 +96,7 @@ class AgentService:
             },
         }
         if has_evidence:
-            payload["format"] = "json"
+            payload["format"] = DraftReport.model_json_schema()
         else:
             payload["tools"] = ollama_tools(request.allowed_tools)
         response = await self.ollama.chat(payload)
