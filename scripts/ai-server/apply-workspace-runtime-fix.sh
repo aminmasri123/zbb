@@ -38,9 +38,9 @@ install -o root -g root -m 0644 "${UPLOAD_CONFIG}" "${SOURCE_ROOT}/config.py"
 install -o root -g root -m 0644 "${UPLOAD_SERVICE}" "${RUNTIME_ROOT}/service.py"
 install -o root -g root -m 0644 "${UPLOAD_CONFIG}" "${RUNTIME_ROOT}/config.py"
 if grep -q '^ZBB_OLLAMA_TIMEOUT_SECONDS=' "${ENV_FILE}"; then
-    sed -i 's/^ZBB_OLLAMA_TIMEOUT_SECONDS=.*/ZBB_OLLAMA_TIMEOUT_SECONDS=240/' "${ENV_FILE}"
+    sed -i 's/^ZBB_OLLAMA_TIMEOUT_SECONDS=.*/ZBB_OLLAMA_TIMEOUT_SECONDS=600/' "${ENV_FILE}"
 else
-    printf '%s\n' 'ZBB_OLLAMA_TIMEOUT_SECONDS=240' >> "${ENV_FILE}"
+    printf '%s\n' 'ZBB_OLLAMA_TIMEOUT_SECONDS=600' >> "${ENV_FILE}"
 fi
 
 systemctl restart zbb-ai-agent.service
