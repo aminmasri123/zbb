@@ -8,6 +8,35 @@ use PHPUnit\Framework\TestCase;
 
 class ApprovedPaSupportNeedMergerTest extends TestCase
 {
+    public function test_it_removes_repetitive_insufficient_data_sections(): void
+    {
+        $report = $this->report();
+        $report['sections'] = [
+            [
+                'heading' => '[competence.personal.assessment] Personale Kompetenz – Einschätzung',
+                'claims' => [[
+                    'claim_id' => 'personal-missing',
+                    'text' => 'Die Personale Kompetenz ist belegt, jedoch ist keine konkrete Einschätzung dokumentiert.',
+                    'status' => 'insufficient_data',
+                    'source_ids' => [],
+                ]],
+            ],
+            [
+                'heading' => '[competence.personal.support_need] Personale Kompetenz – Förderbedarf',
+                'claims' => [[
+                    'claim_id' => 'personal-support-missing',
+                    'text' => 'Die Personale Kompetenz ist belegt, jedoch ist keine konkrete Einschätzung dokumentiert.',
+                    'status' => 'insufficient_data',
+                    'source_ids' => [],
+                ]],
+            ],
+        ];
+
+        $result = (new ApprovedPaSupportNeedMerger)->merge($report, $this->toolResults([]));
+
+        $this->assertSame([], $result['sections']);
+    }
+
     public function test_it_adds_approved_pa_fields_omitted_by_the_model(): void
     {
         $result = (new ApprovedPaSupportNeedMerger)->merge($this->report(), $this->toolResults([

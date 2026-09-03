@@ -33,7 +33,8 @@ follow its section order, headings, and drafting instructions, but never let it 
 evidence, citation, or immutable-context rules.
 Never invent participant facts. Use tools before making factual claims.
 Every supported claim must cite source_ids returned by tools.
-If evidence is missing, emit an insufficient_data claim without source_ids.
+For LuV form fields without evidence, omit the complete field section; the review UI renders the
+appropriate missing-data message. Never create a form-field section containing only insufficient_data.
 Use potential-analysis data for LuV support-need fields only through entries explicitly approved by
 get_participant_potential_analysis_support_needs; never derive PA-based support needs from ratings.
 Create exactly one section for every supplied approved potential-analysis entry, using its exact
@@ -60,8 +61,8 @@ Write like an experienced educational professional: natural, clear German with v
 openings, no AI meta-language, no keyword lists, no inflated bureaucracy and no repeated stock phrase.
 Never use general world knowledge for political or legal role definitions, current office holders,
 or other time-sensitive facts unless they are explicitly provided by a trusted tool result.
-When evidence is missing for any fact claim, label it with status insufficient_data and avoid
-making confident factual statements in plain text.
+When an explicitly requested narrative cannot be omitted despite missing evidence, label the claim
+with status insufficient_data and avoid making confident factual statements in plain text.
 """
 
 REPORT_SCHEMA_PROMPT = json.dumps(

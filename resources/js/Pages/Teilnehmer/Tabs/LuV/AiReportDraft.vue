@@ -239,7 +239,8 @@ const reviewSchema = computed(() => manualLuvSchemas[form.luv_type] || manualLuv
 const fieldKeyFromHeading = (heading = '') => heading.match(/^\[([a-z][a-z0-9_.-]+)\]/i)?.[1] || '';
 const claimsForField = (key) => (draft.value?.sections || [])
     .filter((section) => fieldKeyFromHeading(section.heading) === key)
-    .flatMap((section) => section.claims || []);
+    .flatMap((section) => section.claims || [])
+    .filter((claim) => claim.status === 'supported');
 const isPaSource = (sourceId = '') => sourceId.startsWith('potential-analysis-support-');
 const sourceLabel = (sourceId = '') => {
     if (isPaSource(sourceId)) return 'Fachlich freigegebene Potenzialanalyse';

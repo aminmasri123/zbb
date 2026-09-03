@@ -18,6 +18,8 @@ final class ApprovedPaSupportNeedMerger
      */
     public function merge(array $report, array $toolResults): array
     {
+        $report = $this->withoutInsufficientDataSections($report);
+
         $toolResult = collect($toolResults)
             ->firstWhere('tool_name', GetParticipantPotentialAnalysisSupportNeedsTool::NAME);
         $entries = is_array($toolResult)
@@ -95,6 +97,28 @@ final class ApprovedPaSupportNeedMerger
             ->push('Fachlich freigegebene Angaben aus der Potenzialanalyse wurden den passenden LuV-Feldern automatisch zugeordnet. Bitte den Gesamtentwurf weiterhin fachlich prüfen.')
             ->unique()
             ->take(50)
+            ->values()
+            ->all();
+
+        return $report;
+    }
+
+    /** @param array<string, mixed> $report */
+    private function withoutInsufficientDataSections(array $report): array
+    {
+        $report['sections'] = collect(is_array($report['sections'] ?? null) ? $report['sections'] : [])
+            ->filter(fn ($section) => is_array($section))
+            ->map(function (array $section): array {
+                $section['claims'] = collect(is_array($section['claims'] ?? null) ? $section['claims'] : [])
+                    ->filter(fn ($claim) => is_array($claim) && ($claim['status'] ?? null) === 'supported')
+                    ->unique(fn (array $claim) => Str::lower(trim((string) ($claim['text'] ?? ''))))
+                    ->values()
+                    ->all();
+
+                return $section;
+            })
+            ->filter(fn (array $section) => $section['claims'] !== [])
+            ->take(60)
             ->values()
             ->all();
 
