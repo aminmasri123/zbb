@@ -562,16 +562,20 @@ const paLegacyMerkmale = [
   { key: 'umgangsformen', label: 'Umgangsformen', kategorie: 'SP' },
 ]
 
-const paMerkmale = (props.potenzialanalyse?.kompetenzen?.length
-  ? props.potenzialanalyse.kompetenzen
-  : paLegacyMerkmale
+// Die PA-Prop wird per Inertia verzögert geladen. Deshalb muss auch die
+// Kompetenzliste reaktiv sein; andernfalls bleibt sie bei den Legacy-Feldern,
+// obwohl das Projekt (z. B. BvB Reha) ein eigenes Profil verwendet.
+const paMerkmale = computed(() => (
+  props.potenzialanalyse?.kompetenzen?.length
+    ? props.potenzialanalyse.kompetenzen
+    : paLegacyMerkmale
 ).map((merkmal) => ({
   ...merkmal,
   kategorie: merkmal.category_code || merkmal.kategorie || '',
   kategorieLabel: merkmal.category || merkmal.kategorie_label || '',
   selbsteinschaetzungText: merkmal.self_assessment_text || merkmal.selbsteinschaetzung_text || '',
   ratingDescriptions: merkmal.rating_descriptions || merkmal.bewertungsbeschreibungen || [],
-}))
+})))
 
 const paLegacyKompetenzBemerkungTexte = {
   feinmotorik: [
@@ -653,14 +657,14 @@ const paLegacyKompetenzBemerkungTexte = {
   ],
 }
 
-const paKompetenzBemerkungTexte = {
+const paKompetenzBemerkungTexte = computed(() => ({
   ...paLegacyKompetenzBemerkungTexte,
   ...Object.fromEntries(
-    paMerkmale
+    paMerkmale.value
       .filter((merkmal) => Array.isArray(merkmal.ratingDescriptions) && merkmal.ratingDescriptions.length === 5)
       .map((merkmal) => [merkmal.key, merkmal.ratingDescriptions])
   ),
-}
+}))
 
 const defaultPaBewertung = () => ({ bewertung: null, bemerkung: '' })
 const defaultPaUebungErgebnis = () => ({
@@ -726,7 +730,7 @@ const ensurePaEintrag = (personenId) => {
     eintrag.uebungen[uebungKey] ||= defaultPaUebungErgebnis()
   })
 
-  paMerkmale.forEach((merkmal) => {
+  paMerkmale.value.forEach((merkmal) => {
     eintrag.selbsteinschaetzung[merkmal.key] ||= defaultPaBewertung()
     eintrag.kompetenzen[merkmal.key] ||= defaultPaBewertung()
   })
@@ -785,13 +789,13 @@ const paUebungErgebnis = (personenId, uebungId) => {
 }
 
 const paKompetenzBemerkungText = (merkmalKey, wert) =>
-  paKompetenzBemerkungTexte[merkmalKey]?.[Number(wert) - 1] || ''
+  paKompetenzBemerkungTexte.value[merkmalKey]?.[Number(wert) - 1] || ''
 
 // Bereits gespeicherte Bewertungen aus älteren Profilständen sollen ihren
 // inzwischen kompetenzspezifischen Text sofort anzeigen, ohne einen Umweg
 // über eine andere Bewertungsstufe zu verlangen.
 Object.values(paTeilnehmerDaten.value).forEach((eintrag) => {
-  paMerkmale.forEach((merkmal) => {
+  paMerkmale.value.forEach((merkmal) => {
     const bewertung = eintrag?.kompetenzen?.[merkmal.key]
 
     if (!bewertung?.bewertung || String(bewertung.bemerkung || '').trim()) return
@@ -822,7 +826,7 @@ const setzePaBewertungSpalte = (feld, wert) => {
     return
   }
 
-  paMerkmale.forEach((merkmal) => {
+  paMerkmale.value.forEach((merkmal) => {
     setzePaBewertung(teilnehmer.id, feld, merkmal.key, wert, false)
   })
 
@@ -973,7 +977,7 @@ const resolvePaTeilnehmerId = (personenId = null) =>
   personenId ?? selectedPaTeilnehmer.value?.id ?? null
 
 const paBewertungPayload = (eintrag, feld) =>
-  paMerkmale.reduce((payload, merkmal) => {
+  paMerkmale.value.reduce((payload, merkmal) => {
     const wert = eintrag?.[feld]?.[merkmal.key] || defaultPaBewertung()
     const bewertung = normalisierePaZahl(wert.bewertung, { min: 1, max: 5 })
 
@@ -1295,7 +1299,23 @@ watch(() => props.potenzialanalyse, (payload) => {
   if (!payload) return
 
   paAutoSaveBereit.value = false
-  paTeilnehmerDaten.value = JSON.parse(JSON.stringify(payload.teilnehmer || {}))
+  const geladeneTeilnehmerDaten = JSON.parse(JSON.stringify(payload.teilnehmer || {}))
+
+  if (!paDatenGeladen.value) {
+    paTeilnehmerDaten.value = geladeneTeilnehmerDaten
+  } else {
+    // Ein erneutes Inertia-Nachladen darf lokale Änderungen nicht durch einen
+    // älteren Serverstand überschreiben, solange deren Speicherung noch läuft.
+    Object.entries(geladeneTeilnehmerDaten).forEach(([key, eintrag]) => {
+      const hatOffeneAenderungen = paDirtyTeilnehmerIds.has(key)
+        || paSaveInFlight.has(key)
+        || paAutoSaveTimers.has(key)
+
+      if (!hatOffeneAenderungen) {
+        paTeilnehmerDaten.value[key] = eintrag
+      }
+    })
+  }
   paDatenGeladen.value = true
 
   if (paAktiv.value && gruppenTeilnehmer.value.length) {
@@ -1515,7 +1535,7 @@ const formatiereFreitextFuerBericht = (value, prefix) => {
 }
 
 const paBewertungenAlsListe = (eintrag, feld) =>
-  paMerkmale
+  paMerkmale.value
     .map((merkmal) => ({
       ...merkmal,
       bewertung: Number(eintrag?.[feld]?.[merkmal.key]?.bewertung),

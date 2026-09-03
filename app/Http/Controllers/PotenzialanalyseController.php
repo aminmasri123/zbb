@@ -632,6 +632,12 @@ class PotenzialanalyseController extends Controller
         $kriteriumIds = $this->projektKriteriumIds((int) $gruppe->projekt_id, $groupProfileId);
         $uebungen = $this->projektUebungenMap((int) $gruppe->projekt_id, $groupProfileId);
         $allowedCompetencyKeys = collect($this->profiles->competenciesForGroup($gruppe))->pluck('key')->all();
+        $this->ensureMerkmalKeysMatchProfile([
+            'selbsteinschaetzung' => $request->input('selbsteinschaetzung', []),
+            'kompetenzen' => $request->input('kompetenzen', []),
+            'merkmale_snapshot.selbsteinschaetzung' => $request->input('merkmale_snapshot.selbsteinschaetzung', []),
+            'merkmale_snapshot.kompetenzen' => $request->input('merkmale_snapshot.kompetenzen', []),
+        ], $allowedCompetencyKeys);
         $selbsteinschaetzung = $this->normalizeMerkmalEntries(
             $request->input('selbsteinschaetzung', []),
             $request->input('merkmale_snapshot.selbsteinschaetzung', []),
@@ -1035,6 +1041,27 @@ class PotenzialanalyseController extends Controller
         }
 
         return $this->normalizeMerkmalEntrySet($fallback, $allowedCompetencyKeys);
+    }
+
+    /**
+     * Verhindert, dass ein noch geöffneter Browser-Tab mit einer veralteten
+     * Profilkonfiguration gültige PA-Bewertungen stillschweigend löscht.
+     */
+    private function ensureMerkmalKeysMatchProfile(array $entrySets, array $allowedCompetencyKeys): void
+    {
+        foreach ($entrySets as $field => $entries) {
+            if (! is_array($entries)) {
+                continue;
+            }
+
+            $unknownKeys = array_diff(array_keys($entries), $allowedCompetencyKeys);
+
+            if ($unknownKeys !== []) {
+                throw ValidationException::withMessages([
+                    $field => 'Das Potenzialanalyse-Profil wurde geändert oder noch nicht vollständig geladen. Bitte laden Sie die Seite neu und versuchen Sie es erneut.',
+                ]);
+            }
+        }
     }
 
     private function normalizeMerkmalEntrySet(mixed $entries, array $allowedCompetencyKeys): array

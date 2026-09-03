@@ -214,6 +214,37 @@ class PotenzialanalyseTabClearTest extends TestCase
         ], $gruppe, $teilnehmer]);
     }
 
+    public function test_stale_competency_keys_are_rejected_before_existing_pa_data_can_be_deleted(): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('noch nicht vollständig geladen');
+
+        $this->invokePrivate(
+            app(PotenzialanalyseController::class),
+            'ensureMerkmalKeysMatchProfile',
+            [[
+                'kompetenzen' => [
+                    'veraltetes_merkmal' => ['bewertung' => 4, 'bemerkung' => 'Alt'],
+                ],
+            ], ['aktuelles_merkmal']],
+        );
+    }
+
+    public function test_current_competency_keys_are_accepted(): void
+    {
+        $result = $this->invokePrivate(
+            app(PotenzialanalyseController::class),
+            'ensureMerkmalKeysMatchProfile',
+            [[
+                'kompetenzen' => [
+                    'aktuelles_merkmal' => ['bewertung' => 4, 'bemerkung' => 'Aktuell'],
+                ],
+            ], ['aktuelles_merkmal']],
+        );
+
+        $this->assertNull($result);
+    }
+
     private function paContext(): array
     {
         $betreuer = Personen::factory()->create();
