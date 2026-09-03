@@ -115,11 +115,6 @@
     ).length
     const boVollstaendig = (personenId) => boCriteria.value.length > 0 && boBewerteteAnzahl(personenId) === boCriteria.value.length
     const boBegonnen = (personenId) => boBewerteteAnzahl(personenId) > 0
-    const boUebersicht = computed(() => ({
-      abgeschlossen: gruppenTeilnehmer.value.filter((item) => boVollstaendig(item.id)).length,
-      begonnen: gruppenTeilnehmer.value.filter((item) => boBegonnen(item.id) && !boVollstaendig(item.id)).length,
-      offen: gruppenTeilnehmer.value.filter((item) => !boBegonnen(item.id)).length,
-    }))
     const boModalBewerteteAnzahl = computed(() => boCriteria.value.filter((criterion) =>
       Number(boBewertungen.value[criterion.key]?.bewertung) >= 1
     ).length)
@@ -161,6 +156,33 @@
         await Swal.fire({ icon: 'success', title: 'Auswertung gespeichert', timer: 1500, showConfirmButton: false })
       } catch (error) {
         await Swal.fire('Fehler', Object.values(error.response?.data?.errors || {}).flat()[0] || error.response?.data?.message || 'Die Auswertung konnte nicht gespeichert werden.', 'error')
+      } finally {
+        boSaving.value = false
+      }
+    }
+    const deleteBereichsauswertung = async () => {
+      if (!selectedBoTeilnehmer.value || boSaving.value || !boBegonnen(selectedBoTeilnehmer.value.id)) return
+      const result = await Swal.fire({
+        icon: 'warning',
+        title: 'Auswertung löschen?',
+        text: `Die Bereichsauswertung von ${selectedBoTeilnehmer.value.vorname} ${selectedBoTeilnehmer.value.nachname} in „${props.bereichsauswertung?.bereich?.name || 'diesem Bereich'}“ wird vollständig gelöscht.`,
+        showCancelButton: true,
+        confirmButtonText: 'Ja, Auswertung löschen',
+        cancelButtonText: 'Abbrechen',
+        confirmButtonColor: '#dc2626',
+      })
+      if (!result.isConfirmed) return
+      boSaving.value = true
+      try {
+        const response = await axios.delete(route('gruppe.bereichsauswertung.destroy', {
+          gruppe: props.gruppe.id,
+          personen: selectedBoTeilnehmer.value.id,
+        }))
+        delete props.bereichsauswertung.bewertungen[selectedBoTeilnehmer.value.id]
+        showBereichsauswertung.value = false
+        await Swal.fire({ icon: 'success', title: 'Auswertung gelöscht', text: response.data.message, timer: 1800, showConfirmButton: false })
+      } catch (error) {
+        await Swal.fire('Fehler', error.response?.data?.message || 'Die Auswertung konnte nicht gelöscht werden.', 'error')
       } finally {
         boSaving.value = false
       }
@@ -2295,36 +2317,6 @@ const exportMitTag = async () => {
         </Dialog>
       </div>
 
-      <!-- Projektbezogene Bereichsauswertung -->
-      <section v-if="boAktiv" class="space-y-3 rounded border border-gray-200 bg-white p-4">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 class="font-semibold text-gray-800">Teilnehmer auswerten</h3>
-            <p class="text-sm text-gray-500">Bereich: {{ props.bereichsauswertung?.bereich?.name || '–' }}</p>
-          </div>
-          <div class="flex flex-wrap gap-2 text-xs">
-            <span class="rounded bg-green-100 px-2.5 py-1 font-medium text-green-700">Vollständig: {{ boUebersicht.abgeschlossen }}</span>
-            <span class="rounded bg-blue-100 px-2.5 py-1 font-medium text-blue-700">Begonnen: {{ boUebersicht.begonnen }}</span>
-            <span class="rounded bg-amber-100 px-2.5 py-1 font-medium text-amber-700">Offen: {{ boUebersicht.offen }}</span>
-          </div>
-        </div>
-        <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          <button
-            v-for="teilnehmer in gruppenTeilnehmer"
-            :key="'bo-' + teilnehmer.id"
-            type="button"
-            class="flex items-center justify-between gap-3 rounded border border-gray-200 px-3 py-2 text-left hover:border-zbb hover:bg-zbbTrp disabled:cursor-not-allowed disabled:opacity-60"
-            :disabled="!boCanUpdate"
-            @click="openBereichsauswertung(teilnehmer)"
-          >
-            <span class="truncate font-medium text-gray-800">{{ teilnehmer.vorname }} {{ teilnehmer.nachname }}</span>
-            <span class="shrink-0 rounded px-2 py-0.5 text-xs font-medium" :class="boVollstaendig(teilnehmer.id) ? 'bg-green-100 text-green-700' : (boBegonnen(teilnehmer.id) ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700')">
-              {{ boBewerteteAnzahl(teilnehmer.id) }} / {{ boCriteria.length }}
-            </span>
-          </button>
-        </div>
-      </section>
-
       <Dialog
         v-model:visible="showBereichsauswertung"
         modal
@@ -2366,10 +2358,24 @@ const exportMitTag = async () => {
               </tr>
             </tbody>
           </table>
-          </div>
+        </div>
         <template #footer>
-          <Button label="Abbrechen" severity="secondary" text :disabled="boSaving" @click="showBereichsauswertung = false" />
-          <Button label="Auswertung speichern" icon="pi pi-check" :loading="boSaving" :disabled="!boCanUpdate" @click="saveBereichsauswertung" />
+          <div class="flex w-full flex-wrap items-center justify-between gap-2">
+            <Button
+              v-if="selectedBoTeilnehmer && boBegonnen(selectedBoTeilnehmer.id)"
+              label="Auswertung löschen"
+              icon="pi pi-trash"
+              severity="danger"
+              text
+              :disabled="boSaving || !boCanUpdate"
+              @click="deleteBereichsauswertung"
+            />
+            <span v-else></span>
+            <div class="flex gap-2">
+              <Button label="Abbrechen" severity="secondary" text :disabled="boSaving" @click="showBereichsauswertung = false" />
+              <Button label="Auswertung speichern" icon="pi pi-check" :loading="boSaving" :disabled="!boCanUpdate" @click="saveBereichsauswertung" />
+            </div>
+          </div>
         </template>
       </Dialog>
 
@@ -2496,8 +2502,17 @@ const exportMitTag = async () => {
               class="flex items-center justify-between gap-3 py-2"
             >
               <div class="min-w-0">
-                <p class="flex min-w-0 items-center gap-2 font-medium text-gray-800">
-                  <span class="truncate">{{ t.vorname }} {{ t.nachname }}</span>
+                <p class="flex min-w-0 flex-wrap items-center gap-2 font-medium text-gray-800">
+                  <button v-if="boAktiv" type="button" class="truncate text-left hover:text-zbb hover:underline" :disabled="!boCanUpdate" @click="openBereichsauswertung(t)">{{ t.vorname }} {{ t.nachname }}</button>
+                  <span v-else class="truncate">{{ t.vorname }} {{ t.nachname }}</span>
+                  <button
+                    v-if="boAktiv"
+                    type="button"
+                    class="shrink-0 rounded px-2 py-0.5 text-xs font-medium"
+                    :class="boVollstaendig(t.id) ? 'bg-green-100 text-green-700' : (boBegonnen(t.id) ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700')"
+                    :disabled="!boCanUpdate"
+                    @click="openBereichsauswertung(t)"
+                  >{{ boVollstaendig(t.id) ? 'Vollständig' : (boBegonnen(t.id) ? 'Begonnen' : 'Offen') }} {{ boBewerteteAnzahl(t.id) }}/{{ boCriteria.length }}</button>
                   <span
                     v-if="fehltElterneinverstaendnis(t)"
                     class="shrink-0 text-xl font-black leading-none text-red-600"
@@ -2666,8 +2681,9 @@ const exportMitTag = async () => {
                 <td class="sticky left-0 z-10 border bg-white px-4 py-3 font-medium text-gray-800">
                   <div class="flex items-start justify-between gap-2">
                     <div class="min-w-0">
-                      <p class="flex min-w-0 items-center gap-2">
-                        <span class="truncate">{{ t.vorname }} {{ t.nachname }}</span>
+                      <p class="flex min-w-0 flex-wrap items-center gap-2">
+                        <button v-if="boAktiv" type="button" class="truncate text-left hover:text-zbb hover:underline" :disabled="!boCanUpdate" @click="openBereichsauswertung(t)">{{ t.vorname }} {{ t.nachname }}</button>
+                        <span v-else class="truncate">{{ t.vorname }} {{ t.nachname }}</span>
                         <span
                           v-if="fehltElterneinverstaendnis(t)"
                           class="shrink-0 text-xl font-black leading-none text-red-600"
@@ -2677,6 +2693,14 @@ const exportMitTag = async () => {
                           ×
                         </span>
                       </p>
+                      <button
+                        v-if="boAktiv"
+                        type="button"
+                        class="mt-1 rounded px-2 py-0.5 text-xs font-medium"
+                        :class="boVollstaendig(t.id) ? 'bg-green-100 text-green-700' : (boBegonnen(t.id) ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700')"
+                        :disabled="!boCanUpdate"
+                        @click="openBereichsauswertung(t)"
+                      >{{ boVollstaendig(t.id) ? 'Vollständig' : (boBegonnen(t.id) ? 'Begonnen' : 'Offen') }} · {{ boBewerteteAnzahl(t.id) }}/{{ boCriteria.length }}</button>
                       <span class="text-sm text-zbb">{{ formatTime(t.pivot?.zeitgeplant?.startzeit) }} - {{formatTime(t.pivot?.zeitgeplant?.endzeit)}}</span>
                     </div>
                     <button

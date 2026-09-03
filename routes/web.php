@@ -610,6 +610,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
 
         Route::delete('/gruppehasteilnehmer/gruppe/{gruppe}/teilnehmer/{personen}', [GruppeHasTeilnehmerController::class, 'destroyTeilnehmer'])->name('gruppeHasTeilnehmer.destroyTeilnehmer')->middleware(['module:participant_management', 'projectFeature:participant_management', 'can:gruppeHasTeilnehmer.destroyTeilnehmer']);
         Route::put('/gruppe/{gruppe}/bereichsauswertung/teilnehmer/{personen}', [BerufsorientierungBewertungController::class, 'update'])->name('gruppe.bereichsauswertung.update')->can('gruppeHasTeilnehmer.store');
+        Route::delete('/gruppe/{gruppe}/bereichsauswertung/teilnehmer/{personen}', [BerufsorientierungBewertungController::class, 'destroy'])->name('gruppe.bereichsauswertung.destroy')->can('gruppeHasTeilnehmer.store');
         Route::delete('/gruppehasteilnehmer/entfernen/{id}', [GruppeHasTeilnehmerController::class, 'destroy'])->name('gruppeHasPersonen.destroy')->middleware(['module:participant_management', 'projectFeature:participant_management', 'can:gruppeHasTeilnehmer.destroyTeilnehmer']);
     });
 

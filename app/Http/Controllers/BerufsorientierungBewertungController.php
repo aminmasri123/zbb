@@ -82,6 +82,24 @@ class BerufsorientierungBewertungController extends Controller
         return response()->json($this->service->config($projekt->fresh()));
     }
 
+    public function destroy(Request $request, Gruppe $gruppe, Personen $personen)
+    {
+        $this->authorizeGroup($request, $gruppe);
+        abort_unless($gruppe->teilnehmer()->whereKey($personen->id)->exists(), 404);
+
+        $deleted = BerufsorientierungBewertung::query()
+            ->where('gruppe_id', $gruppe->id)
+            ->where('personen_id', $personen->id)
+            ->delete();
+
+        return response()->json([
+            'message' => $deleted > 0
+                ? 'Die Bereichsauswertung wurde gelöscht.'
+                : 'Für diesen Teilnehmer war keine Bereichsauswertung vorhanden.',
+            'deleted' => $deleted,
+        ]);
+    }
+
     private function authorizeGroup(Request $request, Gruppe $gruppe): void
     {
         $active = $this->activeProjectContext->currentAvailableFor($request->user());
