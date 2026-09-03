@@ -357,6 +357,41 @@ async def test_evidence_turn_uses_fast_report_model_and_bounded_json_output() ->
         "sections",
     }
     assert "tools" not in fake.payload
-    assert fake.payload["options"]["num_predict"] == 2200
+    assert fake.payload["options"]["num_predict"] == 1100
     assert fake.payload["options"]["num_ctx"] == 16384
     assert "only for form fields supported" in fake.payload["messages"][0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_truncated_report_recovers_fully_closed_sections() -> None:
+    response = {
+        "message": {
+            "content": """{
+                \"report_type\":\"luv\",
+                \"title\":\"Start-LuV\",
+                \"sections\":[
+                    {\"heading\":\"[competence.school.assessment] Schulisch\",\"claims\":[{
+                        \"claim_id\":\"school-1\",
+                        \"text\":\"Die Rechtschreibung wurde dokumentiert.\",
+                        \"status\":\"supported\",
+                        \"source_ids\":[\"note-1\"]
+                    }]},
+                    {\"heading\":\"[competence.personal.assessment] Personal\",\"claims\":[{
+                        \"claim_id\":\"personal-1\",
+                        \"text\":\"Diese zweite Aussage ist abgeschnitten",
+                        \"status\":\"supported\""""
+        }
+    }
+    tool_results = [
+        ToolResultMessage(
+            tool_name=ToolName.LUV_DATA,
+            content={"items": [{"source_id": "note-1", "text": "Dokumentiert"}]},
+        )
+    ]
+
+    result = await service(response).next_turn(request(tool_results=tool_results))
+
+    assert result.report.title == "Wiederhergestellter LuV-Entwurf"
+    assert len(result.report.sections) == 1
+    assert result.report.sections[0].claims[0].claim_id == "school-1"
+    assert result.report.warnings

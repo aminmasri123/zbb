@@ -15,6 +15,7 @@ from .schemas import (
     ClaimStatus,
     DraftReport,
     FinalResponse,
+    ReportSection,
     ToolCall,
     ToolCallsResponse,
     ToolName,
@@ -49,7 +50,7 @@ documented observation, then - where supported - the resulting support need or a
 Prefer concrete formulations such as "benötigt Unterstützung bei ...", "kann ... zunehmend
 selbstständig" and "soll im nächsten Berichtszeitraum ...". Do not use promotional language,
 school grades, psychological interpretation or absolute labels. Use at most one claim per form
-field and at most 3 short sentences per claim.
+field and at most 2 short sentences per claim. Prefer fewer high-value sections over a long answer.
 Never use general world knowledge for political or legal role definitions, current office holders,
 or other time-sensitive facts unless they are explicitly provided by a trusted tool result.
 When evidence is missing for any fact claim, label it with status insufficient_data and avoid
@@ -100,7 +101,7 @@ class AgentService:
             "options": {
                 "temperature": 0,
                 "num_ctx": 16384 if has_evidence else 8192,
-                "num_predict": 2200 if has_evidence else 160,
+                "num_predict": 1100 if has_evidence else 160,
             },
         }
         if has_evidence:
@@ -121,16 +122,90 @@ class AgentService:
         if not isinstance(content, str) or not content.strip():
             self._protocol_error("Ollama response contains neither tool calls nor report JSON")
 
-        try:
-            report = DraftReport.model_validate_json(content)
-        except ValidationError:
-            self._protocol_error("invalid structured report")
+        report = self._parse_report(content, request)
 
         if report.report_type != request.report_type:
             self._protocol_error("model changed the immutable report type")
 
         self._validate_claim_sources(report, self._source_ids(request))
         return FinalResponse(run_id=request.run_id, report=report)
+
+    @classmethod
+    def _parse_report(cls, content: str, request: AgentTurnRequest) -> DraftReport:
+        try:
+            return DraftReport.model_validate_json(content)
+        except ValidationError:
+            recovered = cls._recover_complete_sections(content, request)
+            if recovered is None:
+                cls._protocol_error("invalid structured report")
+            return recovered
+
+    @classmethod
+    def _recover_complete_sections(
+        cls, content: str, request: AgentTurnRequest
+    ) -> DraftReport | None:
+        """Recover fully closed sections when Ollama truncates the JSON tail."""
+        marker = content.find('"sections"')
+        array_start = content.find("[", marker) if marker >= 0 else -1
+        if array_start < 0:
+            return None
+
+        known_sources = cls._source_ids(request)
+        sections = []
+        seen_claim_ids: set[str] = set()
+        object_start: int | None = None
+        depth = 0
+        in_string = False
+        escaped = False
+
+        for index in range(array_start + 1, len(content)):
+            char = content[index]
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    in_string = False
+                continue
+            if char == '"':
+                in_string = True
+            elif char == "{":
+                if depth == 0:
+                    object_start = index
+                depth += 1
+            elif char == "}" and depth > 0:
+                depth -= 1
+                if depth == 0 and object_start is not None:
+                    try:
+                        section = ReportSection.model_validate_json(content[object_start:index + 1])
+                    except (ValidationError, json.JSONDecodeError, AttributeError):
+                        object_start = None
+                        continue
+
+                    safe_claims = []
+                    for claim in section.claims:
+                        if claim.claim_id in seen_claim_ids:
+                            continue
+                        if claim.status == ClaimStatus.SUPPORTED and not set(claim.source_ids).issubset(known_sources):
+                            continue
+                        seen_claim_ids.add(claim.claim_id)
+                        safe_claims.append(claim)
+                    if safe_claims:
+                        sections.append(section.model_copy(update={"claims": safe_claims}))
+                    object_start = None
+
+        if not sections:
+            return None
+
+        return DraftReport(
+            report_type=request.report_type,
+            title="Wiederhergestellter LuV-Entwurf",
+            sections=sections,
+            warnings=[
+                "Die KI-Ausgabe wurde am Ende abgeschnitten. Vollständig erzeugte Felder wurden wiederhergestellt; fehlende Felder bitte fachlich ergänzen."
+            ],
+        )
 
     async def generate(self, request: WorkspaceGenerateRequest) -> WorkspaceGenerateResponse:
         if self._requires_trusted_source(request):
