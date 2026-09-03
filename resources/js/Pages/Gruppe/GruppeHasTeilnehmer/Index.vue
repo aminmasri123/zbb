@@ -2065,9 +2065,16 @@ onMounted(() => {
   geheZuAktuellerWoche()
 
   const gruppiert = {}
-  props.gruppe.teilnehmer.forEach(t => {
-    if (!gruppiert[t.id]) gruppiert[t.id] = []
-    gruppiert[t.id].push(t)
+  props.gruppe.teilnehmer.forEach(teilnehmer => {
+    const anwesenheitEintraege = Array.isArray(teilnehmer.anwesenheit_eintraege)
+      ? teilnehmer.anwesenheit_eintraege
+      : []
+    const eintraege = anwesenheitEintraege.length
+      ? anwesenheitEintraege.map(pivot => ({ ...teilnehmer, pivot }))
+      : [teilnehmer]
+
+    if (!gruppiert[teilnehmer.id]) gruppiert[teilnehmer.id] = []
+    gruppiert[teilnehmer.id].push(...eintraege)
   })
 
   gruppenTeilnehmer.value = sortiereTeilnehmerNachNachname(Object.values(gruppiert).map(teilnehmerGruppe => {

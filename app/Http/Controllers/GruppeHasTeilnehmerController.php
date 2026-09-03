@@ -217,7 +217,7 @@ class GruppeHasTeilnehmerController extends Controller
             'anwesenheit.destroy',
         ])->contains(fn (string $permission) => $user->can($permission));
 
-        $gruppenTeilnehmer = GruppeHasPersonen::query()
+        $gruppenEintraege = GruppeHasPersonen::query()
             ->where('gruppe_id', $gruppe->id)
             ->with([
                 'teilnehmer.schueler',
@@ -227,34 +227,31 @@ class GruppeHasTeilnehmerController extends Controller
                 'tag',
                 'user',
             ])
-            ->get()
-            ->map(function (GruppeHasPersonen $eintrag) use ($canReadAttendance) {
-                if (! $eintrag->teilnehmer) {
-                    return null;
-                }
+            ->get();
 
-                $teilnehmer = clone $eintrag->teilnehmer;
+        // Eine laufende BvB-Gruppe besitzt pro Person und Anwesenheitstag einen
+        // Pivot-Datensatz. Die Person selbst wird deshalb nur einmal übertragen;
+        // ihre Tagesdaten hängen kompakt als Liste daran.
+        $gruppenTeilnehmer = $gruppenEintraege
+            ->filter(fn (GruppeHasPersonen $eintrag) => $eintrag->teilnehmer !== null)
+            ->groupBy(fn (GruppeHasPersonen $eintrag) => (int) $eintrag->personen_id)
+            ->map(function ($eintraege) use ($canReadAttendance) {
+                $teilnehmer = clone $eintraege->first()->teilnehmer;
                 $teilnehmer->setAttribute(
                     'parental_consent_received',
                     $this->parentalConsentReceived($teilnehmer)
                 );
-                $pivot = clone $eintrag;
-                $pivot->unsetRelation('teilnehmer');
-                if (! $canReadAttendance) {
-                    $pivot->makeHidden([
-                        'anwesenheitsstatuten_id',
-                        'bemerkung',
-                        'tage_id',
-                        'zeitgeplant_id',
-                        'zeittatsaechlich_id',
-                        'status',
-                        'tag',
-                        'zeitgeplant',
-                        'zeittatsaechlich',
-                    ]);
-                    $pivot->unsetRelations();
-                }
-                $teilnehmer->setRelation('pivot', $pivot);
+
+                $anwesenheitEintraege = $canReadAttendance
+                    ? $eintraege->map(function (GruppeHasPersonen $eintrag) {
+                        $pivot = clone $eintrag;
+                        $pivot->unsetRelation('teilnehmer');
+
+                        return $pivot;
+                    })->values()->all()
+                    : [];
+
+                $teilnehmer->setAttribute('anwesenheit_eintraege', $anwesenheitEintraege);
 
                 return $teilnehmer;
             })
@@ -510,7 +507,7 @@ class GruppeHasTeilnehmerController extends Controller
             'auswertung_config' => $this->paScoring->defaultConfig(),
         ];
 
-        if (! $this->istPotenzialanalyseGruppe($gruppe) || ! $projekt?->potenzialanalyse_aktiv || ! $canView) {
+        if (! $this->istPotenzialanalyseAuswertungsgruppe($gruppe) || ! $projekt?->potenzialanalyse_aktiv || ! $canView) {
             return $emptyPayload;
         }
 
@@ -752,6 +749,12 @@ class GruppeHasTeilnehmerController extends Controller
     private function istPotenzialanalyseGruppe(Gruppe $gruppe): bool
     {
         return strtolower((string) $gruppe->bereich?->name) === 'potenzialanalyse';
+    }
+
+    private function istPotenzialanalyseAuswertungsgruppe(Gruppe $gruppe): bool
+    {
+        return $this->istPotenzialanalyseGruppe($gruppe)
+            || (bool) $gruppe->projekt?->supportsLuvPotentialAnalysis();
     }
 
     private function bopGruppenContext(Gruppe $gruppe): ?array

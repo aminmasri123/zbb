@@ -126,7 +126,7 @@ class ParticipantListEnhancementsTest extends TestCase
 
     public function test_group_page_orders_all_participants_by_last_name(): void
     {
-        $user = $this->userWithParticipantAccess([]);
+        $user = $this->userWithParticipantAccess(['anwesenheit.index']);
         $project = Projekt::factory()->create();
         $this->assignToProject($user->person, $project);
         $user->update(['current_team_id' => $project->id]);
@@ -138,6 +138,7 @@ class ParticipantListEnhancementsTest extends TestCase
         $this->assignToProject($zebra, $project);
         $this->assignToProject($adler, $project);
         $this->assignToGroup($zebra, $group, $user);
+        $this->assignToGroup($zebra, $group, $user, '2026-08-15');
         $this->assignToGroup($adler, $group, $user);
 
         $this->actingAs($user)
@@ -147,6 +148,47 @@ class ParticipantListEnhancementsTest extends TestCase
                 ->has('gruppe.teilnehmer', 2)
                 ->where('gruppe.teilnehmer.0.id', $adler->id)
                 ->where('gruppe.teilnehmer.1.id', $zebra->id)
+                ->has('gruppe.teilnehmer.0.anwesenheit_eintraege', 1)
+                ->has('gruppe.teilnehmer.1.anwesenheit_eintraege', 2)
+            );
+    }
+
+    public function test_bvb_reha_group_exposes_pa_only_when_luv_and_pa_are_enabled(): void
+    {
+        $user = $this->userWithParticipantAccess(['potenzialanalyse.index']);
+        $project = Projekt::factory()->create([
+            'name' => 'BvB Reha',
+            'potenzialanalyse_aktiv' => true,
+        ]);
+        $this->assignToProject($user->person, $project);
+        $user->update(['current_team_id' => $project->id]);
+        $group = $this->group(
+            $project,
+            $user->person,
+            Bereich::query()->create(['name' => 'Allgemeine BvB-Gruppe']),
+        );
+
+        $this->actingAs($user)
+            ->get(route('gruppeHasTeilnehmer.show', $group->id))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('potenzialanalyse.aktiv', true)
+                ->where('potenzialanalyse.luv_foerderbedarf_aktiv', true)
+            );
+
+        $project->update([
+            'participant_profile_settings' => [
+                'enabled_tabs' => ['stammdaten'],
+                'tab_order' => Projekt::participantProfileTabKeys(),
+            ],
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('gruppeHasTeilnehmer.show', $group->id))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('potenzialanalyse.aktiv', false)
+                ->where('potenzialanalyse.luv_foerderbedarf_aktiv', false)
             );
     }
 
@@ -297,10 +339,10 @@ class ParticipantListEnhancementsTest extends TestCase
         ]);
     }
 
-    private function assignToGroup(Personen $person, Gruppe $group, User $user): void
+    private function assignToGroup(Personen $person, Gruppe $group, User $user, string $date = '2026-08-14'): void
     {
         $day = Tage::query()->firstOrCreate([
-            'datum' => '2026-08-14',
+            'datum' => $date,
             'wochentag' => 'Freitag',
         ]);
         $time = Zeiten::query()->firstOrCreate([
