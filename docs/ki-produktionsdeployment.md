@@ -52,6 +52,18 @@ sudo bash scripts/web-server/install-zbb-queue-worker.sh /var/www/matrix
 
 Das Skript migriert die versionierte `jobs`-Tabelle, cached die Konfiguration und installiert `zbb-laravel-queue.service`. Ein mit `&` gestarteter Worker reicht nicht, weil er beim Logout oder Neustart verschwinden kann.
 
+Bei jedem späteren Code-Update muss der dauerhaft laufende Worker den neuen
+Anwendungsstand laden. Nach dem Pull und dem erfolgreichen Build daher immer:
+
+```bash
+sudo -u www-data php artisan queue:restart
+```
+
+Der laufende Auftrag wird dabei noch beendet; anschließend startet systemd den
+Worker automatisch mit dem aktuellen Code neu. Ohne diesen Schritt können die
+Weboberfläche und der Hintergrundprozess vorübergehend unterschiedliche
+Versionen verwenden.
+
 Prüfung:
 
 ```bash

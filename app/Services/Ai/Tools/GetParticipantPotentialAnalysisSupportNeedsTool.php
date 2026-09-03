@@ -8,6 +8,8 @@ use App\Services\Ai\AiProjectAuthorizer;
 use App\Services\Ai\AiRunContext;
 use App\Services\Ai\Contracts\AiTool;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Carbon;
+use Throwable;
 
 final class GetParticipantPotentialAnalysisSupportNeedsTool implements AiTool
 {
@@ -35,7 +37,6 @@ final class GetParticipantPotentialAnalysisSupportNeedsTool implements AiTool
         $reports = PotenzialanalyseBericht::query()
             ->where('personen_id', $context->participantId)
             ->whereIn('status', ['fertig', 'geprueft'])
-            ->when($context->fromDate, fn ($query, $fromDate) => $query->whereDate('fertiggestellt_at', '>=', $fromDate))
             ->whereDate('fertiggestellt_at', '<=', $context->untilDate)
             ->whereHas('gruppe', fn ($query) => $query->where('projekt_id', $context->projectId))
             ->orderByDesc('fertiggestellt_at')
@@ -44,6 +45,8 @@ final class GetParticipantPotentialAnalysisSupportNeedsTool implements AiTool
 
         $entries = [];
         foreach (PotenzialanalyseBericht::LUV_FOERDERBEDARF_BEREICHE as $key => $definition) {
+            $approvedEntries = [];
+
             foreach ($reports as $report) {
                 $supportNeeds = (array) $report->luv_foerderbedarfe;
                 $entry = (array) ($supportNeeds[$key] ?? []);
@@ -58,24 +61,37 @@ final class GetParticipantPotentialAnalysisSupportNeedsTool implements AiTool
                     continue;
                 }
 
-                $entries[$key] = [
-                    'source_id' => "potential-analysis-support-{$report->id}-{$key}",
-                    'field_key' => $this->fieldKey($context->reportType, $key, $definition['field_key']),
-                    'category_key' => $key,
-                    'category' => $definition['label'],
-                    'decision' => $status === 'foerderbedarf' ? 'support_need' : 'no_support_need',
-                    'observation' => trim((string) ($entry['begruendung'] ?? '')) ?: null,
-                    'support_need' => $status === 'foerderbedarf'
-                        ? $supportNeed
-                        : "Im Bereich {$definition['label']} wurde kein zusätzlicher Förderbedarf festgestellt.",
-                    'report_status' => $report->status,
-                    'completed_at' => $report->fertiggestellt_at?->toIso8601String(),
-                    'approved_at' => $entry['freigegeben_am'] ?? null,
-                ];
+                $approvedAt = $this->approvedAt($entry, $report);
+                if (! $approvedAt
+                    || $approvedAt->toDateString() < $context->fromDate
+                    || $approvedAt->toDateString() > $context->untilDate) {
+                    continue;
+                }
 
-                // Die Berichte sind absteigend sortiert. Pro Kompetenzbereich
-                // genügt daher die neueste tatsächlich freigegebene Angabe.
-                break;
+                $approvedEntries[] = [
+                    'approved_timestamp' => $approvedAt->getTimestamp(),
+                    'entry' => [
+                        'source_id' => "potential-analysis-support-{$report->id}-{$key}",
+                        'field_key' => $this->fieldKey($context->reportType, $key, $definition['field_key']),
+                        'category_key' => $key,
+                        'category' => $definition['label'],
+                        'decision' => $status === 'foerderbedarf' ? 'support_need' : 'no_support_need',
+                        'observation' => trim((string) ($entry['begruendung'] ?? '')) ?: null,
+                        'support_need' => $status === 'foerderbedarf'
+                            ? $supportNeed
+                            : "Im Bereich {$definition['label']} wurde kein zusätzlicher Förderbedarf festgestellt.",
+                        'report_status' => $report->status,
+                        'completed_at' => $report->fertiggestellt_at?->toIso8601String(),
+                        'approved_at' => $approvedAt->toIso8601String(),
+                    ],
+                ];
+            }
+
+            $newestApprovedEntry = collect($approvedEntries)
+                ->sortByDesc('approved_timestamp')
+                ->first();
+            if ($newestApprovedEntry) {
+                $entries[$key] = $newestApprovedEntry['entry'];
             }
         }
 
@@ -93,5 +109,23 @@ final class GetParticipantPotentialAnalysisSupportNeedsTool implements AiTool
             'final' => 'support.description',
             default => $startFieldKey,
         };
+    }
+
+    /** @param array<string, mixed> $entry */
+    private function approvedAt(array $entry, PotenzialanalyseBericht $report): ?Carbon
+    {
+        $approvedAt = trim((string) ($entry['freigegeben_am'] ?? ''));
+
+        if ($approvedAt !== '') {
+            try {
+                return Carbon::parse($approvedAt);
+            } catch (Throwable) {
+                // Ältere Datensätze können noch keinen normierten Zeitwert besitzen.
+            }
+        }
+
+        return $report->fertiggestellt_at
+            ? Carbon::instance($report->fertiggestellt_at)
+            : null;
     }
 }

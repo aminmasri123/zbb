@@ -139,7 +139,7 @@ class AiReportOrchestratorTest extends TestCase
             'personen_id' => $participant->id,
             'user_id' => $user->id,
             'status' => 'geprueft',
-            'fertiggestellt_at' => '2026-09-03 20:59:00',
+            'fertiggestellt_at' => '2026-08-25 12:00:00',
             'luv_foerderbedarfe' => [
                 'personal' => [
                     'status' => 'kein_foerderbedarf',
@@ -193,7 +193,7 @@ class AiReportOrchestratorTest extends TestCase
             $user,
             $participant->id,
             'luv',
-            '2026-01-01',
+            '2026-09-01',
             '2026-09-05',
             'Erstelle einen menschlich formulierten Start-LuV-Entwurf.',
         );
