@@ -22,6 +22,7 @@ final class AiReportOrchestrator
         private readonly AgentClient $agent,
         private readonly AiToolRegistry $tools,
         private readonly AiProjectAuthorizer $authorizer,
+        private readonly ApprovedPaSupportNeedMerger $approvedPaSupportNeeds,
     ) {}
 
     /**
@@ -135,6 +136,8 @@ final class AiReportOrchestrator
         if ($response['kind'] !== 'final') {
             throw new AgentUnavailableException('Der KI-Agent forderte trotz vollstaendiger Daten weitere Tools an.');
         }
+
+        $response['report'] = $this->approvedPaSupportNeeds->merge($response['report'], $toolResults);
 
         return ['run_id' => $runId, 'report' => $response['report']];
     }

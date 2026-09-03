@@ -18,8 +18,8 @@ use App\Services\Ai\AiReportOrchestrator;
 use App\Services\Ai\AiRunContext;
 use App\Services\Ai\AiToolRegistry;
 use App\Services\Ai\Exceptions\AgentUnavailableException;
-use App\Services\Ai\Tools\GetProjectReportRulesTool;
 use App\Services\Ai\Tools\GetParticipantPotentialAnalysisSupportNeedsTool;
+use App\Services\Ai\Tools\GetProjectReportRulesTool;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -115,6 +115,98 @@ class AiReportOrchestratorTest extends TestCase
         } catch (AuthorizationException) {
             Http::assertNothingSent();
         }
+    }
+
+    public function test_it_guarantees_approved_pa_fields_even_when_the_model_omits_them(): void
+    {
+        [$user, $project, $participant] = $this->context();
+        $project->update(['potenzialanalyse_aktiv' => true]);
+        $standort = Standort::factory()->create();
+        $gruppe = Gruppe::query()->create([
+            'personen_id' => Personen::factory()->create()->id,
+            'bereich_id' => Bereich::query()->create(['name' => 'Potenzialanalyse'])->id,
+            'projekt_id' => $project->id,
+            'raum_id' => Raeume::query()->create([
+                'name' => 'PA-Test-Raum',
+                'standort_id' => $standort->id,
+                'typ' => 'Seminarraum',
+                'aktiv' => true,
+            ])->id,
+            'standort_id' => $standort->id,
+        ]);
+        $bericht = PotenzialanalyseBericht::query()->create([
+            'gruppe_id' => $gruppe->id,
+            'personen_id' => $participant->id,
+            'user_id' => $user->id,
+            'status' => 'geprueft',
+            'fertiggestellt_at' => '2026-09-03 20:59:00',
+            'luv_foerderbedarfe' => [
+                'personal' => [
+                    'status' => 'kein_foerderbedarf',
+                    'begruendung' => 'Arbeitet in vertrauten Situationen zunehmend selbstständig.',
+                    'foerderbedarf' => '',
+                    'freigegeben' => true,
+                    'freigegeben_von' => $user->id,
+                    'freigegeben_am' => '2026-09-03T20:59:00+02:00',
+                ],
+                'methodical' => [
+                    'status' => 'unprueft',
+                    'begruendung' => '',
+                    'foerderbedarf' => '',
+                    'freigegeben' => false,
+                ],
+                'social' => [
+                    'status' => 'foerderbedarf',
+                    'begruendung' => 'Der mündliche Ausdruck gelingt noch nicht durchgehend verständlich.',
+                    'foerderbedarf' => 'Mündlichen Ausdruck und grammatische Sicherheit stärken.',
+                    'freigegeben' => true,
+                    'freigegeben_von' => $user->id,
+                    'freigegeben_am' => '2026-09-03T20:59:03+02:00',
+                ],
+            ],
+        ]);
+
+        Http::fake(function (Request $request) {
+            $payload = $request->data();
+
+            return Http::response([
+                'kind' => 'final',
+                'run_id' => $payload['run_id'],
+                'report' => [
+                    'report_type' => 'luv',
+                    'title' => 'Start-LuV Entwurf',
+                    'sections' => [[
+                        'heading' => '[competence.school.assessment] Schulische Basiskompetenzen – Einschätzung',
+                        'claims' => [[
+                            'claim_id' => 'school-1',
+                            'text' => 'Eine belegte schulische Beobachtung liegt vor.',
+                            'status' => 'supported',
+                            'source_ids' => ['participant-development-summary'],
+                        ]],
+                    ]],
+                    'warnings' => [],
+                ],
+            ]);
+        });
+
+        $result = app(AiReportOrchestrator::class)->draft(
+            $user,
+            $participant->id,
+            'luv',
+            '2026-01-01',
+            '2026-09-05',
+            'Erstelle einen menschlich formulierten Start-LuV-Entwurf.',
+        );
+        $sections = collect($result['report']['sections'])
+            ->keyBy(fn (array $section) => preg_match('/^\[([^]]+)\]/', $section['heading'], $match) ? $match[1] : '');
+
+        $this->assertTrue($sections->has('competence.personal.support_need'));
+        $this->assertFalse($sections->has('competence.methodical.support_need'));
+        $this->assertTrue($sections->has('competence.social.support_need'));
+        $this->assertSame(
+            ['potential-analysis-support-'.$bericht->id.'-social'],
+            $sections['competence.social.support_need']['claims'][0]['source_ids'],
+        );
     }
 
     public function test_it_does_not_send_project_disabled_sources_to_the_agent(): void
@@ -280,6 +372,16 @@ class AiReportOrchestratorTest extends TestCase
                 ],
             ],
         ]);
+        $newerGroup = $gruppe->replicate();
+        $newerGroup->save();
+        PotenzialanalyseBericht::query()->create([
+            'gruppe_id' => $newerGroup->id,
+            'personen_id' => $participant->id,
+            'user_id' => $user->id,
+            'status' => 'geprueft',
+            'fertiggestellt_at' => '2026-04-01 10:00:00',
+            'luv_foerderbedarfe' => PotenzialanalyseBericht::defaultLuvFoerderbedarfe(),
+        ]);
         $context = new AiRunContext(
             $user->id,
             $project->id,
@@ -303,6 +405,38 @@ class AiReportOrchestratorTest extends TestCase
         );
         $this->assertSame('no_support_need', $entries['competence.social.support_need']['decision']);
         $this->assertFalse($entries->has('competence.methodical.support_need'));
+
+        $interimContext = new AiRunContext(
+            $user->id,
+            $project->id,
+            [GetParticipantPotentialAnalysisSupportNeedsTool::NAME],
+            $participant->id,
+            '2026-01-01',
+            '2026-06-30',
+            'interim',
+        );
+        $interimResult = app(AiToolRegistry::class)->execute(
+            $user,
+            $interimContext,
+            GetParticipantPotentialAnalysisSupportNeedsTool::NAME,
+        );
+        $this->assertSame('competence.personal.current_need', $interimResult['entries'][0]['field_key']);
+
+        $finalContext = new AiRunContext(
+            $user->id,
+            $project->id,
+            [GetParticipantPotentialAnalysisSupportNeedsTool::NAME],
+            $participant->id,
+            '2026-01-01',
+            '2026-06-30',
+            'final',
+        );
+        $finalResult = app(AiToolRegistry::class)->execute(
+            $user,
+            $finalContext,
+            GetParticipantPotentialAnalysisSupportNeedsTool::NAME,
+        );
+        $this->assertSame('support.description', $finalResult['entries'][0]['field_key']);
     }
 
     /** @return array{User, Projekt, Personen} */

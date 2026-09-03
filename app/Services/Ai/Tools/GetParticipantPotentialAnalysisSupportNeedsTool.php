@@ -32,20 +32,20 @@ final class GetParticipantPotentialAnalysisSupportNeedsTool implements AiTool
             throw new AuthorizationException('Die Potenzialanalyse ist fuer dieses LuV-Projekt nicht als Quelle freigegeben.');
         }
 
-        $report = PotenzialanalyseBericht::query()
+        $reports = PotenzialanalyseBericht::query()
             ->where('personen_id', $context->participantId)
             ->whereIn('status', ['fertig', 'geprueft'])
+            ->when($context->fromDate, fn ($query, $fromDate) => $query->whereDate('fertiggestellt_at', '>=', $fromDate))
             ->whereDate('fertiggestellt_at', '<=', $context->untilDate)
             ->whereHas('gruppe', fn ($query) => $query->where('projekt_id', $context->projectId))
             ->orderByDesc('fertiggestellt_at')
             ->orderByDesc('updated_at')
-            ->first();
+            ->get();
 
         $entries = [];
-        if ($report) {
-            $supportNeeds = (array) $report->luv_foerderbedarfe;
-
-            foreach (PotenzialanalyseBericht::LUV_FOERDERBEDARF_BEREICHE as $key => $definition) {
+        foreach (PotenzialanalyseBericht::LUV_FOERDERBEDARF_BEREICHE as $key => $definition) {
+            foreach ($reports as $report) {
+                $supportNeeds = (array) $report->luv_foerderbedarfe;
                 $entry = (array) ($supportNeeds[$key] ?? []);
                 $status = (string) ($entry['status'] ?? 'unprueft');
                 $approved = (bool) ($entry['freigegeben'] ?? false);
@@ -60,7 +60,8 @@ final class GetParticipantPotentialAnalysisSupportNeedsTool implements AiTool
 
                 $entries[$key] = [
                     'source_id' => "potential-analysis-support-{$report->id}-{$key}",
-                    'field_key' => $definition['field_key'],
+                    'field_key' => $this->fieldKey($context->reportType, $key, $definition['field_key']),
+                    'category_key' => $key,
                     'category' => $definition['label'],
                     'decision' => $status === 'foerderbedarf' ? 'support_need' : 'no_support_need',
                     'observation' => trim((string) ($entry['begruendung'] ?? '')) ?: null,
@@ -71,6 +72,10 @@ final class GetParticipantPotentialAnalysisSupportNeedsTool implements AiTool
                     'completed_at' => $report->fertiggestellt_at?->toIso8601String(),
                     'approved_at' => $entry['freigegeben_am'] ?? null,
                 ];
+
+                // Die Berichte sind absteigend sortiert. Pro Kompetenzbereich
+                // genügt daher die neueste tatsächlich freigegebene Angabe.
+                break;
             }
         }
 
@@ -79,5 +84,14 @@ final class GetParticipantPotentialAnalysisSupportNeedsTool implements AiTool
             'period' => ['from' => $context->fromDate, 'until' => $context->untilDate],
             'entries' => array_values($entries),
         ];
+    }
+
+    private function fieldKey(string $reportType, string $categoryKey, string $startFieldKey): string
+    {
+        return match ($reportType) {
+            'interim' => "competence.{$categoryKey}.current_need",
+            'final' => 'support.description',
+            default => $startFieldKey,
+        };
     }
 }

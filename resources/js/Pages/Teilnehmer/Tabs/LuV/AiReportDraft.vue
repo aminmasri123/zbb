@@ -81,6 +81,7 @@
 
                         <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                             Der erzeugte Text ist ausschließlich eine Arbeitshilfe. Fakten ohne freigegebene Quelle werden als „Daten fehlen“ markiert.
+                            Fachlich freigegebene PA-Förderbedarfe im gewählten Zeitraum werden automatisch den passenden LuV-Feldern zugeordnet.
                         </div>
 
                         <div class="flex justify-end gap-3">
@@ -136,6 +137,11 @@
                             <p class="mt-1 text-xs text-gray-400">Lauf-ID: {{ runId }}</p>
                         </div>
 
+                        <div v-if="paFilledFieldCount" class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+                            <strong>{{ paFilledFieldCount }} PA-{{ paFilledFieldCount === 1 ? 'Angabe wurde' : 'Angaben wurden' }} automatisch zugeordnet.</strong>
+                            Die Inhalte sind fachlich freigegeben, bleiben im LuV-Entwurf aber weiterhin bearbeitbar.
+                        </div>
+
                         <section v-for="group in reviewSchema" :key="group.key" class="rounded-xl border border-gray-200 bg-gray-50 p-5">
                             <h4 class="mb-4 text-lg font-semibold text-gray-900">{{ group.heading }}</h4>
                             <div class="grid gap-4 lg:grid-cols-2">
@@ -148,10 +154,10 @@
                                         <span v-else class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">Daten fehlen</span>
                                     </div>
                                     <p class="whitespace-pre-line text-sm leading-6 text-gray-800">{{ claim.text }}</p>
-                                    <p v-if="claim.source_ids.length" class="mt-2 text-xs text-gray-500">Quellen: {{ claim.source_ids.join(', ') }}</p>
+                                    <p v-if="claim.source_ids.length" class="mt-2 text-xs text-gray-500">Quellen: {{ sourceLabels(claim.source_ids).join(', ') }}</p>
                                     </div>
                                     </template>
-                                    <p v-else class="text-sm italic text-amber-700">Daten fehlen.</p>
+                                    <p v-else class="text-sm italic text-amber-700">{{ missingFieldMessage(field) }}</p>
                                 </article>
                             </div>
                         </section>
@@ -234,6 +240,28 @@ const fieldKeyFromHeading = (heading = '') => heading.match(/^\[([a-z][a-z0-9_.-
 const claimsForField = (key) => (draft.value?.sections || [])
     .filter((section) => fieldKeyFromHeading(section.heading) === key)
     .flatMap((section) => section.claims || []);
+const isPaSource = (sourceId = '') => sourceId.startsWith('potential-analysis-support-');
+const sourceLabel = (sourceId = '') => {
+    if (isPaSource(sourceId)) return 'Fachlich freigegebene Potenzialanalyse';
+    if (sourceId === 'participant-development-summary') return 'Teilnehmerentwicklung';
+    if (sourceId.startsWith('attendance-')) return 'Anwesenheit';
+    if (sourceId.startsWith('documentation-')) return 'Dokumentation';
+    if (sourceId.startsWith('previous-luv-')) return 'Frühere LuV';
+    if (sourceId.startsWith('participant-identity-')) return 'Stammdaten';
+
+    return sourceId;
+};
+const paFilledFieldCount = computed(() => new Set(
+    (draft.value?.sections || [])
+        .filter((section) => (section.claims || []).some((claim) => (claim.source_ids || []).some(isPaSource)))
+        .map((section) => fieldKeyFromHeading(section.heading))
+        .filter(Boolean),
+).size);
+const sourceLabels = (sourceIds = []) => [...new Set(sourceIds.map(sourceLabel))];
+const missingFieldMessage = (field) =>
+    /^competence\.(personal|methodical|social)\.(support_need|current_need)$/.test(field.key)
+        ? 'Kein fachlich freigegebener PA-Förderbedarf im gewählten Zeitraum vorhanden.'
+        : 'Daten fehlen.';
 const displayedElapsedSeconds = computed(() => Math.max(
     Number(runStatus.elapsed_seconds) || 0,
     clientElapsedSeconds.value,
@@ -404,7 +432,7 @@ const generate = async () => {
         const aiFields = fieldsForType(form.luv_type)
             .filter((field) => !['master_data', 'discussion'].includes(field.groupKey))
             .map((field) => `[${field.key}] ${field.label}`);
-        const structuredRequest = `${form.request}\n\nErstelle nur für Formularfelder mit mindestens einem konkreten Beleg einen eigenen Abschnitt; lasse unbelegte Felder vollständig weg, weil die Oberfläche sie automatisch als „Daten fehlen“ kennzeichnet. Die Abschnittsüberschrift muss exakt wie vorgegeben mit [Feldschlüssel] beginnen. Formuliere sachlich im Stil der BvB-Reha-Beispielformulare, als nachvollziehbare pädagogische Beobachtung. Keine Diagnose, keine Vermutung, keine Wiederholung und höchstens zwei kurze Sätze je Feld. Bevorzuge wenige aussagekräftige Felder gegenüber einer langen Ausgabe.\n\nMögliche Formularfelder:\n${aiFields.join('\n')}`;
+        const structuredRequest = `${form.request}\n\nErstelle nur für Formularfelder mit mindestens einem konkreten Beleg einen eigenen Abschnitt; lasse unbelegte Felder vollständig weg, weil die Oberfläche sie automatisch als „Daten fehlen“ kennzeichnet. Fachlich freigegebene Einträge aus der Potenzialanalyse müssen unter ihrem vorgegebenen Feldschlüssel vollständig berücksichtigt werden. Die Abschnittsüberschrift muss exakt wie vorgegeben mit [Feldschlüssel] beginnen. Schreibe wie eine erfahrene pädagogische Fachkraft: natürliches, klares Deutsch, abwechslungsreiche Satzanfänge und nachvollziehbare Beobachtungen. Keine Diagnose, keine Vermutung, keine Stichwortsammlung, keine KI-Metasprache, keine unnötige Verwaltungssprache, keine Wiederholung und höchstens zwei kurze Sätze je Feld.\n\nMögliche Formularfelder:\n${aiFields.join('\n')}`;
         const response = await axios.post(route('ai.reports.draft'), {
             participant_id: props.participantId,
             report_type: luvTypes.find((option) => option.value === form.luv_type)?.reportType || 'luv',
