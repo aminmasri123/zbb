@@ -519,29 +519,34 @@ class BopGruppeExportController extends Controller
     {
         $context = $this->bopContext($gruppe);
         $partner = ! empty($context['partner_id']) ? Partner::find($context['partner_id']) : null;
+        $classParticipantNumbers = [];
 
         return $gruppe->teilnehmer
             ->unique('id')
             ->sortBy(fn (Personen $person) => strtolower(($person->nachname ?? '').' '.($person->vorname ?? '')))
             ->values()
-            ->map(function (Personen $person, int $index) use ($gruppe, $context, $partner) {
+            ->map(function (Personen $person, int $index) use ($gruppe, $context, $partner, &$classParticipantNumbers) {
                 $schueler = $this->schuelerFuerPerson($person, $context);
                 $itemPartner = $partner ?: ($schueler?->schule_id ? Partner::find($schueler->schule_id) : null);
                 $bereich = $gruppe->bereich?->name ?? '';
                 $schule = $itemPartner?->name ?? '';
                 $anleiter = trim(($gruppe->betreuer?->vorname ?? '').' '.($gruppe->betreuer?->nachname ?? ''));
+                $klasse = trim((string) ($schueler?->klasse ?? ''));
+                $teilnehmerNr = $this->classParticipantNumber($schueler, $classParticipantNumbers);
 
                 $values = [
                     'personen_id' => $person->id,
                     'nr' => $index + 1,
                     'nummer' => $index + 1,
+                    'teilnehmer_nr' => $teilnehmerNr ?? '',
+                    'ablage_nr' => $teilnehmerNr === null || $klasse === '' ? '' : $klasse.'-'.$teilnehmerNr,
                     'vorname' => $person->vorname ?? '',
                     'nachname' => $person->nachname ?? '',
                     'voller_name' => trim(($person->vorname ?? '').' '.($person->nachname ?? '')),
                     'name' => trim(($person->nachname ?? '').', '.($person->vorname ?? '')),
                     'geburtsdatum' => $this->formatDate($person->geburtsdatum),
                     'geschlecht' => $person->geschlecht ?? '',
-                    'klasse' => $schueler?->klasse ?? '',
+                    'klasse' => $klasse,
                     'schule' => $schule,
                     'schule_name' => $schule,
                     'schulform' => $this->schulform($schueler),
@@ -564,6 +569,55 @@ class BopGruppeExportController extends Controller
 
                 return array_merge($values, $this->bereichMarkierungen($bereich));
             });
+    }
+
+    private function classParticipantNumber(?PersonenIstSchueler $student, array &$cache): ?int
+    {
+        $class = trim((string) ($student?->klasse ?? ''));
+        if (! $student?->schule_id || ! $student->schuljahr || ! $student->teil || $class === '') {
+            return null;
+        }
+
+        $cacheKey = implode('|', [
+            $student->schule_id,
+            (string) $student->schuljahr,
+            (string) $student->teil,
+            mb_strtolower($class),
+        ]);
+
+        if (! array_key_exists($cacheKey, $cache)) {
+            $cache[$cacheKey] = PersonenIstSchueler::query()
+                ->filterSchueler($student->schule_id, $student->schuljahr, $student->teil)
+                ->where('klasse', $student->klasse)
+                ->get()
+                ->filter(fn (PersonenIstSchueler $classmate) => $classmate->person !== null)
+                ->unique('person_id')
+                ->sort(function (PersonenIstSchueler $left, PersonenIstSchueler $right) {
+                    $lastName = strnatcasecmp(
+                        (string) ($left->person?->nachname ?? ''),
+                        (string) ($right->person?->nachname ?? '')
+                    );
+                    if ($lastName !== 0) {
+                        return $lastName;
+                    }
+
+                    $firstName = strnatcasecmp(
+                        (string) ($left->person?->vorname ?? ''),
+                        (string) ($right->person?->vorname ?? '')
+                    );
+
+                    return $firstName !== 0
+                        ? $firstName
+                        : ((int) $left->person_id <=> (int) $right->person_id);
+                })
+                ->values()
+                ->mapWithKeys(fn (PersonenIstSchueler $classmate, int $index) => [
+                    (int) $classmate->person_id => $index + 1,
+                ])
+                ->all();
+        }
+
+        return $cache[$cacheKey][(int) $student->person_id] ?? null;
     }
 
     private function fillTemplate(TemplateProcessor $processor, array $values): void
@@ -745,6 +799,12 @@ class BopGruppeExportController extends Controller
         $this->writePdfValue($pdf, 151, 27.3, $datum, 45);
         $this->writePdfValue($pdf, 48, 39.1, $item['schule'], 30);
         $this->writePdfValue($pdf, 105, 39.1, $item['klasse'], 37);
+
+        if (($item['ablage_nr'] ?? '') !== '') {
+            $pdf->SetFillColor(238, 237, 237);
+            $pdf->Rect(132.3, 36.1, 49.7, 8.8, 'F');
+            $this->writePdfValue($pdf, 134.5, 39.1, 'TN-NR.: '.$item['ablage_nr'], 45);
+        }
     }
 
     private function writeTagesauswertungPartnerLogos(Fpdi $pdf): void

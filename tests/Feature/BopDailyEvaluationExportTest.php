@@ -17,6 +17,7 @@ use App\Models\User;
 use App\Models\Zeiten;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use setasign\Fpdi\Fpdi;
+use Smalot\PdfParser\Parser;
 use Tests\TestCase;
 
 class BopDailyEvaluationExportTest extends TestCase
@@ -49,6 +50,34 @@ class BopDailyEvaluationExportTest extends TestCase
 
         $pdf = new Fpdi;
         $this->assertSame(8, $pdf->setSourceFile($response->getFile()->getPathname()));
+    }
+
+    public function test_participant_number_matches_the_alphabetical_order_within_the_class(): void
+    {
+        [$user, $group, $project, $partner] = $this->context();
+        $earlierClassmate = Personen::factory()->create([
+            'typ' => 'teilnehmer',
+            'vorname' => 'Anna',
+            'nachname' => 'Adler',
+        ]);
+        PersonenIstSchueler::query()->create([
+            'person_id' => $earlierClassmate->id,
+            'schule_id' => $partner->id,
+            'schuljahr' => '2026/2027',
+            'teil' => 'Teil 1',
+            'klasse' => '7.1',
+        ]);
+        $project->teilnehmer()->attach($earlierClassmate->id);
+
+        $response = $this->actingAs($user)->get(route('gruppe.bop.export.tagesauswertung', [
+            'gruppe' => $group->id,
+            'bo_tag' => 1,
+        ]))->assertOk();
+
+        $text = (new Parser)->parseFile($response->getFile()->getPathname())->getText();
+
+        $this->assertStringContainsString('TN-NR.: 7.1-2', $text);
+        $this->assertStringContainsString('TN-NR.: 7.2-1', $text);
     }
 
     private function context(): array
@@ -102,6 +131,6 @@ class BopDailyEvaluationExportTest extends TestCase
             ]);
         }
 
-        return [$user, $group];
+        return [$user, $group, $project, $partner];
     }
 }
