@@ -40,6 +40,7 @@
     const paSaving = ref(false)
     const paDatenGeladen = ref(false)
     const paAutoSaveStatus = ref('idle')
+    const paAutoSaveError = ref('')
     const paAutoSaveBereit = ref(false)
     const paAutoSaveTimers = new Map()
     const paSaveVersions = new Map()
@@ -951,7 +952,7 @@ const selectedPaTeilnehmer = computed(() =>
 )
 
 const paAutoSaveStatusText = computed(() => {
-  if (paAutoSaveStatus.value === 'pending') return 'Änderungen werden gespeichert ...'
+  if (paAutoSaveStatus.value === 'pending') return 'Änderungen werden gleich gespeichert ...'
   if (paAutoSaveStatus.value === 'saving') return 'Speichert automatisch ...'
   if (paAutoSaveStatus.value === 'saved') return 'Automatisch gespeichert'
   if (paAutoSaveStatus.value === 'error') return 'Auto-Speichern fehlgeschlagen'
@@ -1104,6 +1105,16 @@ const uebernehmeAllePaVorschlaege = async () => {
 const csrfToken = () =>
   document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
 
+const paSpeicherFehlermeldung = (error) => {
+  const validationErrors = error.response?.data?.errors
+
+  if (validationErrors && typeof validationErrors === 'object') {
+    return Object.values(validationErrors).flat().join(' ')
+  }
+
+  return error.response?.data?.message || 'Potenzialanalyse konnte nicht gespeichert werden.'
+}
+
 const speicherePotenzialanalyse = async ({ personenId = null, silent = false, version = null } = {}) => {
   if (!canEditPotenzialanalyse.value) return false
 
@@ -1129,6 +1140,7 @@ const speicherePotenzialanalyse = async ({ personenId = null, silent = false, ve
   paSaveInFlight.add(key)
   paSaving.value = true
   paAutoSaveStatus.value = 'saving'
+  paAutoSaveError.value = ''
 
   const saveVersion = version ?? (paSaveVersions.get(key) || 0)
 
@@ -1148,6 +1160,7 @@ const speicherePotenzialanalyse = async ({ personenId = null, silent = false, ve
       }
       paDirtyTeilnehmerIds.delete(key)
       paAutoSaveStatus.value = 'saved'
+      paAutoSaveError.value = ''
     } else {
       paAutoSaveStatus.value = 'pending'
     }
@@ -1165,12 +1178,13 @@ const speicherePotenzialanalyse = async ({ personenId = null, silent = false, ve
     return true
   } catch (error) {
     paAutoSaveStatus.value = 'error'
+    paAutoSaveError.value = paSpeicherFehlermeldung(error)
 
     if (!silent) {
       await Swal.fire({
         icon: 'error',
         title: 'Fehler',
-        text: error.response?.data?.message || 'Potenzialanalyse konnte nicht gespeichert werden.',
+        text: paAutoSaveError.value,
       })
     } else {
       console.error('Potenzialanalyse Auto-Save fehlgeschlagen:', error)
@@ -1218,6 +1232,7 @@ const planePotenzialanalyseSpeichern = ({ personenId = null, sofort = false } = 
   paSaveVersions.set(key, nextVersion)
   paDirtyTeilnehmerIds.add(key)
   paAutoSaveStatus.value = sofort ? 'saving' : 'pending'
+  paAutoSaveError.value = ''
 
   const timer = window.setTimeout(() => {
     paAutoSaveTimers.delete(key)
@@ -1226,7 +1241,7 @@ const planePotenzialanalyseSpeichern = ({ personenId = null, sofort = false } = 
       silent: true,
       version: nextVersion,
     })
-  }, sofort ? 0 : 650)
+  }, sofort ? 0 : 1500)
 
   paAutoSaveTimers.set(key, timer)
 }
@@ -1275,20 +1290,6 @@ const speichereOffenePaAenderungen = () => {
     }
   })
 }
-
-watch(paTeilnehmerDaten, () => {
-  if (!paAutoSaveBereit.value) {
-    return
-  }
-
-  const teilnehmerId = selectedPaTeilnehmer.value?.id
-
-  if (!teilnehmerId) {
-    return
-  }
-
-  planePotenzialanalyseSpeichern({ personenId: teilnehmerId })
-}, { deep: true })
 
 watch(() => props.potenzialanalyse, (payload) => {
   if (!payload) return
@@ -2948,6 +2949,14 @@ const exportMitTag = async () => {
               :disabled="paSaving || !selectedPaTeilnehmer || !canEditPotenzialanalyse"
               @click="speicherePotenzialanalyse()"
             />
+            <div
+              v-if="paAutoSaveError"
+              class="basis-full rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+              role="alert"
+            >
+              <strong>Die letzte Änderung wurde noch nicht gespeichert.</strong>
+              {{ paAutoSaveError }} Bitte prüfen und anschließend „Jetzt speichern“ wählen.
+            </div>
           </div>
         </div>
 
@@ -3266,6 +3275,7 @@ const exportMitTag = async () => {
                     optionValue="value"
                     class="w-56 max-w-full"
                     :disabled="!canEditPotenzialanalyse"
+                    @update:modelValue="planePotenzialanalyseSpeichern({ personenId: selectedPaTeilnehmer.id, sofort: true })"
                   />
                   <Button
                     v-if="can('gruppe.bop.export.berichte-pa')"
