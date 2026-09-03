@@ -36,6 +36,7 @@
     const paTeilnehmerDaten = ref(JSON.parse(JSON.stringify(props.potenzialanalyse?.teilnehmer || {})))
     const selectedPaTeilnehmerId = ref(null)
     const paSaving = ref(false)
+    const paDatenGeladen = ref(false)
     const paAutoSaveStatus = ref('idle')
     const paAutoSaveBereit = ref(false)
     const paAutoSaveTimers = new Map()
@@ -1274,6 +1275,23 @@ watch(paTeilnehmerDaten, () => {
 
   planePotenzialanalyseSpeichern({ personenId: teilnehmerId })
 }, { deep: true })
+
+watch(() => props.potenzialanalyse, (payload) => {
+  if (!payload) return
+
+  paAutoSaveBereit.value = false
+  paTeilnehmerDaten.value = JSON.parse(JSON.stringify(payload.teilnehmer || {}))
+  paDatenGeladen.value = true
+
+  if (paAktiv.value && gruppenTeilnehmer.value.length) {
+    selectedPaTeilnehmerId.value ||= gruppenTeilnehmer.value[0].id
+    gruppenTeilnehmer.value.forEach((teilnehmer) => ensurePaEintrag(teilnehmer.id))
+  }
+
+  window.setTimeout(() => {
+    paAutoSaveBereit.value = true
+  }, 0)
+})
 
 const waehlePaTeilnehmer = (teilnehmer) => {
   selectedPaTeilnehmerId.value = teilnehmer.id
@@ -2871,6 +2889,14 @@ const exportMitTag = async () => {
           </table>
         </div>
         </div>
+      </div>
+
+      <div
+        v-if="props.gruppe?.projekt?.potenzialanalyse_aktiv && !paDatenGeladen"
+        class="flex items-center gap-3 border-t border-gray-200 py-5 text-sm text-gray-500"
+      >
+        <i class="pi pi-spin pi-spinner text-zbb"></i>
+        Potenzialanalyse wird im Hintergrund geladen …
       </div>
 
       <div v-if="paAktiv" class="space-y-4 border-t border-gray-200 pt-6">

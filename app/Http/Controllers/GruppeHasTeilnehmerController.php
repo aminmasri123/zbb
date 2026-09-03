@@ -204,8 +204,6 @@ class GruppeHasTeilnehmerController extends Controller
             'klassenbuecher.typ',
             'projekt.dokumente.bereiche',
             'projekt.dokumentKategorien.dokumente.bereiche',
-            'projekt.potenzialanalyseUebungen.kriterien',
-            'projekt.potenzialanalyseUebungen.kompetenzZuordnungen',
 
         ])->findOrFail($id);
 
@@ -328,7 +326,17 @@ class GruppeHasTeilnehmerController extends Controller
                 $gruppe->enddatum ?: $gruppe->anfangsdatum,
             ),
             'bopLegacyExporte' => $this->bopLegacyExporte($gruppe),
-            'potenzialanalyse' => $this->potenzialanalysePayload($gruppe, $user),
+            // PA-Daten enthalten Übungen, Bewertungen und Berichtstexte. Sie
+            // werden getrennt nachgeladen, damit ein langsamer PA-Datensatz
+            // niemals mehr die komplette Gruppenseite blockiert.
+            'potenzialanalyse' => Inertia::defer(function () use ($gruppe, $user) {
+                $gruppe->projekt?->loadMissing([
+                    'potenzialanalyseUebungen.kriterien',
+                    'potenzialanalyseUebungen.kompetenzZuordnungen',
+                ]);
+
+                return $this->potenzialanalysePayload($gruppe, $user);
+            }, 'potenzialanalyse'),
             'bereichsauswertung' => $this->bereichsauswertungPayload($gruppe, $user),
         ]);
 

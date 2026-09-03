@@ -174,8 +174,11 @@ class ParticipantListEnhancementsTest extends TestCase
             ->get(route('gruppeHasTeilnehmer.show', $group->id))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->where('potenzialanalyse.aktiv', true)
-                ->where('potenzialanalyse.luv_foerderbedarf_aktiv', true)
+                ->missing('potenzialanalyse')
+                ->loadDeferredProps('potenzialanalyse', fn (Assert $reload) => $reload
+                    ->where('potenzialanalyse.aktiv', true)
+                    ->where('potenzialanalyse.luv_foerderbedarf_aktiv', true)
+                )
             );
 
         $project->update([
@@ -189,8 +192,11 @@ class ParticipantListEnhancementsTest extends TestCase
             ->get(route('gruppeHasTeilnehmer.show', $group->id))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->where('potenzialanalyse.aktiv', false)
-                ->where('potenzialanalyse.luv_foerderbedarf_aktiv', false)
+                ->missing('potenzialanalyse')
+                ->loadDeferredProps('potenzialanalyse', fn (Assert $reload) => $reload
+                    ->where('potenzialanalyse.aktiv', false)
+                    ->where('potenzialanalyse.luv_foerderbedarf_aktiv', false)
+                )
             );
     }
 
