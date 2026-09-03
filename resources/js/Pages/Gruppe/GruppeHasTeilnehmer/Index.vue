@@ -2064,33 +2064,37 @@ const statusUebersicht = computed(() => {
 onMounted(() => {
   geheZuAktuellerWoche()
 
-  const gruppiert = {}
-  props.gruppe.teilnehmer.forEach(teilnehmer => {
-    const anwesenheitEintraege = Array.isArray(teilnehmer.anwesenheit_eintraege)
-      ? teilnehmer.anwesenheit_eintraege
-      : []
-    const eintraege = anwesenheitEintraege.length
-      ? anwesenheitEintraege.map(pivot => ({ ...teilnehmer, pivot }))
-      : [teilnehmer]
+  gruppenTeilnehmer.value = sortiereTeilnehmerNachNachname(props.gruppe.teilnehmer.map(teilnehmer => {
+    // Neuer, kompakter Payload: direkter Zugriff je Datum statt für jeden
+    // Kalendertag alle Anwesenheitseinträge erneut zu durchsuchen.
+    const anwesenheitNachDatum = { ...(teilnehmer.anwesenheit_nach_datum || {}) }
 
-    if (!gruppiert[teilnehmer.id]) gruppiert[teilnehmer.id] = []
-    gruppiert[teilnehmer.id].push(...eintraege)
-  })
+    // Übergangsunterstützung für Antworten eines älteren Backends.
+    if (!Object.keys(anwesenheitNachDatum).length && Array.isArray(teilnehmer.anwesenheit_eintraege)) {
+      teilnehmer.anwesenheit_eintraege.forEach((pivot) => {
+        const datum = pivot?.tag?.datum
+        if (!datum) return
 
-  gruppenTeilnehmer.value = sortiereTeilnehmerNachNachname(Object.values(gruppiert).map(teilnehmerGruppe => {
-    const basis = teilnehmerGruppe[0]
+        anwesenheitNachDatum[datum] = {
+          status: pivot?.status?.status,
+          startzeit: pivot?.zeittatsaechlich?.startzeit,
+          endzeit: pivot?.zeittatsaechlich?.endzeit,
+        }
+      })
+    }
+
+    const basis = { ...teilnehmer }
+    delete basis.anwesenheit_eintraege
 
     return {
       ...basis,
       anwesenheit: tage.value.map(tag => {
-        const eintrag = teilnehmerGruppe.find(tt => tt.pivot?.tag?.datum === tag.date)
-        return eintrag?.pivot?.status?.status || 'unentschuldigt'
+        return anwesenheitNachDatum[tag.date]?.status || 'unentschuldigt'
       }),
       zeiten: tage.value.map(tag => {
-        const eintrag = teilnehmerGruppe.find(tt => tt.pivot?.tag?.datum === tag.date)
         return {
-          start: eintrag?.pivot?.zeittatsaechlich?.startzeit || props.gruppe.startzeit,
-          ende: eintrag?.pivot?.zeittatsaechlich?.endzeit || props.gruppe.endzeit,
+          start: anwesenheitNachDatum[tag.date]?.startzeit || props.gruppe.startzeit,
+          ende: anwesenheitNachDatum[tag.date]?.endzeit || props.gruppe.endzeit,
         }
       }),
     }

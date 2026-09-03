@@ -148,8 +148,10 @@ class ParticipantListEnhancementsTest extends TestCase
                 ->has('gruppe.teilnehmer', 2)
                 ->where('gruppe.teilnehmer.0.id', $adler->id)
                 ->where('gruppe.teilnehmer.1.id', $zebra->id)
-                ->has('gruppe.teilnehmer.0.anwesenheit_eintraege', 1)
-                ->has('gruppe.teilnehmer.1.anwesenheit_eintraege', 2)
+                ->has('gruppe.teilnehmer.0.anwesenheit_nach_datum', 1)
+                ->where('gruppe.teilnehmer.0.anwesenheit_nach_datum.2026-08-14.status', 'anwesend')
+                ->has('gruppe.teilnehmer.1.anwesenheit_nach_datum', 2)
+                ->where('gruppe.teilnehmer.1.anwesenheit_nach_datum.2026-08-15.status', 'anwesend')
             );
     }
 

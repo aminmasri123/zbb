@@ -219,13 +219,21 @@ class GruppeHasTeilnehmerController extends Controller
 
         $gruppenEintraege = GruppeHasPersonen::query()
             ->where('gruppe_id', $gruppe->id)
+            ->without(['zeitgeplant', 'zeittatsaechlich', 'status', 'tag'])
+            ->select([
+                'id',
+                'gruppe_id',
+                'personen_id',
+                'tage_id',
+                'zeittatsaechlich_id',
+                'anwesenheitsstatuten_id',
+            ])
             ->with([
-                'teilnehmer.schueler',
-                'zeitgeplant',
-                'zeittatsaechlich',
-                'status',
-                'tag',
-                'user',
+                'teilnehmer:id,vorname,nachname,geschlecht',
+                'teilnehmer.schueler:id,person_id,eee',
+                'zeittatsaechlich:id,startzeit,endzeit',
+                'status:id,status',
+                'tag:id,datum',
             ])
             ->get();
 
@@ -242,16 +250,32 @@ class GruppeHasTeilnehmerController extends Controller
                     $this->parentalConsentReceived($teilnehmer)
                 );
 
-                $anwesenheitEintraege = $canReadAttendance
+                $anwesenheitNachDatum = $canReadAttendance
                     ? $eintraege->map(function (GruppeHasPersonen $eintrag) {
-                        $pivot = clone $eintrag;
-                        $pivot->unsetRelation('teilnehmer');
+                        $datum = $eintrag->tag?->datum;
 
-                        return $pivot;
-                    })->values()->all()
+                        if (! $datum) {
+                            return null;
+                        }
+
+                        return [
+                            'datum' => $datum,
+                            'status' => $eintrag->status?->status,
+                            'startzeit' => $eintrag->zeittatsaechlich?->startzeit,
+                            'endzeit' => $eintrag->zeittatsaechlich?->endzeit,
+                        ];
+                    })
+                        ->filter()
+                        ->keyBy('datum')
+                        ->map(fn (array $eintrag) => [
+                            'status' => $eintrag['status'],
+                            'startzeit' => $eintrag['startzeit'],
+                            'endzeit' => $eintrag['endzeit'],
+                        ])
+                        ->all()
                     : [];
 
-                $teilnehmer->setAttribute('anwesenheit_eintraege', $anwesenheitEintraege);
+                $teilnehmer->setAttribute('anwesenheit_nach_datum', $anwesenheitNachDatum);
 
                 return $teilnehmer;
             })
