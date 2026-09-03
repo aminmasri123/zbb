@@ -148,10 +148,13 @@ class ParticipantListEnhancementsTest extends TestCase
                 ->has('gruppe.teilnehmer', 2)
                 ->where('gruppe.teilnehmer.0.id', $adler->id)
                 ->where('gruppe.teilnehmer.1.id', $zebra->id)
-                ->has('gruppe.teilnehmer.0.anwesenheit_nach_datum', 1)
-                ->where('gruppe.teilnehmer.0.anwesenheit_nach_datum.2026-08-14.status', 'anwesend')
-                ->has('gruppe.teilnehmer.1.anwesenheit_nach_datum', 2)
-                ->where('gruppe.teilnehmer.1.anwesenheit_nach_datum.2026-08-15.status', 'anwesend')
+                ->missing('anwesenheit')
+                ->loadDeferredProps('anwesenheit', fn (Assert $reload) => $reload
+                    ->has("anwesenheit.teilnehmer.{$adler->id}", 1)
+                    ->where("anwesenheit.teilnehmer.{$adler->id}.2026-08-14.status", 'anwesend')
+                    ->has("anwesenheit.teilnehmer.{$zebra->id}", 2)
+                    ->where("anwesenheit.teilnehmer.{$zebra->id}.2026-08-15.status", 'anwesend')
+                )
             );
     }
 

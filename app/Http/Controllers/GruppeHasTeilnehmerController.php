@@ -215,69 +215,19 @@ class GruppeHasTeilnehmerController extends Controller
             'anwesenheit.destroy',
         ])->contains(fn (string $permission) => $user->can($permission));
 
-        $gruppenEintraege = GruppeHasPersonen::query()
-            ->where('gruppe_id', $gruppe->id)
-            ->without(['zeitgeplant', 'zeittatsaechlich', 'status', 'tag'])
-            ->select([
-                'id',
-                'gruppe_id',
-                'personen_id',
-                'tage_id',
-                'zeittatsaechlich_id',
-                'anwesenheitsstatuten_id',
-            ])
-            ->with([
-                'teilnehmer:id,vorname,nachname,geschlecht',
-                'teilnehmer.schueler:id,person_id,eee',
-                'zeittatsaechlich:id,startzeit,endzeit',
-                'status:id,status',
-                'tag:id,datum',
-            ])
-            ->get();
-
-        // Eine laufende BvB-Gruppe besitzt pro Person und Anwesenheitstag einen
-        // Pivot-Datensatz. Die Person selbst wird deshalb nur einmal übertragen;
-        // ihre Tagesdaten hängen kompakt als Liste daran.
-        $gruppenTeilnehmer = $gruppenEintraege
-            ->filter(fn (GruppeHasPersonen $eintrag) => $eintrag->teilnehmer !== null)
-            ->groupBy(fn (GruppeHasPersonen $eintrag) => (int) $eintrag->personen_id)
-            ->map(function ($eintraege) use ($canReadAttendance) {
-                $teilnehmer = clone $eintraege->first()->teilnehmer;
-                $teilnehmer->setAttribute(
-                    'parental_consent_received',
-                    $this->parentalConsentReceived($teilnehmer)
-                );
-
-                $anwesenheitNachDatum = $canReadAttendance
-                    ? $eintraege->map(function (GruppeHasPersonen $eintrag) {
-                        $datum = $eintrag->tag?->datum;
-
-                        if (! $datum) {
-                            return null;
-                        }
-
-                        return [
-                            'datum' => $datum,
-                            'status' => $eintrag->status?->status,
-                            'startzeit' => $eintrag->zeittatsaechlich?->startzeit,
-                            'endzeit' => $eintrag->zeittatsaechlich?->endzeit,
-                        ];
-                    })
-                        ->filter()
-                        ->keyBy('datum')
-                        ->map(fn (array $eintrag) => [
-                            'status' => $eintrag['status'],
-                            'startzeit' => $eintrag['startzeit'],
-                            'endzeit' => $eintrag['endzeit'],
-                        ])
-                        ->all()
-                    : [];
-
-                $teilnehmer->setAttribute('anwesenheit_nach_datum', $anwesenheitNachDatum);
-
-                return $teilnehmer;
-            })
-            ->filter()
+        // Für den ersten Seitenaufbau reichen die eindeutigen Personen. Die
+        // potenziell sehr vielen Tagesdatensätze werden separat nachgeladen.
+        $gruppenTeilnehmer = Personen::Teilnehmer()
+            ->where('aktiv', true)
+            ->whereIn('id', GruppeHasPersonen::query()
+                ->where('gruppe_id', $gruppe->id)
+                ->select('personen_id'))
+            ->with('schueler:id,person_id,eee')
+            ->get(['id', 'vorname', 'nachname', 'geschlecht'])
+            ->each(fn (Personen $teilnehmer) => $teilnehmer->setAttribute(
+                'parental_consent_received',
+                $this->parentalConsentReceived($teilnehmer)
+            ))
             ->sortBy(function (Personen $teilnehmer) {
                 return mb_strtolower(trim((string) $teilnehmer->nachname).'\0'.trim((string) $teilnehmer->vorname));
             }, SORT_NATURAL)
@@ -306,20 +256,24 @@ class GruppeHasTeilnehmerController extends Controller
         $projektId = $gruppe->projekt_id ?? $user->current_team_id;
         $standortId = $gruppe->standort_id;
 
-        $teilnehmer = Personen::Teilnehmer()
-            ->whereHas('projekte', function ($query) use ($projektId, $standortId) {
-                $query->where('projekts.id', $projektId);
-                if ($standortId) {
-                    $query->where('projekt_has_personens.standort_id', $standortId);
-                }
-            })
-            ->orderBy('nachname')
-            ->orderBy('vorname')
-            ->get(['id', 'vorname', 'nachname', 'geschlecht']);
-
         return Inertia::render('Gruppe/GruppeHasTeilnehmer/Index', [
             'gruppe' => $gruppe,
-            'teilnehmer' => $teilnehmer,
+            'teilnehmer' => Inertia::defer(function () use ($projektId, $standortId) {
+                return Personen::Teilnehmer()
+                    ->whereHas('projekte', function ($query) use ($projektId, $standortId) {
+                        $query->where('projekts.id', $projektId);
+                        if ($standortId) {
+                            $query->where('projekt_has_personens.standort_id', $standortId);
+                        }
+                    })
+                    ->orderBy('nachname')
+                    ->orderBy('vorname')
+                    ->get(['id', 'vorname', 'nachname', 'geschlecht']);
+            }, 'teilnehmer'),
+            'anwesenheit' => Inertia::defer(
+                fn () => $this->anwesenheitPayload($gruppe, $canReadAttendance),
+                'anwesenheit'
+            ),
             'anwesenheitsstatuten' => $anwesenheitsstatuten,
             'nonWorkingDays' => $this->workdays->nonWorkingDays(
                 $gruppe->anfangsdatum,
@@ -337,9 +291,47 @@ class GruppeHasTeilnehmerController extends Controller
 
                 return $this->potenzialanalysePayload($gruppe, $user);
             }, 'potenzialanalyse'),
-            'bereichsauswertung' => $this->bereichsauswertungPayload($gruppe, $user),
+            'bereichsauswertung' => Inertia::defer(
+                fn () => $this->bereichsauswertungPayload($gruppe, $user),
+                'bereichsauswertung'
+            ),
         ]);
 
+    }
+
+    private function anwesenheitPayload(Gruppe $gruppe, bool $canReadAttendance): array
+    {
+        if (! $canReadAttendance) {
+            return ['teilnehmer' => []];
+        }
+
+        $eintraege = DB::table('gruppe_has_personens as gruppenzuordnung')
+            ->join('tages as tag', 'tag.id', '=', 'gruppenzuordnung.tage_id')
+            ->leftJoin('anwesenheitsstatutens as status', 'status.id', '=', 'gruppenzuordnung.anwesenheitsstatuten_id')
+            ->leftJoin('zeitens as zeit', 'zeit.id', '=', 'gruppenzuordnung.zeittatsaechlich_id')
+            ->where('gruppenzuordnung.gruppe_id', $gruppe->id)
+            ->orderBy('gruppenzuordnung.id')
+            ->get([
+                'gruppenzuordnung.personen_id',
+                'tag.datum',
+                'status.status',
+                'zeit.startzeit',
+                'zeit.endzeit',
+            ]);
+
+        return [
+            'teilnehmer' => $eintraege
+                ->groupBy(fn ($eintrag) => (int) $eintrag->personen_id)
+                ->map(fn ($personenEintraege) => $personenEintraege
+                    ->keyBy('datum')
+                    ->map(fn ($eintrag) => [
+                        'status' => $eintrag->status,
+                        'startzeit' => $eintrag->startzeit,
+                        'endzeit' => $eintrag->endzeit,
+                    ])
+                    ->all())
+                ->all(),
+        ];
     }
 
     private function bereichsauswertungPayload(Gruppe $gruppe, $user): array
@@ -625,31 +617,38 @@ class GruppeHasTeilnehmerController extends Controller
         $beurteilungen = PotenzialanalyseBeurteilung::query()
             ->where('gruppe_id', $gruppe->id)
             ->whereIn('personen_id', $personenIds)
-            ->get()
+            ->get(['personen_id', 'kriterium_id', 'bewertung', 'bemerkung'])
             ->groupBy('personen_id');
 
         $selbsteinschaetzungen = PotenzialanalyseSelbsteinschaetzung::query()
             ->where('gruppe_id', $gruppe->id)
             ->whereIn('personen_id', $personenIds)
-            ->get()
+            ->get(['personen_id', 'kriterium_id', 'bewertung', 'bemerkung'])
             ->groupBy('personen_id');
 
         $uebungErgebnisse = PotenzialanalyseUebungErgebnis::query()
             ->where('gruppe_id', $gruppe->id)
             ->whereIn('personen_id', $personenIds)
-            ->get()
+            ->get([
+                'personen_id', 'uebung_id', 'punkte', 'fehler', 'berechnete_punkte',
+                'maximalpunkte_snapshot', 'fehler_abzug_snapshot', 'zeit',
+            ])
             ->groupBy('personen_id');
 
         $kompetenzbewertungen = PotenzialanalyseKompetenzbewertung::query()
             ->where('gruppe_id', $gruppe->id)
             ->whereIn('personen_id', $personenIds)
-            ->get()
+            ->get(['personen_id', 'typ', 'merkmal', 'bewertung', 'bemerkung'])
             ->groupBy('personen_id');
 
         $berichte = PotenzialanalyseBericht::query()
             ->where('gruppe_id', $gruppe->id)
             ->whereIn('personen_id', $personenIds)
-            ->get()
+            ->get([
+                'personen_id', 'status', 'staerken', 'entwicklungsfelder', 'empfehlung',
+                'bericht_text', 'generator_stil', 'generator_snapshot', 'luv_foerderbedarfe',
+                'fertiggestellt_at',
+            ])
             ->keyBy('personen_id');
 
         $teilnehmer = $personenIds
@@ -688,17 +687,22 @@ class GruppeHasTeilnehmerController extends Controller
                         'bemerkung' => $entry->bemerkung,
                     ])
                     ->all(),
-                'bericht' => $berichte->get($personenId)?->only([
-                    'status',
-                    'staerken',
-                    'entwicklungsfelder',
-                    'empfehlung',
-                    'bericht_text',
-                    'generator_stil',
-                    'generator_snapshot',
-                    'luv_foerderbedarfe',
-                    'fertiggestellt_at',
-                ]) ?? [
+                'bericht' => ($bericht = $berichte->get($personenId)) ? [
+                    'status' => $bericht->status,
+                    'staerken' => $bericht->staerken,
+                    'entwicklungsfelder' => $bericht->entwicklungsfelder,
+                    'empfehlung' => $bericht->empfehlung,
+                    'bericht_text' => $bericht->bericht_text,
+                    'generator_stil' => $bericht->generator_stil,
+                    // Für die Oberfläche wird aus dem Snapshot nur der
+                    // Variationszähler benötigt; große alte Snapshots bleiben
+                    // deshalb auf dem Server.
+                    'generator_snapshot' => $bericht->generator_snapshot === null ? null : [
+                        'variation' => (int) data_get($bericht->generator_snapshot, 'variation', 0),
+                    ],
+                    'luv_foerderbedarfe' => $bericht->luv_foerderbedarfe,
+                    'fertiggestellt_at' => $bericht->fertiggestellt_at,
+                ] : [
                     'status' => 'entwurf',
                     'staerken' => null,
                     'entwicklungsfelder' => null,

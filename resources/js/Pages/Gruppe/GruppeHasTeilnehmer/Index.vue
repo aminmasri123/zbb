@@ -16,7 +16,8 @@
     // --- Props ---
     const props = defineProps({
     gruppe: { type: Object, required: true },
-    teilnehmer: { type: Array, required: true },
+    teilnehmer: { type: Array, default: () => [] },
+    anwesenheit: { type: Object, default: () => ({ teilnehmer: {} }) },
     anwesenheitsstatuten: { type: Array, required: true },
     nonWorkingDays: { type: Array, default: () => [] },
     bopLegacyExporte: { type: Array, default: () => [] },
@@ -33,6 +34,7 @@
     const isSubmittingTeilnehmer = ref(false)
     const selectedAttendanceActionDate = ref(null)
     const bulkAttendanceSavingDate = ref(null)
+    const anwesenheitDatenGeladen = ref(false)
     const paTeilnehmerDaten = ref(JSON.parse(JSON.stringify(props.potenzialanalyse?.teilnehmer || {})))
     const selectedPaTeilnehmerId = ref(null)
     const paSaving = ref(false)
@@ -2079,13 +2081,14 @@ const statusUebersicht = computed(() => {
   }))
 })
 
-onMounted(() => {
-  geheZuAktuellerWoche()
-
+const bereiteGruppenTeilnehmerVor = () => {
   gruppenTeilnehmer.value = sortiereTeilnehmerNachNachname(props.gruppe.teilnehmer.map(teilnehmer => {
     // Neuer, kompakter Payload: direkter Zugriff je Datum statt für jeden
     // Kalendertag alle Anwesenheitseinträge erneut zu durchsuchen.
-    const anwesenheitNachDatum = { ...(teilnehmer.anwesenheit_nach_datum || {}) }
+    const anwesenheitNachDatum = {
+      ...(teilnehmer.anwesenheit_nach_datum || {}),
+      ...(props.anwesenheit?.teilnehmer?.[teilnehmer.id] || {}),
+    }
 
     // Übergangsunterstützung für Antworten eines älteren Backends.
     if (!Object.keys(anwesenheitNachDatum).length && Array.isArray(teilnehmer.anwesenheit_eintraege)) {
@@ -2117,6 +2120,18 @@ onMounted(() => {
       }),
     }
   }))
+}
+
+watch(() => props.anwesenheit, (payload) => {
+  if (!payload) return
+
+  anwesenheitDatenGeladen.value = true
+  bereiteGruppenTeilnehmerVor()
+})
+
+onMounted(() => {
+  geheZuAktuellerWoche()
+  bereiteGruppenTeilnehmerVor()
 
   if (paAktiv.value && gruppenTeilnehmer.value.length) {
     selectedPaTeilnehmerId.value = gruppenTeilnehmer.value[0].id
@@ -2481,7 +2496,12 @@ const exportMitTag = async () => {
       <!-- Anwesenheit -->
       <div v-if="canViewAttendance" class="space-y-4">
         <div class="flex flex-wrap items-center justify-between gap-3">
-            <h3 class="font-semibold text-gray-700">Anwesenheit verwalten</h3>
+            <div>
+              <h3 class="font-semibold text-gray-700">Anwesenheit verwalten</h3>
+              <p v-if="canReadAttendance && !anwesenheitDatenGeladen" class="mt-1 text-xs text-gray-500">
+                Anwesenheitsdaten werden im Hintergrund geladen …
+              </p>
+            </div>
             <Button
               v-if="canExportAttendance"
               label="Exportieren"
