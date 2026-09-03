@@ -110,8 +110,24 @@
     const boCanUpdate = computed(() => Boolean(props.bereichsauswertung?.can_update))
     const boCriteria = computed(() => props.bereichsauswertung?.criteria || [])
     const boScale = computed(() => props.bereichsauswertung?.scale || {})
-    const boVorhanden = (personenId) => Object.values(props.bereichsauswertung?.bewertungen?.[personenId] || {})
-      .some((entry) => entry?.bewertung || String(entry?.bemerkung || '').trim())
+    const boBewerteteAnzahl = (personenId) => boCriteria.value.filter((criterion) =>
+      Number(props.bereichsauswertung?.bewertungen?.[personenId]?.[criterion.key]?.bewertung) >= 1
+    ).length
+    const boVollstaendig = (personenId) => boCriteria.value.length > 0 && boBewerteteAnzahl(personenId) === boCriteria.value.length
+    const boBegonnen = (personenId) => boBewerteteAnzahl(personenId) > 0
+    const boUebersicht = computed(() => ({
+      abgeschlossen: gruppenTeilnehmer.value.filter((item) => boVollstaendig(item.id)).length,
+      begonnen: gruppenTeilnehmer.value.filter((item) => boBegonnen(item.id) && !boVollstaendig(item.id)).length,
+      offen: gruppenTeilnehmer.value.filter((item) => !boBegonnen(item.id)).length,
+    }))
+    const boModalBewerteteAnzahl = computed(() => boCriteria.value.filter((criterion) =>
+      Number(boBewertungen.value[criterion.key]?.bewertung) >= 1
+    ).length)
+    const setzeAlleBoBewertungen = (value) => {
+      boCriteria.value.forEach((criterion) => {
+        boBewertungen.value[criterion.key].bewertung = Number(value)
+      })
+    }
     const openBereichsauswertung = (teilnehmer) => {
       selectedBoTeilnehmer.value = teilnehmer
       const existing = props.bereichsauswertung?.bewertungen?.[teilnehmer.id] || {}
@@ -2286,7 +2302,11 @@ const exportMitTag = async () => {
             <h3 class="font-semibold text-gray-800">Teilnehmer auswerten</h3>
             <p class="text-sm text-gray-500">Bereich: {{ props.bereichsauswertung?.bereich?.name || '–' }}</p>
           </div>
-          <span class="rounded bg-gray-100 px-2.5 py-1 text-xs text-gray-600">{{ boCriteria.length }} Beobachtungspunkte</span>
+          <div class="flex flex-wrap gap-2 text-xs">
+            <span class="rounded bg-green-100 px-2.5 py-1 font-medium text-green-700">Vollständig: {{ boUebersicht.abgeschlossen }}</span>
+            <span class="rounded bg-blue-100 px-2.5 py-1 font-medium text-blue-700">Begonnen: {{ boUebersicht.begonnen }}</span>
+            <span class="rounded bg-amber-100 px-2.5 py-1 font-medium text-amber-700">Offen: {{ boUebersicht.offen }}</span>
+          </div>
         </div>
         <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           <button
@@ -2298,8 +2318,8 @@ const exportMitTag = async () => {
             @click="openBereichsauswertung(teilnehmer)"
           >
             <span class="truncate font-medium text-gray-800">{{ teilnehmer.vorname }} {{ teilnehmer.nachname }}</span>
-            <span class="shrink-0 rounded px-2 py-0.5 text-xs" :class="boVorhanden(teilnehmer.id) ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'">
-              {{ boVorhanden(teilnehmer.id) ? 'Bewertet' : 'Offen' }}
+            <span class="shrink-0 rounded px-2 py-0.5 text-xs font-medium" :class="boVollstaendig(teilnehmer.id) ? 'bg-green-100 text-green-700' : (boBegonnen(teilnehmer.id) ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700')">
+              {{ boBewerteteAnzahl(teilnehmer.id) }} / {{ boCriteria.length }}
             </span>
           </button>
         </div>
@@ -2309,33 +2329,44 @@ const exportMitTag = async () => {
         v-model:visible="showBereichsauswertung"
         modal
         :header="`Auswertung · ${selectedBoTeilnehmer?.vorname || ''} ${selectedBoTeilnehmer?.nachname || ''}`"
-        :style="{ width: '980px', maxWidth: '96vw' }"
+        :style="{ width: '1180px', maxWidth: '97vw' }"
         :draggable="false"
         appendTo="body"
       >
-        <div class="mb-4 rounded bg-zbbTrp px-4 py-3 text-sm text-gray-700">
-          Beobachtungsbereich: <strong>{{ props.bereichsauswertung?.bereich?.name }}</strong>
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded bg-zbbTrp px-4 py-3 text-sm text-gray-700">
+          <span>Beobachtungsbereich: <strong>{{ props.bereichsauswertung?.bereich?.name }}</strong></span>
+          <span class="rounded bg-white px-2.5 py-1 text-xs font-semibold text-zbb">{{ boModalBewerteteAnzahl }} / {{ boCriteria.length }} bewertet</span>
         </div>
-        <div class="max-h-[62vh] space-y-3 overflow-y-auto pr-1">
-          <div v-for="criterion in boCriteria" :key="criterion.key" class="rounded border border-gray-200 p-3">
-            <div class="mb-2">
-              <p class="font-medium text-gray-800">{{ criterion.label }} <span v-if="criterion.required" class="text-red-600">*</span></p>
-              <p v-if="criterion.description" class="text-xs text-gray-500">{{ criterion.description }}</p>
-            </div>
-            <div class="grid gap-2 md:grid-cols-5">
-              <label
-                v-for="(label, value) in boScale"
-                :key="criterion.key + '-' + value"
-                class="flex cursor-pointer items-center gap-2 rounded border px-2 py-2 text-xs transition"
-                :class="Number(boBewertungen[criterion.key]?.bewertung) === Number(value) ? 'border-zbb bg-zbbTrp text-zbb' : 'border-gray-200 hover:border-zbb/50'"
-              >
-                <input v-model.number="boBewertungen[criterion.key].bewertung" type="radio" :name="'bo-' + criterion.key" :value="Number(value)" class="text-zbb focus:ring-zbb" />
-                <span><strong>{{ value }}</strong> · {{ label }}</span>
-              </label>
-            </div>
-            <textarea v-model="boBewertungen[criterion.key].bemerkung" rows="2" class="mt-2 w-full rounded border-gray-300 text-sm" placeholder="Bemerkung (optional)"></textarea>
+        <div class="max-h-[64vh] overflow-auto rounded border border-gray-200">
+          <table class="w-full min-w-[920px] border-collapse text-sm">
+            <thead class="sticky top-0 z-10 bg-gray-50 text-gray-600 shadow-sm">
+              <tr>
+                <th class="border-b px-3 py-2 text-left">Beobachtungspunkt</th>
+                <th v-for="(label, value) in boScale" :key="'bo-head-' + value" class="w-24 border-b px-1 py-2 text-center">
+                  <button type="button" class="group inline-flex w-full flex-col items-center rounded px-1 py-1.5 hover:bg-zbb hover:text-white" :title="`Alle Beobachtungspunkte mit ${value} – ${label} bewerten`" @click="setzeAlleBoBewertungen(value)">
+                    <span class="text-base font-bold">{{ value }}</span>
+                    <span class="max-w-20 text-[10px] leading-tight">{{ label }}</span>
+                  </button>
+                </th>
+                <th class="w-64 border-b px-3 py-2 text-left">Bemerkung</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="criterion in boCriteria" :key="criterion.key" class="border-b last:border-b-0 hover:bg-gray-50">
+                <td class="px-3 py-2">
+                  <p class="font-medium text-gray-800">{{ criterion.label }} <span v-if="criterion.required" class="text-red-600">*</span></p>
+                  <p v-if="criterion.description" class="mt-0.5 text-xs text-gray-500">{{ criterion.description }}</p>
+                </td>
+                <td v-for="(label, value) in boScale" :key="criterion.key + '-' + value" class="px-1 py-2 text-center">
+                  <label class="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded transition hover:bg-zbb/10" :title="`${value} – ${label}`">
+                    <input v-model.number="boBewertungen[criterion.key].bewertung" type="radio" :name="'bo-' + criterion.key" :value="Number(value)" class="h-5 w-5 text-zbb focus:ring-2 focus:ring-zbb" />
+                  </label>
+                </td>
+                <td class="px-3 py-2"><textarea v-model="boBewertungen[criterion.key].bemerkung" rows="1" class="h-9 min-h-0 w-full resize-y rounded border-gray-300 py-1 text-xs" placeholder="Optional"></textarea></td>
+              </tr>
+            </tbody>
+          </table>
           </div>
-        </div>
         <template #footer>
           <Button label="Abbrechen" severity="secondary" text :disabled="boSaving" @click="showBereichsauswertung = false" />
           <Button label="Auswertung speichern" icon="pi pi-check" :loading="boSaving" :disabled="!boCanUpdate" @click="saveBereichsauswertung" />
