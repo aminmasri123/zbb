@@ -348,6 +348,12 @@ class Projekt extends Model
         return true;
     }
 
+    public function supportsLuvPotentialAnalysis(): bool
+    {
+        return $this->featureEnabled('potential_analysis')
+            && in_array('luv', $this->participantProfileSettings()['enabled_tabs'], true);
+    }
+
     public static function participantOverviewColumnDefinitions(): array
     {
         return collect(self::PARTICIPANT_OVERVIEW_COLUMN_DEFINITIONS)

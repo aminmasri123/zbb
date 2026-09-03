@@ -20,7 +20,7 @@
     anwesenheitsstatuten: { type: Array, required: true },
     nonWorkingDays: { type: Array, default: () => [] },
     bopLegacyExporte: { type: Array, default: () => [] },
-    potenzialanalyse: { type: Object, default: () => ({ aktiv: false, erlaubt: false, can: { view: false, update: false }, tage: null, uebungen: [], teilnehmer: {} }) },
+    potenzialanalyse: { type: Object, default: () => ({ aktiv: false, erlaubt: false, luv_foerderbedarf_aktiv: false, can: { view: false, update: false }, tage: null, uebungen: [], teilnehmer: {} }) },
     bereichsauswertung: { type: Object, default: () => ({ enabled: false, criteria: [], scale: {}, bewertungen: {}, can_update: false }) },
     })
     console.log('Props:', props.gruppe    )
@@ -511,6 +511,27 @@ const paBerichtStatusOptionen = [
   { label: 'Fertig', value: 'fertig' },
   { label: 'Geprüft', value: 'geprueft' },
 ]
+const paLuvFoerderbedarfStatusOptionen = [
+  { label: 'Noch nicht geprüft', value: 'unprueft' },
+  { label: 'Kein Förderbedarf festgestellt', value: 'kein_foerderbedarf' },
+  { label: 'Förderbedarf vorhanden', value: 'foerderbedarf' },
+]
+const paLuvFoerderbedarfBereiche = [
+  { key: 'personal', label: 'Personale Kompetenz' },
+  { key: 'methodical', label: 'Methodische Kompetenz' },
+  { key: 'social', label: 'Sozial-kommunikative Kompetenz' },
+]
+const defaultPaLuvFoerderbedarf = () => ({
+  status: 'unprueft',
+  begruendung: '',
+  foerderbedarf: '',
+  freigegeben: false,
+  freigegeben_von: null,
+  freigegeben_am: null,
+})
+const defaultPaLuvFoerderbedarfe = () => Object.fromEntries(
+  paLuvFoerderbedarfBereiche.map((bereich) => [bereich.key, defaultPaLuvFoerderbedarf()]),
+)
 const paTabs = [
   { key: 'selbst', label: 'Selbsteinschätzung' },
   { key: 'uebungen', label: 'Übungen' },
@@ -655,6 +676,7 @@ const defaultPaBericht = () => ({
   bericht_text: '',
   generator_stil: props.potenzialanalyse?.auswertung_config?.report_style || 'staerkenorientiert',
   generator_snapshot: null,
+  luv_foerderbedarfe: defaultPaLuvFoerderbedarfe(),
   fertiggestellt_at: null,
 })
 
@@ -679,6 +701,13 @@ const ensurePaEintrag = (personenId) => {
   eintrag.beurteilungen ||= {}
   eintrag.selbsteinschaetzungen ||= {}
   eintrag.bericht ||= defaultPaBericht()
+  eintrag.bericht.luv_foerderbedarfe ||= defaultPaLuvFoerderbedarfe()
+  paLuvFoerderbedarfBereiche.forEach((bereich) => {
+    eintrag.bericht.luv_foerderbedarfe[bereich.key] = {
+      ...defaultPaLuvFoerderbedarf(),
+      ...(eintrag.bericht.luv_foerderbedarfe[bereich.key] || {}),
+    }
+  })
 
   paUebungen.value.forEach((uebung) => {
     const uebungKey = String(uebung.id)
@@ -694,6 +723,43 @@ const ensurePaEintrag = (personenId) => {
 }
 
 const paEintrag = (personenId) => ensurePaEintrag(personenId)
+
+const paLuvFoerderbedarfEintrag = (personenId, bereichKey) =>
+  paEintrag(personenId).bericht.luv_foerderbedarfe[bereichKey]
+
+const paBerichtIstFuerLuvAbgeschlossen = (personenId) =>
+  ['fertig', 'geprueft'].includes(paEintrag(personenId).bericht.status)
+
+const paLuvFoerderbedarfFreigabeMoeglich = (personenId, bereichKey) => {
+  const eintrag = paLuvFoerderbedarfEintrag(personenId, bereichKey)
+  if (!paBerichtIstFuerLuvAbgeschlossen(personenId)) return false
+  if (eintrag.status === 'kein_foerderbedarf') return true
+  return eintrag.status === 'foerderbedarf' && Boolean(String(eintrag.foerderbedarf || '').trim())
+}
+
+const paLuvFoerderbedarfGeaendert = (personenId, bereichKey, sofort = false) => {
+  const eintrag = paLuvFoerderbedarfEintrag(personenId, bereichKey)
+  eintrag.freigegeben = false
+  eintrag.freigegeben_von = null
+  eintrag.freigegeben_am = null
+  planePotenzialanalyseSpeichern({ personenId, sofort })
+}
+
+const paLuvFoerderbedarfFreigabeGeaendert = (personenId) =>
+  planePotenzialanalyseSpeichern({ personenId, sofort: true })
+
+const paBerichtStatusGeaendert = (personenId) => {
+  if (!paBerichtIstFuerLuvAbgeschlossen(personenId)) {
+    paLuvFoerderbedarfBereiche.forEach((bereich) => {
+      const eintrag = paLuvFoerderbedarfEintrag(personenId, bereich.key)
+      eintrag.freigegeben = false
+      eintrag.freigegeben_von = null
+      eintrag.freigegeben_am = null
+    })
+  }
+
+  planePotenzialanalyseSpeichern({ personenId, sofort: true })
+}
 
 const paUebungErgebnis = (personenId, uebungId) => {
   const eintrag = ensurePaEintrag(personenId)
@@ -1061,6 +1127,10 @@ const speicherePotenzialanalyse = async ({ personenId = null, silent = false, ve
     }), payload)
 
     if ((paSaveVersions.get(key) || 0) === saveVersion) {
+      if (response.data?.teilnehmer) {
+        paTeilnehmerDaten.value[key] = response.data.teilnehmer
+        ensurePaEintrag(teilnehmerId)
+      }
       paDirtyTeilnehmerIds.delete(key)
       paAutoSaveStatus.value = 'saved'
     } else {
@@ -3152,7 +3222,7 @@ const exportMitTag = async () => {
                     optionValue="value"
                     class="w-56 max-w-full"
                     :disabled="!canEditPotenzialanalyse"
-                    @update:modelValue="planePotenzialanalyseSpeichern({ personenId: selectedPaTeilnehmer.id, sofort: true })"
+                    @update:modelValue="paBerichtStatusGeaendert(selectedPaTeilnehmer.id)"
                   />
                 </div>
               </div>
@@ -3199,6 +3269,100 @@ const exportMitTag = async () => {
                   ></textarea>
                 </label>
               </div>
+
+              <section
+                v-if="props.potenzialanalyse?.luv_foerderbedarf_aktiv"
+                class="mt-6 border-t border-gray-200 pt-5"
+              >
+                <div class="mb-4">
+                  <h6 class="font-semibold text-gray-800">Förderbedarf für LuV</h6>
+                  <p class="mt-1 max-w-4xl text-sm text-gray-600">
+                    Bewerten Sie die drei Bereiche fachlich. Nur ausdrücklich freigegebene Angaben aus einem
+                    fertigen oder geprüften PA-Bericht werden der KI als Quelle für den LuV-Entwurf angeboten.
+                  </p>
+                </div>
+
+                <div
+                  v-if="!paBerichtIstFuerLuvAbgeschlossen(selectedPaTeilnehmer.id)"
+                  class="mb-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+                >
+                  Für die Freigabe muss der Bericht oben den Status „Fertig“ oder „Geprüft“ haben.
+                </div>
+
+                <div class="grid gap-4 xl:grid-cols-3">
+                  <article
+                    v-for="bereich in paLuvFoerderbedarfBereiche"
+                    :key="bereich.key"
+                    class="rounded-lg border border-gray-200 bg-gray-50 p-4"
+                  >
+                    <h6 class="mb-3 font-semibold text-gray-800">{{ bereich.label }}</h6>
+
+                    <label class="block text-sm text-gray-600">
+                      Fachliche Bewertung
+                      <select
+                        v-model="paLuvFoerderbedarfEintrag(selectedPaTeilnehmer.id, bereich.key).status"
+                        class="mt-1 w-full rounded border-gray-300 bg-white text-sm"
+                        :disabled="!canEditPotenzialanalyse"
+                        @change="paLuvFoerderbedarfGeaendert(selectedPaTeilnehmer.id, bereich.key, true)"
+                      >
+                        <option
+                          v-for="option in paLuvFoerderbedarfStatusOptionen"
+                          :key="option.value"
+                          :value="option.value"
+                        >
+                          {{ option.label }}
+                        </option>
+                      </select>
+                    </label>
+
+                    <label class="mt-3 block text-sm text-gray-600">
+                      Begründung / Beobachtung
+                      <textarea
+                        v-model="paLuvFoerderbedarfEintrag(selectedPaTeilnehmer.id, bereich.key).begruendung"
+                        rows="3"
+                        class="mt-1 w-full rounded border-gray-300 bg-white text-sm"
+                        :disabled="!canEditPotenzialanalyse"
+                        placeholder="Konkrete Beobachtung aus der Potenzialanalyse"
+                        @input="paLuvFoerderbedarfGeaendert(selectedPaTeilnehmer.id, bereich.key)"
+                      ></textarea>
+                    </label>
+
+                    <label
+                      v-if="paLuvFoerderbedarfEintrag(selectedPaTeilnehmer.id, bereich.key).status === 'foerderbedarf'"
+                      class="mt-3 block text-sm text-gray-600"
+                    >
+                      Konkreter Förderbedarf
+                      <textarea
+                        v-model="paLuvFoerderbedarfEintrag(selectedPaTeilnehmer.id, bereich.key).foerderbedarf"
+                        rows="3"
+                        class="mt-1 w-full rounded border-gray-300 bg-white text-sm"
+                        :disabled="!canEditPotenzialanalyse"
+                        placeholder="Was soll gezielt gefördert werden?"
+                        @input="paLuvFoerderbedarfGeaendert(selectedPaTeilnehmer.id, bereich.key)"
+                      ></textarea>
+                    </label>
+
+                    <label class="mt-4 flex items-start gap-2 text-sm text-gray-700">
+                      <input
+                        v-model="paLuvFoerderbedarfEintrag(selectedPaTeilnehmer.id, bereich.key).freigegeben"
+                        type="checkbox"
+                        class="mt-0.5 rounded border-gray-300 text-zbb focus:ring-zbb"
+                        :disabled="!canEditPotenzialanalyse || !paLuvFoerderbedarfFreigabeMoeglich(selectedPaTeilnehmer.id, bereich.key)"
+                        @change="paLuvFoerderbedarfFreigabeGeaendert(selectedPaTeilnehmer.id)"
+                      />
+                      <span>Für die Verwendung im LuV-KI-Entwurf freigeben</span>
+                    </label>
+
+                    <p
+                      v-if="paLuvFoerderbedarfEintrag(selectedPaTeilnehmer.id, bereich.key).freigegeben_am"
+                      class="mt-2 text-xs text-emerald-700"
+                    >
+                      Fachlich freigegeben am
+                      {{ new Date(paLuvFoerderbedarfEintrag(selectedPaTeilnehmer.id, bereich.key).freigegeben_am).toLocaleString('de-DE') }}
+                    </p>
+                  </article>
+                </div>
+              </section>
             </div>
 
             <div class="flex flex-wrap items-center justify-between gap-3 rounded border border-gray-200 bg-white px-3 py-2">

@@ -24,6 +24,7 @@ class ToolName(StrEnum):
     ATTENDANCE = "get_attendance_summary"
     DOCUMENTATION = "get_documentation_entries"
     DEVELOPMENT = "get_participant_development_data"
+    POTENTIAL_ANALYSIS_SUPPORT_NEEDS = "get_participant_potential_analysis_support_needs"
     GOALS = "get_goals_and_progress"
     PROJECT_RULES = "get_project_report_rules"
     TEMPLATE = "get_report_template_metadata"

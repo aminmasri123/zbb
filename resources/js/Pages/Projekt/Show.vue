@@ -568,6 +568,7 @@ const paAuswertungConfig = reactive(JSON.parse(JSON.stringify({
 })));
 
 const paAktiv = computed(() => Boolean(props.projekt.potenzialanalyse_aktiv));
+const paLuvIntegrationAktiv = computed(() => paAktiv.value && participantProfileEnabled('luv'));
 const paMatrixEntry = (uebung, merkmal) => uebung.kompetenzen.find((entry) => entry.merkmal === merkmal);
 const paMatrixCellValue = (uebung, merkmal) => {
     const entry = paMatrixEntry(uebung, merkmal);
@@ -1850,9 +1851,14 @@ const formatLuvTemplateDate = (value) => value
                             <h3 class="font-semibold text-gray-800">Freigegebene KI-Datenquellen</h3>
                             <p class="mt-1 text-xs text-gray-500">Es werden ausschließlich Daten der aktuellen Projektteilnahme verwendet.</p>
                             <div class="mt-3 grid gap-2 sm:grid-cols-2">
-                                <label v-for="(enabled, key) in luvTemplateForm.source_settings" :key="key" class="inline-flex items-center gap-2 text-sm text-gray-700">
+                                <label
+                                    v-for="(enabled, key) in luvTemplateForm.source_settings"
+                                    v-show="key !== 'potential_analysis' || paLuvIntegrationAktiv"
+                                    :key="key"
+                                    class="inline-flex items-center gap-2 text-sm text-gray-700"
+                                >
                                     <input v-model="luvTemplateForm.source_settings[key]" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
-                                    {{ ({ identity: 'Stammdaten', attendance: 'Anwesenheit', documentation: 'Dokumentation', previous_luvs: 'Frühere LuV', internships: 'Praktika', education: 'Abschlüsse/Verlauf', consents: 'Einwilligungen' })[key] || key }}
+                                    {{ ({ identity: 'Stammdaten', attendance: 'Anwesenheit', documentation: 'Dokumentation', previous_luvs: 'Frühere LuV', internships: 'Praktika', education: 'Abschlüsse/Verlauf', consents: 'Einwilligungen', potential_analysis: 'PA-Förderbedarf' })[key] || key }}
                                 </label>
                             </div>
                         </div>

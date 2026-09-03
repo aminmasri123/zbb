@@ -492,9 +492,11 @@ class GruppeHasTeilnehmerController extends Controller
             ?? $projekt?->potenzialanalyse_auswertung_config;
         $canView = $this->canViewPotenzialanalyse($user);
         $canUpdate = $user?->can('potenzialanalyse.update') ?? false;
+        $luvFoerderbedarfAktiv = (bool) $projekt?->supportsLuvPotentialAnalysis();
         $emptyPayload = [
             'aktiv' => false,
             'erlaubt' => $canView,
+            'luv_foerderbedarf_aktiv' => $luvFoerderbedarfAktiv,
             'can' => [
                 'view' => $canView,
                 'update' => $canUpdate,
@@ -576,6 +578,7 @@ class GruppeHasTeilnehmerController extends Controller
             return [
                 'aktiv' => true,
                 'erlaubt' => true,
+                'luv_foerderbedarf_aktiv' => $luvFoerderbedarfAktiv,
                 'can' => [
                     'view' => true,
                     'update' => $canUpdate,
@@ -664,6 +667,7 @@ class GruppeHasTeilnehmerController extends Controller
                     'bericht_text',
                     'generator_stil',
                     'generator_snapshot',
+                    'luv_foerderbedarfe',
                     'fertiggestellt_at',
                 ]) ?? [
                     'status' => 'entwurf',
@@ -673,6 +677,7 @@ class GruppeHasTeilnehmerController extends Controller
                     'bericht_text' => null,
                     'generator_stil' => null,
                     'generator_snapshot' => null,
+                    'luv_foerderbedarfe' => PotenzialanalyseBericht::defaultLuvFoerderbedarfe(),
                     'fertiggestellt_at' => null,
                 ],
             ]])
@@ -681,6 +686,7 @@ class GruppeHasTeilnehmerController extends Controller
         return [
             'aktiv' => true,
             'erlaubt' => true,
+            'luv_foerderbedarf_aktiv' => $luvFoerderbedarfAktiv,
             'can' => [
                 'view' => true,
                 'update' => $canUpdate,

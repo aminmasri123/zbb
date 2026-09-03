@@ -84,6 +84,7 @@ class ProjektLuvTemplate extends Model
         'internships' => true,
         'education' => true,
         'consents' => true,
+        'potential_analysis' => true,
     ];
 
     public const DEFAULT_SCHEDULE_SETTINGS = [

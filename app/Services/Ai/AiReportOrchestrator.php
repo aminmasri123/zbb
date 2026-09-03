@@ -11,6 +11,7 @@ use App\Services\Ai\Tools\GetDocumentationEntriesTool;
 use App\Services\Ai\Tools\GetParticipantDevelopmentDataTool;
 use App\Services\Ai\Tools\GetParticipantIdentitySummaryTool;
 use App\Services\Ai\Tools\GetParticipantLuvDataTool;
+use App\Services\Ai\Tools\GetParticipantPotentialAnalysisSupportNeedsTool;
 use App\Services\Ai\Tools\GetProjectReportRulesTool;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Str;
@@ -53,6 +54,7 @@ final class AiReportOrchestrator
             GetAttendanceSummaryTool::NAME,
             GetDocumentationEntriesTool::NAME,
             GetParticipantDevelopmentDataTool::NAME,
+            GetParticipantPotentialAnalysisSupportNeedsTool::NAME,
         ];
         $context = new AiRunContext((int) $user->getKey(), $projectId, $allTools, $participantId, $fromDate, $untilDate, $reportType);
 
@@ -81,6 +83,9 @@ final class AiReportOrchestrator
         }
         if ($sources['internships'] || $sources['education'] || $sources['consents']) {
             $allowedTools[] = GetParticipantDevelopmentDataTool::NAME;
+        }
+        if (($sources['potential_analysis'] ?? true) && $project->supportsLuvPotentialAnalysis()) {
+            $allowedTools[] = GetParticipantPotentialAnalysisSupportNeedsTool::NAME;
         }
 
         $context = new AiRunContext((int) $user->getKey(), $projectId, $allowedTools, $participantId, $fromDate, $untilDate, $reportType, $sources);

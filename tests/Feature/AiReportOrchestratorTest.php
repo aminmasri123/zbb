@@ -2,16 +2,24 @@
 
 namespace Tests\Feature;
 
+use App\Models\Bereich;
+use App\Models\Gruppe;
 use App\Models\Personen;
+use App\Models\PotenzialanalyseBericht;
 use App\Models\Projekt;
 use App\Models\ProjektHasPersonen;
 use App\Models\ProjektLuvTemplate;
+use App\Models\Raeume;
 use App\Models\Role;
 use App\Models\RoleDataAccessSetting;
+use App\Models\Standort;
 use App\Models\User;
 use App\Services\Ai\AiReportOrchestrator;
+use App\Services\Ai\AiRunContext;
+use App\Services\Ai\AiToolRegistry;
 use App\Services\Ai\Exceptions\AgentUnavailableException;
 use App\Services\Ai\Tools\GetProjectReportRulesTool;
+use App\Services\Ai\Tools\GetParticipantPotentialAnalysisSupportNeedsTool;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -187,6 +195,114 @@ class AiReportOrchestratorTest extends TestCase
             '2026-06-30',
             'Erstelle einen Entwurf.',
         );
+    }
+
+    public function test_it_allowlists_the_pa_support_source_only_when_luv_and_pa_are_both_enabled(): void
+    {
+        [$user, $project, $participant] = $this->context();
+        $contextWithoutPa = app(AiReportOrchestrator::class)->createDraftContext(
+            $user,
+            $participant->id,
+            '2026-01-01',
+            '2026-06-30',
+        );
+        $this->assertNotContains(GetParticipantPotentialAnalysisSupportNeedsTool::NAME, $contextWithoutPa->allowedTools);
+
+        $project->update(['potenzialanalyse_aktiv' => true]);
+
+        $context = app(AiReportOrchestrator::class)->createDraftContext(
+            $user,
+            $participant->id,
+            '2026-01-01',
+            '2026-06-30',
+        );
+        $this->assertContains(GetParticipantPotentialAnalysisSupportNeedsTool::NAME, $context->allowedTools);
+
+        $project->update([
+            'participant_profile_settings' => [
+                'enabled_tabs' => ['stammdaten'],
+                'tab_order' => Projekt::participantProfileTabKeys(),
+            ],
+        ]);
+
+        $contextWithoutLuv = app(AiReportOrchestrator::class)->createDraftContext(
+            $user,
+            $participant->id,
+            '2026-01-01',
+            '2026-06-30',
+        );
+        $this->assertNotContains(GetParticipantPotentialAnalysisSupportNeedsTool::NAME, $contextWithoutLuv->allowedTools);
+    }
+
+    public function test_pa_tool_returns_only_completed_and_explicitly_approved_support_needs(): void
+    {
+        [$user, $project, $participant] = $this->context();
+        $project->update(['potenzialanalyse_aktiv' => true]);
+        $standort = Standort::factory()->create();
+        $gruppe = Gruppe::query()->create([
+            'personen_id' => Personen::factory()->create()->id,
+            'bereich_id' => Bereich::query()->create(['name' => 'PA-LuV-Test'])->id,
+            'projekt_id' => $project->id,
+            'raum_id' => Raeume::query()->create([
+                'name' => 'PA-LuV-Raum',
+                'standort_id' => $standort->id,
+                'typ' => 'Seminarraum',
+                'aktiv' => true,
+            ])->id,
+            'standort_id' => $standort->id,
+        ]);
+        PotenzialanalyseBericht::query()->create([
+            'gruppe_id' => $gruppe->id,
+            'personen_id' => $participant->id,
+            'user_id' => $user->id,
+            'status' => 'geprueft',
+            'fertiggestellt_at' => '2026-03-01 10:00:00',
+            'luv_foerderbedarfe' => [
+                'personal' => [
+                    'status' => 'foerderbedarf',
+                    'begruendung' => 'Neue Aufgaben werden noch zögerlich begonnen.',
+                    'foerderbedarf' => 'Selbstständigen Aufgabenbeginn schrittweise einüben.',
+                    'freigegeben' => true,
+                    'freigegeben_von' => $user->id,
+                    'freigegeben_am' => '2026-03-01T10:00:00+01:00',
+                ],
+                'methodical' => [
+                    'status' => 'foerderbedarf',
+                    'foerderbedarf' => 'Arbeitsschritte strukturieren.',
+                    'freigegeben' => false,
+                ],
+                'social' => [
+                    'status' => 'kein_foerderbedarf',
+                    'begruendung' => 'Kommuniziert situationsgerecht.',
+                    'freigegeben' => true,
+                    'freigegeben_von' => $user->id,
+                    'freigegeben_am' => '2026-03-01T10:00:00+01:00',
+                ],
+            ],
+        ]);
+        $context = new AiRunContext(
+            $user->id,
+            $project->id,
+            [GetParticipantPotentialAnalysisSupportNeedsTool::NAME],
+            $participant->id,
+            '2026-01-01',
+            '2026-06-30',
+        );
+
+        $result = app(AiToolRegistry::class)->execute(
+            $user,
+            $context,
+            GetParticipantPotentialAnalysisSupportNeedsTool::NAME,
+        );
+
+        $entries = collect($result['entries'])->keyBy('field_key');
+        $this->assertCount(2, $entries);
+        $this->assertSame(
+            'Selbstständigen Aufgabenbeginn schrittweise einüben.',
+            $entries['competence.personal.support_need']['support_need'],
+        );
+        $this->assertSame('no_support_need', $entries['competence.social.support_need']['decision']);
+        $this->assertFalse($entries->has('competence.methodical.support_need'));
     }
 
     /** @return array{User, Projekt, Personen} */

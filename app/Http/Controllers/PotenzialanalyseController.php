@@ -621,6 +621,11 @@ class PotenzialanalyseController extends Controller
             'bericht.bericht_text' => ['nullable', 'string'],
             'bericht.generator_stil' => ['nullable', Rule::in(collect(PotenzialanalyseScoringService::REPORT_STYLES)->pluck('value')->all())],
             'bericht.generator_snapshot' => ['nullable', 'array'],
+            'bericht.luv_foerderbedarfe' => ['nullable', 'array:personal,methodical,social', 'max:3'],
+            'bericht.luv_foerderbedarfe.*.status' => ['required', Rule::in(['unprueft', 'kein_foerderbedarf', 'foerderbedarf'])],
+            'bericht.luv_foerderbedarfe.*.begruendung' => ['nullable', 'string', 'max:5000'],
+            'bericht.luv_foerderbedarfe.*.foerderbedarf' => ['nullable', 'string', 'max:5000'],
+            'bericht.luv_foerderbedarfe.*.freigegeben' => ['required', 'boolean'],
         ]);
 
         $groupProfileId = $gruppe->potenzialanalyse_profil_id ?: $gruppe->projekt->potenzialanalyse_profil_id;
@@ -1149,9 +1154,29 @@ class PotenzialanalyseController extends Controller
     private function syncBericht(array $berichtData, Gruppe $gruppe, Personen $personen): void
     {
         $status = $berichtData['status'] ?? 'entwurf';
+        $existing = PotenzialanalyseBericht::query()
+            ->where('gruppe_id', $gruppe->id)
+            ->where('personen_id', $personen->id)
+            ->first();
+        $submittedLuvFoerderbedarfe = array_key_exists('luv_foerderbedarfe', $berichtData)
+            && $gruppe->projekt?->supportsLuvPotentialAnalysis()
+            ? $this->normalizeLuvFoerderbedarfe(
+                (array) $berichtData['luv_foerderbedarfe'],
+                (array) ($existing?->luv_foerderbedarfe ?? []),
+            )
+            : null;
+        $effectiveLuvFoerderbedarfe = $submittedLuvFoerderbedarfe
+            ?? (array) ($existing?->luv_foerderbedarfe ?? []);
+        if (! in_array($status, ['fertig', 'geprueft'], true)
+            && collect($effectiveLuvFoerderbedarfe)->contains(fn ($entry) => (bool) ($entry['freigegeben'] ?? false))) {
+            throw ValidationException::withMessages([
+                'bericht.status' => 'LuV-Förderbedarfe dürfen erst bei einem fertigen oder geprüften PA-Bericht freigegeben werden.',
+            ]);
+        }
         $hatInhalt = collect(['staerken', 'entwicklungsfelder', 'empfehlung', 'bericht_text'])
             ->contains(fn ($feld) => filled($berichtData[$feld] ?? null))
             || ! empty($berichtData['generator_snapshot'])
+            || $this->hatLuvFoerderbedarfInhalt($effectiveLuvFoerderbedarfe)
             || in_array($status, ['in_bearbeitung', 'fertig', 'geprueft'], true);
 
         if (! $hatInhalt) {
@@ -1162,30 +1187,86 @@ class PotenzialanalyseController extends Controller
             return;
         }
 
-        $existing = PotenzialanalyseBericht::query()
-            ->where('gruppe_id', $gruppe->id)
-            ->where('personen_id', $personen->id)
-            ->first();
+        $updates = [
+            'user_id' => auth()->id(),
+            'status' => $status,
+            'staerken' => $berichtData['staerken'] ?? null,
+            'entwicklungsfelder' => $berichtData['entwicklungsfelder'] ?? null,
+            'empfehlung' => $berichtData['empfehlung'] ?? null,
+            'bericht_text' => $berichtData['bericht_text'] ?? null,
+            'generator_stil' => $berichtData['generator_stil'] ?? null,
+            'generator_snapshot' => $berichtData['generator_snapshot'] ?? null,
+            'fertiggestellt_at' => in_array($status, ['fertig', 'geprueft'], true)
+                ? ($existing?->fertiggestellt_at ?? now())
+                : null,
+        ];
+        if ($submittedLuvFoerderbedarfe !== null) {
+            $updates['luv_foerderbedarfe'] = $submittedLuvFoerderbedarfe;
+        }
 
         PotenzialanalyseBericht::updateOrCreate(
             [
                 'gruppe_id' => $gruppe->id,
                 'personen_id' => $personen->id,
             ],
-            [
-                'user_id' => auth()->id(),
-                'status' => $status,
-                'staerken' => $berichtData['staerken'] ?? null,
-                'entwicklungsfelder' => $berichtData['entwicklungsfelder'] ?? null,
-                'empfehlung' => $berichtData['empfehlung'] ?? null,
-                'bericht_text' => $berichtData['bericht_text'] ?? null,
-                'generator_stil' => $berichtData['generator_stil'] ?? null,
-                'generator_snapshot' => $berichtData['generator_snapshot'] ?? null,
-                'fertiggestellt_at' => in_array($status, ['fertig', 'geprueft'], true)
-                    ? ($existing?->fertiggestellt_at ?? now())
-                    : null,
-            ]
+            $updates
         );
+    }
+
+    private function normalizeLuvFoerderbedarfe(array $submitted, array $existing): array
+    {
+        $normalized = PotenzialanalyseBericht::defaultLuvFoerderbedarfe();
+
+        foreach (array_keys(PotenzialanalyseBericht::LUV_FOERDERBEDARF_BEREICHE) as $key) {
+            $input = (array) ($submitted[$key] ?? []);
+            $old = (array) ($existing[$key] ?? []);
+            $status = (string) ($input['status'] ?? 'unprueft');
+            $begruendung = trim((string) ($input['begruendung'] ?? ''));
+            $foerderbedarf = trim((string) ($input['foerderbedarf'] ?? ''));
+            $freigegeben = (bool) ($input['freigegeben'] ?? false);
+
+            if ($freigegeben && $status === 'unprueft') {
+                throw ValidationException::withMessages([
+                    "bericht.luv_foerderbedarfe.{$key}.status" => 'Bitte den Förderbedarf zuerst fachlich bewerten.',
+                ]);
+            }
+            if ($freigegeben && $status === 'foerderbedarf' && $foerderbedarf === '') {
+                throw ValidationException::withMessages([
+                    "bericht.luv_foerderbedarfe.{$key}.foerderbedarf" => 'Für die Freigabe muss ein konkreter Förderbedarf eingetragen werden.',
+                ]);
+            }
+
+            $oldContent = [
+                'status' => (string) ($old['status'] ?? 'unprueft'),
+                'begruendung' => trim((string) ($old['begruendung'] ?? '')),
+                'foerderbedarf' => trim((string) ($old['foerderbedarf'] ?? '')),
+            ];
+            $newContent = compact('status', 'begruendung', 'foerderbedarf');
+            $approvalUnchanged = $freigegeben
+                && (bool) ($old['freigegeben'] ?? false)
+                && $oldContent === $newContent;
+
+            $normalized[$key] = $newContent + [
+                'freigegeben' => $freigegeben,
+                'freigegeben_von' => $freigegeben
+                    ? ($approvalUnchanged ? ($old['freigegeben_von'] ?? auth()->id()) : auth()->id())
+                    : null,
+                'freigegeben_am' => $freigegeben
+                    ? ($approvalUnchanged ? ($old['freigegeben_am'] ?? now()->toIso8601String()) : now()->toIso8601String())
+                    : null,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    private function hatLuvFoerderbedarfInhalt(array $entries): bool
+    {
+        return collect($entries)->contains(fn ($entry) => is_array($entry) && (
+            ($entry['status'] ?? 'unprueft') !== 'unprueft'
+            || filled($entry['begruendung'] ?? null)
+            || filled($entry['foerderbedarf'] ?? null)
+        ));
     }
 
     private function projektUebungen(Projekt $projekt): Collection
@@ -1277,6 +1358,7 @@ class PotenzialanalyseController extends Controller
                     'bericht_text',
                     'generator_stil',
                     'generator_snapshot',
+                    'luv_foerderbedarfe',
                     'fertiggestellt_at',
                 ]) ?? [
                     'status' => 'entwurf',
@@ -1286,6 +1368,7 @@ class PotenzialanalyseController extends Controller
                     'bericht_text' => null,
                     'generator_stil' => null,
                     'generator_snapshot' => null,
+                    'luv_foerderbedarfe' => PotenzialanalyseBericht::defaultLuvFoerderbedarfe(),
                     'fertiggestellt_at' => null,
             ],
         ];

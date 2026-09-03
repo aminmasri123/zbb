@@ -9,6 +9,7 @@ use App\Services\Ai\Tools\GetDocumentationEntriesTool;
 use App\Services\Ai\Tools\GetParticipantDevelopmentDataTool;
 use App\Services\Ai\Tools\GetParticipantIdentitySummaryTool;
 use App\Services\Ai\Tools\GetParticipantLuvDataTool;
+use App\Services\Ai\Tools\GetParticipantPotentialAnalysisSupportNeedsTool;
 use App\Services\Ai\Tools\GetProjectReportRulesTool;
 use Illuminate\Auth\Access\AuthorizationException;
 use InvalidArgumentException;
@@ -18,9 +19,9 @@ final class AiToolRegistry
     /** @var array<string, AiTool> */
     private array $tools;
 
-    public function __construct(GetProjectReportRulesTool $projectReportRules, GetParticipantIdentitySummaryTool $identity, GetParticipantLuvDataTool $luv, GetAttendanceSummaryTool $attendance, GetDocumentationEntriesTool $documentation, GetParticipantDevelopmentDataTool $development)
+    public function __construct(GetProjectReportRulesTool $projectReportRules, GetParticipantIdentitySummaryTool $identity, GetParticipantLuvDataTool $luv, GetAttendanceSummaryTool $attendance, GetDocumentationEntriesTool $documentation, GetParticipantDevelopmentDataTool $development, GetParticipantPotentialAnalysisSupportNeedsTool $potentialAnalysisSupportNeeds)
     {
-        $this->tools = collect([$projectReportRules, $identity, $luv, $attendance, $documentation, $development])->mapWithKeys(fn ($tool) => [$tool->name() => $tool])->all();
+        $this->tools = collect([$projectReportRules, $identity, $luv, $attendance, $documentation, $development, $potentialAnalysisSupportNeeds])->mapWithKeys(fn ($tool) => [$tool->name() => $tool])->all();
     }
 
     /**

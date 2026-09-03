@@ -19,6 +19,7 @@ use App\Models\Standort;
 use App\Models\User;
 use App\Services\Bop\PotenzialanalyseReportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
 use ReflectionMethod;
 use Tests\TestCase;
 
@@ -149,6 +150,68 @@ class PotenzialanalyseTabClearTest extends TestCase
         $this->assertDatabaseMissing('potenzialanalyse_beurteilungen', ['gruppe_id' => $gruppe->id, 'personen_id' => $teilnehmer->id]);
         $this->assertDatabaseMissing('potenzialanalyse_selbsteinschaetzungen', ['gruppe_id' => $gruppe->id, 'personen_id' => $teilnehmer->id]);
         $this->assertDatabaseMissing('potenzialanalyse_berichte', ['gruppe_id' => $gruppe->id, 'personen_id' => $teilnehmer->id]);
+    }
+
+    public function test_luv_support_needs_are_stored_only_for_projects_with_luv_and_potential_analysis(): void
+    {
+        [$gruppe, $teilnehmer] = $this->paContext();
+        $user = User::factory()->create();
+        $this->actingAs($user);
+        $gruppe->projekt->update(['potenzialanalyse_aktiv' => true]);
+
+        $controller = app(PotenzialanalyseController::class);
+        $bericht = [
+            'status' => 'fertig',
+            'luv_foerderbedarfe' => [
+                'personal' => [
+                    'status' => 'foerderbedarf',
+                    'begruendung' => 'Benötigt bei neuen Aufgaben häufig Bestätigung.',
+                    'foerderbedarf' => 'Selbstständiges Beginnen neuer Aufgaben einüben.',
+                    'freigegeben' => true,
+                ],
+            ],
+        ];
+
+        $this->invokePrivate($controller, 'syncBericht', [$bericht, $gruppe, $teilnehmer]);
+
+        $gespeichert = PotenzialanalyseBericht::query()->firstOrFail();
+        $this->assertTrue($gespeichert->luv_foerderbedarfe['personal']['freigegeben']);
+        $this->assertSame('Selbstständiges Beginnen neuer Aufgaben einüben.', $gespeichert->luv_foerderbedarfe['personal']['foerderbedarf']);
+        $this->assertSame($user->id, $gespeichert->luv_foerderbedarfe['personal']['freigegeben_von']);
+
+        $gespeichert->update(['luv_foerderbedarfe' => null]);
+        $gruppe->projekt->update([
+            'participant_profile_settings' => [
+                'enabled_tabs' => ['stammdaten'],
+                'tab_order' => Projekt::participantProfileTabKeys(),
+            ],
+        ]);
+        $gruppe->unsetRelation('projekt');
+
+        $this->invokePrivate($controller, 'syncBericht', [$bericht, $gruppe, $teilnehmer]);
+
+        $this->assertNull($gespeichert->fresh()->luv_foerderbedarfe);
+    }
+
+    public function test_luv_support_needs_cannot_be_approved_while_the_pa_report_is_a_draft(): void
+    {
+        [$gruppe, $teilnehmer] = $this->paContext();
+        $this->actingAs(User::factory()->create());
+        $gruppe->projekt->update(['potenzialanalyse_aktiv' => true]);
+
+        $this->expectException(ValidationException::class);
+
+        $this->invokePrivate(app(PotenzialanalyseController::class), 'syncBericht', [[
+            'status' => 'entwurf',
+            'luv_foerderbedarfe' => [
+                'social' => [
+                    'status' => 'kein_foerderbedarf',
+                    'begruendung' => 'Im Beobachtungszeitraum unauffällig.',
+                    'foerderbedarf' => '',
+                    'freigegeben' => true,
+                ],
+            ],
+        ], $gruppe, $teilnehmer]);
     }
 
     private function paContext(): array
