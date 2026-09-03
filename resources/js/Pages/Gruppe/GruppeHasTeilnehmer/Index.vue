@@ -706,10 +706,18 @@ const ensurePaEintrag = (personenId) => {
   eintrag.bericht ||= defaultPaBericht()
   eintrag.bericht.luv_foerderbedarfe ||= defaultPaLuvFoerderbedarfe()
   paLuvFoerderbedarfBereiche.forEach((bereich) => {
-    eintrag.bericht.luv_foerderbedarfe[bereich.key] = {
-      ...defaultPaLuvFoerderbedarf(),
-      ...(eintrag.bericht.luv_foerderbedarfe[bereich.key] || {}),
+    const vorhandenerEintrag = eintrag.bericht.luv_foerderbedarfe[bereich.key]
+
+    if (!vorhandenerEintrag) {
+      eintrag.bericht.luv_foerderbedarfe[bereich.key] = defaultPaLuvFoerderbedarf()
+      return
     }
+
+    Object.entries(defaultPaLuvFoerderbedarf()).forEach(([key, value]) => {
+      if (vorhandenerEintrag[key] === undefined) {
+        vorhandenerEintrag[key] = value
+      }
+    })
   })
 
   paUebungen.value.forEach((uebung) => {
@@ -725,7 +733,11 @@ const ensurePaEintrag = (personenId) => {
   return eintrag
 }
 
-const paEintrag = (personenId) => ensurePaEintrag(personenId)
+// Diese Funktion wird im Template sehr häufig aufgerufen. Vorhandene Einträge
+// dürfen dabei nicht erneut normalisiert oder ersetzt werden, weil jede
+// Mutation einen weiteren Vue-Render auslöst.
+const paEintrag = (personenId) =>
+  paTeilnehmerDaten.value[String(personenId)] || ensurePaEintrag(personenId)
 
 const paLuvFoerderbedarfEintrag = (personenId, bereichKey) =>
   paEintrag(personenId).bericht.luv_foerderbedarfe[bereichKey]
