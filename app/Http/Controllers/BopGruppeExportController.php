@@ -6,6 +6,8 @@ use App\Models\Gruppe;
 use App\Models\Partner;
 use App\Models\Personen;
 use App\Models\PersonenIstSchueler;
+use App\Models\BerufsorientierungBewertung;
+use App\Services\BerufsorientierungAuswertungService;
 use App\Services\Bop\AttendanceFooterService;
 use App\Services\Projects\ActiveProjectContext;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -28,6 +30,7 @@ class BopGruppeExportController extends Controller
     public function __construct(
         private readonly AttendanceFooterService $attendanceFooter,
         private readonly ActiveProjectContext $activeProjectContext,
+        private readonly BerufsorientierungAuswertungService $boAuswertung,
     ) {}
 
     public function namensschilder(Gruppe $gruppe)
@@ -111,12 +114,22 @@ class BopGruppeExportController extends Controller
 
     public function auswertungsbogenBop(Gruppe $gruppe)
     {
-        return $this->combinedTemplateExport(
-            $gruppe,
-            $this->wordTemplate('Auswertungsbogen_BOP.docx'),
-            'Auswertungsbogen_BOP_Gruppe_'.$gruppe->id,
-            fn (TemplateProcessor $processor, array $item) => $this->fillTemplate($processor, $item)
-        );
+        $gruppe = $this->gruppeMitDaten($gruppe);
+        $teilnehmer = $this->teilnehmerDaten($gruppe);
+        abort_if($teilnehmer->isEmpty(), 422, 'Die Gruppe verfügt derzeit über keine Teilnehmer.');
+        abort_unless($gruppe->bereich_id, 422, 'Der Gruppe ist kein Bereich zugeordnet.');
+        $config = $this->boAuswertung->config($gruppe->projekt);
+        abort_unless($config['enabled'] && count($config['criteria']), 422, 'Für dieses Projekt ist keine Bereichsauswertung konfiguriert.');
+
+        $ratings = BerufsorientierungBewertung::query()
+            ->where('gruppe_id', $gruppe->id)
+            ->whereIn('personen_id', $teilnehmer->pluck('personen_id'))
+            ->get()->groupBy('personen_id')->map->keyBy('kriterium');
+        $pdf = Pdf::loadView('pdf.bereichsauswertung', compact('gruppe', 'teilnehmer', 'config', 'ratings'))
+            ->setPaper('a4', 'portrait');
+        $filename = $this->safeFileName('Auswertungsbogen_'.($gruppe->bereich?->name ?: 'Gruppe_'.$gruppe->id)).'.pdf';
+
+        return $pdf->download($filename);
     }
 
     public function tagesauswertungBop(Request $request, Gruppe $gruppe)
@@ -519,6 +532,7 @@ class BopGruppeExportController extends Controller
                 $anleiter = trim(($gruppe->betreuer?->vorname ?? '').' '.($gruppe->betreuer?->nachname ?? ''));
 
                 $values = [
+                    'personen_id' => $person->id,
                     'nr' => $index + 1,
                     'nummer' => $index + 1,
                     'vorname' => $person->vorname ?? '',

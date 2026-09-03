@@ -21,6 +21,7 @@
     nonWorkingDays: { type: Array, default: () => [] },
     bopLegacyExporte: { type: Array, default: () => [] },
     potenzialanalyse: { type: Object, default: () => ({ aktiv: false, erlaubt: false, can: { view: false, update: false }, tage: null, uebungen: [], teilnehmer: {} }) },
+    bereichsauswertung: { type: Object, default: () => ({ enabled: false, criteria: [], scale: {}, bewertungen: {}, can_update: false }) },
     })
     console.log('Props:', props.gruppe    )
     // Modal-Steuerung + Auswahl
@@ -42,6 +43,10 @@
     const paSaveInFlight = new Set()
     const paSavePending = new Set()
     const paDirtyTeilnehmerIds = new Set()
+    const showBereichsauswertung = ref(false)
+    const selectedBoTeilnehmer = ref(null)
+    const boSaving = ref(false)
+    const boBewertungen = ref({})
     const { can, canAny } = usePermissions()
     const canReadAttendance = computed(() => canAny([
       'anwesenheit.index',
@@ -101,6 +106,49 @@
     const canExportAttendance = canUseAttendanceExports
     const canAddTeilnehmerToGroup = computed(() => can('gruppeHasTeilnehmer.store'))
     const canRemoveTeilnehmerFromGroup = computed(() => can('gruppeHasTeilnehmer.destroyTeilnehmer'))
+    const boAktiv = computed(() => Boolean(props.bereichsauswertung?.enabled))
+    const boCanUpdate = computed(() => Boolean(props.bereichsauswertung?.can_update))
+    const boCriteria = computed(() => props.bereichsauswertung?.criteria || [])
+    const boScale = computed(() => props.bereichsauswertung?.scale || {})
+    const boVorhanden = (personenId) => Object.values(props.bereichsauswertung?.bewertungen?.[personenId] || {})
+      .some((entry) => entry?.bewertung || String(entry?.bemerkung || '').trim())
+    const openBereichsauswertung = (teilnehmer) => {
+      selectedBoTeilnehmer.value = teilnehmer
+      const existing = props.bereichsauswertung?.bewertungen?.[teilnehmer.id] || {}
+      boBewertungen.value = Object.fromEntries(boCriteria.value.map((criterion) => [criterion.key, {
+        bewertung: existing[criterion.key]?.bewertung ?? null,
+        bemerkung: existing[criterion.key]?.bemerkung ?? '',
+      }]))
+      showBereichsauswertung.value = true
+    }
+    const saveBereichsauswertung = async () => {
+      if (!selectedBoTeilnehmer.value || boSaving.value) return
+      const missing = boCriteria.value.filter((criterion) => criterion.required && !boBewertungen.value[criterion.key]?.bewertung)
+      if (missing.length) {
+        await Swal.fire('Bewertung unvollständig', `Bitte bewerten Sie noch: ${missing.map((item) => item.label).join(', ')}`, 'warning')
+        return
+      }
+      boSaving.value = true
+      try {
+        await axios.put(route('gruppe.bereichsauswertung.update', {
+          gruppe: props.gruppe.id,
+          personen: selectedBoTeilnehmer.value.id,
+        }), {
+          bewertungen: boCriteria.value.map((criterion) => ({
+            kriterium: criterion.key,
+            bewertung: boBewertungen.value[criterion.key]?.bewertung,
+            bemerkung: boBewertungen.value[criterion.key]?.bemerkung || null,
+          })),
+        })
+        props.bereichsauswertung.bewertungen[selectedBoTeilnehmer.value.id] = JSON.parse(JSON.stringify(boBewertungen.value))
+        showBereichsauswertung.value = false
+        await Swal.fire({ icon: 'success', title: 'Auswertung gespeichert', timer: 1500, showConfirmButton: false })
+      } catch (error) {
+        await Swal.fire('Fehler', Object.values(error.response?.data?.errors || {}).flat()[0] || error.response?.data?.message || 'Die Auswertung konnte nicht gespeichert werden.', 'error')
+      } finally {
+        boSaving.value = false
+      }
+    }
     const paAbilities = computed(() => props.potenzialanalyse?.can || {})
     const canViewPotenzialanalyse = computed(() => Boolean(paAbilities.value.view))
     const canEditPotenzialanalyse = computed(() => Boolean(paAbilities.value.update))
@@ -2230,6 +2278,69 @@ const exportMitTag = async () => {
           </div>
         </Dialog>
       </div>
+
+      <!-- Projektbezogene Bereichsauswertung -->
+      <section v-if="boAktiv" class="space-y-3 rounded border border-gray-200 bg-white p-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 class="font-semibold text-gray-800">Teilnehmer auswerten</h3>
+            <p class="text-sm text-gray-500">Bereich: {{ props.bereichsauswertung?.bereich?.name || '–' }}</p>
+          </div>
+          <span class="rounded bg-gray-100 px-2.5 py-1 text-xs text-gray-600">{{ boCriteria.length }} Beobachtungspunkte</span>
+        </div>
+        <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          <button
+            v-for="teilnehmer in gruppenTeilnehmer"
+            :key="'bo-' + teilnehmer.id"
+            type="button"
+            class="flex items-center justify-between gap-3 rounded border border-gray-200 px-3 py-2 text-left hover:border-zbb hover:bg-zbbTrp disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="!boCanUpdate"
+            @click="openBereichsauswertung(teilnehmer)"
+          >
+            <span class="truncate font-medium text-gray-800">{{ teilnehmer.vorname }} {{ teilnehmer.nachname }}</span>
+            <span class="shrink-0 rounded px-2 py-0.5 text-xs" :class="boVorhanden(teilnehmer.id) ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'">
+              {{ boVorhanden(teilnehmer.id) ? 'Bewertet' : 'Offen' }}
+            </span>
+          </button>
+        </div>
+      </section>
+
+      <Dialog
+        v-model:visible="showBereichsauswertung"
+        modal
+        :header="`Auswertung · ${selectedBoTeilnehmer?.vorname || ''} ${selectedBoTeilnehmer?.nachname || ''}`"
+        :style="{ width: '980px', maxWidth: '96vw' }"
+        :draggable="false"
+        appendTo="body"
+      >
+        <div class="mb-4 rounded bg-zbbTrp px-4 py-3 text-sm text-gray-700">
+          Beobachtungsbereich: <strong>{{ props.bereichsauswertung?.bereich?.name }}</strong>
+        </div>
+        <div class="max-h-[62vh] space-y-3 overflow-y-auto pr-1">
+          <div v-for="criterion in boCriteria" :key="criterion.key" class="rounded border border-gray-200 p-3">
+            <div class="mb-2">
+              <p class="font-medium text-gray-800">{{ criterion.label }} <span v-if="criterion.required" class="text-red-600">*</span></p>
+              <p v-if="criterion.description" class="text-xs text-gray-500">{{ criterion.description }}</p>
+            </div>
+            <div class="grid gap-2 md:grid-cols-5">
+              <label
+                v-for="(label, value) in boScale"
+                :key="criterion.key + '-' + value"
+                class="flex cursor-pointer items-center gap-2 rounded border px-2 py-2 text-xs transition"
+                :class="Number(boBewertungen[criterion.key]?.bewertung) === Number(value) ? 'border-zbb bg-zbbTrp text-zbb' : 'border-gray-200 hover:border-zbb/50'"
+              >
+                <input v-model.number="boBewertungen[criterion.key].bewertung" type="radio" :name="'bo-' + criterion.key" :value="Number(value)" class="text-zbb focus:ring-zbb" />
+                <span><strong>{{ value }}</strong> · {{ label }}</span>
+              </label>
+            </div>
+            <textarea v-model="boBewertungen[criterion.key].bemerkung" rows="2" class="mt-2 w-full rounded border-gray-300 text-sm" placeholder="Bemerkung (optional)"></textarea>
+          </div>
+        </div>
+        <template #footer>
+          <Button label="Abbrechen" severity="secondary" text :disabled="boSaving" @click="showBereichsauswertung = false" />
+          <Button label="Auswertung speichern" icon="pi pi-check" :loading="boSaving" :disabled="!boCanUpdate" @click="saveBereichsauswertung" />
+        </template>
+      </Dialog>
 
       <!-- Anwesenheit -->
       <div v-if="canViewAttendance" class="space-y-4">

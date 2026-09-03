@@ -88,6 +88,7 @@ use App\Http\Controllers\ProjectCourseQuizController;
 use App\Http\Controllers\ProjectCourseSessionController;
 use App\Http\Controllers\ProjektBopController;
 use App\Http\Controllers\ProjektController;
+use App\Http\Controllers\BerufsorientierungBewertungController;
 use App\Http\Controllers\ProjektHasPersonenController;
 use App\Http\Controllers\ProjektHasTeilnehmerController;
 use App\Http\Controllers\ProjektHasTeilnehmerLuvController;
@@ -509,6 +510,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::put('/projekt/{projekt}/bereiche', [ProjektController::class, 'updateBereiche'])->name('projekt.bereiche.update')->can('projekt.update');
     Route::put('/projekt/{projekt}/funktionen', [ProjektController::class, 'updateFeatures'])->name('projekt.features.update')->can('projekt.update');
     Route::put('/projekt/{projekt}/regeln', [ProjektController::class, 'updateRules'])->name('projekt.rules.update')->can('projekt.update');
+    Route::put('/projekt/{projekt}/bereichsauswertung', [BerufsorientierungBewertungController::class, 'updateProjectConfig'])->name('projekt.bereichsauswertung.update')->can('projekt.update');
     Route::put('/projekt/{projekt}/aufnahmecheckliste', [IntakeChecklistController::class, 'updateDefinition'])->name('projekt.intake-checklist.update')->can('projekt.update');
     Route::put('/projekt/{projekt}/abschlusscheckliste', [ParticipationCompletionController::class, 'updateDefinition'])->name('projekt.completion-checklist.update')->middleware('projectFeature:completion_management')->can('projekt.update');
     Route::put('/projekt/{projekt}/portal-funktionen', [ProjektController::class, 'updatePortalFeatures'])->name('projekt.portal-features.update')->can('projekt.update');
@@ -607,6 +609,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
         Route::post('/gruppehasteilnehmer/anlegen', [GruppeHasTeilnehmerController::class, 'store'])->name('gruppeHasTeilnehmer.store')->middleware(['module:participant_management', 'projectFeature:participant_management', 'can:gruppeHasTeilnehmer.store']);
 
         Route::delete('/gruppehasteilnehmer/gruppe/{gruppe}/teilnehmer/{personen}', [GruppeHasTeilnehmerController::class, 'destroyTeilnehmer'])->name('gruppeHasTeilnehmer.destroyTeilnehmer')->middleware(['module:participant_management', 'projectFeature:participant_management', 'can:gruppeHasTeilnehmer.destroyTeilnehmer']);
+        Route::put('/gruppe/{gruppe}/bereichsauswertung/teilnehmer/{personen}', [BerufsorientierungBewertungController::class, 'update'])->name('gruppe.bereichsauswertung.update')->can('gruppeHasTeilnehmer.store');
         Route::delete('/gruppehasteilnehmer/entfernen/{id}', [GruppeHasTeilnehmerController::class, 'destroy'])->name('gruppeHasPersonen.destroy')->middleware(['module:participant_management', 'projectFeature:participant_management', 'can:gruppeHasTeilnehmer.destroyTeilnehmer']);
     });
 

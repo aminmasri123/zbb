@@ -26,6 +26,7 @@ const canConfigureProjectFeature = (featureKey) =>
 const administrationTabs = computed(() => [
     { key: 'overview', label: 'Übersicht' },
     ...(canUpdateProjekt.value ? [{ key: 'areas', label: 'Bereiche' }] : []),
+    ...(canUpdateProjekt.value ? [{ key: 'area_evaluation', label: 'Bereichsauswertung' }] : []),
     { key: 'participants', label: 'Teilnehmerprofil' },
     ...(projectFeatures.participant_portal ? [{ key: 'participant_portal', label: 'Teilnehmerportal' }] : []),
     { key: 'features', label: 'Funktionen & Regeln' },
@@ -36,6 +37,39 @@ const administrationTabs = computed(() => [
 const activeAdministrationTab = ref('overview');
 const areaAssignmentSaving = ref(false);
 const selectedAreaIds = ref((props.projekt.bereiche || []).map((bereich) => bereich.id));
+const boConfig = reactive(JSON.parse(JSON.stringify(props.projekt.berufsorientierung_auswertung_config || { enabled: false, criteria: [] })));
+const boConfigSaving = ref(false);
+const addBoCriterion = () => {
+    let suffix = boConfig.criteria.length + 1;
+    while (boConfig.criteria.some((item) => item.key === `merkmal_${suffix}`)) suffix += 1;
+    boConfig.criteria.push({ key: `merkmal_${suffix}`, label: '', description: '', required: true });
+};
+const removeBoCriterion = (index) => boConfig.criteria.splice(index, 1);
+const moveBoCriterion = (index, direction) => {
+    const target = index + direction;
+    if (target < 0 || target >= boConfig.criteria.length) return;
+    [boConfig.criteria[index], boConfig.criteria[target]] = [boConfig.criteria[target], boConfig.criteria[index]];
+};
+const saveBoConfig = async () => {
+    if (!boConfig.criteria.length || boConfig.criteria.some((item) => !item.label?.trim())) {
+        Swal.fire('Fehler', 'Mindestens ein Beobachtungspunkt und für jeden Punkt eine Bezeichnung sind erforderlich.', 'error');
+        return;
+    }
+    boConfigSaving.value = true;
+    try {
+        const response = await axios.put(route('projekt.bereichsauswertung.update', props.projekt.id), {
+            enabled: Boolean(boConfig.enabled),
+            criteria: boConfig.criteria.map((item) => ({ ...item, label: item.label.trim(), description: item.description?.trim() || null })),
+        });
+        Object.assign(boConfig, response.data);
+        props.projekt.berufsorientierung_auswertung_config = response.data;
+        Swal.fire('Gespeichert!', 'Die Beobachtungspunkte wurden für dieses Projekt gespeichert.', 'success');
+    } catch (error) {
+        Swal.fire('Fehler', Object.values(error.response?.data?.errors || {}).flat()[0] || 'Die Konfiguration konnte nicht gespeichert werden.', 'error');
+    } finally {
+        boConfigSaving.value = false;
+    }
+};
 
 const resetAreaAssignment = () => {
     selectedAreaIds.value = (props.projekt.bereiche || []).map((bereich) => bereich.id);
@@ -1357,6 +1391,43 @@ const formatLuvTemplateDate = (value) => value
                     >
                         {{ areaAssignmentSaving ? 'Speichert …' : 'Bereiche speichern' }}
                     </button>
+                </div>
+            </section>
+
+            <section v-if="activeAdministrationTab === 'area_evaluation' && canUpdateProjekt" class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-800">Projektbezogene Bereichsauswertung</h2>
+                        <p class="mt-1 text-sm text-gray-500">Diese Beobachtungspunkte erscheinen bei Teilnehmern in Gruppen mit einem zugewiesenen Bereich.</p>
+                    </div>
+                    <label class="flex items-center gap-2 rounded bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700">
+                        <input v-model="boConfig.enabled" type="checkbox" class="rounded text-zbb focus:ring-zbb" />
+                        Bereichsauswertung aktiv
+                    </label>
+                </div>
+                <div class="space-y-3">
+                    <div v-for="(criterion, index) in boConfig.criteria" :key="criterion.key" class="rounded border border-gray-200 p-4">
+                        <div class="grid gap-3 lg:grid-cols-[1fr_2fr_auto]">
+                            <label class="text-sm text-gray-600">Bezeichnung
+                                <input v-model="criterion.label" type="text" maxlength="255" class="mt-1 w-full rounded border-gray-300" />
+                            </label>
+                            <label class="text-sm text-gray-600">Beobachtungshinweis
+                                <input v-model="criterion.description" type="text" maxlength="2000" class="mt-1 w-full rounded border-gray-300" />
+                            </label>
+                            <div class="flex items-end gap-1">
+                                <button type="button" class="rounded border px-2 py-2" :disabled="index === 0" title="Nach oben" @click="moveBoCriterion(index, -1)">↑</button>
+                                <button type="button" class="rounded border px-2 py-2" :disabled="index === boConfig.criteria.length - 1" title="Nach unten" @click="moveBoCriterion(index, 1)">↓</button>
+                                <button type="button" class="rounded border border-red-200 px-2 py-2 text-red-600" :disabled="boConfig.criteria.length === 1" title="Entfernen" @click="removeBoCriterion(index)">×</button>
+                            </div>
+                        </div>
+                        <label class="mt-3 inline-flex items-center gap-2 text-sm text-gray-600">
+                            <input v-model="criterion.required" type="checkbox" class="rounded text-zbb focus:ring-zbb" /> Pflichtbewertung
+                        </label>
+                    </div>
+                </div>
+                <div class="mt-4 flex flex-wrap justify-between gap-3">
+                    <button type="button" class="rounded border border-zbb px-4 py-2 text-sm font-semibold text-zbb hover:bg-zbbTrp" @click="addBoCriterion">Beobachtungspunkt hinzufügen</button>
+                    <button type="button" class="rounded bg-zbb px-5 py-2 text-sm font-semibold text-white disabled:opacity-60" :disabled="boConfigSaving" @click="saveBoConfig">{{ boConfigSaving ? 'Speichert …' : 'Konfiguration speichern' }}</button>
                 </div>
             </section>
 

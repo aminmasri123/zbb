@@ -15,6 +15,8 @@ use App\Models\Tage;
 use App\Models\Zeiten;
 use App\Services\PotenzialanalyseProfileService;
 use App\Services\PotenzialanalyseScoringService;
+use App\Services\BerufsorientierungAuswertungService;
+use App\Models\BerufsorientierungBewertung;
 use App\Services\Projects\ActiveProjectContext;
 use App\Services\SaarlandWorkdayService;
 use Carbon\Carbon;
@@ -32,6 +34,7 @@ class GruppeHasTeilnehmerController extends Controller
         private readonly SaarlandWorkdayService $workdays,
         private readonly PotenzialanalyseScoringService $paScoring,
         private readonly PotenzialanalyseProfileService $paProfiles,
+        private readonly BerufsorientierungAuswertungService $boAuswertung,
     ) {}
 
     /**
@@ -305,8 +308,33 @@ class GruppeHasTeilnehmerController extends Controller
             ),
             'bopLegacyExporte' => $this->bopLegacyExporte($gruppe),
             'potenzialanalyse' => $this->potenzialanalysePayload($gruppe, $user),
+            'bereichsauswertung' => $this->bereichsauswertungPayload($gruppe, $user),
         ]);
 
+    }
+
+    private function bereichsauswertungPayload(Gruppe $gruppe, $user): array
+    {
+        $config = $this->boAuswertung->config($gruppe->projekt);
+        $enabled = $config['enabled'] && (bool) $gruppe->bereich_id;
+        $ratings = $enabled
+            ? BerufsorientierungBewertung::query()
+                ->where('gruppe_id', $gruppe->id)
+                ->whereIn('personen_id', $gruppe->teilnehmer->pluck('id'))
+                ->get()
+                ->groupBy('personen_id')
+                ->map(fn ($entries) => $entries->keyBy('kriterium')->map(fn ($entry) => [
+                    'bewertung' => $entry->bewertung,
+                    'bemerkung' => $entry->bemerkung,
+                ])->all())->all()
+            : [];
+
+        return array_merge($config, [
+            'enabled' => $enabled,
+            'bereich' => $gruppe->bereich?->only(['id', 'name']),
+            'bewertungen' => $ratings,
+            'can_update' => $user?->can('gruppeHasTeilnehmer.store') ?? false,
+        ]);
     }
 
     /**
@@ -956,7 +984,7 @@ class GruppeHasTeilnehmerController extends Controller
             [
                 'id' => 'bop-gruppe-auswertungsbogen',
                 'name' => 'Auswertungsbogen BOP Gruppe',
-                'format' => 'DOCX',
+                'format' => 'PDF',
                 'typ' => 'BOP Gruppe',
                 'method' => 'get',
                 'url' => route('gruppe.bop.export.auswertungsbogen-bop', $gruppe->id),

@@ -17,6 +17,7 @@ use App\Models\Standort;
 use App\Notifications\ConfiguredEventNotification;
 use App\Services\NotificationRecipientService;
 use App\Services\PotenzialanalyseProfileService;
+use App\Services\BerufsorientierungAuswertungService;
 use Exception;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
@@ -296,6 +297,7 @@ class ProjektController extends Controller
             'projekt' => array_merge($projekt->toArray(), [
                 'potenzialanalyse_profil' => $paProfilePayload,
                 'potenzialanalyse_auswertung_config' => $profileScoringConfig,
+                'berufsorientierung_auswertung_config' => app(BerufsorientierungAuswertungService::class)->config($projekt),
                 'features' => $projekt->featureSettings(),
                 'rules' => $projekt->ruleSettings(),
                 'portal_features' => $projekt->portalFeatureSettings(),
