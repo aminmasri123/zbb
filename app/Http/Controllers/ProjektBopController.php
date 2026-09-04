@@ -1232,9 +1232,9 @@ class ProjektBopController extends Controller
 
     public function anwesenheitslistePADraftStore(Request $request)
     {
-        // Auch der Delta-Save muss den vorhandenen zentralen JSON-Entwurf einmal
-        // einlesen. Bei großen Beständen reicht das PHP-Standardlimit von 128 MB
-        // nicht, obwohl nur eine einzelne Signatur geändert wird.
+        // Das höhere Limit bleibt für Datenbanktreiber ohne JSON-Teilupdates als
+        // sichere Rückfallebene bestehen. MariaDB speichert weiter unten nur das
+        // geänderte Feld und lädt den Gesamtbestand nicht mehr nach PHP.
         $this->ensureMemoryLimit(512 * 1024 * 1024);
 
         $this->purgeExpiredPaDrafts();
@@ -1271,13 +1271,27 @@ class ProjektBopController extends Controller
                 'teil' => $scope['teil'],
                 'export_mode' => $scope['draft_export_mode'],
                 'klasse' => $scope['draft_klasse'],
-                'payload' => json_encode([]),
+                'payload' => json_encode((object) []),
                 'revision' => 0,
                 'user_create' => $userId,
                 'user_update' => $userId,
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
+
+            // MariaDB kann einzelne JSON-Werte direkt in der Datenbank ändern.
+            // So muss PHP bei großen Entwürfen nicht für jede neue Unterschrift
+            // alle bereits gespeicherten PNGs laden und mehrfach kopieren.
+            // Auch alte Schuljahr-Entwürfe werden dabei direkt in MariaDB
+            // zusammengeführt, ohne den großen Bildbestand nach PHP zu laden.
+            if (DB::connection()->getDriverName() === 'mysql') {
+                return $this->storePaDraftDeltaWithDatabaseJson(
+                    $scope,
+                    $incomingPayload,
+                    $userId,
+                    $request
+                );
+            }
 
             $draft = PaAttendanceListDraft::where('draft_hash', $scope['draft_hash'])
                 ->lockForUpdate()
@@ -1480,7 +1494,7 @@ class ProjektBopController extends Controller
                 'teil' => $scope['teil'],
                 'export_mode' => $scope['draft_export_mode'],
                 'klasse' => $scope['draft_klasse'],
-                'payload' => json_encode([]),
+                'payload' => json_encode((object) []),
                 'revision' => 0,
                 'user_create' => $userId,
                 'user_update' => $userId,
@@ -1800,6 +1814,221 @@ class ProjektBopController extends Controller
             ->all();
 
         return $payload;
+    }
+
+    /**
+     * Speichert eine PA-Änderung direkt im JSON-Dokument von MariaDB. Die
+     * Payload kann hunderte verschlüsselte PNGs enthalten; würde Eloquent sie
+     * als PHP-Array casten, entstünden beim Zusammenführen mehrere vollständige
+     * Kopien und das PHP-Speicherlimit wäre schnell erreicht.
+     *
+     * @return array{0:PaAttendanceListDraft,1:null}
+     */
+    private function storePaDraftDeltaWithDatabaseJson(
+        array $scope,
+        array $incomingPayload,
+        ?int $userId,
+        Request $request
+    ): array {
+        $draftRow = DB::table('pa_attendance_list_drafts')
+            ->select(['id', 'revision'])
+            ->where('draft_hash', $scope['draft_hash'])
+            ->lockForUpdate()
+            ->first();
+
+        abort_unless($draftRow, 404);
+
+        $draftId = (int) $draftRow->id;
+        $savedAt = now();
+        $savedAtIso = $savedAt->toIso8601String();
+
+        // Frühere Datensätze konnten als leeres JSON-Array angelegt werden.
+        // Für benannte Eigenschaften wird einmalig ein Objekt sichergestellt.
+        DB::update(
+            "UPDATE pa_attendance_list_drafts
+             SET payload = IF(JSON_TYPE(payload) = 'OBJECT', payload, JSON_OBJECT())
+             WHERE id = ?",
+            [$draftId]
+        );
+
+        $legacyDraftId = null;
+        if (!empty($scope['legacy_draft_hashes'])) {
+            $legacyDraftId = DB::table('pa_attendance_list_drafts')
+                ->whereIn('draft_hash', $scope['legacy_draft_hashes'])
+                ->orderByDesc('updated_at')
+                ->lockForUpdate()
+                ->value('id');
+        }
+
+        if ($legacyDraftId) {
+            DB::update(
+                "UPDATE pa_attendance_list_drafts AS current_draft
+                 INNER JOIN pa_attendance_list_drafts AS legacy_draft
+                     ON legacy_draft.id = ?
+                 SET current_draft.payload = JSON_SET(
+                     current_draft.payload,
+                     '$.signatures', JSON_MERGE_PATCH(
+                         IFNULL(JSON_EXTRACT(legacy_draft.payload, '$.signatures'), JSON_OBJECT()),
+                         IFNULL(JSON_EXTRACT(current_draft.payload, '$.signatures'), JSON_OBJECT())
+                     )
+                 )
+                 WHERE current_draft.id = ?",
+                [(int) $legacyDraftId, $draftId]
+            );
+        }
+
+        DB::update(
+            "UPDATE pa_attendance_list_drafts
+             SET payload = JSON_SET(
+                 payload,
+                 '$.version', GREATEST(
+                     IFNULL(CAST(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.version')) AS UNSIGNED), 1),
+                     ?
+                 ),
+                 '$.form', JSON_EXTRACT(?, '$'),
+                 '$.days', JSON_EXTRACT(?, '$'),
+                 '$.selectedDayId', JSON_EXTRACT(?, '$'),
+                 '$.saved_at', ?
+             )
+             WHERE id = ?",
+            [
+                (int) ($incomingPayload['version'] ?? 1),
+                json_encode($incomingPayload['form'] ?? [], JSON_THROW_ON_ERROR),
+                json_encode($incomingPayload['days'] ?? [], JSON_THROW_ON_ERROR),
+                json_encode($incomingPayload['selectedDayId'] ?? null, JSON_THROW_ON_ERROR),
+                $savedAtIso,
+                $draftId,
+            ]
+        );
+
+        if (array_key_exists('classSchedules', $incomingPayload)) {
+            DB::update(
+                "UPDATE pa_attendance_list_drafts
+                 SET payload = JSON_SET(
+                     payload,
+                     '$.classSchedules', JSON_MERGE_PATCH(
+                         IFNULL(JSON_EXTRACT(payload, '$.classSchedules'), JSON_OBJECT()),
+                         JSON_EXTRACT(?, '$')
+                     )
+                 )
+                 WHERE id = ?",
+                [
+                    json_encode($incomingPayload['classSchedules'] ?? [], JSON_THROW_ON_ERROR),
+                    $draftId,
+                ]
+            );
+        }
+
+        $signatureType = DB::selectOne(
+            "SELECT JSON_TYPE(JSON_EXTRACT(payload, '$.signatures')) AS signature_type
+             FROM pa_attendance_list_drafts
+             WHERE id = ?",
+            [$draftId]
+        )?->signature_type;
+
+        if ($signatureType !== 'OBJECT') {
+            DB::update(
+                "UPDATE pa_attendance_list_drafts
+                 SET payload = JSON_SET(payload, '$.signatures', JSON_EXTRACT(?, '$'))
+                 WHERE id = ?",
+                ['{}', $draftId]
+            );
+        }
+
+        $signatureChanges = [];
+        foreach (($incomingPayload['signatures'] ?? []) as $signatureKey => $incomingValue) {
+            if (!is_string($signatureKey)) {
+                continue;
+            }
+
+            $jsonPath = '$.signatures."'
+                . str_replace(['\\', '"'], ['\\\\', '\\"'], $signatureKey)
+                . '"';
+            $storedRow = DB::selectOne(
+                'SELECT JSON_UNQUOTE(JSON_EXTRACT(payload, ?)) AS signature_value
+                 FROM pa_attendance_list_drafts
+                 WHERE id = ?',
+                [$jsonPath, $draftId]
+            );
+            $storedValue = is_string($storedRow?->signature_value)
+                ? $storedRow->signature_value
+                : null;
+            $previousValue = $storedValue !== null
+                ? $this->decryptPaSignature($storedValue)
+                : null;
+            $currentValue = is_string($incomingValue) && $incomingValue !== ''
+                ? $incomingValue
+                : null;
+
+            if ($previousValue === $currentValue) {
+                continue;
+            }
+
+            $signatureChanges[$signatureKey] = [
+                'previous' => $previousValue,
+                'current' => $currentValue,
+            ];
+
+            if ($currentValue === null) {
+                DB::update(
+                    'UPDATE pa_attendance_list_drafts SET payload = JSON_REMOVE(payload, ?) WHERE id = ?',
+                    [$jsonPath, $draftId]
+                );
+            } else {
+                DB::update(
+                    'UPDATE pa_attendance_list_drafts SET payload = JSON_SET(payload, ?, ?) WHERE id = ?',
+                    [$jsonPath, $this->encryptPaSignature($currentValue), $draftId]
+                );
+            }
+        }
+
+        $revision = ((int) $draftRow->revision) + 1;
+        DB::table('pa_attendance_list_drafts')
+            ->where('id', $draftId)
+            ->update([
+                'revision' => $revision,
+                'user_update' => $userId,
+                'updated_at' => $savedAt,
+            ]);
+
+        $draft = PaAttendanceListDraft::query()
+            ->select([
+                'id',
+                'draft_hash',
+                'projekt_id',
+                'partner_id',
+                'schuljahr',
+                'teil',
+                'export_mode',
+                'klasse',
+                'final_pdf_path',
+                'finalized_at',
+                'expires_at',
+                'revision',
+                'user_create',
+                'user_update',
+                'created_at',
+                'updated_at',
+            ])
+            ->findOrFail($draftId);
+
+        $historyPayload = $incomingPayload;
+        unset($historyPayload['signatures']);
+        $this->paSignatureHistory->recordSignatureChanges(
+            $draft,
+            $scope,
+            $historyPayload,
+            $signatureChanges,
+            $request
+        );
+
+        if ($legacyDraftId) {
+            PaAttendanceListDraft::query()
+                ->whereIn('draft_hash', $scope['legacy_draft_hashes'])
+                ->delete();
+        }
+
+        return [$draft, null];
     }
 
     private function decryptPaDraftPayloadSignatures(array $payload): array

@@ -123,6 +123,7 @@ let draftSaveRequestId = 0
 let draftSaveQueue = Promise.resolve()
 let draftSaveQueueDepth = 0
 let draftSaveGeneration = 0
+let signatureStateRevision = 0
 
 const selectedDays = computed(() => days.value.filter((day) => day.selected))
 const selectedDay = computed(() => days.value.find((day) => day.id === selectedDayId.value) || selectedDays.value[0] || null)
@@ -361,11 +362,9 @@ const signatureHistoryTimestamp = (value) => {
   })
 }
 
-const signatureSnapshot = (signaturePayload = {}) => JSON.stringify(
-  Object.entries(signaturePayload || {})
-    .filter(([, value]) => Boolean(value))
-    .sort(([left], [right]) => left.localeCompare(right))
-)
+// Ein Zähler erkennt Änderungen während eines laufenden Saves, ohne dafür bei
+// hunderten Unterschriften jedes Mal sämtliche Base64-Bilder zu kopieren.
+const signatureSnapshot = () => signatureStateRevision
 
 const hasSignature = (day, participant) => Boolean(
   day
@@ -671,8 +670,12 @@ const captureSignature = (day, participant, value) => {
   if (!day || !participant || !previewContext.value || draftHydrating.value) return
   if (!isParticipantExpectedOnDay(day, participant) || !value) return
 
-  signatures[signatureKey(day, participant)] = value
-  pendingSignatureChanges[signatureKey(day, participant)] = value
+  const key = signatureKey(day, participant)
+  if (signatures[key] !== value) {
+    signatures[key] = value
+    signatureStateRevision++
+  }
+  pendingSignatureChanges[key] = value
   draftDirty.value = true
 }
 
@@ -695,6 +698,9 @@ const removeSignature = (day, participant) => {
   if (!day || !participant) return
 
   const key = signatureKey(day, participant)
+  if (Object.prototype.hasOwnProperty.call(signatures, key)) {
+    signatureStateRevision++
+  }
   delete signatures[key]
   pendingSignatureChanges[key] = ''
   draftDirty.value = true
@@ -817,7 +823,10 @@ const restoreSignatureVersion = async (version) => {
       versionId: version.id,
     })
 
-    signatures[signatureHistoryContext.value.signatureKey] = response.data.signature
+    if (signatures[signatureHistoryContext.value.signatureKey] !== response.data.signature) {
+      signatures[signatureHistoryContext.value.signatureKey] = response.data.signature
+      signatureStateRevision++
+    }
     signatureHistoryVersions.value = response.data.versions || []
     draftRevision.value = response.data.revision || draftRevision.value
     draftLastSavedAt.value = response.data.updated_at || new Date().toISOString()
@@ -1687,6 +1696,7 @@ const resetState = () => {
   activeScheduleClass.value = null
   manualDate.value = ''
   manualNote.value = ''
+  if (Object.keys(signatures).length > 0) signatureStateRevision++
   Object.keys(signatures).forEach((key) => delete signatures[key])
   clearPendingSignatureChanges()
   signatureHistoryVisible.value = false

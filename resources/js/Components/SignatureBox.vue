@@ -33,6 +33,23 @@ let expandedCtx = null
 let expandedDrawing = false
 let signatureChanged = false
 
+// Die große Zeichenfläche ist für eine angenehme Bedienung auf Tablets gedacht.
+// Gespeichert wird bewusst eine kleinere Variante: Sie bleibt im PDF scharf,
+// benötigt aber nur einen Bruchteil des Speichers im zentralen Entwurf.
+const serializedSignature = () => {
+  if (!expandedCanvas.value) return ''
+
+  const output = document.createElement('canvas')
+  output.width = 700
+  output.height = 300
+  const outputContext = output.getContext('2d')
+  if (!outputContext) return expandedCanvas.value.toDataURL('image/png')
+
+  outputContext.drawImage(expandedCanvas.value, 0, 0, output.width, output.height)
+
+  return output.toDataURL('image/png')
+}
+
 const configureContext = (context, lineWidth = 4.5) => {
   if (!context) return
 
@@ -102,7 +119,7 @@ const openExpanded = async () => {
 
 const closeExpanded = () => {
   const completedValue = signatureChanged && expandedCanvas.value
-    ? expandedCanvas.value.toDataURL('image/png')
+    ? serializedSignature()
     : ''
 
   expanded.value = false
@@ -110,6 +127,7 @@ const closeExpanded = () => {
 
   if (completedValue) {
     signatureChanged = false
+    emit('update:modelValue', completedValue)
     emit('completed', completedValue)
   }
 }
@@ -141,7 +159,6 @@ const stopExpandedDrawing = (event) => {
   expandedDrawing = false
   hasInk.value = true
   signatureChanged = true
-  emit('update:modelValue', expandedCanvas.value.toDataURL('image/png'))
 }
 
 const clearSignature = async () => {
