@@ -24,7 +24,11 @@ class AttendanceFooterServiceTest extends TestCase
             $this->assertArrayHasKey(HeaderFooter::IMAGE_FOOTER_CENTER, $footer->getImages());
             $this->assertArrayHasKey(HeaderFooter::IMAGE_FOOTER_CENTER_EVEN, $footer->getImages());
             $this->assertArrayHasKey(HeaderFooter::IMAGE_FOOTER_CENTER_FIRST, $footer->getImages());
-            $this->assertGreaterThanOrEqual(1.05, $sheet->getPageMargins()->getBottom());
+            $this->assertSame(
+                600,
+                $footer->getImages()[HeaderFooter::IMAGE_FOOTER_CENTER]->getWidth()
+            );
+            $this->assertGreaterThanOrEqual(1.15, $sheet->getPageMargins()->getBottom());
         }
 
         $target = storage_path('framework/testing/attendance-footer-' . uniqid() . '.xlsx');

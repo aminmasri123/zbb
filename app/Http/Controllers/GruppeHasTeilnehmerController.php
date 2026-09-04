@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Anwesenheitsstatuten;
+use App\Models\BerufsorientierungBewertung;
 use App\Models\Gruppe;
 use App\Models\GruppeHasPersonen;
 use App\Models\Personen;
@@ -13,10 +14,9 @@ use App\Models\PotenzialanalyseSelbsteinschaetzung;
 use App\Models\PotenzialanalyseUebungErgebnis;
 use App\Models\Tage;
 use App\Models\Zeiten;
+use App\Services\BerufsorientierungAuswertungService;
 use App\Services\PotenzialanalyseProfileService;
 use App\Services\PotenzialanalyseScoringService;
-use App\Services\BerufsorientierungAuswertungService;
-use App\Models\BerufsorientierungBewertung;
 use App\Services\Projects\ActiveProjectContext;
 use App\Services\SaarlandWorkdayService;
 use Carbon\Carbon;
@@ -337,7 +337,9 @@ class GruppeHasTeilnehmerController extends Controller
     private function bereichsauswertungPayload(Gruppe $gruppe, $user): array
     {
         $config = $this->boAuswertung->config($gruppe->projekt);
-        $enabled = $config['enabled'] && (bool) $gruppe->bereich_id;
+        $enabled = $config['enabled']
+            && (bool) $gruppe->bereich_id
+            && ! ($this->istBopProjekt($gruppe) && $this->istPotenzialanalyseGruppe($gruppe));
         $ratings = $enabled
             ? BerufsorientierungBewertung::query()
                 ->where('gruppe_id', $gruppe->id)
@@ -355,6 +357,10 @@ class GruppeHasTeilnehmerController extends Controller
             'bereich' => $gruppe->bereich?->only(['id', 'name']),
             'bewertungen' => $ratings,
             'can_update' => $user?->can('gruppeHasTeilnehmer.store') ?? false,
+            'can_export' => $enabled
+                && $this->istBopProjekt($gruppe)
+                && ! $this->istPotenzialanalyseGruppe($gruppe)
+                && ($user?->can('gruppe.bop.export.auswertungsbogen-bop') ?? false),
         ]);
     }
 
@@ -1217,13 +1223,13 @@ class GruppeHasTeilnehmerController extends Controller
             ],
             [
                 'id' => 'bop-auswertung-pobo',
-                'name' => 'Auswertung POBO',
+                'name' => 'BOP-Auswertungen – gesamte Schule',
                 'format' => 'PDF',
                 'typ' => 'BOP',
                 'method' => 'get',
                 'url' => route('export.auswertungBO.schule.pdf', [
                     'schulId' => $partnerId,
-                    'schuljahr' => $schuljahr,
+                    'schuljahr' => str_replace('/', '-', $schuljahr),
                     'teil' => $teil,
                 ]),
             ],
@@ -1248,7 +1254,7 @@ class GruppeHasTeilnehmerController extends Controller
                 'method' => 'get',
                 'url' => route('export.auswertungBO.schule.pdf.tofolder', [
                     'schulId' => $partnerId,
-                    'schuljahr' => $schuljahr,
+                    'schuljahr' => str_replace('/', '-', $schuljahr),
                     'teil' => $teil,
                 ]),
             ],

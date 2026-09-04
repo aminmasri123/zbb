@@ -6,10 +6,10 @@ use App\Models\Gruppe;
 use App\Models\Partner;
 use App\Models\Personen;
 use App\Models\PersonenIstSchueler;
-use App\Models\BerufsorientierungBewertung;
-use App\Services\BerufsorientierungAuswertungService;
 use App\Services\Bop\AttendanceFooterService;
+use App\Services\Bop\BopEvaluationExportService;
 use App\Services\Projects\ActiveProjectContext;
+use App\Services\SaarlandWorkdayService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -30,7 +30,8 @@ class BopGruppeExportController extends Controller
     public function __construct(
         private readonly AttendanceFooterService $attendanceFooter,
         private readonly ActiveProjectContext $activeProjectContext,
-        private readonly BerufsorientierungAuswertungService $boAuswertung,
+        private readonly BopEvaluationExportService $bopEvaluations,
+        private readonly SaarlandWorkdayService $workdays,
     ) {}
 
     public function namensschilder(Gruppe $gruppe)
@@ -115,19 +116,35 @@ class BopGruppeExportController extends Controller
     public function auswertungsbogenBop(Gruppe $gruppe)
     {
         $gruppe = $this->gruppeMitDaten($gruppe);
-        $teilnehmer = $this->teilnehmerDaten($gruppe);
-        abort_if($teilnehmer->isEmpty(), 422, 'Die Gruppe verfügt derzeit über keine Teilnehmer.');
+        abort_unless($this->bopEvaluations->isWorkshopGroup($gruppe), 422, 'Der BOP-Auswertungsbogen ist nur für Werkstattbereiche verfügbar.');
+        $teilnehmer = $this->bopEvaluations->groupEntries($gruppe);
+        abort_if($teilnehmer->isEmpty(), 422, 'Für diese Werkstattgruppe wurde noch keine Auswertung gespeichert.');
         abort_unless($gruppe->bereich_id, 422, 'Der Gruppe ist kein Bereich zugeordnet.');
-        $config = $this->boAuswertung->config($gruppe->projekt);
+        $config = $this->bopEvaluations->config($gruppe->projekt);
         abort_unless($config['enabled'] && count($config['criteria']), 422, 'Für dieses Projekt ist keine Bereichsauswertung konfiguriert.');
 
-        $ratings = BerufsorientierungBewertung::query()
-            ->where('gruppe_id', $gruppe->id)
-            ->whereIn('personen_id', $teilnehmer->pluck('personen_id'))
-            ->get()->groupBy('personen_id')->map->keyBy('kriterium');
-        $pdf = Pdf::loadView('pdf.bereichsauswertung', compact('gruppe', 'teilnehmer', 'config', 'ratings'))
+        $pdf = Pdf::loadView('pdf.bereichsauswertung', compact('teilnehmer', 'config'))
             ->setPaper('a4', 'portrait');
         $filename = $this->safeFileName('Auswertungsbogen_'.($gruppe->bereich?->name ?: 'Gruppe_'.$gruppe->id)).'.pdf';
+
+        return $pdf->download($filename);
+    }
+
+    public function auswertungsbogenBopTeilnehmer(Gruppe $gruppe, Personen $personen)
+    {
+        $gruppe = $this->gruppeMitDaten($gruppe);
+        abort_unless($this->bopEvaluations->isWorkshopGroup($gruppe), 422, 'Der BOP-Auswertungsbogen ist nur für Werkstattbereiche verfügbar.');
+        abort_unless($gruppe->teilnehmer->contains('id', $personen->id), 404, 'Die teilnehmende Person gehört nicht zu dieser Werkstattgruppe.');
+        $teilnehmer = $this->bopEvaluations->groupEntries($gruppe, $personen->id);
+        abort_if($teilnehmer->isEmpty(), 422, 'Für diese teilnehmende Person wurde noch keine Auswertung gespeichert.');
+        $config = $this->bopEvaluations->config($gruppe->projekt);
+        abort_unless($config['enabled'] && count($config['criteria']), 422, 'Für dieses Projekt ist keine Bereichsauswertung konfiguriert.');
+
+        $pdf = Pdf::loadView('pdf.bereichsauswertung', compact('teilnehmer', 'config'))
+            ->setPaper('a4', 'portrait');
+        $filename = $this->safeFileName(
+            'Auswertungsbogen_'.$personen->nachname.'_'.$personen->vorname.'_'.($gruppe->bereich?->name ?: 'Gruppe_'.$gruppe->id)
+        ).'.pdf';
 
         return $pdf->download($filename);
     }
@@ -200,7 +217,11 @@ class BopGruppeExportController extends Controller
 
         $start = Carbon::parse($gruppe->anfangsdatum);
         $end = Carbon::parse($gruppe->enddatum);
-        $attendanceDays = $this->attendanceDays($start, $end);
+        $attendanceDays = $this->attendanceDays(
+            $start,
+            $end,
+            $gruppe->non_working_dates ?? [],
+        );
         $first = $teilnehmer->first();
         $school = $first['schule'] ?: '';
         $bereich = $gruppe->bereich?->name ?? '';
@@ -713,14 +734,22 @@ class BopGruppeExportController extends Controller
         return storage_path('vorlage/projekte/bop/word/'.$name);
     }
 
-    private function attendanceDays(Carbon $start, Carbon $end): array
+    private function attendanceDays(Carbon $start, Carbon $end, array $confirmedNonWorkingDates = []): array
     {
         if ($end->lessThan($start)) {
             $end = $start->copy();
         }
 
+        $confirmedDates = collect($confirmedNonWorkingDates)
+            ->map(fn ($date) => Carbon::parse($date)->toDateString())
+            ->all();
         $days = [];
         for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
+            if (! $this->workdays->isWorkday($date)
+                && ! in_array($date->toDateString(), $confirmedDates, true)) {
+                continue;
+            }
+
             $days[] = $date->copy();
         }
 

@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\GruppeHasPersonen;
 use App\Models\Partner;
 use App\Models\PersonenIstSchueler;
+use App\Models\Projekt;
 use App\Services\Bop\AttendanceFooterService;
+use App\Services\Bop\BopEvaluationExportService;
 use App\Services\Bop\PotenzialanalyseReportService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -28,7 +30,10 @@ use ZipArchive;
 
 class BopLegacyFunctionController extends Controller
 {
-    public function __construct(private readonly AttendanceFooterService $attendanceFooter) {}
+    public function __construct(
+        private readonly AttendanceFooterService $attendanceFooter,
+        private readonly BopEvaluationExportService $bopEvaluations,
+    ) {}
 
     private function schueler(int $schuleId, string $schuljahr, string $teil)
     {
@@ -36,9 +41,22 @@ class BopLegacyFunctionController extends Controller
             ->where('schule_id', $schuleId)
             ->forSchuljahr($schuljahr)
             ->where('teil', $teil)
-            ->orderBy('klasse')
             ->get()
-            ->sortBy(fn ($schueler) => $schueler->person?->nachname)
+            ->sort(function (PersonenIstSchueler $left, PersonenIstSchueler $right) {
+                $class = strnatcasecmp((string) $left->klasse, (string) $right->klasse);
+                if ($class !== 0) {
+                    return $class;
+                }
+
+                $lastName = strnatcasecmp((string) $left->person?->nachname, (string) $right->person?->nachname);
+                if ($lastName !== 0) {
+                    return $lastName;
+                }
+
+                $firstName = strnatcasecmp((string) $left->person?->vorname, (string) $right->person?->vorname);
+
+                return $firstName !== 0 ? $firstName : ($left->person_id <=> $right->person_id);
+            })
             ->values();
     }
 
@@ -529,10 +547,14 @@ class BopLegacyFunctionController extends Controller
     public function auswertungPobo(int $schulId, string $schuljahr, string $teil)
     {
         $partner = $this->partner($schulId);
-        $schueler = $this->schueler($schulId, $schuljahr, $teil);
-        $pdf = Pdf::loadView('bop.auswertung-pobo', compact('partner', 'schueler', 'schuljahr', 'teil'));
+        $project = $this->currentBopProject();
+        $teilnehmer = $this->bopEvaluations->schoolEntries($schulId, $schuljahr, $teil, $project);
+        abort_if($teilnehmer->isEmpty(), 422, 'Für diese Schule wurden noch keine BOP-Werkstattgruppen gefunden.');
+        $config = $this->bopEvaluations->config($project);
+        abort_unless($config['enabled'] && count($config['criteria']), 422, 'Für dieses Projekt ist keine Bereichsauswertung konfiguriert.');
+        $pdf = Pdf::loadView('pdf.bereichsauswertung', compact('teilnehmer', 'config'))->setPaper('a4', 'portrait');
 
-        return $pdf->download('Auswertung_POBO_'.$schulId.'_'.$this->safeName($schuljahr).'_Teil_'.$this->safeName($teil).'.pdf');
+        return $pdf->download('Auswertung_BOP_'.$this->safeName($partner->name).'_'.$this->safeName($schuljahr).'_'.$this->safeName($teil).'.pdf');
     }
 
     public function auswertungPoboToFolder(int $schulId, string $schuljahr, string $teil)
@@ -540,14 +562,32 @@ class BopLegacyFunctionController extends Controller
         $folder = $this->baseFolder($schulId, $schuljahr, $teil).DIRECTORY_SEPARATOR.'Auswertung_POBO';
         File::ensureDirectoryExists($folder);
 
-        foreach ($this->schueler($schulId, $schuljahr, $teil) as $item) {
-            $partner = $this->partner($schulId);
-            $schueler = collect([$item]);
-            Pdf::loadView('bop.auswertung-pobo', compact('partner', 'schueler', 'schuljahr', 'teil'))
-                ->save($folder.DIRECTORY_SEPARATOR.$this->safeName($item->person?->nachname.'_'.$item->person?->vorname).'.pdf');
+        $project = $this->currentBopProject();
+        $teilnehmer = $this->bopEvaluations->schoolEntries($schulId, $schuljahr, $teil, $project);
+        $config = $this->bopEvaluations->config($project);
+        abort_if($teilnehmer->isEmpty(), 422, 'Für diese Schule wurden noch keine BOP-Werkstattgruppen gefunden.');
+        abort_unless($config['enabled'] && count($config['criteria']), 422, 'Für dieses Projekt ist keine Bereichsauswertung konfiguriert.');
+
+        foreach ($teilnehmer->groupBy('personen_id') as $participantEntries) {
+            $participant = $participantEntries->first();
+            $filename = $this->safeName(
+                $participant['klasse'].'_'.$participant['nachname'].'_'.$participant['vorname']
+            ).'.pdf';
+            Pdf::loadView('pdf.bereichsauswertung', [
+                'teilnehmer' => $participantEntries,
+                'config' => $config,
+            ])->setPaper('a4', 'portrait')->save($folder.DIRECTORY_SEPARATOR.$filename);
         }
 
         return back()->with('success', 'POBO-Auswertungen wurden im Ordner generiert.');
+    }
+
+    private function currentBopProject(): Projekt
+    {
+        $project = Projekt::findOrFail((int) auth()->user()?->current_team_id);
+        abort_unless(str_contains(mb_strtolower((string) $project->name), 'bop'), 404, 'Diese Funktion ist nur im Projekt BOP verfügbar.');
+
+        return $project;
     }
 
     public function auswertungPaToFolder(

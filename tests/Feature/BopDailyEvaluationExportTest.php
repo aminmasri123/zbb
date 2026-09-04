@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Anwesenheitsstatuten;
 use App\Models\Bereich;
+use App\Models\BerufsorientierungBewertung;
 use App\Models\Gruppe;
 use App\Models\GruppeHasPersonen;
 use App\Models\Partner;
@@ -78,6 +79,124 @@ class BopDailyEvaluationExportTest extends TestCase
 
         $this->assertStringContainsString('TN-NR.: 7.1-2', $text);
         $this->assertStringContainsString('TN-NR.: 7.2-1', $text);
+    }
+
+    public function test_single_workshop_evaluation_uses_the_bop_form_and_only_contains_the_selected_participant(): void
+    {
+        [$user, $group] = $this->context();
+        $participants = $group->fresh()->teilnehmer->unique('id')->values();
+        $selected = $participants->firstWhere('nachname', 'Muster');
+        $other = $participants->firstWhere('nachname', 'Beispiel');
+        BerufsorientierungBewertung::query()->create([
+            'gruppe_id' => $group->id,
+            'personen_id' => $selected->id,
+            'user_id' => $user->id,
+            'kriterium' => 'einhaltung_der_regeln',
+            'kriterium_label' => 'Einhaltung der Arbeitszeitregeln',
+            'bewertung' => 5,
+        ]);
+
+        $response = $this->actingAs($user)->get(route('gruppe.bop.export.teilnehmer-auswertungsbogen-bop', [
+            'gruppe' => $group->id,
+            'personen' => $selected->id,
+        ]))->assertOk();
+        $document = (new Parser)->parseContent($response->getContent());
+        $text = $document->getText();
+
+        $this->assertSame(1, (int) $document->getDetails()['Pages']);
+        $this->assertStringContainsString('Einschätzung der Kompetenzen', $text);
+        $this->assertStringContainsString($selected->nachname, $text);
+        $this->assertStringNotContainsString($other->nachname, $text);
+        $this->assertStringContainsString('Einhaltung der Arbeitszeitregeln', $text);
+    }
+
+    public function test_group_evaluation_contains_one_bop_form_per_participant_in_class_order(): void
+    {
+        [$user, $group] = $this->context();
+        foreach ($group->fresh()->teilnehmer->unique('id') as $participant) {
+            BerufsorientierungBewertung::query()->create([
+                'gruppe_id' => $group->id,
+                'personen_id' => $participant->id,
+                'user_id' => $user->id,
+                'kriterium' => 'einhaltung_der_regeln',
+                'kriterium_label' => 'Einhaltung der Arbeitszeitregeln',
+                'bewertung' => 4,
+            ]);
+        }
+
+        $response = $this->actingAs($user)->get(route('gruppe.bop.export.auswertungsbogen-bop', $group->id))->assertOk();
+        $document = (new Parser)->parseContent($response->getContent());
+        $text = $document->getText();
+
+        $this->assertSame(2, (int) $document->getDetails()['Pages']);
+        $this->assertLessThan(strpos($text, 'Beispiel'), strpos($text, 'Muster'));
+    }
+
+    public function test_school_evaluation_excludes_potential_analysis_and_is_sorted_by_class_then_last_name(): void
+    {
+        [$user, $group, $project, $partner] = $this->context();
+        $this->grantTestPermission($user, 'dokumente.schule.export');
+        $participants = $group->fresh()->teilnehmer->unique('id')->values();
+        $metalArea = Bereich::query()->create(['name' => 'Metall']);
+        $paArea = Bereich::query()->create(['name' => 'Potenzialanalyse']);
+
+        foreach ($participants as $participant) {
+            BerufsorientierungBewertung::query()->create([
+                'gruppe_id' => $group->id,
+                'personen_id' => $participant->id,
+                'user_id' => $user->id,
+                'kriterium' => 'einhaltung_der_regeln',
+                'kriterium_label' => 'Einhaltung der Arbeitszeitregeln',
+                'bewertung' => 4,
+            ]);
+        }
+
+        foreach ([$metalArea, $paArea] as $area) {
+            $additionalGroup = Gruppe::query()->create([
+                'personen_id' => $group->personen_id,
+                'bereich_id' => $area->id,
+                'projekt_id' => $project->id,
+                'partner_id' => $partner->id,
+                'standort_id' => $group->standort_id,
+                'raum_id' => $group->raum_id,
+                'anfangsdatum' => '2026-09-08',
+                'enddatum' => '2026-09-10',
+                'bemerkung' => 'BOP Einteilung Schule '.$partner->id.' Schuljahr 2026/2027 Teil Teil 1 Runde 2',
+            ]);
+
+            foreach ($participants as $participant) {
+                $source = GruppeHasPersonen::query()->where('gruppe_id', $group->id)->where('personen_id', $participant->id)->firstOrFail();
+                GruppeHasPersonen::query()->create([
+                    'personen_id' => $participant->id,
+                    'user_id' => $user->id,
+                    'gruppe_id' => $additionalGroup->id,
+                    'tage_id' => $source->tage_id,
+                    'zeitgeplant_id' => $source->zeitgeplant_id,
+                    'zeittatsaechlich_id' => $source->zeittatsaechlich_id,
+                    'anwesenheitsstatuten_id' => $source->anwesenheitsstatuten_id,
+                ]);
+                BerufsorientierungBewertung::query()->create([
+                    'gruppe_id' => $additionalGroup->id,
+                    'personen_id' => $participant->id,
+                    'user_id' => $user->id,
+                    'kriterium' => 'einhaltung_der_regeln',
+                    'kriterium_label' => 'Einhaltung der Arbeitszeitregeln',
+                    'bewertung' => 4,
+                ]);
+            }
+        }
+
+        $response = $this->actingAs($user)->get(route('export.auswertungBO.schule.pdf', [
+            'schulId' => $partner->id,
+            'schuljahr' => '2026-2027',
+            'teil' => 'Teil 1',
+        ]))->assertOk();
+        $document = (new Parser)->parseContent($response->getContent());
+        $text = $document->getText();
+
+        $this->assertSame(4, (int) $document->getDetails()['Pages']);
+        $this->assertStringNotContainsString('Potenzialanalyse', $text);
+        $this->assertLessThan(strpos($text, 'Beispiel'), strpos($text, 'Muster'));
     }
 
     private function context(): array

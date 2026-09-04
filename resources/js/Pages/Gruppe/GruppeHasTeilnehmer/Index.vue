@@ -22,7 +22,7 @@
     nonWorkingDays: { type: Array, default: () => [] },
     bopLegacyExporte: { type: Array, default: () => [] },
     potenzialanalyse: { type: Object, default: () => ({ aktiv: false, erlaubt: false, luv_foerderbedarf_aktiv: false, can: { view: false, update: false }, tage: null, uebungen: [], teilnehmer: {} }) },
-    bereichsauswertung: { type: Object, default: () => ({ enabled: false, criteria: [], scale: {}, bewertungen: {}, can_update: false }) },
+    bereichsauswertung: { type: Object, default: () => ({ enabled: false, criteria: [], scale: {}, bewertungen: {}, can_update: false, can_export: false }) },
     })
     console.log('Props:', props.gruppe    )
     // Modal-Steuerung + Auswahl
@@ -112,6 +112,7 @@
     const canRemoveTeilnehmerFromGroup = computed(() => can('gruppeHasTeilnehmer.destroyTeilnehmer'))
     const boAktiv = computed(() => Boolean(props.bereichsauswertung?.enabled))
     const boCanUpdate = computed(() => Boolean(props.bereichsauswertung?.can_update))
+    const boCanExport = computed(() => Boolean(props.bereichsauswertung?.can_export))
     const boCriteria = computed(() => props.bereichsauswertung?.criteria || [])
     const boScale = computed(() => props.bereichsauswertung?.scale || {})
     const boBewerteteAnzahl = (personenId) => boCriteria.value.filter((criterion) =>
@@ -2508,16 +2509,27 @@ const exportMitTag = async () => {
         </div>
         <template #footer>
           <div class="flex w-full flex-wrap items-center justify-between gap-2">
-            <Button
-              v-if="selectedBoTeilnehmer && boBegonnen(selectedBoTeilnehmer.id)"
-              label="Auswertung löschen"
-              icon="pi pi-trash"
-              severity="danger"
-              text
-              :disabled="boSaving || !boCanUpdate"
-              @click="deleteBereichsauswertung"
-            />
-            <span v-else></span>
+            <div class="flex flex-wrap items-center gap-2">
+              <a
+                v-if="selectedBoTeilnehmer && boCanExport && boBegonnen(selectedBoTeilnehmer.id)"
+                :href="route('gruppe.bop.export.teilnehmer-auswertungsbogen-bop', { gruppe: props.gruppe.id, personen: selectedBoTeilnehmer.id })"
+                target="_blank"
+                rel="noopener"
+                class="inline-flex h-10 items-center gap-2 rounded border border-zbb px-4 text-sm font-semibold text-zbb hover:bg-zbb hover:text-white"
+              >
+                <i class="pi pi-file-pdf"></i>
+                PDF drucken
+              </a>
+              <Button
+                v-if="selectedBoTeilnehmer && boBegonnen(selectedBoTeilnehmer.id)"
+                label="Auswertung löschen"
+                icon="pi pi-trash"
+                severity="danger"
+                text
+                :disabled="boSaving || !boCanUpdate"
+                @click="deleteBereichsauswertung"
+              />
+            </div>
             <div class="flex gap-2">
               <Button label="Abbrechen" severity="secondary" text :disabled="boSaving" @click="showBereichsauswertung = false" />
               <Button label="Auswertung speichern" icon="pi pi-check" :loading="boSaving" :disabled="!boCanUpdate" @click="saveBereichsauswertung" />

@@ -13,7 +13,8 @@ class AttendanceFooterService
 {
     private const IMAGE_PATH = 'img/bop/kooperationspartner.png';
     private const WORD_IMAGE_ENTRY = 'word/media/bop-attendance-footer.png';
-    private const SPREADSHEET_IMAGE_WIDTH = 535;
+    private const SPREADSHEET_IMAGE_WIDTH = 600;
+    private const SPREADSHEET_BOTTOM_MARGIN = 1.15;
 
     public function applyToSpreadsheet(Spreadsheet $spreadsheet): void
     {
@@ -39,8 +40,8 @@ class AttendanceFooterService
 
             $margins = $sheet->getPageMargins();
             $margins->setFooter(0.1);
-            if ($margins->getBottom() < 1.05) {
-                $margins->setBottom(1.05);
+            if ($margins->getBottom() < self::SPREADSHEET_BOTTOM_MARGIN) {
+                $margins->setBottom(self::SPREADSHEET_BOTTOM_MARGIN);
             }
         }
     }
