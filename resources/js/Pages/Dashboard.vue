@@ -4,7 +4,7 @@ import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import { useModules } from '@/utils/modules';
 
-const props = defineProps({ dashboardCards: Object, hiddenCards: Array, roleLabel: String, apps: Object });
+const props = defineProps({ dashboardCards: Object, dashboardProject: Object, hiddenCards: Array, roleLabel: String, apps: Object });
 const page = usePage();
 const { moduleEnabled } = useModules();
 const editing = ref(false);
@@ -56,7 +56,7 @@ const apps = computed(() => [
     { title: 'Kalender', text: 'Termine und Freigaben', route: 'apps.calendar', icon: 'la-calendar', count: 'events', allowed: can('apps.calendar') },
     { title: 'Kontakte', text: 'Ansprechpartner verwalten', route: 'apps.contacts', icon: 'la-address-book', count: 'contacts', allowed: can('apps.contacts') },
     { title: 'Dateimanager', text: 'Dateien und Ordner teilen', route: 'apps.files', icon: 'la-folder-open', count: 'files', allowed: can('apps.files') },
-    { title: 'Teilnehmer', text: 'Teilnehmerliste verwalten', route: 'teilnehmer.index', icon: 'la-user-graduate', count: 'participants', allowed: can('teilnehmer.index') },
+    { title: 'Teilnehmer', text: props.dashboardProject ? `Teilnehmer in ${props.dashboardProject.name}` : 'Kein aktives Projekt', route: can('teilnehmer.index') ? 'teilnehmer.index' : 'teilnehmer.projekt.index', params: can('teilnehmer.index') ? undefined : props.dashboardProject?.id, icon: 'la-user-graduate', count: 'participants', allowed: can('teilnehmer.index') || (can('teilnehmer.projekt.index') && !!props.dashboardProject) },
     { title: 'Taskmanager', text: 'Aufgaben steuern', route: 'apps.tasks', icon: 'la-tasks', count: 'tasks', allowed: can('apps.tasks') },
     { title: 'Popups', text: 'Hinweise anzeigen', route: 'apps.popups', icon: 'la-bullhorn', count: 'popups', allowed: can('apps.popups') },
 ].filter(app => app.allowed));
@@ -69,7 +69,7 @@ const apps = computed(() => [
             <div class="mx-auto mb-8 max-w-7xl px-4">
                 <div class="rounded-lg px-8 py-4 text-[var(--buttonTextPrimary)] shadow-lg" style="background: linear-gradient(90deg, var(--buttonPrimary), var(--borderHover));">
                     <div class="flex flex-wrap items-start justify-between gap-4">
-                        <div><h1 class="mb-2 text-2xl font-bold">Willkommen im webbasierten ERP-System des ZBB</h1><p class="text-lg">Ihre Übersicht für {{ roleLabel || 'Ihre Aufgaben' }}</p></div>
+                        <div><h1 class="mb-2 text-2xl font-bold">Willkommen im webbasierten ERP-System des ZBB</h1><p class="text-lg">Ihre Übersicht für {{ roleLabel || 'Ihre Aufgaben' }}</p><p class="mt-2 text-sm">{{ dashboardProject ? `Projekt: ${dashboardProject.name} · Teilnehmer, Partner und Gruppen gemäß Ihren Berechtigungen.` : 'Kein aktives Projekt verfügbar.' }}</p></div>
                         <button type="button" class="rounded-md border border-white/60 bg-white/15 px-4 py-2 text-sm font-semibold hover:bg-white/25" @click="editing = !editing"><i class="la la-sliders-h mr-2"></i>Dashboard anpassen</button>
                     </div>
                 </div>
@@ -91,7 +91,7 @@ const apps = computed(() => [
 
             <div v-if="apps.length" class="mx-auto mb-10 max-w-7xl px-4">
                 <div class="mb-3 flex items-center justify-between border-b border-gray-200 pb-2"><h2 class="text-lg font-semibold">Apps</h2><Link v-if="can('apps.index')" :href="route('apps.index')" class="text-sm font-medium text-[var(--buttonPrimary)]">Alle Apps</Link></div>
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"><Link v-for="app in apps" :key="app.title" :href="route(app.route)" class="rounded border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm transition hover:border-[var(--borderHover)] hover:shadow"><div class="mb-3 flex items-center justify-between"><i :class="['la la-2x text-[var(--buttonPrimary)]', app.icon]"></i><span class="rounded bg-[var(--muted)] px-2 py-1 text-xs font-semibold">{{ props.apps?.[app.count] ?? 0 }}</span></div><h3 class="text-sm font-semibold">{{ app.title }}</h3><p class="mt-1 text-xs leading-5 text-[var(--secondary)]">{{ app.text }}</p></Link></div>
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"><Link v-for="app in apps" :key="app.title" :href="route(app.route, app.params)" class="rounded border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm transition hover:border-[var(--borderHover)] hover:shadow"><div class="mb-3 flex items-center justify-between"><i :class="['la la-2x text-[var(--buttonPrimary)]', app.icon]"></i><span class="rounded bg-[var(--muted)] px-2 py-1 text-xs font-semibold">{{ props.apps?.[app.count] ?? 0 }}</span></div><h3 class="text-sm font-semibold">{{ app.title }}</h3><p class="mt-1 text-xs leading-5 text-[var(--secondary)]">{{ app.text }}</p></Link></div>
             </div>
 
             <div v-if="shownStatCards.length" class="mx-auto mb-10 grid max-w-7xl grid-cols-1 gap-6 px-4 sm:grid-cols-2" :class="shownStatCards.length >= 5 ? 'md:grid-cols-5' : 'lg:grid-cols-4'">

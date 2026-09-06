@@ -51,19 +51,22 @@ class DashbaordController extends Controller
 
         $participantCount = 0;
         if ($canViewParticipants) {
-            $participantQuery = Personen::query()->aktiv()->teilnehmer()->visibleForUser($user);
+            $participantQuery = Personen::query()->aktiv()->teilnehmer()->visibleForUser($user)
+                ->when($activeProject, fn ($query) => $query->whereHas('projekte',
+                    fn ($projects) => $projects->where('projekts.id', $activeProject->id)))
+                ->when(! $activeProject, fn ($query) => $query->whereRaw('1 = 0'));
             $participantCount = (clone $participantQuery)->count();
 
             $cards['participants'] = [
                 'label' => 'Teilnehmer',
                 'type' => 'stat',
                 'value' => $participantCount,
-                'scope' => $this->scopeLabel($user, 'Teilnehmer'),
+                'scope' => $activeProject ? "Teilnehmer in {$activeProject->name}" : 'Kein aktives Projekt',
             ];
             $cards['recent_participants'] = [
                 'label' => 'Letzte Teilnehmer',
                 'type' => 'list',
-                'scope' => 'Maximal 50 zuletzt angelegte Teilnehmer',
+                'scope' => $activeProject ? "Maximal 50 zuletzt angelegte Teilnehmer in {$activeProject->name}" : 'Kein aktives Projekt',
                 'can_open' => $can('teilnehmer.update'),
                 'items' => (clone $participantQuery)
                     ->orderByDesc('personens.created_at')
@@ -162,6 +165,7 @@ class DashbaordController extends Controller
 
         return Inertia::render('Dashboard', [
             'dashboardCards' => $cards,
+            'dashboardProject' => $this->activeProjectContext->payload($activeProject),
             'hiddenCards' => array_values(array_intersect($preference->hidden_cards ?? [], self::CARD_KEYS)),
             'roleLabel' => $user->getRoleNames()->join(', '),
             'apps' => [

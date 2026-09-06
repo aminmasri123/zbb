@@ -65,6 +65,15 @@ class DashboardPermissionCardsTest extends TestCase
         $group = $this->group($project, $user->person, $area, '2026-08-14');
         $group->partners()->attach($school->id);
 
+        $otherProject = Projekt::factory()->create();
+        $this->assignToProject($user->person, $otherProject);
+        $otherSchool = Partner::query()->create(['name' => 'Andere Projektschule']);
+        $otherProject->partners()->attach($otherSchool->id);
+        $this->group($otherProject, $user->person, $area, '2026-08-15');
+        $otherParticipant = Personen::factory()->create(['typ' => 'teilnehmer']);
+        $this->assignToProject($otherParticipant, $otherProject);
+        Personen::factory()->create(['typ' => 'teilnehmer']);
+
         $participants = collect();
         foreach (range(1, 55) as $index) {
             $participants->push(Personen::factory()->create([
@@ -72,6 +81,7 @@ class DashboardPermissionCardsTest extends TestCase
                 'vorname' => 'Person',
                 'nachname' => str_pad((string) $index, 2, '0', STR_PAD_LEFT),
             ]));
+            $this->assignToProject($participants->last(), $project);
         }
 
         $this->actingAs($user)
@@ -79,7 +89,10 @@ class DashboardPermissionCardsTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->has('dashboardCards.projects')
+                ->where('dashboardProject.id', $project->id)
+                ->where('apps.participants', 55)
                 ->where('dashboardCards.participants.value', 55)
+                ->where('dashboardCards.participants.scope', 'Teilnehmer in BOP Dashboard')
                 ->has('dashboardCards.partners.items', 1)
                 ->where('dashboardCards.partners.items.0.id', $school->id)
                 ->where('dashboardCards.partners.can_open', true)
@@ -92,6 +105,55 @@ class DashboardPermissionCardsTest extends TestCase
                 ->missing('dashboardCards.rooms')
                 ->missing('dashboardCards.vehicles')
                 ->missing('dashboardCards.devices')
+            );
+
+        $this->actingAs($user)->post(route('projekt.switch'), ['projekt_id' => $otherProject->id])
+            ->assertRedirect();
+        $this->actingAs($user->fresh())->get(route('dashboard'))->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('dashboardProject.id', $otherProject->id)
+                ->where('dashboardCards.participants.value', 1)
+                ->where('apps.participants', 1)
+                ->has('dashboardCards.recent_participants.items', 1)
+                ->where('dashboardCards.recent_participants.items.0.id', $otherParticipant->id)
+                ->has('dashboardCards.partners.items', 1)
+                ->where('dashboardCards.partners.items.0.id', $otherSchool->id)
+                ->has('dashboardCards.groups.items', 1)
+            );
+    }
+
+    public function test_dashboard_without_a_project_does_not_fall_back_to_all_participants(): void
+    {
+        $user = $this->userWithPermissions(['dashboard.index', 'teilnehmer.index', 'kooperationspartner.index', 'gruppe.index'], 'all');
+        Personen::factory()->create(['typ' => 'teilnehmer']);
+
+        $this->actingAs($user)->get(route('dashboard'))->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('dashboardProject', null)
+                ->where('apps.participants', 0)
+                ->where('dashboardCards.participants.value', 0)
+                ->where('dashboardCards.participants.scope', 'Kein aktives Projekt')
+                ->has('dashboardCards.recent_participants.items', 0)
+                ->has('dashboardCards.partners.items', 0)
+                ->has('dashboardCards.groups.items', 0)
+            );
+    }
+
+    public function test_project_filter_does_not_grant_participant_access(): void
+    {
+        $user = $this->userWithPermissions(['dashboard.index', 'teilnehmer.index']);
+        $project = Projekt::factory()->create();
+        $this->assignToProject($user->person, $project);
+        $user->update(['current_team_id' => $project->id]);
+        $participant = Personen::factory()->create(['typ' => 'teilnehmer']);
+        $this->assignToProject($participant, $project);
+
+        $this->actingAs($user)->get(route('dashboard'))->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('dashboardProject.id', $project->id)
+                ->where('apps.participants', 0)
+                ->where('dashboardCards.participants.value', 0)
+                ->has('dashboardCards.recent_participants.items', 0)
             );
     }
 
