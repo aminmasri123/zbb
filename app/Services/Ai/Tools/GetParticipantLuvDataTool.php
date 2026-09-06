@@ -18,6 +18,8 @@ final class GetParticipantLuvDataTool implements AiTool
         $this->assertNoArguments($arguments); $participation=$this->participation($user,$context);
         $entries=$participation->luv()->where('status', 'approved')->whereDate('von','<=',$context->untilDate)->orderByDesc('bis')->limit(20)->get()->sortBy('von')->values()->map(fn($luv)=>[
             'source_id'=>'luv-'.$luv->id,'type'=>$luv->typ,'from'=>$luv->von?->toDateString(),'until'=>$luv->bis?->toDateString(),'initial_situation'=>$luv->ausgangssituation,'goal_agreement'=>$luv->zielvereinbarung,'qualifications'=>$luv->qualifikationen,
+            'form_fields' => data_get($luv->payload, 'fields', []),
+            'form_sections' => collect(data_get($luv->payload, 'sections', []))->map(fn ($section) => \Illuminate\Support\Arr::only($section, ['key', 'heading', 'value']))->all(),
         ])->all();
         return ['source_id'=>'luv-summary','period'=>['from'=>$context->fromDate,'until'=>$context->untilDate],'entries'=>$entries];
     }

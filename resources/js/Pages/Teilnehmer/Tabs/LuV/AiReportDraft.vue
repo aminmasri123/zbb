@@ -241,14 +241,18 @@ const claimsForField = (key) => (draft.value?.sections || [])
     .filter((section) => fieldKeyFromHeading(section.heading) === key)
     .flatMap((section) => section.claims || [])
     .filter((claim) => claim.status === 'supported');
-const isPaSource = (sourceId = '') => sourceId.startsWith('potential-analysis-support-');
+const isPaSource = (sourceId = '') => sourceId.startsWith('potential-analysis-support-') || sourceId.startsWith('potential-analysis-assessment-');
 const sourceLabel = (sourceId = '') => {
+    if (sourceId.startsWith('potential-analysis-assessment-')) return 'Anleiterbewertung aus abgeschlossener Potenzialanalyse';
     if (isPaSource(sourceId)) return 'Fachlich freigegebene Potenzialanalyse';
     if (sourceId === 'participant-development-summary') return 'Teilnehmerentwicklung';
     if (sourceId.startsWith('attendance-')) return 'Anwesenheit';
     if (sourceId.startsWith('documentation-')) return 'Dokumentation';
-    if (sourceId.startsWith('previous-luv-')) return 'Frühere LuV';
-    if (sourceId.startsWith('participant-identity-')) return 'Stammdaten';
+    if (sourceId.startsWith('previous-luv-') || sourceId.startsWith('luv-')) return 'Frühere LuV';
+    if (sourceId === 'participant-identity' || sourceId.startsWith('participant-identity-')) return 'Stammdaten';
+    if (sourceId.startsWith('development-internship-')) return 'Praktikum / Maßnahme';
+    if (sourceId.startsWith('development-completion-')) return 'Abschlussbericht';
+    if (sourceId.startsWith('development-consent-')) return 'Einwilligung';
 
     return sourceId;
 };

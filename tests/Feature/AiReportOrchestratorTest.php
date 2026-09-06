@@ -439,6 +439,81 @@ class AiReportOrchestratorTest extends TestCase
         $this->assertSame('support.description', $finalResult['entries'][0]['field_key']);
     }
 
+    public function test_completed_pa_assessments_keep_individual_ratings_and_map_to_each_report_type(): void
+    {
+        [$user, $project, $participant] = $this->context();
+        $project->update(['potenzialanalyse_aktiv' => true]);
+        $location = Standort::factory()->create();
+        $group = Gruppe::query()->create([
+            'personen_id' => $user->person_id,
+            'bereich_id' => Bereich::query()->create(['name' => 'PA'])->id,
+            'projekt_id' => $project->id,
+            'raum_id' => Raeume::query()->create(['name' => 'PA', 'standort_id' => $location->id, 'typ' => 'Seminarraum'])->id,
+            'standort_id' => $location->id,
+        ]);
+        $report = PotenzialanalyseBericht::query()->create([
+            'gruppe_id' => $group->id, 'personen_id' => $participant->id, 'user_id' => $user->id,
+            'status' => 'entwurf', 'fertiggestellt_at' => '2026-03-01 12:00:00',
+        ]);
+        foreach (['motivation_leistungsbereitschaft' => 5, 'arbeitsplanung' => 4, 'teamfaehigkeit' => 5, 'kommunikation' => 1, 'feinmotorik' => 4] as $key => $rating) {
+            \App\Models\PotenzialanalyseKompetenzbewertung::query()->forceCreate([
+                'gruppe_id' => $group->id, 'personen_id' => $participant->id, 'user_id' => $user->id,
+                'typ' => 'anleiter', 'merkmal' => $key, 'bewertung' => $rating,
+                'bemerkung' => 'Gespeicherte Beobachtung '.$key,
+                'created_at' => '2026-03-01 11:00:00', 'updated_at' => '2026-03-01 11:00:00',
+            ]);
+        }
+        $context = new AiRunContext($user->id, $project->id, [GetParticipantPotentialAnalysisSupportNeedsTool::NAME], $participant->id, '2026-01-01', '2026-06-30');
+        $tool = app(GetParticipantPotentialAnalysisSupportNeedsTool::class);
+        $this->assertSame([], $tool->execute($user, $context, [])['entries']);
+        $report->update(['status' => 'geprueft']);
+
+        foreach (['luv', 'interim', 'final'] as $type) {
+            $context = new AiRunContext($user->id, $project->id, [GetParticipantPotentialAnalysisSupportNeedsTool::NAME], $participant->id, '2026-01-01', '2026-06-30', $type);
+            $result = $tool->execute($user, $context, []);
+            $this->assertCount(5, $result['entries']);
+            $merged = app(\App\Services\Ai\ApprovedPaSupportNeedMerger::class)->merge(['sections' => [], 'warnings' => []], [['tool_name' => $tool->name(), 'content' => $result]]);
+            $sections = collect($merged['sections'])->keyBy('heading');
+            $text = json_encode($merged, JSON_UNESCAPED_UNICODE);
+            $this->assertStringContainsString('Teamfähigkeit – dokumentierte Einschätzung 5 von 5', $text);
+            $this->assertStringContainsString('Kommunikation – dokumentierte Einschätzung 1 von 5', $text);
+            $this->assertStringNotContainsString('kein zusätzlicher Förderbedarf', $text);
+            if ($type === 'luv') {
+                $this->assertCount(4, $sections);
+                foreach (['personal', 'methodical', 'social'] as $key) {
+                    $this->assertStringContainsString("[competence.{$key}.assessment]", $text);
+                }
+                $this->assertStringContainsString('[competence.notes]', $text);
+                $this->assertStringNotContainsString('competence.technical.assessment', $text);
+            } else {
+                $this->assertCount(1, $sections);
+                $this->assertStringContainsString($type === 'interim' ? '[development.notes]' : '[support.description]', $text);
+            }
+        }
+        // A later edit is not evidence for an earlier reporting period.
+        \App\Models\PotenzialanalyseKompetenzbewertung::query()->where('gruppe_id', $group->id)->where('merkmal', 'kommunikation')->update(['updated_at' => '2026-07-01 10:00:00']);
+        $this->assertCount(4, $tool->execute($user, $context, [])['entries']);
+    }
+
+    public function test_previous_luv_source_includes_structured_fields_only_from_approved_reports(): void
+    {
+        [$user, $project, $participant] = $this->context();
+        $participation = ProjektHasPersonen::where('projekt_id', $project->id)->where('personen_id', $participant->id)->firstOrFail();
+        foreach (['draft', 'approved'] as $status) {
+            $participation->luv()->create([
+                'ausgangssituation' => '', 'zielvereinbarung' => '', 'qualifikationen' => '',
+                'version' => $status === 'draft' ? 1 : 2, 'typ' => 'Start', 'status' => $status, 'von' => '2026-01-01', 'bis' => '2026-02-01',
+                'payload' => ['fields' => ['competence.social.support_need' => 'Kommunikation üben'], 'sections' => [['key' => 'zielvereinbarung', 'heading' => 'Ziele', 'value' => 'Wöchentliches Gespräch']]],
+            ]);
+        }
+        $tool = \App\Services\Ai\Tools\GetParticipantLuvDataTool::class;
+        $context = new AiRunContext($user->id, $project->id, [$tool::NAME], $participant->id, '2026-01-01', '2026-06-30');
+        $result = app($tool)->execute($user, $context, []);
+        $this->assertCount(1, $result['entries']);
+        $this->assertSame('Kommunikation üben', $result['entries'][0]['form_fields']['competence.social.support_need']);
+        $this->assertSame('Wöchentliches Gespräch', $result['entries'][0]['form_sections'][0]['value']);
+    }
+
     /** @return array{User, Projekt, Personen} */
     private function context(): array
     {

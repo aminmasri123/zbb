@@ -30,7 +30,8 @@ final class ApprovedPaSupportNeedMerger
             ->filter(fn ($entry) => is_array($entry)
                 && filled($entry['source_id'] ?? null)
                 && filled($entry['field_key'] ?? null)
-                && in_array($entry['decision'] ?? null, ['support_need', 'no_support_need'], true))
+                && in_array($entry['decision'] ?? null, ['support_need', 'no_support_need', 'assessment'], true)
+                && (($entry['decision'] ?? null) !== 'assessment' || filled($entry['observation'] ?? null)))
             ->values();
 
         if ($entries->isEmpty()) {
@@ -143,6 +144,9 @@ final class ApprovedPaSupportNeedMerger
     /** @param array<string, mixed> $entry */
     private function fallbackText(array $entry): string
     {
+        if (($entry['decision'] ?? null) === 'assessment') {
+            return $this->sentence((string) $entry['observation']);
+        }
         $category = trim((string) ($entry['category'] ?? 'diesem Kompetenzbereich'));
         $observation = $this->sentence((string) ($entry['observation'] ?? ''));
         $supportNeed = $this->sentence((string) ($entry['support_need'] ?? ''));
@@ -174,6 +178,12 @@ final class ApprovedPaSupportNeedMerger
     /** @param list<array<string, mixed>> $entries */
     private function fieldLabel(string $fieldKey, array $entries): string
     {
+        if ($fieldKey === 'competence.notes' || $fieldKey === 'development.notes') {
+            return 'Ergänzende Erläuterungen';
+        }
+        if (str_ends_with($fieldKey, '.assessment')) {
+            return ($entries[0]['category'] ?? 'Kompetenz').' – Einschätzung';
+        }
         if ($fieldKey === 'support.description') {
             return 'Beschreibung des Unterstützungsbedarfs';
         }

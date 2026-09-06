@@ -47,6 +47,19 @@ Separate Aufgaben, Bewerbungen, Vermittlungen, Nachrichten, Bankdaten, Kinder, L
 
 ## Codebelege
 
+### Ergänzung: Prüfung der Einschätzungs- und übrigen Formularfelder
+
+- PA-Einschätzungen: Die Anbindung wurde um gespeicherte Anleiterbewertungen aus fertigen/geprüften PA-Berichten im Zeitraum ergänzt. Selbstbewertungen, Entwürfe und nach dem Berichtsende geänderte Bewertungen werden ausgeschlossen. Individuelle Bewertungen und Bemerkungen werden mit eigenen Quellenreferenzen erhalten.
+- Start-LUV: Personale, methodische und soziale Einschätzungen werden ihren assessment-Feldern zugeordnet. Praktische/motorische Beobachtungen erscheinen in den ergänzenden Erläuterungen; daraus wird keine berufliche Eignung oder fachliche Qualifikation behauptet.
+- Verlauf-LUV: Die Vorlage besitzt keine separaten assessment-Felder. PA-Einschätzungen gehören hier in development.notes, während bisheriger und aktueller Förderbedarf getrennt bleiben.
+- Abschluss-LUV: Beobachtungen werden im beschreibenden Unterstützungsabschnitt ergänzt; Ausbildungsreife, Vermittlungsfähigkeit, Abschluss oder Berufseignung werden nicht automatisch aus PA-Punktwerten entschieden.
+- Frühere LUV: Zusätzlich zu den drei alten Textfeldern werden jetzt die strukturierten Formularfelder und Abschnittstexte freigegebener Berichte als Quelle bereitgestellt. Damit stehen auch differenzierte frühere Förderbedarfe, Ziele und Aufgaben zur Verfügung.
+- Schulische/fachliche Einschätzung, Fördersequenzen, Zielberuf und Aufgaben: Inhalte benötigen passende Nachweise aus Notizen, früheren LUV oder Praktika/Maßnahmen. Fehlende Nachweise werden nicht durch PA-Noten anderer Kategorien ersetzt. Eine eigenständige Anbindung von Schulnoten, Aufgabenverwaltung und Bewerbungen besteht weiterhin nicht.
+- Gesprächsdatum, Aushändigung, Unterschrift, Kontaktperson des Trägers und formale Abschlussentscheidungen dürfen nicht aus Teilnehmendenkontakten oder Beobachtungen geraten werden. Die automatische PA-Ergänzung verändert diese Felder nicht.
+- Quellenbeschriftungen für Stammdaten, frühere LUV, Praktika, Abschlussberichte und Einwilligungen wurden an die tatsächlich gelieferten Quellen-IDs angepasst.
+
+Die oben beschriebenen Grenzen bei Ausgabelänge, Zeitfiltern anderer Quellen und inhaltlicher Vollständigkeit bleiben separate offene Punkte. Diese Änderung repariert die PA-Einschätzungsanbindung und die fehlenden strukturierten Vorberichte; sie ist keine vollständige Überarbeitung der Generierung.
+
 - app/Services/Ai/AiReportOrchestrator.php
 - app/Services/Ai/Tools/GetProjectReportRulesTool.php
 - app/Services/Ai/Tools/GetParticipantIdentitySummaryTool.php
