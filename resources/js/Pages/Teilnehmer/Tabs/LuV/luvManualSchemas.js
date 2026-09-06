@@ -47,7 +47,7 @@ const commonGroups = [
     {
         key: 'master_data',
         heading: '1. Daten zur teilnehmenden Person',
-        description: 'Teilnehmerstammdaten werden automatisch aus dem aktiven Projekt übernommen.',
+        description: 'Name und Kundennummer stammen aus den Teilnehmerstammdaten. Die zugeordnete Betreuung und eindeutig dienstliche Kontaktdaten werden vorbelegt. Fehlende Angaben bitte ergänzen.',
         fields: [
             { key: 'report.report_date', label: 'Leistungs- und Verhaltensbeurteilung vom', type: 'date', required: true },
             { key: 'report.residential_learning', label: 'Lernort Wohnen / Internat', type: 'boolean' },

@@ -21,6 +21,7 @@
           <label class="text-sm font-medium">Berichtszeitraum bis <span class="text-red-600">*</span><input v-model="formLuV.bis" type="date" class="mt-1 w-full rounded-md border-gray-300" /></label>
         </div>
         <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">Nur dokumentierte Beobachtungen eintragen. Medizinische Diagnosen, Erkrankungen, Vermutungen und abwertende Klassifizierungen gehören nicht in eine LuV.</div>
+        <p v-if="defaultsError" role="status" class="text-sm text-amber-800">{{ defaultsError }}</p>
         <section v-for="group in activeSchema" :key="group.key" class="rounded-xl border bg-white p-4 shadow-sm">
           <h3 class="font-semibold">{{ group.heading }}</h3><p v-if="group.description" class="mt-1 text-xs text-gray-500">{{ group.description }}</p>
           <div class="mt-4 grid gap-4 lg:grid-cols-2">
@@ -29,7 +30,7 @@
               <textarea v-if="field.type === 'textarea'" v-model="fieldValues[field.key]" rows="4" maxlength="30000" class="mt-1 w-full resize-y rounded-md border-gray-300 text-sm" />
               <select v-else-if="field.type === 'select'" v-model="fieldValues[field.key]" class="mt-1 w-full rounded-md border-gray-300 text-sm"><option value="">Bitte auswählen</option><option v-for="option in field.options" :key="option" :value="option">{{ option }}</option></select>
               <select v-else-if="field.type === 'boolean'" v-model="fieldValues[field.key]" class="mt-1 w-full rounded-md border-gray-300 text-sm"><option :value="null">Nicht angegeben</option><option :value="true">Ja</option><option :value="false">Nein</option></select>
-              <input v-else v-model="fieldValues[field.key]" :type="field.type || 'text'" maxlength="1000" class="mt-1 w-full rounded-md border-gray-300 text-sm" />
+              <input v-else v-model="fieldValues[field.key]" @input="editedFields.add(field.key)" :type="field.type || 'text'" maxlength="1000" class="mt-1 w-full rounded-md border-gray-300 text-sm" />
             </label>
           </div>
         </section>
@@ -55,6 +56,9 @@ const luvTypes = ['Start', 'Verlauf', 'Abschluss'];
 const today = () => new Date().toISOString().slice(0, 10);
 const saving = ref(false);
 const fieldValues = reactive({});
+const editedFields = new Set();
+const defaultsError = ref('');
+let defaultsRequest = 0;
 const formLuV = reactive({ teilnehmer_id: props.teilnehmer.id, typ: 'Start', von: today(), bis: today() });
 const activeSchema = computed(() => manualLuvSchemas[formLuV.typ] || manualLuvSchemas.Start);
 const customerNumber = computed(() => props.teilnehmer.sozialedaten?.kundennummer || 'Nicht hinterlegt');
@@ -71,7 +75,7 @@ const buildSections = () => activeSchema.value.map((group) => ({
   value: group.fields.map((field) => [field.label, printableValue(fieldValues[field.key])]).filter(([, value]) => value !== '').map(([label, value]) => `${label}: ${value}`).join('\n\n'),
 })).filter((section) => section.value !== '');
 const sectionValue = (sections, key) => sections.find((section) => section.key === key)?.value || '';
-const resetForm = () => { formLuV.typ = 'Start'; formLuV.von = today(); formLuV.bis = today(); Object.keys(fieldValues).forEach((key) => delete fieldValues[key]); initializeFields('Start'); };
+const resetForm = () => { editedFields.clear(); formLuV.typ = 'Start'; formLuV.von = today(); formLuV.bis = today(); Object.keys(fieldValues).forEach((key) => delete fieldValues[key]); initializeFields('Start'); };
 
 const save = async () => {
   const missing = fieldsForType(formLuV.typ).filter((field) => field.required && !printableValue(fieldValues[field.key]));
@@ -97,5 +101,19 @@ const save = async () => {
     await Swal.fire('Speichern nicht möglich', errors ? Object.values(errors).flat().join('\n') : (error.response?.data?.message || 'Es ist ein unerwarteter Fehler aufgetreten.'), 'error');
   } finally { saving.value = false; }
 };
-watch(() => props.visible, (visible) => { if (visible) initializeFields(formLuV.typ); }, { immediate: true });
+watch(() => props.visible, async (visible) => {
+  const requestId = ++defaultsRequest;
+  if (!visible) return;
+  initializeFields(formLuV.typ);
+  defaultsError.value = '';
+  try {
+    const { data } = await axios.get(route('projekthasteilnehmer.luv.defaults'), { params: { teilnehmer_id: props.teilnehmer.id } });
+    if (requestId !== defaultsRequest || !props.visible) return;
+    for (const key of ['contact.name', 'contact.phone', 'contact.email']) {
+      if (!editedFields.has(key) && !fieldValues[key]) fieldValues[key] = data.fields?.[key] || '';
+    }
+  } catch {
+    if (requestId === defaultsRequest && props.visible) defaultsError.value = 'Kontaktdaten konnten nicht geladen werden. Bitte manuell ergänzen.';
+  }
+}, { immediate: true });
 </script>

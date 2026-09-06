@@ -744,6 +744,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
         Route::put('/teilnehmer/projekt/edit', [ProjektHasTeilnehmerController::class, 'update'])->name('projekthasteilnehmer.update')->middleware('canAnyPermission:projekthasteilnehmer.update,teilnehmer.update');
 
         // ProjektHasTeilnehmerLuv
+        Route::get('/teilnehmer/projekt/luv/vorbelegung', [ProjektHasTeilnehmerLuvController::class, 'defaults'])->name('projekthasteilnehmer.luv.defaults')->middleware('canAnyPermission:projekthasteilnehmer.luv.store,teilnehmer.update');
         Route::post('/teilnehmer/projekt/luv/anlegen', [ProjektHasTeilnehmerLuvController::class, 'store'])->name('projekthasteilnehmer.luv.store')->middleware('canAnyPermission:projekthasteilnehmer.luv.store,teilnehmer.update');
         Route::put('/teilnehmer/projekt/luv/edit', [ProjektHasTeilnehmerLuvController::class, 'update'])->name('projekthasteilnehmer.luv.update')->middleware('canAnyPermission:projekthasteilnehmer.luv.update,teilnehmer.update');
         Route::put('/teilnehmer/projekt/luv/{id}', [ProjektHasTeilnehmerLuvController::class, 'update'])->name('projekthasteilnehmer.luv.workflow.update')->middleware('canAnyPermission:projekthasteilnehmer.luv.update,teilnehmer.update');

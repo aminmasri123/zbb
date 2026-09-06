@@ -249,6 +249,7 @@ const sourceLabel = (sourceId = '') => {
     if (sourceId.startsWith('attendance-')) return 'Anwesenheit';
     if (sourceId.startsWith('documentation-')) return 'Dokumentation';
     if (sourceId.startsWith('previous-luv-') || sourceId.startsWith('luv-')) return 'Frühere LuV';
+    if (sourceId.startsWith('assigned-staff-contact-')) return 'Zugeordnete Betreuung im aktiven Projekt';
     if (sourceId === 'participant-identity' || sourceId.startsWith('participant-identity-')) return 'Stammdaten';
     if (sourceId.startsWith('development-internship-')) return 'Praktikum / Maßnahme';
     if (sourceId.startsWith('development-completion-')) return 'Abschlussbericht';

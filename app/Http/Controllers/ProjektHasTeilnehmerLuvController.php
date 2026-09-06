@@ -248,6 +248,14 @@ class ProjektHasTeilnehmerLuvController extends Controller
         return response()->download($path, Str::slug($luv->typ.'-LuV-'.$participant->vorname.'-'.$participant->nachname).'.docx')->deleteFileAfterSend(true);
     }
 
+    public function defaults(Request $request): JsonResponse
+    {
+        $data = $request->validate(['teilnehmer_id' => ['required', 'integer', 'min:1']]);
+        return response()->json(['fields' => app(\App\Services\LuvContactDefaults::class)->fields(
+            $this->participationFor($request, (int) $data['teilnehmer_id'])
+        )], 200, ['Cache-Control' => 'no-store, private']);
+    }
+
     private function participationFor(Request $request, int $participantId): ProjektHasPersonen
     {
         $projectId = (int) $request->user()->current_team_id;

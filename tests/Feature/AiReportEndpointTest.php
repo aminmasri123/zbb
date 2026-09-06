@@ -290,6 +290,44 @@ class AiReportEndpointTest extends TestCase
         });
     }
 
+    public function test_contact_defaults_use_assigned_staff_and_exclude_private_or_ambiguous_contacts(): void
+    {
+        [$user, $project, $participant] = $this->context(true);
+        $this->grantTestPermission($user, 'teilnehmer.update');
+        $staff = Personen::factory()->create(['vorname' => 'Eva', 'nachname' => 'Betreuung']);
+        $participation = ProjektHasPersonen::where('projekt_id', $project->id)->where('personen_id', $participant->id)->firstOrFail();
+        $participation->meta()->create(['betreuer_id' => $staff->id]);
+        foreach (['Telefon dienstlich' => '03012345', 'E-Mail dienstlich' => 'eva@example.org', 'Mobil privat' => '017099999'] as $name => $value) {
+            $type = \App\Models\Kontakttypen::create(['name' => $name]);
+            $staff->kontaktes()->create(['kontakttyp_id' => $type->id, 'wert' => $value]);
+        }
+        $url = route('projekthasteilnehmer.luv.defaults', ['teilnehmer_id' => $participant->id]);
+        $response = $this->actingAs($user)->getJson($url)->assertOk();
+        $this->assertSame(['contact.name' => 'Eva Betreuung', 'contact.phone' => '03012345', 'contact.email' => 'eva@example.org'], $response->json('fields'));
+
+        $report = app(\App\Services\LuvContactDefaults::class)->mergeReport([
+            'sections' => [['heading' => '[contact.email] E-Mail', 'claims' => [['text' => 'invented@example.org']]]],
+        ], $participation->fresh());
+        $this->assertCount(3, $report['sections']);
+        $this->assertSame('eva@example.org', $report['sections'][2]['claims'][0]['text']);
+        $this->assertStringNotContainsString('invented', json_encode($report));
+
+        $run = AiReportRun::create([
+            'run_uuid' => (string) \Illuminate\Support\Str::uuid(), 'user_id' => $user->id,
+            'project_id' => $project->id, 'participant_id' => $participant->id,
+            'report_type' => 'luv', 'luv_type' => 'Start', 'from_date' => '2026-01-01',
+            'until_date' => '2026-09-06', 'request' => 'Kontaktvorbelegung prüfen',
+            'status' => 'completed', 'report' => $report + ['report_type' => 'luv', 'title' => 'Entwurf', 'warnings' => []],
+        ]);
+        $adopted = $this->postJson(route('ai.reports.adopt', $run->run_uuid))->assertCreated();
+        $this->assertSame('eva@example.org', $adopted->json('luv.payload.fields')['contact.email']);
+
+        $staff->kontaktes()->create(['kontakttyp_id' => \App\Models\Kontakttypen::where('name', 'Telefon dienstlich')->value('id'), 'wert' => '03067890']);
+        $this->assertSame('', $this->getJson($url)->assertOk()->json('fields')['contact.phone']);
+        $foreign = Personen::factory()->create(['typ' => 'teilnehmer']);
+        $this->getJson(route('projekthasteilnehmer.luv.defaults', ['teilnehmer_id' => $foreign->id]))->assertNotFound();
+    }
+
     /** @return array{User, Projekt, Personen} */
     private function context(bool $grantPermission): array
     {

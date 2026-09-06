@@ -39,7 +39,12 @@ final class AiReportOrchestrator
     ): array {
         $context = $this->createDraftContext($user, $participantId, $fromDate, $untilDate, $reportType);
 
-        return $this->runDraft($user, $context, $reportType, $fromDate, $untilDate, $userRequest);
+        $result = $this->runDraft($user, $context, $reportType, $fromDate, $untilDate, $userRequest);
+        $participation = \App\Models\ProjektHasPersonen::query()
+            ->where('projekt_id', $context->projectId)->where('personen_id', $participantId)
+            ->whereHas('teilnehmer', fn ($query) => $query->visibleForUser($user))->firstOrFail();
+        $result['report'] = app(\App\Services\LuvContactDefaults::class)->mergeReport($result['report'], $participation);
+        return $result;
     }
 
     public function createDraftContext(User $user, int $participantId, string $fromDate, string $untilDate, string $reportType = 'luv'): AiRunContext
