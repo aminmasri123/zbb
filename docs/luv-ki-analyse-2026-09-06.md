@@ -6,6 +6,15 @@ Die Quellen- und Berechtigungsarchitektur ist eine brauchbare Grundlage. Die akt
 
 Testdatensatz: BVB Test, Teilnehmer 2539, BvB Reha. Zwei ausdrücklich fiktive Verlaufsnotizen beschreiben Ausgangslage, messbaren Fortschritt, ein noch nicht vollständig erreichtes Ziel und ein lediglich geplantes Praktikum. Lauf ca4fefdd-a8ac-43e1-a687-7854cdf1517d dauerte 402 Sekunden und lieferte nur drei wiederhergestellte Abschnitte. Die Ausgabe war abgeschnitten. Fortschrittsvergleich, konkrete Förderziele und wesentliche Inhalte fehlten. Trotzdem wurde der Lauf als completed geführt. Kein Bericht wurde fachlich freigegeben oder versendet.
 
+## Nachträge zur Fehlerbehebung
+
+- Die PA-Quelle übergibt inzwischen auch gespeicherte Anleiterbewertungen und Bemerkungen aus abgeschlossenen/geprüften Berichten. Personale, methodische und soziale Bewertungen werden den jeweiligen Einschätzungsfeldern zugeordnet; praktische Bewertungen den ergänzenden Erläuterungen. Förderbedarfe bleiben eigenständige fachliche Entscheidungen und werden nicht aus Bewertungszahlen abgeleitet.
+- Frühere freigegebene LuV liefern jetzt zusätzlich ihre strukturierten Formularfelder und Abschnitte.
+- Seit Commit `5e67a38` bleiben bei einer abgewiesenen KI-Antwort ausschließlich die deterministisch zugeordneten, berechtigten PA-Angaben als ausdrücklich unvollständiger Entwurf verfügbar. Andere Felder zeigen dann „Nicht automatisch ausgewertet“ statt „Daten fehlen“. Ohne solche PA-Belege bleibt der Lauf fehlgeschlagen. Die ungültige Modellantwort wird nicht übernommen.
+- Das behebt den Verlust nutzbarer PA-Angaben beim Generierungsfehler, nicht die Zuverlässigkeit des Sprachmodells. Der Agent auf dem KI-Server verwendet weiterhin ein Ausgabelimit von 1.100 Tokens und einen älteren Systemprompt als das Repository.
+- Validierung dieser Fehlerbehandlung: Laravel-Tests sowie erfolgreicher Produktionsbuild. Deployment mit Sicherung der betroffenen Dateien und von `public/build`; keine Datenbankmigration.
+- Erneuter echter Diagnoselauf mit Teilnehmer 2539 und Zeitraum 01.01.–06.09.2026: 572 Sekunden, acht Abschnitte einschließlich automatisch ergänzter PA-Angaben, Warnung wegen abgeschnittener KI-Ausgabe. Der Tunnel war dabei erreichbar. Wiederhergestellte Ausgaben erhalten nun ebenfalls die Kennzeichnung `generation_status=partial`. Es wurde bei diesem Diagnoselauf kein LuV gespeichert.
+
 ## Datenweg
 
 Browser → Laravel-Hintergrundauftrag → berechtigte Datenabfragen für Teilnehmer und aktives Projekt → signierter HTTP-Aufruf über SSH-Tunnel vom Webserver 10.100.1.47 zum KI-Server 10.100.1.30 → Agent → lokales Ollama-Modell → Prüfung der Antwort und Quellen-IDs → Entwurf zur menschlichen Prüfung.

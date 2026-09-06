@@ -188,7 +188,7 @@ class AiReportOrchestratorTest extends TestCase
                             'source_ids' => ['participant-development-summary'],
                         ]],
                     ]],
-                    'warnings' => [],
+                    'warnings' => ['Die KI-Ausgabe wurde am Ende abgeschnitten. Vollständig erzeugte Felder wurden wiederhergestellt; fehlende Felder bitte fachlich ergänzen.'],
                 ],
             ]);
         });
@@ -205,6 +205,7 @@ class AiReportOrchestratorTest extends TestCase
             ->keyBy(fn (array $section) => preg_match('/^\[([^]]+)\]/', $section['heading'], $match) ? $match[1] : '');
 
         $this->assertTrue($sections->has('competence.personal.support_need'));
+        $this->assertSame('partial', $result['report']['generation_status']);
         $this->assertFalse($sections->has('competence.methodical.support_need'));
         $this->assertTrue($sections->has('competence.social.support_need'));
         $this->assertSame(

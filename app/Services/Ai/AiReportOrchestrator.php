@@ -161,6 +161,12 @@ final class AiReportOrchestrator
             throw new AgentUnavailableException('Der KI-Agent forderte trotz vollstaendiger Daten weitere Tools an.');
         }
 
+        // Older deployed agents report truncation through this fixed warning.
+        // Missing fields in a recovered result were not necessarily evaluated.
+        if (in_array('Die KI-Ausgabe wurde am Ende abgeschnitten. Vollständig erzeugte Felder wurden wiederhergestellt; fehlende Felder bitte fachlich ergänzen.', $response['report']['warnings'] ?? [], true)) {
+            $response['report']['generation_status'] = 'partial';
+        }
+
         $response['report'] = $this->approvedPaSupportNeeds->merge($response['report'], $toolResults);
 
         return ['run_id' => $runId, 'report' => $response['report']];
