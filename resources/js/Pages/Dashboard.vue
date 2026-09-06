@@ -91,16 +91,16 @@ const apps = computed(() => [
 
             <div v-if="apps.length" class="mx-auto mb-10 max-w-7xl px-4">
                 <div class="mb-3 flex items-center justify-between border-b border-gray-200 pb-2"><h2 class="text-lg font-semibold">Apps</h2><Link v-if="can('apps.index')" :href="route('apps.index')" class="text-sm font-medium text-[var(--buttonPrimary)]">Alle Apps</Link></div>
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"><Link v-for="app in apps" :key="app.title" :href="route(app.route, app.params)" class="rounded border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm transition hover:border-[var(--borderHover)] hover:shadow"><div class="mb-3 flex items-center justify-between"><i :class="['la la-2x text-[var(--buttonPrimary)]', app.icon]"></i><span class="rounded bg-[var(--muted)] px-2 py-1 text-xs font-semibold">{{ props.apps?.[app.count] ?? 0 }}</span></div><h3 class="text-sm font-semibold">{{ app.title }}</h3><p class="mt-1 text-xs leading-5 text-[var(--secondary)]">{{ app.text }}</p></Link></div>
+                <div class="dashboard-app-grid grid gap-4"><Link v-for="app in apps" :key="app.title" :href="route(app.route, app.params)" class="rounded border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm transition hover:border-[var(--borderHover)] hover:shadow"><div class="mb-3 flex items-center justify-between"><i :class="['la la-2x text-[var(--buttonPrimary)]', app.icon]"></i><span class="rounded bg-[var(--muted)] px-2 py-1 text-xs font-semibold">{{ props.apps?.[app.count] ?? 0 }}</span></div><h3 class="text-sm font-semibold">{{ app.title }}</h3><p class="mt-1 text-xs leading-5 text-[var(--secondary)]">{{ app.text }}</p></Link></div>
             </div>
 
-            <div v-if="shownStatCards.length" class="mx-auto mb-10 grid max-w-7xl grid-cols-1 gap-6 px-4 sm:grid-cols-2" :class="shownStatCards.length >= 5 ? 'md:grid-cols-5' : 'lg:grid-cols-4'">
-                <div v-for="card in shownStatCards" :key="card.key" :class="['flex items-center gap-4 rounded-lg p-6 shadow', card.color]">
-                    <i :class="['la la-2x', card.icon]"></i><div><div class="text-2xl font-bold">{{ card.value }}</div><div class="text-sm font-semibold">{{ card.label }}</div><div class="mt-1 text-xs opacity-75">{{ card.scope }}</div></div>
+            <div v-if="shownStatCards.length" class="dashboard-stat-grid mx-auto mb-10 grid max-w-7xl gap-4 px-4">
+                <div v-for="card in shownStatCards" :key="card.key" :class="['flex min-w-0 items-center gap-3 rounded-lg p-5 shadow', card.color]">
+                    <i :class="['la la-2x shrink-0', card.icon]"></i><div class="min-w-0 [overflow-wrap:anywhere]"><div class="text-2xl font-bold">{{ card.value }}</div><div class="text-sm font-semibold">{{ card.label }}</div><div class="mt-1 text-xs opacity-75">{{ card.scope }}</div></div>
                 </div>
             </div>
 
-            <div v-if="shownListCards.length" class="mx-auto mb-10 grid max-w-7xl grid-cols-1 gap-6 px-4 lg:grid-cols-3">
+            <div v-if="shownListCards.length" class="dashboard-list-grid mx-auto mb-10 grid max-w-7xl gap-6 px-4">
                 <section v-for="card in shownListCards" :key="card.key" class="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-sm">
                     <header class="flex items-start justify-between gap-3 border-b border-[var(--border)] p-4">
                         <div class="flex min-w-0 items-start gap-3">
@@ -129,3 +129,16 @@ const apps = computed(() => [
         </div>
     </AppLayout>
 </template>
+
+<style scoped>
+/* Use the content width after the sidebar, not the viewport width. */
+.dashboard-app-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+}
+.dashboard-stat-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 13.5rem), 1fr));
+}
+.dashboard-list-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+}
+</style>
