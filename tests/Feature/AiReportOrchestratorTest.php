@@ -166,7 +166,11 @@ class AiReportOrchestratorTest extends TestCase
             ],
         ]);
 
-        Http::fake(function (Request $request) {
+        $failResponse = false;
+        Http::fake(function (Request $request) use (&$failResponse) {
+            if ($failResponse) {
+                return Http::response(['detail' => 'invalid structured report'], 502);
+            }
             $payload = $request->data();
 
             return Http::response([
@@ -207,6 +211,22 @@ class AiReportOrchestratorTest extends TestCase
             ['potential-analysis-support-'.$bericht->id.'-social'],
             $sections['competence.social.support_need']['claims'][0]['source_ids'],
         );
+        $failResponse = true;
+        $partial = app(AiReportOrchestrator::class)->draft($user, $participant->id, 'luv', '2026-09-01', '2026-09-05', 'Entwurf erstellen');
+        $this->assertSame('Unvollständiger Entwurf – nur belegte PA-Angaben', $partial['report']['title']);
+        $this->assertSame('partial', $partial['report']['generation_status']);
+        $this->assertCount(2, $partial['report']['sections']);
+        $this->assertStringContainsString('KI-Textgenerierung ist fehlgeschlagen', $partial['report']['warnings'][0]);
+        $this->assertStringNotContainsString('competence.school.assessment', json_encode($partial['report']));
+    }
+
+    public function test_invalid_model_output_without_pa_evidence_still_fails(): void
+    {
+        [$user, $project, $participant] = $this->context();
+        Http::fake(['*' => Http::response(['detail' => 'invalid structured report'], 502)]);
+        $this->expectException(AgentUnavailableException::class);
+        $this->expectExceptionMessage('Berichts-JSON entspricht nicht dem vereinbarten Schema');
+        app(AiReportOrchestrator::class)->draft($user, $participant->id, 'luv', '2026-01-01', '2026-06-30', 'Entwurf erstellen');
     }
 
     public function test_it_does_not_send_project_disabled_sources_to_the_agent(): void

@@ -63,6 +63,19 @@ class AgentClientTest extends TestCase
         });
     }
 
+    public function test_it_does_not_expose_arbitrary_upstream_error_details(): void
+    {
+        Http::fake(['*' => Http::response(['detail' => 'Private participant text must not enter logs'], 502)]);
+        $this->expectException(AgentUnavailableException::class);
+        $this->expectExceptionMessage('Der KI-Agent antwortete mit HTTP 502.');
+        try {
+            app(AgentClient::class)->turn($this->payload());
+        } catch (AgentUnavailableException $exception) {
+            $this->assertStringNotContainsString('Private participant', $exception->getMessage());
+            throw $exception;
+        }
+    }
+
     public function test_it_rejects_a_tool_call_outside_the_request_allowlist(): void
     {
         Http::fake([

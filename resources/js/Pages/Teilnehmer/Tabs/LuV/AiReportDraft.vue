@@ -137,6 +137,12 @@
                             <p class="mt-1 text-xs text-gray-400">Lauf-ID: {{ runId }}</p>
                         </div>
 
+                        <div v-if="draft.warnings.length" role="alert" class="rounded-lg border border-orange-200 bg-orange-50 p-4">
+                            <h4 class="mb-2 text-sm font-semibold text-orange-900">Hinweise zum Entwurf</h4>
+                            <ul class="list-disc space-y-1 pl-5 text-sm text-orange-800">
+                                <li v-for="warning in draft.warnings" :key="warning">{{ warning }}</li>
+                            </ul>
+                        </div>
                         <div v-if="paFilledFieldCount" class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
                             <strong>{{ paFilledFieldCount }} PA-{{ paFilledFieldCount === 1 ? 'Angabe wurde' : 'Angaben wurden' }} automatisch zugeordnet.</strong>
                             Die Inhalte sind fachlich freigegeben, bleiben im LuV-Entwurf aber weiterhin bearbeitbar.
@@ -162,12 +168,6 @@
                             </div>
                         </section>
 
-                            <div v-if="draft.warnings.length" class="rounded-lg border border-orange-200 bg-orange-50 p-4">
-                            <h4 class="mb-2 text-sm font-semibold text-orange-900">Hinweise</h4>
-                            <ul class="list-disc space-y-1 pl-5 text-sm text-orange-800">
-                                <li v-for="warning in draft.warnings" :key="warning">{{ warning }}</li>
-                            </ul>
-                        </div>
 
                         <div class="flex flex-wrap justify-end gap-3">
                             <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100" @click="reset">Neuen Entwurf erstellen</button>
@@ -264,7 +264,9 @@ const paFilledFieldCount = computed(() => new Set(
 ).size);
 const sourceLabels = (sourceIds = []) => [...new Set(sourceIds.map(sourceLabel))];
 const missingFieldMessage = (field) =>
-    /^competence\.(personal|methodical|social)\.(support_need|current_need)$/.test(field.key)
+    draft.value?.generation_status === 'partial'
+        ? 'Nicht automatisch ausgewertet. Bitte vorhandene Quellen prüfen und fachlich ergänzen.'
+        : /^competence\.(personal|methodical|social)\.(support_need|current_need)$/.test(field.key)
         ? 'Kein fachlich freigegebener PA-Förderbedarf im gewählten Zeitraum vorhanden.'
         : 'Daten fehlen.';
 const displayedElapsedSeconds = computed(() => Math.max(

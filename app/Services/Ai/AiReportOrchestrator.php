@@ -14,6 +14,7 @@ use App\Services\Ai\Tools\GetParticipantLuvDataTool;
 use App\Services\Ai\Tools\GetParticipantPotentialAnalysisSupportNeedsTool;
 use App\Services\Ai\Tools\GetProjectReportRulesTool;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 final class AiReportOrchestrator
@@ -121,17 +122,40 @@ final class AiReportOrchestrator
             ];
         }
 
-        $response = $this->agent->turn(new AgentTurnPayload(
-            runId: $runId,
-            projectId: $projectId,
-            participantId: $participantId,
-            reportType: $reportType,
-            fromDate: $fromDate,
-            untilDate: $untilDate,
-            userRequest: $userRequest,
-            allowedTools: $context->allowedTools,
-            toolResults: $toolResults,
-        ));
+        try {
+            $response = $this->agent->turn(new AgentTurnPayload(
+                runId: $runId,
+                projectId: $projectId,
+                participantId: $participantId,
+                reportType: $reportType,
+                fromDate: $fromDate,
+                untilDate: $untilDate,
+                userRequest: $userRequest,
+                allowedTools: $context->allowedTools,
+                toolResults: $toolResults,
+            ));
+        } catch (AgentUnavailableException $exception) {
+            // Preserve only deterministic, authorized PA evidence. Never rescue
+            // claims from the rejected model response or invent missing fields.
+            $report = $this->approvedPaSupportNeeds->merge([
+                'report_type' => $reportType,
+                'title' => 'Unvollständiger Entwurf – nur belegte PA-Angaben',
+                'generation_status' => 'partial',
+                'sections' => [],
+                'warnings' => [
+                    'Die KI-Textgenerierung ist fehlgeschlagen. Dieser unvollständige Entwurf enthält ausschließlich automatisch zugeordnete PA-Angaben; weitere vorhandene Quellen wurden nicht ausformuliert. Fehlende Felder bedeuten hier nicht, dass keine Daten vorhanden sind.',
+                ],
+            ], $toolResults);
+            if ($report['sections'] === []) {
+                throw $exception;
+            }
+            Log::warning('AI report returned PA-only partial draft', [
+                'run_uuid' => $runId,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return ['run_id' => $runId, 'report' => $report];
+        }
 
         if ($response['kind'] !== 'final') {
             throw new AgentUnavailableException('Der KI-Agent forderte trotz vollstaendiger Daten weitere Tools an.');

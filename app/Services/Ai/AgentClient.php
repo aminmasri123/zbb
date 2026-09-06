@@ -134,9 +134,19 @@ final class AgentClient
 
         $raw = $response->body();
         if (! $response->successful()) {
+            // Never log arbitrary upstream bodies: validation errors can echo
+            // participant data. Only expose fixed protocol diagnostics.
+            $detail = $response->json('detail');
+            $reason = is_string($detail) ? ([
+                'invalid structured report' => 'Berichts-JSON entspricht nicht dem vereinbarten Schema',
+                'report cites unknown source ids' => 'Bericht verweist auf unbekannte Quellen',
+                'model changed the immutable report type' => 'Modell hat den Berichtstyp verändert',
+                'Ollama response contains neither tool calls nor report JSON' => 'Modell hat keinen Bericht geliefert',
+            ][$detail] ?? null) : null;
             throw new AgentUnavailableException(sprintf(
-                'Der KI-Agent antwortete mit HTTP %d.',
+                'Der KI-Agent antwortete mit HTTP %d.%s',
                 $response->status(),
+                $reason ? ' '.$reason.'.' : '',
             ));
         }
 
