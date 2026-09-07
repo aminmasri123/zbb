@@ -1719,6 +1719,15 @@ const formatLuvTemplateDate = (value) => value
                                 <span class="mt-1 block text-xs text-gray-500">Samstag und Sonntag erzeugen keine Anwesenheitstage.</span>
                             </span>
                         </label>
+                        <label class="flex items-start gap-3 rounded border border-gray-200 p-4 text-sm text-gray-600">
+                            <input v-model="projectRules.group_signatures_hide_weekends" type="checkbox"
+                                class="mt-1 rounded border-gray-300 text-zbb focus:ring-zbb"
+                                :disabled="!projectFeatures.group_management || !can('projekt.update')" />
+                            <span>
+                                <span class="block font-semibold text-gray-800">Wochenenden bei Gruppenunterschriften ausblenden</span>
+                                <span class="mt-1 block text-xs text-gray-500">Blendet Samstag und Sonntag nur in der Unterschriftenübersicht der Gruppen aus. Vorhandene Termine und Unterschriften bleiben erhalten.</span>
+                            </span>
+                        </label>
                     </div>
                     <div class="mt-4 grid gap-4 border-t border-gray-100 pt-4 md:grid-cols-3">
                         <label class="flex items-start gap-3 rounded border border-gray-200 p-4 text-sm text-gray-600">

@@ -66,6 +66,7 @@ class Projekt extends Model
     public const RULE_DEFAULTS = [
         'max_group_participants' => null,
         'attendance_skip_weekends' => false,
+        'group_signatures_hide_weekends' => true,
         'attendance_default_status' => 'unentschuldigt',
         'participant_birthdate_required' => false,
         'participant_address_enabled' => false,

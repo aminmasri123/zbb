@@ -230,6 +230,27 @@ class GroupAttendanceSignaturesTest extends TestCase
         $membership->save();
     }
 
+    public function test_weekends_are_hidden_by_default_and_can_be_shown_without_changing_signatures(): void
+    {
+        [$user, $group, $draft, $people] = $this->context('bibb');
+        $group->update(['enddatum' => '2026-09-06']);
+        $payload = $draft->payload;
+        foreach (['2026-09-05', '2026-09-06'] as $date) {
+            $this->addDay($group, $date);
+            $payload['days'][] = ['id' => 'program-'.$date, 'date' => $date, 'type' => 'program_day'];
+            $payload['signatures']['program-'.$date.':'.$people[0]->id] = 'enc:v1:'.Crypt::encryptString(self::PNG);
+        }
+        $draft->update(['payload' => $payload]);
+        $url = route('gruppe.signatures.overview', $group).'?'.http_build_query(['type' => 'bibb', 'draft_id' => $draft->id]);
+        $this->actingAs($user)->getJson($url)->assertOk()->assertJsonPath('dates', ['2026-09-01'])
+            ->assertJsonPath('weekends_hidden', true)->assertJsonCount(1, 'rows');
+        $group->projekt->update(['rule_settings' => ['group_signatures_hide_weekends' => false]]);
+        $this->getJson($url)->assertOk()->assertJsonPath('dates', ['2026-09-01', '2026-09-05', '2026-09-06'])
+            ->assertJsonPath('weekends_hidden', false)->assertJsonCount(3, 'rows')->assertJsonPath('rows.1.signed', true);
+        $this->assertSame($payload, $draft->fresh()->payload);
+        $this->assertSame(1, $draft->fresh()->revision);
+    }
+
     public function test_removed_legacy_pa_key_remains_available_for_restore(): void
     {
         [$user, $group, $draft, $people] = $this->context('pa');

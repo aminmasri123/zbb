@@ -43,6 +43,7 @@ class ProjectRuleConfigurationTest extends TestCase
             'rules' => [
                 'max_group_participants' => 12,
                 'attendance_skip_weekends' => true,
+                'group_signatures_hide_weekends' => false,
                 'attendance_default_status' => 'anwesend',
                 'participant_birthdate_required' => true,
                 'participant_address_enabled' => true,
@@ -54,12 +55,14 @@ class ProjectRuleConfigurationTest extends TestCase
         ])->assertOk()
             ->assertJsonPath('rules.max_group_participants', 12)
             ->assertJsonPath('rules.attendance_skip_weekends', true)
+            ->assertJsonPath('rules.group_signatures_hide_weekends', false)
             ->assertJsonPath('rules.participant_address_enabled', true);
 
         $this->assertSame('anwesend', $project->fresh()->rule('attendance_default_status'));
         $this->assertSame(16, $project->fresh()->rule('participant_min_age'));
         $this->assertTrue($project->fresh()->rule('participant_address_enabled'));
         $this->assertTrue($project->fresh()->rule('participant_parts_enabled'));
+        $this->assertFalse($project->fresh()->rule('group_signatures_hide_weekends'));
     }
 
     public function test_participant_birthdate_and_age_rules_are_enforced_for_active_project(): void

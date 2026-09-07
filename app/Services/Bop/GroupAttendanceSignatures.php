@@ -193,6 +193,9 @@ class GroupAttendanceSignatures
         abort_unless($this->allowed($user, $group), 403);
         [$draft, $payload, $keys] = $this->draft($group, $type, $id);
         $rows = $this->rows($group, $user, $draft, $payload, $keys, $type);
+        $hideWeekends = (bool) $group->projekt->rule('group_signatures_hide_weekends', true);
+        $visibleDate = fn (string $date) => !$hideWeekends || (int) date('N', strtotime($date)) <= 5;
+        $rows = array_values(array_filter($rows, fn ($row) => $visibleDate($row['date'])));
         $hashes = $this->hashes($draft, array_column($rows, 'key'));
         $canRemove = $this->canRemove($user, $group);
         $removals = $canRemove ? GroupAttendanceSignatureRemoval::where('gruppe_id', $group->id)
@@ -222,7 +225,9 @@ class GroupAttendanceSignatures
             ->where('gruppe_id', $group->id)->whereIn('personen_id', $students->pluck('person_id'))
             ->whereBetween('datum', [substr($group->anfangsdatum, 0, 10), substr($group->enddatum ?: $group->anfangsdatum, 0, 10)])
             ->distinct()->orderBy('datum')->pluck('datum')->map(fn ($day) => substr($day, 0, 10))->all();
-        return ['rows' => $rows, 'participants' => $participants, 'dates' => $dates, 'can_remove' => $canRemove];
+        $dates = array_values(array_filter($dates, $visibleDate));
+        return ['rows' => $rows, 'participants' => $participants, 'dates' => $dates, 'can_remove' => $canRemove,
+            'weekends_hidden' => $hideWeekends];
     }
 
     private function authorizedRow(Gruppe $group, $user, $draft, array $payload, array $keys, array $input): array

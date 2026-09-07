@@ -11,6 +11,7 @@ const lists = ref([])
 const selected = ref('')
 const date = ref('')
 const dates = ref([])
+const weekendsHidden = ref(false)
 const participants = ref([])
 const rows = ref([])
 const search = ref('')
@@ -43,6 +44,8 @@ const showError = e => { error.value = e.response?.data?.message || 'Die Verbind
 const applyOverview = data => {
   rows.value = data.rows
   dates.value = data.dates
+  weekendsHidden.value = data.weekends_hidden
+  if (date.value && !dates.value.includes(date.value)) date.value = ''
   participants.value = data.participants
   canRemove.value = data.can_remove
 }
@@ -162,8 +165,10 @@ const restore = async row => {
     <p v-if="saving" role="status" class="mb-2 text-sm text-gray-600">Änderung wird bearbeitet …</p>
     <p v-if="loading" role="status">Unterschriften werden geladen …</p>
     <p v-else-if="!lists.length && !error" class="rounded bg-amber-50 p-3">Für die Gruppentermine ist noch keine passende zentrale Liste vorbereitet. Bitte die zuständige Person die PA- oder BO/BIBB-Termine in der Schulliste speichern lassen.</p>
+    <p v-else-if="!dates.length && weekendsHidden && !error" class="rounded bg-amber-50 p-3">Keine sichtbaren Termine. Samstag und Sonntag sind in den Projekteinstellungen für Gruppenunterschriften ausgeblendet.</p>
     <template v-else-if="participants.length && dates.length">
       <p class="mb-2 text-xs text-gray-600">{{ shownParticipants.length }} Teilnehmer · {{ shownDates.length }} Termine · Sortierung nach Nachname. Bei vielen Terminen seitlich scrollen.</p>
+      <p v-if="weekendsHidden" class="mb-2 text-xs text-gray-500">Samstag und Sonntag sind gemäß Projekteinstellung ausgeblendet.</p>
       <div class="signature-grid rounded border border-gray-200" role="region" aria-label="Unterschriften nach Teilnehmer und Termin" tabindex="0">
         <table class="w-full text-left text-sm">
           <caption class="sr-only">Unterschriften dieser Gruppe, nach Nachname sortiert, mit einer Spalte je Termin</caption>

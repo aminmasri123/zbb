@@ -648,6 +648,7 @@ class ProjektController extends Controller
             'rules' => ['required', 'array'],
             'rules.max_group_participants' => ['nullable', 'integer', 'min:1', 'max:999'],
             'rules.attendance_skip_weekends' => ['required', 'boolean'],
+            'rules.group_signatures_hide_weekends' => ['sometimes', 'boolean'],
             'rules.attendance_default_status' => ['required', 'string', 'exists:anwesenheitsstatutens,status'],
             'rules.participant_birthdate_required' => ['required', 'boolean'],
             'rules.participant_address_enabled' => ['sometimes', 'boolean'],
@@ -690,6 +691,8 @@ class ProjektController extends Controller
                     ? (int) $validated['rules']['max_group_participants']
                     : null,
                 'attendance_skip_weekends' => (bool) $validated['rules']['attendance_skip_weekends'],
+                'group_signatures_hide_weekends' => (bool) ($validated['rules']['group_signatures_hide_weekends']
+                    ?? $projekt->rule('group_signatures_hide_weekends', true)),
                 'attendance_default_status' => $validated['rules']['attendance_default_status'],
                 'participant_birthdate_required' => (bool) $validated['rules']['participant_birthdate_required'],
                 'participant_address_enabled' => (bool) ($validated['rules']['participant_address_enabled']
