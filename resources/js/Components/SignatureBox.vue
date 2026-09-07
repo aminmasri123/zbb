@@ -4,6 +4,7 @@ import Swal from 'sweetalert2'
 
 const props = defineProps({
   lazyPreview: Boolean,
+  allowClear: { type: Boolean, default: true },
   modelValue: {
     type: String,
     default: '',
@@ -163,7 +164,7 @@ const stopExpandedDrawing = (event) => {
 }
 
 const clearSignature = async () => {
-  if (props.disabled) return
+  if (props.disabled || !props.allowClear) return
 
   if (hasInk.value) {
     const participantText = props.participantName
@@ -264,6 +265,7 @@ onMounted(() => {
       class="inline-flex items-center justify-center rounded border border-gray-300 text-gray-600 hover:bg-gray-50"
       :class="compact ? 'h-8 w-8' : 'h-9 w-9'"
       title="Unterschrift löschen"
+      v-if="allowClear"
       @pointerdown.stop
       @click="clearSignature"
     >
@@ -311,6 +313,7 @@ onMounted(() => {
             <button
               type="button"
               class="inline-flex items-center gap-2 rounded border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              v-if="allowClear"
               @click="clearSignature"
             >
               <i class="la la-eraser"></i>

@@ -12,10 +12,12 @@
     import axios from 'axios' // ✅ FEHLTE
     import { formatTime } from '@/utils/timeFormat'
     import { usePermissions } from '@/utils/permissions'
+    import GroupSignatures from './GroupSignatures.vue'
 
     // --- Props ---
     const props = defineProps({
     gruppe: { type: Object, required: true },
+    canCollectGroupSignatures: { type: Boolean, default: false },
     teilnehmer: { type: Array, default: () => [] },
     anwesenheit: { type: Object, default: () => ({ teilnehmer: {} }) },
     anwesenheitsstatuten: { type: Array, required: true },
@@ -2541,6 +2543,9 @@ const exportMitTag = async () => {
       </Dialog>
 
       <!-- Anwesenheit -->
+      <div v-if="canCollectGroupSignatures" class="mb-4">
+        <GroupSignatures :group-id="Number(gruppe.id)" />
+      </div>
       <div v-if="canViewAttendance" class="space-y-4">
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div>

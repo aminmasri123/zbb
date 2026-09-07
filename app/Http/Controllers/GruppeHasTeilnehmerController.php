@@ -257,6 +257,7 @@ class GruppeHasTeilnehmerController extends Controller
         $standortId = $gruppe->standort_id;
 
         return Inertia::render('Gruppe/GruppeHasTeilnehmer/Index', [
+            'canCollectGroupSignatures' => app(\App\Services\Bop\GroupAttendanceSignatures::class)->allowed($user, $gruppe),
             'gruppe' => $gruppe,
             'teilnehmer' => Inertia::defer(function () use ($projektId, $standortId) {
                 return Personen::Teilnehmer()

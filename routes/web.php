@@ -607,6 +607,11 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
 
         // GruppeHasTeilnehmer
         Route::get('/gruppehasteilnehmer/{id}', [GruppeHasTeilnehmerController::class, 'show'])->name('gruppeHasTeilnehmer.show')->middleware(['module:participant_management', 'projectFeature:participant_management']);
+        Route::middleware(['module:participant_management', 'projectFeature:participant_management', 'can:anwesenheit.manage'])->group(function () {
+            Route::get('/gruppen/{gruppe}/unterschriften', [\App\Http\Controllers\GroupAttendanceSignatureController::class, 'index'])->name('gruppe.signatures.index');
+            Route::get('/gruppen/{gruppe}/unterschriften/termin', [\App\Http\Controllers\GroupAttendanceSignatureController::class, 'show'])->name('gruppe.signatures.show');
+            Route::post('/gruppen/{gruppe}/unterschriften', [\App\Http\Controllers\GroupAttendanceSignatureController::class, 'store'])->name('gruppe.signatures.store');
+        });
         Route::post('/gruppehasteilnehmer/anlegen', [GruppeHasTeilnehmerController::class, 'store'])->name('gruppeHasTeilnehmer.store')->middleware(['module:participant_management', 'projectFeature:participant_management', 'can:gruppeHasTeilnehmer.store']);
 
         Route::delete('/gruppehasteilnehmer/gruppe/{gruppe}/teilnehmer/{personen}', [GruppeHasTeilnehmerController::class, 'destroyTeilnehmer'])->name('gruppeHasTeilnehmer.destroyTeilnehmer')->middleware(['module:participant_management', 'projectFeature:participant_management', 'can:gruppeHasTeilnehmer.destroyTeilnehmer']);
