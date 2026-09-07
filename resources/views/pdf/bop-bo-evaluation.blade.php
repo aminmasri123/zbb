@@ -131,7 +131,7 @@
                     <table >
                         <tr style="border: none">
                             <td style="border: none"><img class="logo-header" src="{{resource_path('documents/bop/logo.png')}}" alt="Logo-ZBB" style="width: 2.6cm; height: 1.1cm;"></td>
-                            <td style="border: none"><img src="{{resource_path('documents/bop/einschaetzung_der_kompetenzen.png')}}" style="width: 15.4cm" alt=""></td>
+                            <td style="border: none"><img src="{{resource_path('documents/bop/kompetenzeinschaetzung-bo-tage.png')}}" style="width: 15.4cm" alt="Kompetenzeinschätzung während der praxisorientierten BO-Tage"></td>
                         </tr>
                     </table>
                 </header>

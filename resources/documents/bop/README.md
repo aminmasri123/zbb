@@ -1,5 +1,17 @@
 # Originaler BOP-Auswertungsbogen
 
+## Aktuelle Überschrift
+
+Alle aktiven PDF- und Word-Exporte verwenden seit dem 07.09.2026:
+**Kompetenzeinschätzung während der praxisorientierten BO-Tage**.
+Die Wordvorlage enthält den Text sowohl im Textfeld als auch in dessen
+Kompatibilitätsdarstellung. Die PDF-Blade verwendet dafür
+`kompetenzeinschaetzung-bo-tage.png` (1350 × 190 Pixel), mit Comic Sans MS Bold,
+orangefarbener Füllung und schwarzer Kontur. Die Bildproportionen und der
+Druckrand bleiben erhalten. `Auswertungsbogen_BOP.pdf` wurde aus der aktualisierten
+leeren Wordvorlage neu erzeugt. Platzhalter und Bewertungsfelder sind unverändert.
+Die folgenden Angaben beschreiben die Herkunft und frühere Fassungen.
+
 ## Aktive BO-Tage-Vorlage
 
 Seit der Präzisierung durch den Nutzer wird der BO-Tage-Export mit
