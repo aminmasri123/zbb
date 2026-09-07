@@ -10,11 +10,22 @@ Korrigiert sind die Datenbindung von Punkt 11 (eigene Gesamtbewertung statt
 sozialer Kompetenz), ein Leerzeichen beim Vergleich mit Bewertungsstufe 1 und
 die lokalen Bildpfade für den PDF-Renderer.
 
-Die extern referenzierten Titel- und Sterngrafiken waren im alten Verzeichnis
-nicht vorhanden. `star.png` wurde daher aus `word/media/image2.png` der identischen
-BOP-Wordvorlage entnommen; die Titelgrafik stammt aus der Überschrift ihrer
-leeren PDF-Seite. `logo.png` stammt aus `bop/storage/img/logo.png`.
-Die Quelldateien im alten BOP-Projekt bleiben unverändert.
+Die extern referenzierten Titel- und Sterngrafiken fehlten im alten Verzeichnis.
+Sie wurden aus einem vorhandenen Originalexport des alten BOP-Programms
+(`auswertungsbogen.pdf`, lokal im Downloads-Ordner) verlustfrei wiederhergestellt:
+`einschaetzung_der_kompetenzen.png` aus dem Bildobjekt I4 (675 × 95 Pixel),
+`star.png` aus I6 (64 × 64 Pixel), jeweils einschließlich der Transparenzmaske.
+Dadurch bleiben die schwarze Kontur, orange Füllung und originalen Proportionen
+der Überschrift erhalten. Die zuvor verwendete Ersatzgrafik aus Word ist ersetzt.
+Die übernommenen Grafiken enthalten keine Teilnehmerdaten.
+Auch `logo.png` wurde aus dem Originalexport (I2, 780 × 340 Pixel) übernommen,
+damit Farbe und Transparenz exakt derselben Quelle entsprechen.
+Alle Quelldateien bleiben unverändert.
+
+SHA-256 der wiederhergestellten PNG-Dateien:
+- Titel: `41c57d771788d88564c474cccb38230aa34bbeaea77c2a7a8d6f2711426d64eb`
+- Stern: `b91300d60e87f211c963e3fca9b60c6ba58ca27486d7eb3c5537bed23315ed88`
+- Logo: `1eff78aee36e52b059c9a8553803180a13df98365a2e0eb94099ca68fab7f8c5`
 
 ## Aufbewahrte Word-Referenz
 
