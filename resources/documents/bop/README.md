@@ -35,9 +35,13 @@ SHA-256 der wiederhergestellten PNG-Dateien:
 
 `Auswertungsbogen_BOP.pdf` ist die leere Formularseite aus
 `storage/vorlage/projekte/bop/word/Auswertungsbogen_BOP.docx`.
-Diese Worddatei ist bytegleich mit der vom Nutzer angegebenen Vorlage
+Die ursprüngliche Worddatei war bytegleich mit der vom Nutzer angegebenen Vorlage
 `C:\xampp\htdocs\bop\storage\vorlage\word\Auswertungsbogen_BOP.docx`.
-SHA-256 der Wordvorlage: `2abb0ee034a2542787eb88efc037aefbb931c609eea8419682f2be1cdce7806e`.
+SHA-256 dieser ursprünglichen Fassung: `2abb0ee034a2542787eb88efc037aefbb931c609eea8419682f2be1cdce7806e`.
+In der aktiven Word-Vorlage wurde anschließend ausschließlich die Überschrift
+von „BO-Tagen“ in „BO-Tage“ korrigiert, sowohl im Word-Textfeld als auch in seiner
+Kompatibilitätsdarstellung. Platzhalter und Formatierung bleiben erhalten.
+SHA-256 der korrigierten Wordvorlage: `21e977d0fe3ad243c93058e235602822c80c251c7741d221c26e7d042f4f6a21`.
 
 Erstellung: Alle Platzhalter mit PHPWord TemplateProcessor leeren, anschließend
 mit LibreOffice Writer als PDF ausgeben. Keine Änderung der festen Gestaltung.
@@ -45,4 +49,4 @@ Die PDF enthält keine Teilnehmerdaten. Sie bleibt als Word-Referenz erhalten;
 der aktive Renderer `BopOriginalEvaluationPdf` verwendet nun die Blade-Vorlage.
 Jeder Teilnehmer/Bereich erhält eine eigene Seite; die Nummerierung startet
 daher auf jeder Seite wie im Original. Die Gesamtbewertung unten ist im Original
-ohne Nummer. Die ursprüngliche Wordvorlage bleibt unverändert.
+ohne Nummer. Die Quelldatei im alten BOP-Projekt bleibt unverändert.
