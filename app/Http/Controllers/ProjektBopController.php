@@ -306,6 +306,18 @@ class ProjektBopController extends Controller
     {
         $this->purgeExpiredBibbDrafts();
         $scope = $this->bibbDraftScope($request);
+        // Poll only metadata before loading/decrypting the large signature JSON.
+        // Legacy drafts still require merging, so never skip their full response.
+        if ($request->has('known_revision') && $request->filled('known_updated_at')) {
+            $metadata = BibbAttendanceListDraft::where('draft_hash', $scope['draft_hash'])
+                ->first(['id', 'revision', 'updated_at']);
+            if ($metadata
+                && (string) $metadata->revision === (string) $request->input('known_revision')
+                && $metadata->updated_at?->toIso8601String() === $request->input('known_updated_at')
+                && !BibbAttendanceListDraft::whereIn('draft_hash', $scope['legacy_draft_hashes'] ?? [])->exists()) {
+                return response()->json(['exists' => true, 'unchanged' => true]);
+            }
+        }
         $draft = BibbAttendanceListDraft::where('draft_hash', $scope['draft_hash'])->first();
         $legacyDraft = $this->legacyBibbDraft($scope);
         $sourceDraft = $draft ?: $legacyDraft;

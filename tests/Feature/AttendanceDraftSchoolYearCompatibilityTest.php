@@ -161,6 +161,14 @@ class AttendanceDraftSchoolYearCompatibilityTest extends TestCase
             $response = $this->actingAs($user->fresh())
                 ->postJson(route('anwesenheitsliste.POBO.bibb.draft.show'), $scope)->assertOk();
             $this->assertSame($signatures, $response->json('payload.signatures'));
+            $known = [
+                'known_revision' => $response->json('revision'),
+                'known_updated_at' => $response->json('updated_at'),
+            ];
+            $this->postJson(route('anwesenheitsliste.POBO.bibb.draft.show'), $scope + $known)
+                ->assertOk()->assertExactJson(['exists' => true, 'unchanged' => true]);
+            $this->postJson(route('anwesenheitsliste.POBO.bibb.draft.show'), $scope + array_replace($known, ['known_revision' => 0]))
+                ->assertOk()->assertJsonPath('payload.signatures.day-1:person-1001', $signatures['day-1:person-1001']);
             unset($response, $signatures);
         } finally {
             ini_set('memory_limit', $originalLimit);

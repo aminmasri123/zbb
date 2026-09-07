@@ -100,8 +100,12 @@ const feedbackDay = computed(() => {
   }
 })
 const signatureDays = computed(() => [...programDays.value, ...(feedbackDay.value ? [feedbackDay.value] : [])])
+const nameCollator = new Intl.Collator('de', { sensitivity: 'base', numeric: true })
+const compareParticipantNames = (a, b) => nameCollator.compare(a.nachname || '', b.nachname || '')
+  || nameCollator.compare(a.vorname || '', b.vorname || '')
+  || nameCollator.compare(String(a.person_id || a.id), String(b.person_id || b.id))
 const sheetParticipants = computed(() => {
-  if (allParticipants.value.length) return allParticipants.value
+  if (allParticipants.value.length) return [...allParticipants.value].sort(compareParticipantNames)
 
   const byPerson = new Map()
   selectedDays.value.forEach((day) => {
@@ -110,11 +114,7 @@ const sheetParticipants = computed(() => {
     })
   })
 
-  return Array.from(byPerson.values()).sort((a, b) => {
-    const classCompare = String(a.klasse || '').localeCompare(String(b.klasse || ''), 'de', { numeric: true })
-    if (classCompare !== 0) return classCompare
-    return String(a.nachname || '').localeCompare(String(b.nachname || ''), 'de')
-  })
+  return Array.from(byPerson.values()).sort(compareParticipantNames)
 })
 const klasseText = computed(() => {
   if (previewContext.value?.klasse) return previewContext.value.klasse
@@ -219,7 +219,7 @@ function participantsForDay(day) {
     })
   })
 
-  return rows
+  return rows.sort(compareParticipantNames)
 }
 
 const participantGroupText = (participant) => {
@@ -230,11 +230,14 @@ const participantGroupText = (participant) => {
   return pieces.join(' / ')
 }
 
+const participantIdsByDay = computed(() => new Map(signatureDays.value.map((day) => [
+  day.id, new Set(participantsForDay(day).map((participant) => participant.person_id || participant.id)),
+])))
 const participantCanSignDay = (participant, day) => {
   if (!day || day.type === 'rolltag' || day.type === 'program_day' || day.type === 'feedback' || day.source === 'manual' || day.source === 'auto') return true
 
   const participantId = participant.person_id || participant.id
-  return participantsForDay(day).some((entry) => (entry.person_id || entry.id) === participantId)
+  return participantIdsByDay.value.get(day.id)?.has(participantId) ?? participantsForDay(day).some((entry) => (entry.person_id || entry.id) === participantId)
 }
 
 const hasSignature = (day, participant) => Boolean(day && participant && signatures[signatureKey(day, participant)])
@@ -352,12 +355,21 @@ const applyDraftPayload = (payload) => {
   }
 }
 
-const loadDraft = async ({ silent = true } = {}) => {
+const loadDraft = async ({ silent = true, onlyIfChanged = false, preloadedResponse = null } = {}) => {
   if (!props.partnerId || !props.schuljahr || !props.teil) return
-  if (!silent) draftLoading.value = true
+  if (draftLoading.value) return
+  draftLoading.value = true
 
   try {
-    const response = await axios.post(route('anwesenheitsliste.POBO.bibb.draft.show'), draftScopePayload())
+    const response = preloadedResponse || await axios.post(route('anwesenheitsliste.POBO.bibb.draft.show'), {
+      ...draftScopePayload(),
+      ...(onlyIfChanged && draftLoaded.value ? {
+        known_revision: draftRevision.value,
+        known_updated_at: draftLastSavedAt.value,
+      } : {}),
+    })
+
+    if (response.data.unchanged) return
 
     if (!draftDirty.value) {
       if (response.data.exists && response.data.payload) {
@@ -502,9 +514,9 @@ const flushDraftSave = () => {
 const startDraftPolling = () => {
   window.clearInterval(draftPollTimer)
   draftPollTimer = window.setInterval(() => {
-    if (!props.visible || draftDirty.value || draftSaving.value || draftHydrating.value) return
+    if (!props.visible || loadingPreview.value || draftLoading.value || draftDirty.value || draftSaving.value || draftHydrating.value) return
 
-    loadDraft({ silent: true })
+    loadDraft({ silent: true, onlyIfChanged: true })
   }, draftPollIntervalMs)
 }
 
@@ -778,19 +790,19 @@ const loadPreview = async ({ includeDraft = false } = {}) => {
   loadingPreview.value = true
 
   try {
-    const response = await axios.post(route('anwesenheitsliste.POBO.bibb.preview'), {
+    const [response, draftResponse] = await Promise.all([axios.post(route('anwesenheitsliste.POBO.bibb.preview'), {
       schuleIdInputBibb: props.partnerId,
       schuljahrInputBibb: props.schuljahr,
       teilInputBibb: props.teil,
       rolltagDate: form.rolltagDate || null,
       manualDays: manualDaysPayload(),
-    })
+    }), includeDraft ? axios.post(route('anwesenheitsliste.POBO.bibb.draft.show'), draftScopePayload()) : Promise.resolve(null)])
 
     previewContext.value = response.data.context
     allParticipants.value = response.data.participants || []
     hydrateDays(response.data.days || [])
     syncAutoProgramDays()
-    if (includeDraft) await loadDraft({ silent: true })
+    if (includeDraft) await loadDraft({ silent: true, preloadedResponse: draftResponse })
   } catch (error) {
     BibbSwal.fire('Fehler', await readBlobError(error), 'error')
   } finally {
@@ -1463,6 +1475,7 @@ onBeforeUnmount(() => {
                         <i class="la la-check-circle"></i>
                       </span>
                       <SignatureBox
+                        lazy-preview
                         :disabled="draftSaveBlocked"
                         v-if="participantCanSignDay(participant, day)"
                         :model-value="signatures[signatureKey(day, participant)] || ''"
@@ -1488,6 +1501,7 @@ onBeforeUnmount(() => {
                         <i class="la la-check-circle"></i>
                       </span>
                       <SignatureBox
+                        lazy-preview
                         :disabled="draftSaveBlocked"
                         v-if="feedbackDay"
                         :model-value="signatures[signatureKey(feedbackDay, participant)] || ''"

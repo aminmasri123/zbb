@@ -3,6 +3,7 @@ import { nextTick, onMounted, ref, watch } from 'vue'
 import Swal from 'sweetalert2'
 
 const props = defineProps({
+  lazyPreview: Boolean,
   modelValue: {
     type: String,
     default: '',
@@ -224,7 +225,19 @@ onMounted(() => {
 
 <template>
   <div class="flex items-center gap-2">
+    <button
+      v-if="lazyPreview"
+      type="button"
+      class="w-full cursor-pointer rounded border border-gray-300 bg-white"
+      :class="compact ? 'h-10 min-w-[92px]' : 'h-16'"
+      :disabled="disabled"
+      aria-label="Unterschrift anzeigen oder bearbeiten"
+      @click="openExpanded"
+    >
+      <img v-if="modelValue" :src="modelValue" loading="lazy" decoding="async" alt="Unterschrift" class="h-full w-full object-fill">
+    </button>
     <canvas
+      v-else
       ref="canvas"
       width="420"
       height="120"
