@@ -51,7 +51,10 @@ class GroupAttendanceSignaturesTest extends TestCase
     {
         [$user, $group, $draft, $people] = $this->context('bibb');
         if ($reason === 'permission') $user->revokePermissionTo('anwesenheit.manage');
-        if ($reason === 'trainer') $group->update(['personen_id' => User::factory()->create()->person_id]);
+        if ($reason === 'role') {
+            $role = Role::firstOrCreate(['name' => 'Anleiter', 'guard_name' => 'web'], ['color' => '#123456']);
+            $user->syncRoles([$role]);
+        }
         if ($reason === 'project') {
             $other = Projekt::factory()->create();
             $user->projekte()->attach($other->id);
@@ -70,7 +73,26 @@ class GroupAttendanceSignaturesTest extends TestCase
         $this->assertSame(1, $draft->fresh()->revision);
     }
 
-    public static function denials(): array { return [['permission'], ['trainer'], ['project']]; }
+    public static function denials(): array { return [['permission'], ['role'], ['project']]; }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('managementRoles')]
+    public function test_department_management_can_collect_without_being_the_assigned_instructor(string $roleName): void
+    {
+        [$user, $group, $draft, $people] = $this->context('bibb');
+        $role = Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web'], ['color' => '#123456']);
+        RoleDataAccessSetting::updateOrCreate(['role_id' => $role->id], ['team_scope' => 'own_projects', 'participant_scope' => 'own_projects']);
+        $user->syncRoles([$role]);
+        $group->update(['personen_id' => User::factory()->create()->person_id]);
+        $this->assertTrue(app(\App\Services\Bop\GroupAttendanceSignatures::class)->allowed($user, $group));
+        $scope = ['type' => 'bibb', 'draft_id' => $draft->id, 'date' => '2026-09-01'];
+        $this->actingAs($user)->getJson(route('gruppe.signatures.index', $group))->assertOk()->assertJsonCount(1, 'lists');
+        $this->postJson(route('gruppe.signatures.store', $group), $scope + ['key' => 'program-2026-09-01:'.$people[0]->id, 'signature' => self::PNG])->assertOk();
+    }
+
+    public static function managementRoles(): array
+    {
+        return [['Administrator'], ['Abteilungsleitung'], ['Assistenz der Abt.-Leitung']];
+    }
 
     public function test_an_existing_signature_cannot_be_replaced(): void
     {
@@ -232,7 +254,7 @@ class GroupAttendanceSignaturesTest extends TestCase
         $school = Partner::create(['name' => 'Testschule']);
         $user->projekte()->attach($project->id);
         $user->update(['current_team_id' => $project->id]);
-        $role = Role::firstOrCreate(['name' => 'Group signature test', 'guard_name' => 'web'], ['color' => '#123456']);
+        $role = Role::firstOrCreate(['name' => 'Assistenz der Abt.-Leitung', 'guard_name' => 'web'], ['color' => '#123456']);
         RoleDataAccessSetting::updateOrCreate(['role_id' => $role->id], ['team_scope' => 'own_projects', 'participant_scope' => 'own_projects']);
         $user->assignRole($role);
         $this->grantTestPermission($user, 'anwesenheit.manage');
