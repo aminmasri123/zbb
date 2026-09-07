@@ -241,11 +241,25 @@ class GroupDynamicDocumentValidationTest extends TestCase
             ]));
 
             $response->assertOk();
-            $response->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+            if (!$evaluation) $response->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
             $outputPath = $response->baseResponse->getFile()->getPathname();
             $zip = new ZipArchive;
             $this->assertTrue($zip->open($outputPath) === true);
-            $xml = (string) $zip->getFromName('word/document.xml');
+            $xml = '';
+            if ($evaluation) {
+                $this->assertSame(2, $zip->numFiles);
+                for ($i = 0; $i < $zip->numFiles; $i++) {
+                    $nestedPath = tempnam(sys_get_temp_dir(), 'bop-test-');
+                    file_put_contents($nestedPath, $zip->getFromIndex($i));
+                    $nested = new ZipArchive;
+                    $this->assertTrue($nested->open($nestedPath) === true);
+                    $xml .= $nested->getFromName('word/document.xml');
+                    $nested->close();
+                    unlink($nestedPath);
+                }
+            } else {
+                $xml = (string) $zip->getFromName('word/document.xml');
+            }
             $zip->close();
 
             $this->assertStringContainsString('Erste: 7.1', $xml);
@@ -256,6 +270,15 @@ class GroupDynamicDocumentValidationTest extends TestCase
                 $this->assertMatchesRegularExpression('/Erste: 7.1; Testschule; [^;]+; 5=X; 1=; unbewertet=/', $text);
                 $this->assertMatchesRegularExpression('/Zweite: 7.2; Testschule; [^;]+; 5=; 1=X; unbewertet=/', $text);
                 $this->assertStringNotContainsString('${', $xml);
+                $document->update(['ausgabeformate' => ['docx', 'pdf']]);
+                $pdfResponse = $this->get(route('gruppe.export.serienbrief', ['gruppe' => $group, 'dokument' => $document, 'format' => 'pdf']))->assertOk();
+                $pdf = (new \Smalot\PdfParser\Parser)->parseContent($pdfResponse->getContent());
+                $this->assertCount(2, $pdf->getPages());
+                foreach ($pdf->getPages() as $page) {
+                    $this->assertMatchesRegularExpression('/1\.\s+Einhaltung/', $page->getText());
+                    $this->assertMatchesRegularExpression('/11\.\s+Einschätzung/', $page->getText());
+                    $this->assertDoesNotMatchRegularExpression('/12\.\s+Einhaltung/', $page->getText());
+                }
                 \App\Models\RoleDataAccessSetting::where('role_id', $role->id)->update(['participant_scope' => 'none']);
                 $this->get(route('gruppe.export.serienbrief', ['gruppe' => $group, 'dokument' => $document, 'format' => 'docx']))->assertForbidden();
             }
