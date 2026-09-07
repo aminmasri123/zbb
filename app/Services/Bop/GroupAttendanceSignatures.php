@@ -4,6 +4,7 @@ namespace App\Services\Bop;
 
 use App\Models\BibbAttendanceListDraft;
 use App\Models\Gruppe;
+use App\Models\GroupAttendanceSignatureRemoval;
 use App\Models\PaAttendanceListDraft;
 use App\Models\Personen;
 use App\Models\PersonenIstSchueler;
@@ -59,6 +60,13 @@ class GroupAttendanceSignatures
 
     private function rows(Gruppe $group, $user, $draft, array $payload, array $keys, string $type): array
     {
+        if ($type === 'pa') {
+            // Keep a removed legacy PA key addressable even when the schedule uses a newer ID.
+            $removedKeys = GroupAttendanceSignatureRemoval::where('gruppe_id', $group->id)
+                ->where('projekt_id', $group->projekt_id)->where('list_type', $type)->where('draft_id', $draft->id)
+                ->whereNull('restored_at')->orderByDesc('id')->pluck('signature_key')->all();
+            $keys = array_values(array_unique(array_merge($keys, $removedKeys)));
+        }
         $participants = $this->participants($group, $user)->keyBy('id');
         $students = PersonenIstSchueler::filterSchueler($draft->partner_id, $draft->schuljahr, $draft->teil)
             ->whereIn('person_id', $participants->keys())->get()->unique('person_id');
@@ -148,6 +156,179 @@ class GroupAttendanceSignatures
         return $values;
     }
 
+    public function canRemove($user, Gruppe $group): bool
+    {
+        return $this->allowed($user, $group) && $user->can('anwesenheit.destroy');
+    }
+
+    private function decode(string $value): string
+    {
+        return str_starts_with($value, 'enc:v1:') ? Crypt::decryptString(substr($value, 7)) : $value;
+    }
+
+    private function hashes($draft, array $keys): array
+    {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            return array_map(fn ($value) => hash('sha256', $value), array_filter($this->values($draft, $keys)));
+        }
+        $hashes = [];
+        // Only short hashes leave the database, even for an overview of many days.
+        foreach (array_chunk($keys, 100) as $chunk) {
+            $query = $draft->newQuery()->whereKey($draft->id);
+            foreach ($chunk as $i => $key) {
+                $query->selectRaw("SHA2(NULLIF(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, ?)), 'null'), ''), 256) AS s".$i,
+                    ['$.signatures.'.json_encode($key)]);
+            }
+            $record = $query->toBase()->first();
+            foreach ($chunk as $i => $key) {
+                if ($hash = $record->{'s'.$i} ?? null) $hashes[$key] = $hash;
+            }
+        }
+        return $hashes;
+    }
+
+    public function overview(Gruppe $group, $user, string $type, int $id): array
+    {
+        abort_unless($this->allowed($user, $group), 403);
+        [$draft, $payload, $keys] = $this->draft($group, $type, $id);
+        $rows = $this->rows($group, $user, $draft, $payload, $keys, $type);
+        $hashes = $this->hashes($draft, array_column($rows, 'key'));
+        $canRemove = $this->canRemove($user, $group);
+        $removals = $canRemove ? GroupAttendanceSignatureRemoval::where('gruppe_id', $group->id)
+            ->where('projekt_id', $group->projekt_id)->where('list_type', $type)->where('draft_id', $id)
+            ->whereNull('restored_at')->orderByDesc('id')->get(['id', 'signature_key', 'signed_for_date'])
+            ->unique('signature_key')->keyBy('signature_key') : collect();
+        foreach ($rows as &$row) {
+            $row['signed'] = isset($hashes[$row['key']]);
+            $row['expected_hash'] = $hashes[$row['key']] ?? null;
+            $row['signature_url'] = $row['signed'] ? route('gruppe.signatures.image', [
+                'gruppe' => $group->id, 'type' => $type, 'draft_id' => $id,
+                'date' => $row['date'], 'key' => $row['key'], 'hash' => $row['expected_hash'],
+            ], false) : null;
+            $removal = $removals->get($row['key']);
+            $row['removal_id'] = !$row['signed'] && $removal?->signed_for_date === $row['date'] ? $removal->id : null;
+        }
+        unset($row);
+        $people = $this->participants($group, $user)->keyBy('id');
+        $students = PersonenIstSchueler::filterSchueler($draft->partner_id, $draft->schuljahr, $draft->teil)
+            ->whereIn('person_id', $people->keys())->get()->unique('person_id')
+            ->filter(fn ($student) => $type !== 'pa' || $draft->export_mode !== 'klasse' || trim($draft->klasse ?? '') === trim($student->klasse ?? ''));
+        $participants = $students->map(fn ($student) => [
+            'person_id' => $student->person_id, 'vorname' => $people[$student->person_id]->vorname,
+            'nachname' => $people[$student->person_id]->nachname, 'klasse' => $student->klasse,
+        ])->values()->all();
+        $dates = DB::table('gruppe_has_personens')->join('tages', 'tages.id', '=', 'gruppe_has_personens.tage_id')
+            ->where('gruppe_id', $group->id)->whereIn('personen_id', $students->pluck('person_id'))
+            ->whereBetween('datum', [substr($group->anfangsdatum, 0, 10), substr($group->enddatum ?: $group->anfangsdatum, 0, 10)])
+            ->distinct()->orderBy('datum')->pluck('datum')->map(fn ($day) => substr($day, 0, 10))->all();
+        return ['rows' => $rows, 'participants' => $participants, 'dates' => $dates, 'can_remove' => $canRemove];
+    }
+
+    private function authorizedRow(Gruppe $group, $user, $draft, array $payload, array $keys, array $input): array
+    {
+        $row = collect($this->rows($group, $user, $draft, $payload, $keys, $input['type']))
+            ->first(fn ($row) => $row['key'] === $input['key'] && $row['date'] === $input['date']);
+        abort_unless($row, 403);
+        return $row;
+    }
+
+    public function image(Gruppe $group, $user, array $input): string
+    {
+        abort_unless($this->allowed($user, $group), 403);
+        [$draft, $payload, $keys] = $this->draft($group, $input['type'], $input['draft_id']);
+        $this->authorizedRow($group, $user, $draft, $payload, $keys, $input);
+        $value = $this->values($draft, [$input['key']])[$input['key']] ?? '';
+        abort_unless($value && hash_equals(hash('sha256', $value), $input['hash']), 404);
+        $signature = $this->decode($value);
+        $bytes = str_starts_with($signature, 'data:image/png;base64,') ? base64_decode(substr($signature, 22), true) : false;
+        abort_unless($bytes !== false, 404);
+        return $bytes;
+    }
+
+    private function writeValue($draft, string $key, ?string $value, $user): void
+    {
+        if (DB::connection()->getDriverName() === 'mysql') {
+            if ($value === null) {
+                DB::update('UPDATE '.$draft->getTable().' SET payload = JSON_REMOVE(payload, ?), revision = revision + 1, user_update = ?, updated_at = ? WHERE id = ?',
+                    ['$.signatures.'.json_encode($key), $user->id, now(), $draft->id]);
+            } else {
+                DB::update('UPDATE '.$draft->getTable()." SET payload = JSON_SET(payload, '$.signatures', JSON_SET(CASE WHEN JSON_TYPE(JSON_EXTRACT(payload, '$.signatures')) = 'OBJECT' THEN JSON_EXTRACT(payload, '$.signatures') ELSE JSON_OBJECT() END, ?, ?)), revision = revision + 1, user_update = ?, updated_at = ? WHERE id = ?",
+                    ['$.' . json_encode($key), $value, $user->id, now(), $draft->id]);
+            }
+            $draft->revision++;
+        } else {
+            $full = $draft->payload ?? [];
+            if ($value === null) unset($full['signatures'][$key]);
+            else $full['signatures'][$key] = $value;
+            $draft->payload = $full;
+            $draft->revision = ($draft->revision ?? 0) + 1;
+            $draft->user_update = $user->id;
+            $draft->save();
+        }
+    }
+
+    private function historyScope($draft, array $payload, string $key): array
+    {
+        return ['projekt_id' => $draft->projekt_id, 'partner_id' => $draft->partner_id,
+            'schuljahr' => $draft->schuljahr, 'teil' => $draft->teil,
+            'list_type' => str_starts_with($key, 'pa-vorbereitung-') ? 'pa_preparation' : ($payload['form']['listType'] ?? 'pa')];
+    }
+
+    private function actorName($user): string
+    {
+        return mb_substr(trim(($user->person?->vorname ?? '').' '.($user->person?->nachname ?? '')) ?: $user->username ?: $user->email, 0, 255);
+    }
+
+    public function remove(Gruppe $group, Request $request, array $input): void
+    {
+        abort_unless($this->canRemove($request->user(), $group), 403);
+        DB::transaction(function () use ($group, $request, $input) {
+            [$draft, $payload, $keys] = $this->draft($group, $input['type'], $input['draft_id'], true);
+            $row = $this->authorizedRow($group, $request->user(), $draft, $payload, $keys, $input);
+            $value = $this->values($draft, [$input['key']])[$input['key']] ?? '';
+            abort_unless($value && hash_equals(hash('sha256', $value), $input['expected_hash']), 409,
+                'Die Unterschrift wurde inzwischen geändert. Bitte die Übersicht neu laden.');
+            $plain = $this->decode($value);
+            GroupAttendanceSignatureRemoval::create([
+                'gruppe_id' => $group->id, 'projekt_id' => $group->projekt_id, 'list_type' => $input['type'],
+                'draft_id' => $draft->id, 'person_id' => $row['person_id'], 'signature_key' => $input['key'],
+                'signed_for_date' => $input['date'], 'signature_ciphertext' => 'enc:v1:'.Crypt::encryptString($plain),
+                'removed_by' => $request->user()->id, 'removed_by_name' => $this->actorName($request->user()), 'removed_at' => now(),
+            ]);
+            if ($input['type'] === 'pa') {
+                $history = app(PaAttendanceSignatureHistoryService::class);
+                $scope = $this->historyScope($draft, $payload, $input['key']);
+                $latest = $history->versions($scope, $input['key'])->first();
+                // Legacy signatures may have been captured before version history existed.
+                if ($latest?->signature_sha256 !== hash('sha256', $plain)) {
+                    $history->append($draft, $scope, $payload, $input['key'], $plain, 'imported', $request);
+                }
+            }
+            $this->writeValue($draft, $input['key'], null, $request->user());
+            if ($input['type'] === 'pa') $history->append($draft, $scope, $payload, $input['key'], null, 'deleted', $request);
+        });
+    }
+
+    public function restore(Gruppe $group, Request $request, array $input): void
+    {
+        abort_unless($this->canRemove($request->user(), $group), 403);
+        DB::transaction(function () use ($group, $request, $input) {
+            [$draft, $payload, $keys] = $this->draft($group, $input['type'], $input['draft_id'], true);
+            $row = $this->authorizedRow($group, $request->user(), $draft, $payload, $keys, $input);
+            $removal = GroupAttendanceSignatureRemoval::whereKey($input['removal_id'])->where('gruppe_id', $group->id)
+                ->where('projekt_id', $group->projekt_id)->where('list_type', $input['type'])->where('draft_id', $draft->id)
+                ->where('person_id', $row['person_id'])->where('signature_key', $input['key'])->where('signed_for_date', $input['date'])
+                ->lockForUpdate()->firstOrFail();
+            abort_if($removal->restored_at || !empty($this->values($draft, [$input['key']])[$input['key']]), 409,
+                'Das Feld wurde inzwischen geändert. Eine vorhandene Unterschrift wird nicht überschrieben.');
+            $plain = $this->decode($removal->signature_ciphertext);
+            $this->writeValue($draft, $input['key'], 'enc:v1:'.Crypt::encryptString($plain), $request->user());
+            $removal->update(['restored_at' => now(), 'restored_by' => $request->user()->id, 'restored_by_name' => $this->actorName($request->user())]);
+            if ($input['type'] === 'pa') app(PaAttendanceSignatureHistoryService::class)->append($draft,
+                $this->historyScope($draft, $payload, $input['key']), $payload, $input['key'], $plain, 'restored', $request);
+        });
+    }
+
     public function show(Gruppe $group, $user, string $type, int $id, string $date): array
     {
         abort_unless($this->allowed($user, $group), 403);
@@ -181,18 +362,7 @@ class GroupAttendanceSignatures
             }
             abort_if(!empty($existing[$input['key']]), 409, 'Die Unterschrift ist bereits gespeichert und darf hier nicht überschrieben werden.');
             $encrypted = 'enc:v1:'.Crypt::encryptString($value);
-            if (DB::connection()->getDriverName() === 'mysql') {
-                DB::update('UPDATE '.$draft->getTable()." SET payload = JSON_SET(payload, '$.signatures', JSON_SET(CASE WHEN JSON_TYPE(JSON_EXTRACT(payload, '$.signatures')) = 'OBJECT' THEN JSON_EXTRACT(payload, '$.signatures') ELSE JSON_OBJECT() END, ?, ?)), revision = revision + 1, user_update = ?, updated_at = ? WHERE id = ?",
-                    ['$.' . json_encode($input['key']), $encrypted, $request->user()->id, now(), $draft->id]);
-                $draft->revision++;
-            } else {
-                $full = $draft->payload ?? [];
-                $full['signatures'][$input['key']] = $encrypted;
-                $draft->payload = $full;
-                $draft->revision = ($draft->revision ?? 0) + 1;
-                $draft->user_update = $request->user()->id;
-                $draft->save();
-            }
+            $this->writeValue($draft, $input['key'], $encrypted, $request->user());
             if ($input['type'] === 'pa') {
                 app(PaAttendanceSignatureHistoryService::class)->recordSignatureChanges($draft, [
                     'projekt_id' => $draft->projekt_id, 'partner_id' => $draft->partner_id,

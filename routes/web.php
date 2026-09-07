@@ -611,7 +611,11 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
         Route::middleware(['module:participant_management', 'projectFeature:participant_management', 'can:anwesenheit.manage'])->group(function () {
             Route::get('/gruppen/{gruppe}/unterschriften', [\App\Http\Controllers\GroupAttendanceSignatureController::class, 'index'])->name('gruppe.signatures.index');
             Route::get('/gruppen/{gruppe}/unterschriften/termin', [\App\Http\Controllers\GroupAttendanceSignatureController::class, 'show'])->name('gruppe.signatures.show');
+            Route::get('/gruppen/{gruppe}/unterschriften/uebersicht', [\App\Http\Controllers\GroupAttendanceSignatureController::class, 'overview'])->name('gruppe.signatures.overview');
+            Route::get('/gruppen/{gruppe}/unterschriften/bild', [\App\Http\Controllers\GroupAttendanceSignatureController::class, 'image'])->name('gruppe.signatures.image');
             Route::post('/gruppen/{gruppe}/unterschriften', [\App\Http\Controllers\GroupAttendanceSignatureController::class, 'store'])->name('gruppe.signatures.store');
+            Route::delete('/gruppen/{gruppe}/unterschriften', [\App\Http\Controllers\GroupAttendanceSignatureController::class, 'destroy'])->name('gruppe.signatures.destroy')->can('anwesenheit.destroy');
+            Route::post('/gruppen/{gruppe}/unterschriften/wiederherstellen', [\App\Http\Controllers\GroupAttendanceSignatureController::class, 'restore'])->name('gruppe.signatures.restore')->can('anwesenheit.destroy');
         });
         Route::post('/gruppehasteilnehmer/anlegen', [GruppeHasTeilnehmerController::class, 'store'])->name('gruppeHasTeilnehmer.store')->middleware(['module:participant_management', 'projectFeature:participant_management', 'can:gruppeHasTeilnehmer.store']);
 

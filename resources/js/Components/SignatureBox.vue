@@ -4,6 +4,7 @@ import Swal from 'sweetalert2'
 
 const props = defineProps({
   lazyPreview: Boolean,
+  emptyLabel: { type: String, default: '' },
   allowClear: { type: Boolean, default: true },
   modelValue: {
     type: String,
@@ -236,6 +237,7 @@ onMounted(() => {
       @click="openExpanded"
     >
       <img v-if="modelValue" :src="modelValue" loading="lazy" decoding="async" alt="Unterschrift" class="h-full w-full object-fill">
+      <span v-else-if="emptyLabel" class="text-xs font-semibold text-emerald-700">{{ emptyLabel }}</span>
     </button>
     <canvas
       v-else
