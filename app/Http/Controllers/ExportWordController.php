@@ -1210,7 +1210,7 @@ class ExportWordController extends Controller
                 }
             }
 
-            return back()->with('error', 'Hausordnung konnte nicht erstellt werden: '.$exception->getMessage());
+            return back()->with('error', 'Serienbrief konnte nicht erstellt werden: '.$exception->getMessage());
         } finally {
             foreach ($documentPaths as $documentPath) {
                 if (is_file($documentPath)) {
@@ -1221,7 +1221,7 @@ class ExportWordController extends Controller
 
         $extension = $format === 'pdf' ? 'pdf' : 'docx';
         $filename = $this->safeFileName(
-            'Hausordnung_'.$projekt->name.'_'.($gruppe->bereich?->name ?? 'Gruppe')
+            $dokument->name.'_'.$projekt->name.'_'.($gruppe->bereich?->name ?? 'Gruppe')
         ).'.'.$extension;
 
         return response()->download($outputPath, $filename)->deleteFileAfterSend(true);
