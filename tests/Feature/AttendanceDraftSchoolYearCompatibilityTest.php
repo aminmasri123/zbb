@@ -137,6 +137,36 @@ class AttendanceDraftSchoolYearCompatibilityTest extends TestCase
         $this->assertStringStartsWith('enc:v1:', $currentDraft->payload['signatures']['day-1:person-1']);
     }
 
+    public function test_bibb_can_save_and_restore_more_than_one_thousand_signatures(): void
+    {
+        [$user, $project, $school] = $this->attendanceContext();
+        $originalLimit = ini_get('memory_limit');
+        try {
+            // The test client also holds and JSON-encodes the entire upload in this
+            // process; production clients build their request outside PHP.
+            ini_set('memory_limit', '1280M');
+            $signatures = [];
+            for ($i = 1; $i <= 1001; $i++) {
+                $signatures['day-1:person-'.$i] = 'data:image/png;base64,'.base64_encode(str_repeat('signature-'.$i, 1800));
+            }
+            $scope = [
+                'schuleIdInputBibb' => $school->id,
+                'schuljahrInputBibb' => '2026',
+                'teilInputBibb' => '1',
+            ];
+            $this->actingAs($user)->putJson(route('anwesenheitsliste.POBO.bibb.draft.store'), $scope + [
+                'payload' => ['form' => [], 'days' => [], 'signatures' => $signatures],
+            ])->assertOk();
+            $this->assertSame('1280M', ini_get('memory_limit'));
+            $response = $this->actingAs($user->fresh())
+                ->postJson(route('anwesenheitsliste.POBO.bibb.draft.show'), $scope)->assertOk();
+            $this->assertSame($signatures, $response->json('payload.signatures'));
+            unset($response, $signatures);
+        } finally {
+            ini_set('memory_limit', $originalLimit);
+        }
+    }
+
     private function attendanceContext(): array
     {
         $user = User::factory()->create();
