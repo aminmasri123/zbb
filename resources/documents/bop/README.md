@@ -10,6 +10,10 @@ Korrigiert sind die Datenbindung von Punkt 11 (eigene Gesamtbewertung statt
 sozialer Kompetenz), ein Leerzeichen beim Vergleich mit Bewertungsstufe 1 und
 die lokalen Bildpfade für den PDF-Renderer.
 
+Für den Ausdruck erhält jede Seite oben und unten 5 mm Druckrand.
+Der Abstand vor der Legende ist etwas kleiner, sodass der vollständige Bogen
+weiterhin ohne Skalierung auf einer A4-Seite bleibt.
+
 Die extern referenzierten Titel- und Sterngrafiken fehlten im alten Verzeichnis.
 Sie wurden aus einem vorhandenen Originalexport des alten BOP-Programms
 (`auswertungsbogen.pdf`, lokal im Downloads-Ordner) verlustfrei wiederhergestellt:

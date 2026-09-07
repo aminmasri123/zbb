@@ -7,7 +7,7 @@
     <style>
           @page {
                 size: A4;
-                margin: 0mm; /* Passe die Seitenränder an */
+                margin: 5mm 0; /* Druckabstand oben und unten auf jeder Seite. */
             }
         body {
             font-family: 'Comic Sans MS', 'Patrick Hand', cursive; /* Ähnliche Schriftarten */
@@ -18,6 +18,11 @@
         }
         .page-break {
             page-break-after: always;
+        }
+        .container > p {
+            /* Die Legende bleibt ohne Verkleinerung innerhalb des Druckrandes. */
+            margin: 0;
+            line-height: 1;
         }
         table {
             width: 100%;
