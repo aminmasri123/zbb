@@ -2515,7 +2515,7 @@ const exportMitTag = async () => {
           <div class="flex w-full flex-wrap items-center justify-between gap-2">
             <div class="flex flex-wrap items-center gap-2">
               <a
-                v-if="selectedBoTeilnehmer && boCanExportParticipant(selectedBoTeilnehmer.id) && boBegonnen(selectedBoTeilnehmer.id)"
+                v-if="selectedBoTeilnehmer && boCanExportParticipant(selectedBoTeilnehmer.id)"
                 :href="route('gruppe.bop.export.teilnehmer-auswertungsbogen-bop', { gruppe: props.gruppe.id, personen: selectedBoTeilnehmer.id })"
                 target="_blank"
                 rel="noopener"
@@ -2696,7 +2696,7 @@ const exportMitTag = async () => {
                 <span class="text-sm text-zbb">{{ formatTime(t.pivot?.zeitgeplant?.startzeit || props.gruppe.startzeit) }} - {{ formatTime(t.pivot?.zeitgeplant?.endzeit || props.gruppe.endzeit) }}</span>
               </div>
               <a
-                v-if="boAktiv && boCanExportParticipant(t.id) && boBegonnen(t.id)"
+                v-if="boAktiv && boCanExportParticipant(t.id)"
                 :href="route('gruppe.bop.export.teilnehmer-auswertungsbogen-bop', { gruppe: props.gruppe.id, personen: t.id })"
                 target="_blank" rel="noopener"
                 class="inline-flex shrink-0 items-center gap-2 rounded border border-zbb px-3 py-2 text-xs font-semibold text-zbb hover:bg-zbb hover:text-white"

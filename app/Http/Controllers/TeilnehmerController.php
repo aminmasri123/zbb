@@ -849,6 +849,7 @@ class TeilnehmerController extends Controller
         $kontakttypen = Kontakttypen::all();
 
         return Inertia::render('Teilnehmer/Edit', [
+            'bopEvaluationExports' => app(\App\Services\Bop\BopEvaluationExportService::class)->participantExportOptions($personen, $user),
             'teilnehmer' => $personen->toArray(),
             'kontakttypen' => $kontakttypen,
             'projekte' => $projekte,

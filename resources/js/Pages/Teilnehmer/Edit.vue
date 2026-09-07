@@ -1112,6 +1112,16 @@
 
                 <!-- ================= Exportieren ================= -->
                 <div v-else-if="activeTab === 'Exportieren'">
+                    <section v-if="bopEvaluationExports.length" class="mx-auto mb-5 max-w-6xl rounded-xl border border-gray-200 bg-white p-5">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <h3 class="font-semibold text-gray-800">Auswertungsbögen BO-Tage</h3>
+                            <a :href="route('teilnehmer.bop.auswertungsboegen', teilnehmer.id)" class="rounded bg-zbb px-4 py-2 text-sm font-semibold text-white">Alle berechtigten BO-Bögen als PDF</a>
+                        </div>
+                        <div v-for="entry in bopEvaluationExports" :key="entry.id" class="mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+                            <div><p class="text-sm font-medium">{{ entry.bereich }}</p><p class="text-xs text-gray-500">{{ entry.datum }} · Gruppe {{ entry.id }}</p></div>
+                            <a :href="entry.url" class="rounded border border-zbb px-4 py-2 text-sm font-semibold text-zbb">Einzelbogen PDF</a>
+                        </div>
+                    </section>
                     <div class="flex justify-center mx-auto items-center mb-4">
                         <input type="text" v-model="exportSuche" placeholder="🔍 Dokument suchen..." class="w-3/4 rounded-md border-gray-300 text-sm px-3 py-2 focus:ring-zbb focus:border-zbb" />
                     </div>
@@ -2221,6 +2231,7 @@
 
     const props = defineProps({
         teilnehmer: Object,
+        bopEvaluationExports: { type: Array, default: () => [] },
         gruppen: Array,
         kontakttypen: Array,
         projekte: Array,

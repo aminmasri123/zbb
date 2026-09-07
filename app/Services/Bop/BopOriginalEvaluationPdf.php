@@ -3,39 +3,52 @@
 namespace App\Services\Bop;
 
 use App\Services\BerufsorientierungAuswertungService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Collection;
 use setasign\Fpdi\Fpdi;
+use setasign\Fpdi\PdfParser\StreamReader;
 
 class BopOriginalEvaluationPdf
 {
     public function render(Collection $entries): string
     {
-        $pdf = new Fpdi;
-        $pdf->SetAutoPageBreak(false);
-        $pdf->setSourceFile(resource_path('documents/bop/Auswertungsbogen_BOP.pdf'));
-        $page = $pdf->importPage(1);
-        // Coordinates in millimetres in the original A4 form. Scores run 5 -> 1.
-        $rowY = [52.5, 73.8, 93.8, 113.7, 133.8, 153.8, 173.9, 193.9, 213.9, 233.9, 266.1];
-        foreach ($entries as $entry) {
-            $pdf->AddPage('P', 'A4');
-            $pdf->useTemplate($page, 0, 0, 210, 297);
-            $this->field($pdf, 24.2, 30.4, 44.5, $entry['vorname']);
-            $this->field($pdf, 71.5, 30.4, 44.5, $entry['nachname']);
-            $this->field($pdf, 119, 30.4, 44.5, $entry['anleiter_name']);
-            $this->field($pdf, 165.3, 30.4, 26, $entry['datum']);
-            $this->field($pdf, 36.4, 40.1, 14.5, $entry['klasse']);
-            $this->field($pdf, 71.5, 40.1, 44.5, $entry['schule_name']);
-            $this->field($pdf, 141, 40.1, 50.2, $entry['bereich_name']);
-            $pdf->SetFont('Helvetica', 'B', 12);
-            foreach (BerufsorientierungAuswertungService::BOP_CRITERIA as $index => $criterion) {
-                $score = (int) ($entry['ratings']->get($criterion['key'])?->bewertung ?? 0);
-                if ($score < 1 || $score > 5) continue;
-                $x = ($index === 10 ? 127 : 127.5) + (5 - $score) * 12;
-                $pdf->SetXY($x, $rowY[$index]);
-                $pdf->Cell(5, 5, 'X', 0, 0, 'C');
+        $limit = trim((string) ini_get('memory_limit'));
+        $bytes = (float) $limit * match (strtolower(substr($limit, -1))) {
+            'g' => 1024 ** 3, 'm' => 1024 ** 2, 'k' => 1024, default => 1,
+        };
+        if ($limit !== '-1' && $bytes < 512 * 1024 ** 2) ini_set('memory_limit', '512M');
+        @set_time_limit(300);
+        // Keep the HTML renderer bounded for whole-school exports. Every batch
+        // still uses the same Blade, and PDF pages are joined without reflow.
+        if ($entries->count() > 10) {
+            $merged = new Fpdi;
+            foreach ($entries->chunk(10) as $batch) {
+                $count = $merged->setSourceFile(StreamReader::createByString($this->renderBatch($batch)));
+                for ($page = 1; $page <= $count; $page++) {
+                    $template = $merged->importPage($page);
+                    $size = $merged->getTemplateSize($template);
+                    $merged->AddPage($size['orientation'], [$size['width'], $size['height']]);
+                    $merged->useTemplate($template);
+                }
+                gc_collect_cycles();
             }
+            return $merged->Output('S');
         }
-        return $pdf->Output('S');
+        return $this->renderBatch($entries);
+    }
+
+    private function renderBatch(Collection $entries): string
+    {
+        $people = $entries->map(function (array $entry) {
+            $person = (object) $entry;
+            $person->enddatum = $entry['datum'];
+            foreach (BerufsorientierungAuswertungService::BOP_CRITERIA as $criterion) {
+                $person->{$criterion['key']} = $entry['ratings']->get($criterion['key'])?->bewertung;
+            }
+            return $person;
+        })->values();
+        return Pdf::loadView('pdf.bop-bo-evaluation', ['alle_teilnehmer' => $people])
+            ->setPaper('a4', 'portrait')->output();
     }
 
     public function download(Collection $entries, string $filename)
@@ -46,20 +59,4 @@ class BopOriginalEvaluationPdf
         ]);
     }
 
-    private function field(Fpdi $pdf, float $x, float $y, float $width, string $value): void
-    {
-        $value = iconv('UTF-8', 'Windows-1252//TRANSLIT//IGNORE', preg_replace('/\s+/u', ' ', trim($value)));
-        $size = 11;
-        do {
-            $pdf->SetFont('Helvetica', '', $size);
-            if ($pdf->GetStringWidth($value) <= $width - 3) break;
-            $size -= 0.5;
-        } while ($size >= 7);
-        if ($pdf->GetStringWidth($value) > $width - 3) {
-            while ($value !== '' && $pdf->GetStringWidth($value.'...') > $width - 3) $value = substr($value, 0, -1);
-            $value .= '...';
-        }
-        $pdf->SetXY($x + 1, $y);
-        $pdf->Cell($width - 2, 8.1, $value);
-    }
 }

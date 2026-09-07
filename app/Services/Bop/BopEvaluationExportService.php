@@ -54,7 +54,6 @@ class BopEvaluationExportService
                     $ratings->get($group->id.'|'.$person->id, collect())
                 );
             })
-            ->filter(fn (array $entry) => $entry['ratings']->isNotEmpty())
             ->sort($this->entryComparator(...))
             ->values();
     }
@@ -118,6 +117,36 @@ class BopEvaluationExportService
                     ));
             })
             ->values();
+    }
+
+    public function participantGroups(Personen $person, $user): Collection
+    {
+        if (!$user || !$user->can('gruppe.bop.export.auswertungsbogen-bop')) return collect();
+        $project = app(\App\Services\Projects\ActiveProjectContext::class)->currentAvailableFor($user);
+        if (!$project || (int) $project->id !== (int) $user->current_team_id) return collect();
+        $config = $this->config($project);
+        if (!$config['enabled'] || !count($config['criteria'])) return collect();
+        if (!Personen::teilnehmer()->visibleForUser($user)->whereKey($person->id)
+            ->whereHas('projekte', fn ($query) => $query->where('projekts.id', $project->id))->exists()) return collect();
+
+        return Gruppe::with(['bereich', 'projekt', 'bopPhaseSchedule.run'])
+            ->where('projekt_id', $project->id)
+            ->whereNotNull('bereich_id')
+            ->whereHas('teilnehmer', fn ($query) => $query->where('personens.id', $person->id))
+            ->when(!$user->can('gruppe.view.all') && !$user->can('projekt.mitarbeiter.view.all'),
+                fn ($query) => $query->where('personen_id', $user->person_id))
+            ->orderBy('anfangsdatum')->orderBy('id')->get()
+            ->filter(fn (Gruppe $group) => $this->isWorkshopGroup($group))->values();
+    }
+
+    public function participantExportOptions(Personen $person, $user): array
+    {
+        return $this->participantGroups($person, $user)->map(fn (Gruppe $group) => [
+            'id' => $group->id,
+            'bereich' => $group->bereich->name,
+            'datum' => $this->formatDate($group->anfangsdatum).' – '.$this->formatDate($group->enddatum ?: $group->anfangsdatum),
+            'url' => route('gruppe.bop.export.teilnehmer-auswertungsbogen-bop', ['gruppe' => $group->id, 'personen' => $person->id]),
+        ])->all();
     }
 
     private function ratingsFor(Collection $personIds, Collection $groupIds): Collection

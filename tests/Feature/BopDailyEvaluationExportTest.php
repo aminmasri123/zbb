@@ -95,6 +95,17 @@ class BopDailyEvaluationExportTest extends TestCase
             'kriterium_label' => 'Einhaltung der Arbeitszeitregeln',
             'bewertung' => 5,
         ]);
+        foreach ([
+            'bereitschaft_der_auftragsübernahme' => 1,
+            'soziale_kompetenzen' => 5,
+            'einschätzung_der_befähigung_und_eignung_zur_berufsorientierung' => 2,
+        ] as $criterion => $score) {
+            BerufsorientierungBewertung::query()->create([
+                'gruppe_id' => $group->id, 'personen_id' => $selected->id,
+                'user_id' => $user->id, 'kriterium' => $criterion,
+                'kriterium_label' => $criterion, 'bewertung' => $score,
+            ]);
+        }
 
         $response = $this->actingAs($user)->get(route('gruppe.bop.export.teilnehmer-auswertungsbogen-bop', [
             'gruppe' => $group->id,
@@ -104,16 +115,24 @@ class BopDailyEvaluationExportTest extends TestCase
         $text = $document->getText();
 
         $this->assertSame(1, (int) $document->getDetails()['Pages']);
-        $this->assertStringContainsString('Einschätzungen der Kompetenzen', $text);
+        $this->assertStringContainsString('11. Einschätzung der Befähigung und Eignung', $text);
         $this->assertStringContainsString($selected->nachname, $text);
         $this->assertStringNotContainsString($other->nachname, $text);
         $this->assertStringContainsString('Einhaltung der Arbeitszeitregeln', $text);
+        // Actual PDF marks: row 3 must support score 1, and row 11 must use
+        // its own score 2 rather than copying the social-competence score 5.
+        $marks = collect($document->getPages()[0]->getDataTm())
+            ->filter(fn ($item) => trim($item[1]) === 'X')->values();
+        $this->assertCount(4, $marks);
+        foreach ([372, 522, 372, 492] as $index => $expectedX) {
+            $this->assertEqualsWithDelta($expectedX, (float) $marks[$index][0][4], 5);
+        }
     }
 
     public function test_group_evaluation_contains_one_bop_form_per_participant_in_class_order(): void
     {
         [$user, $group] = $this->context();
-        foreach ($group->fresh()->teilnehmer->unique('id') as $participant) {
+        foreach ($group->fresh()->teilnehmer->unique('id')->take(1) as $participant) {
             BerufsorientierungBewertung::query()->create([
                 'gruppe_id' => $group->id,
                 'personen_id' => $participant->id,
@@ -130,6 +149,12 @@ class BopDailyEvaluationExportTest extends TestCase
 
         $this->assertSame(2, (int) $document->getDetails()['Pages']);
         $this->assertLessThan(strpos($text, 'Beispiel'), strpos($text, 'Muster'));
+        $this->assertSame(1, preg_match_all('/\bX\b/', $text));
+        foreach ($document->getPages() as $page) {
+            $this->assertStringContainsString('1. Einhaltung', $page->getText());
+            $this->assertStringContainsString('11. Einschätzung', $page->getText());
+            $this->assertStringNotContainsString('12. Einhaltung', $page->getText());
+        }
     }
 
     public function test_school_evaluation_excludes_potential_analysis_and_is_sorted_by_class_then_last_name(): void
@@ -201,7 +226,7 @@ class BopDailyEvaluationExportTest extends TestCase
 
     public static function deniedIndividualExports(): array
     {
-        return [['permission', 403], ['group', 403], ['project', 403], ['participant', 404], ['scope', 403]];
+        return [['permission', 403], ['group', 403], ['project', 403], ['participant', 404], ['scope', 403], ['project_access', 404]];
     }
 
     #[\PHPUnit\Framework\Attributes\DataProvider('deniedIndividualExports')]
@@ -218,9 +243,12 @@ class BopDailyEvaluationExportTest extends TestCase
         }
         if ($case === 'participant') $person = Personen::factory()->create(['typ' => 'teilnehmer']);
         if ($case === 'scope') \App\Models\RoleDataAccessSetting::where('role_id', $user->roles->first()->id)->update(['participant_scope' => 'none']);
+        if ($case === 'project_access') $user->projekte()->detach($group->projekt_id);
         $this->actingAs($user)->get(route('gruppe.bop.export.teilnehmer-auswertungsbogen-bop', ['gruppe' => $group->id, 'personen' => $person->id]))->assertStatus($status);
-        if (in_array($case, ['scope', 'permission', 'group', 'project'], true)) {
-            $this->get(route('gruppe.bop.export.auswertungsbogen-bop', $group->id))->assertForbidden();
+        $this->get(route('teilnehmer.bop.auswertungsboegen', $person->id))->assertStatus($case === 'project_access' ? 404 : 403);
+        $this->assertSame([], app(\App\Services\Bop\BopEvaluationExportService::class)->participantExportOptions($person, $user));
+        if (in_array($case, ['scope', 'permission', 'group', 'project', 'project_access'], true)) {
+            $this->get(route('gruppe.bop.export.auswertungsbogen-bop', $group->id))->assertStatus($status);
         }
     }
 
@@ -256,6 +284,76 @@ class BopDailyEvaluationExportTest extends TestCase
         $this->actingAs($user)->get(route('export.auswertungBO.schule.pdf', [
             'schulId' => $partner->id, 'schuljahr' => '2026-2027', 'teil' => 'Teil 1',
         ]))->assertForbidden();
+    }
+
+    public function test_participant_page_exports_only_the_selected_person_and_authorized_bo_groups(): void
+    {
+        [$user, $group, $project] = $this->context();
+        $person = $group->teilnehmer->firstWhere('nachname', 'Muster');
+        $otherProject = Projekt::factory()->create(['name' => 'BOP anderes Projekt']);
+        $otherProject->teilnehmer()->attach($person->id);
+        $otherTrainer = User::factory()->create();
+        $extraGroups = [];
+        foreach ([
+            ['Metall', $project->id, $user->person_id],
+            ['Potenzialanalyse', $project->id, $user->person_id],
+            ['Fremdes Projekt', $otherProject->id, $user->person_id],
+            ['Anderer Anleiter', $project->id, $otherTrainer->person_id],
+        ] as [$areaName, $projectId, $trainerId]) {
+            $extra = $group->replicate();
+            $extra->bereich_id = Bereich::create(['name' => $areaName])->id;
+            $extra->projekt_id = $projectId;
+            $extra->personen_id = $trainerId;
+            $extra->save();
+            $membership = GruppeHasPersonen::where('gruppe_id', $group->id)->where('personen_id', $person->id)->firstOrFail()->replicate();
+            $membership->gruppe_id = $extra->id;
+            $membership->save();
+            $extraGroups[] = $extra;
+        }
+
+        $this->actingAs($user);
+        $service = app(\App\Services\Bop\BopEvaluationExportService::class);
+        $options = $service->participantExportOptions($person, $user);
+        $this->assertSame([$group->id, $extraGroups[0]->id], array_column($options, 'id'));
+        foreach ($options as $option) {
+            $this->assertSame(route('gruppe.bop.export.teilnehmer-auswertungsbogen-bop', ['gruppe' => $option['id'], 'personen' => $person->id]), $option['url']);
+        }
+        $this->grantTestPermission($user, 'teilnehmer.update');
+        $this->get(route('teilnehmer.edit', $person->id))->assertOk()
+            ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+                ->component('Teilnehmer/Edit')->has('bopEvaluationExports', 2)
+                ->where('bopEvaluationExports.0.id', $group->id)->etc());
+        $response = $this->get(route('teilnehmer.bop.auswertungsboegen', $person->id))->assertOk();
+        $document = (new Parser)->parseContent($response->getContent());
+        $this->assertCount(2, $document->getPages());
+        foreach ($document->getPages() as $page) {
+            $this->assertStringContainsString('Muster', $page->getText());
+            $this->assertStringNotContainsString('Beispiel', $page->getText());
+            $this->assertStringNotContainsString('Potenzialanalyse', $page->getText());
+            $this->assertStringNotContainsString('Fremdes Projekt', $page->getText());
+            $this->assertStringNotContainsString('Anderer Anleiter', $page->getText());
+        }
+        $this->grantTestPermission($user, 'gruppe.view.all');
+        $this->assertSame([$group->id, $extraGroups[0]->id, $extraGroups[3]->id], array_column($service->participantExportOptions($person, $user), 'id'));
+    }
+
+    public function test_large_export_keeps_one_form_per_person_across_render_batches(): void
+    {
+        [$user, $group] = $this->context();
+        $entry = app(\App\Services\Bop\BopEvaluationExportService::class)->groupEntries($group)->first();
+        $entries = collect(range(1, 11))->map(fn ($index) => array_replace($entry, [
+            'vorname' => 'Testperson'.str_pad((string) $index, 2, '0', STR_PAD_LEFT),
+        ]));
+        $pdf = app(\App\Services\Bop\BopOriginalEvaluationPdf::class)->render($entries);
+        $pages = (new Parser)->parseContent($pdf)->getPages();
+        $this->assertCount(11, $pages);
+        foreach ($pages as $index => $page) {
+            $text = $page->getText();
+            $this->assertStringContainsString($entries[$index]['vorname'], $text);
+            $this->assertStringContainsString('1. Einhaltung', $text);
+            $this->assertStringContainsString('11. Einschätzung', $text);
+            $this->assertDoesNotMatchRegularExpression('/\bX\b/', $text);
+        }
     }
 
     private function context(): array

@@ -117,11 +117,12 @@ class BopGruppeExportController extends Controller
     {
         $gruppe = $this->gruppeMitDaten($gruppe);
         abort_unless((int) auth()->user()->current_team_id === (int) $gruppe->projekt_id, 403);
+        abort_unless((int) $this->activeProjectContext->currentAvailableFor(auth()->user())?->id === (int) $gruppe->projekt_id, 403);
         $participantIds = $gruppe->teilnehmer->pluck('id')->unique();
         abort_unless(Personen::teilnehmer()->visibleForUser(auth()->user())->whereIn('id', $participantIds)->count() === $participantIds->count(), 403);
         abort_unless($this->bopEvaluations->isWorkshopGroup($gruppe), 422, 'Der BOP-Auswertungsbogen ist nur für Werkstattbereiche verfügbar.');
         $teilnehmer = $this->bopEvaluations->groupEntries($gruppe);
-        abort_if($teilnehmer->isEmpty(), 422, 'Für diese Werkstattgruppe wurde noch keine Auswertung gespeichert.');
+        abort_if($teilnehmer->isEmpty(), 422, 'Die Werkstattgruppe verfügt derzeit über keine Teilnehmer.');
         abort_unless($gruppe->bereich_id, 422, 'Der Gruppe ist kein Bereich zugeordnet.');
         $config = $this->bopEvaluations->config($gruppe->projekt);
         abort_unless($config['enabled'] && count($config['criteria']), 422, 'Für dieses Projekt ist keine Bereichsauswertung konfiguriert.');
@@ -134,11 +135,12 @@ class BopGruppeExportController extends Controller
     {
         $gruppe = $this->gruppeMitDaten($gruppe);
         abort_unless((int) auth()->user()->current_team_id === (int) $gruppe->projekt_id, 403);
+        abort_unless((int) $this->activeProjectContext->currentAvailableFor(auth()->user())?->id === (int) $gruppe->projekt_id, 403);
         abort_unless($this->bopEvaluations->isWorkshopGroup($gruppe), 422, 'Der BOP-Auswertungsbogen ist nur für Werkstattbereiche verfügbar.');
         abort_unless($gruppe->teilnehmer->contains('id', $personen->id), 404, 'Die teilnehmende Person gehört nicht zu dieser Werkstattgruppe.');
         abort_unless(Personen::teilnehmer()->visibleForUser(auth()->user())->whereKey($personen->id)->exists(), 403);
         $teilnehmer = $this->bopEvaluations->groupEntries($gruppe, $personen->id);
-        abort_if($teilnehmer->isEmpty(), 422, 'Für diese teilnehmende Person wurde noch keine Auswertung gespeichert.');
+        abort_if($teilnehmer->isEmpty(), 422, 'Die teilnehmende Person ist dieser Werkstattgruppe nicht zugeordnet.');
         $config = $this->bopEvaluations->config($gruppe->projekt);
         abort_unless($config['enabled'] && count($config['criteria']), 422, 'Für dieses Projekt ist keine Bereichsauswertung konfiguriert.');
 
@@ -147,6 +149,15 @@ class BopGruppeExportController extends Controller
         ).'.pdf';
 
         return app(\App\Services\Bop\BopOriginalEvaluationPdf::class)->download($teilnehmer, $filename);
+    }
+
+    public function auswertungsboegenBopPerson(Request $request, Personen $personen)
+    {
+        $groups = $this->bopEvaluations->participantGroups($personen, $request->user());
+        abort_if($groups->isEmpty(), 403, 'Für diese Person sind keine BO-Gruppen zum Export freigegeben.');
+        $entries = $groups->flatMap(fn (Gruppe $group) => $this->bopEvaluations->groupEntries($group, $personen->id));
+        return app(\App\Services\Bop\BopOriginalEvaluationPdf::class)->download($entries,
+            $this->safeFileName('BO_Auswertungsboegen_'.$personen->nachname.'_'.$personen->vorname).'.pdf');
     }
 
     public function tagesauswertungBop(Request $request, Gruppe $gruppe)
