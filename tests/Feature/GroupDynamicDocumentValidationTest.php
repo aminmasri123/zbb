@@ -275,9 +275,10 @@ class GroupDynamicDocumentValidationTest extends TestCase
                 $pdf = (new \Smalot\PdfParser\Parser)->parseContent($pdfResponse->getContent());
                 $this->assertCount(2, $pdf->getPages());
                 foreach ($pdf->getPages() as $page) {
-                    $this->assertMatchesRegularExpression('/1\.\s+Einhaltung/', $page->getText());
-                    $this->assertMatchesRegularExpression('/11\.\s+Einschätzung/', $page->getText());
-                    $this->assertDoesNotMatchRegularExpression('/12\.\s+Einhaltung/', $page->getText());
+                    $this->assertMatchesRegularExpression('/1\.\s*Einhaltung/', $page->getText());
+                    $this->assertMatchesRegularExpression('/10\.\s*Soziale/', $page->getText());
+                    $this->assertStringContainsString('Einschätzung der Befähigung und Eignung', $page->getText());
+                    $this->assertDoesNotMatchRegularExpression('/(?:11|12)\.\s*Einhaltung/', $page->getText());
                 }
                 \App\Models\RoleDataAccessSetting::where('role_id', $role->id)->update(['participant_scope' => 'none']);
                 $this->get(route('gruppe.export.serienbrief', ['gruppe' => $group, 'dokument' => $document, 'format' => 'docx']))->assertForbidden();

@@ -70,6 +70,7 @@ class BopEvaluationExportService
             ->where('schule_id', $schoolId)
             ->forSchuljahr($schoolYear)
             ->where('teil', $part)
+            ->whereHas('person.projekte', fn ($query) => $query->where('projekts.id', $project->id))
             ->get()
             ->filter(fn (PersonenIstSchueler $student) => $student->person !== null)
             ->unique('person_id')
@@ -81,8 +82,9 @@ class BopEvaluationExportService
         }
 
         $personIds = $students->pluck('person_id')->map(fn ($id) => (int) $id)->values();
+        abort_unless(Personen::teilnehmer()->visibleForUser(auth()->user())->whereIn('id', $personIds)->count() === $personIds->count(), 403);
         $groups = Gruppe::query()
-            ->with(['teilnehmer', 'bereich', 'betreuer', 'projekt', 'partner'])
+            ->with(['teilnehmer', 'bereich', 'betreuer', 'projekt', 'partner', 'bopPhaseSchedule.run'])
             ->where('projekt_id', $project->id)
             ->whereNotNull('bereich_id')
             ->where(function ($query) use ($schoolId) {
@@ -91,6 +93,11 @@ class BopEvaluationExportService
             ->whereHas('teilnehmer', fn ($query) => $query->whereIn('personens.id', $personIds))
             ->get()
             ->filter(fn (Gruppe $group) => $this->isWorkshopGroup($group))
+            ->filter(function (Gruppe $group) use ($schoolYear, $part) {
+                $context = $this->groupContext($group);
+                return (empty($context['school_year']) || $this->sameSchoolYear($context['school_year'], $schoolYear))
+                    && (empty($context['part']) || $context['part'] === $part);
+            })
             ->values();
         $ratings = $this->ratingsFor($personIds, $groups->pluck('id'));
 
@@ -108,8 +115,7 @@ class BopEvaluationExportService
                         $student->person,
                         $student,
                         $ratings->get($group->id.'|'.$student->person_id, collect())
-                    ))
-                    ->filter(fn (array $entry) => $entry['ratings']->isNotEmpty());
+                    ));
             })
             ->values();
     }
@@ -171,8 +177,8 @@ class BopEvaluationExportService
     {
         $context = [
             'partner_id' => $group->partner_id ?: null,
-            'school_year' => null,
-            'part' => null,
+            'school_year' => $group->bopPhaseSchedule?->run?->schuljahr,
+            'part' => $group->bopPhaseSchedule?->run?->teil,
         ];
 
         if (preg_match('/BOP Einteilung Schule\s+(\d+)\s+Schuljahr\s+(.+?)\s+Teil\s+(.+?)\s+Runde\s+\d+/u', (string) $group->bemerkung, $matches)) {

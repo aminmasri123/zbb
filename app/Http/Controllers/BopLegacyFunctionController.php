@@ -552,13 +552,13 @@ class BopLegacyFunctionController extends Controller
         abort_if($teilnehmer->isEmpty(), 422, 'Für diese Schule wurden noch keine BOP-Werkstattgruppen gefunden.');
         $config = $this->bopEvaluations->config($project);
         abort_unless($config['enabled'] && count($config['criteria']), 422, 'Für dieses Projekt ist keine Bereichsauswertung konfiguriert.');
-        $pdf = Pdf::loadView('pdf.bereichsauswertung', compact('teilnehmer', 'config'))->setPaper('a4', 'portrait');
-
-        return $pdf->download('Auswertung_BOP_'.$this->safeName($partner->name).'_'.$this->safeName($schuljahr).'_'.$this->safeName($teil).'.pdf');
+        return app(\App\Services\Bop\BopOriginalEvaluationPdf::class)->download($teilnehmer,
+            'Auswertung_BOP_'.$this->safeName($partner->name).'_'.$this->safeName($schuljahr).'_'.$this->safeName($teil).'.pdf');
     }
 
     public function auswertungPoboToFolder(int $schulId, string $schuljahr, string $teil)
     {
+        $this->partner($schulId);
         $folder = $this->baseFolder($schulId, $schuljahr, $teil).DIRECTORY_SEPARATOR.'Auswertung_POBO';
         File::ensureDirectoryExists($folder);
 
@@ -572,11 +572,9 @@ class BopLegacyFunctionController extends Controller
             $participant = $participantEntries->first();
             $filename = $this->safeName(
                 $participant['klasse'].'_'.$participant['nachname'].'_'.$participant['vorname']
-            ).'.pdf';
-            Pdf::loadView('pdf.bereichsauswertung', [
-                'teilnehmer' => $participantEntries,
-                'config' => $config,
-            ])->setPaper('a4', 'portrait')->save($folder.DIRECTORY_SEPARATOR.$filename);
+            ).'_'.now()->format('Ymd_His').'_'.\Illuminate\Support\Str::random(6).'.pdf';
+            File::put($folder.DIRECTORY_SEPARATOR.$filename,
+                app(\App\Services\Bop\BopOriginalEvaluationPdf::class)->render($participantEntries));
         }
 
         return back()->with('success', 'POBO-Auswertungen wurden im Ordner generiert.');
@@ -584,7 +582,8 @@ class BopLegacyFunctionController extends Controller
 
     private function currentBopProject(): Projekt
     {
-        $project = Projekt::findOrFail((int) auth()->user()?->current_team_id);
+        $project = app(\App\Services\Projects\ActiveProjectContext::class)->currentAvailableFor(auth()->user());
+        abort_unless($project && (int) $project->id === (int) auth()->user()->current_team_id, 403);
         abort_unless(str_contains(mb_strtolower((string) $project->name), 'bop'), 404, 'Diese Funktion ist nur im Projekt BOP verfügbar.');
 
         return $project;

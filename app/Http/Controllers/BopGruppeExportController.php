@@ -126,11 +126,8 @@ class BopGruppeExportController extends Controller
         $config = $this->bopEvaluations->config($gruppe->projekt);
         abort_unless($config['enabled'] && count($config['criteria']), 422, 'Für dieses Projekt ist keine Bereichsauswertung konfiguriert.');
 
-        $pdf = Pdf::loadView('pdf.bereichsauswertung', compact('teilnehmer', 'config'))
-            ->setPaper('a4', 'portrait');
         $filename = $this->safeFileName('Auswertungsbogen_'.($gruppe->bereich?->name ?: 'Gruppe_'.$gruppe->id)).'.pdf';
-
-        return $pdf->download($filename);
+        return app(\App\Services\Bop\BopOriginalEvaluationPdf::class)->download($teilnehmer, $filename);
     }
 
     public function auswertungsbogenBopTeilnehmer(Gruppe $gruppe, Personen $personen)
@@ -145,13 +142,11 @@ class BopGruppeExportController extends Controller
         $config = $this->bopEvaluations->config($gruppe->projekt);
         abort_unless($config['enabled'] && count($config['criteria']), 422, 'Für dieses Projekt ist keine Bereichsauswertung konfiguriert.');
 
-        $pdf = Pdf::loadView('pdf.bereichsauswertung', compact('teilnehmer', 'config'))
-            ->setPaper('a4', 'portrait');
         $filename = $this->safeFileName(
             'Auswertungsbogen_'.$personen->nachname.'_'.$personen->vorname.'_'.($gruppe->bereich?->name ?: 'Gruppe_'.$gruppe->id)
         ).'.pdf';
 
-        return $pdf->download($filename);
+        return app(\App\Services\Bop\BopOriginalEvaluationPdf::class)->download($teilnehmer, $filename);
     }
 
     public function tagesauswertungBop(Request $request, Gruppe $gruppe)

@@ -1010,8 +1010,8 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::get('/export/anwesenheitsliste/rechnung/{idSchule}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'anwesenheitslisteRechnung'])->name('export.anwesenheitsliste.rechnung');
     Route::get('/export/zertifikat/pobo/{idSchule}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'zertifikatPobo'])->name('export.zertifikat.schule.pobo');
     Route::get('/export/zertifikat/pobo/pdf/{schuleId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'zertifikatPoboPdf'])->name('export.zertifikat.schule.pobo.pdf');
-    Route::get('/export/auswertung/pobo/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'auswertungPobo'])->name('export.auswertungBO.schule.pdf');
-    Route::get('/export/auswertung/pobo/tofolder/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'auswertungPoboToFolder'])->name('export.auswertungBO.schule.pdf.tofolder');
+    Route::get('/export/auswertung/pobo/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'auswertungPobo'])->name('export.auswertungBO.schule.pdf')->can('dokumente.schule.export');
+    Route::get('/export/auswertung/pobo/tofolder/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'auswertungPoboToFolder'])->name('export.auswertungBO.schule.pdf.tofolder')->middleware(['can:dokumente.ansprechpartner.manage', 'can:dokumente.schule.export']);
     Route::get('/export/auswertung/pa/tofolder/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'auswertungPaToFolder'])->name('export.auswertungPA.schule.pdf.tofolder')->middleware(['can:dokumente.ansprechpartner.manage', 'canAnyPermission:potenzialanalyse.index,potenzialanalyse.update,potenzialanalyse.manage']);
     Route::get('/export/auswertung/pobo/runde/{schuleId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'auswertungPoboRunde'])->name('auswertungPoboModal');
 

@@ -104,7 +104,7 @@ class BopDailyEvaluationExportTest extends TestCase
         $text = $document->getText();
 
         $this->assertSame(1, (int) $document->getDetails()['Pages']);
-        $this->assertStringContainsString('Einschätzung der Kompetenzen', $text);
+        $this->assertStringContainsString('Einschätzungen der Kompetenzen', $text);
         $this->assertStringContainsString($selected->nachname, $text);
         $this->assertStringNotContainsString($other->nachname, $text);
         $this->assertStringContainsString('Einhaltung der Arbeitszeitregeln', $text);
@@ -222,6 +222,40 @@ class BopDailyEvaluationExportTest extends TestCase
         if (in_array($case, ['scope', 'permission', 'group', 'project'], true)) {
             $this->get(route('gruppe.bop.export.auswertungsbogen-bop', $group->id))->assertForbidden();
         }
+    }
+
+    public function test_school_export_includes_unrated_students_but_excludes_groups_from_other_years_and_parts(): void
+    {
+        [$user, $group, $project, $partner] = $this->context();
+        $this->grantTestPermission($user, 'dokumente.schule.export');
+        foreach ([['2025/2026', 'Teil 1'], ['2026/2027', 'Teil 2']] as [$year, $part]) {
+            $other = $group->replicate();
+            $other->bemerkung = 'BOP Einteilung Schule '.$partner->id.' Schuljahr '.$year.' Teil '.$part.' Runde 1';
+            $other->save();
+            foreach (GruppeHasPersonen::where('gruppe_id', $group->id)->get() as $membership) {
+                $copy = $membership->replicate();
+                $copy->gruppe_id = $other->id;
+                $copy->save();
+            }
+        }
+        $url = route('export.auswertungBO.schule.pdf', ['schulId' => $partner->id, 'schuljahr' => '2026-2027', 'teil' => 'Teil 1']);
+        $response = $this->actingAs($user)->get($url)->assertOk();
+        $pages = (new Parser)->parseContent($response->getContent())->getPages();
+        $this->assertCount(2, $pages);
+        foreach ($pages as $page) {
+            $this->assertStringNotContainsString('${', $page->getText());
+            $this->assertDoesNotMatchRegularExpression('/\bX\b/', $page->getText());
+        }
+        \App\Models\RoleDataAccessSetting::where('role_id', $user->roles->first()->id)->update(['participant_scope' => 'none']);
+        $this->get($url)->assertForbidden();
+    }
+
+    public function test_school_export_requires_the_school_export_permission(): void
+    {
+        [$user, $group, $project, $partner] = $this->context();
+        $this->actingAs($user)->get(route('export.auswertungBO.schule.pdf', [
+            'schulId' => $partner->id, 'schuljahr' => '2026-2027', 'teil' => 'Teil 1',
+        ]))->assertForbidden();
     }
 
     private function context(): array

@@ -827,11 +827,10 @@ const updatePartnerAPI = async (form) => {
                                                             class="block px-4 py-1 hover:bg-gray-200">Zertifikat
                                                             POBO PDF</a>
 
-                                                        <a v-if="can('dokumente.schule.export')" :href="route('export.auswertungBO.schule.pdf', { schulId: partner.id, schuljahr: jahr, teil })"
-                                                            class="block px-4 py-1 hover:bg-gray-200">Auswertung
-                                                            POBO</a>
+                                                        <a v-if="can('dokumente.schule.export')" :href="route('export.auswertungBO.schule.pdf', { schulId: partner.id, schuljahr: String(jahr).replaceAll('/', '-'), teil })"
+                                                            class="block px-4 py-1 hover:bg-gray-200">BO-Auswertungsbögen – alle Schüler (Original)</a>
 
-                                                        <a v-if="can('dokumente.ansprechpartner.manage')" :href="route('export.auswertungBO.schule.pdf.tofolder', { schulId: partner.id, schuljahr: jahr, teil })"
+                                                        <a v-if="can('dokumente.ansprechpartner.manage') && can('dokumente.schule.export')" :href="route('export.auswertungBO.schule.pdf.tofolder', { schulId: partner.id, schuljahr: String(jahr).replaceAll('/', '-'), teil })"
                                                             class="block px-4 py-1 hover:bg-gray-200">BO
                                                             Auswertungen in Ordner generieren</a>
 

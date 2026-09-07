@@ -474,17 +474,16 @@ class ExportWordController extends Controller
         if ($bopEvaluationTemplate) {
             abort_unless((int) auth()->user()->current_team_id === (int) $gruppe->projekt_id, 403);
             abort_unless(Personen::teilnehmer()->visibleForUser(auth()->user())->whereIn('id', $teilnehmer->pluck('id'))->count() === $teilnehmer->count(), 403);
-            // Floating Word shapes and shared numbering definitions are not safe
-            // to concatenate. Use the same fixed PDF layout as the single export.
+            // Reuse the original form page for every participant so floating
+            // shapes and numbering cannot drift between pages.
             if ($format === 'pdf') {
                 $service = app(\App\Services\Bop\BopEvaluationExportService::class);
                 $entries = $service->groupEntries($gruppe);
                 abort_if($entries->isEmpty(), 422, 'Für diese Werkstattgruppe wurde noch keine Auswertung gespeichert.');
                 $config = $service->config($projekt);
                 abort_unless($config['enabled'] && count($config['criteria']), 422, 'Für dieses Projekt ist keine Bereichsauswertung konfiguriert.');
-                return \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.bereichsauswertung', ['teilnehmer' => $entries, 'config' => $config])
-                    ->setPaper('a4', 'portrait')
-                    ->download($this->safeFileName($dokument->name.'_'.($gruppe->bereich?->name ?? 'Gruppe')).'.pdf');
+                return app(\App\Services\Bop\BopOriginalEvaluationPdf::class)
+                    ->download($entries, $this->safeFileName($dokument->name.'_'.($gruppe->bereich?->name ?? 'Gruppe')).'.pdf');
             }
             return $this->downloadWordDocxZip($templateFile, $gruppe, $projekt, $dokument, $teilnehmer);
         }
