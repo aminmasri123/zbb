@@ -34,6 +34,7 @@ use ZipArchive;
 class ExportWordController extends Controller
 {
     private array $schoolPlaceholderCache = [];
+    private array $bopEvaluationPlaceholderCache = [];
 
     // dd($templateProcessor->getVariables());
 
@@ -468,7 +469,9 @@ class ExportWordController extends Controller
 
         // Die BOP-Hausordnung ist ein personalisierter Serienbrief, soll aber als
         // ein zusammenhängendes Dokument (eine Seite je Teilnehmer) ausgegeben werden.
-        if ($this->isBopHausordnung($projekt, $dokument, $templateFile)) {
+        $bopEvaluationTemplate = app(\App\Services\Bop\BopEvaluationExportService::class)->isWorkshopGroup($gruppe)
+            && count(array_intersect(['a-1', 'k-5', 'anleiter'], (new TemplateProcessor($templateFile))->getVariables())) === 3;
+        if ($this->isBopHausordnung($projekt, $dokument, $templateFile) || $bopEvaluationTemplate) {
             return $this->downloadWordCombinedSerienbrief(
                 $templateFile,
                 $gruppe,
@@ -1576,6 +1579,24 @@ class ExportWordController extends Controller
             $values['klassen'] = $participantClass;
         }
 
+        if (app(\App\Services\Bop\BopEvaluationExportService::class)->isWorkshopGroup($gruppe)) {
+            $values['anleiter'] = trim(($gruppe->betreuer?->vorname ?? '').' '.($gruppe->betreuer?->nachname ?? ''));
+            if ($person) {
+                $entries = $this->bopEvaluationPlaceholderCache[$gruppe->id] ??= app(\App\Services\Bop\BopEvaluationExportService::class)
+                    ->groupEntries($gruppe)->keyBy('personen_id');
+                $entry = $entries->get($person->id);
+                $values['schule'] = $entry['schule_name'] ?? $partnerValues['partner_name'] ?? '';
+                // The legacy Word form has fixed rows a-k. Bind by criterion key,
+                // never by the configurable display order or another group.
+                foreach (\App\Services\BerufsorientierungAuswertungService::BOP_CRITERIA as $index => $criterion) {
+                    $rating = $entry ? $entry['ratings']->get($criterion['key']) : null;
+                    foreach (range(1, 5) as $score) {
+                        $values[chr(97 + $index).'-'.$score] = (int) ($rating?->bewertung ?? 0) === $score ? 'X' : '';
+                    }
+                }
+            }
+        }
+
         return $values;
     }
 
@@ -2473,6 +2494,10 @@ class ExportWordController extends Controller
             'hausnummer', 'plz', 'stadt', 'ort', 'adresse', 'email', 'telefon',
         ]);
         $structuralVariables = collect();
+        if (app(\App\Services\Bop\BopEvaluationExportService::class)->isWorkshopGroup($gruppe)) {
+            $participantKeys = $participantKeys->merge(['klasse', 'schule'])
+                ->merge($variables->filter(fn ($variable) => preg_match('/^[a-k]-[1-5]$/', $variable)));
+        }
         if ($spreadsheet) {
             $structuralVariables->push('teilnehmer_tabelle');
         }
@@ -2621,6 +2646,11 @@ class ExportWordController extends Controller
         }
 
         foreach ($variables as $variable) {
+            // Unchecked boxes are intentionally empty, but unknown placeholders
+            // must still fail validation outside the BOP field mapping.
+            if (preg_match('/^[a-k]-[1-5]$/', $variable) && array_key_exists($variable, $values)) {
+                continue;
+            }
             if ($participantAddressVariables->contains($variable)
                 || $partnerAddressVariables->contains($variable)
                 || $optionalVariables->contains($variable)) {

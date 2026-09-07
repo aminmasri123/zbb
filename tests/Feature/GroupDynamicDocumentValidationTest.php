@@ -127,7 +127,13 @@ class GroupDynamicDocumentValidationTest extends TestCase
         }
     }
 
-    public function test_bop_hausordnung_uses_only_the_current_participants_class(): void
+    public static function bopTemplateCases(): array
+    {
+        return ['Hausordnung' => [false], 'BOP-Auswertung' => [true]];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('bopTemplateCases')]
+    public function test_bop_templates_use_only_the_current_participants_data(bool $evaluation): void
     {
         $user = User::factory()->create();
         $project = Projekt::factory()->create([
@@ -189,17 +195,24 @@ class GroupDynamicDocumentValidationTest extends TestCase
                 'zeittatsaechlich_id' => $time->id,
                 'anwesenheitsstatuten_id' => $status->id,
             ]);
+            if ($evaluation) {
+                \App\Models\BerufsorientierungBewertung::create([
+                    'gruppe_id' => $group->id, 'personen_id' => $participant->id, 'user_id' => $user->id,
+                    'kriterium' => 'einhaltung_der_regeln', 'kriterium_label' => 'Arbeitszeitregeln',
+                    'bewertung' => $vorname === 'Anna' ? 5 : 1,
+                ]);
+            }
         }
 
         $permission = $this->permission('dokumente.export.bop-hausordnung-class');
         $user->givePermissionTo($permission);
         $document = Dokumente::query()->create([
-            'name' => 'Hausordnung BOP',
+            'name' => $evaluation ? 'Auswertungsbogen BOP' : 'Hausordnung BOP',
             'typ' => 'word',
             'kontext' => 'gruppe',
             'einsatzbereich' => 'gruppe',
             'ausgabeformate' => ['docx'],
-            'dateipfad' => '/app/temp/test-hausordnung-bop.docx',
+            'dateipfad' => '/app/temp/test-bop-template.docx',
             'aktiv' => true,
             'export_permission' => $permission->name,
             'gruppen_export_modus' => 'einzelne_dateien',
@@ -210,9 +223,11 @@ class GroupDynamicDocumentValidationTest extends TestCase
             'sort_order' => 0,
         ]);
 
-        $templatePath = storage_path('app/temp/test-hausordnung-bop.docx');
+        $templatePath = storage_path('app/temp/test-bop-template.docx');
         $word = new PhpWord;
-        $word->addSection()->addText('${nachname}: ${klassen}');
+        $word->addSection()->addText($evaluation
+            ? '${nachname}: ${klasse}; ${schule}; ${anleiter}; 5=${a-5}; 1=${a-1}; unbewertet=${k-5}'
+            : '${nachname}: ${klassen}');
         WordIOFactory::createWriter($word, 'Word2007')->save($templatePath);
 
         try {
@@ -233,6 +248,12 @@ class GroupDynamicDocumentValidationTest extends TestCase
             $this->assertStringContainsString('Erste: 7.1', $xml);
             $this->assertStringContainsString('Zweite: 7.2', $xml);
             $this->assertStringNotContainsString('7.1 + 7.2', $xml);
+            if ($evaluation) {
+                $text = html_entity_decode(strip_tags($xml));
+                $this->assertMatchesRegularExpression('/Erste: 7.1; Testschule; [^;]+; 5=X; 1=; unbewertet=/', $text);
+                $this->assertMatchesRegularExpression('/Zweite: 7.2; Testschule; [^;]+; 5=; 1=X; unbewertet=/', $text);
+                $this->assertStringNotContainsString('${', $xml);
+            }
         } finally {
             @unlink($templatePath);
         }
