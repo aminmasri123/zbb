@@ -136,6 +136,9 @@ class GroupDynamicDocumentValidationTest extends TestCase
     public function test_bop_templates_use_only_the_current_participants_data(bool $evaluation): void
     {
         $user = User::factory()->create();
+        $role = \App\Models\Role::create(['name' => 'BOP-Exporttest', 'guard_name' => 'web', 'color' => '#123456']);
+        \App\Models\RoleDataAccessSetting::create(['role_id' => $role->id, 'team_scope' => 'own_projects', 'participant_scope' => 'own_projects']);
+        $user->assignRole($role);
         $project = Projekt::factory()->create([
             'name' => 'BOP',
             'feature_settings' => ['group_management' => true],
@@ -253,6 +256,8 @@ class GroupDynamicDocumentValidationTest extends TestCase
                 $this->assertMatchesRegularExpression('/Erste: 7.1; Testschule; [^;]+; 5=X; 1=; unbewertet=/', $text);
                 $this->assertMatchesRegularExpression('/Zweite: 7.2; Testschule; [^;]+; 5=; 1=X; unbewertet=/', $text);
                 $this->assertStringNotContainsString('${', $xml);
+                \App\Models\RoleDataAccessSetting::where('role_id', $role->id)->update(['participant_scope' => 'none']);
+                $this->get(route('gruppe.export.serienbrief', ['gruppe' => $group, 'dokument' => $document, 'format' => 'docx']))->assertForbidden();
             }
         } finally {
             @unlink($templatePath);

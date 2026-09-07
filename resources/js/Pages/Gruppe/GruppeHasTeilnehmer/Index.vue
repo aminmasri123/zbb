@@ -113,6 +113,8 @@
     const boAktiv = computed(() => Boolean(props.bereichsauswertung?.enabled))
     const boCanUpdate = computed(() => Boolean(props.bereichsauswertung?.can_update))
     const boCanExport = computed(() => Boolean(props.bereichsauswertung?.can_export))
+    const boCanExportParticipant = (id) => boCanExport.value
+      && (props.bereichsauswertung?.exportable_participant_ids || []).some((allowed) => Number(allowed) === Number(id))
     const boCriteria = computed(() => props.bereichsauswertung?.criteria || [])
     const boScale = computed(() => props.bereichsauswertung?.scale || {})
     const boBewerteteAnzahl = (personenId) => boCriteria.value.filter((criterion) =>
@@ -2511,7 +2513,7 @@ const exportMitTag = async () => {
           <div class="flex w-full flex-wrap items-center justify-between gap-2">
             <div class="flex flex-wrap items-center gap-2">
               <a
-                v-if="selectedBoTeilnehmer && boCanExport && boBegonnen(selectedBoTeilnehmer.id)"
+                v-if="selectedBoTeilnehmer && boCanExportParticipant(selectedBoTeilnehmer.id) && boBegonnen(selectedBoTeilnehmer.id)"
                 :href="route('gruppe.bop.export.teilnehmer-auswertungsbogen-bop', { gruppe: props.gruppe.id, personen: selectedBoTeilnehmer.id })"
                 target="_blank"
                 rel="noopener"
@@ -2688,6 +2690,13 @@ const exportMitTag = async () => {
                 </p>
                 <span class="text-sm text-zbb">{{ formatTime(t.pivot?.zeitgeplant?.startzeit || props.gruppe.startzeit) }} - {{ formatTime(t.pivot?.zeitgeplant?.endzeit || props.gruppe.endzeit) }}</span>
               </div>
+              <a
+                v-if="boAktiv && boCanExportParticipant(t.id) && boBegonnen(t.id)"
+                :href="route('gruppe.bop.export.teilnehmer-auswertungsbogen-bop', { gruppe: props.gruppe.id, personen: t.id })"
+                target="_blank" rel="noopener"
+                class="inline-flex shrink-0 items-center gap-2 rounded border border-zbb px-3 py-2 text-xs font-semibold text-zbb hover:bg-zbb hover:text-white"
+                :aria-label="`BOP-Auswertungsbogen für ${t.vorname} ${t.nachname} als PDF exportieren`"
+              ><i class="pi pi-file-pdf" aria-hidden="true"></i>Auswertungsbogen PDF</a>
             </div>
           </div>
 

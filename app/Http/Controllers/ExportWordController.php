@@ -471,6 +471,10 @@ class ExportWordController extends Controller
         // ein zusammenhängendes Dokument (eine Seite je Teilnehmer) ausgegeben werden.
         $bopEvaluationTemplate = app(\App\Services\Bop\BopEvaluationExportService::class)->isWorkshopGroup($gruppe)
             && count(array_intersect(['a-1', 'k-5', 'anleiter'], (new TemplateProcessor($templateFile))->getVariables())) === 3;
+        if ($bopEvaluationTemplate) {
+            abort_unless((int) auth()->user()->current_team_id === (int) $gruppe->projekt_id, 403);
+            abort_unless(Personen::teilnehmer()->visibleForUser(auth()->user())->whereIn('id', $teilnehmer->pluck('id'))->count() === $teilnehmer->count(), 403);
+        }
         if ($this->isBopHausordnung($projekt, $dokument, $templateFile) || $bopEvaluationTemplate) {
             return $this->downloadWordCombinedSerienbrief(
                 $templateFile,

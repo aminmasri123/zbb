@@ -199,6 +199,31 @@ class BopDailyEvaluationExportTest extends TestCase
         $this->assertLessThan(strpos($text, 'Beispiel'), strpos($text, 'Muster'));
     }
 
+    public static function deniedIndividualExports(): array
+    {
+        return [['permission', 403], ['group', 403], ['project', 403], ['participant', 404], ['scope', 403]];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('deniedIndividualExports')]
+    public function test_individual_export_checks_permissions_and_scope(string $case, int $status): void
+    {
+        [$user, $group] = $this->context();
+        $person = $group->teilnehmer->first();
+        if ($case === 'permission') $user->revokePermissionTo('gruppe.bop.export.auswertungsbogen-bop');
+        if ($case === 'group') $group->update(['personen_id' => User::factory()->create()->person_id]);
+        if ($case === 'project') {
+            $otherProject = Projekt::factory()->create();
+            $user->projekte()->attach($otherProject->id);
+            $user->update(['current_team_id' => $otherProject->id]);
+        }
+        if ($case === 'participant') $person = Personen::factory()->create(['typ' => 'teilnehmer']);
+        if ($case === 'scope') \App\Models\RoleDataAccessSetting::where('role_id', $user->roles->first()->id)->update(['participant_scope' => 'none']);
+        $this->actingAs($user)->get(route('gruppe.bop.export.teilnehmer-auswertungsbogen-bop', ['gruppe' => $group->id, 'personen' => $person->id]))->assertStatus($status);
+        if (in_array($case, ['scope', 'permission', 'group', 'project'], true)) {
+            $this->get(route('gruppe.bop.export.auswertungsbogen-bop', $group->id))->assertForbidden();
+        }
+    }
+
     private function context(): array
     {
         $user = User::factory()->create();
@@ -206,6 +231,9 @@ class BopDailyEvaluationExportTest extends TestCase
         $partner = Partner::query()->create(['name' => 'Gemeinschaftsschule Test']);
         $user->projekte()->attach($project->id);
         $user->update(['current_team_id' => $project->id]);
+        $role = \App\Models\Role::firstOrCreate(['name' => 'BOP-Exporttest', 'guard_name' => 'web'], ['color' => '#123456']);
+        \App\Models\RoleDataAccessSetting::updateOrCreate(['role_id' => $role->id], ['team_scope' => 'own_projects', 'participant_scope' => 'own_projects']);
+        $user->assignRole($role);
         $project->partners()->attach($partner->id);
         $this->grantTestPermission($user, 'gruppe.bop.export.auswertungsbogen-bop');
 

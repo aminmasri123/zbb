@@ -357,6 +357,11 @@ class GruppeHasTeilnehmerController extends Controller
             'bereich' => $gruppe->bereich?->only(['id', 'name']),
             'bewertungen' => $ratings,
             'can_update' => $user?->can('gruppeHasTeilnehmer.store') ?? false,
+            'exportable_participant_ids' => $enabled && $user
+                && (int) $user->current_team_id === (int) $gruppe->projekt_id
+                && $user->can('gruppe.bop.export.auswertungsbogen-bop')
+                    ? Personen::teilnehmer()->visibleForUser($user)->whereIn('id', $gruppe->teilnehmer->pluck('id'))->pluck('id')->all()
+                    : [],
             'can_export' => $enabled
                 && $this->istBopProjekt($gruppe)
                 && ! $this->istPotenzialanalyseGruppe($gruppe)
