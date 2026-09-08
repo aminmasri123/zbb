@@ -23,12 +23,29 @@ class BibbAttendanceWordTemplate
                 if (!$document->loadXML($zip->getFromName('word/document.xml'))) throw new RuntimeException('Ungültige Word-Vorlage.');
                 $xpath = new DOMXPath($document);
                 $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+                $instructorPageStarted = false;
                 foreach ($xpath->query('//w:body/w:tbl') as $table) {
                     $rows = [];
                     foreach ($xpath->query('./w:tr', $table) as $row) {
                         if (preg_match('/\$\{nachname\d+\}/u', $row->textContent)) $rows[] = $row;
                     }
                     if (!$rows) {
+                        if (!$instructorPageStarted) {
+                            // A4 already starts a new section; A3 needs an explicit page break.
+                            $hasSectionBreak = false;
+                            for ($previous = $table->previousSibling; $previous && $previous->localName !== 'tbl'; $previous = $previous->previousSibling) {
+                                if ($xpath->query('.//w:sectPr', $previous)->length) $hasSectionBreak = true;
+                            }
+                            if (!$hasSectionBreak) {
+                                $separator = $document->createElementNS($table->namespaceURI, 'w:p');
+                                $properties = $document->createElementNS($table->namespaceURI, 'w:pPr');
+                                $properties->appendChild($document->createElementNS($table->namespaceURI, 'w:keepNext'));
+                                $properties->appendChild($document->createElementNS($table->namespaceURI, 'w:pageBreakBefore'));
+                                $separator->appendChild($properties);
+                                $table->parentNode->insertBefore($separator, $table);
+                            }
+                            $instructorPageStarted = true;
+                        }
                         // Keep each instructor confirmation together on one page.
                         $paragraphs = $xpath->query('.//w:p', $table);
                         foreach ($paragraphs as $index => $paragraph) {
