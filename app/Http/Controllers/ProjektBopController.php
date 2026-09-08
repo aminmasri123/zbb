@@ -1125,7 +1125,7 @@ class ProjektBopController extends Controller
 
             $tagWerte = array_pad($programmTage, 10, '');
             $i = 1;
-            $templateProcessor = new TemplateProcessor($templateFile);
+            $templateProcessor = app(\App\Services\Bop\BibbAttendanceWordTemplate::class)->processor($templateFile, $alle_teilnehmer->count());
 
             // Einfügen der Daten in die Textfelder
 
@@ -1150,12 +1150,6 @@ class ProjektBopController extends Controller
                 $templateProcessor->setValue('nachname' . $i, $teilnehmer->person->nachname);
                 $templateProcessor->setValue('vorname' . $i, $teilnehmer->person->vorname);
                 $templateProcessor->setValue('klasse' . $i, $teilnehmer->klasse);
-                $i++;
-            }
-            while($i<=97){
-                $templateProcessor->setValue('nachname' . $i, '');
-                $templateProcessor->setValue('vorname' . $i, '');
-                $templateProcessor->setValue('klasse' . $i, '');
                 $i++;
             }
                 $filename = 'Teilnehmendenliste_zum_Nachweis_der_praxisorientierten_Berufsorientierung_' . $schule->name . '_' . $schuljahr . '_' .  date('Ymd_His') . '.docx';
