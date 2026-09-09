@@ -76,7 +76,7 @@ class UserController extends Controller
                         ->orWhere('users.email', 'like', "%{$search}%");
                 });
             })
-            ->with(['projekte', 'user.roles:id,name,color', 'user.latestStaffAccountInvitation']);
+            ->with(['projekte', 'user.roles:id,name,display_name', 'user.latestStaffAccountInvitation']);
 
         // Zugriffsbeschränkung
         $this->applyTeamVisibility($query, $authUser, $teamScope);

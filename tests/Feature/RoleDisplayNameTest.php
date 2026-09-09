@@ -54,6 +54,23 @@ class RoleDisplayNameTest extends TestCase
         $this->assertSame('Ausbilder', $role->fresh()->toArray()['display_name']);
     }
 
+    public function test_user_list_loads_the_edited_label_for_assigned_roles(): void
+    {
+        $viewer = User::factory()->create();
+        $viewer->assignRole($this->role('Administrator'));
+        $this->grantTestPermission($viewer, 'benutzer.index');
+        $member = User::factory()->create();
+        $role = $this->role('Berufsbegleiter');
+        $role->update(['display_name' => 'Bildungsbegleitung']);
+        $member->assignRole($role);
+        $this->actingAs($viewer)->get(route('user.index'))->assertOk()
+            ->assertInertia(fn ($page) => $page->component('User/Index')
+                ->where('users.data', fn ($rows) => collect($rows)->contains(fn ($row) =>
+                    (int) $row['id'] === $member->id
+                    && data_get($row, 'roles.0.display_name') === 'Bildungsbegleitung'
+                    && data_get($row, 'roles.0.name') === 'Berufsbegleiter')));
+    }
+
     public function test_renamed_administrator_keeps_protection_and_default_scope(): void
     {
         $editor = User::factory()->create();

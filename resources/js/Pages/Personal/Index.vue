@@ -194,7 +194,7 @@ const groupProjects = (projekte, standorte) => {
                                 <span
                                     v-for="rolle in user.user.roles"
                                     :key="rolle.id"
-                                    class="inline-flex rounded-md bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700"
+                                    class="text-sm text-black"
                                 >
                                     {{ rolle.display_name || rolle.name }}
                                 </span>

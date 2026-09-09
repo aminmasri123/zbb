@@ -365,8 +365,7 @@ const handleProjektZuweisungRemoved = ({ user_id, projekt_id }) => {
                             <span
                                 v-for="rolle in user.roles"
                                 :key="rolle.id"
-                                class="px-2 py-1 text-xs rounded"
-                                :style="{ backgroundColor: rolle.color }"
+                                class="mr-2 text-sm text-black"
                             >
                                 {{ rolle.display_name || rolle.name }}
                             </span>
