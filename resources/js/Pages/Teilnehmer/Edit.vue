@@ -62,7 +62,7 @@
                 </nav>
 
                 <!-- ================= STAMMDATEN ================= -->
-                <CareerGoalSection v-if="activeTab === 'Stammdaten' && props.activeParticipationId" :key="props.activeParticipationId" :participation-id="props.activeParticipationId" :can-edit="can('teilnehmer.update')" />
+                <CareerGoalSection v-if="activeTab === 'Zielvereinbarung' && props.activeParticipationId" :key="props.activeParticipationId" :participation-id="props.activeParticipationId" :can-edit="can('teilnehmer.update')" />
                 <Stammdaten v-if="activeTab === 'Stammdaten'" :teilnehmer="teilnehmer" :betreuer="props.betreuer" :import-details="props.participantImportDetails" />
 
                 <!-- ================= Sozialdaten ================= -->
@@ -2326,6 +2326,10 @@ watchEffect(() => {
             visibleTabs.splice(attendanceIndex >= 0 ? attendanceIndex + 1 : visibleTabs.length, 0, 'PA-Unterschriften');
         }
 
+        if (props.activeParticipationId && visibleTabs.includes('Stammdaten')) {
+            const after = visibleTabs.includes('Schule/Beruf') ? 'Schule/Beruf' : 'Stammdaten';
+            visibleTabs.splice(visibleTabs.indexOf(after) + 1, 0, 'Zielvereinbarung');
+        }
         return visibleTabs;
     });
 
