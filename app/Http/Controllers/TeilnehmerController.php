@@ -949,7 +949,20 @@ class TeilnehmerController extends Controller
             $validatedData = $request->validate(array_merge($this->participantCoreRules($activeProject), [
                 'bemerkungen' => ['nullable', 'string'],
             ]));
-            $teilnehmer->update($validatedData);
+            if ($activeProject->showsCustomerNumberInStammdaten()) {
+                $validatedData += $request->validate(['kundennummer' => ['sometimes', 'nullable', 'string', 'max:255']]);
+            }
+
+            DB::transaction(function () use ($teilnehmer, $validatedData): void {
+                $teilnehmer->update(collect($validatedData)->except('kundennummer')->all());
+
+                if (array_key_exists('kundennummer', $validatedData)) {
+                    PersonenHasSozialedaten::updateOrCreate(
+                        ['person_id' => $teilnehmer->id],
+                        ['kundennummer' => $validatedData['kundennummer']]
+                    );
+                }
+            });
 
             return back()->with('success', 'Teilnehmer wurde erfolgreich aktualisiert.');
         } catch (ValidationException $e) {
@@ -1257,8 +1270,8 @@ class TeilnehmerController extends Controller
                     }
 
                     $participantValidator = Validator::make(
-                        $teilnehmerData,
-                        $this->participantCoreRules($activeProject)
+                        [...$teilnehmerData, 'kundennummer' => $this->cleanImportValue($row[23] ?? null)],
+                        [...$this->participantCoreRules($activeProject), 'kundennummer' => ['nullable', 'string', 'max:255']]
                     );
 
                     if ($participantValidator->fails()) {
@@ -1371,6 +1384,17 @@ class TeilnehmerController extends Controller
                         }
                     } else {
                         $teilnehmer = Personen::create($validRow['teilnehmerData']);
+                        app(\App\Services\Participants\ImportedSchoolQualification::class)->store(
+                            $teilnehmer->id,
+                            $this->cleanImportValue($validRow['row'][22] ?? null)
+                        );
+                        $customerNumber = $this->cleanImportValue($validRow['row'][23] ?? null);
+                        if ($customerNumber !== null) {
+                            PersonenHasSozialedaten::create([
+                                'person_id' => $teilnehmer->id,
+                                'kundennummer' => $customerNumber,
+                            ]);
+                        }
                         foreach ([19 => 'Telefon', 20 => 'Email', 21 => 'Telefax'] as $column => $type) {
                             if ($value = $this->cleanImportValue($validRow['row'][$column] ?? null)) {
                                 $contactType = \App\Models\Kontakttypen::firstOrCreate(['name' => $type]);

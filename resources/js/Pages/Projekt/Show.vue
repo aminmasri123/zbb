@@ -5,6 +5,7 @@ import axios from 'axios';
 import Swal from 'sweetalert2';
 import MultiSelect from 'primevue/multiselect';
 import AppLayout from '@/Layouts/AppLayout.vue';
+import AptitudeProjectConfig from '@/Components/Aptitude/ProjectConfig.vue';
 import { usePermissions } from '@/utils/permissions';
 
 const props = defineProps({
@@ -28,6 +29,7 @@ const administrationTabs = computed(() => [
     ...(canUpdateProjekt.value ? [{ key: 'areas', label: 'Bereiche' }] : []),
     ...(canUpdateProjekt.value ? [{ key: 'area_evaluation', label: 'Bereichsauswertung' }] : []),
     { key: 'participants', label: 'Teilnehmerprofil' },
+    ...(canUpdateProjekt.value ? [{ key: 'aptitude', label: 'Eignungstests' }] : []),
     ...(projectFeatures.participant_portal ? [{ key: 'participant_portal', label: 'Teilnehmerportal' }] : []),
     { key: 'features', label: 'Funktionen & Regeln' },
     ...(canUpdateProjekt.value ? [{ key: 'luv', label: 'LuV & KI' }] : []),
@@ -153,6 +155,7 @@ const saveParticipantProfile = async () => {
     try {
         const response = await axios.put(route('projekt.participant-profile.update', props.projekt.id), {
             enabled_tabs: participantProfile.enabled_tabs,
+            customer_number_in_stammdaten: Boolean(participantProfile.customer_number_in_stammdaten),
             tab_order: participantProfile.tab_order,
         });
         Object.assign(participantProfile, response.data.participant_profile);
@@ -176,6 +179,8 @@ const portalFeatureDefinitions = [
     { key: 'consents_and_approvals', label: 'Einwilligungen', description: 'Versionierte Zustimmungen und Widerrufe verwalten' },
 ];
 const featureDefinitions = [
+    { key: 'aptitude_tests', label: 'Eignungstests', description: 'Testgruppen, Punkteauswertung und Förderbedarf; Testprofile im Reiter Eignungstests konfigurieren.' },
+    { key: 'daily_documentation', label: 'Tagesdokumentation', description: 'Tägliche Aufgaben je Teilnehmer dokumentieren, wiederverwenden und für die LuV zusammenfassen. Bei BOP standardmäßig deaktiviert.' },
     { key: 'participant_management', label: 'Teilnehmerverwaltung', description: 'Teilnehmerlisten, Stammdaten und Projektteilnahmen' },
     { key: 'group_management', label: 'Gruppen und Bereiche', description: 'Gruppenbildung und Zuordnung von Teilnehmern' },
     { key: 'attendance_management', label: 'Anwesenheit', description: 'Anwesenheiten innerhalb dieses Projekts erfassen' },
@@ -1320,6 +1325,7 @@ const formatLuvTemplateDate = (value) => value
                 </button>
             </nav>
 
+            <AptitudeProjectConfig v-if="activeAdministrationTab === 'aptitude'" :project-id="Number(projekt.id)" :can-edit="canUpdateProjekt" @saved="value => { projectFeatures.aptitude_tests = value; }" />
             <section v-if="activeAdministrationTab === 'overview'" class="bg-white p-5 shadow-sm">
                 <div class="grid gap-4 md:grid-cols-6">
                     <div>
@@ -1454,6 +1460,14 @@ const formatLuvTemplateDate = (value) => value
                     <strong>{{ participantProfile.enabled_tabs?.length || 0 }} Bereiche aktiv.</strong>
                     „Stammdaten“ ist ein Pflichtbereich. Mit den Pfeilen bestimmen Sie die Reihenfolge auf der Teilnehmerseite.
                 </div>
+
+                <label class="mb-5 flex items-start gap-3 rounded-lg border border-gray-200 p-4">
+                    <input v-model="participantProfile.customer_number_in_stammdaten" type="checkbox" :disabled="!canUpdateProjekt" class="mt-1 rounded border-gray-300 text-zbb focus:ring-zbb" />
+                    <span>
+                        <span class="block text-sm font-semibold">Kundennummer in Stammdaten anzeigen</span>
+                        <span class="text-sm text-gray-500">Wenn der Bereich Sozialdaten deaktiviert ist, kann die Kundennummer in den Stammdaten eingesehen und bearbeitet werden.</span>
+                    </span>
+                </label>
 
                 <div class="grid gap-3 xl:grid-cols-2">
                     <div
@@ -1867,7 +1881,7 @@ const formatLuvTemplateDate = (value) => value
                                     class="inline-flex items-center gap-2 text-sm text-gray-700"
                                 >
                                     <input v-model="luvTemplateForm.source_settings[key]" type="checkbox" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
-                                    {{ ({ identity: 'Stammdaten', attendance: 'Anwesenheit', documentation: 'Dokumentation', previous_luvs: 'Frühere LuV', internships: 'Praktika', education: 'Abschlüsse/Verlauf', consents: 'Einwilligungen', potential_analysis: 'PA-Förderbedarf' })[key] || key }}
+                                    {{ ({ daily_documentation: 'Tagesdokumentation', aptitude_tests: 'Eignungstests (fachlich freigegeben)', identity: 'Stammdaten', attendance: 'Anwesenheit', documentation: 'Dokumentation', previous_luvs: 'Frühere LuV', internships: 'Praktika', education: 'Abschlüsse/Verlauf', consents: 'Einwilligungen', potential_analysis: 'PA-Förderbedarf' })[key] || key }}
                                 </label>
                             </div>
                         </div>

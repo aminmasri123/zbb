@@ -269,10 +269,13 @@ const selectedBetreuer = computed(() =>
   allBetreuer.value.find((person) => Number(person.id) === Number(form.betreuer))
 )
 const selectedBetreuerBereiche = computed(() => selectedBetreuer.value?.bereiche || [])
+const allowedProjectBereiche = computed(() => (props.projekt?.bereiche || []).filter((bereich) =>
+  bereich.code !== 'E-TEST'
+))
 const bereichOptions = computed(() =>
   selectedBetreuerBereiche.value.length
     ? selectedBetreuerBereiche.value
-    : (props.projekt?.bereiche || [])
+    : allowedProjectBereiche.value
 )
 const selectedBetreuerArbeitsraeume = computed(() => selectedBetreuer.value?.raeume?.arbeitsbereich || [])
 const roomOptions = computed(() =>

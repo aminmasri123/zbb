@@ -13,6 +13,8 @@
     import { formatTime } from '@/utils/timeFormat'
     import { usePermissions } from '@/utils/permissions'
     import GroupSignatures from './GroupSignatures.vue'
+    import AptitudeGroupEvaluation from '@/Components/Aptitude/GroupEvaluation.vue'
+    import GroupDailyDocumentation from '@/Components/GroupDailyDocumentation.vue'
 
     // --- Props ---
     const props = defineProps({
@@ -504,7 +506,9 @@ const gefilterteExportVorlagen = computed(() => {
 })
 
 const bopLegacyExporte = computed(() => props.bopLegacyExporte || [])
-const paAktiv = computed(() => Boolean(props.potenzialanalyse?.aktiv) && canViewPotenzialanalyse.value)
+const istEignungstest = computed(() => Boolean(props.gruppe?.aptitude_profile_id) || props.gruppe?.bereich?.code === 'E-TEST')
+const istPotenzialanalyseGruppe = computed(() => !istEignungstest.value && (props.gruppe?.bereich?.name || '').trim().toLowerCase() === 'potenzialanalyse')
+const paAktiv = computed(() => istPotenzialanalyseGruppe.value && Boolean(props.potenzialanalyse?.aktiv) && canViewPotenzialanalyse.value)
 const paUebungen = computed(() => props.potenzialanalyse?.uebungen || [])
 const paBerichtStile = computed(() => props.potenzialanalyse?.bericht_stile || [
   { value: 'staerkenorientiert', label: 'Stärkenorientiert' },
@@ -2542,6 +2546,8 @@ const exportMitTag = async () => {
         </template>
       </Dialog>
 
+      <GroupDailyDocumentation :group-id="Number(props.gruppe.id)" :from="props.gruppe.anfangsdatum" :until="props.gruppe.enddatum" :participant-ids="gruppenTeilnehmer.map(teilnehmer => Number(teilnehmer.id))" />
+
       <!-- Anwesenheit -->
       <div v-if="canCollectGroupSignatures" class="mb-4">
         <GroupSignatures :group-id="Number(gruppe.id)" />
@@ -2970,8 +2976,9 @@ const exportMitTag = async () => {
         </div>
       </div>
 
+      <AptitudeGroupEvaluation :group-id="Number(props.gruppe.id)" :profile-id="Number(props.gruppe.aptitude_profile_id)" :participant-ids="gruppenTeilnehmer.map(teilnehmer => Number(teilnehmer.id))" />
       <div
-        v-if="props.gruppe?.projekt?.potenzialanalyse_aktiv && !paDatenGeladen"
+        v-if="istPotenzialanalyseGruppe && props.gruppe?.projekt?.potenzialanalyse_aktiv && !paDatenGeladen"
         class="flex items-center gap-3 border-t border-gray-200 py-5 text-sm text-gray-500"
       >
         <i class="pi pi-spin pi-spinner text-zbb"></i>

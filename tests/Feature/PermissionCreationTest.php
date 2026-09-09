@@ -87,6 +87,45 @@ class PermissionCreationTest extends TestCase
         $this->assertDatabaseMissing('permissions', ['name' => 'chat.moderate']);
     }
 
+    public function test_edit_renames_permission_preserving_assignments_and_delete_removes_them(): void
+    {
+        [$manager, $category] = $this->managerForCategory();
+        $this->grantTestPermission($manager, 'berechtigung.update');
+        $this->grantTestPermission($manager, 'berechtigung.destroy');
+        $permission = Permission::create(['name'=>'custom.test', 'guard_name'=>'web', 'berechtigungskategorie_id'=>$category->id]);
+        $manager->givePermissionTo($permission);
+        $role = $manager->roles->first();
+        $role->givePermissionTo($permission);
+        $this->actingAs($manager)->putJson(route('berechtigung.update', $permission->id), ['name'=>'changed.key','display_name'=>'Klarer Name','beschreibung'=>'Beschreibung'])->assertOk();
+        $this->assertSame('changed.key', $permission->fresh()->name);
+        $this->assertSame('Klarer Name', $permission->fresh()->display_name);
+        $this->assertTrue($role->fresh()->hasPermissionTo($permission->fresh()));
+        $this->assertTrue($manager->fresh()->hasPermissionTo('changed.key'));
+        $this->putJson(route('berechtigung.update', $permission->id), ['name'=>'berechtigung.update','display_name'=>'Doppelt'])->assertUnprocessable()->assertJsonValidationErrors('name');
+        $this->deleteJson(route('berechtigung.destroy', $permission->id), ['confirm_name'=>'wrong'])->assertUnprocessable();
+        $this->deleteJson(route('berechtigung.destroy', $permission->id), ['confirm_name'=>'changed.key'])->assertOk();
+        $this->assertDatabaseMissing('permissions', ['id'=>$permission->id]);
+        $this->assertDatabaseMissing('role_has_permissions', ['permission_id'=>$permission->id]);
+        $this->assertDatabaseMissing('model_has_permissions', ['permission_id'=>$permission->id]);
+    }
+
+    public function test_permission_management_requires_right_and_category_access_and_protects_management(): void
+    {
+        [$manager, $category] = $this->managerForCategory();
+        $permission = Permission::create(['name'=>'custom.test', 'guard_name'=>'web', 'berechtigungskategorie_id'=>$category->id]);
+        $this->actingAs($manager)->putJson(route('berechtigung.update',$permission->id), ['display_name'=>'Test'])->assertForbidden();
+        $this->deleteJson(route('berechtigung.destroy',$permission->id), ['confirm_name'=>'custom.test'])->assertForbidden();
+        $this->grantTestPermission($manager,'berechtigung.update');
+        $this->grantTestPermission($manager,'berechtigung.destroy');
+        $other = Berechtigungskategorie::create(['name'=>'Andere Kategorie']);
+        $permission->update(['berechtigungskategorie_id'=>$other->id]);
+        $this->putJson(route('berechtigung.update',$permission->id), ['display_name'=>'Test'])->assertForbidden();
+        $this->deleteJson(route('berechtigung.destroy',$permission->id), ['confirm_name'=>'custom.test'])->assertForbidden();
+        $permission->update(['name'=>'berechtigung.protected','berechtigungskategorie_id'=>$category->id]);
+        $this->deleteJson(route('berechtigung.destroy',$permission->id), ['confirm_name'=>'berechtigung.protected'])->assertUnprocessable();
+        $this->assertDatabaseHas('permissions',['id'=>$permission->id]);
+    }
+
     /** @return array{0: User, 1: Berechtigungskategorie} */
     private function managerForCategory(): array
     {

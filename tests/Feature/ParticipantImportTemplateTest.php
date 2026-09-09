@@ -33,12 +33,15 @@ class ParticipantImportTemplateTest extends TestCase
             $this->assertContains('Vorname',$fields);$this->assertContains('Nachname',$fields);
             $this->assertNotContains('Projekt_ID',$fields);$this->assertNotContains('Standort_ID',$fields);
             if($name==='BVB Reha') {
-                $this->assertCount(14,$fields);
+                $this->assertCount(15,$fields);
+                $this->assertSame('Kundennummer',$fields[14]);
                 $this->assertSame('Nachname',$fields[0]);
                 $this->assertContains('Schulabschluss bei Übermittlung durch BA',$fields);
             } elseif($name==='BOP') {
+                $this->assertNotContains('Kundennummer',$fields);
                 $this->assertContains('Schule_ID',$fields);$this->assertContains('Klasse',$fields);$this->assertContains('Teil',$fields);
             } else {
+                $this->assertNotContains('Kundennummer',$fields);
                 $this->assertNotContains('Schule_ID',$fields);$this->assertContains('E-Mail',$fields);
             }
             $this->assertCount(1,preg_split('/\r?\n/',trim($csv)));

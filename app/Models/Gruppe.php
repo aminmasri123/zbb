@@ -20,6 +20,18 @@ class Gruppe extends Model
 {
     use HasFactory;
 
+    public function isAptitudeTest(): bool
+    {
+        return (bool) $this->aptitude_profile_id
+            || $this->bereich?->code === \App\Services\Aptitude\AptitudeGroupSetup::AREA_CODE;
+    }
+
+    public function isPotentialAnalysisGroup(): bool
+    {
+        return ! $this->isAptitudeTest()
+            && mb_strtolower(trim((string) $this->bereich?->name)) === 'potenzialanalyse';
+    }
+
     public $fillable =
     [
         'personen_id',
@@ -27,6 +39,7 @@ class Gruppe extends Model
         'bereich_id',
         'projekt_id',
         'potenzialanalyse_profil_id',
+        'aptitude_profile_id',
         'bop_phase_schedule_id',
         'partner_id',
         'standort_id',

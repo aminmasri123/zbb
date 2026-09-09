@@ -1057,6 +1057,7 @@ class UserSeeder extends Seeder
             $this->permission('berechtigung.destroy', 8, 'Erlaubt das Entfernen von Berechtigungen oder Rollenbestandteilen, sofern eine entsprechende Verwaltungsfunktion bereitgestellt ist.'),
             $this->permission('berechtigung.zuweisen', 8, 'Erlaubt das konkrete Zuweisen und Entziehen einzelner Permissions an Rollen in der Rollen- und Berechtigungsmaske.'),
             $this->permission('rolle.store', 7, 'Erlaubt das Anlegen neuer Rollen, die anschliessend mit Berechtigungskategorien, Permissions und Datenzugriffen ausgestattet werden koennen.'),
+            $this->permission('rolle.update', 7, 'Erlaubt das Bearbeiten der Bezeichnung bestehender Rollen, ohne deren Berechtigungen oder Datenzugriff automatisch zu veraendern.'),
             $this->permission('rolle.destroy', 7, 'Erlaubt das Loeschen bestehender Rollen. Diese Berechtigung sollte nur an Administratoren oder sehr eingeschraenkte Systemverantwortliche vergeben werden.'),
             $this->permission('rolle.data-access.update', 8, 'Erlaubt das Bearbeiten des rollenbezogenen Datenzugriffs, also welche Mitarbeiter- und Teilnehmerdaten eine Rolle grundsaetzlich sehen darf.'),
             $this->permission('notification-rules.index', 8, 'Erlaubt das Einsehen der Benachrichtigungsregeln und der verfuegbaren Ereignisse, Empfaenger und Kanaele.'),

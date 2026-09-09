@@ -87,6 +87,17 @@ class ParticipationCareerGoalTest extends TestCase
         $this->assertStringContainsString('vereinbartes Eingliederungsziel', $service->source($p->id, '2026-09-02')['text']);
         $this->assertNull($service->source($p->id, '2026-07-01'));
         $this->assertNull($service->source($p->id + 1000, '2026-09-02'));
+        $defaults=app(\App\Services\LuvAssessmentDefaults::class);
+        foreach (['Start','Verlauf'] as $type) {
+            $manual=$defaults->fields($p,$type,'2026-09-02');
+            $this->assertSame($service->source($p->id,'2026-09-02')['text'],$manual['fields']['integration.goal']);
+            $this->assertSame('agreed',$manual['sources']['integration.goal'][0]['status']);
+            $this->assertStringContainsString('Verkäufer',$manual['fields']['integration.goal']);
+            $this->assertStringContainsString('Wohnortnah',$manual['fields']['integration.goal']);
+        }
+        $this->assertSame($old['text'],$defaults->fields($p,'Start','2026-08-31')['fields']['integration.goal']);
+        $this->assertArrayNotHasKey('integration.goal',$defaults->fields($p,'Abschluss','2026-09-02')['fields']);
+        $this->assertArrayNotHasKey('integration.goal',$defaults->fields($p,'Start','2026-07-01')['fields']);
         $tools = [['tool_name' => 'get_participant_identity_summary', 'content' => ['career_goal' => $old]]];
         $report = ['report_type' => 'luv', 'sections' => [['heading' => '[integration.goal] Ziel', 'claims' => [['text' => 'Erfunden']]]]];
         $merged = $service->merge($report, $tools);
@@ -96,5 +107,39 @@ class ParticipationCareerGoalTest extends TestCase
         $this->assertSame($report, $service->merge($report, []));
         $final = ['report_type' => 'final', 'sections' => []];
         $this->assertSame($final, $service->merge($final, $tools));
+    }
+
+    public function test_luv_explains_latest_change_and_ignores_unchanged_resaves(): void
+    {
+        [, $p] = $this->context();
+        $url=route('teilnehmer.career-goal.store',$p->id);
+        $first=$this->postJson($url,$this->data())->assertOk()->json('history.0.id');
+        $changed=$this->data(['previous_id'=>$first,'target'=>'employment','occupation'=>'Gärtner','agreement_status'=>'agreed','documented_on'=>'2026-09-01']);
+        $second=$this->postJson($url,$changed)->assertOk()->json('history.0.id');
+        $this->postJson($url,[...$changed,'previous_id'=>$second,'documented_on'=>'2026-09-02'])->assertOk();
+        $service=app(CareerGoalLuvSource::class);
+        $before=$service->source($p->id,'2026-08-31')['text'];
+        $this->assertStringNotContainsString('Änderung dokumentiert',$before);
+        $this->assertStringNotContainsString('Gärtner',$before);
+        $after=$service->source($p->id,'2026-09-03')['text'];
+        $this->assertStringContainsString('Beschäftigung als Gärtner',$after);
+        $this->assertStringContainsString('Ausbildung als Fachlagerist',$after);
+        $this->assertStringContainsString('noch nicht vereinbarter Berufswunsch',$after);
+        $this->assertStringContainsString('Änderung dokumentiert am 01.09.2026 gegenüber dem Stand vom 01.08.2026',$after);
+        $this->assertStringNotContainsString('Änderung dokumentiert am 02.09.2026',$after);
+        $this->assertSame($after,app(\App\Services\LuvAssessmentDefaults::class)->fields($p,'Verlauf','2026-09-03')['fields']['integration.goal']);
+    }
+
+    public function test_same_day_status_and_alternative_changes_are_reported_without_inventing_a_new_occupation(): void
+    {
+        [, $p] = $this->context();
+        $url=route('teilnehmer.career-goal.store',$p->id);
+        $id=$this->postJson($url,$this->data())->assertOk()->json('history.0.id');
+        $this->postJson($url,$this->data(['previous_id'=>$id,'agreement_status'=>'agreed','alternatives'=>'','notes'=>'Neue Ergänzung']))->assertOk();
+        $text=app(CareerGoalLuvSource::class)->source($p->id,'2026-08-01')['text'];
+        $this->assertStringContainsString('bisherige Berufswunsch',$text);
+        $this->assertStringContainsString('Alternativen: zuvor „Verkäufer“, jetzt „keine Angaben“',$text);
+        $this->assertStringContainsString('Ergänzende Angaben: zuvor „Wohnortnah“, jetzt „Neue Ergänzung“',$text);
+        $this->assertStringNotContainsString('Zuvor war „',$text);
     }
 }

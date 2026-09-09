@@ -88,7 +88,7 @@ final class AiReportOrchestrator
         if ($sources['documentation']) {
             $allowedTools[] = GetDocumentationEntriesTool::NAME;
         }
-        if ($sources['internships'] || $sources['education'] || $sources['consents']) {
+        if ($sources['internships'] || $sources['education'] || $sources['consents'] || (($sources['aptitude_tests'] ?? true) && $project->featureEnabled('aptitude_tests')) || (($sources['daily_documentation'] ?? true) && $project->featureEnabled('daily_documentation'))) {
             $allowedTools[] = GetParticipantDevelopmentDataTool::NAME;
         }
         if (($sources['potential_analysis'] ?? true) && $project->supportsLuvPotentialAnalysis()) {

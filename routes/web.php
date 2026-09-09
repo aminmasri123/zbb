@@ -300,14 +300,14 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
 
     Route::post('/ki/berichte/entwurf', [AiReportController::class, 'store'])
         ->name('ai.reports.draft')
-        ->middleware('throttle:3,1');
+        ->middleware(['canStoredPermission:ai.report.use', 'throttle:5,1']);
 
     Route::get('/ki/berichte/entwurf/{run}', [AiReportController::class, 'show'])
         ->name('ai.reports.status')
-        ->middleware('throttle:60,1');
+        ->middleware(['canStoredPermission:ai.report.use', 'throttle:60,1']);
     Route::post('/ki/berichte/entwurf/{run}/uebernehmen', [AiReportController::class, 'adopt'])
         ->name('ai.reports.adopt')
-        ->middleware('throttle:30,1');
+        ->middleware(['canStoredPermission:ai.report.use', 'throttle:30,1']);
 
     Route::prefix('chat')->name('chat.')->group(function () {
         Route::get('/', [StaffChatController::class, 'index'])->name('index');
@@ -450,6 +450,8 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     // Einstellung -- Rolle
     Route::get('/berechtigung/{id?}', [BerechtigungController::class, 'index'])->name('berechtigung.index')->can('berechtigung.index');
     Route::post('/berechtigung/anlegen', [BerechtigungController::class, 'store'])->name('berechtigung.store')->can('berechtigung.store');
+    Route::put('/berechtigung/{id}', [BerechtigungController::class, 'update'])->name('berechtigung.update')->can('berechtigung.update');
+    Route::delete('/berechtigung/{id}', [BerechtigungController::class, 'destroy'])->name('berechtigung.destroy')->can('berechtigung.destroy');
     Route::post('/berechtigungZuweisen', [BerechtigungController::class, 'berechtigungZuweisen'])->name('berechtigung.zuweisen')->middleware('canAnyPermission:berechtigung.zuweisen,berechtigung.update');
     Route::post('/berechtigungKategorieZuweisen', [BerechtigungController::class, 'berechtigungKategorieZuweisen'])->name('berechtigung.kategorie.zuweisen')->middleware('canAnyPermission:berechtigung.zuweisen,berechtigung.update');
     Route::put('/personal/benutzer/{user}/zusatzberechtigungen', [UserPermissionController::class, 'update'])->name('personal.permissions.update')->middleware('canAnyPermission:berechtigung.zuweisen,berechtigung.update');
@@ -641,6 +643,18 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     });
 
     // Teilnehmer
+    Route::middleware(['module:participant_management', 'projectFeature:participant_management'])->group(function () {
+        Route::get('/projekte/{projekt}/eignungstests', [\App\Http\Controllers\AptitudeController::class, 'config'])->name('aptitude.config');
+        Route::put('/projekte/{projekt}/eignungstests', [\App\Http\Controllers\AptitudeController::class, 'saveConfig'])->name('aptitude.config.save');
+        Route::get('/gruppen/{gruppe}/eignungstests', [\App\Http\Controllers\AptitudeController::class, 'groupData'])->name('aptitude.group');
+        Route::get('/gruppen/{gruppe}/tagesdokumentation', [\App\Http\Controllers\GroupDailyTaskController::class, 'index'])->name('daily-tasks.index');
+        Route::post('/gruppen/{gruppe}/tagesdokumentation', [\App\Http\Controllers\GroupDailyTaskController::class, 'store'])->name('daily-tasks.store');
+        Route::delete('/gruppen/{gruppe}/tagesdokumentation/{task}', [\App\Http\Controllers\GroupDailyTaskController::class, 'destroy'])->name('daily-tasks.destroy');
+        Route::post('/gruppen/{gruppe}/eignungstests/{person}', [\App\Http\Controllers\AptitudeController::class, 'saveAttempt'])->name('aptitude.attempt.save');
+        Route::get('/teilnehmer/{person}/eignungstests', [\App\Http\Controllers\AptitudeController::class, 'history'])->name('aptitude.history');
+        Route::post('/eignungstests/{attempt}/ki', [\App\Http\Controllers\AptitudeController::class, 'generate'])->name('aptitude.generate');
+        Route::get('/eignungstests/{attempt}/ki/{uuid}', [\App\Http\Controllers\AptitudeController::class, 'generationStatus'])->name('aptitude.generate.status');
+    });
     Route::middleware(['module:participant_management', 'projectFeature:participant_management'])->group(function () {
         Route::get('/teilnehmer', [TeilnehmerController::class, 'index'])->name('teilnehmer.index')->can('teilnehmer.index');
         Route::get('/teilnehmer/portal-nutzer', [TeilnehmerController::class, 'portalUsers'])

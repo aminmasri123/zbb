@@ -88,7 +88,12 @@ final class GetParticipantDevelopmentDataTool implements AiTool
             'period' => ['from' => $context->fromDate, 'until' => $context->untilDate],
             'internships_and_measures' => $internships,
             'completion_reports' => $completionReports,
+            'aptitude_tests' => ($context->sourceSettings['aptitude_tests'] ?? true) && $participation->projekt->featureEnabled('aptitude_tests')
+                ? app(\App\Services\Aptitude\AptitudeLuvSources::class)->entries($participation->id, $context->fromDate, $context->untilDate, $context->reportType)
+                : [],
             'consents' => $consents,
+            'daily_documentation' => ($context->sourceSettings['daily_documentation'] ?? true)
+                ? array_values(array_filter([app(\App\Services\DailyTaskLuvSummary::class)->entry($participation,$context->fromDate,$context->untilDate,$context->reportType)])) : [],
         ];
     }
 }

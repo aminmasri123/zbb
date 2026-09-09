@@ -40,6 +40,11 @@
 
 
 
+      <div v-if="showCustomerNumber">
+        <label for="stammdaten-kundennummer">Kundennummer</label>
+        <input id="stammdaten-kundennummer" v-model="kundennummer" maxlength="255" class="input" />
+      </div>
+
       <div class="md:col-span-3">
         <label>Bemerkungen</label>
         <textarea v-model="teilnehmer.bemerkungen" rows="2" class="input"></textarea>
@@ -57,9 +62,11 @@ import dayjs from "dayjs";
 const props = defineProps({
   teilnehmer: Object,
   importDetails: Object,
+  showCustomerNumber: { type: Boolean, default: false },
 });
 
 const teilnehmer = ref(JSON.parse(JSON.stringify(props.teilnehmer)));
+const kundennummer = ref(props.teilnehmer.sozialedaten?.kundennummer ?? "");
 
 const form = ref({
   geburtsdatum: teilnehmer.value.geburtsdatum
@@ -86,6 +93,7 @@ const saveStammdaten = () => {
     geschlecht: teilnehmer.value.geschlecht,
     geburtsdatum: form.value.geburtsdatum,
     bemerkungen: teilnehmer.value.bemerkungen,
+    ...(props.showCustomerNumber ? { kundennummer: kundennummer.value } : {}),
   };
 
   router.patch(route("teilnehmer.update", teilnehmer.value.id), payload, {

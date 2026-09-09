@@ -14,6 +14,7 @@ use App\Models\Projekt;
 use App\Services\RaumBelegungService;
 use App\Services\SaarlandWorkdayService;
 use App\Services\Projects\ActiveProjectContext;
+use App\Services\Aptitude\AptitudeGroupSetup;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -149,6 +150,7 @@ class GruppeController extends Controller
             'groupType' => ['required', Rule::in(['1-day', '2-day', '3-day', 'unlimited'])],
             'startDate' => 'required|date',
             'endDate' => ['required_if:groupType,unlimited', 'nullable', 'date', 'after_or_equal:startDate'],
+            'aptitude_profile_id' => ['prohibited'],
             'startZeit' => 'required|date_format:H:i',
             'endZeit' => 'required|date_format:H:i|after:startZeit',
             'bereich' => 'required|integer|exists:bereiches,id',
@@ -191,13 +193,16 @@ class GruppeController extends Controller
         $this->validateProjektZuordnung($projekt, (int) $validated['bereich'], $validated['raum_id'] ?? null);
         $standortId = $this->resolveStandortId($projekt, $validated);
         $this->validateBetreuer($user, $projekt, (int) $validated['betreuer']);
+        $this->validateAptitudeBetreuer($projekt, (int) $validated['bereich'], (int) $validated['betreuer']);
         $roomConflicts = $this->validateRaumBelegung($belegungService, $validated);
 
         if ($roomConflicts !== [] && ! ($validated['allow_room_overlap'] ?? false)) {
             return $this->roomConflictResponse($roomConflicts);
         }
 
+        $aptitudeProfileId = app(AptitudeGroupSetup::class)->profileForArea($activeProject, (int) $validated['bereich']);
         $gruppe = Gruppe::create([
+            'aptitude_profile_id' => $aptitudeProfileId,
             'personen_id' => $validated['betreuer'],
             'bereich_id' => $validated['bereich'],
             'projekt_id' => $activeProject->id,
@@ -326,25 +331,32 @@ class GruppeController extends Controller
             $this->validateProjektZuordnung($projekt, (int) $validated['bereich'], $validated['raum_id'] ?? null);
             $standortId = $this->resolveStandortId($projekt, $validated);
             $this->validateBetreuer($user, $projekt, (int) $validated['betreuer']);
+            $this->validateAptitudeBetreuer($projekt, (int) $validated['bereich'], (int) $validated['betreuer']);
             $roomConflicts = $this->validateRaumBelegung($belegungService, $validated, $gruppe->id);
 
             if ($roomConflicts !== [] && ! ($validated['allow_room_overlap'] ?? false)) {
                 return $this->roomConflictResponse($roomConflicts);
             }
 
-            $gruppe->update([
-                'bereich_id' => $validated['bereich'],
-                'personen_id' => $validated['betreuer'],
-                'standort_id' => $standortId,
-                'ort_typ' => $validated['ort_typ'],
-                'raum_id' => $validated['ort_typ'] === 'raum' ? $validated['raum_id'] : null,
-                'externer_ort' => $validated['ort_typ'] === 'extern' ? $validated['externer_ort'] : null,
-                'anfangsdatum' => $validated['anfangsdatum'],
-                'enddatum' => $validated['enddatum'],
-                'startzeit' => $validated['startzeit'],
-                'endzeit' => $validated['endzeit'],
-                'bemerkung' => $validated['bemerkung'] ?? null,
-            ]);
+            DB::transaction(function () use ($gruppe, $projekt, $validated, $standortId) {
+                $locked = Gruppe::whereKey($gruppe->id)->lockForUpdate()->firstOrFail();
+                $aptitudeProfileId = app(AptitudeGroupSetup::class)->profileForArea($projekt, (int) $validated['bereich'], $locked);
+                $locked->update([
+                    'aptitude_profile_id' => $aptitudeProfileId,
+                    'bereich_id' => $validated['bereich'],
+                    'personen_id' => $validated['betreuer'],
+                    'standort_id' => $standortId,
+                    'ort_typ' => $validated['ort_typ'],
+                    'raum_id' => $validated['ort_typ'] === 'raum' ? $validated['raum_id'] : null,
+                    'externer_ort' => $validated['ort_typ'] === 'extern' ? $validated['externer_ort'] : null,
+                    'anfangsdatum' => $validated['anfangsdatum'],
+                    'enddatum' => $validated['enddatum'],
+                    'startzeit' => $validated['startzeit'],
+                    'endzeit' => $validated['endzeit'],
+                    'bemerkung' => $validated['bemerkung'] ?? null,
+                ]);
+            });
+            $gruppe->refresh();
             $gruppe->partners()->sync($validated['partner_ids'] ?? []);
 
             if ($roomConflicts !== [] && ($validated['allow_room_overlap'] ?? false)) {
@@ -757,6 +769,28 @@ class GruppeController extends Controller
         if (!$isProjectMember) {
             throw ValidationException::withMessages([
                 'betreuer' => 'Der Betreuer gehoert nicht zum ausgewaehlten Projekt oder ist nicht als Vertretung verfuegbar.',
+            ]);
+        }
+    }
+
+    private function validateAptitudeBetreuer(Projekt $projekt, int $bereichId, int $betreuerId): void
+    {
+        $isAptitudeArea = $projekt->bereiche
+            ->contains(fn ($bereich) => (int) $bereich->id === $bereichId && $bereich->code === AptitudeGroupSetup::AREA_CODE);
+
+        if (! $isAptitudeArea) {
+            return;
+        }
+
+        $allowed = ProjektHasPersonen::query()
+            ->where('projekt_id', $projekt->id)
+            ->where('personen_id', $betreuerId)
+            ->whereHas('bereichZuweisungen', fn ($query) => $query->where('bereich_id', $bereichId))
+            ->exists();
+
+        if (! $allowed) {
+            throw ValidationException::withMessages([
+                'betreuer' => 'Der Bereich Eignungstest ist dem ausgewählten Betreuer in diesem Projekt nicht zugeordnet.',
             ]);
         }
     }

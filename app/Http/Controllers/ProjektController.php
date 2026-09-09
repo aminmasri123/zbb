@@ -584,10 +584,14 @@ class ProjektController extends Controller
             'features.classbook_management' => ['required', 'boolean'],
             'features.potential_analysis' => ['required', 'boolean'],
             'features.participant_portal' => ['required', 'boolean'],
+            'features.aptitude_tests' => ['sometimes', 'boolean'],
+            'features.daily_documentation' => ['sometimes', 'boolean'],
             'potenzialanalyse_tage' => ['nullable', 'integer', 'min:1', 'max:60'],
         ]);
 
         $canManagePotenzialanalyse = $request->user()?->can('potenzialanalyse.manage') ?? false;
+        $validated['features']['aptitude_tests'] ??= $projekt->featureEnabled('aptitude_tests');
+        $validated['features']['daily_documentation'] ??= $projekt->featureEnabled('daily_documentation');
 
         if (! $canManagePotenzialanalyse) {
             $validated['features']['potential_analysis'] = (bool) $projekt->potenzialanalyse_aktiv;
@@ -634,6 +638,10 @@ class ProjektController extends Controller
                 ? (int) $validated['potenzialanalyse_tage']
                 : null,
         ]);
+
+        if ($projekt->featureEnabled('aptitude_tests')) {
+            app(\App\Services\Aptitude\AptitudeGroupSetup::class)->ensureArea($projekt);
+        }
 
         return response()->json([
             'message' => 'Projektfunktionen wurden gespeichert.',
@@ -752,6 +760,7 @@ class ProjektController extends Controller
         $validated = $request->validate([
             'enabled_tabs' => ['required', 'array', 'min:1'],
             'enabled_tabs.*' => ['required', 'string', 'distinct', Rule::in($validKeys)],
+            'customer_number_in_stammdaten' => ['sometimes', 'boolean'],
             'tab_order' => ['required', 'array', 'size:'.count($validKeys)],
             'tab_order.*' => ['required', 'string', 'distinct', Rule::in($validKeys)],
         ]);
@@ -772,6 +781,7 @@ class ProjektController extends Controller
         $projekt->update([
             'participant_profile_settings' => [
                 'enabled_tabs' => array_values($validated['enabled_tabs']),
+                'customer_number_in_stammdaten' => $validated['customer_number_in_stammdaten'] ?? $projekt->participantProfileSettings()['customer_number_in_stammdaten'],
                 'tab_order' => array_values($validated['tab_order']),
             ],
         ]);

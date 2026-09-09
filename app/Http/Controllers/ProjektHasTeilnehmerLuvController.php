@@ -250,10 +250,10 @@ class ProjektHasTeilnehmerLuvController extends Controller
 
     public function defaults(Request $request): JsonResponse
     {
-        $data = $request->validate(['teilnehmer_id' => ['required', 'integer', 'min:1']]);
-        return response()->json(['fields' => app(\App\Services\LuvContactDefaults::class)->fields(
-            $this->participationFor($request, (int) $data['teilnehmer_id'])
-        )], 200, ['Cache-Control' => 'no-store, private']);
+        $data = $request->validate(['teilnehmer_id' => ['required', 'integer', 'min:1'], 'typ'=>['sometimes',Rule::in(ProjektLuvTemplate::TYPES)], 'bis'=>'sometimes|date', 'von'=>'sometimes|date|before_or_equal:bis']);
+        $participation=$this->participationFor($request,(int)$data['teilnehmer_id']);
+        $defaults=app(\App\Services\LuvAssessmentDefaults::class)->fields($participation,$data['typ']??'Start',Carbon::parse($data['bis']??today())->toDateString(),isset($data['von'])?Carbon::parse($data['von'])->toDateString():null);
+        return response()->json(['fields'=>[...app(\App\Services\LuvContactDefaults::class)->fields($participation),...$defaults['fields']], 'sources'=>$defaults['sources']],200,['Cache-Control'=>'no-store, private']);
     }
 
     private function participationFor(Request $request, int $participantId): ProjektHasPersonen

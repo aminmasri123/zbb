@@ -51,6 +51,8 @@ class Projekt extends Model
         'internship_management' => true,
         'completion_management' => true,
         'participant_portal' => false,
+        'aptitude_tests' => false,
+        'daily_documentation' => true,
     ];
 
     public const FEATURE_DEPENDENCIES = [
@@ -60,6 +62,8 @@ class Projekt extends Model
         'completion_management' => ['participant_management'],
         'classbook_management' => ['group_management'],
         'potential_analysis' => ['participant_management', 'group_management'],
+        'aptitude_tests' => ['participant_management', 'group_management'],
+        'daily_documentation' => ['participant_management', 'group_management'],
         'participant_portal' => ['participant_management'],
     ];
 
@@ -230,6 +234,8 @@ class Projekt extends Model
         'aufgaben' => ['label' => 'Aufgaben', 'group' => 'Teilnahme', 'description' => 'Aufgaben und Termine der Teilnahme.', 'portal_feature' => 'tasks_and_appointments'],
         'teilnahmeabschluss' => ['label' => 'Teilnahmeabschluss', 'group' => 'Teilnahme', 'description' => 'Abschlusscheckliste und Abschlussberichte.', 'feature' => 'completion_management'],
         'anwesenheit' => ['label' => 'Anwesenheit', 'group' => 'Teilnahme', 'description' => 'Anwesenheiten des aktiven Projekts.', 'feature' => 'attendance_management'],
+        'pa_unterschriften' => ['label' => 'PA-Unterschriften', 'group' => 'Teilnahme', 'description' => 'Unterschriftstage der Potenzialanalyse einschließlich älterer Versionen.', 'feature' => 'potential_analysis'],
+        'eignungstests' => ['label' => 'Eignungstests', 'group' => 'Teilnahme', 'description' => 'Testergebnisse, Einschätzungen und freigegebener Förderbedarf.', 'feature' => 'aptitude_tests'],
         'praktika' => ['label' => 'Praktika', 'group' => 'Teilnahme', 'description' => 'Praktika und betriebliche Erprobungen.', 'feature' => 'internship_management'],
         'fahrtkosten' => ['label' => 'Fahrtkosten', 'group' => 'Teilnahme', 'description' => 'Fahrtkostenabrechnungen des Teilnehmers.'],
         'luv' => ['label' => 'LuV', 'group' => 'Teilnahme', 'description' => 'Leistungs- und Verhaltensbeurteilungen.'],
@@ -282,7 +288,16 @@ class Projekt extends Model
         return [
             'enabled_tabs' => array_values(array_filter($order, fn ($key) => in_array($key, $enabled, true))),
             'tab_order' => $order,
+            'customer_number_in_stammdaten' => (bool) ($settings['customer_number_in_stammdaten'] ?? false),
         ];
+    }
+
+    public function showsCustomerNumberInStammdaten(): bool
+    {
+        $settings = $this->participantProfileSettings();
+
+        return $settings['customer_number_in_stammdaten']
+            && ! in_array('sozialdaten', $settings['enabled_tabs'], true);
     }
 
     public function portalFeatureSettings(): array
@@ -326,7 +341,7 @@ class Projekt extends Model
 
     public function configuredFeatureSettings(): array
     {
-        return array_replace(self::FEATURE_DEFAULTS, $this->feature_settings ?? [], [
+        return array_replace(self::FEATURE_DEFAULTS, ['daily_documentation' => !str_contains(mb_strtolower((string)$this->name), 'bop')], $this->feature_settings ?? [], [
             'classbook_management' => (bool) $this->klassenbuch_aktiv,
             'potential_analysis' => (bool) $this->potenzialanalyse_aktiv,
         ]);

@@ -36,6 +36,10 @@ class BvbParticipantImportTest extends TestCase
         $this->postJson(route('teilnehmer.import'),['standort_id'=>$this->importLocationId,'file'=>$file,'confirmation'=>$preview->json('confirmation')])->assertOk()->assertJsonPath('success',true);
         $person=Personen::where('nachname','Müller')->firstOrFail();
         $this->assertSame('von',$person->namenszusatz);
+        $qualification = $person->abschluesse()->firstOrFail();
+        $this->assertSame('Hauptschulabschluss', $qualification->bezeichnung);
+        $this->assertNull($qualification->pivotModel->start);
+        $this->assertNull($qualification->pivotModel->end);
         $this->assertDatabaseHas('adresses',['model_id'=>$person->id,'plz'=>'01234','strasse'=>'Musterstraße','hausnummer'=>'12a','zusatzinfo'=>'Hinterhaus']);
         $this->assertSame(['0123456789','ada@example.test','0987654321'],$person->kontaktes()->orderBy('id')->pluck('wert')->all());
         $participation=ProjektHasPersonen::where('personen_id',$person->id)->where('projekt_id',$project->id)->firstOrFail();
@@ -54,6 +58,45 @@ class BvbParticipantImportTest extends TestCase
         $other=Projekt::factory()->create();$user->projekte()->attach($other,['standort_id'=>$this->importLocationId,'status'=>'aktiv']);$user->update(['current_team_id'=>$other->id]);
         $this->postJson(route('teilnehmer.import'),['standort_id'=>$this->importLocationId,'file'=>$file,'confirmation'=>$preview->json('confirmation')])->assertUnprocessable();
         $this->assertDatabaseMissing('personens',['nachname'=>'Müller']);
+    }
+    public function test_customer_number_is_imported_with_leading_zeroes(): void
+    {
+        [$user] = $this->context();
+        $file = UploadedFile::fake()->createWithContent('bvb.csv',
+            "Nachname;Vorname;Geschlecht;Geburtsdatum;Kundennummer\nNummer;Ada;w;12.03.2008;00123ABC\n"
+        );
+        $preview = $this->actingAs($user)->postJson(route('teilnehmer.import'), [
+            'standort_id' => $this->importLocationId, 'file' => $file, 'preview' => 1,
+        ])->assertOk()->assertJsonPath('rows.0.values.23', '00123ABC');
+        $this->postJson(route('teilnehmer.import'), [
+            'standort_id' => $this->importLocationId, 'file' => $file, 'confirmation' => $preview->json('confirmation'),
+        ])->assertOk();
+        $person = Personen::where('nachname', 'Nummer')->firstOrFail();
+        $this->assertDatabaseHas('personen_has_sozialedatens', ['person_id' => $person->id, 'kundennummer' => '00123ABC']);
+    }
+    public function test_backfill_preserves_labels_and_does_not_duplicate_existing_qualifications(): void
+    {
+        [$user, $project] = $this->context();
+        foreach (['Hauptschulabschluss', 'Abschluss der Förderschule', 'ohne Schulabschluss'] as $label) {
+            $person = Personen::factory()->create(['typ' => 'teilnehmer']);
+            ProjektHasPersonen::create([
+                'projekt_id' => $project->id,
+                'personen_id' => $person->id,
+                'standort_id' => $this->importLocationId,
+                'status' => 'aktiv',
+                'import_entry_data' => ['school_qualification_at_entry' => $label],
+            ]);
+        }
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $this->artisan('participants:backfill-school-qualifications', ['project' => $project->id])->assertSuccessful();
+        $this->assertDatabaseCount('personen_has_abschluesses', 0);
+        for ($i = 0; $i < 2; $i++) {
+            $this->artisan('participants:backfill-school-qualifications', ['project' => $project->id, '--apply' => true])->assertSuccessful();
+            $this->assertDatabaseCount('personen_has_abschluesses', 3);
+        }
+        foreach (['Hauptschulabschluss', 'Abschluss der Förderschule', 'ohne Schulabschluss'] as $label) {
+            $this->assertDatabaseHas('abschluesses', ['typ' => 'schule', 'bezeichnung' => $label]);
+        }
     }
     public function test_header_only_and_invalid_calendar_date_are_rejected(): void
     {

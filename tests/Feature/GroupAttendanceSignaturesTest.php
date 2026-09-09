@@ -51,6 +51,7 @@ class GroupAttendanceSignaturesTest extends TestCase
     {
         [$user, $group, $draft, $people] = $this->context('bibb');
         if ($reason === 'permission') $user->revokePermissionTo('anwesenheit.manage');
+        if ($reason === 'area') $group->projekt->update(['name'=>'BvB Reha']);
         if ($reason === 'role') {
             $role = Role::firstOrCreate(['name' => 'Anleiter', 'guard_name' => 'web'], ['color' => '#123456']);
             $user->syncRoles([$role]);
@@ -73,7 +74,7 @@ class GroupAttendanceSignaturesTest extends TestCase
         $this->assertSame(1, $draft->fresh()->revision);
     }
 
-    public static function denials(): array { return [['permission'], ['role'], ['project']]; }
+    public static function denials(): array { return [['permission'], ['role'], ['project'], ['area']]; }
 
     #[\PHPUnit\Framework\Attributes\DataProvider('managementRoles')]
     public function test_department_management_can_collect_without_being_the_assigned_instructor(string $roleName): void

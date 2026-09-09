@@ -11,6 +11,7 @@
     import RoleNameAction from './RoleNameAction.vue';
     import ModalCreate from './ModalCreate.vue';
     import ModalCreatePermission from './ModalCreatePermission.vue';
+    import PermissionActions from './PermissionActions.vue';
     import { usePermissions } from '@/utils/permissions';
     // Search input state
     let seite = 'rolle';
@@ -95,7 +96,7 @@
 };
     const refreshPermissions = () => {
         router.reload({
-            only: ['berechtigungskategorien', 'kategorienDerUser', 'alleZugewiesenePermission'],
+            only: ['berechtigungskategorien', 'kategorienDerUser', 'alleZugewiesenePermission', 'permissions'],
             preserveScroll: true,
         });
     };
@@ -529,6 +530,7 @@
                                                                 {{ permission.technical_name }}
                                                             </span>
                                                         </abbr>
+                                                        <PermissionActions :permission="permission" @changed="refreshPermissions" />
                                                     </div>
                                                     <div class="basis-1/6">
                                                         <div class="flex items-center">

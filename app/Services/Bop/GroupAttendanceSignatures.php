@@ -17,6 +17,9 @@ class GroupAttendanceSignatures
 {
     public function allowed($user, Gruppe $group): bool
     {
+        // BO/BIBB collection remains available in BOP occupational groups; other projects use PA groups only.
+        if ($group->isAptitudeTest() || (!$group->isPotentialAnalysisGroup()
+            && !str_contains(mb_strtolower((string)$group->projekt?->name), 'bop'))) return false;
         // Group signature collection is currently reserved for department management.
         // Instructor assignment alone must not grant access, even with attendance permissions.
         if (!$user || !$user->hasAnyRole(['Administrator', 'Abteilungsleitung', 'Assistenz der Abt.-Leitung'])) return false;

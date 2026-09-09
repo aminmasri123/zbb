@@ -34,6 +34,7 @@ class ProjectFeatureConfigurationTest extends TestCase
     {
         $user = User::factory()->create();
         $this->givePermission($user, 'projekt.update');
+        $this->givePermission($user, 'potenzialanalyse.manage');
         $project = Projekt::factory()->create();
 
         $this->actingAs($user)->putJson(route('projekt.features.update', $project), [
@@ -41,6 +42,7 @@ class ProjectFeatureConfigurationTest extends TestCase
                 'group_management' => true,
                 'classbook_management' => true,
                 'potential_analysis' => true,
+                'aptitude_tests' => true,
             ]),
             'potenzialanalyse_tage' => 4,
         ])->assertOk()
@@ -49,6 +51,7 @@ class ProjectFeatureConfigurationTest extends TestCase
 
         $project->refresh();
         $this->assertTrue($project->featureEnabled('group_management'));
+        $this->assertTrue($project->featureEnabled('aptitude_tests'));
         $this->assertTrue($project->klassenbuch_aktiv);
         $this->assertTrue($project->potenzialanalyse_aktiv);
         $this->assertSame(4, $project->potenzialanalyse_tage);

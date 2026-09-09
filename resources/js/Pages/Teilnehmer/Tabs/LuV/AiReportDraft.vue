@@ -430,6 +430,7 @@ const generate = async () => {
     errorMessage.value = '';
     stopPolling();
     runStatus.status = 'queued';
+    runId.value = '';
     runStatus.status_label = 'Warte auf KI-Verarbeitung';
     runStatus.progress_percent = 0;
     runStatus.elapsed_seconds = 0;
@@ -458,6 +459,8 @@ const generate = async () => {
         }
     } catch (error) {
         const status = error.response?.status;
+        runStatus.status = 'failed';
+        runStatus.status_label = 'Entwurf konnte nicht gestartet werden';
         const validationErrors = error.response?.data?.errors;
 
         if (validationErrors) {

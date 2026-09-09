@@ -796,13 +796,12 @@ class GruppeHasTeilnehmerController extends Controller
 
     private function istPotenzialanalyseGruppe(Gruppe $gruppe): bool
     {
-        return strtolower((string) $gruppe->bereich?->name) === 'potenzialanalyse';
+        return $gruppe->isPotentialAnalysisGroup();
     }
 
     private function istPotenzialanalyseAuswertungsgruppe(Gruppe $gruppe): bool
     {
-        return $this->istPotenzialanalyseGruppe($gruppe)
-            || (bool) $gruppe->projekt?->supportsLuvPotentialAnalysis();
+        return $gruppe->isPotentialAnalysisGroup();
     }
 
     private function bopGruppenContext(Gruppe $gruppe): ?array

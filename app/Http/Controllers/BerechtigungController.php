@@ -343,7 +343,16 @@ class BerechtigungController extends Controller
      */
     public function update(Request $request, $id)
     {
-        //
+        $permission = $this->manageablePermission($request, $id);
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255', 'regex:/^[\pL\pN][\pL\pN._:-]*$/u', Rule::unique('permissions', 'name')->where('guard_name', 'web')->ignore($permission->id)],
+            'display_name' => ['required', 'string', 'max:255'],
+            'beschreibung' => ['nullable', 'string', 'max:5000'],
+        ], ['name.unique' => 'Dieser technische Name existiert bereits. Bitte die vorhandene Berechtigung verwenden.', 'name.regex' => 'Der technische Name darf keine Leerzeichen oder Sonderzeichen außer . _ : - enthalten.']);
+        abort_if(str_starts_with($permission->name, 'berechtigung.') && $data['name'] !== $permission->name, 422, 'Der technische Name einer Verwaltungsberechtigung kann nicht geändert werden.');
+        $permission->update($data);
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+        return response()->json(['success' => true]);
     }
 
     /**
@@ -352,8 +361,26 @@ class BerechtigungController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
-        //
+        $permission = $this->manageablePermission($request, $id);
+        abort_if(str_starts_with($permission->name, 'berechtigung.'), 422, 'Berechtigungen zur Verwaltung der Zugriffsrechte können nicht gelöscht werden.');
+        $request->validate(['confirm_name' => ['required', Rule::in([$permission->name])]]);
+        DB::transaction(function () use ($permission) {
+            DB::table('role_has_permissions')->where('permission_id', $permission->id)->delete();
+            DB::table('model_has_permissions')->where('permission_id', $permission->id)->delete();
+            $permission->delete();
+        });
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+        return response()->json(['success' => true]);
+    }
+
+    private function manageablePermission(Request $request, $id): Permission
+    {
+        $permission = Permission::where('guard_name', 'web')->findOrFail($id);
+        abort_unless(Berechtigungskategorie::whereKey($permission->berechtigungskategorie_id)
+            ->whereHas('roles', fn ($roles) => $roles->whereIn('roles.id', $request->user()->roles()->pluck('roles.id')))
+            ->exists(), 403);
+        return $permission;
     }
 }

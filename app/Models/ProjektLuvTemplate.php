@@ -77,6 +77,8 @@ class ProjektLuvTemplate extends Model
     ];
 
     public const DEFAULT_SOURCE_SETTINGS = [
+        'aptitude_tests' => true,
+        'daily_documentation' => true,
         'identity' => true,
         'attendance' => true,
         'documentation' => true,

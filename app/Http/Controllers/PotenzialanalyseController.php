@@ -1559,7 +1559,7 @@ class PotenzialanalyseController extends Controller
 
     private function canUseGroup($user, ?Gruppe $gruppe): bool
     {
-        if (!$user || !$gruppe) {
+        if (!$user || !$gruppe || !$gruppe->isPotentialAnalysisGroup()) {
             return false;
         }
 

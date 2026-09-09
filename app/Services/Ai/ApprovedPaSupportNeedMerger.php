@@ -26,7 +26,9 @@ final class ApprovedPaSupportNeedMerger
             ? data_get($toolResult, 'content.entries', [])
             : [];
 
-        $entries = collect(is_array($entries) ? $entries : [])
+        $development = collect($toolResults)->firstWhere('tool_name', \App\Services\Ai\Tools\GetParticipantDevelopmentDataTool::NAME);
+        $entries = array_merge(is_array($entries) ? $entries : [], data_get($development, 'content.aptitude_tests', []), data_get($development, 'content.daily_documentation', []));
+        $entries = collect($entries)
             ->filter(fn ($entry) => is_array($entry)
                 && filled($entry['source_id'] ?? null)
                 && filled($entry['field_key'] ?? null)
@@ -95,7 +97,7 @@ final class ApprovedPaSupportNeedMerger
             ->values()
             ->all();
         $report['warnings'] = collect(is_array($report['warnings'] ?? null) ? $report['warnings'] : [])
-            ->push('Fachlich freigegebene Angaben aus der Potenzialanalyse wurden den passenden LuV-Feldern automatisch zugeordnet. Bitte den Gesamtentwurf weiterhin fachlich prüfen.')
+            ->push('Dokumentierte Angaben aus den ausgewählten Quellen wurden den passenden LuV-Feldern automatisch zugeordnet. Bitte den Gesamtentwurf fachlich prüfen.')
             ->unique()
             ->take(50)
             ->values()
@@ -144,6 +146,10 @@ final class ApprovedPaSupportNeedMerger
     /** @param array<string, mixed> $entry */
     private function fallbackText(array $entry): string
     {
+        if (($entry['origin'] ?? null) === 'aptitude') {
+            return 'Eignungstest vom '.($entry['tested_on'] ?? '').' ('.($entry['category'] ?? '').'): '
+                .$this->sentence((string) ($entry['observation'] ?: ($entry['support_need'] ?? '')));
+        }
         if (($entry['decision'] ?? null) === 'assessment') {
             return $this->sentence((string) $entry['observation']);
         }
@@ -178,6 +184,9 @@ final class ApprovedPaSupportNeedMerger
     /** @param list<array<string, mixed>> $entries */
     private function fieldLabel(string $fieldKey, array $entries): string
     {
+        if ($fieldKey === 'support.recommendations') {
+            return 'Ergänzende Erläuterungen und Empfehlungen';
+        }
         if ($fieldKey === 'competence.notes' || $fieldKey === 'development.notes') {
             return 'Ergänzende Erläuterungen';
         }

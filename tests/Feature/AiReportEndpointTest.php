@@ -77,6 +77,17 @@ class AiReportEndpointTest extends TestCase
         Queue::assertNothingPushed();
     }
 
+    public function test_stored_ai_permission_allows_generation_even_when_gate_is_stale(): void
+    {
+        [$user, , $participant] = $this->context(true);
+        Queue::fake();
+        \Illuminate\Support\Facades\Gate::swap(new \Illuminate\Auth\Access\Gate(app(), fn () => $user));
+        $this->assertFalse($user->can('ai.report.use'));
+        $this->assertTrue($user->hasStoredPermission('ai.report.use'));
+        $response = $this->actingAs($user)->postJson('/ki/berichte/entwurf', $this->payload($participant->id))->assertStatus(202);
+        $this->getJson(route('ai.reports.status', ['run'=>$response->json('run_id')]))->assertOk();
+    }
+
     public function test_invalid_period_is_rejected_before_the_agent_is_contacted(): void
     {
         [$user, , $participant] = $this->context(true);

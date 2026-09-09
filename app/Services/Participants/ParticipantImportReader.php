@@ -10,13 +10,13 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 /** Translate project-specific column names into the existing participant import schema. */
 class ParticipantImportReader
 {
-    public const FIELDS = ['Vorname','Nachname','Geschlecht','Geburtsdatum','Projekt_ID','Standort_ID','Schule_ID','Schuljahr','Teil','Klasse','Foerderschueler','EEE','Straße','Hausnummer','PLZ','Stadt','Land','Adresszusatz','Namenszusatz','Telefon','E-Mail','Telefax','Schulabschluss bei Übermittlung durch BA'];
+    public const FIELDS = ['Vorname','Nachname','Geschlecht','Geburtsdatum','Projekt_ID','Standort_ID','Schule_ID','Schuljahr','Teil','Klasse','Foerderschueler','EEE','Straße','Hausnummer','PLZ','Stadt','Land','Adresszusatz','Namenszusatz','Telefon','E-Mail','Telefax','Schulabschluss bei Übermittlung durch BA','Kundennummer'];
 
     public function templateFor(\App\Models\Projekt $project): array
     {
         $name = mb_strtoupper($project->name);
         if (str_contains($name, 'BVB') && str_contains($name, 'REHA')) {
-            return ['profile'=>'BVB Reha', 'fields'=>['Nachname','Vorname','Namenszusatz','Geschlecht','Geburtsdatum','Straße','Nr.','PLZ','Ort','Adresszusatz','Telefon','Email','Telefax','Schulabschluss bei Übermittlung durch BA']];
+            return ['profile'=>'BVB Reha', 'fields'=>['Nachname','Vorname','Namenszusatz','Geschlecht','Geburtsdatum','Straße','Nr.','PLZ','Ort','Adresszusatz','Telefon','Email','Telefax','Schulabschluss bei Übermittlung durch BA','Kundennummer']];
         }
         $indices = [0,1,18,2,3,12,13,14,15,16,17,19,20,21];
         $isBop = $project->usesBopParticipantOverviewPreset() || $project->rule('participant_parts_enabled', false);
