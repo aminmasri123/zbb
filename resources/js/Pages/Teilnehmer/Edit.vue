@@ -62,6 +62,7 @@
                 </nav>
 
                 <!-- ================= STAMMDATEN ================= -->
+                <CareerGoalSection v-if="activeTab === 'Stammdaten' && props.activeParticipationId" :key="props.activeParticipationId" :participation-id="props.activeParticipationId" :can-edit="can('teilnehmer.update')" />
                 <Stammdaten v-if="activeTab === 'Stammdaten'" :teilnehmer="teilnehmer" :betreuer="props.betreuer" :import-details="props.participantImportDetails" />
 
                 <!-- ================= Sozialdaten ================= -->
@@ -2214,6 +2215,7 @@
     import Toggle from '@/Components/Toggle.vue';
     import Alert from '@/Components/Utils/SweetalertSuccessError.vue'
     import Stammdaten from '@/Pages/Teilnehmer/Tabs/StammdatenSection.vue';
+    import CareerGoalSection from '@/Pages/Teilnehmer/Tabs/CareerGoalSection.vue';
     import PaSignaturesSection from '@/Pages/Teilnehmer/Tabs/PaSignaturesSection.vue';
     import InputText from 'primevue/inputtext';
     import FloatLabel from 'primevue/floatlabel';

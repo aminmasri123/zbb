@@ -159,6 +159,7 @@ final class AiReportOrchestrator
                 'error' => $exception->getMessage(),
             ]);
 
+            $report = app(\App\Services\Participants\CareerGoalLuvSource::class)->merge($report, $toolResults);
             return ['run_id' => $runId, 'report' => $report];
         }
 
@@ -173,6 +174,7 @@ final class AiReportOrchestrator
         }
 
         $response['report'] = $this->approvedPaSupportNeeds->merge($response['report'], $toolResults);
+        $response['report'] = app(\App\Services\Participants\CareerGoalLuvSource::class)->merge($response['report'], $toolResults);
 
         return ['run_id' => $runId, 'report' => $response['report']];
     }

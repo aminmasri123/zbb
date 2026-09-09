@@ -243,6 +243,7 @@ const claimsForField = (key) => (draft.value?.sections || [])
     .filter((claim) => claim.status === 'supported');
 const isPaSource = (sourceId = '') => sourceId.startsWith('potential-analysis-support-') || sourceId.startsWith('potential-analysis-assessment-');
 const sourceLabel = (sourceId = '') => {
+    if (sourceId.startsWith('career-goal-')) return 'Berufliches Ziel / Zielvereinbarung dieser Projektteilnahme';
     if (sourceId.startsWith('potential-analysis-assessment-')) return 'Anleiterbewertung aus abgeschlossener Potenzialanalyse';
     if (isPaSource(sourceId)) return 'Fachlich freigegebene Potenzialanalyse';
     if (sourceId === 'participant-development-summary') return 'Teilnehmerentwicklung';

@@ -96,6 +96,32 @@ class AiReportOrchestratorTest extends TestCase
         });
     }
 
+    public function test_career_goal_is_sent_as_evidence_and_mapped_to_the_luv_field(): void
+    {
+        [$user, $project, $participant] = $this->context();
+        $participation = ProjektHasPersonen::where('projekt_id', $project->id)->where('personen_id', $participant->id)->firstOrFail();
+        $goal = \App\Models\ParticipationCareerGoal::create([
+            'project_person_id' => $participation->id, 'target' => 'training', 'occupation' => 'Fachlagerist',
+            'agreement_status' => 'wish', 'documented_on' => '2026-02-01', 'author_name' => 'Fachkraft', 'created_by' => $user->id,
+        ]);
+        Http::fake(fn (Request $request) => Http::response([
+            'kind' => 'final', 'run_id' => $request->data()['run_id'],
+            'report' => ['report_type' => 'luv', 'title' => 'Entwurf', 'sections' => [[
+                'heading' => '[integration.goal] Eingliederungsziel',
+                'claims' => [['claim_id' => 'missing', 'text' => 'Daten fehlen.', 'status' => 'insufficient_data', 'source_ids' => []]],
+            ]], 'warnings' => []],
+        ]));
+        $result = app(AiReportOrchestrator::class)->draft($user, $participant->id, 'luv', '2026-01-01', '2026-06-30', 'Erstelle einen belegten Entwurf.');
+        Http::assertSent(function (Request $request) use ($goal) {
+            $identity = collect($request->data()['tool_results'])->firstWhere('tool_name', 'get_participant_identity_summary');
+            return data_get($identity, 'content.career_goal.source_id') === 'career-goal-'.$goal->id;
+        });
+        $section = collect($result['report']['sections'])->firstWhere('heading', '[integration.goal] (Ausbildungs-)Zielberuf und Alternativen');
+        $this->assertStringContainsString('Berufswunsch', $section['claims'][0]['text']);
+        $this->assertStringContainsString('Ausbildung als Fachlagerist', $section['claims'][0]['text']);
+        $this->assertSame(['career-goal-'.$goal->id], $section['claims'][0]['source_ids']);
+    }
+
     public function test_it_denies_an_unrelated_participant_before_contacting_the_agent(): void
     {
         [$user] = $this->context();

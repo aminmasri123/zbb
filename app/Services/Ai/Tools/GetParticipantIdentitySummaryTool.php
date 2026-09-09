@@ -30,6 +30,7 @@ final class GetParticipantIdentitySummaryTool implements AiTool
 
         return [
             'source_id' => 'participant-identity',
+            'career_goal' => app(\App\Services\Participants\CareerGoalLuvSource::class)->source($participation->id, $context->untilDate),
             'participant_id' => (int) $person->id,
             'first_name' => $person->vorname,
             'last_name' => $person->nachname,
