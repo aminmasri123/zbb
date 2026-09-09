@@ -1099,6 +1099,9 @@ class ProjektBopController extends Controller
 
             $alle_teilnehmer = PersonenIstSchueler::query()->filterSchueler( $schulId ?? null, $schuljahr ?? null, $teil ?? null)
             ->with('person')
+            ->reorder()
+            ->orderBy(Personen::select('nachname')->whereColumn('personens.id', (new PersonenIstSchueler)->qualifyColumn('person_id')))
+            ->orderBy('id')
             ->get();
 
 
