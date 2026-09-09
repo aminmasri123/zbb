@@ -30,8 +30,11 @@ class ProjektHasPersonen extends Pivot //Model
         'standort_id',
         'ergebnisse_id',
         'status',
-        'bemerkung'
+        'bemerkung',
+        'import_entry_data'
     ];
+    protected $casts = ['import_entry_data' => 'array'];
+
     public function meta()
     {
         return $this->hasOne(ProjektHasPersonenMeta::class,  'projekt_person_id')

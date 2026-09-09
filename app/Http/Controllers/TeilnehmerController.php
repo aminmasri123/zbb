@@ -871,6 +871,7 @@ class TeilnehmerController extends Controller
             'bereiche' => $bereiche,
             'arbeitsvermittler' => $arbeitsvermittler,
             'activeParticipationId' => $activeParticipation?->id,
+            'participantImportDetails' => $activeParticipation?->import_entry_data,
             'intakeChecklist' => $intakeChecklist,
             'participationTasks' => $participationTasks,
             'completionChecklist' => $completionChecklist,
@@ -1033,6 +1034,8 @@ class TeilnehmerController extends Controller
     public function import(Request $request)
     {
 
+        $importLock = \Illuminate\Support\Facades\Cache::lock('participants:import', 600);
+        if (!$importLock->get()) return response()->json(['error'=>true,'message'=>'Ein Teilnehmerimport läuft bereits. Bitte kurz warten.'], 409);
         try {
             $activeProject = $this->activeProjectContext->currentAvailableFor($request->user());
             abort_unless($activeProject, 409, 'Bitte wählen Sie zuerst ein aktives Projekt aus.');
@@ -1047,72 +1050,23 @@ class TeilnehmerController extends Controller
                 return response()->json(['error' => true, 'message' => 'Fehler beim Hochladen der Datei.']);
             }
 
-            try {
-                $spreadsheet = IOFactory::load($file->getRealPath());
-            } catch (Exception $e) {
-                Log::error('Excel konnte nicht geladen werden: '.$e->getMessage());
-
-                return response()->json(['error' => true, 'message' => 'Die Datei konnte nicht gelesen werden.']);
-            }
-
-            $worksheet = $spreadsheet->getActiveSheet();
-
-            $importTyp = strtolower((string) $this->cleanImportValue($worksheet->getCell('B2')->getCalculatedValue()));
-            $isBopImport = in_array($importTyp, ['bop', 'berufsorientierungsprogramm'], true);
-
-            $data = [];
-            $headerFound = false;
-            $emptyRowCount = 0; // Zähler für aufeinanderfolgende leere Zeilen
-
-            foreach ($worksheet->getRowIterator() as $row) {
-                // Zellen einlesen
-                $cellIterator = $row->getCellIterator();
-                $cellIterator->setIterateOnlyExistingCells(false);
-
-                $rowData = [];
-                foreach ($cellIterator as $cell) {
-                    $rowData[] = $cell->getValue();
+            $request->validate(['file' => ['required', 'file', 'max:5120', 'mimes:csv,txt,xlsx,xls'], 'import_profile' => ['nullable','in:auto,standard,bop,bvb_reha']]);
+            $parsed = app(\App\Services\Participants\ParticipantImportReader::class)->read($file, $request->input('import_profile', 'auto'));
+            $data = $parsed['data'];
+            $isBopImport = $parsed['profile'] === 'bop';
+            $fingerprint = hash('sha256', hash_file('sha256', $file->getRealPath()).'|'.$activeProject->id.'|'.$request->user()->id.'|'.$parsed['profile']);
+            if (!$request->boolean('preview') && ($parsed['profile'] === 'bvb_reha' || collect($parsed['mapping'])->contains('target', 'Schulabschluss bei Übermittlung durch BA') || $request->filled('confirmation'))) {
+                try { $approval = json_decode(\Illuminate\Support\Facades\Crypt::decryptString($request->input('confirmation', '')), true); }
+                catch (\Throwable $e) { $approval = []; }
+                if (($approval['fingerprint'] ?? '') !== $fingerprint || ($approval['expires'] ?? 0) < time()) {
+                    return response()->json(['error'=>true,'message'=>'Bitte die Datei zuerst in der Vorschau prüfen und anschließend bestätigen.'], 422);
                 }
-
-                if (! $headerFound) {
-                    $firstColumn = strtolower((string) $this->cleanImportValue($rowData[0] ?? null));
-                    $secondColumn = strtolower((string) $this->cleanImportValue($rowData[1] ?? null));
-
-                    if ($firstColumn === 'vorname' && $secondColumn === 'nachname') {
-                        $headerFound = true;
-                    }
-
-                    continue;
-                }
-                // Prüfen, ob die Zeile komplett leer ist
-                if (count(array_filter($rowData)) === 0) {
-                    $emptyRowCount++;
-                    if ($emptyRowCount >= 3) {
-                        Log::info('Import beendet nach '.$emptyRowCount.' aufeinanderfolgenden leeren Zeilen.');
-                        break; // Import abbrechen
-                    }
-
-                    continue; // Leere Zeile überspringen
-                } else {
-                    $emptyRowCount = 0; // Reset, sobald wieder eine gefüllte Zeile gefunden wurde
-                }
-
-                $data[] = [
-                    'row_number' => $row->getRowIndex(),
-                    'values' => $rowData,
-                ];
-            }
-            // Log::info('Importierte Zeilen:', $data);
-            if (! $headerFound) {
-                return response()->json([
-                    'error' => true,
-                    'message' => 'Die Kopfzeile wurde nicht gefunden. Erwartet wird eine Zeile mit Vorname und Nachname.',
-                ]);
             }
 
             $createdCount = 0;
             $errors = [];
             $validRows = [];
+            $seen = [];
 
             foreach ($data as $index => $entry) {
                 try {
@@ -1163,6 +1117,7 @@ class TeilnehmerController extends Controller
                     }
 
                     $teilnehmerData = [
+                        'namenszusatz' => $this->cleanImportValue($row[18] ?? null),
                         'vorname' => $row[0] ?? null,
                         'nachname' => $row[1] ?? null,
                         'geschlecht' => match (strtolower(trim((string) ($row[2] ?? '')))) {
@@ -1176,6 +1131,14 @@ class TeilnehmerController extends Controller
                         'typ' => 'teilnehmer',
                     ];
 
+                    if ($this->cleanImportValue($row[3] ?? null) && !$teilnehmerData['geburtsdatum']) {
+                        $errors[] = 'Zeile '.$rowNumber.': Ungültiges Geburtsdatum.';
+                        continue;
+                    }
+                    if ($this->cleanImportValue($row[2] ?? null) && !$teilnehmerData['geschlecht']) {
+                        $errors[] = 'Zeile '.$rowNumber.': Geschlecht muss m, w oder d sein.';
+                        continue;
+                    }
                     $addressData = [
                         'strasse' => $this->cleanImportValue($row[12] ?? null),
                         'hausnummer' => $this->cleanImportValue($row[13] ?? null),
@@ -1232,6 +1195,31 @@ class TeilnehmerController extends Controller
                         continue;
                     }
 
+                    $extraValidator = Validator::make([
+                        'namenszusatz'=>$teilnehmerData['namenszusatz'],
+                        'email'=>$this->cleanImportValue($row[20] ?? null),
+                        'telefon'=>$this->cleanImportValue($row[19] ?? null),
+                        'fax'=>$this->cleanImportValue($row[21] ?? null),
+                        'abschluss'=>$this->cleanImportValue($row[22] ?? null),
+                    ], ['namenszusatz'=>'nullable|string|max:255','email'=>'nullable|email|max:255','telefon'=>'nullable|string|max:255','fax'=>'nullable|string|max:255','abschluss'=>'nullable|string|max:1000']);
+                    if ($extraValidator->fails()) {
+                        $errors[] = 'Zeile '.$rowNumber.': '.implode(' ', $extraValidator->errors()->all());
+                        continue;
+                    }
+                    $duplicate = Personen::query()->whereRaw('LOWER(TRIM(vorname)) = ?', [mb_strtolower(trim($teilnehmerData['vorname']))])
+                        ->whereRaw('LOWER(TRIM(nachname)) = ?', [mb_strtolower(trim($teilnehmerData['nachname']))]);
+                    if ($teilnehmerData['geburtsdatum']) $duplicate->where(function ($query) use ($teilnehmerData) {
+                        $query->whereDate('geburtsdatum', $teilnehmerData['geburtsdatum'])->orWhereNull('geburtsdatum');
+                    });
+                    $key = mb_strtolower(trim($teilnehmerData['vorname']).'|'.trim($teilnehmerData['nachname']));
+                    $date = $teilnehmerData['geburtsdatum'];
+                    $sameFile = isset($seen[$key]) && (!$date || in_array(null, $seen[$key], true) || in_array($date, $seen[$key], true));
+                    if ($duplicate->exists() || $sameFile) {
+                        $errors[] = 'Zeile '.$rowNumber.': Mögliche Dublette. Bitte die Personenzuordnung vor dem Import prüfen; es wird nichts überschrieben.';
+                        continue;
+                    }
+                    $seen[$key][] = $date;
+
                     $validRows[] = [
                         'row' => $row,
                         'teilnehmerData' => $teilnehmerData,
@@ -1243,68 +1231,6 @@ class TeilnehmerController extends Controller
                         'klasse' => $klasse,
                         'addressData' => $hasAddress ? $addressData : null,
                     ];
-
-                    continue;
-
-                    /* if (count($row) < 8) {
-                        $errors[] = "Zeile " . ($index + 2) . " hat zu wenige Spalten.";
-                        continue;
-                    } */
-
-                    $teilnehmerData = [
-                        'vorname' => $row[0] ?? null,
-                        'nachname' => $row[1] ?? null,
-                        'geschlecht' => match (strtolower(trim($row[2] ?? ''))) {
-                            'männlich' => 'm',
-                            'weiblich' => 'w',
-                            'divers' => 'd',
-                            'm' => 'm',
-                            'w' => 'w',
-                            'd' => 'd',
-                            default => null,
-                        },
-                        'geburtsdatum' => ! empty($row[3]) ? Date::excelToDateTimeObject($row[3])->format('Y-m-d') : null,
-                        'aktiv' => 1,
-                        'typ' => 'teilnehmer',
-
-                        /* 'klasse'         => $row[3] ?? null,
-                        'schule_id'      => $row[4] ?? null,
-                        'foerderschueler'=> match (strtolower(trim($row[5] ?? ''))) {
-                            'ja' => 1,
-                            'nein' => 0,
-                            '1' => 1,
-                            '0' => 0,
-                            default => 0,
-                        },
-                        'schuljahr'      => $row[7] ?? date('Y'),
-                        'adresse'        => $row[8] ?? null,
-                        'teil'           => $row[9] ?? '1', */
-                    ];
-
-                    if (empty($teilnehmerData['vorname']) || empty($teilnehmerData['nachname'])) {
-                        $errors[] = 'Zeile '.($index + 2).' fehlt Vorname oder Nachname.';
-
-                        continue;
-                    }
-
-                    $teilnehmer = Personen::create($teilnehmerData);
-
-                    if ($teilnehmer) {
-                        // Projekt zuordnen
-                        if (! empty($row[4])) {
-
-                            $teilnehmer->projekte()->attach(
-                                $row[4],
-                                [
-                                    'standort_id' => $row[5] ?? null,
-                                ]
-                            );
-                        }
-
-                        $createdCount++;
-                    } else {
-                        $errors[] = 'Zeile '.($index + 2).' konnte nicht gespeichert werden.';
-                    }
 
                 } catch (Exception $e) {
                     $errors[] = 'Fehler in Zeile '.($rowNumber ?? ($index + 2)).': '.$e->getMessage();
@@ -1322,11 +1248,28 @@ class TeilnehmerController extends Controller
                 ], 422);
             }
 
-            $createdCount = DB::transaction(function () use ($validRows, $activeProject) {
+            if ($request->boolean('preview')) {
+                return response()->json([
+                    'preview'=>true, 'project'=>$activeProject->name, 'profile'=>$parsed['profile'], 'mapping'=>$parsed['mapping'],
+                    'count'=>count($validRows),
+                    'rows'=>array_map(fn($entry)=>['line'=>$entry['row_number'], 'values'=>$entry['values']], $data),
+                    'fields'=>\App\Services\Participants\ParticipantImportReader::FIELDS,
+                    'confirmation'=>\Illuminate\Support\Facades\Crypt::encryptString(json_encode(['fingerprint'=>$fingerprint,'expires'=>time()+1800])),
+                ]);
+            }
+
+            $createdCount = DB::transaction(function () use ($validRows, $activeProject, $parsed) {
                 $createdCount = 0;
 
                 foreach ($validRows as $validRow) {
                     $teilnehmer = Personen::create($validRow['teilnehmerData']);
+
+                    foreach ([19=>'Telefon',20=>'Email',21=>'Telefax'] as $column=>$type) {
+                        if ($value = $this->cleanImportValue($validRow['row'][$column] ?? null)) {
+                            $contactType = \App\Models\Kontakttypen::firstOrCreate(['name'=>$type]);
+                            $teilnehmer->kontaktes()->create(['kontakttyp_id'=>$contactType->id,'wert'=>$value,'bemerkung'=>'Teilnehmerimport']);
+                        }
+                    }
 
                     if ($validRow['addressData']) {
                         $teilnehmer->adresses()->create($validRow['addressData']);
@@ -1338,6 +1281,12 @@ class TeilnehmerController extends Controller
                             [
                                 'standort_id' => $validRow['standortId'],
                                 'status' => $activeProject->rule('participation_initial_status', 'aktiv'),
+                                'import_entry_data' => [
+                                    'profile'=>$parsed['profile'],
+                                    'school_qualification_at_entry'=>$this->cleanImportValue($validRow['row'][22] ?? null),
+                                    'source'=> $this->cleanImportValue($validRow['row'][22] ?? null) ? 'Übermittlung durch BA laut Importdatei' : null,
+                                    'imported_at'=>now()->toIso8601String(),
+                                ],
                             ]
                         );
                     }
@@ -1382,10 +1331,16 @@ class TeilnehmerController extends Controller
                 ]);
             }
 
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+            throw $e;
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json(['error'=>true,'message'=>'Importdatei bitte prüfen.','errors'=>collect($e->errors())->flatten()->all()], 422);
         } catch (Exception $e) {
             Log::error('Allgemeiner Importfehler: '.$e->getMessage());
 
-            return response()->json(['error' => true, 'message' => 'Ein unerwarteter Fehler ist aufgetreten.']);
+            return response()->json(['error' => true, 'message' => 'Ein unerwarteter Fehler ist aufgetreten.'], 500);
+        } finally {
+            $importLock->release();
         }
     }
 
@@ -1500,7 +1455,8 @@ class TeilnehmerController extends Controller
         foreach ($formats as $format) {
             $date = \DateTime::createFromFormat($format, $value);
 
-            if ($date instanceof \DateTime) {
+            $dateErrors = \DateTime::getLastErrors();
+            if ($date instanceof \DateTime && (!$dateErrors || (!$dateErrors['warning_count'] && !$dateErrors['error_count']))) {
                 return $date->format('Y-m-d');
             }
         }

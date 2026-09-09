@@ -87,6 +87,30 @@ const { teilnehmers, authProjekte, rollen, gruppen, projekte, standorte, anleite
 });
 const { can } = usePermissions();
 const showImportModal = ref(false);
+const importProfile = ref('auto');
+const importPreview = ref(null);
+const importFile = ref(null);
+const importSaving = ref(false);
+const confirmParticipantImport = async () => {
+    if (!importPreview.value || !importFile.value || importSaving.value) return;
+    importSaving.value = true;
+    const data = new FormData();
+    data.append('file', importFile.value);
+    data.append('import_profile', importPreview.value.profile);
+    data.append('confirmation', importPreview.value.confirmation);
+    try {
+        const { data: response } = await axios.post(route('teilnehmer.import'), data);
+        if (response.error) throw { response: { data: response } };
+        showImportModal.value = false;
+        importPreview.value = null;
+        importFile.value = null;
+        Swal.fire('Import erfolgreich', response.message, 'success');
+        router.reload({ only: ['teilnehmers'] });
+    } catch (error) {
+        Swal.fire('Import nicht durchgeführt', formatImportMessage(error.response?.data), 'error');
+        importPreview.value = null;
+    } finally { importSaving.value = false; }
+};
 const parentalConsentSaving = ref(new Set());
 const canCreateParticipant = computed(() => can('teilnehmer.store'));
 const canImportParticipant = computed(() => can('teilnehmer.import') || can('teilnehmer.store'));
@@ -132,6 +156,8 @@ const inviteToPortal = async (teilnehmer) => {
 const importTeilnehmer = () => {
     if (!canImportParticipant.value) return;
 
+    importPreview.value = null;
+    importFile.value = null;
     showImportModal.value = true;
 
     setTimeout(() => {
@@ -157,6 +183,8 @@ const initDropzone = () => {
         paramName: "file",
         clickable: true,
         maxFilesize: 5,
+        maxFiles: 1,
+        params: () => ({ preview: '1', import_profile: importProfile.value }),
         acceptedFiles: ".csv,.xlsx,.xls",
         addRemoveLinks: true,
 
@@ -178,15 +206,14 @@ const initDropzone = () => {
                 return;
             }
 
-            Swal.fire({
-                title: "Import erfolgreich",
-                text: response?.message || "Teilnehmer wurden importiert.",
-                icon: "success"
-            });
+            importPreview.value = response;
+            importFile.value = file;
+        },
 
-            showImportModal.value = false;
-
-            router.reload({ only: ["teilnehmers"] });
+        removedfile(file) {
+            file.previewElement?.remove();
+            importFile.value = null;
+            importPreview.value = null;
         },
 
         error(file, message) {
@@ -1093,14 +1120,31 @@ const sortByColumn = (column) => {
 
 
             <div v-if="canImportParticipant && showImportModal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-                <div class="bg-white p-6 rounded-lg w-1/2">
+                <div class="bg-white p-6 rounded-lg w-[95vw] max-w-6xl max-h-[90vh] overflow-y-auto">
 
                     <div class="flex justify-between mb-4">
                         <h2 class="text-lg font-bold">Teilnehmer importieren</h2>
-                        <button @click="showImportModal=false">✕</button>
+                        <button :disabled="importSaving" @click="showImportModal=false">✕</button>
                     </div>
 
+                    <p class="text-sm mb-3">Die Datei wird zuerst geprüft. Gespeichert wird erst nach Ihrer Bestätigung. Bestehende Personen werden nicht überschrieben.</p>
+                    <label class="block mb-3">Importprofil
+                        <select v-model="importProfile" :disabled="importSaving" @change="importPreview=null" class="ml-2 border rounded p-2">
+                            <option value="auto">Automatisch erkennen</option><option value="standard">Standard</option><option value="bop">BOP</option><option value="bvb_reha">BVB Reha / BA</option>
+                        </select>
+                    </label>
                     <form id="mydropzone" class="dropzone border border-dashed p-6 rounded-lg"></form>
+                    <button :disabled="importSaving" class="mt-2 underline text-sm" @click="dropzoneInstance?.removeAllFiles(true); importFile=null; importPreview=null">Andere Datei prüfen</button>
+                    <section v-if="importPreview" class="mt-4">
+                        <h3 class="font-bold">Vorschau: {{ importPreview.count }} Teilnehmer → {{ importPreview.project }}</h3>
+                        <p class="text-sm">Profil: {{ importPreview.profile }} · Angaben bitte vor dem Import kontrollieren.</p>
+                        <details class="my-2"><summary>Erkannte Spaltenzuordnung</summary><ul><li v-for="column in importPreview.mapping" :key="column.source">{{ column.source }} → {{ column.target }}</li></ul></details>
+                        <div class="overflow-auto max-h-80 border rounded"><table class="text-sm whitespace-nowrap w-full">
+                            <thead class="sticky top-0 bg-slate-100"><tr><th class="p-2">Zeile</th><th v-for="field in importPreview.fields" :key="field" class="p-2 text-left">{{ field }}</th></tr></thead>
+                            <tbody><tr v-for="row in importPreview.rows" :key="row.line" class="border-t"><td class="p-2">{{ row.line }}</td><td v-for="(value,index) in row.values" :key="index" class="p-2">{{ value ?? '–' }}</td></tr></tbody>
+                        </table></div>
+                        <button :disabled="importSaving" class="mt-4 bg-zbb text-white rounded px-4 py-2 disabled:opacity-50" @click="confirmParticipantImport">{{ importSaving ? 'Wird importiert…' : `${importPreview.count} Teilnehmer verbindlich importieren` }}</button>
+                    </section>
 
                 </div>
 

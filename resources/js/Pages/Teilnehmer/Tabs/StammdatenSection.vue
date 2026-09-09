@@ -1,5 +1,9 @@
 <template>
   <div>
+    <div v-if="teilnehmer.namenszusatz || importDetails?.school_qualification_at_entry" class="mb-4 p-4 bg-slate-50 border rounded">
+      <p v-if="teilnehmer.namenszusatz"><strong>Namenszusatz:</strong> {{ teilnehmer.namenszusatz }}</p>
+      <p v-if="importDetails?.school_qualification_at_entry"><strong>Schulabschluss bei Übermittlung durch BA:</strong> {{ importDetails.school_qualification_at_entry }}<br><span class="text-sm">Quelle: {{ importDetails.source }}</span></p>
+    </div>
     <button
       @click="saveStammdaten"
       class="bg-zbb text-white px-4 mb-6 mt-4 py-2 rounded-md text-sm hover:bg-zbb/80 transition w-full"
@@ -52,6 +56,7 @@ import dayjs from "dayjs";
 
 const props = defineProps({
   teilnehmer: Object,
+  importDetails: Object,
 });
 
 const teilnehmer = ref(JSON.parse(JSON.stringify(props.teilnehmer)));

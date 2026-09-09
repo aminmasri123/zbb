@@ -34,6 +34,7 @@ class Personen extends Model
         'id',
         'vorname',
         'nachname',
+        'namenszusatz',
         'geburtsdatum',
         'geschlecht',
         'aktiv',

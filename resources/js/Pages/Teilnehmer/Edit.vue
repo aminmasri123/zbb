@@ -62,7 +62,7 @@
                 </nav>
 
                 <!-- ================= STAMMDATEN ================= -->
-                <Stammdaten v-if="activeTab === 'Stammdaten'" :teilnehmer="teilnehmer" :betreuer="props.betreuer" />
+                <Stammdaten v-if="activeTab === 'Stammdaten'" :teilnehmer="teilnehmer" :betreuer="props.betreuer" :import-details="props.participantImportDetails" />
 
                 <!-- ================= Sozialdaten ================= -->
                 <div v-if="activeTab === 'Sozialdaten'">
@@ -2253,6 +2253,7 @@
         bereiche: Array,
         arbeitsvermittler: Array,
         activeParticipationId: Number,
+        participantImportDetails: Object,
         intakeChecklist: { type: Array, default: () => [] },
         participationTasks: { type: Array, default: () => [] },
         completionChecklist: { type: Array, default: () => [] },
