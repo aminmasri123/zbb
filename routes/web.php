@@ -649,6 +649,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
             ->can('teilnehmer.portal.overview');
         Route::get('/teilnehmer/anlegen', [TeilnehmerController::class, 'create'])->name('teilnehmer.create')->can('teilnehmer.store');
         Route::post('/teilnehmer/anlegen', [TeilnehmerController::class, 'store'])->name('teilnehmer.store')->can('teilnehmer.store');
+        Route::get('/teilnehmer/import-kontext', [TeilnehmerController::class, 'importContext'])->name('teilnehmer.import.context')->middleware('canAnyPermission:teilnehmer.import,teilnehmer.store');
         Route::get('/teilnehmer/import-pruefungen', [TeilnehmerController::class, 'importReviews'])->name('teilnehmer.import.reviews')->middleware('canAnyPermission:teilnehmer.import,teilnehmer.store');
         Route::get('/teilnehmer/import-pruefungen/{review}', [TeilnehmerController::class, 'resumeImportReview'])->name('teilnehmer.import.reviews.resume')->middleware('canAnyPermission:teilnehmer.import,teilnehmer.store');
         Route::get('/teilnehmer/import-vorlage', [TeilnehmerController::class, 'importTemplate'])->name('teilnehmer.import.template')->can('teilnehmer.import');

@@ -1049,6 +1049,19 @@ class TeilnehmerController extends Controller
         }, $filename, ['Content-Type'=>'text/csv; charset=UTF-8', 'Cache-Control'=>'private, no-store']);
     }
 
+    public function importContext(Request $request)
+    {
+        $project = $this->activeProjectContext->currentAvailableFor($request->user());
+        abort_unless($project, 409, 'Bitte wählen Sie zuerst ein aktives Projekt aus.');
+
+        return response()->json([
+            'project' => ['id' => $project->id, 'name' => $project->name],
+            'locations' => $request->user()->standorte()->orderBy('standorts.name')
+                ->get(['standorts.id', 'standorts.name'])->unique('id')->values()
+                ->map(fn ($location) => ['id' => $location->id, 'name' => $location->name]),
+        ])->header('Cache-Control', 'private, no-store');
+    }
+
     public function importReviews(Request $request)
     {
         $project = $this->activeProjectContext->currentAvailableFor($request->user());
@@ -1067,7 +1080,10 @@ class TeilnehmerController extends Controller
         abort_unless($project, 409);
         $pending = \App\Models\ParticipantImportReview::whereKey($review)->where('user_id',$request->user()->id)
             ->where('projekt_id',$project->id)->where('expires_at','>',now())->firstOrFail();
-        return response()->json(['id'=>$pending->id,'csv'=>$pending->csv(),'profile'=>$pending->payload['profile']])->header('Cache-Control','private, no-store');
+        return response()->json([
+            'id'=>$pending->id,'csv'=>$pending->csv(),'profile'=>$pending->payload['profile'],
+            'standort_id'=>$pending->payload['standort_id'] ?? null,
+        ])->header('Cache-Control','private, no-store');
     }
 
     public function import(Request $request)
@@ -1089,7 +1105,17 @@ class TeilnehmerController extends Controller
                 return response()->json(['error' => true, 'message' => 'Fehler beim Hochladen der Datei.']);
             }
 
-            $request->validate(['file' => ['required', 'file', 'max:5120', 'mimes:csv,txt,xlsx,xls'], 'import_profile' => ['nullable','in:auto,standard,bop,bvb_reha']]);
+            $request->validate([
+                'file' => ['required', 'file', 'max:5120', 'mimes:csv,txt,xlsx,xls'],
+                'import_profile' => ['nullable','in:auto,standard,bop,bvb_reha'],
+                'standort_id' => ['required', 'integer'],
+                'project_id' => ['nullable', 'integer'],
+            ], ['standort_id.required' => 'Bitte wählen Sie einen Ihrer zugewiesenen Standorte aus.']);
+            abort_if($request->filled('project_id') && $request->integer('project_id') !== (int) $activeProject->id,
+                409, 'Das aktive Projekt wurde geändert. Bitte öffnen Sie den Import erneut.');
+            $importLocation = $request->user()->standorte()->whereKey($request->integer('standort_id'))
+                ->first(['standorts.id', 'standorts.name']);
+            abort_unless($importLocation, 403, 'Dieser Standort ist Ihnen nicht zugewiesen. Bitte öffnen Sie den Import erneut und wählen Sie einen zugewiesenen Standort.');
             $parsed = app(\App\Services\Participants\ParticipantImportReader::class)->read($file, $request->input('import_profile', 'auto'));
             $data = $parsed['data'];
             $isBopImport = $parsed['profile'] === 'bop';
@@ -1105,8 +1131,8 @@ class TeilnehmerController extends Controller
             if (!is_array($decisions)) throw \Illuminate\Validation\ValidationException::withMessages(['decisions'=>'Ungültige Importentscheidungen.']);
             $matcher = app(\App\Services\Participants\ParticipantImportMatches::class);
 
-            $fingerprint = hash('sha256', hash_file('sha256', $file->getRealPath()).'|'.$activeProject->id.'|'.$request->user()->id.'|'.$parsed['profile']);
-            if (!$request->boolean('preview') && ($parsed['profile'] === 'bvb_reha' || collect($parsed['mapping'])->contains('target', 'Schulabschluss bei Übermittlung durch BA') || $request->filled('confirmation'))) {
+            $fingerprint = hash('sha256', hash_file('sha256', $file->getRealPath()).'|'.$activeProject->id.'|'.$importLocation->id.'|'.$request->user()->id.'|'.$parsed['profile']);
+            if (!$request->boolean('preview')) {
                 try { $approval = json_decode(\Illuminate\Support\Facades\Crypt::decryptString($request->input('confirmation', '')), true); }
                 catch (\Throwable $e) { $approval = []; }
                 if (($approval['fingerprint'] ?? '') !== $fingerprint || ($approval['expires'] ?? 0) < time()) {
@@ -1127,9 +1153,11 @@ class TeilnehmerController extends Controller
                     $schuljahr = $this->cleanImportValue($row[7] ?? null);
                     $teil = $this->cleanImportValue($row[8] ?? null);
                     $klasse = $this->cleanImportValue($row[9] ?? null);
-                    $spreadsheetProjectId = $this->cleanImportValue($row[4] ?? null);
                     $projektId = $activeProject->id;
-                    $standortId = $this->cleanImportValue($row[5] ?? null);
+                    $standortId = $importLocation->id;
+                    // The reviewed import context is authoritative, including for legacy spreadsheets.
+                    $row[4] = $projektId;
+                    $row[5] = $standortId;
 
                     if (! $isBopImport) {
                         $schuleId = null;
@@ -1145,18 +1173,6 @@ class TeilnehmerController extends Controller
                             ? 'Schule_ID, Schuljahr, Teil oder Klasse'
                             : 'Schule_ID, Schuljahr oder Klasse';
                         $errors[] = 'Zeile '.$rowNumber." ist BOP, aber {$requiredSchoolColumns} fehlt.";
-
-                        continue;
-                    }
-
-                    if ($spreadsheetProjectId && (int) $spreadsheetProjectId !== (int) $activeProject->id) {
-                        $errors[] = 'Zeile '.$rowNumber.': Projekt_ID muss dem aktiven Header-Projekt entsprechen.';
-
-                        continue;
-                    }
-
-                    if ($standortId && ! Standort::whereKey($standortId)->exists()) {
-                        $errors[] = 'Zeile '.$rowNumber.': Standort_ID '.$standortId.' existiert nicht.';
 
                         continue;
                     }
@@ -1297,6 +1313,7 @@ class TeilnehmerController extends Controller
             if ($request->boolean('preview')) {
                 return response()->json([
                     'preview'=>true, 'project'=>$activeProject->name, 'profile'=>$parsed['profile'], 'mapping'=>$parsed['mapping'],
+                    'location'=>['id'=>$importLocation->id, 'name'=>$importLocation->name],
                     'count'=>count($validRows),
                     'rows'=>array_map(fn($entry)=>['line'=>$entry['line'], 'values'=>$entry['row'], 'match'=>$entry['match']], $validRows),
                     'new_count'=>count(array_filter($validRows,fn($entry)=>$entry['match']['status']==='new')),
@@ -1329,7 +1346,7 @@ class TeilnehmerController extends Controller
             }
             unset($entry);
 
-            $result = DB::transaction(function () use ($validRows, $activeProject, $parsed, $request, $pending) {
+            $result = DB::transaction(function () use ($validRows, $activeProject, $importLocation, $parsed, $request, $pending) {
                 $created=0; $linked=0; $skipped=0; $deferred=[]; $processedIds=[];
                 foreach ($validRows as $validRow) {
                     if ($validRow['action']==='defer') { $deferred[]=$validRow['row']; continue; }
@@ -1376,7 +1393,7 @@ class TeilnehmerController extends Controller
                 }
                 if ($deferred) {
                     $review = $pending ?: new \App\Models\ParticipantImportReview(['user_id'=>$request->user()->id,'projekt_id'=>$activeProject->id,'expires_at'=>now()->addDays(30)]);
-                    $review->payload=['profile'=>$parsed['profile'],'rows'=>$deferred];$review->save();
+                    $review->payload=['profile'=>$parsed['profile'],'rows'=>$deferred,'standort_id'=>$importLocation->id];$review->save();
                 } elseif ($pending) {
                     $pending->delete(); // Only the temporary import copy; participant/project records are untouched.
                 }

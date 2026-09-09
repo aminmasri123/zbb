@@ -308,6 +308,7 @@ class ProjectRuleConfigurationTest extends TestCase
         $user = User::factory()->create();
         $this->givePermission($user, 'teilnehmer.import');
         $location = Standort::factory()->create();
+        $user->standorte()->attach($location);
         $project = Projekt::factory()->create([
             'rule_settings' => ['participant_birthdate_required' => true],
         ]);
@@ -325,6 +326,8 @@ class ProjectRuleConfigurationTest extends TestCase
         try {
             $this->actingAs($user)->postJson(route('teilnehmer.import'), [
                 'file' => new UploadedFile($path, 'teilnehmer.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true),
+                'standort_id' => $location->id,
+                'preview' => 1,
             ])->assertUnprocessable()
                 ->assertJsonPath('error', true);
 

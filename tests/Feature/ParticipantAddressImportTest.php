@@ -30,15 +30,13 @@ class ParticipantAddressImportTest extends TestCase
         ]);
 
         try {
-            $this->actingAs($user)->postJson(route('teilnehmer.import'), [
-                'file' => new UploadedFile(
+            $this->submitImport($user, new UploadedFile(
                     $file,
                     'teilnehmer-mit-adresse.xlsx',
                     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                     null,
                     true
-                ),
-            ])->assertOk()
+                ), $location->id)->assertOk()
                 ->assertJsonPath('success', true);
 
             $participant = Personen::query()
@@ -74,15 +72,13 @@ class ParticipantAddressImportTest extends TestCase
         ]);
 
         try {
-            $this->actingAs($user)->postJson(route('teilnehmer.import'), [
-                'file' => new UploadedFile(
+            $this->submitImport($user, new UploadedFile(
                     $file,
                     'teilnehmer-mit-unvollstaendiger-adresse.xlsx',
                     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                     null,
                     true
-                ),
-            ])->assertUnprocessable()
+                ), $location->id)->assertUnprocessable()
                 ->assertJsonPath('error', true)
                 ->assertJsonPath('message', 'Import abgebrochen. Bitte korrigiere die Fehler in der Excel-Datei.');
 
@@ -122,15 +118,13 @@ class ParticipantAddressImportTest extends TestCase
         (new Xlsx($spreadsheet))->save($file);
 
         try {
-            $this->actingAs($user)->postJson(route('teilnehmer.import'), [
-                'file' => new UploadedFile(
+            $this->submitImport($user, new UploadedFile(
                     $file,
                     'alte-teilnehmer-vorlage.xlsx',
                     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                     null,
                     true
-                ),
-            ])->assertOk()
+                ), $location->id)->assertOk()
                 ->assertJsonPath('success', true);
 
             $this->assertDatabaseHas('personens', [
@@ -143,11 +137,22 @@ class ParticipantAddressImportTest extends TestCase
         }
     }
 
+    private function submitImport(User $user, UploadedFile $file, int $locationId)
+    {
+        $payload = ['file' => $file, 'standort_id' => $locationId, 'preview' => 1];
+        $preview = $this->actingAs($user)->postJson(route('teilnehmer.import'), $payload);
+        if (!$preview->isSuccessful()) return $preview;
+        unset($payload['preview']);
+        $payload['confirmation'] = $preview->json('confirmation');
+        return $this->postJson(route('teilnehmer.import'), $payload);
+    }
+
     private function createProjectContext(): array
     {
         $user = User::factory()->create();
         $this->grantTestPermission($user, 'teilnehmer.import');
         $location = Standort::factory()->create();
+        $user->standorte()->attach($location);
         $project = Projekt::factory()->create();
 
         ProjektHasPersonen::query()->create([

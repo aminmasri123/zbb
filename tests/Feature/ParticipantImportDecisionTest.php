@@ -22,9 +22,14 @@ class ParticipantImportDecisionTest extends TestCase
 {
     use RefreshDatabase;
 
+    private int $importLocationId;
+
     private function setupContext(bool $sourceAccess = true): array
     {
         $user = User::factory()->create();
+        $location = \App\Models\Standort::factory()->create();
+        $user->standorte()->attach($location);
+        $this->importLocationId = $location->id;
         $user->assignRole(Role::firstOrCreate(['name' => 'Projektleitung', 'guard_name' => 'web'], ['color' => '#123456']));
         $target = Projekt::factory()->create(['name' => 'BVB Reha']);
         $source = Projekt::factory()->create(['name' => 'BOP Altprojekt']);
@@ -48,7 +53,7 @@ class ParticipantImportDecisionTest extends TestCase
 
     private function preview($user, $file): array
     {
-        return $this->actingAs($user)->postJson(route('teilnehmer.import'), ['file' => $file, 'preview' => 1])->assertOk()->json();
+        return $this->actingAs($user)->postJson(route('teilnehmer.import'), ['standort_id' => $this->importLocationId, 'file' => $file, 'preview' => 1])->assertOk()->json();
     }
 
     public function test_new_rows_import_while_matches_are_encrypted_and_can_be_resumed(): void
@@ -58,14 +63,14 @@ class ParticipantImportDecisionTest extends TestCase
         $preview = $this->preview($user, $file);
         $this->assertSame('match', $preview['rows'][0]['match']['status']);
         $this->assertSame(['BOP Altprojekt'], $preview['rows'][0]['match']['candidates'][0]['projects']);
-        $this->postJson(route('teilnehmer.import'), ['file' => $file, 'confirmation' => $preview['confirmation']])->assertOk()->assertJsonPath('result.created', 1)->assertJsonPath('result.deferred', 1);
+        $this->postJson(route('teilnehmer.import'), ['standort_id' => $this->importLocationId, 'file' => $file, 'confirmation' => $preview['confirmation']])->assertOk()->assertJsonPath('result.created', 1)->assertJsonPath('result.deferred', 1);
         $review = ParticipantImportReview::firstOrFail();
         $this->assertStringNotContainsString('Bestand', DB::table('participant_import_reviews')->value('payload'));
         $this->assertFalse($person->projekte()->whereKey($target->id)->exists());
         $saved = $this->getJson(route('teilnehmer.import.reviews.resume', $review->id))->assertOk()->json();
         $resumed = UploadedFile::fake()->createWithContent('offen.csv', $saved['csv']);
-        $next = $this->postJson(route('teilnehmer.import'), ['file' => $resumed, 'preview' => 1, 'review_id' => $review->id, 'import_profile' => $saved['profile']])->assertOk()->json();
-        $this->postJson(route('teilnehmer.import'), ['file' => $resumed, 'confirmation' => $next['confirmation'], 'review_id' => $review->id, 'import_profile' => $saved['profile'],
+        $next = $this->postJson(route('teilnehmer.import'), ['standort_id' => $this->importLocationId, 'file' => $resumed, 'preview' => 1, 'review_id' => $review->id, 'import_profile' => $saved['profile']])->assertOk()->json();
+        $this->postJson(route('teilnehmer.import'), ['standort_id' => $this->importLocationId, 'file' => $resumed, 'confirmation' => $next['confirmation'], 'review_id' => $review->id, 'import_profile' => $saved['profile'],
             'decisions' => ['2' => ['action' => 'reuse', 'person_id' => $person->id, 'identity_checked' => true]]])->assertOk()->assertJsonPath('result.linked', 1)->assertJsonPath('result.created', 0);
         $this->assertDatabaseCount('participant_import_reviews', 0);
         $this->assertSame(1, Personen::where('nachname', 'Bestand')->count());
@@ -82,7 +87,7 @@ class ParticipantImportDecisionTest extends TestCase
         $preview = $this->preview($user, $file);
         $this->assertSame(['status' => 'restricted', 'candidates' => []], $preview['rows'][0]['match']);
         $this->assertStringNotContainsString('BOP Altprojekt', json_encode($preview));
-        $this->postJson(route('teilnehmer.import'), ['file' => $file, 'confirmation' => $preview['confirmation'], 'decisions' => ['2' => ['action' => 'reuse', 'person_id' => $person->id, 'identity_checked' => true]]])->assertUnprocessable();
+        $this->postJson(route('teilnehmer.import'), ['standort_id' => $this->importLocationId, 'file' => $file, 'confirmation' => $preview['confirmation'], 'decisions' => ['2' => ['action' => 'reuse', 'person_id' => $person->id, 'identity_checked' => true]]])->assertUnprocessable();
         $this->assertDatabaseMissing('personens', ['nachname' => 'Neuzugang']);
     }
 
@@ -93,7 +98,7 @@ class ParticipantImportDecisionTest extends TestCase
         $file = $this->file(false);
         $preview = $this->preview($user, $file);
         $this->assertFalse($preview['rows'][0]['match']['candidates'][0]['can_reuse']);
-        $this->postJson(route('teilnehmer.import'), ['file' => $file, 'confirmation' => $preview['confirmation'], 'decisions' => ['2' => ['action' => 'reuse', 'person_id' => $person->id, 'identity_checked' => true]]])->assertUnprocessable();
+        $this->postJson(route('teilnehmer.import'), ['standort_id' => $this->importLocationId, 'file' => $file, 'confirmation' => $preview['confirmation'], 'decisions' => ['2' => ['action' => 'reuse', 'person_id' => $person->id, 'identity_checked' => true]]])->assertUnprocessable();
         $this->assertFalse($person->projekte()->whereKey($target->id)->exists());
     }
 
@@ -119,7 +124,7 @@ class ParticipantImportDecisionTest extends TestCase
         [$user,$target,$source,$person] = $this->setupContext();
         $file = $this->file(false);
         $preview = $this->preview($user, $file);
-        $request = ['file' => $file, 'confirmation' => $preview['confirmation'], 'decisions' => ['2' => ['action' => 'separate', 'identity_checked' => false]]];
+        $request = ['standort_id' => $this->importLocationId, 'file' => $file, 'confirmation' => $preview['confirmation'], 'decisions' => ['2' => ['action' => 'separate', 'identity_checked' => false]]];
         $this->postJson(route('teilnehmer.import'), $request)->assertUnprocessable();
         $request['decisions']['2']['identity_checked'] = true;
         $this->postJson(route('teilnehmer.import'), $request)->assertOk()->assertJsonPath('result.created', 1)->assertJsonPath('result.linked', 0);
@@ -136,7 +141,7 @@ class ParticipantImportDecisionTest extends TestCase
         $this->assertSame('new', $preview['rows'][0]['match']['status']);
         $person = Personen::factory()->create(['typ' => 'teilnehmer', 'vorname' => 'Berta', 'nachname' => 'Spaeter', 'geburtsdatum' => '2007-02-02']);
         $person->projekte()->attach($target);
-        $this->postJson(route('teilnehmer.import'), ['file' => $file, 'confirmation' => $preview['confirmation'], 'decisions' => ['2' => ['action' => 'new']]])
+        $this->postJson(route('teilnehmer.import'), ['standort_id' => $this->importLocationId, 'file' => $file, 'confirmation' => $preview['confirmation'], 'decisions' => ['2' => ['action' => 'new']]])
             ->assertOk()->assertJsonPath('result.created', 0)->assertJsonPath('result.deferred', 1);
         $this->assertSame(1, Personen::where('nachname', 'Spaeter')->count());
     }
@@ -155,7 +160,7 @@ class ParticipantImportDecisionTest extends TestCase
         ]);
         $file = UploadedFile::fake()->createWithContent('kontakte.csv', "Vorname;Nachname;Geburtsdatum;E-Mail;Geschlecht\nAda;Bestand;12.03.2008;neue@example.test;w\n");
         $preview = $this->preview($user, $file);
-        $this->postJson(route('teilnehmer.import'), ['file' => $file, 'confirmation' => $preview['confirmation'],
+        $this->postJson(route('teilnehmer.import'), ['standort_id' => $this->importLocationId, 'file' => $file, 'confirmation' => $preview['confirmation'],
             'decisions' => ['2' => ['action' => 'reuse', 'person_id' => $person->id, 'identity_checked' => true]]])->assertOk()->assertJsonPath('result.linked', 1);
         $this->assertSame(['bisher@example.test'], $person->kontaktes()->pluck('wert')->all());
         $this->assertSame($sourceParticipation->id, $note->fresh()->projekt_person_id);

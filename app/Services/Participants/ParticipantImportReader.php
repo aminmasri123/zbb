@@ -18,7 +18,7 @@ class ParticipantImportReader
         if (str_contains($name, 'BVB') && str_contains($name, 'REHA')) {
             return ['profile'=>'BVB Reha', 'fields'=>['Nachname','Vorname','Namenszusatz','Geschlecht','Geburtsdatum','Straße','Nr.','PLZ','Ort','Adresszusatz','Telefon','Email','Telefax','Schulabschluss bei Übermittlung durch BA']];
         }
-        $indices = [0,1,18,2,3,5,12,13,14,15,16,17,19,20,21];
+        $indices = [0,1,18,2,3,12,13,14,15,16,17,19,20,21];
         $isBop = $project->usesBopParticipantOverviewPreset() || $project->rule('participant_parts_enabled', false);
         if ($isBop) {
             $indices = array_merge($indices, [6,7], $project->rule('participant_parts_enabled', false) ? [8] : [], [9,10,11]);

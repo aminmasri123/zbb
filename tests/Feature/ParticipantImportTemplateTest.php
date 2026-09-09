@@ -31,6 +31,7 @@ class ParticipantImportTemplateTest extends TestCase
             $this->assertStringStartsWith("\xEF\xBB\xBF",$csv);
             $fields=str_getcsv(trim(substr($csv,3)),';','"','');
             $this->assertContains('Vorname',$fields);$this->assertContains('Nachname',$fields);
+            $this->assertNotContains('Projekt_ID',$fields);$this->assertNotContains('Standort_ID',$fields);
             if($name==='BVB Reha') {
                 $this->assertCount(14,$fields);
                 $this->assertSame('Nachname',$fields[0]);
