@@ -33,7 +33,7 @@ class ParticipantImportDecisionTest extends TestCase
         $user->assignRole(Role::firstOrCreate(['name' => 'Projektleitung', 'guard_name' => 'web'], ['color' => '#123456']));
         $target = Projekt::factory()->create(['name' => 'BVB Reha']);
         $source = Projekt::factory()->create(['name' => 'BOP Altprojekt']);
-        $user->projekte()->attach($target);
+        $user->projekte()->attach($target, ['standort_id' => $location->id, 'status' => 'aktiv']);
         if ($sourceAccess) {
             $user->projekte()->attach($source);
         }

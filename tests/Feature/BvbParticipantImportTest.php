@@ -16,7 +16,7 @@ class BvbParticipantImportTest extends TestCase
         $location=\App\Models\Standort::factory()->create();
         $user->standorte()->attach($location);$this->importLocationId=$location->id;
         $project=Projekt::factory()->create(['name'=>'BVB Reha']);
-        $user->projekte()->attach($project);
+        $user->projekte()->attach($project,['standort_id'=>$location->id,'status'=>'aktiv']);
         $user->update(['current_team_id'=>$project->id]);
         $this->grantTestPermission($user,'teilnehmer.import');
         return [$user,$project];
@@ -51,7 +51,7 @@ class BvbParticipantImportTest extends TestCase
         $this->actingAs($user)->postJson(route('teilnehmer.import'),['standort_id'=>$this->importLocationId,'file'=>$file])->assertUnprocessable();
         $preview=$this->postJson(route('teilnehmer.import'),['standort_id'=>$this->importLocationId,'file'=>$file,'preview'=>1])->assertOk();
         $this->postJson(route('teilnehmer.import'),['standort_id'=>$this->importLocationId,'file'=>$this->file('Anders'),'confirmation'=>$preview->json('confirmation')])->assertUnprocessable();
-        $other=Projekt::factory()->create();$user->projekte()->attach($other);$user->update(['current_team_id'=>$other->id]);
+        $other=Projekt::factory()->create();$user->projekte()->attach($other,['standort_id'=>$this->importLocationId,'status'=>'aktiv']);$user->update(['current_team_id'=>$other->id]);
         $this->postJson(route('teilnehmer.import'),['standort_id'=>$this->importLocationId,'file'=>$file,'confirmation'=>$preview->json('confirmation')])->assertUnprocessable();
         $this->assertDatabaseMissing('personens',['nachname'=>'Müller']);
     }

@@ -4,7 +4,7 @@ Der Import speichert eindeutig neue Teilnehmer und stellt mögliche Bestandstref
 
 ## Projekt und Standort
 
-Das aktive Projekt des angemeldeten Nutzers wird automatisch verwendet und in der Importübersicht angezeigt. Vor dem Hochladen ist ein Standort auszuwählen. Die Liste enthält ausschließlich die über `User::standorte()` zugewiesenen Standorte; auch ein weitreichender Teilnehmer-Datensichtbereich erweitert diese Auswahl nicht. Ohne Standortzuweisung ist kein Import möglich.
+Das aktive Projekt des angemeldeten Nutzers wird automatisch verwendet und in der Importübersicht angezeigt. Vor dem Hochladen ist ein Standort auszuwählen. Die Liste enthält ausschließlich die aktiven Mitarbeiterzuordnungen dieses Nutzers im aktiven Projekt aus `projekt_has_personens` (Person, Projekt und Standort). Die allgemeine Standortliste aus `standort_has_personens` ist hierfür nicht maßgeblich. Auch ein weitreichender Teilnehmer-Datensichtbereich erweitert diese Auswahl nicht. Ohne Standortzuweisung im aktiven Projekt ist kein Import möglich.
 
 Der ausgewählte Standort gilt für alle übernommenen Zeilen. Die herunterladbaren Vorlagen benötigen keine Projekt- oder Standortspalte. In älteren Dateien werden `Projekt_ID` und `Standort_ID` nicht zur Zuordnung verwendet; die Vorschau zeigt die tatsächlich gewählte Zuordnung. Jeder Import benötigt eine bestätigte Vorschau. Die Bestätigung ist zusätzlich an den Standort gebunden. Serverseitig werden Projektkontext und Standortzuweisung beim Speichern erneut geprüft. Zurückgestellte Zeilen behalten den ausgewählten Standort als Vorschlag; eine inzwischen entzogene Zuweisung wird nicht umgangen.
 

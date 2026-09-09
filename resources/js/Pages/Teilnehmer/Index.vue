@@ -1242,7 +1242,7 @@ const sortByColumn = (column) => {
                                 <option v-for="location in importContext.locations" :key="location.id" :value="location.id">{{ location.name }}</option>
                             </select>
                             <p id="participant-import-location-help" class="text-sm mt-1" :class="!importContext.locations.length ? 'text-red-700' : 'text-slate-600'">
-                                {{ importContext.locations.length ? 'Pflichtauswahl für alle Zeilen. Es werden nur Ihre zugewiesenen Standorte angezeigt.' : 'Ihnen ist kein Standort zugewiesen. Bitte lassen Sie die Zuordnung durch die Administration ergänzen.' }}
+                                {{ importContext.locations.length ? 'Pflichtauswahl für alle Zeilen. Es werden nur Ihre Standorte im aktiven Projekt angezeigt.' : 'Ihnen ist im aktiven Projekt kein Standort zugewiesen. Bitte lassen Sie die Projektzuordnung durch die Administration ergänzen.' }}
                             </p>
                         </div>
                         <p class="text-sm sm:col-span-2">Projekt und Standort werden hier festgelegt. Vorhandene Projekt_ID- und Standort_ID-Spalten in älteren Dateien werden nicht zur Zuordnung verwendet.</p>

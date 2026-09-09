@@ -1049,6 +1049,17 @@ class TeilnehmerController extends Controller
         }, $filename, ['Content-Type'=>'text/csv; charset=UTF-8', 'Cache-Control'=>'private, no-store']);
     }
 
+    private function assignedImportLocations(User $user, Projekt $project): \Illuminate\Database\Eloquent\Builder
+    {
+        // Staff administration stores locations per project, independently of the legacy general location list.
+        return Standort::query()->whereIn('standorts.id', ProjektHasPersonen::query()
+            ->select('standort_id')
+            ->where('personen_id', $user->person_id)
+            ->where('projekt_id', $project->id)
+            ->where('status', 'aktiv')
+            ->whereNotNull('standort_id'));
+    }
+
     public function importContext(Request $request)
     {
         $project = $this->activeProjectContext->currentAvailableFor($request->user());
@@ -1056,7 +1067,7 @@ class TeilnehmerController extends Controller
 
         return response()->json([
             'project' => ['id' => $project->id, 'name' => $project->name],
-            'locations' => $request->user()->standorte()->orderBy('standorts.name')
+            'locations' => $this->assignedImportLocations($request->user(), $project)->orderBy('standorts.name')
                 ->get(['standorts.id', 'standorts.name'])->unique('id')->values()
                 ->map(fn ($location) => ['id' => $location->id, 'name' => $location->name]),
         ])->header('Cache-Control', 'private, no-store');
@@ -1113,9 +1124,9 @@ class TeilnehmerController extends Controller
             ], ['standort_id.required' => 'Bitte wählen Sie einen Ihrer zugewiesenen Standorte aus.']);
             abort_if($request->filled('project_id') && $request->integer('project_id') !== (int) $activeProject->id,
                 409, 'Das aktive Projekt wurde geändert. Bitte öffnen Sie den Import erneut.');
-            $importLocation = $request->user()->standorte()->whereKey($request->integer('standort_id'))
+            $importLocation = $this->assignedImportLocations($request->user(), $activeProject)->whereKey($request->integer('standort_id'))
                 ->first(['standorts.id', 'standorts.name']);
-            abort_unless($importLocation, 403, 'Dieser Standort ist Ihnen nicht zugewiesen. Bitte öffnen Sie den Import erneut und wählen Sie einen zugewiesenen Standort.');
+            abort_unless($importLocation, 403, 'Dieser Standort ist Ihnen im aktiven Projekt nicht zugewiesen. Bitte öffnen Sie den Import erneut und wählen Sie einen zugewiesenen Standort.');
             $parsed = app(\App\Services\Participants\ParticipantImportReader::class)->read($file, $request->input('import_profile', 'auto'));
             $data = $parsed['data'];
             $isBopImport = $parsed['profile'] === 'bop';

@@ -23,7 +23,8 @@ class ParticipantImportLocationTest extends TestCase
         $first = Standort::factory()->create(['name' => 'Zugewiesen A']);
         $second = Standort::factory()->create(['name' => 'Zugewiesen B']);
         $foreign = Standort::factory()->create(['name' => 'Fremder Standort']);
-        $user->projekte()->attach($project);
+        $user->projekte()->attach($project, ['standort_id' => $first->id, 'status' => 'aktiv']);
+        $user->projekte()->attach($project, ['standort_id' => $second->id, 'status' => 'aktiv']);
         $user->standorte()->attach([$first->id, $second->id]);
         $user->update(['current_team_id' => $project->id]);
         $this->grantTestPermission($user, 'teilnehmer.import');
@@ -56,7 +57,7 @@ class ParticipantImportLocationTest extends TestCase
         $this->postJson(route('teilnehmer.import'), ['file' => $file, 'preview' => 1, 'standort_id' => $foreign->id])->assertForbidden();
         $this->postJson(route('teilnehmer.import'), ['file' => $file, 'standort_id' => $first->id])->assertUnprocessable();
         $this->assertDatabaseMissing('personens', ['nachname' => 'Standorttest']);
-        $user->standorte()->detach();
+        ProjektHasPersonen::where('personen_id', $user->person_id)->where('projekt_id', $project->id)->update(['status' => 'abgeschlossen']);
         $this->getJson(route('teilnehmer.import.context'))->assertOk()->assertJsonCount(0, 'locations');
     }
 
@@ -81,7 +82,7 @@ class ParticipantImportLocationTest extends TestCase
         $payload = ['file' => $file, 'standort_id' => $first->id];
         $preview = $this->actingAs($user)->postJson(route('teilnehmer.import'), $payload + ['preview' => 1])->assertOk()->json();
         $this->postJson(route('teilnehmer.import'), ['file' => $file, 'standort_id' => $second->id, 'confirmation' => $preview['confirmation']])->assertUnprocessable();
-        $user->standorte()->detach($first);
+        ProjektHasPersonen::where('personen_id', $user->person_id)->where('projekt_id', $project->id)->where('standort_id', $first->id)->update(['status' => 'abgeschlossen']);
         $this->postJson(route('teilnehmer.import'), $payload + ['confirmation' => $preview['confirmation']])->assertForbidden();
         $this->assertDatabaseMissing('personens', ['nachname' => 'Standorttest']);
     }
@@ -107,9 +108,46 @@ class ParticipantImportLocationTest extends TestCase
         $this->postJson(route('teilnehmer.import'), $payload + ['confirmation' => $preview['confirmation']])->assertOk()->assertJsonPath('result.deferred', 1);
         $review = ParticipantImportReview::firstOrFail();
         $saved = $this->getJson(route('teilnehmer.import.reviews.resume', $review->id))->assertOk()->assertJsonPath('standort_id', $first->id)->json();
-        $user->standorte()->detach($first);
+        ProjektHasPersonen::where('personen_id', $user->person_id)->where('projekt_id', $project->id)->where('standort_id', $first->id)->update(['status' => 'abgeschlossen']);
         $this->postJson(route('teilnehmer.import'), ['file' => UploadedFile::fake()->createWithContent('offen.csv', $saved['csv']),
             'review_id' => $review->id, 'standort_id' => $first->id, 'preview' => 1])->assertForbidden();
         $this->assertDatabaseHas('participant_import_reviews', ['id' => $review->id]);
+    }
+
+    public function test_each_project_uses_its_own_staff_locations_even_when_the_general_list_is_outdated(): void
+    {
+        [$user, $bop, $first, $second] = $this->context();
+        $bop->update(['name' => 'Bop']);
+        $bvb = Projekt::factory()->create(['name' => 'BvB Reha']);
+        $rodenhof = Standort::factory()->create(['name' => 'Rodenhof']);
+        $user->projekte()->attach($bvb, ['standort_id' => $rodenhof->id, 'status' => 'aktiv']);
+        $user->update(['current_team_id' => $bvb->id]);
+
+        // The legacy list still contains only the two BOP locations, just as in the reported case.
+        $this->assertFalse($user->standorte()->whereKey($rodenhof->id)->exists());
+        $this->actingAs($user)->getJson(route('teilnehmer.import.context'))->assertOk()
+            ->assertJsonPath('project.id', $bvb->id)->assertJsonCount(1, 'locations')
+            ->assertJsonPath('locations.0.id', $rodenhof->id);
+
+        $payload = ['file' => $this->file(), 'standort_id' => $rodenhof->id];
+        $preview = $this->postJson(route('teilnehmer.import'), $payload + ['preview' => 1])->assertOk()->json();
+        $this->postJson(route('teilnehmer.import'), ['file' => $this->file(), 'preview' => 1, 'standort_id' => $first->id])->assertForbidden();
+        $this->postJson(route('teilnehmer.import'), $payload + ['confirmation' => $preview['confirmation']])->assertOk()->assertJsonPath('result.created', 2);
+        $people = Personen::where('nachname', 'Standorttest')->pluck('id');
+        $this->assertSame(2, ProjektHasPersonen::whereIn('personen_id', $people)->where('projekt_id', $bvb->id)->where('standort_id', $rodenhof->id)->count());
+
+        $user->update(['current_team_id' => $bop->id]);
+        $this->getJson(route('teilnehmer.import.context'))->assertOk()->assertJsonPath('project.id', $bop->id)
+            ->assertJsonCount(2, 'locations')->assertJsonPath('locations.0.id', $first->id)->assertJsonPath('locations.1.id', $second->id);
+    }
+
+    public function test_other_employees_locations_are_excluded_and_repeated_assignments_are_deduplicated(): void
+    {
+        [$user, $project, $first, $second, $foreign] = $this->context();
+        $other = User::factory()->create();
+        $other->projekte()->attach($project, ['standort_id' => $foreign->id, 'status' => 'aktiv']);
+        $user->projekte()->attach($project, ['standort_id' => $first->id, 'status' => 'aktiv']);
+        $this->actingAs($user)->getJson(route('teilnehmer.import.context'))->assertOk()->assertJsonCount(2, 'locations')->assertDontSee($foreign->name);
+        $this->postJson(route('teilnehmer.import'), ['file' => $this->file(), 'preview' => 1, 'standort_id' => $foreign->id])->assertForbidden();
     }
 }
