@@ -12,6 +12,20 @@ class ParticipantImportReader
 {
     public const FIELDS = ['Vorname','Nachname','Geschlecht','Geburtsdatum','Projekt_ID','Standort_ID','Schule_ID','Schuljahr','Teil','Klasse','Foerderschueler','EEE','Straße','Hausnummer','PLZ','Stadt','Land','Adresszusatz','Namenszusatz','Telefon','E-Mail','Telefax','Schulabschluss bei Übermittlung durch BA'];
 
+    public function templateFor(\App\Models\Projekt $project): array
+    {
+        $name = mb_strtoupper($project->name);
+        if (str_contains($name, 'BVB') && str_contains($name, 'REHA')) {
+            return ['profile'=>'BVB Reha', 'fields'=>['Nachname','Vorname','Namenszusatz','Geschlecht','Geburtsdatum','Straße','Nr.','PLZ','Ort','Adresszusatz','Telefon','Email','Telefax','Schulabschluss bei Übermittlung durch BA']];
+        }
+        $indices = [0,1,18,2,3,5,12,13,14,15,16,17,19,20,21];
+        $isBop = $project->usesBopParticipantOverviewPreset() || $project->rule('participant_parts_enabled', false);
+        if ($isBop) {
+            $indices = array_merge($indices, [6,7], $project->rule('participant_parts_enabled', false) ? [8] : [], [9,10,11]);
+        }
+        return ['profile'=>$isBop ? 'BOP' : 'Standard', 'fields'=>array_map(fn($index)=>self::FIELDS[$index], $indices)];
+    }
+
     public function read(UploadedFile $file, string $profile = 'auto'): array
     {
         if (!in_array($profile, ['auto','standard','bop','bvb_reha'], true)) $this->fail('Unbekanntes Importprofil.');

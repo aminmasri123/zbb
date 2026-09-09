@@ -1031,6 +1031,20 @@ class TeilnehmerController extends Controller
         }
     }
 
+    public function importTemplate(Request $request)
+    {
+        $project = $this->activeProjectContext->currentAvailableFor($request->user());
+        abort_unless($project, 409, 'Bitte wählen Sie zuerst ein aktives Projekt aus.');
+        $template = app(\App\Services\Participants\ParticipantImportReader::class)->templateFor($project);
+        $filename = 'Teilnehmerimport_'.\Illuminate\Support\Str::slug($project->name).'_'.$project->id.'.csv';
+        return response()->streamDownload(function () use ($template) {
+            $output = fopen('php://output', 'w');
+            fwrite($output, "\xEF\xBB\xBF");
+            fputcsv($output, $template['fields'], ';', '"', '');
+            fclose($output);
+        }, $filename, ['Content-Type'=>'text/csv; charset=UTF-8', 'Cache-Control'=>'private, no-store']);
+    }
+
     public function import(Request $request)
     {
 

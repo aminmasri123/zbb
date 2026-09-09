@@ -649,6 +649,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
             ->can('teilnehmer.portal.overview');
         Route::get('/teilnehmer/anlegen', [TeilnehmerController::class, 'create'])->name('teilnehmer.create')->can('teilnehmer.store');
         Route::post('/teilnehmer/anlegen', [TeilnehmerController::class, 'store'])->name('teilnehmer.store')->can('teilnehmer.store');
+        Route::get('/teilnehmer/import-vorlage', [TeilnehmerController::class, 'importTemplate'])->name('teilnehmer.import.template')->can('teilnehmer.import');
         Route::post('/teilnehmer/import', [TeilnehmerController::class, 'import'])->name('teilnehmer.import')->middleware('canAnyPermission:teilnehmer.import,teilnehmer.store');
         Route::patch('/teilnehmer/namen-tauschen', [TeilnehmerController::class, 'swapNames'])->name('teilnehmer.names.swap')->can('teilnehmer.update');
         Route::delete('/teilnehmer/entfernen', [TeilnehmerController::class, 'bulkDestroy'])->name('teilnehmer.bulkDestroy')->middleware('canAnyPermission:teilnehmer.bulkDestroy,teilnehmer.destroy');

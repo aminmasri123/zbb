@@ -811,6 +811,9 @@ const sortByColumn = (column) => {
             </div>
 
 
+            <a v-if="can('teilnehmer.import')" :href="route('teilnehmer.import.template')" class="border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-zbb hover:bg-zbb hover:text-white" title="CSV-Importvorlage für das aktive Projekt herunterladen">
+                <i class="las la-download" aria-hidden="true"></i> Importvorlage
+            </a>
             <div v-if="canImportParticipant" @click="importTeilnehmer" class="flex items-center">
                 <i
                     class="las la-upload bg-white border border-gray-300 px-5 py-3 text-zbb hover:text-white hover:bg-zbb hover:border hover:border-orange-500"
@@ -1127,6 +1130,10 @@ const sortByColumn = (column) => {
                         <button :disabled="importSaving" @click="showImportModal=false">✕</button>
                     </div>
 
+                    <p v-if="can('teilnehmer.import')" class="mb-3 text-sm">
+                        <a :href="route('teilnehmer.import.template')" class="underline font-medium">Importvorlage für das aktive Projekt herunterladen</a><br>
+                        Eine Person pro Zeile. Datum: TT.MM.JJJJ; Geschlecht: m, w oder d. PLZ und Telefonnummern als Text eingeben, damit führende Nullen erhalten bleiben. ID-Spalten beziehen sich auf die IDs im Programm. Leere optionale Felder sind erlaubt.
+                    </p>
                     <p class="text-sm mb-3">Die Datei wird zuerst geprüft. Gespeichert wird erst nach Ihrer Bestätigung. Bestehende Personen werden nicht überschrieben.</p>
                     <label class="block mb-3">Importprofil
                         <select v-model="importProfile" :disabled="importSaving" @change="importPreview=null" class="ml-2 border rounded p-2">
