@@ -140,7 +140,11 @@ class TeilnehmerController extends Controller
             ->teilnehmer()
             ->aktiv()
             ->visibleForUser($benutzer)   // <-- dein globaler Berechtigungsscope
-            ->with(['projekte.abteilung', 'standorte', 'kontaktes.kontakttyp']);
+            ->with([
+                'projekte' => fn ($query) => $query->whereKey($defaultProjekt)->with('abteilung'),
+                'standorte',
+                'kontaktes.kontakttyp',
+            ]);
 
         if ($defaultProjekt) {
             $abfrage->whereHas('projekte', function ($query) use ($defaultProjekt, $standortId) {
@@ -1045,6 +1049,27 @@ class TeilnehmerController extends Controller
         }, $filename, ['Content-Type'=>'text/csv; charset=UTF-8', 'Cache-Control'=>'private, no-store']);
     }
 
+    public function importReviews(Request $request)
+    {
+        $project = $this->activeProjectContext->currentAvailableFor($request->user());
+        abort_unless($project, 409);
+        $reviews = \App\Models\ParticipantImportReview::where('user_id', $request->user()->id)
+            ->where('projekt_id', $project->id)->where('expires_at', '>', now())->latest()->get();
+        return response()->json(['reviews'=>$reviews->map(fn($review)=>[
+            'id'=>$review->id, 'count'=>count($review->payload['rows']), 'created_at'=>$review->created_at->toIso8601String(),
+            'expires_at'=>$review->expires_at->toIso8601String(),
+        ])])->header('Cache-Control','private, no-store');
+    }
+
+    public function resumeImportReview(Request $request, int $review)
+    {
+        $project = $this->activeProjectContext->currentAvailableFor($request->user());
+        abort_unless($project, 409);
+        $pending = \App\Models\ParticipantImportReview::whereKey($review)->where('user_id',$request->user()->id)
+            ->where('projekt_id',$project->id)->where('expires_at','>',now())->firstOrFail();
+        return response()->json(['id'=>$pending->id,'csv'=>$pending->csv(),'profile'=>$pending->payload['profile']])->header('Cache-Control','private, no-store');
+    }
+
     public function import(Request $request)
     {
 
@@ -1068,6 +1093,18 @@ class TeilnehmerController extends Controller
             $parsed = app(\App\Services\Participants\ParticipantImportReader::class)->read($file, $request->input('import_profile', 'auto'));
             $data = $parsed['data'];
             $isBopImport = $parsed['profile'] === 'bop';
+            $pending = null;
+            if ($request->filled('review_id')) {
+                $pending = \App\Models\ParticipantImportReview::whereKey($request->input('review_id'))->where('user_id',$request->user()->id)
+                    ->where('projekt_id',$activeProject->id)->where('expires_at','>',now())->first();
+                abort_unless($pending,404);
+                abort_unless(hash_equals(hash('sha256',$pending->csv()),hash_file('sha256',$file->getRealPath())),422,'Die zurückgestellte Datei wurde verändert. Bitte erneut öffnen.');
+            }
+            $decisions = $request->input('decisions', []);
+            if (is_string($decisions)) $decisions = json_decode($decisions, true);
+            if (!is_array($decisions)) throw \Illuminate\Validation\ValidationException::withMessages(['decisions'=>'Ungültige Importentscheidungen.']);
+            $matcher = app(\App\Services\Participants\ParticipantImportMatches::class);
+
             $fingerprint = hash('sha256', hash_file('sha256', $file->getRealPath()).'|'.$activeProject->id.'|'.$request->user()->id.'|'.$parsed['profile']);
             if (!$request->boolean('preview') && ($parsed['profile'] === 'bvb_reha' || collect($parsed['mapping'])->contains('target', 'Schulabschluss bei Übermittlung durch BA') || $request->filled('confirmation'))) {
                 try { $approval = json_decode(\Illuminate\Support\Facades\Crypt::decryptString($request->input('confirmation', '')), true); }
@@ -1220,21 +1257,16 @@ class TeilnehmerController extends Controller
                         $errors[] = 'Zeile '.$rowNumber.': '.implode(' ', $extraValidator->errors()->all());
                         continue;
                     }
-                    $duplicate = Personen::query()->whereRaw('LOWER(TRIM(vorname)) = ?', [mb_strtolower(trim($teilnehmerData['vorname']))])
-                        ->whereRaw('LOWER(TRIM(nachname)) = ?', [mb_strtolower(trim($teilnehmerData['nachname']))]);
-                    if ($teilnehmerData['geburtsdatum']) $duplicate->where(function ($query) use ($teilnehmerData) {
-                        $query->whereDate('geburtsdatum', $teilnehmerData['geburtsdatum'])->orWhereNull('geburtsdatum');
-                    });
+                    $match = $matcher->inspect($teilnehmerData, $request->user(), $activeProject);
                     $key = mb_strtolower(trim($teilnehmerData['vorname']).'|'.trim($teilnehmerData['nachname']));
                     $date = $teilnehmerData['geburtsdatum'];
                     $sameFile = isset($seen[$key]) && (!$date || in_array(null, $seen[$key], true) || in_array($date, $seen[$key], true));
-                    if ($duplicate->exists() || $sameFile) {
-                        $errors[] = 'Zeile '.$rowNumber.': Mögliche Dublette. Bitte die Personenzuordnung vor dem Import prüfen; es wird nichts überschrieben.';
-                        continue;
-                    }
+                    if ($sameFile) $match = ['status'=>'file_duplicate','candidates'=>[]];
                     $seen[$key][] = $date;
 
                     $validRows[] = [
+                        'line'=>$rowNumber,
+                        'match'=>$match,
                         'row' => $row,
                         'teilnehmerData' => $teilnehmerData,
                         'projektId' => $projektId,
@@ -1266,84 +1298,91 @@ class TeilnehmerController extends Controller
                 return response()->json([
                     'preview'=>true, 'project'=>$activeProject->name, 'profile'=>$parsed['profile'], 'mapping'=>$parsed['mapping'],
                     'count'=>count($validRows),
-                    'rows'=>array_map(fn($entry)=>['line'=>$entry['row_number'], 'values'=>$entry['values']], $data),
+                    'rows'=>array_map(fn($entry)=>['line'=>$entry['line'], 'values'=>$entry['row'], 'match'=>$entry['match']], $validRows),
+                    'new_count'=>count(array_filter($validRows,fn($entry)=>$entry['match']['status']==='new')),
                     'fields'=>\App\Services\Participants\ParticipantImportReader::FIELDS,
                     'confirmation'=>\Illuminate\Support\Facades\Crypt::encryptString(json_encode(['fingerprint'=>$fingerprint,'expires'=>time()+1800])),
-                ]);
+                ])->header('Cache-Control', 'private, no-store');
             }
 
-            $createdCount = DB::transaction(function () use ($validRows, $activeProject, $parsed) {
-                $createdCount = 0;
+            if (collect($validRows)->contains(fn($entry)=>$entry['match']['status']!=='new') && !$request->filled('confirmation')) {
+                return response()->json(['error'=>true,'message'=>'Bitte mögliche Treffer zuerst in der Importvorschau prüfen.'],422);
+            }
+            // Validate every decision before saving anything, including IDs and current visibility.
+            foreach ($validRows as &$entry) {
+                $choice = $decisions[(string)$entry['line']] ?? ['action'=>$entry['match']['status']==='new' ? 'new' : 'defer'];
+                abort_unless(is_array($choice),422,'Ungültige Importentscheidung.');
+                $action = $choice['action'] ?? 'defer';
+                if (!in_array($action,['new','reuse','separate','defer','skip'],true)) abort(422,'Ungültige Importentscheidung.');
+                $entry['action'] = $action;
+                if ($action==='new' && $entry['match']['status']!=='new') $entry['action']='defer';
+                if (in_array($action,['reuse','separate'],true)) {
+                    abort_unless($request->user()->can('teilnehmer.import') && $request->user()->can('teilnehmer.update'),403);
+                    abort_unless($entry['match']['status']==='match',422,'Treffer bitte erneut prüfen.');
+                    abort_unless(($choice['identity_checked'] ?? false) === true,422,'Bitte die Identitätsprüfung ausdrücklich bestätigen.');
+                    if ($action==='reuse') {
+                        $candidate = collect($entry['match']['candidates'])->firstWhere('id',(int)($choice['person_id'] ?? 0));
+                        abort_unless($candidate && $candidate['can_reuse'],422,'Diese Person kann nicht zugeordnet werden. Bitte zurückstellen und prüfen.');
+                        $entry['reuse_id'] = $candidate['id'];
+                    }
+                }
+            }
+            unset($entry);
 
+            $result = DB::transaction(function () use ($validRows, $activeProject, $parsed, $request, $pending) {
+                $created=0; $linked=0; $skipped=0; $deferred=[]; $processedIds=[];
                 foreach ($validRows as $validRow) {
-                    $teilnehmer = Personen::create($validRow['teilnehmerData']);
-
-                    foreach ([19=>'Telefon',20=>'Email',21=>'Telefax'] as $column=>$type) {
-                        if ($value = $this->cleanImportValue($validRow['row'][$column] ?? null)) {
-                            $contactType = \App\Models\Kontakttypen::firstOrCreate(['name'=>$type]);
-                            $teilnehmer->kontaktes()->create(['kontakttyp_id'=>$contactType->id,'wert'=>$value,'bemerkung'=>'Teilnehmerimport']);
+                    if ($validRow['action']==='defer') { $deferred[]=$validRow['row']; continue; }
+                    if ($validRow['action']==='skip') { $skipped++; continue; }
+                    $reuse = $validRow['action']==='reuse';
+                    if ($reuse) {
+                        $teilnehmer = Personen::findOrFail($validRow['reuse_id']);
+                        // Includes another row in this batch: never duplicate or revive an existing participation.
+                        if ($teilnehmer->projekte()->where('projekts.id',$activeProject->id)->exists() || isset($processedIds[$teilnehmer->id])) {
+                            $skipped++; continue;
+                        }
+                    } else {
+                        $teilnehmer = Personen::create($validRow['teilnehmerData']);
+                        foreach ([19 => 'Telefon', 20 => 'Email', 21 => 'Telefax'] as $column => $type) {
+                            if ($value = $this->cleanImportValue($validRow['row'][$column] ?? null)) {
+                                $contactType = \App\Models\Kontakttypen::firstOrCreate(['name' => $type]);
+                                $teilnehmer->kontaktes()->create(['kontakttyp_id' => $contactType->id, 'wert' => $value, 'bemerkung' => 'Teilnehmerimport']);
+                            }
+                        }
+                        if ($validRow['addressData']) {
+                            $teilnehmer->adresses()->create($validRow['addressData']);
                         }
                     }
-
-                    if ($validRow['addressData']) {
-                        $teilnehmer->adresses()->create($validRow['addressData']);
-                    }
-
-                    if ($validRow['projektId']) {
-                        $teilnehmer->projekte()->attach(
-                            $validRow['projektId'],
-                            [
-                                'standort_id' => $validRow['standortId'],
-                                'status' => $activeProject->rule('participation_initial_status', 'aktiv'),
-                                'import_entry_data' => [
-                                    'profile'=>$parsed['profile'],
-                                    'school_qualification_at_entry'=>$this->cleanImportValue($validRow['row'][22] ?? null),
-                                    'source'=> $this->cleanImportValue($validRow['row'][22] ?? null) ? 'Übermittlung durch BA laut Importdatei' : null,
-                                    'imported_at'=>now()->toIso8601String(),
-                                ],
-                            ]
-                        );
-                    }
-
+                    $participationData = [
+                        'standort_id'=>$validRow['standortId'], 'status'=>$activeProject->rule('participation_initial_status','aktiv'),
+                        'import_entry_data'=>[
+                            'profile'=>$parsed['profile'],
+                            'school_qualification_at_entry'=>$this->cleanImportValue($validRow['row'][22] ?? null),
+                            'source'=>$this->cleanImportValue($validRow['row'][22] ?? null) ? 'Übermittlung durch BA laut Importdatei' : null,
+                            'imported_at'=>now()->toIso8601String(),
+                            'identity_decision'=>$validRow['action'], 'confirmed_by'=>$request->user()->id,
+                            'source_line'=>$validRow['line'], 'reports_transferred'=>false,
+                        ],
+                    ];
+                    $teilnehmer->projekte()->attach($activeProject->id,$participationData);
                     if ($validRow['schuleId']) {
-                        PersonenIstSchueler::create([
-                            'person_id' => $teilnehmer->id,
-                            'klasse' => $validRow['klasse'],
-                            'schule_id' => $validRow['schuleId'],
-                            'foerderschueler' => $this->parseImportBoolean($validRow['row'][10] ?? null),
-                            'eee' => $this->parseImportBoolean($validRow['row'][11] ?? null),
-                            'schuljahr' => $validRow['schuljahr'],
-                            'teil' => $validRow['teil'],
-                        ]);
+                        PersonenIstSchueler::firstOrCreate([
+                            'person_id'=>$teilnehmer->id,'schule_id'=>$validRow['schuleId'],
+                            'schuljahr'=>$validRow['schuljahr'],'teil'=>$validRow['teil'],
+                        ], ['klasse'=>$validRow['klasse'],'foerderschueler'=>$this->parseImportBoolean($validRow['row'][10] ?? null),'eee'=>$this->parseImportBoolean($validRow['row'][11] ?? null)]);
                     }
-
-                    $createdCount++;
+                    $processedIds[$teilnehmer->id]=true;
+                    if ($reuse) $linked++; else $created++;
                 }
-
-                return $createdCount;
+                if ($deferred) {
+                    $review = $pending ?: new \App\Models\ParticipantImportReview(['user_id'=>$request->user()->id,'projekt_id'=>$activeProject->id,'expires_at'=>now()->addDays(30)]);
+                    $review->payload=['profile'=>$parsed['profile'],'rows'=>$deferred];$review->save();
+                } elseif ($pending) {
+                    $pending->delete(); // Only the temporary import copy; participant/project records are untouched.
+                }
+                return ['created'=>$created,'linked'=>$linked,'skipped'=>$skipped,'deferred'=>count($deferred)];
             });
-
-            Log::info('Importierte Zeilen:', $errors);
-            if ($createdCount > 0) {
-                /*  $rollen = Role::whereIn('name', ['Administrator', 'Abteilungsleiter', 'Anleiter'])->get();
-                 foreach ($rollen as $role) {
-                     foreach ($role->users as $user) {
-                         $user->notify(new ImportTeilnehmerNotification($createdCount));
-                     }
-                 } */
-
-                return response()->json([
-                    'success' => true,
-                    'message' => "Import erfolgreich: $createdCount Teilnehmer angelegt.",
-                    'errors' => $errors,
-                ]);
-            } else {
-                return response()->json([
-                    'error' => true,
-                    'message' => 'Kein Teilnehmer konnte importiert werden.',
-                    'errors' => $errors,
-                ]);
-            }
+            return response()->json(['success'=>true,'message'=>"{$result['created']} neu angelegt, {$result['linked']} zugeordnet, {$result['deferred']} zur Prüfung zurückgestellt, {$result['skipped']} übersprungen.",'result'=>$result]);
 
         } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
             throw $e;

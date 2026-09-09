@@ -15,6 +15,8 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule)
     {
+        $schedule->command('participants:purge-expired-import-reviews')->daily()->withoutOverlapping();
+
         $schedule->command('bibb:purge-expired-attendance-drafts')
             ->dailyAt('02:30')
             ->withoutOverlapping();

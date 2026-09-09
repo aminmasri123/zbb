@@ -93,6 +93,38 @@ const importProfile = ref('auto');
 const importPreview = ref(null);
 const importFile = ref(null);
 const importSaving = ref(false);
+const importDecisions = ref({});
+const importReviews = ref([]);
+const activeImportReview = ref(null);
+const importResult = ref(null);
+const selectedImportCount = computed(() => Object.values(importDecisions.value).filter(choice => ['new','reuse','separate'].includes(choice.action)).length);
+const setImportPreview = (response, file) => {
+    importPreview.value = response;
+    importFile.value = file;
+    importResult.value = null;
+    importDecisions.value = Object.fromEntries(response.rows.map(row => [row.line, { action: row.match.status === 'new' ? 'new' : 'defer', person_id: null, identity_checked: false }]));
+};
+const loadImportReviews = async () => {
+    try { importReviews.value = (await axios.get(route('teilnehmer.import.reviews'))).data.reviews; }
+    catch (error) { Swal.fire('Fehler', formatImportMessage(error.response?.data), 'error'); }
+};
+const resumeImportReview = async (review) => {
+    if (importSaving.value) return;
+    importSaving.value = true;
+    importPreview.value = null;
+    importFile.value = null;
+    activeImportReview.value = null;
+    try {
+        const { data: saved } = await axios.get(route('teilnehmer.import.reviews.resume', review.id));
+        const file = new File([saved.csv], 'zurueckgestellte-teilnehmer.csv', { type: 'text/csv' });
+        const payload = new FormData();
+        payload.append('file', file); payload.append('preview', '1'); payload.append('review_id', saved.id); payload.append('import_profile', saved.profile);
+        const { data } = await axios.post(route('teilnehmer.import'), payload);
+        activeImportReview.value = saved.id;
+        setImportPreview(data, file);
+    } catch (error) { Swal.fire('Prüfung nicht möglich', formatImportMessage(error.response?.data), 'error'); }
+    finally { importSaving.value = false; }
+};
 const confirmParticipantImport = async () => {
     if (!importPreview.value || !importFile.value || importSaving.value) return;
     importSaving.value = true;
@@ -100,13 +132,17 @@ const confirmParticipantImport = async () => {
     data.append('file', importFile.value);
     data.append('import_profile', importPreview.value.profile);
     data.append('confirmation', importPreview.value.confirmation);
+    data.append('decisions', JSON.stringify(importDecisions.value));
+    if (activeImportReview.value) data.append('review_id', activeImportReview.value);
     try {
         const { data: response } = await axios.post(route('teilnehmer.import'), data);
         if (response.error) throw { response: { data: response } };
-        showImportModal.value = false;
+        importResult.value = response;
+        activeImportReview.value = null;
         importPreview.value = null;
         importFile.value = null;
         Swal.fire('Import erfolgreich', response.message, 'success');
+        await loadImportReviews();
         router.reload({ only: ['teilnehmers'] });
     } catch (error) {
         Swal.fire('Import nicht durchgeführt', formatImportMessage(error.response?.data), 'error');
@@ -160,7 +196,10 @@ const importTeilnehmer = () => {
 
     importPreview.value = null;
     importFile.value = null;
+    activeImportReview.value = null;
+    importResult.value = null;
     showImportModal.value = true;
+    loadImportReviews();
 
     setTimeout(() => {
         initDropzone();
@@ -184,6 +223,7 @@ const initDropzone = () => {
         method: "post",
         paramName: "file",
         clickable: true,
+        accept(file, done) { if (importSaving.value) done('Bitte den laufenden Import abwarten.'); else done(); },
         maxFilesize: 5,
         maxFiles: 1,
         params: () => ({ preview: '1', import_profile: importProfile.value }),
@@ -207,8 +247,8 @@ const initDropzone = () => {
                 return;
             }
 
-            importPreview.value = response;
-            importFile.value = file;
+            activeImportReview.value = null;
+            setImportPreview(response, file);
         },
 
         removedfile(file) {
@@ -1146,16 +1186,61 @@ const sortByColumn = (column) => {
                         </select>
                     </label>
                     <form id="mydropzone" class="dropzone border border-dashed p-6 rounded-lg"></form>
-                    <button :disabled="importSaving" class="mt-2 underline text-sm" @click="dropzoneInstance?.removeAllFiles(true); importFile=null; importPreview=null">Andere Datei prüfen</button>
+                    <button :disabled="importSaving" class="mt-2 underline text-sm" @click="dropzoneInstance?.removeAllFiles(true); importFile=null; importPreview=null; activeImportReview=null">Andere Datei prüfen</button>
+                    <p v-if="importResult" class="mt-3 p-3 rounded bg-green-50">{{ importResult.message }}</p>
+                    <section v-if="importReviews.length" class="my-4 border rounded p-3">
+                        <h3 class="font-bold">Zurückgestellte Importe</h3>
+                        <p class="text-sm">Nur für Sie im aktiven Projekt sichtbar. Temporäre Importkopien werden nach 30 Tagen entfernt; vorhandene Teilnehmer bleiben erhalten.</p>
+                        <div v-for="review in importReviews" :key="review.id" class="flex justify-between gap-3 py-2 border-t">
+                            <span>{{ review.count }} offene Zeilen · verfügbar bis {{ new Date(review.expires_at).toLocaleDateString('de-DE') }}</span>
+                            <button :disabled="importSaving" class="underline" @click="resumeImportReview(review)">Weiter prüfen</button>
+                        </div>
+                    </section>
                     <section v-if="importPreview" class="mt-4">
-                        <h3 class="font-bold">Vorschau: {{ importPreview.count }} Teilnehmer → {{ importPreview.project }}</h3>
+                        <h3 class="font-bold">Vorschau: {{ importPreview.new_count }} neue Teilnehmer · {{ importPreview.count - importPreview.new_count }} mögliche Treffer → {{ importPreview.project }}</h3>
                         <p class="text-sm">Profil: {{ importPreview.profile }} · Angaben bitte vor dem Import kontrollieren.</p>
                         <details class="my-2"><summary>Erkannte Spaltenzuordnung</summary><ul><li v-for="column in importPreview.mapping" :key="column.source">{{ column.source }} → {{ column.target }}</li></ul></details>
-                        <div class="overflow-auto max-h-80 border rounded"><table class="text-sm whitespace-nowrap w-full">
-                            <thead class="sticky top-0 bg-slate-100"><tr><th class="p-2">Zeile</th><th v-for="field in importPreview.fields" :key="field" class="p-2 text-left">{{ field }}</th></tr></thead>
-                            <tbody><tr v-for="row in importPreview.rows" :key="row.line" class="border-t"><td class="p-2">{{ row.line }}</td><td v-for="(value,index) in row.values" :key="index" class="p-2">{{ value ?? '–' }}</td></tr></tbody>
-                        </table></div>
-                        <button :disabled="importSaving" class="mt-4 bg-zbb text-white rounded px-4 py-2 disabled:opacity-50" @click="confirmParticipantImport">{{ importSaving ? 'Wird importiert…' : `${importPreview.count} Teilnehmer verbindlich importieren` }}</button>
+                        <p class="my-2 text-sm">Neue Teilnehmer können bereits importiert werden. Unklare Treffer bleiben zurückgestellt. „Dieselbe Person“ legt eine neue Projektzuordnung an und verwendet die vorhandenen Stammdaten. Abweichende Namen, Adressen und Kontaktdaten aus der Datei werden nicht automatisch übernommen. Frühere Berichte bleiben im ursprünglichen Projekt.</p>
+                        <div v-for="row in importPreview.rows.filter(item => item.match.status !== 'new')" :key="row.line" class="border rounded p-3 mb-3 bg-amber-50">
+                            <h4 class="font-semibold mb-2">Identität prüfen · Zeile {{ row.line }}</h4>
+                            <div class="grid gap-3 md:grid-cols-2">
+                                <div class="bg-white rounded p-2">
+                                    <p class="font-semibold text-sm mb-1">Importdatei</p>
+                                    <p>{{ row.values[0] }} {{ row.values[1] }}</p>
+                                    <p class="text-sm">Geburtsdatum: {{ row.values[3] || 'nicht angegeben' }}</p>
+                                    <p class="text-sm">Zielprojekt: {{ importPreview.project }}</p>
+                                </div>
+                                <div>
+                            <p v-if="row.match.status === 'restricted'" class="text-sm">Möglicher Bestandstreffer. Ihre Berechtigung reicht nicht für die Identitätsprüfung; bitte zur Klärung zurückstellen.</p>
+                            <p v-if="row.match.status === 'file_duplicate'" class="text-sm">Eine gleichlautende Person steht bereits weiter oben in dieser Datei. Bitte die doppelte Zeile prüfen.</p>
+                            <div v-for="candidate in row.match.candidates" :key="candidate.id" class="bg-white rounded p-2 mb-2">
+                                <p class="font-semibold text-sm mb-1">Vorhandener Teilnehmer</p>
+                                <p>{{ candidate.name }} · {{ candidate.birthdate || 'Geburtsdatum nicht hinterlegt' }}</p>
+                                <p class="text-sm">Für Sie sichtbare Projekte: {{ candidate.projects.join(', ') }}</p>
+                                <p v-if="!candidate.exact_birthdate" class="text-sm text-amber-800">Geburtsdatum stimmt nicht vollständig überein oder fehlt. Identität sorgfältig prüfen.</p>
+                                <p v-if="candidate.reason" class="text-sm">{{ candidate.reason }}</p>
+                            </div>
+                                </div>
+                            </div>
+                            <select v-model="importDecisions[row.line].action" :disabled="importSaving" @change="importDecisions[row.line].identity_checked=false; importDecisions[row.line].person_id=null" class="border rounded p-2 mt-2 max-w-full">
+                                <option value="defer">Noch unklar – zur Prüfung behalten</option>
+                                <option value="skip">Diese Zeile überspringen</option>
+                                <option v-if="row.match.candidates.some(candidate => candidate.can_reuse)" value="reuse">Dieselbe Person – dem aktiven Projekt zuordnen</option>
+                                <option v-if="row.match.status === 'match'" value="separate">Andere Person – getrennt neu anlegen</option>
+                            </select>
+                            <select v-if="importDecisions[row.line].action === 'reuse'" v-model="importDecisions[row.line].person_id" :disabled="importSaving" class="border rounded p-2 block mt-2 max-w-full">
+                                <option :value="null" disabled>Vorhandene Person auswählen</option>
+                                <option v-for="candidate in row.match.candidates.filter(item => item.can_reuse)" :key="candidate.id" :value="candidate.id">{{ candidate.name }} ({{ candidate.birthdate || 'ohne Geburtsdatum' }}) · {{ candidate.projects.join(', ') }}</option>
+                            </select>
+                            <label v-if="['reuse','separate'].includes(importDecisions[row.line].action)" class="block text-sm mt-2"><input type="checkbox" v-model="importDecisions[row.line].identity_checked" :disabled="importSaving"> Ich habe die Identität fachlich geprüft und bestätige diese Zuordnung. Dies ist keine Freigabe früherer Berichte.</label>
+                        </div>
+                        <details class="my-2"><summary>Alle Importdaten prüfen ({{ importPreview.count }} Zeilen)</summary>
+                            <div class="overflow-auto max-h-80 border rounded"><table class="text-sm whitespace-nowrap w-full">
+                                <thead class="sticky top-0 bg-slate-100"><tr><th class="p-2">Zeile</th><th v-for="field in importPreview.fields" :key="field" class="p-2 text-left">{{ field }}</th></tr></thead>
+                                <tbody><tr v-for="row in importPreview.rows" :key="row.line" class="border-t"><td class="p-2">{{ row.line }}</td><td v-for="(value,index) in row.values" :key="index" class="p-2">{{ value ?? '–' }}</td></tr></tbody>
+                            </table></div>
+                        </details>
+                        <button :disabled="importSaving" class="mt-4 bg-zbb text-white rounded px-4 py-2 disabled:opacity-50" @click="confirmParticipantImport">{{ importSaving ? 'Wird verarbeitet…' : `${selectedImportCount} Teilnehmer übernehmen und offene Zeilen zurückstellen` }}</button>
                     </section>
 
                 </div>

@@ -38,7 +38,7 @@ class BvbParticipantImportTest extends TestCase
         $participation=ProjektHasPersonen::where('personen_id',$person->id)->where('projekt_id',$project->id)->firstOrFail();
         $this->assertSame('Hauptschulabschluss',$participation->import_entry_data['school_qualification_at_entry']);
         $this->assertSame('Übermittlung durch BA laut Importdatei',$participation->import_entry_data['source']);
-        $this->postJson(route('teilnehmer.import'),['file'=>$file,'confirmation'=>$preview->json('confirmation')])->assertUnprocessable();
+        $this->postJson(route('teilnehmer.import'),['file'=>$file,'confirmation'=>$preview->json('confirmation')])->assertOk()->assertJsonPath('result.created',0)->assertJsonPath('result.deferred',1);
         $this->assertSame(1,Personen::where('nachname','Müller')->count());
     }
     public function test_confirmation_is_required_and_bound_to_exact_file_and_project(): void
@@ -59,7 +59,7 @@ class BvbParticipantImportTest extends TestCase
         $this->postJson(route('teilnehmer.import'),['file'=>$this->file(birth:'31.02.2008'),'preview'=>1])->assertUnprocessable();
         $this->assertDatabaseMissing('personens',['nachname'=>'Müller']);
     }
-    public function test_reordered_headers_are_mapped_and_duplicate_rows_abort_the_whole_file(): void
+    public function test_reordered_headers_are_mapped_and_duplicate_rows_are_flagged(): void
     {
         [$user]=$this->context();
         $header="Geburtsdatum;Nachname;Vorname;Geschlecht\n";
@@ -69,7 +69,7 @@ class BvbParticipantImportTest extends TestCase
         $this->assertSame('Ada',$preview->json('rows.0.values.0'));
         $this->assertSame('Reihenfolge',$preview->json('rows.0.values.1'));
         $duplicates=UploadedFile::fake()->createWithContent('doppelt.csv',$header.$row.$row);
-        $this->postJson(route('teilnehmer.import'),['file'=>$duplicates,'preview'=>1])->assertUnprocessable();
+        $this->postJson(route('teilnehmer.import'),['file'=>$duplicates,'preview'=>1])->assertOk()->assertJsonPath('rows.1.match.status','file_duplicate');
         $this->assertDatabaseMissing('personens',['nachname'=>'Reihenfolge']);
     }
 
