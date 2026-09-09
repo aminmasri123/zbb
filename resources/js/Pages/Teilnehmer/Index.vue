@@ -8,6 +8,8 @@ import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import Swal from 'sweetalert2';
 import axios from 'axios';
+import { applyUploadCsrf } from '@/utils/uploadCsrf.mjs';
+import { redirectAfterSessionExpiry } from '@/keepAlive';
 import ModalCreateTeilnehmer from '@/Pages/Teilnehmer/ModalCreateTeilnehmer.vue';
 import ZurGruppeHinzufügen from '@/Components/ZurGruppeHinzufuegen.vue';
 import { usePermissions } from '@/utils/permissions';
@@ -188,10 +190,9 @@ const initDropzone = () => {
         acceptedFiles: ".csv,.xlsx,.xls",
         addRemoveLinks: true,
 
-        headers: {
-            "X-CSRF-TOKEN": document
-                .querySelector('meta[name="csrf-token"]')
-                .getAttribute("content")
+        headers: { Accept: 'application/json' },
+        sending(file, xhr) {
+            applyUploadCsrf(xhr);
         },
 
         dictDefaultMessage: "Datei hier hineinziehen oder klicken",
@@ -216,7 +217,11 @@ const initDropzone = () => {
             importPreview.value = null;
         },
 
-        error(file, message) {
+        error(file, message, xhr) {
+            if ([401, 419].includes(xhr?.status)) {
+                redirectAfterSessionExpiry();
+                return;
+            }
             Swal.fire({
                 title: "Fehler",
                 text: formatImportMessage(message),
