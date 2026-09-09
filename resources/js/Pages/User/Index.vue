@@ -368,7 +368,7 @@ const handleProjektZuweisungRemoved = ({ user_id, projekt_id }) => {
                                 class="px-2 py-1 text-xs rounded"
                                 :style="{ backgroundColor: rolle.color }"
                             >
-                                {{ rolle.name }}
+                                {{ rolle.display_name || rolle.name }}
                             </span>
                         </td>
 

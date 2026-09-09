@@ -159,7 +159,7 @@ const submit = () => {
                         id="rollen"
                         v-model="form.rollen"
                         :options="rollen"
-                        optionLabel="name"
+                        optionLabel="display_name"
                         optionValue="id"
                         display="chip"
                         class="w-full"

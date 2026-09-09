@@ -25,7 +25,7 @@ class PersonalController extends Controller
      */
      public function index(Request $request)
     {
-        $rollen = Role::select('id', 'name')->get();
+        $rollen = Role::select('id', 'name', 'display_name')->get();
         $standorte = Standort::all();
 
         $search          = $request->input('search');

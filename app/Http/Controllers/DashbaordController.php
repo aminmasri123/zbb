@@ -167,7 +167,7 @@ class DashbaordController extends Controller
             'dashboardCards' => $cards,
             'dashboardProject' => $this->activeProjectContext->payload($activeProject),
             'hiddenCards' => array_values(array_intersect($preference->hidden_cards ?? [], self::CARD_KEYS)),
-            'roleLabel' => $user->getRoleNames()->join(', '),
+            'roleLabel' => $user->roles->pluck('display_name')->join(', '),
             'apps' => [
                 'events' => $can('apps.calendar') ? AppCalendarEvent::count() : 0,
                 'contacts' => $can('apps.contacts') ? AppContact::count() : 0,

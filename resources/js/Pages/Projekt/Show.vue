@@ -643,7 +643,7 @@ const formatDate = (date) => {
 };
 
 const roleNames = (person) => {
-    return person.user?.roles?.map((role) => role.name).join(', ') || '-';
+    return person.user?.roles?.map((role) => role.display_name || role.name).join(', ') || '-';
 };
 
 const resetUebungForm = () => {

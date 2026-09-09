@@ -93,7 +93,7 @@ const emit = defineEmits(['close', 'add-user'])
         <div class="mb-4 w-full mx-1">
             <div class="field">
                 <FloatLabel variant="on">
-                    <MultiSelect v-model="newUser.rollen" :options="rollen" optionLabel="name" optionValue="id" display="chip" class="w-full" />
+                    <MultiSelect v-model="newUser.rollen" :options="rollen" optionLabel="display_name" optionValue="id" display="chip" class="w-full" />
                     <label>Rollen</label>
                 </FloatLabel>
           </div>

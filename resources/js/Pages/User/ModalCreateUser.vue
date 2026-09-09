@@ -232,7 +232,7 @@ watch(() => props.newUser.account_setup_method, (method) => {
         <div class="mb-4 w-full mx-1">
             <div class="field">
                 <FloatLabel variant="on">
-                    <MultiSelect v-model="newUser.rollen" :options="rollen" optionLabel="name" optionValue="id" display="chip" filter filterPlaceholder="Rolle suchen …" class="w-full" />
+                    <MultiSelect v-model="newUser.rollen" :options="rollen" optionLabel="display_name" optionValue="id" display="chip" filter filterPlaceholder="Rolle suchen …" class="w-full" />
                     <label>Rollen</label>
                 </FloatLabel>
           </div>

@@ -56,7 +56,19 @@ class RolleController extends Controller
     
     public function update(Request $request, string $id)
     {
-        //
+        $role = Role::where('guard_name', 'web')->findOrFail($id);
+        if (is_string($request->input('display_name'))) {
+            $request->merge(['display_name' => trim($request->input('display_name'))]);
+        }
+        $data = $request->validate(['display_name' => ['required', 'string', 'max:255']]);
+        if (Role::where('guard_name', $role->guard_name)->where('id', '!=', $role->id)
+            ->where(fn ($query) => $query->where('name', $data['display_name'])->orWhere('display_name', $data['display_name']))->exists()) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['display_name' => 'Diese Rollenbezeichnung ist bereits vergeben.']);
+        }
+        // The canonical name remains stable for hasRole(), policies and default data scopes.
+        $role->update(['display_name' => $data['display_name']]);
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+        return response()->json(['message' => 'Rollenbezeichnung gespeichert.', 'role' => $role->fresh()]);
     }
 
     /**

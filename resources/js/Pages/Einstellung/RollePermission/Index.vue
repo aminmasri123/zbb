@@ -8,6 +8,7 @@
     import Swal from 'sweetalert2';
     import Dropdown from '@/Components/Dropdown.vue';
     import DropdownLink from '@/Components/DropdownLink.vue';
+    import RoleNameAction from './RoleNameAction.vue';
     import ModalCreate from './ModalCreate.vue';
     import ModalCreatePermission from './ModalCreatePermission.vue';
     import { usePermissions } from '@/utils/permissions';
@@ -39,6 +40,11 @@
     const canCreateRole = computed(() => canAny(['rolle.store', 'berechtigung.store', 'berechtigung.update']));
     const canCreatePermission = computed(() => can('berechtigung.store'));
     const canDeleteRole = computed(() => canAny(['rolle.destroy', 'berechtigung.update']));
+    const canEditRole = computed(() => canAny(['rolle.update', 'berechtigung.update']));
+    const updateRoleLabel = (role) => {
+        localRollen.value = localRollen.value.map(item => item.id === role.id ? role : item);
+        router.reload({ only: ['rollen', 'roleSearched'], preserveScroll: true });
+    };
 
     const dataAccessForm = ref({
         team_scope: props.dataAccess?.team_scope || 'none',
@@ -96,7 +102,7 @@
     // Löschbestätigung anzeigen und Abteilungsnamen speichern
     const confirmDelete = (rolle) => {
         rolleToDelete.value = {
-            name: rolle.name, // Speichere den Namen der Rolle
+            name: rolle.display_name || rolle.name, // Speichere den Namen der Rolle
             id: rolle.id      // Speichere die ID der Rolle
         };
         showModalLöschen.value = true; // Modal anzeigen
@@ -381,8 +387,9 @@
                                 <Link class="text-gray-400 hover:text-black hover:font-bold transition duration-200"
                                     :class="{'text-zbb font-bold': rolle.id == roleId}"
                                     :href="route('berechtigung.index', { id: rolle.id })">
-                                    {{ rolle.name}}
+                                    {{ rolle.display_name || rolle.name}}
                                 </Link>
+                                <RoleNameAction v-if="canEditRole" :role="rolle" @updated="updateRoleLabel" />
                             </li>
                         </ul>
                     </li>
@@ -405,9 +412,9 @@
                                             :href="route('berechtigung.index', { id: rolle.id })"
                                             :class="{'text-zbb font-bold': rolle.id == roleId}"
                                             >
-                                            <div class="cursor-pointer">{{ rolle.name }}</div>
+                                            <div class="cursor-pointer">{{ rolle.display_name || rolle.name }}</div>
                                         </Link>
-                                        <span v-if="canDeleteRole" class="cursor-pointer  py-2">
+                                        <span v-if="canDeleteRole || canEditRole" class="cursor-pointer  py-2">
                                             <!-- Dropdown für Aktion -->
                                             <Dropdown >
                                                 <template #trigger>
@@ -419,8 +426,9 @@
                                                 </template>
 
                                                 <template #content >
+                                                    <RoleNameAction v-if="canEditRole" :role="rolle" @updated="updateRoleLabel" />
                                                     <!-- Gefilterte Projektauswahl -->
-                                                    <span class="flex justify-around cursor-pointer" @click="confirmDelete(rolle)">
+                                                    <span v-if="canDeleteRole" class="flex justify-around cursor-pointer" @click="confirmDelete(rolle)">
                                                         {{ $t('Löschen') }} <i class="las la-trash-alt"></i>
                                                     </span>
                                                 </template>
@@ -566,7 +574,7 @@
                  :visible="isPermissionModalOpen"
                  :categories="kategorienDerUser"
                  :role-id="roleId"
-                 :role-name="roleSearched?.name || ''"
+                 :role-name="roleSearched?.display_name || roleSearched?.name || ''"
                  @close="closePermissionModal"
                  @added="refreshPermissions" />
     </app-layout>

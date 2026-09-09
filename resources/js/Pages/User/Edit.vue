@@ -154,7 +154,7 @@ const submit = () => {
                         required
                         v-model="form.rollen"
                         :options="rollen"
-                        optionLabel="name"
+                        optionLabel="display_name"
                         optionValue="id"
                         display="chip"
                         filter

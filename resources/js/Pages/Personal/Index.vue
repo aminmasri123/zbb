@@ -196,7 +196,7 @@ const groupProjects = (projekte, standorte) => {
                                     :key="rolle.id"
                                     class="inline-flex rounded-md bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700"
                                 >
-                                    {{ rolle.name }}
+                                    {{ rolle.display_name || rolle.name }}
                                 </span>
                             </div>
                             <span v-else class="text-gray-400">–</span>
