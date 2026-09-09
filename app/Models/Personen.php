@@ -113,7 +113,12 @@ class Personen extends Model
         }
 
         if ($scope === 'current_project_same_location') {
-            $standortIds = $user->standorte()->pluck('standorts.id')->filter()->unique()->values();
+            $standortIds = ProjektHasPersonen::query()
+                ->where('personen_id', $user->person_id)
+                ->where('projekt_id', $user->current_team_id)
+                ->where('status', 'aktiv')
+                ->whereNotNull('standort_id')
+                ->pluck('standort_id')->unique()->values();
 
             if (! $user->current_team_id || $standortIds->isEmpty()) {
                 return $query->whereRaw('1 = 0');
