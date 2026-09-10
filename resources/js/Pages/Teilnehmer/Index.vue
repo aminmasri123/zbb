@@ -623,10 +623,17 @@ const toggleParentalConsent = async (participant) => {
 
 // Projekt auswählen
 const selectedCount = computed(() => selected.value.length);
+const selectionKey = (id) => String(id);
+const selectedKeySet = computed(() => new Set(selected.value.map(selectionKey)));
+const visibleParticipantIds = computed(() => filteredTeilnehmerByProject.value.map(teilnehmer => teilnehmer.id));
 const allVisibleSelected = computed(() =>
-    filteredTeilnehmerByProject.value.length > 0
-    && filteredTeilnehmerByProject.value.every(teilnehmer => selected.value.includes(teilnehmer.id))
+    visibleParticipantIds.value.length > 0
+    && visibleParticipantIds.value.every(id => selectedKeySet.value.has(selectionKey(id)))
 );
+const someVisibleSelected = computed(() =>
+    visibleParticipantIds.value.some(id => selectedKeySet.value.has(selectionKey(id)))
+);
+const isParticipantSelected = (id) => selectedKeySet.value.has(selectionKey(id));
 
 const toggleSelectionMode = () => {
     if (!canUseSelectionActions.value) return;
@@ -638,15 +645,29 @@ const toggleSelectionMode = () => {
     }
 };
 
-const toggleSelectAllVisible = () => {
-    const visibleIds = filteredTeilnehmerByProject.value.map(teilnehmer => teilnehmer.id);
+const setParticipantSelected = (id, checked) => {
+    const key = selectionKey(id);
 
-    if (allVisibleSelected.value) {
-        selected.value = selected.value.filter(id => !visibleIds.includes(id));
+    if (checked) {
+        if (!selectedKeySet.value.has(key)) {
+            selected.value = [...selected.value, id];
+        }
         return;
     }
 
-    selected.value = [...new Set([...selected.value, ...visibleIds])];
+    selected.value = selected.value.filter(selectedId => selectionKey(selectedId) !== key);
+};
+
+const toggleSelectAllVisible = (event = null) => {
+    const shouldSelect = event?.currentTarget?.type === 'checkbox'
+        ? event.currentTarget.checked
+        : !allVisibleSelected.value;
+    const visibleKeys = new Set(visibleParticipantIds.value.map(selectionKey));
+    const remainingIds = selected.value.filter(id => !visibleKeys.has(selectionKey(id)));
+
+    selected.value = shouldSelect
+        ? [...remainingIds, ...visibleParticipantIds.value]
+        : remainingIds;
 };
 
 const openGroupModal = () => {
@@ -1016,7 +1037,7 @@ const sortByColumn = (column) => {
             </Link>
         </div>
 
-         <ZurGruppeHinzufügen
+        <ZurGruppeHinzufügen
             v-if="canAssignParticipantToGroup"
             ref="groupModal"
             :show-button="false"
@@ -1024,6 +1045,33 @@ const sortByColumn = (column) => {
             :gruppen="gruppen"
             @submitted="selected = []"
             />
+
+        <div
+            v-if="checkBoxListeTeilnehmer && canUseSelectionActions"
+            class="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm"
+            role="status"
+        >
+            <span class="font-medium text-blue-900">
+                {{ selectedCount }} Teilnehmer markiert
+            </span>
+            <div class="flex flex-wrap items-center gap-2">
+                <button
+                    type="button"
+                    class="rounded-md border border-blue-300 bg-white px-3 py-1.5 font-medium text-blue-800 hover:bg-blue-100"
+                    @click="toggleSelectAllVisible"
+                >
+                    {{ allVisibleSelected ? 'Sichtbare abwählen' : `Alle sichtbaren markieren (${visibleParticipantIds.length})` }}
+                </button>
+                <button
+                    v-if="selectedCount > 0"
+                    type="button"
+                    class="rounded-md px-3 py-1.5 font-medium text-gray-700 hover:bg-white"
+                    @click="selected = []"
+                >
+                    Auswahl aufheben
+                </button>
+            </div>
+        </div>
 
         <!-- Teilnehmer Tabelle -->
         <div class="overflow-x-auto snap-x">
@@ -1037,7 +1085,13 @@ const sortByColumn = (column) => {
                     <thead class="text-gray-600 uppercase bg-gray-200">
                         <tr>
                             <th v-if="checkBoxListeTeilnehmer && canUseSelectionActions" class="border border-solid border-gray-300 text-center py-3">
-                                <input type="checkbox" :checked="allVisibleSelected" @change="toggleSelectAllVisible">
+                                <input
+                                    type="checkbox"
+                                    :checked="allVisibleSelected"
+                                    :indeterminate.prop="someVisibleSelected && !allVisibleSelected"
+                                    aria-label="Alle sichtbaren Teilnehmer markieren"
+                                    @change="toggleSelectAllVisible"
+                                >
                             </th>
                             <th
                                 v-for="column in visibleOverviewColumns"
@@ -1056,7 +1110,12 @@ const sortByColumn = (column) => {
                     <tbody>
                         <tr v-for="teilnehmer in filteredTeilnehmerByProject" :key="teilnehmer.id" class="bg-white border-b">
                             <td v-if="checkBoxListeTeilnehmer && canUseSelectionActions" class="text-center py-4 border border-solid border-gray-300">
-                                <input v-model="selected" :value="teilnehmer.id" type="checkbox">
+                                <input
+                                    type="checkbox"
+                                    :checked="isParticipantSelected(teilnehmer.id)"
+                                    :aria-label="`${teilnehmer.vorname} ${teilnehmer.nachname} markieren`"
+                                    @change="setParticipantSelected(teilnehmer.id, $event.currentTarget.checked)"
+                                >
                             </td>
                             <td
                                 v-for="column in visibleOverviewColumns"
