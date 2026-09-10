@@ -1085,13 +1085,20 @@ const sortByColumn = (column) => {
                     <thead class="text-gray-600 uppercase bg-gray-200">
                         <tr>
                             <th v-if="checkBoxListeTeilnehmer && canUseSelectionActions" class="border border-solid border-gray-300 text-center py-3">
-                                <input
-                                    type="checkbox"
-                                    :checked="allVisibleSelected"
-                                    :indeterminate.prop="someVisibleSelected && !allVisibleSelected"
+                                <button
+                                    type="button"
+                                    role="checkbox"
+                                    :aria-checked="allVisibleSelected ? 'true' : (someVisibleSelected ? 'mixed' : 'false')"
                                     aria-label="Alle sichtbaren Teilnehmer markieren"
-                                    @change="toggleSelectAllVisible"
+                                    class="inline-flex h-6 w-6 items-center justify-center rounded border-2 transition"
+                                    :class="allVisibleSelected || someVisibleSelected
+                                        ? 'border-zbb bg-zbb text-white'
+                                        : 'border-gray-400 bg-white text-transparent hover:border-zbb'"
+                                    @click="toggleSelectAllVisible"
                                 >
+                                    <i v-if="allVisibleSelected" class="las la-check text-base" aria-hidden="true"></i>
+                                    <i v-else-if="someVisibleSelected" class="las la-minus text-base" aria-hidden="true"></i>
+                                </button>
                             </th>
                             <th
                                 v-for="column in visibleOverviewColumns"
@@ -1110,12 +1117,19 @@ const sortByColumn = (column) => {
                     <tbody>
                         <tr v-for="teilnehmer in filteredTeilnehmerByProject" :key="teilnehmer.id" class="bg-white border-b">
                             <td v-if="checkBoxListeTeilnehmer && canUseSelectionActions" class="text-center py-4 border border-solid border-gray-300">
-                                <input
-                                    type="checkbox"
-                                    :checked="isParticipantSelected(teilnehmer.id)"
+                                <button
+                                    type="button"
+                                    role="checkbox"
+                                    :aria-checked="isParticipantSelected(teilnehmer.id) ? 'true' : 'false'"
                                     :aria-label="`${teilnehmer.vorname} ${teilnehmer.nachname} markieren`"
-                                    @change="setParticipantSelected(teilnehmer.id, $event.currentTarget.checked)"
+                                    class="inline-flex h-6 w-6 items-center justify-center rounded border-2 transition"
+                                    :class="isParticipantSelected(teilnehmer.id)
+                                        ? 'border-zbb bg-zbb text-white'
+                                        : 'border-gray-400 bg-white text-transparent hover:border-zbb'"
+                                    @click="setParticipantSelected(teilnehmer.id, !isParticipantSelected(teilnehmer.id))"
                                 >
+                                    <i v-if="isParticipantSelected(teilnehmer.id)" class="las la-check text-base" aria-hidden="true"></i>
+                                </button>
                             </td>
                             <td
                                 v-for="column in visibleOverviewColumns"
