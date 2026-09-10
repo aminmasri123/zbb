@@ -129,9 +129,18 @@
     const boModalBewerteteAnzahl = computed(() => boCriteria.value.filter((criterion) =>
       Number(boBewertungen.value[criterion.key]?.bewertung) >= 1
     ).length)
+    const boBewertungIst = (criterionKey, value) =>
+      Number(boBewertungen.value[criterionKey]?.bewertung) === Number(value)
+    const boAlleBewertungenSind = (value) =>
+      boCriteria.value.length > 0 && boCriteria.value.every((criterion) => boBewertungIst(criterion.key, value))
+    const setzeBoBewertung = (criterionKey, value) => {
+      if (!boBewertungen.value[criterionKey]) return
+
+      boBewertungen.value[criterionKey].bewertung = Number(value)
+    }
     const setzeAlleBoBewertungen = (value) => {
       boCriteria.value.forEach((criterion) => {
-        boBewertungen.value[criterion.key].bewertung = Number(value)
+        setzeBoBewertung(criterion.key, value)
       })
     }
     const openBereichsauswertung = (teilnehmer) => {
@@ -2491,9 +2500,19 @@ const exportMitTag = async () => {
               <tr>
                 <th class="border-b px-3 py-2 text-left">Beobachtungspunkt</th>
                 <th v-for="(label, value) in boScale" :key="'bo-head-' + value" class="w-24 border-b px-1 py-2 text-center">
-                  <button type="button" class="group inline-flex w-full flex-col items-center rounded px-1 py-1.5 hover:bg-zbb hover:text-white" :title="`Alle Beobachtungspunkte mit ${value} – ${label} bewerten`" @click="setzeAlleBoBewertungen(value)">
+                  <button
+                    type="button"
+                    class="group inline-flex w-full flex-col items-center rounded border-2 px-1 py-1.5 transition"
+                    :class="boAlleBewertungenSind(value)
+                      ? 'border-zbb bg-zbb text-white shadow-sm'
+                      : 'border-transparent hover:border-zbb hover:bg-zbb hover:text-white'"
+                    :aria-pressed="boAlleBewertungenSind(value)"
+                    :title="`Alle Beobachtungspunkte mit ${value} – ${label} bewerten`"
+                    @click="setzeAlleBoBewertungen(value)"
+                  >
                     <span class="text-base font-bold">{{ value }}</span>
                     <span class="max-w-20 text-[10px] leading-tight">{{ label }}</span>
+                    <span v-if="boAlleBewertungenSind(value)" class="mt-1 text-[10px] font-semibold">✓ Alle</span>
                   </button>
                 </th>
                 <th class="w-64 border-b px-3 py-2 text-left">Bemerkung</th>
@@ -2506,9 +2525,21 @@ const exportMitTag = async () => {
                   <p v-if="criterion.description" class="mt-0.5 text-xs text-gray-500">{{ criterion.description }}</p>
                 </td>
                 <td v-for="(label, value) in boScale" :key="criterion.key + '-' + value" class="px-1 py-2 text-center">
-                  <label class="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded transition hover:bg-zbb/10" :title="`${value} – ${label}`">
-                    <input v-model.number="boBewertungen[criterion.key].bewertung" type="radio" :name="'bo-' + criterion.key" :value="Number(value)" class="h-5 w-5 text-zbb focus:ring-2 focus:ring-zbb" />
-                  </label>
+                  <button
+                    type="button"
+                    role="radio"
+                    :aria-checked="boBewertungIst(criterion.key, value)"
+                    :aria-label="`${criterion.label}: ${value} – ${label}`"
+                    class="inline-flex h-9 w-9 items-center justify-center rounded-full border-2 text-sm font-bold transition"
+                    :class="boBewertungIst(criterion.key, value)
+                      ? 'border-zbb bg-zbb text-white shadow-sm'
+                      : 'border-gray-300 bg-white text-gray-500 hover:border-zbb hover:bg-zbb/10 hover:text-zbb'"
+                    :title="`${value} – ${label}`"
+                    @click="setzeBoBewertung(criterion.key, value)"
+                  >
+                    <i v-if="boBewertungIst(criterion.key, value)" class="las la-check" aria-hidden="true"></i>
+                    <span v-else>{{ value }}</span>
+                  </button>
                 </td>
                 <td class="px-3 py-2"><textarea v-model="boBewertungen[criterion.key].bemerkung" rows="1" class="h-9 min-h-0 w-full resize-y rounded border-gray-300 py-1 text-xs" placeholder="Optional"></textarea></td>
               </tr>
