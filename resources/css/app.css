@@ -354,6 +354,20 @@ body {
     touch-action: manipulation;
 }
 
+/*
+ * Checkboxen und Radiofelder werden vom Browser selbst gezeichnet. Die vom
+ * Tailwind-Forms-Plugin verwendete SVG-Darstellung kann in Brave zusammen mit
+ * den dynamischen Themes verschwinden, obwohl der Wert weiterhin ausgewählt
+ * ist. Die native Darstellung hält Anzeige und Formularzustand synchron.
+ */
+input[type="checkbox"],
+input[type="radio"] {
+    -webkit-appearance: auto !important;
+    -moz-appearance: auto !important;
+    appearance: auto !important;
+    accent-color: var(--buttonPrimary, #ff8500);
+}
+
 @media (max-width: 1024px) {
     .main-wrapper table {
         display: block;
