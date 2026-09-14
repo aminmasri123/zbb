@@ -6,7 +6,7 @@
         @page { margin: 46mm 15mm 38mm; }
         body { margin: 0; font-family: "DejaVu Sans", sans-serif; font-size: 10pt; color: #111; }
         table { border-collapse: collapse; }
-        .attendance { width: 100%; table-layout: auto; }
+        .attendance { width: {{ $paper === 'A3' ? 324 : 234 }}mm; table-layout: auto; }
         thead { display: table-header-group; }
         tr { page-break-inside: avoid; }
         .document-header { position: fixed; top: -34mm; left: 0; right: 0; text-align: left; }
@@ -37,8 +37,8 @@
     <thead>
         <tr class="columns">
             <th class="center" style="width: 6mm">Nr.</th>
-            <th style="width: {{ $paper === 'A3' ? 138 : 76.5 }}mm">Name</th>
-            <th style="width: {{ $paper === 'A3' ? 138 : 76.5 }}mm">Vorname</th>
+            <th style="width: {{ $paper === 'A3' ? 105 : 60 }}mm">Name</th>
+            <th style="width: {{ $paper === 'A3' ? 105 : 60 }}mm">Vorname</th>
             <th class="center" style="width: 28mm">Geschlecht<br><span class="sub-label">w/m</span></th>
             <th style="width: 55mm">Unterschrift<br><span class="sub-label">Schüler/-in</span></th>
         </tr>
