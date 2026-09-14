@@ -11,6 +11,8 @@ use PhpOffice\PhpWord\PhpWord;
 class PaPreparationAttendanceWordExportService
 {
     private const PAGE_MARGIN = 850; // 15 mm
+    private const SIGNATURE_WIDTH = 3400; // 60 mm, auch auf A3
+    private const TABLE_WIDTH = 600 + 2800 + 2600 + 1300 + self::SIGNATURE_WIDTH;
 
     public function __construct(private readonly AttendanceFooterService $attendanceFooter)
     {
@@ -80,8 +82,9 @@ class PaPreparationAttendanceWordExportService
             'borderSize' => 8,
             'borderColor' => '1F2937',
             'cellMargin' => 70,
-            'width' => 100 * 50,
-            'unit' => 'pct',
+            'width' => self::TABLE_WIDTH,
+            'unit' => 'dxa',
+            'layout' => 'fixed',
         ], [
             'bgColor' => 'E5E7EB',
         ]);
@@ -92,7 +95,7 @@ class PaPreparationAttendanceWordExportService
             [2800, 'Name'],
             [2600, 'Vorname'],
             [1300, 'Klasse'],
-            [7838, "Unterschrift\n{$dateLabel}"],
+            [self::SIGNATURE_WIDTH, "Unterschrift\n{$dateLabel}"],
         ] as [$width, $label]) {
             $header->addCell($width, ['valign' => 'center'])
                 ->addText($label, ['bold' => true], ['alignment' => 'center']);
@@ -108,7 +111,7 @@ class PaPreparationAttendanceWordExportService
                 $row->addCell(2800, ['valign' => 'center'])->addText((string) ($person?->nachname ?? ''));
                 $row->addCell(2600, ['valign' => 'center'])->addText((string) ($person?->vorname ?? ''));
                 $row->addCell(1300, ['valign' => 'center'])->addText((string) ($participant->klasse ?? ''), [], ['alignment' => 'center']);
-                $signatureCell = $row->addCell(7838, ['valign' => 'center']);
+                $signatureCell = $row->addCell(self::SIGNATURE_WIDTH, ['valign' => 'center']);
                 $signature = $this->signatureFor($day, (int) $participant->person_id, $signatures);
                 $signaturePath = $this->writeSignatureImage($signature);
 

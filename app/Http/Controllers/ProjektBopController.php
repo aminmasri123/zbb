@@ -1756,6 +1756,55 @@ class ProjektBopController extends Controller
         return response()->download($path, $filename)->deleteFileAfterSend(true);
     }
 
+    public function anwesenheitslistePAPreparationExportTemplate(
+        Request $request,
+        \App\Services\Bop\PaPreparationAttendanceTemplateExportService $exporter,
+        \App\Services\Documents\OfficeToPdfConverter $converter
+    ) {
+        $this->ensureMemoryLimit(512 * 1024 * 1024);
+        $scope = $this->paDraftScope($request);
+        abort_unless($scope['list_type'] === 'pa_preparation', 422, 'Dieser Export ist nur für die Vorbereitung PA verfügbar.');
+        $data = $request->validate([
+            'format' => ['required', 'in:xlsx,pdf'],
+            'exportFormat' => ['nullable', 'in:A4,A3'],
+        ]);
+        $draft = PaAttendanceListDraft::where('draft_hash', $scope['draft_hash'])->first();
+        $legacyDraft = $this->legacyPaDraft($scope);
+        $sourceDraft = $draft ?: $legacyDraft;
+        abort_unless($sourceDraft, 422, 'Bitte speichern Sie zuerst den Entwurf der Anwesenheitsliste.');
+        $payload = $this->decryptPaDraftPayloadSignatures($sourceDraft->payload ?? []);
+        if ($draft && $legacyDraft) {
+            $payload = $this->restoreLegacySignatures($payload, $this->decryptPaDraftPayloadSignatures($legacyDraft->payload ?? []));
+        }
+        $selectedDays = collect($payload['days'] ?? [])->filter(fn ($item) => is_array($item)
+            && ($item['selected'] ?? true) && ($item['type'] ?? 'preparation') === 'preparation' && !empty($item['date']));
+        abort_unless($selectedDays->count() === 1, 422, 'Bitte wählen Sie genau einen Termin Vorbereitung PA für die Vorlage aus.');
+        $day = $selectedDays->first();
+        $participants = $this->paTeilnehmer($scope['partner_id'], $scope['schuljahr'], $scope['teil'], $scope['export_mode'], $scope['klasse'], $scope['list_type']);
+        abort_if($participants->isEmpty(), 422, 'Die Schule hat keine Teilnehmer für diese Auswahl.');
+        $school = Partner::findOrFail($scope['partner_id']);
+        $classPart = $scope['export_mode'] === 'klasse' && $scope['klasse'] ? '_Klasse_'.$scope['klasse'] : '';
+        $baseName = $this->bibbSafeName('Anwesenheitsliste_Vorbereitung_PA_'.$school->name.'_'.$scope['schuljahr'].'_Teil_'.$scope['teil'].$classPart);
+        $xlsxPath = storage_path('exports/'.Str::uuid().'_'.$baseName.'.xlsx');
+        $outputPath = $xlsxPath;
+        try {
+            $exporter->create($school, $participants, $day, is_array($payload['signatures'] ?? null) ? $payload['signatures'] : [],
+                $scope['export_mode'], $scope['klasse'], $data['exportFormat'] ?? ($payload['form']['exportFormat'] ?? 'A4'), $xlsxPath, $data['format'] === 'pdf');
+            if ($data['format'] === 'pdf') {
+                $outputPath = $converter->convert($xlsxPath);
+                $exporter->applyPdfFooter($outputPath);
+                File::delete($xlsxPath);
+            }
+        } catch (\Throwable $exception) {
+            File::delete($xlsxPath);
+            if ($outputPath !== $xlsxPath) File::delete($outputPath);
+            report($exception);
+            throw ValidationException::withMessages(['export' => 'Die Vorlage konnte nicht exportiert werden. Bitte prüfen Sie die Vorlagendatei und für PDF die LibreOffice-Installation.']);
+        }
+
+        return response()->download($outputPath, $baseName.'.'.$data['format'])->deleteFileAfterSend(true);
+    }
+
     private function availablePaSignedPdfPath(string $folder, string $filename): array
     {
         $path = $folder . DIRECTORY_SEPARATOR . $filename;

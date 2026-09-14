@@ -57,7 +57,7 @@ const primaryDateLabel = computed(() => isPreparationPa.value ? 'Termin Vorberei
 const createDaysButtonText = computed(() => isPreparationPa.value ? 'Vorbereitungstag übernehmen' : 'PA-Tage übernehmen')
 const noDaysText = computed(() => isPreparationPa.value ? 'Kein Vorbereitungstag angelegt.' : 'Keine PA-Tage angelegt.')
 const sheetTitle = computed(() => isPreparationPa.value
-  ? 'Vorbereitung PA mit digitalen Unterschriften'
+  ? 'Teilnehmendenliste zum Nachweis der Vorbereitung BO-Tage'
   : 'Potenzialanalyse mit digitalen Unterschriften')
 const pdfDocumentTitle = computed(() => isPreparationPa.value
   ? 'Anwesenheitsliste Vorbereitung PA'
@@ -86,6 +86,7 @@ const manualDate = ref('')
 const manualNote = ref('')
 const loadingPreview = ref(false)
 const exportingWord = ref(false)
+const exportingTemplate = ref(false)
 const exportingPdf = ref(false)
 const creatingArchiveFolder = ref(false)
 const signatures = reactive({})
@@ -156,7 +157,7 @@ const scopeReady = computed(() => props.partnerId
 const draftScopeReady = computed(() => props.partnerId
   && props.schuljahr
   && props.teil
-  && (!isPreparationPa.value || form.klasse))
+  && (!isPreparationPa.value || form.exportMode === 'alle' || form.klasse))
 const draftStatusText = computed(() => {
   if (draftSaveBlocked.value) return 'Speichern fehlgeschlagen'
   if (draftLoading.value) return 'wird geladen'
@@ -169,7 +170,7 @@ const draftStatusText = computed(() => {
     })}`
   }
 
-  return 'bereit'
+  return 'Vorschau – noch nicht gespeichert'
 })
 const draftExpiryText = computed(() => {
   if (!draftExpiresAt.value) return null
@@ -632,6 +633,7 @@ const performDraftSave = async ({ silent, draftPayload, requestSignatureSnapshot
       draftLoaded.value = true
       draftDirty.value = signatureChangedDuringSave || Object.keys(pendingSignatureChanges).length > 0
     }
+    return isLatestSaveResponse && !draftDirty.value
   } catch (error) {
     if (generation === draftSaveGeneration && requestId === draftSaveRequestId && ![401, 419].includes(error?.response?.status)) {
       draftSaveBlocked.value = true
@@ -641,6 +643,7 @@ const performDraftSave = async ({ silent, draftPayload, requestSignatureSnapshot
     if (!silent && generation === draftSaveGeneration && requestId === draftSaveRequestId) {
       PaSwal.fire('Fehler', await readBlobError(error), 'error')
     }
+    return false
   }
 }
 
@@ -733,6 +736,19 @@ const flushDraftSave = async () => {
   window.clearTimeout(draftSaveTimer)
   draftSaveTimer = null
   await saveDraft({ silent: true, payload })
+}
+
+const ensureDraftSavedForExport = async () => {
+  if (!previewContext.value || !draftScopeReady.value) return false
+  window.clearTimeout(draftSaveTimer)
+  draftSaveTimer = null
+  await draftSaveQueue
+  // Auch eine unveränderte erste Vorschau braucht einen gespeicherten Entwurf.
+  const saved = await saveDraft({ silent: true })
+  await draftSaveQueue
+  if (saved && draftRevision.value > 0 && !draftDirty.value && !draftSaveBlocked.value) return true
+  PaSwal.fire('Entwurf nicht gespeichert', 'Der Entwurf konnte nicht gespeichert werden. Bitte erneut versuchen.', 'warning')
+  return false
 }
 
 const loadSignatureHistory = async (context) => {
@@ -1050,6 +1066,46 @@ const reloadScope = async () => {
   startDraftPolling()
 }
 
+const handleTemplateExport = async (format) => {
+  if (exportingTemplate.value || exportingPdf.value) return
+  if (selectedDays.value.length !== 1 || (form.exportMode === 'klasse' && !form.klasse)) {
+    PaSwal.fire('Angaben fehlen', 'Bitte genau einen Vorbereitungstermin und die gewünschte Klasse auswählen.', 'warning')
+    return
+  }
+  exportingTemplate.value = true
+  exportingPdf.value = format === 'pdf'
+  try {
+    if (!await ensureDraftSavedForExport()) return
+    const response = await axios.post(route('anwesenheitsliste.PA.preparation.export.template'), {
+      ...draftScopePayload(), format, exportFormat: form.exportFormat,
+    }, { responseType: 'blob' })
+    const disposition = response.headers['content-disposition'] || ''
+    const filename = disposition.match(/filename="?([^";]+)"?/)?.[1] || `Anwesenheitsliste_Vorbereitung_PA.${format}`
+    const blob = response.data
+    let folderSave = null
+    let folderError = null
+    if (format === 'pdf') {
+      try { folderSave = await storeSignedPdfInFolder(blob, filename) }
+      catch (error) { folderError = await readBlobError(error) }
+    }
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.setTimeout(() => window.URL.revokeObjectURL(url), 1000)
+    if (folderSave) PaSwal.fire('PDF erstellt', `Die PDF wurde heruntergeladen und im Ordner gespeichert: ${folderSave.folder}`, 'success')
+    else if (folderError) PaSwal.fire('PDF heruntergeladen', `Die PDF wurde erstellt, aber die Ordner-Speicherung ist fehlgeschlagen: ${folderError}`, 'warning')
+  } catch (error) {
+    PaSwal.fire('Export fehlgeschlagen', await readBlobError(error), 'error')
+  } finally {
+    exportingTemplate.value = false
+    exportingPdf.value = false
+  }
+}
+
 const handleWordExport = async () => {
   if (isPreparationPa.value) {
     if (!selectedDays.value.length || (form.exportMode === 'klasse' && !form.klasse)) {
@@ -1060,7 +1116,7 @@ const handleWordExport = async () => {
     exportingWord.value = true
 
     try {
-      await flushDraftSave()
+      if (!await ensureDraftSavedForExport()) return
       const response = await axios.post(route('anwesenheitsliste.PA.preparation.export.word'), {
         ...draftScopePayload(),
         exportFormat: form.exportFormat,
@@ -1273,7 +1329,7 @@ const pdfColumns = (layout) => {
   ]
   const staticWidth = staticColumns.reduce((sum, column) => sum + column.width, 0)
   const dayCount = Math.max(selectedDays.value.length, 1)
-  const dayWidth = Math.max(18 * layout.widthScale, (layout.tableWidth - staticWidth) / dayCount)
+  const dayWidth = Math.min(60 * layout.widthScale, Math.max(18 * layout.widthScale, (layout.tableWidth - staticWidth) / dayCount))
 
   return [
     ...staticColumns,
@@ -1516,6 +1572,10 @@ const drawTrainerTable = (doc, layout) => {
 }
 
 const createSignedPdf = async () => {
+  if (isPreparationPa.value) {
+    await handleTemplateExport('pdf')
+    return
+  }
   if (!selectedDays.value.length) {
     PaSwal.fire('Keine Tage', isPreparationPa.value ? 'Bitte den Vorbereitungstag übernehmen.' : 'Bitte mindestens einen PA-Tag auswählen.', 'warning')
     return
@@ -1929,7 +1989,17 @@ onBeforeUnmount(() => {
               <button
                 type="button"
                 class="inline-flex items-center gap-2 rounded border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                :disabled="exportingWord"
+                :disabled="exportingWord || exportingTemplate"
+                @click="isPreparationPa ? handleTemplateExport('xlsx') : handleWordExport()"
+              >
+                <i :class="isPreparationPa ? 'la la-file-excel' : 'la la-file-word'"></i>
+                {{ (exportingWord || exportingTemplate) ? 'Exportiert...' : (isPreparationPa ? 'Excel-Vorlage' : 'Word') }}
+              </button>
+              <button
+                v-if="isPreparationPa"
+                type="button"
+                class="inline-flex items-center gap-2 rounded border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                :disabled="exportingWord || exportingTemplate"
                 @click="handleWordExport"
               >
                 <i class="la la-file-word"></i>
@@ -1939,7 +2009,7 @@ onBeforeUnmount(() => {
                 v-if="canArchiveAttendance"
                 type="button"
                 class="inline-flex items-center gap-2 rounded bg-gray-900 px-3 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
-                :disabled="exportingPdf || selectedDays.length === 0"
+                :disabled="exportingPdf || exportingTemplate || selectedDays.length === 0"
                 @click="createSignedPdf"
               >
                 <i class="la la-file-signature"></i>
@@ -2076,13 +2146,20 @@ onBeforeUnmount(() => {
           </div>
 
           <div :class="sheetTableWrapperClass">
-            <table class="min-w-[980px] border-collapse text-[11px]">
+            <table class="border-collapse text-[11px]" :class="isPreparationPa ? 'w-[800px] table-fixed break-words' : 'min-w-[980px]'">
+              <colgroup v-if="isPreparationPa">
+                <col class="w-[40px]">
+                <col class="w-[170px]">
+                <col class="w-[170px]">
+                <col class="w-[100px]">
+                <col v-for="day in selectedDays" :key="day.id" class="w-[320px]">
+              </colgroup>
               <thead class="sticky top-0 z-10 bg-white">
                 <tr>
                   <th class="border border-gray-800 px-2 py-2 text-left font-semibold">Nr.</th>
                   <th class="border border-gray-800 px-2 py-2 text-left font-semibold">Name</th>
                   <th class="border border-gray-800 px-2 py-2 text-left font-semibold">Vorname</th>
-                  <th class="border border-gray-800 px-2 py-2 text-left font-semibold">Klasse</th>
+                  <th class="border border-gray-800 px-2 py-2 text-left font-semibold">{{ isPreparationPa ? 'Geschlecht w/m' : 'Klasse' }}</th>
                   <th
                     v-for="(day, index) in selectedDays"
                     :key="`head-${day.id}`"
@@ -2115,7 +2192,7 @@ onBeforeUnmount(() => {
                     <td class="border border-gray-800 px-2 py-2 align-middle">{{ row.index + 1 }}</td>
                     <td class="border border-gray-800 px-2 py-2 align-middle font-medium">{{ row.participant.nachname }}</td>
                     <td class="border border-gray-800 px-2 py-2 align-middle">{{ row.participant.vorname }}</td>
-                    <td class="border border-gray-800 px-2 py-2 align-middle">{{ row.participant.klasse }}</td>
+                    <td class="border border-gray-800 px-2 py-2 align-middle">{{ isPreparationPa ? row.participant.geschlecht : row.participant.klasse }}</td>
                     <td
                       v-for="day in selectedDays"
                       :key="`${day.id}-${row.participant.person_id || row.participant.id}`"

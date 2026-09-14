@@ -183,6 +183,7 @@ class RoutePermissionMap
         'anwesenheitsliste.PA.digital.draft.clear' => 'anwesenheit.abrechnung',
         'anwesenheitsliste.PA.export.word' => 'anwesenheit.abrechnung',
         'anwesenheitsliste.PA.preparation.export.word' => 'anwesenheit.abrechnung',
+        'anwesenheitsliste.PA.preparation.export.template' => 'anwesenheit.abrechnung',
         'anwesenheitsliste.BoTag1.export' => 'anwesenheit.abrechnung',
         'anwesenheitsliste.POBO.bibb.archive.folder' => 'anwesenheit.archiv',
         'anwesenheitsliste.POBO.bibb.pdf.store' => 'anwesenheit.archiv',

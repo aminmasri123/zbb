@@ -201,6 +201,8 @@ Route::middleware(['module:participant_portal', 'auth', 'participantPortalUser']
     Route::delete('/portal/kontakt/anfragen/{change}', [ParticipantContactController::class, 'cancel'])->name('participant-portal.contact.cancel');
     Route::get('/portal/lebenslauf', [ParticipantCvController::class, 'index'])->name('participant-portal.resume.index')->middleware('participantPortalFeature:profile');
     Route::get('/portal/bewerbungsstudio', [ParticipantCareerStudioController::class, 'index'])->name('participant-portal.career-studio.index')->middleware('participantPortalFeature:application_management');
+    Route::post('/portal/bewerbungsstudio/import/vorschau', [ParticipantCareerStudioController::class, 'importPreview'])->name('participant-portal.career-studio.import.preview')->middleware(['participantPortalFeature:application_management', 'throttle:10,1']);
+    Route::post('/portal/bewerbungsstudio/import/bestaetigen', [ParticipantCareerStudioController::class, 'importConfirm'])->name('participant-portal.career-studio.import.confirm')->middleware('participantPortalFeature:application_management');
     Route::post('/portal/bewerbungsstudio/dokumente', [ParticipantCareerStudioController::class, 'store'])->name('participant-portal.career-studio.store')->middleware('participantPortalFeature:application_management');
     Route::put('/portal/bewerbungsstudio/dokumente/{document}', [ParticipantCareerStudioController::class, 'update'])->name('participant-portal.career-studio.update')->middleware('participantPortalFeature:application_management');
     Route::post('/portal/bewerbungsstudio/dokumente/{document}/kopieren', [ParticipantCareerStudioController::class, 'duplicate'])->name('participant-portal.career-studio.duplicate')->middleware('participantPortalFeature:application_management');
@@ -686,6 +688,18 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
         Route::patch('/teilnehmer/update/{id}', [TeilnehmerController::class, 'update'])->name('teilnehmer.update')->can('teilnehmer.update');
         Route::patch('/teilnehmer/{person}/elterneinverstaendnis', [TeilnehmerController::class, 'updateParentalConsent'])->name('teilnehmer.elterneinverstaendnis.update')->middleware(['module:participant_management', 'projectFeature:participant_management'])->can('teilnehmer.elterneinverstaendnis.update');
         Route::get('/teilnehmer/{person}/lebenslauf', [ParticipantCvController::class, 'staffIndex'])->name('teilnehmer.resume.index')->middleware(['module:participant_portal', 'projectFeature:participant_portal'])->can('teilnehmer.update');
+        Route::middleware(['module:participant_portal', 'projectFeature:participant_portal', 'can:teilnehmer.update'])->name('teilnehmer.career-studio.')->group(function () {
+            Route::get('/teilnehmer/{person}/bewerbungsstudio', [ParticipantCareerStudioController::class, 'index'])->name('index');
+            Route::post('/teilnehmer/{person}/bewerbungsstudio/dokumente', [ParticipantCareerStudioController::class, 'store'])->name('store');
+            Route::post('/teilnehmer/{person}/bewerbungsstudio/import/vorschau', [ParticipantCareerStudioController::class, 'importPreview'])->name('import.preview')->middleware('throttle:10,1');
+            Route::post('/teilnehmer/{person}/bewerbungsstudio/import/bestaetigen', [ParticipantCareerStudioController::class, 'importConfirm'])->name('import.confirm');
+            Route::put('/teilnehmer/bewerbungsstudio/dokumente/{document}', [ParticipantCareerStudioController::class, 'update'])->name('update');
+            Route::post('/teilnehmer/bewerbungsstudio/dokumente/{document}/kopieren', [ParticipantCareerStudioController::class, 'duplicate'])->name('duplicate');
+            Route::delete('/teilnehmer/bewerbungsstudio/dokumente/{document}', [ParticipantCareerStudioController::class, 'destroy'])->name('destroy');
+            Route::get('/teilnehmer/bewerbungsstudio/dokumente/{document}/vorschau', [ParticipantCareerStudioController::class, 'preview'])->name('preview');
+            Route::get('/teilnehmer/bewerbungsstudio/dokumente/{document}/download', [ParticipantCareerStudioController::class, 'download'])->name('download');
+            Route::get('/teilnehmer/bewerbungsstudio/dokumente/{document}/download-docx', [ParticipantCareerStudioController::class, 'downloadDocx'])->name('download-docx');
+        });
         Route::post('/teilnehmer/{person}/lebenslauf/eintraege', [ParticipantCvController::class, 'store'])->name('teilnehmer.resume.entries.store')->middleware(['module:participant_portal', 'projectFeature:participant_portal'])->can('teilnehmer.update');
         Route::post('/teilnehmer/{person}/lebenslauf/versionen', [ParticipantCvController::class, 'createVersion'])->name('teilnehmer.resume.versions.store')->middleware(['module:participant_portal', 'projectFeature:participant_portal'])->can('teilnehmer.update');
         Route::put('/teilnehmer/lebenslauf/eintraege/{entry}', [ParticipantCvController::class, 'update'])->name('teilnehmer.resume.entries.update')->middleware(['module:participant_portal', 'projectFeature:participant_portal'])->can('teilnehmer.update');
@@ -995,6 +1009,7 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::post('export-anwesenheitsliste/pa/archive-folder', [ProjektBopController::class, 'anwesenheitslistePAArchiveFolder'])->name('anwesenheitsliste.PA.digital.archive.folder');
     Route::post('export-anwesenheitsliste/pa/pdf-folder', [ProjektBopController::class, 'anwesenheitslistePASignedPdfStore'])->name('anwesenheitsliste.PA.digital.pdf.store');
     Route::post('export-anwesenheitsliste/pa/vorbereitung/word', [ProjektBopController::class, 'anwesenheitslistePAPreparationExportWord'])->name('anwesenheitsliste.PA.preparation.export.word');
+    Route::post('export-anwesenheitsliste/pa/vorbereitung/vorlage', [ProjektBopController::class, 'anwesenheitslistePAPreparationExportTemplate'])->name('anwesenheitsliste.PA.preparation.export.template');
     Route::post('export-anwesenheitsliste/pa', [ProjektBopController::class, 'anwesenheitslistePAexportWord'])->name('anwesenheitsliste.PA.export.word');
     Route::get('/export-anwesenheitsliste-pobo/tag1/{partnerID}/{schuljahr}/{teil}/{klasse?}', [ProjektBopController::class, 'anwesenheitslistePOBOTag1'])->name('anwesenheitsliste.BoTag1.export');
     Route::get('/export/hausordnung/{partnerId}/{schuljahr}/{teil}/{sortBy}/{termin}', [ProjektBopController::class, 'hausordnungExportPdf'])->name('hausordnung.export.schule.pdf');
