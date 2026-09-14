@@ -2,6 +2,7 @@
 
 namespace App\Services\Bop;
 
+use App\Services\Documents\OfficeToPdfConverter;
 use App\Models\Partner;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
@@ -116,7 +117,7 @@ class PaPreparationAttendanceTemplateExportService
         }
     }
 
-    public function applyPdfFooter(string $pdfPath): void
+    public function applyPdfFooter(string $pdfPath, bool $addPageNumbers = false): void
     {
         $workbook = IOFactory::load(storage_path(self::TEMPLATE_PATH));
         $sheet = $workbook->getActiveSheet();
@@ -137,6 +138,11 @@ class PaPreparationAttendanceTemplateExportService
                 $size = $pdf->getTemplateSize($templateId);
                 $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
                 $pdf->useTemplate($templateId);
+                if ($addPageNumbers) {
+                    $pdf->SetFont('Helvetica', '', 8);
+                    $pdf->SetXY($size['width'] - 50, 5);
+                    $pdf->Cell(30, 5, 'Seite '.$page.' von '.$pageCount, 0, 0, 'R');
+                }
                 $left = $sheet->getPageMargins()->getLeft() * 25.4;
                 $right = $sheet->getPageMargins()->getRight() * 25.4;
                 $width = min($footerImage->getWidth() * 25.4 / 96, $size['width'] - $left - $right);
@@ -148,6 +154,47 @@ class PaPreparationAttendanceTemplateExportService
             File::move($renderedPath, $pdfPath);
         } finally {
             File::delete([$imagePath, $renderedPath]);
+            $workbook->disconnectWorksheets();
+        }
+    }
+
+    public function createPdf(string $xlsxPath, OfficeToPdfConverter $converter): string
+    {
+        $pdfPath = substr($xlsxPath, 0, -5).'.pdf';
+        try {
+            $pdfPath = $converter->convert($xlsxPath);
+            $this->applyPdfFooter($pdfPath);
+            return $pdfPath;
+        } catch (\Throwable $exception) {
+            report($exception);
+            File::delete($pdfPath);
+        }
+
+        // Keep PDF export available on webservers without an Office installation.
+        // Render the same filled template, including its saved signature images.
+        $workbook = IOFactory::load($xlsxPath);
+        try {
+            // Excel lets headings overflow into empty cells; HTML needs explicit spans.
+            $sheet = $workbook->getActiveSheet();
+            $sheet->getStyle('A1:E'.$sheet->getHighestRow())->getFont()->setName('DejaVu Sans');
+            $sheet->getStyle('A8:E'.$sheet->getHighestRow())->getAlignment()->setVertical('center');
+            $sheet->mergeCells('A1:E1');
+            foreach ([2, 4, 5] as $row) {
+                $sheet->mergeCells('B'.$row.':E'.$row);
+            }
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Pdf\Dompdf($workbook);
+            $writer->setUseInlineCss(true);
+            $margins = $sheet->getPageMargins();
+            $writer->setEditHtmlCallback(static fn (string $html) => str_replace('</style>',
+                sprintf('@page { margin: %sin %sin %sin %sin; } body { margin: 0; } td, th { padding: 1pt; } </style>',
+                    $margins->getTop(), $margins->getRight(), $margins->getBottom(), $margins->getLeft()), $html));
+            $writer->save($pdfPath);
+            $this->applyPdfFooter($pdfPath, true);
+            return $pdfPath;
+        } catch (\Throwable $exception) {
+            File::delete($pdfPath);
+            throw $exception;
+        } finally {
             $workbook->disconnectWorksheets();
         }
     }

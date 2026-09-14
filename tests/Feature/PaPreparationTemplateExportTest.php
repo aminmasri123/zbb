@@ -80,6 +80,52 @@ class PaPreparationTemplateExportTest extends TestCase
         $this->actingAs($user->fresh())->postJson($url, $scope + ['format' => 'xlsx'])->assertForbidden();
     }
 
+    public static function pdfConversionFailures(): array
+    {
+        return ['missing LibreOffice' => [false, 'A4'], 'unreadable converter PDF' => [true, 'A3']];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('pdfConversionFailures')]
+    public function test_pdf_is_created_with_all_participants_when_office_conversion_fails(bool $unreadablePdf, string $format): void
+    {
+        [$user, $scope] = $this->context();
+        foreach (range(2, 32) as $number) {
+            $person = Personen::factory()->create(['typ' => 'teilnehmer', 'vorname' => 'Testperson'.$number, 'nachname' => 'Muster', 'geschlecht' => 'm']);
+            PersonenIstSchueler::create(['person_id' => $person->id, 'schule_id' => $scope['schuleId'], 'schuljahr' => $scope['schuljahr'], 'teil' => '1', 'klasse' => '7.1']);
+        }
+        $converter = \Mockery::mock(OfficeToPdfConverter::class);
+        $xlsxPath = null;
+        $converter->shouldReceive('convert')->once()->andReturnUsing(function ($path) use (&$xlsxPath, $unreadablePdf) {
+            $xlsxPath = $path;
+            if ($unreadablePdf) {
+                $pdfPath = substr($path, 0, -5).'.pdf';
+                file_put_contents($pdfPath, 'Invalid PDF');
+                return $pdfPath;
+            }
+            throw new \RuntimeException('LibreOffice ist nicht installiert.');
+        });
+        $this->app->instance(OfficeToPdfConverter::class, $converter);
+        $response = $this->actingAs($user)->post(route('anwesenheitsliste.PA.preparation.export.template'), $scope + ['format' => 'pdf', 'exportFormat' => $format]);
+        $response->assertOk()->assertDownload();
+        $path = $response->baseResponse->getFile()->getPathname();
+        try {
+            $this->assertFileDoesNotExist($xlsxPath);
+            $pdf = (new \Smalot\PdfParser\Parser)->parseFile($path);
+            $text = $pdf->getText();
+            $this->assertStringContainsString('Mina', $text);
+            foreach (range(2, 32) as $number) {
+                $this->assertStringContainsString('Testperson'.$number, $text);
+            }
+            $this->assertGreaterThan(1, count($pdf->getPages()));
+            foreach ($pdf->getPages() as $page) {
+                $this->assertStringContainsString('Vorlagen-Testschule', $page->getText());
+                $this->assertStringContainsString('Seite', $page->getText());
+            }
+        } finally {
+            @unlink($path);
+        }
+    }
+
     private function context(): array
     {
         $user = User::factory()->create();
