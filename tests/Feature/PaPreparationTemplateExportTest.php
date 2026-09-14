@@ -8,7 +8,6 @@ use App\Models\PersonenIstSchueler;
 use App\Models\Projekt;
 use App\Models\User;
 use App\Services\Bop\PaPreparationAttendanceTemplateExportService;
-use App\Services\Documents\OfficeToPdfConverter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
@@ -46,26 +45,20 @@ class PaPreparationTemplateExportTest extends TestCase
         @unlink($response->baseResponse->getFile()->getPathname());
     }
 
-    public function test_pdf_converts_the_same_filled_workbook_and_removes_the_intermediate_file(): void
+    public function test_pdf_uses_template_content_and_removes_the_intermediate_file(): void
     {
         [$user, $scope] = $this->context();
-        $xlsxPath = null;
-        $converter = \Mockery::mock(OfficeToPdfConverter::class);
-        $converter->shouldReceive('convert')->once()->andReturnUsing(function ($path) use (&$xlsxPath) {
-            $xlsxPath = $path;
-            $this->assertSame('Mina', IOFactory::load($path)->getActiveSheet()->getCell('C8')->getValue());
-            $pdf = substr($path, 0, -5).'.pdf';
-            $document = new \FPDF;
-            $document->AddPage('L');
-            $document->Output('F', $pdf);
-            return $pdf;
-        });
-        $this->app->instance(OfficeToPdfConverter::class, $converter);
         $response = $this->actingAs($user)->post(route('anwesenheitsliste.PA.preparation.export.template'), $scope + ['format' => 'pdf']);
         $response->assertOk()->assertDownload();
+        $path = $response->baseResponse->getFile()->getPathname();
+        $xlsxPath = substr($path, 0, -4).'.xlsx';
         $this->assertFileDoesNotExist($xlsxPath);
         $this->assertSame('pdf', $response->baseResponse->getFile()->getExtension());
-        @unlink($response->baseResponse->getFile()->getPathname());
+        $text = (new \Smalot\PdfParser\Parser)->parseFile($path)->getText();
+        $this->assertStringContainsString('Mina', $text);
+        $this->assertStringContainsString('15.09.2026', $text);
+        $this->assertStringContainsString('Teilnehmendenliste zum Nachweis der Vorbereitung BO-Tage', $text);
+        @unlink($path);
     }
 
     public function test_template_export_is_restricted_to_preparation_and_authorized_projects(): void
@@ -80,43 +73,31 @@ class PaPreparationTemplateExportTest extends TestCase
         $this->actingAs($user->fresh())->postJson($url, $scope + ['format' => 'xlsx'])->assertForbidden();
     }
 
-    public static function pdfConversionFailures(): array
+    public static function pdfPaperFormats(): array
     {
-        return ['missing LibreOffice' => [false, 'A4'], 'unreadable converter PDF' => [true, 'A3']];
+        return ['A4' => ['A4'], 'A3' => ['A3']];
     }
 
-    #[\PHPUnit\Framework\Attributes\DataProvider('pdfConversionFailures')]
-    public function test_pdf_is_created_with_all_participants_when_office_conversion_fails(bool $unreadablePdf, string $format): void
+    #[\PHPUnit\Framework\Attributes\DataProvider('pdfPaperFormats')]
+    public function test_pdf_prints_all_participants_with_repeated_headers_and_page_numbers(string $format): void
     {
         [$user, $scope] = $this->context();
         foreach (range(2, 32) as $number) {
             $person = Personen::factory()->create(['typ' => 'teilnehmer', 'vorname' => 'Testperson'.$number, 'nachname' => 'Muster', 'geschlecht' => 'm']);
             PersonenIstSchueler::create(['person_id' => $person->id, 'schule_id' => $scope['schuleId'], 'schuljahr' => $scope['schuljahr'], 'teil' => '1', 'klasse' => '7.1']);
         }
-        $converter = \Mockery::mock(OfficeToPdfConverter::class);
-        $xlsxPath = null;
-        $converter->shouldReceive('convert')->once()->andReturnUsing(function ($path) use (&$xlsxPath, $unreadablePdf) {
-            $xlsxPath = $path;
-            if ($unreadablePdf) {
-                $pdfPath = substr($path, 0, -5).'.pdf';
-                file_put_contents($pdfPath, 'Invalid PDF');
-                return $pdfPath;
-            }
-            throw new \RuntimeException('LibreOffice ist nicht installiert.');
-        });
-        $this->app->instance(OfficeToPdfConverter::class, $converter);
         $response = $this->actingAs($user)->post(route('anwesenheitsliste.PA.preparation.export.template'), $scope + ['format' => 'pdf', 'exportFormat' => $format]);
         $response->assertOk()->assertDownload();
         $path = $response->baseResponse->getFile()->getPathname();
         try {
-            $this->assertFileDoesNotExist($xlsxPath);
+            $this->assertFileDoesNotExist(substr($path, 0, -4).'.xlsx');
             $pdf = (new \Smalot\PdfParser\Parser)->parseFile($path);
             $text = $pdf->getText();
             $this->assertStringContainsString('Mina', $text);
             foreach (range(2, 32) as $number) {
                 $this->assertStringContainsString('Testperson'.$number, $text);
             }
-            $this->assertGreaterThan(1, count($pdf->getPages()));
+            $this->assertCount($format === 'A3' ? 1 : 2, $pdf->getPages());
             foreach ($pdf->getPages() as $page) {
                 $this->assertStringContainsString('Vorlagen-Testschule', $page->getText());
                 $this->assertStringContainsString('Seite', $page->getText());

@@ -2,11 +2,13 @@
 
 namespace App\Services\Bop;
 
-use App\Services\Documents\OfficeToPdfConverter;
 use App\Models\Partner;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
 use PhpOffice\PhpSpreadsheet\Style\Border;
@@ -146,6 +148,9 @@ class PaPreparationAttendanceTemplateExportService
                 $left = $sheet->getPageMargins()->getLeft() * 25.4;
                 $right = $sheet->getPageMargins()->getRight() * 25.4;
                 $width = min($footerImage->getWidth() * 25.4 / 96, $size['width'] - $left - $right);
+                if ($addPageNumbers) {
+                    $left = ($size['width'] - $width) / 2;
+                }
                 $height = $width * $footerImage->getHeight() / max(1, $footerImage->getWidth());
                 $bottom = max(3, $sheet->getPageMargins()->getFooter() * 25.4);
                 $pdf->Image($imagePath, $left, $size['height'] - $bottom - $height, $width, $height, 'PNG');
@@ -158,37 +163,45 @@ class PaPreparationAttendanceTemplateExportService
         }
     }
 
-    public function createPdf(string $xlsxPath, OfficeToPdfConverter $converter): string
+    public function createPdf(string $xlsxPath): string
     {
         $pdfPath = substr($xlsxPath, 0, -5).'.pdf';
-        try {
-            $pdfPath = $converter->convert($xlsxPath);
-            $this->applyPdfFooter($pdfPath);
-            return $pdfPath;
-        } catch (\Throwable $exception) {
-            report($exception);
-            File::delete($pdfPath);
-        }
-
-        // Keep PDF export available on webservers without an Office installation.
-        // Render the same filled template, including its saved signature images.
         $workbook = IOFactory::load($xlsxPath);
         try {
-            // Excel lets headings overflow into empty cells; HTML needs explicit spans.
+            // Read content from the filled Excel template, but use explicit print layout
+            // instead of inheriting spreadsheet column widths and overflow behaviour.
             $sheet = $workbook->getActiveSheet();
-            $sheet->getStyle('A1:E'.$sheet->getHighestRow())->getFont()->setName('DejaVu Sans');
-            $sheet->getStyle('A8:E'.$sheet->getHighestRow())->getAlignment()->setVertical('center');
-            $sheet->mergeCells('A1:E1');
-            foreach ([2, 4, 5] as $row) {
-                $sheet->mergeCells('B'.$row.':E'.$row);
+            $signatures = [];
+            foreach ($sheet->getDrawingCollection() as $drawing) {
+                if ($drawing instanceof \PhpOffice\PhpSpreadsheet\Worksheet\Drawing) {
+                    $signatures[$drawing->getCoordinates()] = 'data:image/png;base64,'.base64_encode(file_get_contents($drawing->getPath()));
+                }
             }
-            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Pdf\Dompdf($workbook);
-            $writer->setUseInlineCss(true);
-            $margins = $sheet->getPageMargins();
-            $writer->setEditHtmlCallback(static fn (string $html) => str_replace('</style>',
-                sprintf('@page { margin: %sin %sin %sin %sin; } body { margin: 0; } td, th { padding: 1pt; } </style>',
-                    $margins->getTop(), $margins->getRight(), $margins->getBottom(), $margins->getLeft()), $html));
-            $writer->save($pdfPath);
+            $lastRow = Coordinate::rangeBoundaries($sheet->getPageSetup()->getPrintArea())[1][1];
+            $rows = [];
+            for ($row = 8; $row <= $lastRow; $row++) {
+                $rows[] = [
+                    'number' => $sheet->getCell('A'.$row)->getValue(),
+                    'lastName' => $sheet->getCell('B'.$row)->getValue(),
+                    'firstName' => $sheet->getCell('C'.$row)->getValue(),
+                    'gender' => $sheet->getCell('D'.$row)->getValue(),
+                    'signature' => $signatures['E'.$row] ?? null,
+                ];
+            }
+            $paper = $sheet->getPageSetup()->getPaperSize() === PageSetup::PAPERSIZE_A3 ? 'A3' : 'A4';
+            $pdf = new Dompdf(new Options(['defaultFont' => 'DejaVu Sans', 'isRemoteEnabled' => false]));
+            $pdf->setPaper($paper, 'landscape');
+            $pdf->loadHtml(view('pdf.bop.pa-preparation-attendance', [
+                'title' => $sheet->getCell('A1')->getValue(),
+                'school' => $sheet->getCell('B2')->getValue(),
+                'schoolForm' => $sheet->getCell('B4')->getValue(),
+                'classes' => $sheet->getCell('B5')->getValue(),
+                'date' => $sheet->getCell('E6')->getFormattedValue(),
+                'paper' => $paper,
+                'rows' => $rows,
+            ])->render());
+            $pdf->render();
+            File::put($pdfPath, $pdf->output());
             $this->applyPdfFooter($pdfPath, true);
             return $pdfPath;
         } catch (\Throwable $exception) {

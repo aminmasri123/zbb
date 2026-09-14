@@ -1758,8 +1758,7 @@ class ProjektBopController extends Controller
 
     public function anwesenheitslistePAPreparationExportTemplate(
         Request $request,
-        \App\Services\Bop\PaPreparationAttendanceTemplateExportService $exporter,
-        \App\Services\Documents\OfficeToPdfConverter $converter
+        \App\Services\Bop\PaPreparationAttendanceTemplateExportService $exporter
     ) {
         $this->ensureMemoryLimit(512 * 1024 * 1024);
         $scope = $this->paDraftScope($request);
@@ -1791,7 +1790,7 @@ class ProjektBopController extends Controller
             $exporter->create($school, $participants, $day, is_array($payload['signatures'] ?? null) ? $payload['signatures'] : [],
                 $scope['export_mode'], $scope['klasse'], $data['exportFormat'] ?? ($payload['form']['exportFormat'] ?? 'A4'), $xlsxPath, $data['format'] === 'pdf');
             if ($data['format'] === 'pdf') {
-                $outputPath = $exporter->createPdf($xlsxPath, $converter);
+                $outputPath = $exporter->createPdf($xlsxPath);
                 File::delete($xlsxPath);
             }
         } catch (\Throwable $exception) {
