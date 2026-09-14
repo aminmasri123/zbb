@@ -570,8 +570,13 @@ class GruppeController extends Controller
             ->get()
             ->groupBy(fn (ProjektHasPersonen $assignment) => (int) $assignment->personen_id);
 
+        $testBereiche = $projekt->featureEnabled('aptitude_tests')
+            ? $projekt->bereiche->where('code', AptitudeGroupSetup::AREA_CODE)
+                ->map(fn ($bereich) => ['id' => (int) $bereich->id, 'name' => $bereich->name])
+            : collect();
+
         return $this->uniquePersonen($personen)
-            ->map(function (Personen $person) use ($projectMemberIds, $bereichZuweisungen) {
+            ->map(function (Personen $person) use ($projectMemberIds, $bereichZuweisungen, $testBereiche) {
                 $assignments = $bereichZuweisungen->get((int) $person->id, collect());
                 $bereiche = $assignments
                     ->flatMap(fn (ProjektHasPersonen $assignment) => $assignment->bereichZuweisungen)
@@ -582,6 +587,10 @@ class GruppeController extends Controller
                         'name' => $zuweisung->bereich->name,
                     ])
                     ->values();
+
+                if ($bereiche->isNotEmpty()) {
+                    $bereiche = $bereiche->concat($testBereiche)->unique('id')->values();
+                }
 
                 $defaultBereich = $assignments
                     ->flatMap(fn (ProjektHasPersonen $assignment) => $assignment->bereichZuweisungen)

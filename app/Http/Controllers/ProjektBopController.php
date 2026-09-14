@@ -1791,15 +1791,14 @@ class ProjektBopController extends Controller
             $exporter->create($school, $participants, $day, is_array($payload['signatures'] ?? null) ? $payload['signatures'] : [],
                 $scope['export_mode'], $scope['klasse'], $data['exportFormat'] ?? ($payload['form']['exportFormat'] ?? 'A4'), $xlsxPath, $data['format'] === 'pdf');
             if ($data['format'] === 'pdf') {
-                $outputPath = $converter->convert($xlsxPath);
-                $exporter->applyPdfFooter($outputPath);
+                $outputPath = $exporter->createPdf($xlsxPath, $converter);
                 File::delete($xlsxPath);
             }
         } catch (\Throwable $exception) {
             File::delete($xlsxPath);
             if ($outputPath !== $xlsxPath) File::delete($outputPath);
             report($exception);
-            throw ValidationException::withMessages(['export' => 'Die Vorlage konnte nicht exportiert werden. Bitte prüfen Sie die Vorlagendatei und für PDF die LibreOffice-Installation.']);
+            throw ValidationException::withMessages(['export' => 'Die Anwesenheitsliste konnte nicht erstellt werden. Bitte erneut versuchen. Falls der Fehler bleibt, muss die Vorlagendatei und das Serverprotokoll geprüft werden.']);
         }
 
         return response()->download($outputPath, $baseName.'.'.$data['format'])->deleteFileAfterSend(true);
