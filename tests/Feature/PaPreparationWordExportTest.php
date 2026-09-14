@@ -90,6 +90,19 @@ class PaPreparationWordExportTest extends TestCase
             $this->assertStringContainsString('Anwesenheitsliste Vorbereitung Potenzialanalyse', $documentXml);
             $this->assertStringContainsString('Mina', $documentXml);
             $this->assertStringContainsString('Muster', $documentXml);
+            $xml = new \DOMDocument();
+            $xml->loadXML($documentXml);
+            $xpath = new \DOMXPath($xml);
+            $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+            $this->assertSame('3400', $xpath->evaluate('string((//w:tbl)[2]/w:tblGrid/w:gridCol[5]/@w:w)'));
+            $this->assertSame('PaPreparationAttendance', $xpath->evaluate('string((//w:tbl)[2]/w:tblPr/w:tblStyle/@w:val)'));
+            $xml->loadXML((string) $zip->getFromName('word/styles.xml'));
+            $xpath = new \DOMXPath($xml);
+            $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+            $stylePath = '//w:style[@w:styleId="PaPreparationAttendance"]/w:tblPr/';
+            $this->assertSame('10700', $xpath->evaluate('string(' . $stylePath . 'w:tblW/@w:w)'));
+            $this->assertSame('dxa', $xpath->evaluate('string(' . $stylePath . 'w:tblW/@w:type)'));
+            $this->assertSame('fixed', $xpath->evaluate('string(' . $stylePath . 'w:tblLayout/@w:type)'));
             $this->assertMatchesRegularExpression('/<w:pgMar[^>]*w:top="850"[^>]*w:right="850"[^>]*w:bottom="1250"[^>]*w:left="850"/', $documentXml);
 
             $mediaFiles = [];
