@@ -35,5 +35,6 @@ Homestead.yaml
 *.bak
 *.err.txt
 /storage/backups/
+/storage/exports/
 /tmp/
 /public/*.xlsx
