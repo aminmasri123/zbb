@@ -277,7 +277,10 @@ class ExportExcelController extends Controller
 
     public function anwesenheitslite_V1(Request $request, $id){
 
-        $tag = Tage::where('datum', $request->query('tag'))->first();
+        $request->validate(['tag' => ['required', 'date']]);
+        $attendanceGroup = Gruppe::findOrFail($id);
+        abort_unless(app(\App\Services\SaarlandWorkdayService::class)->isAttendanceDay($request->query('tag'), [], $attendanceGroup->non_working_dates ?? []), 422, 'Für diesen Tag ist keine Arbeitstag-Ausnahme bestätigt.');
+        $tag = Tage::where('datum', $request->query('tag'))->firstOrFail();
 
         $gruppeHasTeilnehmer= GruppeHasPersonen::where('gruppe_id', $id)
         ->where('tage_id', $tag->id)
@@ -399,6 +402,7 @@ class ExportExcelController extends Controller
         foreach ($tage as $datum) {
             if ($colIndex > 43) break; // Spalte AQ = 42
             $columns[$datum] = Coordinate::stringFromColumnIndex($colIndex);
+            $sheet->getColumnDimension($columns[$datum])->setVisible(app(\App\Services\SaarlandWorkdayService::class)->isWorkday($datum));
             $colIndex++;
         }
         // --- 8) Teilnehmer eintragen ---
@@ -430,6 +434,10 @@ class ExportExcelController extends Controller
             $anwesenheiten = $person->anwesenheiten;
 
             foreach ($tage as $datum) {
+                if (!app(\App\Services\SaarlandWorkdayService::class)->isWorkday($datum)) {
+                    $sheet->setCellValue($columns[$datum].$row, '');
+                    continue;
+                }
 
                 $found = $anwesenheiten->first(function ($a) use ($datum) {
                     return $a->tag->datum === $datum;

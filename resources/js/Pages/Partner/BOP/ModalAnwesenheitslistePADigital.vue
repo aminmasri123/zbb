@@ -4,6 +4,8 @@ import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import Swal from 'sweetalert2'
 import axios from 'axios'
+import AttendanceDayOptions from '@/Components/AttendanceDayOptions.vue'
+import { useAttendanceCalendar } from '@/utils/useAttendanceCalendar'
 import { jsPDF } from 'jspdf'
 import SignatureBox from '@/Components/SignatureBox.vue'
 import {
@@ -70,6 +72,9 @@ const selectedDaysSummary = computed(() => {
 })
 
 const form = reactive({
+  includeSaturday: false,
+  includeSunday: false,
+  includeHolidays: false,
   exportFormat: 'A4',
   startDate: '',
   endDate: '',
@@ -126,8 +131,12 @@ let draftSaveQueueDepth = 0
 let draftSaveGeneration = 0
 let signatureStateRevision = 0
 
-const selectedDays = computed(() => days.value.filter((day) => day.selected))
-const selectedDay = computed(() => days.value.find((day) => day.id === selectedDayId.value) || selectedDays.value[0] || null)
+const { allows: allowsDay, loading: calendarLoading, error: calendarError, reload: reloadCalendar } = useAttendanceCalendar(
+  () => [form.startDate, form.endDate, form.feedbackDate, manualDate.value, ...days.value.map(day => day.date)], form
+)
+const visibleDays = computed(() => days.value.filter(day => allowsDay(day.date)))
+const selectedDays = computed(() => visibleDays.value.filter((day) => day.selected))
+const selectedDay = computed(() => visibleDays.value.find((day) => day.id === selectedDayId.value) || selectedDays.value[0] || null)
 const sheetParticipants = computed(() => allParticipants.value)
 const hasClassSpecificSchedules = computed(() => !isPreparationPa.value && Object.keys(classSchedules.value).length > 0)
 const classScheduleOverview = computed(() => form.exportMode === 'alle' && hasClassSpecificSchedules.value)
@@ -303,6 +312,9 @@ const daysSnapshotForDraft = () => days.value.map(daySnapshotForDraft)
 const currentScheduleSnapshot = () => ({
   form: {
     exportFormat: form.exportFormat,
+    includeSaturday: form.includeSaturday,
+    includeSunday: form.includeSunday,
+    includeHolidays: form.includeHolidays,
     startDate: form.startDate,
     endDate: form.endDate,
     feedbackDate: form.feedbackDate,
@@ -502,6 +514,9 @@ const applyScheduleToView = (schedule) => {
   const normalized = normalizeDraftSchedule(schedule)
 
   form.exportFormat = normalized.form.exportFormat || form.exportFormat
+  form.includeSaturday = Boolean(normalized.form.includeSaturday)
+  form.includeSunday = Boolean(normalized.form.includeSunday)
+  form.includeHolidays = Boolean(normalized.form.includeHolidays)
   form.startDate = normalized.form.startDate || ''
   form.endDate = normalized.form.endDate || ''
   form.feedbackDate = normalized.form.feedbackDate || ''
@@ -1067,6 +1082,8 @@ const reloadScope = async () => {
 }
 
 const handleTemplateExport = async (format) => {
+  await reloadCalendar()
+  if (calendarError.value) { PaSwal.fire('Kalender nicht verfügbar', calendarError.value, 'error'); return }
   if (exportingTemplate.value || exportingPdf.value) return
   if (selectedDays.value.length !== 1 || (form.exportMode === 'klasse' && !form.klasse)) {
     PaSwal.fire('Angaben fehlen', 'Bitte genau einen Vorbereitungstermin und die gewünschte Klasse auswählen.', 'warning')
@@ -1107,6 +1124,8 @@ const handleTemplateExport = async (format) => {
 }
 
 const handleWordExport = async () => {
+  await reloadCalendar()
+  if (calendarError.value) { PaSwal.fire('Kalender nicht verfügbar', calendarError.value, 'error'); return }
   if (isPreparationPa.value) {
     if (!selectedDays.value.length || (form.exportMode === 'klasse' && !form.klasse)) {
       PaSwal.fire('Angaben fehlen', 'Bitte den Vorbereitungstermin und die Klasse prüfen.', 'warning')
@@ -1161,6 +1180,9 @@ const handleWordExport = async () => {
     const response = await axios.post(route('anwesenheitsliste.PA.export.word'), {
       startDate: form.startDate,
       endDate: form.endDate,
+      includeSaturday: form.includeSaturday,
+      includeSunday: form.includeSunday,
+      includeHolidays: form.includeHolidays,
       schuleId: props.partnerId,
       schuljahr: props.schuljahr,
       teil: props.teil,
@@ -1572,6 +1594,8 @@ const drawTrainerTable = (doc, layout) => {
 }
 
 const createSignedPdf = async () => {
+  await reloadCalendar()
+  if (calendarError.value) { PaSwal.fire('Kalender nicht verfügbar', calendarError.value, 'error'); return }
   if (isPreparationPa.value) {
     await handleTemplateExport('pdf')
     return
@@ -1697,6 +1721,9 @@ const clearDraft = async () => {
     draftSaveGeneration++
     draftSaveRequestId++
     draftHydrating.value = true
+    form.includeSaturday = false
+    form.includeSunday = false
+    form.includeHolidays = false
     form.startDate = ''
     form.endDate = ''
     form.feedbackDate = ''
@@ -1741,6 +1768,9 @@ const resetState = () => {
   draftSaveBlocked.value = false
   draftSaveError.value = ''
   form.exportFormat = 'A4'
+  form.includeSaturday = false
+  form.includeSunday = false
+  form.includeHolidays = false
   form.startDate = ''
   form.endDate = ''
   form.feedbackDate = ''
@@ -1873,6 +1903,8 @@ onBeforeUnmount(() => {
           <p class="text-sm text-gray-600">Schuljahr {{ schuljahr }} / Teil {{ teil }}</p>
         </div>
 
+        <AttendanceDayOptions :options="form" :loading="calendarLoading" :error="calendarError" @retry="reloadCalendar" />
+
         <div class="grid grid-cols-2 gap-3">
           <label class="text-sm font-semibold text-gray-700">
             <span class="mb-1 block">Format</span>
@@ -1981,7 +2013,7 @@ onBeforeUnmount(() => {
             <div>
               <p class="text-xs font-semibold uppercase text-gray-500">{{ dayPluralLabel }}</p>
               <h3 class="text-base font-bold text-gray-900">
-                {{ selectedDays.length }} ausgewählt / {{ days.length }} in der Vorschau
+                {{ selectedDays.length }} ausgewählt / {{ visibleDays.length }} in der Vorschau
               </h3>
             </div>
 
@@ -2080,13 +2112,13 @@ onBeforeUnmount(() => {
             </button>
           </div>
 
-          <div v-if="days.length === 0" class="mt-4 rounded border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
+          <div v-if="visibleDays.length === 0" class="mt-4 rounded border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
             {{ noDaysText }}
           </div>
 
           <div v-else class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             <button
-              v-for="day in days"
+              v-for="day in visibleDays"
               :key="day.id"
               type="button"
               class="rounded border p-3 text-left transition"

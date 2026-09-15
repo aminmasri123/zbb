@@ -491,7 +491,7 @@ class KlassenbuchController extends Controller
         $end = CarbonImmutable::parse($woche->end_datum);
 
         for ($tag = $start; $tag->lte($end); $tag = $tag->addDay()) {
-            if ($tag->isWeekend()) {
+            if (!app(\App\Services\SaarlandWorkdayService::class)->isWorkday($tag)) {
                 continue;
             }
 

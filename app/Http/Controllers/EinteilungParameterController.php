@@ -1594,7 +1594,9 @@ class EinteilungParameterController extends Controller
     private function tageIds(Carbon $start, Carbon $end): array
     {
         $ids = [];
+        $workdays = app(\App\Services\SaarlandWorkdayService::class);
         for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
+            if (!$workdays->isWorkday($date)) continue;
             $tag = Tage::firstOrCreate([
                 'datum' => $date->toDateString(),
             ], [

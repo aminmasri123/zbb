@@ -767,6 +767,8 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
         Route::delete('/ressourcen/standort/raeumlichkeiten/buchung/{buchung}', [RaumlichkeitenController::class, 'destroyBuchung'])->name('raeumlichkeiten.buchung.destroy');
     });
 
+    Route::get('/anwesenheit/kalender', \App\Http\Controllers\AttendanceCalendarController::class)->name('attendance.calendar');
+
     // Anwesenheiten
     Route::middleware('projectFeature:attendance_management')->group(function () {
         Route::post('/anwesenheit/speichern', [AnwesenheitController::class, 'store'])->name('anwesenheit.store')->can('anwesenheit.manage');

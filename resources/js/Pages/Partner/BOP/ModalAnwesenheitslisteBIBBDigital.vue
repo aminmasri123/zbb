@@ -4,6 +4,8 @@ import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import Swal from 'sweetalert2'
 import axios from 'axios'
+import AttendanceDayOptions from '@/Components/AttendanceDayOptions.vue'
+import { useAttendanceCalendar } from '@/utils/useAttendanceCalendar'
 import { jsPDF } from 'jspdf'
 import SignatureBox from '@/Components/SignatureBox.vue'
 import { drawBopAttendanceFooter, loadBopAttendanceFooterImage } from '@/utils/bopAttendanceFooter'
@@ -38,6 +40,7 @@ const form = reactive({
   endDate: '',
   includeSaturday: false,
   includeSunday: false,
+  includeHolidays: false,
   feedbackDate: '',
 })
 
@@ -73,12 +76,16 @@ let draftSaveQueue = Promise.resolve()
 let draftSaveQueueDepth = 0
 let draftSaveGeneration = 0
 
-const selectedDays = computed(() => days.value.filter((day) => day.selected))
-const selectedDay = computed(() => days.value.find((day) => day.id === selectedDayId.value) || selectedDays.value[0] || null)
+const { allows: allowsDay, loading: calendarLoading, error: calendarError, reload: reloadCalendar } = useAttendanceCalendar(
+  () => [form.startDate, form.endDate, form.rolltagDate, form.feedbackDate, manualDate.value, ...days.value.map(day => day.date)], form
+)
+const visibleDays = computed(() => days.value.filter(day => allowsDay(day.date)))
+const selectedDays = computed(() => visibleDays.value.filter((day) => day.selected))
+const selectedDay = computed(() => visibleDays.value.find((day) => day.id === selectedDayId.value) || selectedDays.value[0] || null)
 const dayRows = computed(() => selectedDay.value ? participantsForDay(selectedDay.value) : [])
 const programDays = computed(() => selectedDays.value.filter((day) => day.type !== 'feedback').slice(0, 10))
 const feedbackDay = computed(() => {
-  if (!form.feedbackDate) return null
+  if (!form.feedbackDate || !allowsDay(form.feedbackDate)) return null
 
   return {
     id: `feedback-${form.feedbackDate}`,
@@ -336,6 +343,7 @@ const applyDraftPayload = (payload) => {
       form.endDate = payload.form.endDate || ''
       form.includeSaturday = Boolean(payload.form.includeSaturday)
       form.includeSunday = Boolean(payload.form.includeSunday)
+      form.includeHolidays = Boolean(payload.form.includeHolidays)
       form.feedbackDate = payload.form.feedbackDate || ''
     }
 
@@ -687,9 +695,6 @@ const rangeDates = (startValue, endValue, { excludeFeedback = true } = {}) => {
   const values = []
 
   for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
-    const weekday = date.getDay()
-    if (weekday === 6 && !form.includeSaturday) continue
-    if (weekday === 0 && !form.includeSunday) continue
 
     const value = toDateInput(date)
     if (excludeFeedback && form.feedbackDate && value === form.feedbackDate) continue
@@ -811,6 +816,8 @@ const loadPreview = async ({ includeDraft = false } = {}) => {
 }
 
 const handleWordExport = async () => {
+  await reloadCalendar()
+  if (calendarError.value) { BibbSwal.fire('Kalender nicht verfügbar', calendarError.value, 'error'); return }
   if (selectedDays.value.length === 0) {
     BibbSwal.fire('Keine Tage', 'Bitte mindestens einen Tag auswählen.', 'warning')
     return
@@ -824,7 +831,10 @@ const handleWordExport = async () => {
       schuleIdInputBibb: props.partnerId,
       schuljahrInputBibb: props.schuljahr,
       teilInputBibb: props.teil,
-      feedbackDate: form.feedbackDate || null,
+      feedbackDate: feedbackDay.value?.date || null,
+      includeSaturday: form.includeSaturday,
+      includeSunday: form.includeSunday,
+      includeHolidays: form.includeHolidays,
       days: selectedProgramDaysPayload(),
     }, { responseType: 'blob' })
 
@@ -994,6 +1004,8 @@ const storeSignedPdfInFolder = async (pdfBlob, filename) => {
 }
 
 const createSignedPdf = async () => {
+  await reloadCalendar()
+  if (calendarError.value) { BibbSwal.fire('Kalender nicht verfügbar', calendarError.value, 'error'); return }
   if (selectedDays.value.length === 0) {
     BibbSwal.fire('Keine Tage', 'Bitte mindestens einen Tag auswählen.', 'warning')
     return
@@ -1103,6 +1115,7 @@ const resetState = () => {
   form.endDate = ''
   form.includeSaturday = false
   form.includeSunday = false
+  form.includeHolidays = false
   form.feedbackDate = ''
   previewContext.value = null
   allParticipants.value = []
@@ -1212,16 +1225,7 @@ onBeforeUnmount(() => {
             </label>
           </div>
 
-          <div class="mt-3 flex flex-wrap gap-3 text-sm text-gray-700">
-            <label class="inline-flex items-center gap-2">
-              <input v-model="form.includeSaturday" type="checkbox" class="rounded border-gray-300 text-zbb" />
-              <span>Samstag</span>
-            </label>
-            <label class="inline-flex items-center gap-2">
-              <input v-model="form.includeSunday" type="checkbox" class="rounded border-gray-300 text-zbb" />
-              <span>Sonntag</span>
-            </label>
-          </div>
+          <AttendanceDayOptions class="mt-3" :options="form" :loading="calendarLoading" :error="calendarError" @retry="reloadCalendar" />
 
           <button
             type="button"
@@ -1271,7 +1275,7 @@ onBeforeUnmount(() => {
             <div>
               <p class="text-xs font-semibold uppercase text-gray-500">Tage</p>
               <h3 class="text-base font-bold text-gray-900">
-                {{ selectedDays.length }} ausgewählt / {{ days.length }} in der Vorschau
+                {{ selectedDays.length }} ausgewählt / {{ visibleDays.length }} in der Vorschau
               </h3>
             </div>
 
@@ -1350,13 +1354,13 @@ onBeforeUnmount(() => {
             </button>
           </div>
 
-          <div v-if="days.length === 0" class="mt-4 rounded border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
+          <div v-if="visibleDays.length === 0" class="mt-4 rounded border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
             Keine Tage gefunden.
           </div>
 
           <div v-else class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             <button
-              v-for="day in days"
+              v-for="day in visibleDays"
               :key="day.id"
               type="button"
               class="rounded border p-3 text-left transition"
@@ -1445,7 +1449,7 @@ onBeforeUnmount(() => {
                   <th class="min-w-[110px] border border-gray-800 px-2 py-2 text-left align-top font-semibold">
                     <span class="block">Termin 11</span>
                     <span class="block font-normal">Feedbackgespräch</span>
-                    <span class="block font-normal">Datum: {{ form.feedbackDate ? dateLabel(form.feedbackDate) : '-' }}</span>
+                    <span class="block font-normal">Datum: {{ feedbackDay ? dateLabel(feedbackDay.date) : '-' }}</span>
                     <span v-if="feedbackDay" class="mt-1 block text-[10px] font-semibold text-emerald-700">
                       {{ signedCountForDay(feedbackDay) }}/{{ expectedSignatureCountForDay(feedbackDay) }}
                     </span>

@@ -224,6 +224,23 @@ class GroupAttendanceSignaturesTest extends TestCase
         $this->assertSame($before, $draft->fresh()->payload);
     }
 
+    public function test_holidays_are_hidden_in_all_signature_views_without_deleting_existing_signatures(): void
+    {
+        [$user, $group, $draft, $people] = $this->context('bibb');
+        $group->update(['enddatum' => '2026-12-28']);
+        $this->addDay($group, '2026-12-25');
+        $payload = $draft->payload;
+        $payload['days'][] = ['id' => 'program-2026-12-25', 'date' => '2026-12-25', 'type' => 'program_day'];
+        $payload['signatures']['program-2026-12-25:'.$people[0]->id] = 'enc:v1:'.Crypt::encryptString(self::PNG);
+        $draft->update(['payload' => $payload]);
+        $url = route('gruppe.signatures.overview', $group).'?'.http_build_query(['type' => 'bibb', 'draft_id' => $draft->id]);
+        $this->actingAs($user)->getJson($url)->assertOk()->assertJsonPath('dates', ['2026-09-01']);
+        $this->assertSame($payload, $draft->fresh()->payload);
+        $payload['form']['includeHolidays'] = true;
+        $draft->update(['payload' => $payload]);
+        $this->getJson($url)->assertOk()->assertJsonPath('dates', ['2026-09-01', '2026-12-25'])->assertJsonPath('rows.1.signed', true);
+    }
+
     private function addDay(Gruppe $group, string $date): void
     {
         $membership = GruppeHasPersonen::where('gruppe_id', $group->id)->firstOrFail()->replicate();

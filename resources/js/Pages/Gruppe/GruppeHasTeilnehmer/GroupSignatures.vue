@@ -165,7 +165,7 @@ const restore = async row => {
     <p v-if="saving" role="status" class="mb-2 text-sm text-gray-600">Änderung wird bearbeitet …</p>
     <p v-if="loading" role="status">Unterschriften werden geladen …</p>
     <p v-else-if="!lists.length && !error" class="rounded bg-amber-50 p-3">Für die Gruppentermine ist noch keine passende zentrale Liste vorbereitet. Bitte die zuständige Person die PA- oder BO/BIBB-Termine in der Schulliste speichern lassen.</p>
-    <p v-else-if="!dates.length && weekendsHidden && !error" class="rounded bg-amber-50 p-3">Keine sichtbaren Termine. Samstag und Sonntag sind in den Projekteinstellungen für Gruppenunterschriften ausgeblendet.</p>
+    <p v-else-if="!dates.length && weekendsHidden && !error" class="rounded bg-amber-50 p-3">Keine sichtbaren Termine. Wochenenden und gesetzliche Feiertage sind standardmäßig ausgeschlossen.</p>
     <template v-else-if="participants.length && dates.length">
       <p class="mb-2 text-xs text-gray-600">{{ shownParticipants.length }} Teilnehmer · {{ shownDates.length }} Termine · Sortierung nach Nachname. Bei vielen Terminen seitlich scrollen.</p>
       <p v-if="weekendsHidden" class="mb-2 text-xs text-gray-500">Samstag und Sonntag sind gemäß Projekteinstellung ausgeblendet.</p>

@@ -23,7 +23,7 @@ class BibbAttendanceWordExportTest extends TestCase
         foreach(['A3','A4'] as $format) {
             $response=$this->actingAs($user)->post(route('anwesenheitsliste.POBO.bibb.export.word'),[
                 'exportFormat'=>$format,'schuleIdInputBibb'=>$school->id,'schuljahrInputBibb'=>'2026','teilInputBibb'=>'1',
-                'days'=>[['date'=>'2026-09-08','selected'=>true]],
+                'days'=>[['date'=>'2026-05-14','selected'=>true], ['date'=>'2026-09-08','selected'=>true], ['date'=>'2026-09-19','selected'=>true], ['date'=>'2026-09-20','selected'=>true]],
             ])->assertOk();
             $path=$response->getFile()->getPathname();
             $zip=new ZipArchive;$zip->open($path);
@@ -39,6 +39,8 @@ class BibbAttendanceWordExportTest extends TestCase
                     $this->assertSame(['Testname1','Testname2','Testname3'], $names);
                 }
                 $this->assertStringNotContainsString('${nachname',$doc->textContent);
+                $this->assertStringContainsString('08.09.2026', $doc->textContent);
+                foreach (['14.05.2026', '19.09.2026', '20.09.2026'] as $excluded) $this->assertStringNotContainsString($excluded, $doc->textContent);
                 $this->assertSame(file_get_contents(public_path('img/bop/kooperationspartner.png')),$zip->getFromName('word/media/bop-attendance-footer.png'));
             } finally {$zip->close();unlink($path);}
         }

@@ -70,11 +70,16 @@ class SchoolAttendanceExportTest extends TestCase
             'bemerkung' => 'Bus verspätet',
         ]);
 
+        foreach (['2026-09-05', '2026-09-06', '2026-10-03'] as $excludedDate) {
+            $extra = GruppeHasPersonen::where('gruppe_id', $group->id)->first()->replicate();
+            $extra->tage_id = Tage::create(['datum' => $excludedDate, 'wochentag' => 'Samstag'])->id;
+            $extra->save();
+        }
         $response = $this->actingAs($user)->post(route('export.schulanwesenheit.excel', [
             'schulId' => $partner->id,
             'schuljahr' => '2026-2027',
             'teil' => 'Teil 1',
-        ]), ['von' => '2026-09-01', 'bis' => '2026-09-01'])->assertOk();
+        ]), ['von' => '2026-09-01', 'bis' => '2026-10-03'])->assertOk();
 
         $sheet = IOFactory::load($response->getFile()->getPathname())->getActiveSheet();
         $this->assertSame('Muster', $sheet->getCell('C5')->getValue());

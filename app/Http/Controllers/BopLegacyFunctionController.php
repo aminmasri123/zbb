@@ -336,6 +336,7 @@ class BopLegacyFunctionController extends Controller
             return back()->with('error', 'Die Vorlage fuer die Anwesenheitsliste BO Vorbereitung wurde nicht gefunden.');
         }
 
+        abort_unless(app(\App\Services\SaarlandWorkdayService::class)->isWorkday($termin), 422, 'Wochenenden und Feiertage sind für diese Anwesenheitsliste ausgeschlossen.');
         $terminDatum = $this->formatTermin($termin);
         $klassen = $klasse
             ? collect([$klasse])
@@ -645,6 +646,7 @@ class BopLegacyFunctionController extends Controller
             ->whereHas('gruppe', fn ($query) => $query->where('projekt_id', $projektId))
             ->whereHas('tag', fn ($query) => $query->whereBetween('datum', [$von->toDateString(), $bis->toDateString()]))
             ->get()
+            ->filter(fn ($entry) => $entry->tag && app(\App\Services\SaarlandWorkdayService::class)->isAttendanceDay($entry->tag->datum, [], $entry->gruppe?->non_working_dates ?? []))
             ->sortBy(fn ($entry) => sprintf(
                 '%s|%s|%s|%s',
                 $entry->tag?->datum,

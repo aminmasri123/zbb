@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import Swal from 'sweetalert2';
+import { useAttendanceCalendar } from '@/utils/useAttendanceCalendar';
 
 const props = defineProps({
     internships: { type: Array, default: () => [] },
@@ -31,6 +32,8 @@ const selectedInternship = computed(() => props.internships.find((item) => Numbe
 const weekStart = ref('');
 const rows = ref([]);
 const saving = ref(false);
+const { allows: allowsDay, error: calendarError, reload: reloadCalendar } = useAttendanceCalendar(() => rows.value.map(row => row.date));
+const visibleRows = computed(() => rows.value.filter(row => allowsDay(row.date)));
 
 const parseDate = (value) => new Date(`${String(value).slice(0, 10)}T12:00:00`);
 const isoDate = (date) => {
@@ -99,9 +102,9 @@ const weekLabel = computed(() => weekStart.value
     ? `${formatDate(weekStart.value)} bis ${formatDate(isoDate(addDays(weekStart.value, 4)))}`
     : '');
 const weeklySummary = computed(() => ({
-    recorded: rows.value.filter((row) => isWithinInternship(row.date) && row.status).length,
-    present: rows.value.filter((row) => row.status === 'present').length,
-    actualHours: rows.value.reduce((sum, row) => sum + (Number(row.actual_hours) || 0), 0),
+    recorded: visibleRows.value.filter((row) => isWithinInternship(row.date) && row.status).length,
+    present: visibleRows.value.filter((row) => row.status === 'present').length,
+    actualHours: visibleRows.value.reduce((sum, row) => sum + (Number(row.actual_hours) || 0), 0),
 }));
 
 const shiftWeek = (weeks) => {
@@ -118,12 +121,17 @@ const statusChanged = (row) => {
 };
 
 const saveWeek = async () => {
+    await reloadCalendar();
+    if (calendarError.value || !visibleRows.value.length) {
+        Swal.fire('Keine Arbeitstage', calendarError.value || 'Diese Woche enthält keine verfügbaren Arbeitstage.', 'warning');
+        return;
+    }
     if (!selectedInternship.value || !weekStart.value) return;
     saving.value = true;
     try {
         const response = await axios.put(route('teilnehmer.praktikum.attendance.week', selectedInternship.value.id), {
             week_start: weekStart.value,
-            days: rows.value
+            days: visibleRows.value
                 .filter((row) => isWithinInternship(row.date))
                 .map((row) => ({
                     date: row.date,
@@ -172,7 +180,7 @@ const saveWeek = async () => {
             <table class="min-w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500"><tr><th class="px-3 py-2">Tag</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Sollstunden</th><th class="px-3 py-2">Iststunden</th><th class="px-3 py-2">Bemerkung</th></tr></thead>
                 <tbody class="divide-y divide-gray-100">
-                    <tr v-for="row in rows" :key="row.date" :class="isWithinInternship(row.date) ? 'bg-white' : 'bg-gray-100 text-gray-400'">
+                    <tr v-for="row in visibleRows" :key="row.date" :class="isWithinInternship(row.date) ? 'bg-white' : 'bg-gray-100 text-gray-400'">
                         <td class="whitespace-nowrap px-3 py-3"><p class="font-semibold">{{ row.weekday }}</p><p class="text-xs">{{ formatDate(row.date) }}</p><p v-if="!isWithinInternship(row.date)" class="mt-1 text-xs">außerhalb des Zeitraums</p></td>
                         <td class="px-3 py-3"><select v-model="row.status" :disabled="!canEdit || !isWithinInternship(row.date)" class="min-w-52 rounded-lg border-gray-300 text-sm" @change="statusChanged(row)"><option value="">Kein Eintrag / löschen</option><option v-for="status in statusOptions" :key="status.value" :value="status.value">{{ status.label }}</option></select></td>
                         <td class="px-3 py-3"><input v-model="row.planned_hours" :disabled="!canEdit || !isWithinInternship(row.date)" type="number" min="0" max="24" step="0.25" class="w-24 rounded-lg border-gray-300 text-sm" /></td>

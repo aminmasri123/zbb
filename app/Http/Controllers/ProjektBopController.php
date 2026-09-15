@@ -688,6 +688,7 @@ class ProjektBopController extends Controller
             'endDate',
             'includeSaturday',
             'includeSunday',
+            'includeHolidays',
             'feedbackDate',
         ];
 
@@ -1033,19 +1034,27 @@ class ProjektBopController extends Controller
         return null;
     }
 
+    private function attendanceDateAllowed($date, array $options = []): bool
+    {
+        return filled($date) && app(\App\Services\SaarlandWorkdayService::class)->isAttendanceDay($date, $options);
+    }
+
     private function bibbDateListFromRequest(Request $request): array
     {
+        $options = $request->only(['includeSaturday', 'includeSunday', 'includeHolidays']);
         $dates = collect($request->input('days', []))
             ->filter(fn ($day) => ($day['selected'] ?? true) && !empty($day['date']))
             ->pluck('date')
+            ->filter(fn ($date) => $this->attendanceDateAllowed($date, $options))
+            ->sort()
             ->map(fn ($date) => Carbon::parse($date)->format('d.m.Y'))
             ->unique()
             ->values();
 
-        if ($dates->isEmpty()) {
+        if (!$request->has('days')) {
             $dates = collect(range(1, 10))
                 ->map(fn ($index) => $request->input('termin' . $index))
-                ->filter()
+                ->filter(fn ($date) => $this->attendanceDateAllowed($date, $options))
                 ->map(fn ($date) => Carbon::parse($date)->format('d.m.Y'))
                 ->values();
         }
@@ -1056,7 +1065,7 @@ class ProjektBopController extends Controller
 
         return [
             $dates->take(10)->values()->all(),
-            $feedbackDate,
+            $this->attendanceDateAllowed($feedbackDate, $options) ? $feedbackDate : '',
         ];
     }
 
@@ -1716,7 +1725,7 @@ class ProjektBopController extends Controller
             ->first(fn ($item) => is_array($item)
                 && ($item['selected'] ?? true)
                 && ($item['type'] ?? 'preparation') === 'preparation'
-                && !empty($item['date']));
+                && $this->attendanceDateAllowed($item['date'] ?? null, $payload['form'] ?? []));
         abort_unless($day, 422, 'Bitte übernehmen Sie zuerst den Termin Vorbereitung PA.');
 
         $participants = $this->paTeilnehmer(
@@ -1776,7 +1785,8 @@ class ProjektBopController extends Controller
             $payload = $this->restoreLegacySignatures($payload, $this->decryptPaDraftPayloadSignatures($legacyDraft->payload ?? []));
         }
         $selectedDays = collect($payload['days'] ?? [])->filter(fn ($item) => is_array($item)
-            && ($item['selected'] ?? true) && ($item['type'] ?? 'preparation') === 'preparation' && !empty($item['date']));
+            && ($item['selected'] ?? true) && ($item['type'] ?? 'preparation') === 'preparation'
+            && $this->attendanceDateAllowed($item['date'] ?? null, $payload['form'] ?? []));
         abort_unless($selectedDays->count() === 1, 422, 'Bitte wählen Sie genau einen Termin Vorbereitung PA für die Vorlage aus.');
         $day = $selectedDays->first();
         $participants = $this->paTeilnehmer($scope['partner_id'], $scope['schuljahr'], $scope['teil'], $scope['export_mode'], $scope['klasse'], $scope['list_type']);
@@ -2298,6 +2308,9 @@ class ProjektBopController extends Controller
             'exportMode',
             'klasse',
             'listType',
+            'includeSaturday',
+            'includeSunday',
+            'includeHolidays',
         ];
 
         return [
@@ -2679,8 +2692,10 @@ class ProjektBopController extends Controller
                 return redirect()->back()->with('error', 'Die PA-Anwesenheitsliste unterstützt maximal 34 Teilnehmer/-innen pro Klasse.');
             }
 
-            $tag1 = Carbon::parse($request->startDate)->format('d.m.Y');
-            $tag2 = Carbon::parse($request->endDate)->format('d.m.Y');
+            $options = $request->only(['includeSaturday', 'includeSunday', 'includeHolidays']);
+            $tag1 = $this->attendanceDateAllowed($request->startDate, $options) ? Carbon::parse($request->startDate)->format('d.m.Y') : '';
+            $tag2 = $this->attendanceDateAllowed($request->endDate, $options) ? Carbon::parse($request->endDate)->format('d.m.Y') : '';
+            abort_if($tag1 === '' && $tag2 === '', 422, 'Keine Arbeitstage ausgewählt. Wochenenden und Feiertage sind standardmäßig ausgeschlossen.');
 
             $createDocument = function ($teilnehmerListe, string $klasseName, string $exportPath) use ($templateFile, $schule, $tag1, $tag2) {
                 $i = 1;
@@ -2787,6 +2802,8 @@ class ProjektBopController extends Controller
         $anzahlRaeumlichkeiten = request()->query('anzahlRaeumlichkeiten', $anzahlBereiche);
         $kapazitaeten = request()->query('kapazitaeten', []);
         $termin = request()->query('termin', date('Y-m-d')) ;
+        $request->validate(['termin' => ['nullable', 'date']]);
+        abort_unless($this->attendanceDateAllowed($termin), 422, 'Wochenenden und Feiertage sind für diese Anwesenheitsliste ausgeschlossen.');
         $raumNamen = $request->input('raumNamen', []);
 
         // Prüfen

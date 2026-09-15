@@ -93,6 +93,11 @@ class GroupAttendanceSignatures
                     || $date < substr($group->anfangsdatum, 0, 10)
                     || $date > substr($group->enddatum ?: $group->anfangsdatum, 0, 10)
                     || !$membership->has($student->person_id.'|'.$date)) continue;
+                $options = $schedule['form'] ?? [];
+                if (!$group->projekt->rule('group_signatures_hide_weekends', true)) {
+                    $options['includeSaturday'] = $options['includeSunday'] = true;
+                }
+                if (!app(\App\Services\SaarlandWorkdayService::class)->isAttendanceDay($date, $options, $group->non_working_dates ?? [])) continue;
                 if (!empty($day['eligible_classes']) && !in_array(trim($student->klasse ?? ''), $day['eligible_classes'], true)) continue;
                 // BO workshop days may contain several separate groups.
                 if ($type === 'bibb' && !in_array($day['type'] ?? '', ['rolltag', 'program_day', 'feedback'], true)
@@ -197,8 +202,6 @@ class GroupAttendanceSignatures
         [$draft, $payload, $keys] = $this->draft($group, $type, $id);
         $rows = $this->rows($group, $user, $draft, $payload, $keys, $type);
         $hideWeekends = (bool) $group->projekt->rule('group_signatures_hide_weekends', true);
-        $visibleDate = fn (string $date) => !$hideWeekends || (int) date('N', strtotime($date)) <= 5;
-        $rows = array_values(array_filter($rows, fn ($row) => $visibleDate($row['date'])));
         $hashes = $this->hashes($draft, array_column($rows, 'key'));
         $canRemove = $this->canRemove($user, $group);
         $removals = $canRemove ? GroupAttendanceSignatureRemoval::where('gruppe_id', $group->id)
@@ -228,7 +231,11 @@ class GroupAttendanceSignatures
             ->where('gruppe_id', $group->id)->whereIn('personen_id', $students->pluck('person_id'))
             ->whereBetween('datum', [substr($group->anfangsdatum, 0, 10), substr($group->enddatum ?: $group->anfangsdatum, 0, 10)])
             ->distinct()->orderBy('datum')->pluck('datum')->map(fn ($day) => substr($day, 0, 10))->all();
-        $dates = array_values(array_filter($dates, $visibleDate));
+        $options = $payload['form'] ?? [];
+        if (!$hideWeekends) $options['includeSaturday'] = $options['includeSunday'] = true;
+        $rowDates = array_column($rows, 'date');
+        $dates = array_values(array_filter($dates, fn ($date) => in_array($date, $rowDates, true)
+            || app(\App\Services\SaarlandWorkdayService::class)->isAttendanceDay($date, $options, $group->non_working_dates ?? [])));
         return ['rows' => $rows, 'participants' => $participants, 'dates' => $dates, 'can_remove' => $canRemove,
             'weekends_hidden' => $hideWeekends];
     }

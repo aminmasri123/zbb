@@ -815,10 +815,10 @@ class BopGruppeExportController extends Controller
     {
         $start = Carbon::parse($gruppe->anfangsdatum ?: now());
         $end = Carbon::parse($gruppe->enddatum ?: $start);
-        $excluded = collect($gruppe->non_working_dates ?? [])->map(fn ($date) => Carbon::parse($date)->toDateString())->all();
+        $confirmed = collect($gruppe->non_working_dates ?? [])->map(fn ($date) => Carbon::parse($date)->toDateString())->all();
         $dates = [];
         for ($date = $start->copy(); $date->lte($end) && count($dates) < 3; $date->addDay()) {
-            if ($date->isWeekend() || in_array($date->toDateString(), $excluded, true)) {
+            if (!$this->workdays->isAttendanceDay($date, [], $confirmed)) {
                 continue;
             }
             $dates[] = $date->format('d.m.Y');

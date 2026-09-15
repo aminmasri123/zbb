@@ -394,9 +394,11 @@ function generateDateRangeInclusive(start, end) {
   return result
 }
 
+const showNonWorkingDays = ref(false)
 const tage = computed(() =>
   props.gruppe?.anfangsdatum && props.gruppe?.enddatum
     ? generateDateRangeInclusive(props.gruppe.anfangsdatum, props.gruppe.enddatum)
+        .filter(day => showNonWorkingDays.value || !nonWorkingDayMap.value.has(day.date) || confirmedNonWorkingDates.value.includes(day.date))
     : []
 )
 
@@ -2812,7 +2814,11 @@ const exportMitTag = async () => {
 
         <!-- Tabelle -->
         <div class="max-w-full overflow-hidden rounded border border-gray-200">
-          <table class="w-full table-fixed text-sm border-collapse shadow-sm">
+          <label class="mb-3 inline-flex items-center gap-2 text-sm">
+              <input v-model="showNonWorkingDays" type="checkbox" class="rounded border-gray-300" />
+              Wochenenden und Feiertage anzeigen / Arbeitstag-Ausnahme bestätigen
+            </label>
+            <table class="w-full table-fixed text-sm border-collapse shadow-sm">
             <colgroup>
               <col class="w-52 xl:w-60" />
               <col

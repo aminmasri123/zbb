@@ -50,6 +50,24 @@ class SaarlandWorkdayService
         ];
     }
 
+    /** Explicit exceptions are opt-in; missing options always exclude non-working days. */
+    public function isAttendanceDay(CarbonInterface|string $value, array $options = [], array $confirmedDates = []): bool
+    {
+        $date = $value instanceof CarbonInterface ? CarbonImmutable::instance($value) : CarbonImmutable::parse($value);
+        if (in_array($date->toDateString(), $confirmedDates, true)) {
+            return true;
+        }
+        if ($date->isSaturday() && !filter_var($options['includeSaturday'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            return false;
+        }
+        if ($date->isSunday() && !filter_var($options['includeSunday'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            return false;
+        }
+
+        return !isset($this->holidays($date->year)[$date->toDateString()])
+            || filter_var($options['includeHolidays'] ?? false, FILTER_VALIDATE_BOOLEAN);
+    }
+
     public function isWorkday(CarbonInterface|string $value): bool
     {
         return $this->details($value)['is_workday'];
@@ -94,7 +112,7 @@ class SaarlandWorkdayService
     }
 
     /** @return array<string, string> */
-    private function holidays(int $year): array
+    public function holidays(int $year): array
     {
         if (isset($this->holidaysByYear[$year])) {
             return $this->holidaysByYear[$year];
@@ -104,6 +122,12 @@ class SaarlandWorkdayService
         $result = [];
 
         foreach ($holidays as $holiday) {
+            // § 2 SFG: Yasumi also returns observances such as New Year's Eve.
+            // Its Saarland provider currently classifies Assumption Day as "other".
+            // https://www.kirchenrecht-rheinland.de/document/2954
+            if ($holiday->getType() !== \Yasumi\Holiday::TYPE_OFFICIAL && $holiday->getKey() !== 'assumptionOfMary') {
+                continue;
+            }
             $result[$holiday->format('Y-m-d')] = $holiday->getName();
         }
 

@@ -47,9 +47,9 @@ class InternshipAttendanceController extends Controller
         DB::transaction(function () use ($request, $measure, $data, $weekStart, $weekEnd, $internshipStart, $internshipEnd): void {
             foreach ($data['days'] as $day) {
                 $date = Carbon::parse($day['date'])->startOfDay();
-                if (! $date->betweenIncluded($weekStart, $weekEnd) || $date->isWeekend()) {
+                if (! $date->betweenIncluded($weekStart, $weekEnd) || !app(\App\Services\SaarlandWorkdayService::class)->isWorkday($date)) {
                     throw ValidationException::withMessages([
-                        'days' => 'Es dürfen nur Werktage der ausgewählten Woche gespeichert werden.',
+                        'days' => 'Es dürfen nur Arbeitstage ohne Wochenenden und Feiertage der ausgewählten Woche gespeichert werden.',
                     ]);
                 }
                 if (! $date->betweenIncluded($internshipStart, $internshipEnd)) {
