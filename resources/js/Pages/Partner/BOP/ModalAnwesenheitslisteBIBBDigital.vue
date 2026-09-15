@@ -594,7 +594,7 @@ const pdfFormat = () => form.exportFormat === 'A3' ? 'a3' : 'a4'
 const pdfPrintStyle = {
   headerTitleFontSize: 7.8,
   headerFontSize: 7.1,
-  tableHeaderFontSize: 5.9,
+  tableHeaderFontSize: 6.4,
   rowFontSize: 6.1,
   tableLineWidth: 0.2,
 }
@@ -655,8 +655,8 @@ const pdfLayout = (doc) => {
     headerSecondValueWidth: 96.45,
     tableWidth: 281 * widthScale,
     tableY: form.exportFormat === 'A3' ? 54 : 50,
-    tableHeadTopHeight: 9.4 * rowScale,
-    tableHeadBottomHeight: 5.8 * rowScale,
+    tableHeadTopHeight: 11.6 * rowScale,
+    tableHeadBottomHeight: 7.3 * rowScale,
     rowHeight: 7.2 * rowScale,
     rowsPerPage: form.exportFormat === 'A3' ? 17 : 13,
   }
@@ -937,7 +937,7 @@ const originalColumns = (layout) => {
   })
 
   columns.push({ key: 'feedback', day: feedbackDay.value, label: 'Termin 11\nFeedbackgespräch', width: sw(21) })
-  columns.push({ key: 'angebot', label: 'Ange-\nbotstag', width: sw(11) })
+  columns.push({ key: 'betrag', label: 'Ange-\nforderter\nBetrag', width: sw(11) })
   columns.push({ key: 'zertifikat', label: 'Zertifikat\nja/nein', width: sw(11) })
 
   return columns
@@ -951,21 +951,19 @@ const drawOriginalTableHeader = (doc, columns, x, y, layout) => {
   applyPdfPrintInk(doc)
   doc.setLineWidth(pdfPrintStyle.tableLineWidth)
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(pdfPrintStyle.tableHeaderFontSize)
+  doc.setFontSize(pdfPrintStyle.tableHeaderFontSize * layout.rowScale)
 
   columns.forEach((column) => {
     doc.rect(cursorX, y, column.width, topHeight)
-    if (column.day) {
+    // Feedback has its own heading, whether or not a date has been selected.
+    if (column.key === 'feedback') {
+      const lines = ['Termin 11', 'Feedbackge-', 'spräch', 'Datum:']
+      if (column.day?.date) lines.push(dateLabel(column.day.date))
+      lines.forEach((line, index) => doc.text(line, cursorX + pad, y + ((2.4 + index * 2) * layout.rowScale), { maxWidth: column.width - (2 * pad) }))
+    } else if (column.day) {
       doc.text(column.label, cursorX + pad, y + (2.4 * layout.rowScale))
       doc.text('Datum:', cursorX + pad, y + (4.4 * layout.rowScale))
       doc.text(dateLabel(column.day.date), cursorX + pad, y + (6.5 * layout.rowScale), { maxWidth: column.width - (2 * pad) })
-    } else if (column.key === 'feedback') {
-      doc.text('Termin 11', cursorX + pad, y + (2.4 * layout.rowScale))
-      doc.text('Feedback-', cursorX + pad, y + (4.4 * layout.rowScale))
-      doc.text('gespräch', cursorX + pad, y + (6.5 * layout.rowScale))
-      if (column.day?.date) {
-        doc.text(dateLabel(column.day.date), cursorX + pad, y + (8.5 * layout.rowScale), { maxWidth: column.width - (2 * pad) })
-      }
     }
     cursorX += column.width
   })
@@ -973,12 +971,10 @@ const drawOriginalTableHeader = (doc, columns, x, y, layout) => {
   cursorX = x
   columns.forEach((column) => {
     doc.rect(cursorX, y + topHeight, column.width, bottomHeight)
-    if (column.day) {
-      doc.text('Unterschrift', cursorX + pad, y + topHeight + (2.2 * layout.rowScale))
-      doc.text('Schüler/-in', cursorX + pad, y + topHeight + (4.1 * layout.rowScale))
-    } else {
-      const lines = String(column.label).split('\n')
-      lines.forEach((line, index) => doc.text(line, cursorX + pad, y + topHeight + (2.2 * layout.rowScale) + (index * 1.9 * layout.rowScale)))
+    // Like the Word template, the lower feedback heading cell stays empty.
+    if (column.key !== 'feedback') {
+      const lines = column.day ? ['Unterschrift', 'Schüler/-in'] : String(column.label).split('\n')
+      lines.forEach((line, index) => doc.text(line, cursorX + pad, y + topHeight + ((2.2 + index * 1.9) * layout.rowScale), { maxWidth: column.width - (2 * pad) }))
     }
     cursorX += column.width
   })
@@ -1454,7 +1450,7 @@ onBeforeUnmount(() => {
                       {{ signedCountForDay(feedbackDay) }}/{{ expectedSignatureCountForDay(feedbackDay) }}
                     </span>
                   </th>
-                  <th class="border border-gray-800 px-2 py-2 text-left font-semibold">Angebotstag</th>
+                  <th class="border border-gray-800 px-2 py-2 text-left font-semibold">Angeforderter Betrag</th>
                   <th class="border border-gray-800 px-2 py-2 text-left font-semibold">Zertifikat</th>
                 </tr>
               </thead>
