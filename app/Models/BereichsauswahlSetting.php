@@ -15,6 +15,7 @@ class BereichsauswahlSetting extends Model
         'schuljahr',
         'teil',
         'auswahl_anzahl',
+        'bereich_ids',
         'public_token',
         'zugang_aktiv',
         'user_create',
@@ -24,6 +25,7 @@ class BereichsauswahlSetting extends Model
     protected $casts = [
         'zugang_aktiv' => 'boolean',
         'auswahl_anzahl' => 'integer',
+        'bereich_ids' => 'array',
     ];
 
     /** Match the same school-year spellings as the participant list. */

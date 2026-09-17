@@ -54,7 +54,7 @@ const choicesFor = (teilnehmer) => ([1, 2, 3, 4].map((number) => (
 )));
 
 const activeChoices = (row) => row.choices.slice(0, props.selectionCount);
-const isComplete = (row) => activeChoices(row).every(Boolean);
+const isComplete = (row) => activeChoices(row).every(choice => props.alle_bereiche.some(area => Number(area.id) === Number(choice)));
 const hasDuplicates = (row) => {
     const filled = activeChoices(row).filter(Boolean);
     return new Set(filled.map(Number)).size !== filled.length;

@@ -1,7 +1,7 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { ref, watch } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import Swal from 'sweetalert2';
 import axios from 'axios';
 import Dropdown from '@/Components/Dropdown.vue';
@@ -17,6 +17,9 @@ const props = defineProps({
     schuljahr: String,
     teil: String,
     setting: Object,
+    verfuegbare_bereiche: Array,
+    waehlbare_projektbereiche: Array,
+    bereich_warnungen: Array,
 });
 const { can, canAny } = usePermissions();
 const canPlanSelection = () => can('bereichsauswahl.planning');
@@ -34,6 +37,10 @@ const accessEnabled = ref(props.setting?.zugang_aktiv ?? true);
 const publicUrl = ref(props.setting?.public_url ?? '');
 const qrSvg = ref(props.setting?.qr_svg ?? '');
 const settingSaving = ref(false);
+const selectedAreaIds = ref((props.verfuegbare_bereiche ?? []).map(area => Number(area.id)));
+watch(() => props.verfuegbare_bereiche, areas => {
+    selectedAreaIds.value = (areas ?? []).map(area => Number(area.id));
+});
 
 // Reactive Variablen
 let search = ref('');
@@ -114,11 +121,13 @@ const updateSetting = async (count = selectionCount.value) => {
             schuljahr: props.schuljahr,
             teil: props.teil,
             auswahl_anzahl: Number(count),
+            bereich_ids: selectedAreaIds.value,
             zugang_aktiv: accessEnabled.value,
         });
 
         selectionCount.value = response.data.setting.auswahl_anzahl;
         accessEnabled.value = response.data.setting.zugang_aktiv;
+        router.reload();
 
         Swal.fire({
             title: 'Gespeichert',
@@ -180,7 +189,7 @@ const copyPublicUrl = async () => {
                                 :key="count"
                                 type="button"
                                 :disabled="settingSaving || !canPlanSelection()"
-                                @click="updateSetting(count)"
+                                @click="selectionCount = count"
                                 class="px-4 py-2 text-sm border-r border-gray-300 last:border-r-0 disabled:opacity-50"
                                 :class="selectionCount === count ? 'bg-zbb text-white' : 'bg-white text-gray-700 hover:bg-gray-100'"
                             >
@@ -195,7 +204,6 @@ const copyPublicUrl = async () => {
                             type="checkbox"
                             :disabled="settingSaving || !canPlanSelection()"
                             class="rounded border-gray-300 text-zbb focus:ring-zbb"
-                            @change="updateSetting(selectionCount)"
                         />
                         Teilnehmerzugang aktiv
                     </label>
@@ -241,6 +249,25 @@ const copyPublicUrl = async () => {
             </div>
         </div>
 
+        <section class="border border-gray-300 bg-white p-4 space-y-3">
+            <h2 class="font-bold text-gray-900">Verfügbare Berufsbereiche</h2>
+            <p class="text-sm text-gray-600">Gilt für {{ partner.name }}, {{ schuljahr }}, Teil {{ teil }}: Bereichsauswahl, QR-Selbstwahl, Einteilung und Einteilungsexporte. PA und Rolltag sind eigene Projektbestandteile und nicht wählbar.</p>
+            <div class="flex flex-wrap gap-3">
+                <label v-for="area in waehlbare_projektbereiche" :key="area.id" class="inline-flex items-center gap-2 border border-gray-200 px-3 py-2 text-sm">
+                    <input v-model="selectedAreaIds" type="checkbox" :value="Number(area.id)" :disabled="settingSaving || !canPlanSelection()" class="rounded border-gray-300 text-zbb focus:ring-zbb" />
+                    {{ area.name }}
+                </label>
+            </div>
+            <p class="text-sm text-gray-600">{{ selectedAreaIds.length }} Bereiche verfügbar · {{ selectionCount }} Wahlfelder. Mindestens {{ selectionCount }} Berufsbereiche auswählen.</p>
+            <button v-if="canPlanSelection()" type="button" :disabled="settingSaving || selectedAreaIds.length < selectionCount" class="bg-zbb text-white px-4 py-2 text-sm font-semibold disabled:opacity-50" @click="updateSetting()">{{ settingSaving ? 'Wird gespeichert …' : 'Einstellungen speichern' }}</button>
+        </section>
+
+        <div v-if="bereich_warnungen?.length" role="status" class="border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            <strong>Bereichswahlen prüfen</strong>
+            <p>Diese Teilnehmer haben gespeicherte Wahlen in nicht mehr verfügbaren Bereichen. Die bisherigen Daten bleiben erhalten. Bitte die Auswahl unten korrigieren:</p>
+            <p>{{ bereich_warnungen.map(item => item.name).join('; ') }}</p>
+        </div>
+
         <div class="flex items-center">
             <label for="bereichsauswahl-search" class="sr-only">Suchen</label>
             <input
@@ -254,8 +281,8 @@ const copyPublicUrl = async () => {
 
         <Bereichewaelen
             :alle_teilnehmer="alle_teilnehmer"
-            :alle_bereiche="projekt.bereiche"
-            :selection-count="selectionCount"
+            :alle_bereiche="verfuegbare_bereiche"
+            :selection-count="setting.auswahl_anzahl"
             :setting-saving="settingSaving"
             :search="search"
             :can-create="can('bereichsauswahl.store')"

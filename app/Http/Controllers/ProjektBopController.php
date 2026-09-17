@@ -101,7 +101,7 @@ class ProjektBopController extends Controller
 
     private function defaultAuswahlAnzahl(?Projekt $projekt): int
     {
-        $bereicheCount = $projekt?->bereiche?->count() ?? 4;
+        $bereicheCount = $projekt ? app(\App\Services\Bop\SelectableAreas::class)->eligible($projekt)->count() : 4;
 
         return $this->normalizeAuswahlAnzahl($bereicheCount > 0 ? $bereicheCount : 4);
     }
@@ -202,9 +202,10 @@ class ProjektBopController extends Controller
         return (new Writer($renderer))->writeString($url);
     }
 
-    private function allowedBereichIds(Projekt $projekt): Collection
+    private function allowedBereichIds(Projekt $projekt, BereichsauswahlSetting $setting): Collection
     {
-        return $projekt->bereiche->pluck('id')->map(fn ($id) => (int) $id)->values();
+        return app(\App\Services\Bop\SelectableAreas::class)->forSetting($projekt, $setting)
+            ->pluck('id')->map(fn ($id) => (int) $id)->values();
     }
 
     private function validatedChoices(Request $request, BereichsauswahlSetting $setting, Collection $allowedBereichIds): array
@@ -3220,8 +3221,13 @@ class ProjektBopController extends Controller
         $alle_teilnehmer->load('bereichsauswahl');
 
         $publicUrl = route('bereichsauswahl.self.show', $setting->public_token);
+        $areaService = app(\App\Services\Bop\SelectableAreas::class);
+        $availableAreas = $areaService->forSetting($projekt, $setting);
 
         return Inertia::render('Bereichsauswahl/Index', [
+            'verfuegbare_bereiche' => $availableAreas,
+            'waehlbare_projektbereiche' => $areaService->eligible($projekt),
+            'bereich_warnungen' => $areaService->selectionWarnings($alle_teilnehmer, $availableAreas),
             'projekt' => $projekt,
             'alle_teilnehmer' => $alle_teilnehmer,
             'partner' => [
@@ -3247,6 +3253,8 @@ class ProjektBopController extends Controller
             'schuljahr' => ['required', 'string'],
             'teil' => ['required', 'string'],
             'auswahl_anzahl' => ['required', 'integer', 'min:2', 'max:4'],
+            'bereich_ids' => ['sometimes', 'array', 'min:2'],
+            'bereich_ids.*' => ['required', 'integer', 'distinct'],
             'zugang_aktiv' => ['nullable', 'boolean'],
         ]);
 
@@ -3261,8 +3269,23 @@ class ProjektBopController extends Controller
         );
 
         $selectionCount = $this->normalizeAuswahlAnzahl((int) $validated['auswahl_anzahl']);
+        $areaService = app(\App\Services\Bop\SelectableAreas::class);
+        $areaIds = $request->has('bereich_ids')
+            ? collect($validated['bereich_ids'])->map(fn ($id) => (int) $id)->values()
+            : $areaService->forSetting($projekt, $setting)->pluck('id');
+        if ($areaIds->diff($areaService->eligible($projekt)->pluck('id'))->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'bereich_ids' => 'Bitte nur wählbare Berufsbereiche dieses Projekts auswählen. PA und Rolltag sind nicht wählbar.',
+            ]);
+        }
+        if ($areaIds->count() < $selectionCount) {
+            throw ValidationException::withMessages([
+                'bereich_ids' => 'Es müssen mindestens so viele Berufsbereiche verfügbar sein wie Wahlfelder.',
+            ]);
+        }
 
         $setting->update([
+            ...($request->has('bereich_ids') ? ['bereich_ids' => $areaIds->all()] : []),
             'auswahl_anzahl' => $selectionCount,
             'zugang_aktiv' => $request->boolean('zugang_aktiv', true),
             'user_update' => auth()->id(),
@@ -3312,7 +3335,7 @@ class ProjektBopController extends Controller
             $teilnehmer->teil,
             $projekt
         );
-        $choices = $this->validatedChoices($request, $setting, $this->allowedBereichIds($projekt));
+        $choices = $this->validatedChoices($request, $setting, $this->allowedBereichIds($projekt, $setting));
 
         $wahl = $teilnehmer->bereichsauswahl;
         $hasSavedChoices = collect([1, 2, 3, 4])->contains(
@@ -3350,7 +3373,7 @@ class ProjektBopController extends Controller
                 'teil' => $setting->teil,
                 'auswahl_anzahl' => $setting->auswahl_anzahl,
             ],
-            'bereiche' => $setting->projekt?->bereiche?->values() ?? [],
+            'bereiche' => app(\App\Services\Bop\SelectableAreas::class)->forSetting($setting->projekt, $setting),
             'token' => $token,
         ]);
     }
@@ -3411,7 +3434,7 @@ class ProjektBopController extends Controller
         $choices = $this->validatedChoices(
             $request,
             $setting,
-            $this->allowedBereichIds($setting->projekt)
+            $this->allowedBereichIds($setting->projekt, $setting)
         );
 
         $this->persistChoices($teilnehmer->bereichsauswahl, $choices, null, true);

@@ -82,7 +82,7 @@ class EinteilungParameterController extends Controller
         $schuljahr = (string) $validated['schuljahr'];
         $teil = (string) $validated['teil'];
         $projekt = $this->currentProjekt();
-        $bereiche = $this->projektBereiche($projekt);
+        $bereiche = $this->projektBereiche($projekt, $partnerId, $schuljahr, $teil);
         $rundenAnzahl = $this->normalizeRundenAnzahl((int) $validated['runden_anzahl']);
         $runden = $this->rundenArray($rundenAnzahl);
         $standardKapazitaet = (int) $validated['standard_kapazitaet'];
@@ -266,7 +266,7 @@ class EinteilungParameterController extends Controller
         $validated = array_merge($base, $roundData);
 
         $this->validateDistinctBereiche($validated, true, $runden);
-        $this->assertBereicheInProjekt($this->rundeValues($validated, $runden));
+        $this->assertBereicheInProjekt($this->rundeValues($validated, $runden), (int) $validated['partner_id'], (string) $validated['schuljahr'], (string) $validated['teil']);
 
         $schueler = $this->schuelerInContext(
             (int) $validated['schueler_id'],
@@ -330,7 +330,7 @@ class EinteilungParameterController extends Controller
         $projekt = $this->currentProjekt();
         $setting = $this->einteilungSettingFor($projekt->id, $partnerId, $schuljahr, $teil, $projekt);
         $wahlSetting = $this->bereichsauswahlSettingFor($projekt->id, $partnerId, $schuljahr, $teil, $projekt);
-        $bereiche = $this->projektBereiche($projekt);
+        $bereiche = $this->projektBereiche($projekt, $partnerId, $schuljahr, $teil);
         $bereichIds = $bereiche->pluck('id')->map(fn ($id) => (int) $id)->values();
         $runden = $this->rundenArray($setting->runden_anzahl);
         $this->assertRundentermineConfigured($setting, $runden);
@@ -479,7 +479,7 @@ class EinteilungParameterController extends Controller
         $validated = array_merge($base, $roundData);
 
         $this->validateDistinctBereiche($validated, false, $runden);
-        $this->assertBereicheInProjekt($this->rundeValues($validated, $runden));
+        $this->assertBereicheInProjekt($this->rundeValues($validated, $runden), (int) $validated['partner_id'], (string) $validated['schuljahr'], (string) $validated['teil']);
 
         $schueler = $this->schuelerInContext(
             (int) $validated['schueler_id'],
@@ -622,7 +622,7 @@ class EinteilungParameterController extends Controller
         ];
 
         $validated = $request->validate($rules);
-        $projektBereiche = $this->projektBereiche($projekt);
+        $projektBereiche = $this->projektBereiche($projekt, $partnerId, $schuljahr, $teil);
         $selectedBereiche = collect($validated['bereiche'] ?? [])->map(fn ($id) => (int) $id)->values();
         $bereiche = $selectedBereiche->isEmpty()
             ? $projektBereiche
@@ -810,7 +810,7 @@ class EinteilungParameterController extends Controller
         }
         $exportRunden = $ausgewaehlteRunde === null ? $runden : [$ausgewaehlteRunde];
         $partner = Partner::findOrFail($partnerId);
-        $bereiche = $this->projektBereiche($projekt);
+        $bereiche = $this->projektBereiche($projekt, $partnerId, $schuljahr, $teil);
         $schueler = $this->schuelerQuery($partnerId, $schuljahr, $teil)
             ->with(['person', 'einteilungen.bereich'])
             ->get();
@@ -943,7 +943,7 @@ class EinteilungParameterController extends Controller
         $user = Auth::user();
         $projekt = $this->currentProjekt();
         $partner = Partner::findOrFail($partnerId);
-        $alleBereiche = $this->projektBereiche($projekt);
+        $alleBereiche = $this->projektBereiche($projekt, $partnerId, $schuljahr, $teil);
         $setting = $this->einteilungSettingFor($projekt->id, $partnerId, $schuljahr, $teil, $projekt);
         $runden = $this->rundenArray($setting->runden_anzahl);
 
@@ -998,9 +998,17 @@ class EinteilungParameterController extends Controller
                 'destroy' => $user?->can('einteilung.destroy') ?? false,
                 'export' => $user?->can('einteilung.export') ?? false,
                 'planning' => $user?->can('einteilung.planning') ?? false,
+                'area_selection' => $user?->can('bereichsauswahl.index') ?? false,
             ],
             'results' => $results,
             'alle_bereiche' => $alleBereiche->values(),
+            'bereich_warnungen' => $schueler->filter(fn ($item) => $item->einteilungen->contains(
+                fn ($assignment) => in_array((int) $assignment->runde, $runden, true) && ! $alleBereiche->contains('id', $assignment->bereich_id)
+            ))->map(fn ($item) => [
+                ...$this->formatSchueler($item, $runden),
+                'details' => $item->einteilungen->filter(fn ($assignment) => in_array((int) $assignment->runde, $runden, true) && ! $alleBereiche->contains('id', $assignment->bereich_id))
+                    ->map(fn ($assignment) => 'Runde '.$assignment->runde.': '.($assignment->bereich?->name ?? 'Bereich '.$assignment->bereich_id))->implode(', '),
+            ])->values(),
             'updated_at' => $updatedAt?->toIso8601String(),
             'partner' => [
                 'id' => $partner->id,
@@ -1049,7 +1057,7 @@ class EinteilungParameterController extends Controller
 
     private function parameterPayload(EinteilungSetting $setting, Projekt $projekt, int $partnerId, string $schuljahr, string $teil): array
     {
-        $bereiche = $this->projektBereiche($projekt);
+        $bereiche = $this->projektBereiche($projekt, $partnerId, $schuljahr, $teil);
         $wahlSetting = $this->bereichsauswahlSettingFor($projekt->id, $partnerId, $schuljahr, $teil, $projekt);
 
         return [
@@ -1126,14 +1134,13 @@ class EinteilungParameterController extends Controller
         return $projekt;
     }
 
-    private function projektBereiche(?Projekt $projekt = null): Collection
+    private function projektBereiche(?Projekt $projekt = null, ?int $partnerId = null, ?string $schuljahr = null, ?string $teil = null): Collection
     {
         $projekt = $projekt ?: $this->currentProjekt();
 
-        return $projekt->bereiche
-            ->filter(fn ($bereich) => $bereich->name !== 'Potenzialanalyse')
-            ->sortBy('name')
-            ->values();
+        return $partnerId === null
+            ? app(\App\Services\Bop\SelectableAreas::class)->eligible($projekt)
+            : app(\App\Services\Bop\SelectableAreas::class)->forContext($projekt, $partnerId, $schuljahr, $teil);
     }
 
     private function schuelerQuery(int $partnerId, string $schuljahr, string $teil)
@@ -1173,7 +1180,7 @@ class EinteilungParameterController extends Controller
             ]
         );
 
-        $this->ensureKapazitaeten($setting, $this->projektBereiche($projekt));
+        $this->ensureKapazitaeten($setting, $this->projektBereiche($projekt, $partnerId, $schuljahr, $teil));
 
         return $setting->fresh(['kapazitaeten', 'rundentermine']);
     }
@@ -1337,14 +1344,14 @@ class EinteilungParameterController extends Controller
         }
     }
 
-    private function assertBereicheInProjekt(array $bereichIds): void
+    private function assertBereicheInProjekt(array $bereichIds, int $partnerId, string $schuljahr, string $teil): void
     {
-        $allowed = $this->projektBereiche()->pluck('id')->map(fn ($id) => (int) $id);
+        $allowed = $this->projektBereiche(null, $partnerId, $schuljahr, $teil)->pluck('id')->map(fn ($id) => (int) $id);
         $invalid = collect($bereichIds)->map(fn ($id) => (int) $id)->diff($allowed);
 
         if ($invalid->isNotEmpty()) {
             throw ValidationException::withMessages([
-                'runde_1' => 'Der Bereich gehoert nicht zum aktuellen Projekt.',
+                'runde_1' => 'Dieser Berufsbereich ist für diese Schule, dieses Schuljahr und diesen Teil nicht verfügbar.',
             ]);
         }
     }
@@ -1358,7 +1365,7 @@ class EinteilungParameterController extends Controller
     ): void {
         $projekt = $this->currentProjekt();
         $setting = $this->einteilungSettingFor($projekt->id, $partnerId, $schuljahr, $teil, $projekt);
-        $kapazitaeten = $this->kapazitaetenFor($setting, $this->projektBereiche($projekt));
+        $kapazitaeten = $this->kapazitaetenFor($setting, $this->projektBereiche($projekt, $partnerId, $schuljahr, $teil));
         $schuelerIds = $this->schuelerQuery($partnerId, $schuljahr, $teil)->pluck('id');
 
         foreach ($rundeValues as $runde => $bereichId) {

@@ -25,7 +25,7 @@ const activeChoices = computed(() => (
     choices.value.slice(0, props.context.auswahl_anzahl)
 ));
 
-const isComplete = computed(() => activeChoices.value.every(Boolean));
+const isComplete = computed(() => activeChoices.value.every(choice => props.bereiche.some(area => Number(area.id) === Number(choice))));
 
 const hasDuplicates = computed(() => {
     const filled = activeChoices.value.filter(Boolean);

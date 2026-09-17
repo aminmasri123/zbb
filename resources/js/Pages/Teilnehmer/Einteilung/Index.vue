@@ -19,6 +19,7 @@
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
+            <a v-if="abilities?.area_selection" :href="route('bereichsauswahl.index', { partnerId: partner.id, schuljahr, teil })" class="rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 hover:bg-orange-50">Berufsbereiche einstellen</a>
             <button v-if="canEinteilungStore" type="button" class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2" @click="openCreateModal">
               <i class="la la-user-plus mr-1.5 text-base" aria-hidden="true"></i>Teilnehmer hinzufügen
             </button>
@@ -42,6 +43,17 @@
             <i class="la la-trash mr-1" aria-hidden="true"></i>Einteilung löschen
           </button>
         </div>
+      </section>
+
+      <section v-if="bereichWarnungen.length" class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+        <h2 class="font-bold">Einteilungen prüfen</h2>
+        <p>Diese Zuordnungen betreffen nicht mehr verfügbare Berufsbereiche. Sie bleiben gespeichert, werden aber in der regulären Einteilung und den Einteilungsexporten ausgeblendet.</p>
+        <ul class="mt-2 space-y-1">
+          <li v-for="student in bereichWarnungen" :key="student.id">
+            {{ student.nachname }}, {{ student.vorname }} · {{ student.details }}
+            <button v-if="canEinteilungUpdate" type="button" class="ml-2 underline font-semibold" @click="openEditModal(student)">Zuordnung bearbeiten</button>
+          </li>
+        </ul>
       </section>
 
       <section class="grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -496,6 +508,7 @@ const props = defineProps({
   stats: Object,
   runden: Array,
   parameter: Object,
+  bereich_warnungen: Array,
 })
 const canEinteilungStore = computed(() => Boolean(props.abilities?.store))
 const canEinteilungUpdate = computed(() => Boolean(props.abilities?.update))
@@ -513,6 +526,7 @@ const showSwitchModal = ref(false)
 const selectedSchueler = ref(null)
 const results = ref(JSON.parse(JSON.stringify(props.results)));
 const allBereiche = ref([...(props.alle_bereiche ?? [])])
+const bereichWarnungen = ref([...(props.bereich_warnungen ?? [])])
 const updatedAt = ref(props.updated_at)
 const teilnehmerOptions = ref([...(props.teilnehmerOptions ?? [])])
 const raeume = ref([...(props.raeume ?? [])])
@@ -623,6 +637,7 @@ const replacePayload = (payload) => {
   if (!payload) return
   results.value = JSON.parse(JSON.stringify(payload.results ?? {}))
   allBereiche.value = [...(payload.alle_bereiche ?? [])]
+  bereichWarnungen.value = [...(payload.bereich_warnungen ?? [])]
   updatedAt.value = payload.updated_at ?? null
   teilnehmerOptions.value = [...(payload.teilnehmerOptions ?? [])]
   raeume.value = [...(payload.raeume ?? [])]
