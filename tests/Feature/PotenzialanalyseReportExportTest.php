@@ -13,10 +13,10 @@ use Tests\TestCase;
 
 class PotenzialanalyseReportExportTest extends TestCase
 {
-    public function test_pa_report_uses_the_unchanged_original_bop_sources(): void
+    public function test_pa_report_uses_self_contained_print_styles_and_original_bop_data(): void
     {
         $this->assertSame(
-            'f20e2d6333994072bb1064c702ceec032f53b6d49b9dffd64ee0fb760c3b20cd',
+            'c8b72ef81f5ebdc8103616c70bf61c529046c939047e0cab1df3f1beb66b808c',
             hash_file('sha256', resource_path('views/pdf/berichtPA.blade.php'))
         );
         $this->assertSame(
@@ -40,7 +40,7 @@ class PotenzialanalyseReportExportTest extends TestCase
             'teilnehmer' => $this->participantFixture(),
         ])
             ->setOption('isHtml5ParserEnabled', true)
-            ->setOption('isRemoteEnabled', true)
+            ->setOption('isRemoteEnabled', false)
             ->setPaper('a4', 'portrait');
 
         $pdf->render();

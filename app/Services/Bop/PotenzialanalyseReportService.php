@@ -166,6 +166,11 @@ class PotenzialanalyseReportService
 
     public function renderPdf(Gruppe $gruppe, Personen $person): string
     {
+        // School exports render several reports in one request. Give each
+        // report its own bounded budget instead of sharing PHP's 30 seconds.
+        @set_time_limit(120);
+        gc_collect_cycles();
+
         if ($this->profiles->profileForGroup($gruppe)) {
             return Pdf::loadView('pdf.bericht-pa-profil', $this->reportData($gruppe, $person))
                 ->setOption('isHtml5ParserEnabled', true)

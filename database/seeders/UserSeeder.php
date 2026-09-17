@@ -409,7 +409,7 @@ class UserSeeder extends Seeder
                 'name' => 'Holztechnik',
             ],
             [ // id = 4
-                'name' => 'Metaltechnik',
+                'name' => 'Metalltechnik',
             ],
             [ // id = 5
                 'name' => 'Hauswirtschaft',

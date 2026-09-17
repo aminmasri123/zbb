@@ -176,6 +176,12 @@ class BopEvaluationExportService
             'nachname' => (string) ($person->nachname ?? ''),
             'klasse' => trim((string) ($student?->klasse ?? '')),
             'datum' => $this->formatDate($group->enddatum ?: $group->anfangsdatum),
+            'anfangsdatum_iso' => $group->anfangsdatum
+                ? Carbon::parse($group->anfangsdatum)->toDateString()
+                : null,
+            'enddatum_iso' => ($group->enddatum ?: $group->anfangsdatum)
+                ? Carbon::parse($group->enddatum ?: $group->anfangsdatum)->toDateString()
+                : null,
             'anleiter_name' => trim((string) ($group->betreuer?->vorname ?? '').' '.(string) ($group->betreuer?->nachname ?? '')),
             'schule_name' => (string) ($student?->schule?->name ?? $group->partner?->name ?? ''),
             'bereich_name' => (string) ($group->bereich?->name ?? ''),

@@ -894,6 +894,7 @@ function ownerLabel(item) {
                                             {{ selectedFile.type === 'folder' ? 'Öffnen' : 'Download' }}
                                         </a>
                                         <button v-if="canDo(selectedFile, 'share')" class="rounded border border-gray-200 bg-white px-3 py-2 font-semibold text-gray-700" @click="openShare(selectedFile, 'file')">Teilen</button>
+                                        <a v-if="selectedFile.type === 'folder'" :href="route('apps.files.download', selectedFile.id)" class="col-span-2 rounded border border-gray-200 bg-white px-3 py-2 text-center font-semibold text-gray-700">Ordner als ZIP herunterladen</a>
                                         <button v-if="canDo(selectedFile, 'write')" class="rounded border border-gray-200 bg-white px-3 py-2 font-semibold text-gray-700" @click="openFileEdit(selectedFile)">Bearbeiten</button>
                                         <button v-if="canDo(selectedFile, 'transfer_owner')" class="rounded border border-gray-200 bg-white px-3 py-2 font-semibold text-gray-700" @click="openOwnerTransfer(selectedFile)">Besitzer</button>
                                         <button v-if="canDo(selectedFile, 'delete')" class="rounded border border-red-200 bg-white px-3 py-2 font-semibold text-red-600" @click="destroyItem('apps.files.destroy', selectedFile.id, selectedFile)">Löschen</button>

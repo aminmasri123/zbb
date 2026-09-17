@@ -5,10 +5,14 @@ namespace App\Http\Controllers;
 use App\Models\GruppeHasPersonen;
 use App\Models\Partner;
 use App\Models\PersonenIstSchueler;
+use App\Models\PoboCertificatePrintSetting;
 use App\Models\Projekt;
 use App\Services\Bop\AttendanceFooterService;
 use App\Services\Bop\BopEvaluationExportService;
+use App\Services\Bop\PoboCertificateExportService;
 use App\Services\Bop\PotenzialanalyseReportService;
+use App\Services\Documents\OfficeToPdfConverter;
+use App\Services\Documents\PdfMerger;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -502,47 +506,135 @@ class BopLegacyFunctionController extends Controller
         );
     }
 
-    public function zertifikatPobo(int $idSchule, string $schuljahr, string $teil)
-    {
-        $template = storage_path('vorlage/projekte/bop/word/Zertifikat_Maske_POBO.docx');
-        if (! file_exists($template)) {
-            return back()->with('error', 'POBO-Zertifikat-Vorlage wurde nicht gefunden.');
-        }
-
+    public function zertifikatPoboPreview(
+        int $idSchule,
+        string $schuljahr,
+        string $teil,
+        PoboCertificateExportService $certificates
+    ) {
         $partner = $this->partner($idSchule);
-        $item = $this->schueler($idSchule, $schuljahr, $teil)->first();
-        if (! $item) {
-            return back()->with('error', 'Es wurden keine Teilnehmer fuer dieses Zertifikat gefunden.');
-        }
 
-        $person = $item->person;
-        $processor = new TemplateProcessor($template);
-        foreach ([
-            'vorname' => $person?->vorname,
-            'nachname' => $person?->nachname,
-            'klasse' => $item->klasse,
-            'schule' => $partner->name,
-            'schuljahr' => $schuljahr,
-            'teil' => $teil,
-        ] as $key => $value) {
-            $processor->setValue($key, $value ?? '');
-        }
-
-        $fileName = 'Zertifikat_POBO_'.$this->safeName(($person?->nachname ?? 'Teilnehmer').'_'.($person?->vorname ?? $item->id)).'.docx';
-        $path = storage_path('app/tmp/'.Str::uuid().'_'.$fileName);
-        File::ensureDirectoryExists(dirname($path));
-        $processor->saveAs($path);
-
-        return response()->download($path)->deleteFileAfterSend(true);
+        return response()->json([
+            'school' => ['id' => $partner->id, 'name' => $partner->name],
+            'school_year' => $schuljahr,
+            'part' => $teil,
+            ...$certificates->previewSchool(
+                $idSchule, $schuljahr, $teil, $this->currentBopProject()
+            ),
+        ]);
     }
 
-    public function zertifikatPoboPdf(int $schuleId, string $schuljahr, string $teil)
-    {
-        $partner = $this->partner($schuleId);
-        $schueler = $this->schueler($schuleId, $schuljahr, $teil);
-        $pdf = Pdf::loadView('bop.zertifikate-pobo', compact('partner', 'schueler', 'schuljahr', 'teil'))->setPaper('a4', 'landscape');
+    public function updatePoboCertificatePrintSettings(
+        Request $request,
+        PoboCertificateExportService $certificates
+    ) {
+        $validated = $request->validate([
+            'horizontal_offset_mm' => ['required', 'numeric', 'between:-20,20'],
+            'vertical_offset_mm' => ['required', 'numeric', 'between:-20,20'],
+            'row_spacing_offset_mm' => ['required', 'numeric', 'between:0,5'],
+            'cross_font_size_pt' => ['required', 'numeric', 'between:8,20'],
+        ]);
 
-        return $pdf->download('Zertifikate_POBO_'.$schuleId.'_'.$this->safeName($schuljahr).'_Teil_'.$this->safeName($teil).'.pdf');
+        $settings = PoboCertificatePrintSetting::current();
+        $settings->update([
+            ...$validated,
+            'updated_by' => $request->user()->id,
+        ]);
+
+        return response()->json([
+            'message' => 'Die POBO-Druckposition wurde gespeichert.',
+            'print_settings' => $certificates->printSettings(),
+        ]);
+    }
+
+    public function zertifikatPobo(
+        Request $request,
+        int $idSchule,
+        string $schuljahr,
+        string $teil,
+        PoboCertificateExportService $certificates
+    )
+    {
+        $period = $request->validate([
+            'von' => ['nullable', 'required_with:bis', 'date_format:Y-m-d'],
+            'bis' => ['nullable', 'required_with:von', 'date_format:Y-m-d', 'after_or_equal:von'],
+        ]);
+        $partner = $this->partner($idSchule);
+        $temporaryDirectory = storage_path('app/tmp/pobo-certificates-'.Str::uuid());
+        $filename = 'Zertifikate_POBO_'.$this->safeName($partner->name).'_'.$this->safeName($schuljahr).'_'.$this->safeName($teil).'.zip';
+        $outputPath = storage_path('app/tmp/'.Str::uuid().'_'.$filename);
+
+        try {
+            $documents = $certificates->createSchoolDocuments(
+                $idSchule,
+                $schuljahr,
+                $teil,
+                $this->currentBopProject(),
+                $temporaryDirectory,
+                $period['von'] ?? null,
+                $period['bis'] ?? null,
+            );
+            if ($documents->isEmpty()) {
+                return back()->with('error', 'Es wurden keine Teilnehmer mit ausreichenden POBO-Anwesenheitstagen gefunden.');
+            }
+
+            $zip = new ZipArchive;
+            if ($zip->open($outputPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+                throw new \RuntimeException('Das Zertifikatspaket konnte nicht erstellt werden.');
+            }
+            foreach ($documents as $document) {
+                $zip->addFile($document['path'], $document['filename']);
+            }
+            $zip->close();
+        } finally {
+            File::deleteDirectory($temporaryDirectory);
+        }
+
+        return response()->download($outputPath, $filename)->deleteFileAfterSend(true);
+    }
+
+    public function zertifikatPoboPdf(
+        Request $request,
+        int $schuleId,
+        string $schuljahr,
+        string $teil,
+        PoboCertificateExportService $certificates,
+        OfficeToPdfConverter $converter,
+        PdfMerger $pdfMerger
+    )
+    {
+        $period = $request->validate([
+            'von' => ['nullable', 'required_with:bis', 'date_format:Y-m-d'],
+            'bis' => ['nullable', 'required_with:von', 'date_format:Y-m-d', 'after_or_equal:von'],
+        ]);
+        $partner = $this->partner($schuleId);
+        $temporaryDirectory = storage_path('app/tmp/pobo-certificates-'.Str::uuid());
+        $filename = 'Zertifikate_POBO_'.$this->safeName($partner->name).'_'.$this->safeName($schuljahr).'_'.$this->safeName($teil).'.pdf';
+        $outputPath = storage_path('app/tmp/'.Str::uuid().'_'.$filename);
+
+        try {
+            $documents = $certificates->createSchoolDocuments(
+                $schuleId,
+                $schuljahr,
+                $teil,
+                $this->currentBopProject(),
+                $temporaryDirectory,
+                $period['von'] ?? null,
+                $period['bis'] ?? null,
+            );
+            if ($documents->isEmpty()) {
+                return back()->with('error', 'Es wurden keine Teilnehmer mit ausreichenden POBO-Anwesenheitstagen gefunden.');
+            }
+
+            $pdfs = $documents
+                ->map(fn (array $document) => $converter->convert($document['path'], $temporaryDirectory))
+                ->all();
+            $pdfMerger->merge($pdfs, $outputPath);
+        } finally {
+            File::deleteDirectory($temporaryDirectory);
+        }
+
+        return response()->download($outputPath, $filename)->deleteFileAfterSend(true);
     }
 
     public function auswertungPobo(int $schulId, string $schuljahr, string $teil)
@@ -559,10 +651,8 @@ class BopLegacyFunctionController extends Controller
 
     public function auswertungPoboToFolder(int $schulId, string $schuljahr, string $teil)
     {
-        $this->partner($schulId);
-        $folder = $this->baseFolder($schulId, $schuljahr, $teil).DIRECTORY_SEPARATOR.'Auswertung_POBO';
-        File::ensureDirectoryExists($folder);
-
+        $partner = $this->partner($schulId);
+        $archive = app(\App\Services\Bop\BopReportArchive::class);
         $project = $this->currentBopProject();
         $teilnehmer = $this->bopEvaluations->schoolEntries($schulId, $schuljahr, $teil, $project);
         $config = $this->bopEvaluations->config($project);
@@ -574,11 +664,14 @@ class BopLegacyFunctionController extends Controller
             $filename = $this->safeName(
                 $participant['klasse'].'_'.$participant['nachname'].'_'.$participant['vorname']
             ).'_'.now()->format('Ymd_His').'_'.\Illuminate\Support\Str::random(6).'.pdf';
-            File::put($folder.DIRECTORY_SEPARATOR.$filename,
-                app(\App\Services\Bop\BopOriginalEvaluationPdf::class)->render($participantEntries));
+            $archive->store((int) auth()->id(), (int) $project->id,
+                $archive->folders($partner->name, $schulId, $schuljahr, $teil,
+                    (string) $participant['klasse'], $participant['nachname'].' '.$participant['vorname'],
+                    (int) $participant['personen_id'], 'BO-Auswertungen'),
+                $filename, app(\App\Services\Bop\BopOriginalEvaluationPdf::class)->render($participantEntries));
         }
 
-        return back()->with('success', 'POBO-Auswertungen wurden im Ordner generiert.');
+        return back()->with('success', 'POBO-Auswertungen wurden im Dateimanager unter BOP → Schulen → '.$partner->name.' ('.$schulId.') gespeichert.');
     }
 
     private function currentBopProject(): Projekt
@@ -604,25 +697,24 @@ class BopLegacyFunctionController extends Controller
             return back()->with('error', 'Für diese Schule wurden noch keine PA-Daten gespeichert.');
         }
 
-        $folder = storage_path(
-            'app/public/files/Schulen/'
-            .$this->safeFolderSegment($partner->name)
-            .'/'.$this->safeFolderSegment($schuljahr)
-        );
+        $archive = app(\App\Services\Bop\BopReportArchive::class);
 
         foreach ($assignments as $assignment) {
-            $class = $this->safeFolderSegment((string) ($assignment['student']?->klasse ?? 'ohne Klasse'));
-            $participant = $this->safeFolderSegment(trim(
+            $class = (string) ($assignment['student']?->klasse ?? 'ohne Klasse');
+            $participant = trim(
                 ($assignment['person']->nachname ?? '').' '.($assignment['person']->vorname ?? '')
-            ));
-            $participantFolder = $folder.DIRECTORY_SEPARATOR.$class.DIRECTORY_SEPARATOR.$participant;
-
-            $reports->writePdf($assignment['gruppe'], $assignment['person'], $participantFolder);
+            );
+            $filename = pathinfo($reports->fileName($assignment['person'], 'pdf', $assignment['gruppe']), PATHINFO_FILENAME)
+                .'_'.now()->format('Ymd_His').'_'.\Illuminate\Support\Str::random(6).'.pdf';
+            $archive->store((int) auth()->id(), $projektId,
+                $archive->folders($partner->name, $schulId, $schuljahr, $teil, $class,
+                    $participant, (int) $assignment['person']->id, 'PA-Berichte'),
+                $filename, $reports->renderPdf($assignment['gruppe'], $assignment['person']));
         }
 
         return back()->with(
             'success',
-            $assignments->count().' PA-Bericht(e) wurden für '.$partner->name.' im Ordner generiert: '.$folder
+            $assignments->count().' PA-Bericht(e) wurden im Dateimanager unter BOP → Schulen → '.$partner->name.' ('.$schulId.') gespeichert.'
         );
     }
 

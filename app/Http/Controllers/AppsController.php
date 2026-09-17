@@ -184,10 +184,86 @@ class AppsController extends Controller
 
     public function downloadFile(AppFile $file)
     {
-        abort_unless($file->type === 'file' && $this->canSee($file, AppFile::class), 404);
+        abort_unless($this->canSee($file, AppFile::class), 404);
+        if ($file->type === 'folder') {
+            return $this->downloadFolder($file);
+        }
+        abort_unless($file->type === 'file', 404);
         abort_unless($file->path && Storage::exists($file->path), 404);
 
         return Storage::download($file->path, $file->original_name ?: $file->name);
+    }
+
+    private function downloadFolder(AppFile $folder)
+    {
+        $directory = storage_path('app/tmp/folder-zip-'.\Illuminate\Support\Str::uuid());
+        \Illuminate\Support\Facades\File::ensureDirectoryExists($directory);
+        $archivePath = $directory.'.zip';
+        $zip = new \ZipArchive;
+        $opened = false;
+        $complete = false;
+        try {
+            abort_unless($zip->open($archivePath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true, 500, 'ZIP-Datei konnte nicht erstellt werden.');
+            $opened = true;
+            $root = $this->zipSegment($folder->name);
+            $zip->addEmptyDir($root);
+            $pending = [[$folder->id, $root]];
+            $visited = [];
+            while ($pending) {
+                @set_time_limit(120);
+                [$parentId, $prefix] = array_pop($pending);
+                if (isset($visited[$parentId])) continue;
+                $visited[$parentId] = true;
+                $names = [];
+                // A visible parent never grants access to an otherwise private child.
+                $children = $this->visible(AppFile::query(), AppFile::class)
+                    ->where('parent_id', $parentId)->orderBy('id')->get();
+                foreach ($children as $child) {
+                    $name = $this->zipSegment($child->type === 'folder' ? $child->name : ($child->original_name ?: $child->name));
+                    $base = $name;
+                    $suffix = 1;
+                    while (isset($names[mb_strtolower($name)])) {
+                        $extension = $child->type === 'file' ? pathinfo($base, PATHINFO_EXTENSION) : '';
+                        $stem = $extension !== '' ? substr($base, 0, -strlen($extension) - 1) : $base;
+                        $name = $stem.' ('.$suffix++.')'.($extension !== '' ? '.'.$extension : '');
+                    }
+                    $names[mb_strtolower($name)] = true;
+                    $entry = $prefix.'/'.$name;
+                    if ($child->type === 'folder') {
+                        abort_unless($zip->addEmptyDir($entry), 500);
+                        $pending[] = [$child->id, $entry];
+                    } elseif ($child->type === 'file') {
+                        abort_unless($child->path && Storage::exists($child->path), 409, 'Eine enthaltene Datei fehlt. Der Ordner wurde nicht heruntergeladen.');
+                        $source = Storage::readStream($child->path);
+                        abort_unless(is_resource($source), 500);
+                        $target = fopen($directory.'/'.$child->id, 'wb');
+                        try {
+                            abort_unless(is_resource($target) && stream_copy_to_stream($source, $target) !== false, 500);
+                        } finally {
+                            fclose($source);
+                            if (is_resource($target)) fclose($target);
+                        }
+                        abort_unless($zip->addFile($directory.'/'.$child->id, $entry), 500);
+                    }
+                }
+            }
+            $closed = $zip->close();
+            $opened = false;
+            abort_unless($closed, 500, 'ZIP-Datei konnte nicht abgeschlossen werden.');
+            $response = response()->download($archivePath, $root.'.zip', ['Content-Type' => 'application/zip'])->deleteFileAfterSend(true);
+            $complete = true;
+            return $response;
+        } finally {
+            if ($opened) $zip->close();
+            \Illuminate\Support\Facades\File::deleteDirectory($directory);
+            if (! $complete) \Illuminate\Support\Facades\File::delete($archivePath);
+        }
+    }
+
+    private function zipSegment(string $name): string
+    {
+        $name = preg_replace('/[<>:"\/\\\\|?*\x00-\x1F\x7F]/u', '_', $name);
+        return trim(mb_substr($name, 0, 180), ". \t\n\r") ?: 'Ordner';
     }
 
     public function updateFile(Request $request, AppFile $file)

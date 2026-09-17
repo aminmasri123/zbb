@@ -197,6 +197,8 @@ class RoutePermissionMap
         'hausordnung.export.schule.pdf' => 'dokumente.schule.export',
         'export.auswertungsbogenPA.schule.pdf' => 'dokumente.schule.export',
         'export.auswertungsbogenPA.roland.schule.pdf' => 'dokumente.schule.export',
+        'export.zertifikat.schule.pobo.preview' => 'dokumente.schule.export',
+        'export.zertifikat.schule.pobo.settings.update' => 'dokumente.update',
         'export.zertifikat.schule.pobo' => 'dokumente.schule.export',
         'export.zertifikat.schule.pobo.pdf' => 'dokumente.schule.export',
         'export.auswertungBO.schule.pdf' => 'dokumente.schule.export',

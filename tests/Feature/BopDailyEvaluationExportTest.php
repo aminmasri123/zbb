@@ -25,6 +25,65 @@ class BopDailyEvaluationExportTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_folder_exports_store_original_pdfs_in_private_file_manager_folders(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        [$user, $group, $project, $partner] = $this->context();
+        $this->grantTestPermission($user, 'dokumente.ansprechpartner.manage');
+        $this->grantTestPermission($user, 'dokumente.schule.export');
+        $this->grantTestPermission($user, 'potenzialanalyse.index');
+        $this->actingAs($user);
+        $params = ['schulId' => $partner->id, 'schuljahr' => '2026-2027', 'teil' => 'Teil 1'];
+        $entries = app(\App\Services\Bop\BopEvaluationExportService::class)
+            ->schoolEntries($partner->id, '2026-2027', 'Teil 1', $project);
+        $this->get(route('export.auswertungBO.schule.pdf.tofolder', $params))
+            ->assertRedirect()->assertSessionHas('success');
+        $files = \App\Models\AppFile::where('type', 'file')->get();
+        $this->assertCount(2, $files);
+        foreach ($entries->groupBy('personen_id') as $personId => $participantEntries) {
+            $file = $files->first(fn ($file) => str_ends_with($file->parent->parent->name, '('.$personId.')'));
+            $this->assertNotNull($file);
+            $expected = app(\App\Services\Bop\BopOriginalEvaluationPdf::class)->render($participantEntries);
+            $actual = \Illuminate\Support\Facades\Storage::get($file->path);
+            $this->assertSame(
+                (new Parser)->parseContent($expected)->getPages()[0]->getDataTm(),
+                (new Parser)->parseContent($actual)->getPages()[0]->getDataTm()
+            );
+            $this->assertSame('BO-Auswertungen', $file->parent->name);
+        }
+
+        $person = $group->teilnehmer->first();
+        \App\Models\PotenzialanalyseKompetenzbewertung::create([
+            'gruppe_id' => $group->id, 'personen_id' => $person->id,
+            'typ' => 'anleiter', 'merkmal' => 'feinmotorik', 'bewertung' => 4,
+        ]);
+        $expected = app(\App\Services\Bop\PotenzialanalyseReportService::class)->renderPdf($group, $person);
+        $this->get(route('export.auswertungPA.schule.pdf.tofolder', $params))
+            ->assertRedirect()->assertSessionHas('success');
+        $file = \App\Models\AppFile::where('type', 'file')->latest('id')->firstOrFail();
+        $this->assertSame('PA-Berichte', $file->parent->name);
+        $expectedPages = (new Parser)->parseContent($expected)->getPages();
+        $actualPages = (new Parser)->parseContent(\Illuminate\Support\Facades\Storage::get($file->path))->getPages();
+        $this->assertCount(count($expectedPages), $actualPages);
+        foreach ($expectedPages as $index => $page) {
+            $this->assertSame($page->getDataTm(), $actualPages[$index]->getDataTm());
+        }
+        $this->assertSame(0, \App\Models\AppFile::where('visibility', '!=', 'private')->count());
+        $this->assertSame(0, \App\Models\AppFile::where('owner_user_id', '!=', $user->id)->count());
+        $this->assertSame($expectedPages[0]->getDataTm(), $actualPages[0]->getDataTm());
+
+        $before = \App\Models\AppFile::where('type', 'folder')->count();
+        $this->get(route('export.auswertungBO.schule.pdf.tofolder', $params))->assertRedirect();
+        $this->assertSame($before, \App\Models\AppFile::where('type', 'folder')->count());
+        $this->assertSame(5, \App\Models\AppFile::where('type', 'file')->count());
+        \Illuminate\Support\Facades\Storage::assertExists($file->path);
+
+        $this->get(route('apps.files.download', $file))->assertOk();
+        $other = User::factory()->create(['current_team_id' => $project->id]);
+        $other->projekte()->attach($project->id);
+        $this->actingAs($other)->get(route('apps.files.download', $file))->assertNotFound();
+    }
+
     public function test_one_selected_bo_day_is_exported_for_every_group_participant(): void
     {
         [$user, $group] = $this->context();

@@ -15,6 +15,7 @@ class GeneralSchoolDocumentPermissionTest extends TestCase
             'hausordnung.export.schule.pdf',
             'export.auswertungsbogenPA.schule.pdf',
             'export.auswertungsbogenPA.roland.schule.pdf',
+            'export.zertifikat.schule.pobo.preview',
             'export.zertifikat.schule.pobo',
             'export.zertifikat.schule.pobo.pdf',
             'export.auswertungBO.schule.pdf',
@@ -38,6 +39,10 @@ class GeneralSchoolDocumentPermissionTest extends TestCase
         $this->assertSame(
             ['teilnehmer.liste.export'],
             RoutePermissionMap::permissionsFor('export.teilnehmerliste.schule.excel')
+        );
+        $this->assertSame(
+            ['dokumente.update'],
+            RoutePermissionMap::permissionsFor('export.zertifikat.schule.pobo.settings.update')
         );
     }
 

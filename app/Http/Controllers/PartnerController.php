@@ -43,6 +43,9 @@ class PartnerController extends Controller
 
     private function partnerRelationsForProject($projektId)
     {
+        if (! auth()->user()->can('kooperationspartner.details.view')) {
+            return ['partnerschaftstypens', 'schueler'];
+        }
         $pivotIds = $this->projektPartnerPivotIds($projektId);
 
         return [
@@ -70,6 +73,10 @@ class PartnerController extends Controller
         }
 
         $term = "%{$search}%";
+
+        if (! auth()->user()->can('kooperationspartner.details.view')) {
+            return $query->where('partners.name', 'like', $term);
+        }
 
         return $query->where(function ($query) use ($term) {
             $query->where('partners.name', 'like', $term)
@@ -118,6 +125,15 @@ class PartnerController extends Controller
             'bop_plans',
             $plans->get($partner->id, collect())->unique('schuljahr')->values()
         ));
+    }
+
+    private function protectPartnerDetails($partners): void
+    {
+        if (auth()->user()->can('kooperationspartner.details.view')) return;
+        $partners->getCollection()->each(function (Partner $partner) {
+            $partner->setVisible(['id', 'name', 'partnerschaftstypens', 'schueler', 'bop_plans']);
+            $partner->partnerschaftstypens->each(fn ($type) => $type->setVisible(['id', 'bezeichnung']));
+        });
     }
 
     private function partnerDocumentsForProject(Projekt $project, User $user)
@@ -176,6 +192,7 @@ class PartnerController extends Controller
             $this->attachBopPlanningStatuses($partners, $userProjektAktiv);
         }
 
+        $this->protectPartnerDetails($partners);
         return Inertia::render('Partner/Index', [
             'partners' => $partners,
             'partnerschaftstypen' => $partnerschaftstypen,
@@ -206,6 +223,7 @@ class PartnerController extends Controller
             $this->attachBopPlanningStatuses($partners, $userProjektAktiv);
         }
 
+        $this->protectPartnerDetails($partners);
         return response()->json([
             'partners' => $partners,
         ]);
@@ -246,6 +264,7 @@ class PartnerController extends Controller
 
     public function store(Request $request)
     {
+        abort_unless($request->user()->can('kooperationspartner.details.view'), 403);
         $data = $request->validate([
             'name' => 'required|string|max:255',
             'beschreibung' => 'nullable|string',
@@ -433,6 +452,7 @@ class PartnerController extends Controller
      */
     public function update(Request $request, $id)
     {
+        abort_unless($request->user()->can('kooperationspartner.details.view'), 403);
         $data = $request->validate([
             'name' => 'required|string|max:255',
             'beschreibung' => 'nullable|string',

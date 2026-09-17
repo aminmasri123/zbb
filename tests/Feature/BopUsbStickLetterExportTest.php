@@ -13,7 +13,8 @@ class BopUsbStickLetterExportTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_bop_project_can_export_the_letter_for_an_assigned_school(): void
+    #[\PHPUnit\Framework\Attributes\DataProvider('schoolYears')]
+    public function test_bop_project_can_export_the_letter_for_an_assigned_school(string $schoolYear): void
     {
         $user = User::factory()->create();
         $project = Projekt::factory()->create(['name' => 'BOP']);
@@ -25,9 +26,14 @@ class BopUsbStickLetterExportTest extends TestCase
         $user->givePermissionTo('dokumente.schule.export');
 
         $this->actingAs($user)->post(route('partner.bop-usb-stick-letter.export', $school), [
-            'schuljahr' => '2025/2026',
+            'schuljahr' => $schoolYear,
             'datum' => '2026-07-14',
         ])->assertOk()->assertDownload('USB-Stick-Brief-Testschule.docx');
+    }
+
+    public static function schoolYears(): array
+    {
+        return [['2025/2026'], ['2026']];
     }
 
     public function test_school_outside_the_active_project_is_not_exported(): void

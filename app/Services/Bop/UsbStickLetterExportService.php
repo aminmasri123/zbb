@@ -110,6 +110,11 @@ class UsbStickLetterExportService
 
     private function shortSchoolYear(string $schoolYear): string
     {
+        $schoolYear = trim($schoolYear);
+        if (preg_match('/^\d{4}$/', $schoolYear) === 1) {
+            return substr($schoolYear, -2);
+        }
+
         if (preg_match('/(\d{2,4})\D+(\d{2,4})/', $schoolYear, $matches) !== 1) {
             throw new RuntimeException('Das Schuljahr hat ein ungültiges Format.');
         }

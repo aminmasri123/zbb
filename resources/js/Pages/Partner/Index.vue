@@ -14,6 +14,7 @@ import ModalSchulanwesenheitExport from './BOP/ModalSchulanwesenheitExport.vue';
 import ModalBoTag1 from './BOP/ModalBoTag1.vue'
 import ModalHausordnung from './BOP/ModalHausordnung.vue';
 import ModalUsbStickBrief from './BOP/ModalUsbStickBrief.vue';
+import ModalPoboCertificates from './BOP/ModalPoboCertificates.vue';
 import BopRunPlanner from './BOP/BopRunPlanner.vue';
 import BopTimetablePlanner from './BOP/BopTimetablePlanner.vue';
 import { usePermissions } from '@/utils/permissions';
@@ -587,7 +588,7 @@ const updatePartnerAPI = async (form) => {
 
         <!-- Suchfeld -->
         <div class="mx-auto mb-3 flex w-full max-w-7xl items-stretch overflow-hidden rounded-md border border-gray-300 bg-white shadow-md">
-            <button type="button" @click="openModalCreate" class="flex w-14 shrink-0 items-center justify-center border-r border-gray-300 text-zbb transition hover:bg-zbb hover:text-white" title="Partner anlegen">
+            <button v-if="can('kooperationspartner.details.view') && can('kooperationspartner.store')" type="button" @click="openModalCreate" class="flex w-14 shrink-0 items-center justify-center border-r border-gray-300 text-zbb transition hover:bg-zbb hover:text-white" title="Partner anlegen">
                 <i
                     class="la la-plus"></i>
             </button>
@@ -611,11 +612,11 @@ const updatePartnerAPI = async (form) => {
                     <tr>
                         <th class="hidden w-16 border border-gray-300 px-3 py-3 text-center md:table-cell xl:px-6">ID</th>
                         <th class="w-[46%] border border-gray-300 px-3 py-3 xl:w-48 xl:px-6">Bezeichnung</th>
-                        <th class="border border-gray-300 px-3 py-3 xl:w-1/4 xl:px-6">Ansprechpartner <span class="normal-case xl:hidden">/ Details</span></th>
-                        <th class="hidden w-1/4 border border-gray-300 px-6 py-3 xl:table-cell">Adresse</th>
-                        <th class="hidden w-1/4 border border-gray-300 px-6 py-3 xl:table-cell">Kontakt</th>
-                        <th class="hidden w-1/4 border border-gray-300 px-6 py-3 xl:table-cell">Partnerschaftstypen</th>
-                        <th class="hidden w-40 border border-gray-300 px-6 py-3 xl:table-cell">Beschreibung</th>
+                        <th v-if="can('kooperationspartner.details.view')" class="border border-gray-300 px-3 py-3 xl:w-1/4 xl:px-6">Ansprechpartner <span class="normal-case xl:hidden">/ Details</span></th>
+                        <th v-if="can('kooperationspartner.details.view')" class="hidden w-1/4 border border-gray-300 px-6 py-3 xl:table-cell">Adresse</th>
+                        <th v-if="can('kooperationspartner.details.view')" class="hidden w-1/4 border border-gray-300 px-6 py-3 xl:table-cell">Kontakt</th>
+                        <th v-if="can('kooperationspartner.details.view')" class="hidden w-1/4 border border-gray-300 px-6 py-3 xl:table-cell">Partnerschaftstypen</th>
+                        <th v-if="can('kooperationspartner.details.view')" class="hidden w-40 border border-gray-300 px-6 py-3 xl:table-cell">Beschreibung</th>
                         <th class="w-12 border border-gray-300 px-2 py-3 text-center">*</th>
                     </tr>
                 </thead>
@@ -819,13 +820,9 @@ const updatePartnerAPI = async (form) => {
                                                             class="block px-4 py-1 hover:bg-gray-200">Anwesenheitsliste
                                                             Rechnung</a>
 
-                                                        <a v-if="can('dokumente.schule.export')" :href="route('export.zertifikat.schule.pobo', { idSchule: partner.id, schuljahr: jahr, teil })"
-                                                            class="block px-4 py-1 hover:bg-gray-200">Zertifikat
-                                                            POBO</a>
-
-                                                        <a v-if="can('dokumente.schule.export')" :href="route('export.zertifikat.schule.pobo.pdf', { schuleId: partner.id, schuljahr: jahr, teil })"
-                                                            class="block px-4 py-1 hover:bg-gray-200">Zertifikat
-                                                            POBO PDF</a>
+                                                        <button v-if="can('dokumente.schule.export')" type="button"
+                                                            @click="openModal('poboCertificates', { partnerId: partner.id, jahr, teil, schoolName: partner.name })"
+                                                            class="block w-full px-4 py-1 text-left hover:bg-gray-200">Zertifikate POBO</button>
 
                                                         <a v-if="can('dokumente.schule.export')" :href="route('export.auswertungBO.schule.pdf', { schulId: partner.id, schuljahr: String(jahr).replaceAll('/', '-'), teil })"
                                                             class="block px-4 py-1 hover:bg-gray-200">BO-Auswertungsbögen – alle Schüler (Original)</a>
@@ -850,13 +847,13 @@ const updatePartnerAPI = async (form) => {
 
                                 </div>
 
-                                <p v-if="partner.beschreibung" class="mt-3 break-words text-xs text-gray-500 xl:hidden">
+                                <p v-if="can('kooperationspartner.details.view') && partner.beschreibung" class="mt-3 break-words text-xs text-gray-500 xl:hidden">
                                     {{ partner.beschreibung }}
                                 </p>
                             </td>
 
                             <!-- Ansprechpartner -->
-                            <td class="min-w-0 border-r border-gray-300 px-3 py-4 align-top xl:px-6">
+                            <td v-if="can('kooperationspartner.details.view')" class="min-w-0 border-r border-gray-300 px-3 py-4 align-top xl:px-6">
                                 <div class="break-words font-medium text-gray-800">{{ person.vorname }} {{ person.nachname }}</div>
 
                                 <div class="mt-2 space-y-2 text-xs text-gray-500 xl:hidden">
@@ -877,7 +874,7 @@ const updatePartnerAPI = async (form) => {
                             </td>
 
                             <!-- Adresse -->
-                            <td class="hidden border-r border-gray-300 px-6 py-4 align-top xl:table-cell">
+                            <td v-if="can('kooperationspartner.details.view')" class="hidden border-r border-gray-300 px-6 py-4 align-top xl:table-cell">
                                 <div v-for="adresse in person.adresses" :key="adresse.id">
                                     {{ adresse.strasse }} {{ adresse.hausnummer }}<br>
                                     {{ adresse.plz }} {{ adresse.stadt }}
@@ -885,14 +882,14 @@ const updatePartnerAPI = async (form) => {
                             </td>
 
                             <!-- Kontakt -->
-                            <td class="hidden border-r border-gray-300 px-6 py-4 align-top xl:table-cell">
+                            <td v-if="can('kooperationspartner.details.view')" class="hidden border-r border-gray-300 px-6 py-4 align-top xl:table-cell">
                                 <div v-for="kontakt in person.kontaktes" :key="kontakt.id">
                                     {{ kontakt.kontakttyp?.name }}: {{ kontakt.wert }}
                                 </div>
                             </td>
 
                             <!-- Partnerschaftstyp -->
-                            <td class="hidden border-r border-gray-300 px-6 py-4 align-top xl:table-cell">
+                            <td v-if="can('kooperationspartner.details.view')" class="hidden border-r border-gray-300 px-6 py-4 align-top xl:table-cell">
                                 <div class="flex flex-wrap gap-1">
                                     <span v-for="typ in person.partner_typ" :key="typ.id"
                                         class="bg-orange-500 text-white rounded px-2 py-0.5 text-[10px] font-bold">
@@ -902,7 +899,7 @@ const updatePartnerAPI = async (form) => {
                             </td>
 
                             <!-- Beschreibung (nur einmal) -->
-                            <td v-if="index === 0" :rowspan="partner.ansprechpartners.length"
+                            <td v-if="index === 0 && can('kooperationspartner.details.view')" :rowspan="partner.ansprechpartners.length"
                                 class="hidden border-r border-gray-300 px-6 py-4 align-top xl:table-cell">
                                 {{ partner.beschreibung }}
                             </td>
@@ -910,7 +907,7 @@ const updatePartnerAPI = async (form) => {
                             <!-- Action (nur einmal) -->
                             <td v-if="index === 0" :rowspan="partner.ansprechpartners.length"
                                 class="align-middle py-4 text-center">
-                                <Dropdown align="right">
+                                <Dropdown v-if="can('kooperationspartner.details.view') && (can('kooperationspartner.update') || can('kooperationspartner.destroy'))" align="right">
                                     <template #trigger>
                                         <button
                                             type="button"
@@ -926,7 +923,7 @@ const updatePartnerAPI = async (form) => {
                                             <button
                                                 type="button"
                                                 class="flex w-full items-center gap-2 px-4 py-2 text-left hover:bg-gray-100"
-                                                @click="openModalEdit(partner)"
+                                                v-if="can('kooperationspartner.update')" @click="openModalEdit(partner)"
                                             >
                                                 <i class="la la-edit"></i>
                                                 <span>Bearbeiten</span>
@@ -934,7 +931,7 @@ const updatePartnerAPI = async (form) => {
                                             <button
                                                 type="button"
                                                 class="flex w-full items-center gap-2 px-4 py-2 text-left text-red-600 hover:bg-red-50"
-                                                @click="confirmDelete(partner)"
+                                                v-if="can('kooperationspartner.destroy')" @click="confirmDelete(partner)"
                                             >
                                                 <i class="la la-trash"></i>
                                                 <span>Löschen</span>
@@ -964,6 +961,7 @@ const updatePartnerAPI = async (form) => {
         <ModalBoTag1 v-if="activeModal === 'boTag1Config'" :visible="true" :anzahlBereiche="props.anzahlBereiche" :jahr="modalData.jahr" :teil="modalData.teil" :klassen="modalData.klassen" :teilnehmerCount="modalData.teilnehmerCount" :partnerId="modalData.partnerId" @close="closeModal" @submit="handleBoTag1" />
         <ModalHausordnung v-if="activeModal === 'hausordnungConfig'" :visible="true" :partnerId="modalData.partnerId" :jahr="modalData.jahr" :teil="modalData.teil" @close="closeModal"/>
         <ModalUsbStickBrief v-if="activeModal === 'usbStickBrief'" :partner-id="modalData.partnerId" :schuljahr="modalData.jahr" :school-name="modalData.schoolName" @close="closeModal" />
+        <ModalPoboCertificates v-if="activeModal === 'poboCertificates'" :partner-id="modalData.partnerId" :schuljahr="modalData.jahr" :teil="modalData.teil" :school-name="modalData.schoolName" @close="closeModal" />
         <BopRunPlanner
             v-if="activeModal === 'bopRunPlanner'"
             :visible="true"
