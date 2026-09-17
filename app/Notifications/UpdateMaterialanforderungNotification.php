@@ -32,6 +32,15 @@ class UpdateMaterialanforderungNotification extends Notification
             : route('materialanforderung.show', $this->anforderung->id);
 
         switch ($this->status) {
+            case 'gf_pruefung':
+                $message = "Materialanforderung #{$this->anforderung->id} wartet auf die Entscheidung der Geschäftsführung.";
+                break;
+            case 'gf_genehmigt':
+                $message = "{$actorName} hat Materialanforderung #{$this->anforderung->id} als Geschäftsführung freigegeben. Sie kann bestellt werden. Eine weitere kaufmännische Freigabe ist nicht erforderlich.";
+                break;
+            case 'abgelehnt':
+                $message = "{$actorName} hat Materialanforderung #{$this->anforderung->id} abgelehnt.";
+                break;
             case 'eingereicht':
                 $message = "{$actorName} hat die Materialanforderung #{$this->anforderung->id} eingereicht. Sie wartet auf Ihre sachliche Genehmigung.";
                 break;

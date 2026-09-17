@@ -9,6 +9,7 @@ const props = defineProps({
     canCreateRequest: { type: Boolean, default: false },
     canOpenRequest: { type: Boolean, default: false },
     hasActiveProject: { type: Boolean, default: false },
+    canManageRules: Boolean,
 })
 
 const search = ref(props.filters.search || '')
@@ -17,6 +18,9 @@ const projectFilter = ref('alle')
 const yearFilter = ref('alle')
 const costCenterFilter = ref('alle')
 const statusMeta = {
+    gf_pruefung: ['Wartet auf Geschäftsführung', 'bg-amber-100 text-amber-900'],
+    gf_genehmigt: ['Durch Geschäftsführung freigegeben', 'bg-emerald-100 text-emerald-900'],
+    abgelehnt: ['Abgelehnt', 'bg-red-100 text-red-800'],
     entwurf: ['Entwurf', 'bg-gray-100 text-gray-700'],
     eingereicht: ['Eingereicht', 'bg-blue-100 text-blue-700'],
     sachlich_genehmigt: ['Sachlich genehmigt', 'bg-violet-100 text-violet-700'],
@@ -88,8 +92,8 @@ const contextLabel = computed(() => {
     if (costCenterFilter.value !== 'alle') labels.push(`Kostenstelle ${costCenterFilter.value}`)
     return labels.join(' · ') || 'Alle Anforderungen'
 })
-const openCount = computed(() => contextRequests.value.filter((item) => !['geliefert', 'storniert'].includes(item.status)).length)
-const approvalCount = computed(() => contextRequests.value.filter((item) => ['eingereicht', 'sachlich_genehmigt'].includes(item.status)).length)
+const openCount = computed(() => contextRequests.value.filter((item) => !['geliefert', 'storniert', 'abgelehnt'].includes(item.status)).length)
+const approvalCount = computed(() => contextRequests.value.filter((item) => ['eingereicht', 'sachlich_genehmigt', 'gf_pruefung'].includes(item.status)).length)
 const total = computed(() => contextRequests.value.reduce((sum, item) => sum + Number(item.endsumme || 0), 0))
 
 function resetContextFilters() {
@@ -121,6 +125,7 @@ function yearOf(value) {
     <Head title="Materialanforderungen" />
     <AppLayout>
         <template #header>Materialanforderungen</template>
+        <div v-if="canManageRules" class="mb-4 flex justify-end"><Link :href="route('materialanforderung.settings')" class="rounded border bg-white px-4 py-2 text-sm font-semibold">Freigaberegeln</Link></div>
 
         <div class="space-y-5">
             <div v-if="!hasActiveProject" class="rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
@@ -220,7 +225,7 @@ function yearOf(value) {
                         </thead>
                         <tbody class="divide-y divide-gray-100">
                             <tr v-for="item in filtered" :key="item.id" class="transition hover:bg-orange-50/40">
-                                <td class="px-4 py-3 font-semibold">#{{ item.id }}</td>
+                                <td class="px-4 py-3 font-semibold">#{{ item.bestellnummer || item.id }}</td>
                                 <td class="px-4 py-3"><span class="inline-flex max-w-[220px] items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700"><i class="las la-folder text-orange-500"></i><span class="truncate">{{ item.projekt?.name || 'Ohne Projekt' }}</span></span></td>
                                 <td class="px-4 py-3">{{ date(item.created_at) }}</td>
                                 <td class="px-4 py-3">{{ item.besteller?.name || '–' }}</td>
@@ -239,7 +244,7 @@ function yearOf(value) {
                     <article v-for="item in filtered" :key="item.id" class="p-4">
                         <div class="mb-3 flex items-center gap-1.5 text-xs font-semibold text-slate-600"><i class="las la-folder text-orange-500"></i>{{ item.projekt?.name || 'Ohne Projekt' }}</div>
                         <div class="flex items-start justify-between gap-3">
-                            <div><p class="font-bold text-gray-900">Materialanforderung #{{ item.id }}</p><p class="text-sm text-gray-500">{{ item.besteller?.name || '–' }} · {{ date(item.created_at) }}</p><span v-if="item.von_mir_bearbeitet" class="mt-1 inline-block rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">Von mir bearbeitet</span></div>
+                            <div><p class="font-bold text-gray-900">Materialanforderung #{{ item.bestellnummer || item.id }}</p><p class="text-sm text-gray-500">{{ item.besteller?.name || '–' }} · {{ date(item.created_at) }}</p><span v-if="item.von_mir_bearbeitet" class="mt-1 inline-block rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">Von mir bearbeitet</span></div>
                             <span class="shrink-0 rounded-full px-2 py-1 text-xs font-semibold" :class="statusMeta[item.status]?.[1]">{{ statusMeta[item.status]?.[0] || item.status }}</span>
                         </div>
                         <div class="mt-3 grid grid-cols-2 gap-3 text-sm"><div><span class="block text-xs text-gray-500">Kostenstelle</span>{{ item.kostenstelle }}</div><div><span class="block text-xs text-gray-500">Benötigt am</span>{{ date(item.benoetigt_am) }}</div><div><span class="block text-xs text-gray-500">Endsumme</span><strong>{{ euro(item.endsumme) }}</strong></div><div class="self-end text-right"><Link v-if="canOpenRequest" :href="route('materialanforderung.show', item.id)" class="inline-block rounded-lg bg-gray-900 px-3 py-2 font-semibold text-white">Öffnen</Link></div></div>

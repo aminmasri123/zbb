@@ -117,7 +117,10 @@ class ProjektBopController extends Controller
 
     private function settingFor(int $projektId, int $partnerId, string $schuljahr, string $teil, ?Projekt $projekt = null): BereichsauswahlSetting
     {
-        $setting = BereichsauswahlSetting::firstOrCreate(
+        $setting = BereichsauswahlSetting::query()
+            ->forContext($projektId, $partnerId, $schuljahr, $teil)
+            ->preferConfigured()
+            ->first() ?? BereichsauswahlSetting::firstOrCreate(
             [
                 'projekt_id' => $projektId,
                 'partner_id' => $partnerId,
@@ -209,6 +212,12 @@ class ProjektBopController extends Controller
         $data = $request->validate([
             'choices' => ['required', 'array', 'size:' . $setting->auswahl_anzahl],
             'choices.*' => ['required', 'integer'],
+        ], [
+            'choices.required' => 'Bitte wählen Sie die vorgegebenen Bereiche aus.',
+            'choices.array' => 'Bitte wählen Sie die vorgegebenen Bereiche aus.',
+            'choices.size' => 'Bitte wählen Sie genau ' . $setting->auswahl_anzahl . ' Bereiche aus.',
+            'choices.*.required' => 'Bitte wählen Sie in jedem Wahlfeld einen Bereich aus.',
+            'choices.*.integer' => 'Die Bereichsauswahl ist ungültig.',
         ]);
 
         $choices = collect($data['choices'])->map(fn ($id) => (int) $id)->values();
@@ -252,7 +261,7 @@ class ProjektBopController extends Controller
     {
         return PersonenIstSchueler::with(['person', 'bereichsauswahl'])
             ->where('schule_id', $setting->partner_id)
-            ->where('schuljahr', $setting->schuljahr)
+            ->forSchuljahr($setting->schuljahr)
             ->where('teil', $setting->teil)
             ->whereHas('bereichsauswahl', fn ($query) => $query->where('access_code', $code))
             ->first();

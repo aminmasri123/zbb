@@ -215,17 +215,11 @@ class MaterialanforderungWorkflowTest extends TestCase
 
         $this->actingAs($buyer)
             ->put(route('materialanforderung.genehmigen', [$anforderung->id, 'bestellt']))
-            ->assertSessionHasErrors('bestellnummer');
-
-        $this->actingAs($buyer)
-            ->put(route('materialanforderung.genehmigen', [$anforderung->id, 'bestellt']), ['bestellnummer' => 'B-2026-15'])
-            ->assertRedirect();
+            ->assertRedirect()->assertSessionHasNoErrors();
 
         $this->assertSame('bestellt', $anforderung->fresh()->status);
-        $this->assertDatabaseHas('materialanforderung_vergabevermerks', [
-            'anforderung_id' => $anforderung->id,
-            'bestellnummer' => 'B-2026-15',
-        ]);
+        $this->assertMatchesRegularExpression('/^\d+\/\d{4}$/', $anforderung->fresh()->bestellnummer);
+        $this->assertDatabaseHas('purchase_numbers', ['request_id' => $anforderung->id, 'number' => $anforderung->fresh()->bestellnummer]);
 
         $this->actingAs($buyer)
             ->put(route('materialanforderung.genehmigen', [$anforderung->id, 'teilweise_geliefert']), [

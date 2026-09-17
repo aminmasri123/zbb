@@ -182,9 +182,17 @@
 <body>
 @php
     $vergabe = $anforderung->vergabevermerk;
-    $sachlich = $anforderung->genehmigungen->firstWhere('status', 'sachlich_genehmigt');
-    $kaufmaennisch = $anforderung->genehmigungen->firstWhere('status', 'kaufmaennisch_genehmigt');
-    $status = str_replace('_', ' ', $anforderung->status);
+    $isService = $vergabe?->lieferung_art === 'Dienstleistung';
+    $roundStart = $anforderung->genehmigungen->whereIn('status', ['eingereicht', 'zur_ueberarbeitung', 'zurueckgezogen'])->max('id') ?? 0;
+    $approvals = $anforderung->genehmigungen->where('id', '>', $roundStart)->sortByDesc('id');
+    $sachlich = $approvals->firstWhere('status', 'sachlich_genehmigt');
+    $gfRequired = (bool) ($anforderung->approval_policy['gf_required'] ?? false);
+    $finalApproval = $approvals->firstWhere('status', $gfRequired ? 'gf_genehmigt' : 'kaufmaennisch_genehmigt');
+    $status = match ($anforderung->status) {
+        'gf_pruefung' => 'Wartet auf Geschäftsführung',
+        'gf_genehmigt' => 'Durch Geschäftsführung freigegeben',
+        default => str_replace('_', ' ', $anforderung->status),
+    };
     $labels = [
         'nur_ein_anbieter' => 'Es existiert nur ein Anbieter',
         'besondere_gruende' => 'Aufgrund besonderer Gründe',
@@ -218,7 +226,7 @@
     <tr>
         <td><span class="label">Benötigt am</span><span class="value">{{ $anforderung->benoetigt_am?->format('d.m.Y') ?: '-' }}</span></td>
         <td><span class="label">Priorität</span><span class="value {{ $anforderung->prioritaet === 'dringend' ? 'priority-high' : '' }}">{{ ucfirst($anforderung->prioritaet ?? 'normal') }}</span></td>
-        <td colspan="2"><span class="label">Bestellnummer</span><span class="value">{{ $vergabe?->bestellnummer ?: 'Noch nicht vergeben' }}</span></td>
+        <td colspan="2"><span class="label">Bestellnummer</span><span class="value">{{ $anforderung->bestellnummer ?? $vergabe?->bestellnummer ?: 'Noch nicht vergeben' }}</span></td>
     </tr>
 </table>
 
@@ -235,9 +243,9 @@
                 <th style="width:36%">Artikel</th>
                 <th style="width:7%;text-align:right">Stück</th>
                 <th style="width:15%">Art.-Nr.</th>
-                <th style="width:13%;text-align:right">Einzelpreis</th>
+                <th style="width:13%;text-align:right">Einzelpreis {{ $anforderung->preisart === 'brutto' ? 'brutto' : 'netto' }}</th>
                 <th style="width:9%;text-align:right">MwSt.</th>
-                <th style="width:15%;text-align:right">Gesamt</th>
+                <th style="width:15%;text-align:right">Gesamt {{ $anforderung->preisart === 'brutto' ? 'brutto' : 'netto' }}</th>
             </tr>
         </thead>
         <tbody>
@@ -257,9 +265,9 @@
                     @endif
                 </td>
                 <td class="article-number">{{ wordwrap((string) ($artikel->art_nr ?: '-'), 15, "\n", true) }}</td>
-                <td class="number">{{ number_format($artikel->einzelpreis, 2, ',', '.') }} €</td>
+                <td class="number">{{ number_format(($anforderung->preisart === 'brutto' ? $artikel->einzelpreis_brutto : $artikel->einzelpreis), 2, ',', '.') }} €</td>
                 <td class="number">{{ number_format($artikel->mwst, 0, ',', '.') }} %</td>
-                <td class="number"><strong>{{ number_format($artikel->gesamtpreis, 2, ',', '.') }} €</strong></td>
+                <td class="number"><strong>{{ number_format(($anforderung->preisart === 'brutto' ? $artikel->gesamtMitMwst() : $artikel->gesamtpreis), 2, ',', '.') }} €</strong></td>
             </tr>
         @endforeach
         </tbody>
@@ -270,7 +278,8 @@
             <td class="summary-spacer"></td>
             <td class="summary">
                 <table>
-                    <tr><td>Summe netto</td><td class="amount">{{ number_format($anforderung->gesamtpreis, 2, ',', '.') }} €</td></tr>
+                    <tr><td>{{ $isService ? 'Nebenkosten netto (enthalten)' : 'Versand netto (enthalten)' }}</td><td class="amount">{{ number_format($anforderung->versand_netto, 2, ',', '.') }} €</td></tr>
+                    <tr><td>Summe netto inkl. {{ $isService ? 'Nebenkosten' : 'Versand' }}</td><td class="amount">{{ number_format($anforderung->gesamtpreis, 2, ',', '.') }} €</td></tr>
                     <tr><td>Mehrwertsteuer</td><td class="amount">{{ number_format($anforderung->endsumme - $anforderung->gesamtpreis, 2, ',', '.') }} €</td></tr>
                     <tr class="grand"><td>Endsumme</td><td class="amount">{{ number_format($anforderung->endsumme, 2, ',', '.') }} €</td></tr>
                 </table>
@@ -286,8 +295,8 @@
             <td colspan="2" class="wide"><span class="label">Kurzbeschreibung von Art und Umfang der Leistung</span><div class="text">{{ $vergabe?->kurzbeschreibung ?: '-' }}</div></td>
         </tr>
         <tr>
-            <td><span class="label">Art der Leistung</span><span class="value">{{ $vergabe?->lieferung_art ?: 'Lieferleistung' }}</span></td>
-            <td><span class="label">Lieferart</span><span class="value">{{ $vergabe?->lieferung_option ?: 'per Lieferung' }}</span></td>
+            <td colspan="{{ $isService ? 2 : 1 }}"><span class="label">Art der Leistung</span><span class="value">{{ $vergabe?->lieferung_art ?: 'Lieferleistung' }}</span></td>
+            @unless($isService)<td><span class="label">Lieferart</span><span class="value">{{ $vergabe?->lieferung_option ?: 'per Lieferung' }}</span></td>@endunless
         </tr>
         <tr>
             <td colspan="2" class="wide">
@@ -306,8 +315,11 @@
             </td>
         </tr>
         <tr>
-            <td><span class="label">Lieferant</span><div class="text">{{ $vergabe?->lieferant ?: '-' }}</div></td>
-            <td><span class="label">Lieferadresse</span><div class="text">{{ $vergabe?->lieferadresse ?: '-' }}</div></td>
+            <td><span class="label">Lieferant / Dienstleister</span><div class="text">{{ $vergabe?->lieferant ?: '-' }}</div></td>
+            <td><span class="label">{{ $isService ? 'Leistungsort' : 'Lieferadresse' }}</span><div class="text">{{ ($isService ? $vergabe?->leistungsort : ($vergabe?->lieferung_option === 'per Lieferung' ? $vergabe?->lieferadresse : null)) ?: '-' }}</div></td>
+        </tr>
+        <tr>
+            <td colspan="2"><span class="label">Anschrift des Lieferanten / Dienstleisters</span><div class="text">{{ $anforderung->lieferant_adresse ?: '-' }}</div></td>
         </tr>
     </table>
 </div>
@@ -329,10 +341,11 @@
             </div>
         </td>
         <td>
-            <div class="approval-card {{ $kaufmaennisch ? '' : 'approval-open' }}">
-                <span class="label">Kaufmännische Genehmigung</span>
-                <div class="approval-name">{{ $kaufmaennisch?->genehmiger?->name ?: 'Noch offen' }}</div>
-                @if($kaufmaennisch)<div class="approval-date">Genehmigt am {{ $kaufmaennisch->created_at?->format('d.m.Y H:i') }}</div>@endif
+            <div class="approval-card {{ $finalApproval ? '' : 'approval-open' }}">
+                <span class="label">{{ $gfRequired ? 'Geschäftsführung' : 'Kaufmännische Genehmigung' }}</span>
+                <div class="approval-name">{{ $finalApproval?->genehmiger?->name ?: 'Noch offen' }}</div>
+                @if($finalApproval)<div class="approval-date">Genehmigt am {{ $finalApproval->created_at?->format('d.m.Y H:i') }}</div>@endif
+                @if($gfRequired && $finalApproval)<div class="approval-date">Abschließend freigegeben. Kaufmännische Leitung informiert.</div>@endif
             </div>
         </td>
     </tr>

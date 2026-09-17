@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
 
        $this->call([
             UserSeeder::class,
+            PurchaseWorkflowPermissionSeeder::class,
             DienstwagenSeeder::class,
             DokumenteSeeder::class,
             TageSeeder::class,

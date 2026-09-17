@@ -17,6 +17,20 @@ class NotificationRecipientService
 {
     public function forMaterialanforderung(Materialanforderung $anforderung, string $status, ?User $actor = null): Collection
     {
+        // Director decisions must always inform purchasing and commercial management.
+        if ($status === 'gf_pruefung') {
+            return $this->withoutActor(app(\App\Services\Purchasing\PurchaseWorkflow::class)->directors(), $actor);
+        }
+        if ($status === 'gf_genehmigt') {
+            return $this->uniqueUsers(
+                $this->usersWithPermission('materialanforderung.kaufmännische_freigabe.index')
+                    ->merge($this->usersWithPermission('materialanforderung.kaufmännische_freigabe.update'))
+                    ->merge($this->usersWithPermission('materialanforderung.bestellwesen.update'))
+                    ->merge($this->creatorOfMaterialanforderung($anforderung))
+            );
+        }
+        if ($status === 'abgelehnt') return $this->creatorOfMaterialanforderung($anforderung);
+
         $eventKey = $status === 'storniert'
             ? 'materialanforderung.stornieren'
             : 'materialanforderung.' . $status;

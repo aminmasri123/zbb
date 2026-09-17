@@ -17,6 +17,7 @@ class MaterialanforderungVergabevermerk extends Model
         'lieferant',
         'lieferung_option',
         'lieferadresse',
+        'leistungsort',
         'bestellnummer',
     ];
 

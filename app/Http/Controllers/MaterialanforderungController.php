@@ -6,6 +6,12 @@ use App\Models\Materialanforderung;
 use App\Models\MaterialanforderungGenehmigung;
 use App\Models\MaterialanforderungLoeschprotokoll;
 use App\Models\Projekt;
+use App\Models\Standort;
+use App\Models\PurchaseRule;
+use App\Services\Purchasing\PurchaseWorkflow;
+use App\Services\Purchasing\PurchaseOrderExport;
+use App\Services\Purchasing\PurchaseOfferWriter;
+use Illuminate\Support\Facades\Storage;
 use App\Notifications\UpdateMaterialanforderungNotification;
 use App\Services\NotificationRecipientService;
 use App\Services\Projects\ActiveProjectContext;
@@ -22,16 +28,18 @@ class MaterialanforderungController extends Controller
     public function __construct(
         private readonly NotificationRecipientService $notificationRecipients,
         private readonly ActiveProjectContext $activeProjectContext,
+        private readonly PurchaseWorkflow $purchasing,
     ) {
     }
 
     public function index(Request $request)
     {
         $user = $request->user();
+        abort_unless($this->canOpenMaterialRequest($user) || $user->can('materialanforderung.index') || $user->can('materialanforderung.settings.manage'), 403);
         $search = trim((string) $request->input('search', ''));
         $activeProject = $this->activeProjectContext->currentAvailableFor($user);
 
-        $query = Materialanforderung::with(['projekt', 'besteller.person', 'artikeln', 'vergabevermerk'])
+        $query = Materialanforderung::with(['projekt', 'standort', 'besteller.person', 'artikeln', 'vergabevermerk'])
             ->withExists([
                 'genehmigungen as von_mir_bearbeitet' => fn ($approval) =>
                     $approval->where('genehmiger_id', $user->id),
@@ -40,6 +48,7 @@ class MaterialanforderungController extends Controller
         if ($search !== '') {
             $query->where(function ($searchQuery) use ($search) {
                 $searchQuery->where('materialanforderungs.id', 'like', "%{$search}%")
+                    ->orWhere('materialanforderungs.bestellnummer', 'like', "%{$search}%")
                     ->orWhere('materialanforderungs.bemerkungen', 'like', "%{$search}%")
                     ->orWhere('materialanforderungs.kostenstelle', 'like', "%{$search}%")
                     ->orWhereHas('projekt', fn ($projekt) => $projekt->where('name', 'like', "%{$search}%"))
@@ -57,6 +66,10 @@ class MaterialanforderungController extends Controller
                     $own->where('projekt_id', $currentProjectId);
                 }
             });
+
+            if ($this->purchasing->isDirector($user)) {
+                $visibility->orWhereIn('status', ['gf_pruefung', 'gf_genehmigt']);
+            }
 
             // Anyone who took part in the approval keeps permanent read access.
             $visibility->orWhereHas('genehmigungen', fn ($approval) =>
@@ -84,6 +97,7 @@ class MaterialanforderungController extends Controller
         return Inertia::render('Bestellungen/Materialanforderung/Index', [
             'anforderungen' => $query->latest()->get(),
             'filters' => ['search' => $search],
+            'canManageRules' => $user->can('materialanforderung.settings.manage'),
             'canCreateRequest' => $user->can('materialanforderung.create')
                 && $activeProject !== null,
             'canOpenRequest' => $this->canOpenMaterialRequest($user),
@@ -100,41 +114,77 @@ class MaterialanforderungController extends Controller
             'user' => $request->user()->person,
             'projekt' => $projekt,
             'kostenstellen' => $this->kostenstellen($projekt),
+            'standorte' => Standort::orderBy('name')->get(['id', 'name']),
+            'purchaseRules' => PurchaseRule::current(),
+            'offerUploadLimits' => PurchaseOfferWriter::uploadLimits(),
         ]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, PurchaseOfferWriter $offerWriter)
     {
         $projekt = $this->activeProjectContext->currentAvailableFor($request->user());
         abort_unless($projekt, 409, 'Zum Anlegen einer Materialanforderung muss ein Projekt zugewiesen und ausgewählt sein.');
-        $data = $request->validate($this->requestRules($projekt));
+        $rules = $this->requestRules($projekt) + [
+            'angebote' => ['nullable', 'array', 'list', 'max:'.PurchaseOfferWriter::uploadLimits()['max_offers']],
+            'angebote.*' => ['required', 'array'],
+            'positionen.*.client_key' => ['required_with:angebote', 'nullable', 'string', 'max:64', 'distinct'],
+        ];
+        foreach (array_slice((array) $request->input('angebote', []), 0, PurchaseOfferWriter::uploadLimits()['max_offers'], true) as $index => $offer) {
+            $rules += PurchaseOfferWriter::rules('angebote.'.$index.'.', 'position_key');
+        }
+        $data = $this->purchasing->normalizePrices($request->validate($rules));
 
-        $anforderung = DB::transaction(function () use ($request, $projekt, $data) {
-            [$netto, $brutto] = $this->calculateTotals($data['positionen']);
+        $paths = [];
+        try {
+            $anforderung = DB::transaction(function () use ($request, $projekt, $data, $offerWriter, &$paths) {
+                [$netto, $brutto] = $this->calculateTotals($data['positionen'], $data['versand_netto'] ?? 0, $data['versand_mwst'] ?? 19, $data['versand_brutto']);
 
-            $anforderung = Materialanforderung::create([
-                'projekt_id' => $projekt->id,
-                'kostenstelle' => $data['kostenstelle'],
-                'benoetigt_am' => $data['benoetigt_am'] ?? null,
-                'prioritaet' => $data['prioritaet'],
-                'ersteller_id' => $request->user()->id,
-                'bemerkungen' => $data['bemerkungen'] ?? null,
-                'gesamtpreis' => $netto,
-                'endsumme' => $brutto,
-                'status' => 'entwurf',
-            ]);
+                $anforderung = Materialanforderung::create([
+                    'projekt_id' => $projekt->id,
+                    'standort_id' => $data['standort_id'] ?? null,
+                    'preisart' => $data['preisart'], 'versand_brutto' => $data['versand_brutto'],
+                    'versand_netto' => $data['versand_netto'] ?? 0, 'versand_mwst' => $data['versand_mwst'] ?? 19,
+                    'lieferant_adresse' => $data['lieferant_adresse'] ?? null,
+                    'lieferantenreferenz' => $data['lieferantenreferenz'] ?? null,
+                    'kostenstelle' => $data['kostenstelle'],
+                    'benoetigt_am' => $data['benoetigt_am'] ?? null,
+                    'prioritaet' => $data['prioritaet'],
+                    'ersteller_id' => $request->user()->id,
+                    'bemerkungen' => $data['bemerkungen'] ?? null,
+                    'gesamtpreis' => $netto,
+                    'endsumme' => $brutto,
+                    'status' => 'entwurf',
+                ]);
 
-            foreach ($data['positionen'] as $position) {
-                $anforderung->artikeln()->create($this->positionValues($position));
-            }
+                $itemIds = [];
+                foreach ($data['positionen'] as $position) {
+                    $item = $anforderung->artikeln()->create($this->positionValues($position));
+                    if (isset($position['client_key'])) $itemIds[$position['client_key']] = $item->id;
+                }
 
-            $anforderung->vergabevermerk()->create($this->vergabeValues($data['vergabe'] ?? []));
+                $anforderung->vergabevermerk()->create($this->vergabeValues($data['vergabe'] ?? []));
+                $this->purchasing->number($anforderung);
+                $anforderung->refresh();
+                foreach ($data['angebote'] ?? [] as $index => $offer) {
+                    foreach ($offer['positionen'] as &$line) {
+                        if (!isset($itemIds[$line['position_key']])) {
+                            throw ValidationException::withMessages(['angebote.'.$index.'.positionen' => 'Eine Angebotsposition passt nicht mehr zum Bedarf. Bitte die Positionen prüfen.']);
+                        }
+                        $line['id'] = $itemIds[$line['position_key']];
+                    }
+                    unset($line);
+                    $offerWriter->store($anforderung, $offer, $request->file('angebote.'.$index.'.datei'), (int) $request->user()->id, $paths, 'angebote.'.$index.'.');
+                }
 
-            return $anforderung;
-        });
+                return $anforderung;
+            });
+        } catch (\Throwable $e) {
+            foreach ($paths as $path) Storage::disk('local')->delete($path);
+            throw $e;
+        }
 
         return redirect()->route('materialanforderung.show', $anforderung)
-            ->with('success', 'Materialanforderung wurde als Entwurf gespeichert.');
+            ->with('success', empty($data['angebote']) ? 'Materialanforderung wurde als Entwurf gespeichert.' : 'Materialanforderung und Angebote wurden gemeinsam als Entwurf gespeichert.');
     }
 
     public function update(Request $request)
@@ -147,9 +197,15 @@ class MaterialanforderungController extends Controller
         $payload = $request->all();
         $payload['positionen'] = $payload['positionen'] ?? $payload['artikeln'] ?? [];
         $request->replace($payload);
-        $data = $request->validate($this->requestRules($anforderung->projekt, true));
+        $data = $this->purchasing->normalizePrices($request->validate($this->requestRules($anforderung->projekt, true)));
 
-        DB::transaction(function () use ($anforderung, $data) {
+        DB::transaction(function () use ($request, $anforderung, $data) {
+            $anforderung = Materialanforderung::whereKey($anforderung->id)->lockForUpdate()->firstOrFail();
+            abort_unless(in_array($anforderung->status, ['entwurf', 'zur_ueberarbeitung'], true), 403);
+            if (isset($data['revision']) && (int) $data['revision'] !== $anforderung->revision) {
+                throw ValidationException::withMessages(['revision' => 'Die Materialanforderung wurde zwischenzeitlich geändert. Bitte neu laden.']);
+            }
+            $before = $this->purchasing->contentHash($anforderung);
             $keptIds = collect($data['positionen'])->pluck('id')->filter()->map(fn ($id) => (int) $id);
             $anforderung->artikeln()->whereNotIn('id', $keptIds)->delete();
 
@@ -159,8 +215,13 @@ class MaterialanforderungController extends Controller
                 $existing ? $existing->update($values) : $anforderung->artikeln()->create($values);
             }
 
-            [$netto, $brutto] = $this->calculateTotals($data['positionen']);
+            [$netto, $brutto] = $this->calculateTotals($data['positionen'], $data['versand_netto'] ?? 0, $data['versand_mwst'] ?? 19, $data['versand_brutto']);
             $anforderung->update([
+                'standort_id' => $data['standort_id'] ?? null,
+                'preisart' => $data['preisart'], 'versand_brutto' => $data['versand_brutto'],
+                'versand_netto' => $data['versand_netto'] ?? 0, 'versand_mwst' => $data['versand_mwst'] ?? 19,
+                'lieferant_adresse' => $data['lieferant_adresse'] ?? null,
+                'lieferantenreferenz' => $data['lieferantenreferenz'] ?? null,
                 'kostenstelle' => $data['kostenstelle'],
                 'benoetigt_am' => $data['benoetigt_am'] ?? null,
                 'prioritaet' => $data['prioritaet'],
@@ -173,6 +234,9 @@ class MaterialanforderungController extends Controller
                 ['anforderung_id' => $anforderung->id],
                 $this->vergabeValues($data['vergabe'] ?? [])
             );
+            if ($before !== $this->purchasing->contentHash($anforderung->fresh())) {
+                $anforderung->update(['revision' => $anforderung->revision + 1, 'approval_policy' => null, 'selected_offer_id' => null]);
+            }
         });
 
         return back()->with('success', 'Materialanforderung wurde aktualisiert.');
@@ -231,7 +295,7 @@ class MaterialanforderungController extends Controller
                     'ersteller_id' => $materialanforderung->ersteller_id,
                     'geloescht_von_id' => $request->user()->id,
                     'status' => $materialanforderung->status,
-                    'bestellnummer' => $materialanforderung->vergabevermerk?->bestellnummer,
+                    'bestellnummer' => $materialanforderung->bestellnummer ?? $materialanforderung->vergabevermerk?->bestellnummer,
                     'endsumme' => $materialanforderung->endsumme,
                     'begruendung' => $data['begruendung'],
                     'snapshot' => $this->deletionSnapshot($materialanforderung),
@@ -253,7 +317,7 @@ class MaterialanforderungController extends Controller
 
     public function show(Request $request, $id)
     {
-        $anforderung = Materialanforderung::with(['projekt', 'besteller.person', 'artikeln', 'vergabevermerk'])
+        $anforderung = Materialanforderung::with(['projekt', 'standort', 'angebote', 'besteller.person', 'artikeln', 'vergabevermerk'])
             ->findOrFail($id);
         abort_unless($this->mayView($request->user(), $anforderung), 403);
 
@@ -280,6 +344,10 @@ class MaterialanforderungController extends Controller
 
         return Inertia::render('Bestellungen/Materialanforderung/Show', [
             'anforderung' => $anforderung,
+            'standorte' => Standort::orderBy('name')->get(['id', 'name']),
+            'purchaseRules' => PurchaseRule::current(),
+            'approval' => $this->purchasing->summary($anforderung),
+            'canConfirmDirector' => $this->purchasing->isDirector($request->user()),
             'kostenstellen' => $this->kostenstellen($anforderung->projekt),
             'canConfirmSachlich' => $request->user()->can('materialanforderung.sachlische_freigabe.update')
                 && $this->isAssignedToProject($request->user(), $anforderung->projekt_id),
@@ -306,14 +374,41 @@ class MaterialanforderungController extends Controller
     public function genehmigen(Request $request, $id, $status)
     {
         abort_unless(in_array($status, [
-            'eingereicht', 'sachlich_genehmigt', 'kaufmaennisch_genehmigt',
+            'eingereicht', 'sachlich_genehmigt', 'kaufmaennisch_genehmigt', 'gf_pruefung', 'gf_genehmigt', 'abgelehnt',
             'zur_ueberarbeitung', 'zurueckgezogen', 'storniert', 'bestellt', 'teilweise_geliefert', 'geliefert',
         ], true), 422, 'Ungültiger Status.');
 
-        $anforderung = DB::transaction(function () use ($request, $id, $status) {
+        $anforderung = DB::transaction(function () use ($request, $id, &$status) {
             $anforderung = Materialanforderung::with(['artikeln', 'vergabevermerk'])->whereKey($id)->lockForUpdate()->firstOrFail();
             $this->authorizeTransition($request->user(), $anforderung, $status);
 
+            if ($status === 'eingereicht') {
+                if (!$anforderung->standort_id) throw ValidationException::withMessages(['standort_id' => 'Bitte wählen Sie den zuständigen Standort aus.']);
+                $policy = $this->purchasing->evaluate($anforderung);
+                $this->purchasing->requireOffers($anforderung, $policy);
+                $anforderung->update(['approval_policy' => $policy, 'selected_offer_id' => null]);
+            }
+            if ($status === 'sachlich_genehmigt' && ($anforderung->approval_policy['gf_required'] ?? false)) {
+                MaterialanforderungGenehmigung::create(['anforderung_id' => $anforderung->id,
+                    'genehmiger_id' => $request->user()->id, 'status' => 'sachlich_genehmigt', 'kommentar' => $request->input('anmerkung')]);
+                $status = 'gf_pruefung';
+            } elseif ($status === 'gf_pruefung') {
+                $request->validate(['anmerkung' => ['required', 'string', 'max:2000']]);
+                $policy = $anforderung->approval_policy ?: $this->purchasing->evaluate($anforderung);
+                $policy['gf_required'] = true;
+                $policy['reasons'][] = 'Manuelle Weiterleitung durch die kaufmännische Leitung';
+                $anforderung->update(['approval_policy' => $policy]);
+            }
+            if ($status === 'gf_genehmigt') {
+                $this->purchasing->requireOffers($anforderung, $anforderung->approval_policy ?? []);
+                if ($anforderung->angebote()->where('revision', $anforderung->revision)->exists()) {
+                    $data = $request->validate(['angebot_id' => ['required', 'integer'], 'anmerkung' => ['required', 'string', 'max:2000']]);
+                    $this->purchasing->selectOffer($anforderung, (int) $data['angebot_id']);
+                }
+            }
+            if ($status === 'bestellt' && $anforderung->selected_offer_id) {
+                $this->purchasing->requireOffers($anforderung, $anforderung->approval_policy ?? [], $anforderung->angebote()->findOrFail($anforderung->selected_offer_id));
+            }
             if ($status === 'bestellt' && $anforderung->kommentare()
                 ->where('antwort_erforderlich', true)
                 ->whereNull('geklaert_am')
@@ -323,16 +418,20 @@ class MaterialanforderungController extends Controller
                 ]);
             }
 
-            if (in_array($status, ['zur_ueberarbeitung', 'zurueckgezogen', 'storniert'], true)) {
+            if (in_array($status, ['zur_ueberarbeitung', 'zurueckgezogen', 'storniert', 'abgelehnt'], true)) {
                 $request->validate(['anmerkung' => ['required', 'string', 'max:2000']]);
             }
 
             if ($status === 'bestellt') {
-                $data = $request->validate(['bestellnummer' => ['required', 'string', 'max:100']]);
-                $anforderung->vergabevermerk()->updateOrCreate(
-                    ['anforderung_id' => $anforderung->id],
-                    ['bestellnummer' => $data['bestellnummer']]
-                );
+                if (isset($anforderung->approval_policy['rule_id']) &&
+                    (!$anforderung->vergabevermerk?->lieferant || !$anforderung->lieferant_adresse ||
+                    ($anforderung->vergabevermerk?->lieferung_art !== 'Dienstleistung' && $anforderung->vergabevermerk?->lieferung_option === 'per Lieferung' && !$anforderung->vergabevermerk?->lieferadresse))) {
+                    throw ValidationException::withMessages(['status' => 'Für die Bestellung fehlen der Anbieter, seine Anschrift oder bei Lieferung die Lieferanschrift. Bitte zur Überarbeitung zurückgeben.']);
+                }
+                $this->purchasing->number($anforderung);
+                $anforderung->refresh();
+                $anforderung->update(['bestellt_am' => now()]);
+                $anforderung->update(['order_snapshot' => app(PurchaseOrderExport::class)->snapshot($anforderung, $request->user())]);
             }
 
             if ($status === 'teilweise_geliefert') {
@@ -425,11 +524,27 @@ class MaterialanforderungController extends Controller
             ->download('Materialanforderung-' . $materialanforderung->id . '.pdf');
     }
 
+    public function exportOrder(Request $request, Materialanforderung $materialanforderung, string $format, PurchaseOrderExport $export)
+    {
+        abort_unless($this->mayView($request->user(), $materialanforderung), 403);
+        abort_unless(in_array($format, ['pdf', 'docx'], true), 404);
+        abort_unless(in_array($materialanforderung->status, ['bestellt', 'teilweise_geliefert', 'geliefert'], true), 409, 'Der Bestellschein ist nach der Bestellung verfügbar.');
+        $path = $export->export($materialanforderung, $format);
+        return response()->download($path, 'Bestellschein-'.str_replace('/', '-', $materialanforderung->fresh()->bestellnummer).'.'.$format);
+    }
+
     private function requestRules(Projekt $projekt, bool $forUpdate = false): array
     {
         $kostenstellenIds = $projekt->kostenstellen()->pluck('kostenstelles.id');
 
         return [
+            'standort_id' => ['nullable', 'integer', 'exists:standorts,id'],
+            'revision' => ['nullable', 'integer'],
+            'preisart' => ['sometimes', 'required', Rule::in(['brutto', 'netto'])],
+            'versand_netto' => ['nullable', 'numeric', 'between:0,99999999'],
+            'versand_mwst' => ['nullable', 'numeric', 'between:0,100'],
+            'lieferant_adresse' => ['nullable', 'string', 'max:1000'],
+            'lieferantenreferenz' => ['nullable', 'string', 'max:100'],
             'kostenstelle' => [
                 'required', 'string',
                 Rule::exists('kostenstelles', 'kostenstelle')->where(fn ($query) => $query->whereIn('id', $kostenstellenIds)),
@@ -456,18 +571,16 @@ class MaterialanforderungController extends Controller
             ])],
             'vergabe.begruendung' => ['nullable', 'string', 'max:4000'],
             'vergabe.lieferant' => ['nullable', 'string', 'max:255'],
-            'vergabe.lieferung_option' => ['required', Rule::in(['per Abholung', 'per Lieferung'])],
-            'vergabe.lieferadresse' => ['nullable', 'required_if:vergabe.lieferung_option,per Lieferung', 'string', 'max:1000'],
+            'vergabe.lieferung_option' => ['exclude_if:vergabe.lieferung_art,Dienstleistung', 'required_if:vergabe.lieferung_art,Lieferleistung', Rule::in(['per Abholung', 'per Lieferung'])],
+            'vergabe.lieferadresse' => ['exclude_unless:vergabe.lieferung_art,Lieferleistung', 'exclude_unless:vergabe.lieferung_option,per Lieferung', 'required', 'string', 'max:1000'],
+            'vergabe.leistungsort' => ['exclude_unless:vergabe.lieferung_art,Dienstleistung', 'nullable', 'string', 'max:1000'],
             'vergabe.bestellnummer' => ['nullable', 'string', 'max:100'],
         ];
     }
 
-    private function calculateTotals(array $positionen): array
+    private function calculateTotals(array $positionen, $shipping = 0, $shippingTax = 19, $shippingGross = null): array
     {
-        $netto = collect($positionen)->sum(fn ($position) => (float) $position['stueck'] * (float) $position['einzelpreis']);
-        $brutto = collect($positionen)->sum(fn ($position) => ((float) $position['stueck'] * (float) $position['einzelpreis']) * (1 + ((float) $position['mwst'] / 100)));
-
-        return [round($netto, 2), round($brutto, 2)];
+        return $this->purchasing->totals($positionen, $shipping, $shippingTax, $shippingGross);
     }
 
     private function positionValues(array $position): array
@@ -479,8 +592,9 @@ class MaterialanforderungController extends Controller
             'stueck' => $position['stueck'],
             'art_nr' => $position['art_nr'] ?? null,
             'einzelpreis' => $position['einzelpreis'],
+            'einzelpreis_brutto' => $position['einzelpreis_brutto'],
             'mwst' => $position['mwst'],
-            'gesamtpreis' => round((float) $position['stueck'] * (float) $position['einzelpreis'], 2),
+            'gesamtpreis' => $position['gesamtpreis'],
         ];
     }
 
@@ -492,9 +606,10 @@ class MaterialanforderungController extends Controller
             'begruendung' => $vergabe['begruendung'] ?? null,
             'begruendung_optionen' => $vergabe['begruendung_optionen'] ?? [],
             'lieferant' => $vergabe['lieferant'] ?? null,
-            'lieferung_option' => $vergabe['lieferung_option'] ?? 'per Lieferung',
-            'lieferadresse' => $vergabe['lieferadresse'] ?? null,
-            'bestellnummer' => $vergabe['bestellnummer'] ?? null,
+            'lieferung_option' => ($vergabe['lieferung_art'] ?? '') === 'Dienstleistung' ? null : ($vergabe['lieferung_option'] ?? 'per Lieferung'),
+            'lieferadresse' => ($vergabe['lieferung_art'] ?? '') === 'Dienstleistung' ? null : ($vergabe['lieferadresse'] ?? null),
+            'leistungsort' => ($vergabe['lieferung_art'] ?? '') === 'Dienstleistung' ? ($vergabe['leistungsort'] ?? null) : null,
+            // Internal numbers are assigned by PurchaseWorkflow, never by form input.
         ];
     }
 
@@ -512,8 +627,10 @@ class MaterialanforderungController extends Controller
         return $user->projekte()->whereKey($projektId)->exists();
     }
 
-    private function mayView($user, Materialanforderung $anforderung): bool
+    public function mayView($user, Materialanforderung $anforderung): bool
     {
+        if (!$this->canOpenMaterialRequest($user) && !$user->can('materialanforderung.update')) return false;
+        if ($this->purchasing->isDirector($user) && in_array($anforderung->status, ['gf_pruefung', 'gf_genehmigt'], true)) return true;
         if ((int) $anforderung->ersteller_id === (int) $user->id) {
             return true;
         }
@@ -541,6 +658,7 @@ class MaterialanforderungController extends Controller
 
     private function canOpenMaterialRequest($user): bool
     {
+        if ($this->purchasing->isDirector($user)) return true;
         return collect([
             'materialanforderung.show',
             'materialanforderung.sachlische_freigabe.show',
@@ -564,9 +682,15 @@ class MaterialanforderungController extends Controller
                 && $this->isAssignedToProject($user, $anforderung->projekt_id)
                 && $anforderung->status === 'eingereicht',
             'kaufmaennisch_genehmigt' => $user->can('materialanforderung.kaufmännische_freigabe.update')
-                && $anforderung->status === 'sachlich_genehmigt',
+                && $anforderung->status === 'sachlich_genehmigt'
+                && !($anforderung->approval_policy['gf_required'] ?? false),
+            'gf_pruefung' => $user->can('materialanforderung.kaufmännische_freigabe.update')
+                && PurchaseRule::current()->manual_referral
+                && in_array($anforderung->status, ['sachlich_genehmigt', 'kaufmaennisch_genehmigt'], true),
+            'gf_genehmigt', 'abgelehnt' => $this->purchasing->isDirector($user) && $anforderung->status === 'gf_pruefung',
             'bestellt' => $user->can('materialanforderung.bestellwesen.update')
-                && $anforderung->status === 'kaufmaennisch_genehmigt',
+                && in_array($anforderung->status, ['kaufmaennisch_genehmigt', 'gf_genehmigt'], true)
+                && (!($anforderung->approval_policy['gf_required'] ?? false) || $anforderung->status === 'gf_genehmigt'),
             'teilweise_geliefert' => $user->can('materialanforderung.bestellwesen.update')
                 && in_array($anforderung->status, ['bestellt', 'teilweise_geliefert'], true),
             'geliefert' => $user->can('materialanforderung.bestellwesen.update')
@@ -575,7 +699,8 @@ class MaterialanforderungController extends Controller
                     && $this->isAssignedToProject($user, $anforderung->projekt_id)
                     && $anforderung->status === 'eingereicht')
                 || ($user->can('materialanforderung.kaufmännische_freigabe.update') && $anforderung->status === 'sachlich_genehmigt')
-                || ($user->can('materialanforderung.bestellwesen.update') && $anforderung->status === 'kaufmaennisch_genehmigt'),
+                || ($user->can('materialanforderung.bestellwesen.update') && in_array($anforderung->status, ['kaufmaennisch_genehmigt', 'gf_genehmigt'], true))
+                || ($this->purchasing->isDirector($user) && $anforderung->status === 'gf_pruefung'),
             'zurueckgezogen' => (int) $anforderung->ersteller_id === (int) $user->id
                 && $user->can('materialanforderung.update')
                 && $anforderung->status === 'eingereicht',
@@ -609,10 +734,13 @@ class MaterialanforderungController extends Controller
                 'name' => $anforderung->besteller?->name,
             ],
             'status' => $anforderung->status,
+            'bestellnummer' => $anforderung->bestellnummer, 'approval_policy' => $anforderung->approval_policy,
+            'order_snapshot' => $anforderung->order_snapshot, 'angebote' => $anforderung->angebote->toArray(),
             'kostenstelle' => $anforderung->kostenstelle,
             'benoetigt_am' => $anforderung->benoetigt_am?->toDateString(),
             'prioritaet' => $anforderung->prioritaet,
             'bemerkungen' => $anforderung->bemerkungen,
+            'preisart' => $anforderung->preisart, 'versand_brutto' => $anforderung->versand_brutto,
             'gesamtpreis' => $anforderung->gesamtpreis,
             'endsumme' => $anforderung->endsumme,
             'erstellt_am' => $anforderung->created_at?->toDateTimeString(),
@@ -623,6 +751,7 @@ class MaterialanforderungController extends Controller
                 'gelieferte_menge' => $artikel->gelieferte_menge,
                 'art_nr' => $artikel->art_nr,
                 'einzelpreis' => $artikel->einzelpreis,
+                'einzelpreis_brutto' => $artikel->einzelpreis_brutto,
                 'mwst' => $artikel->mwst,
                 'gesamtpreis' => $artikel->gesamtpreis,
             ])->values()->all(),
@@ -634,6 +763,7 @@ class MaterialanforderungController extends Controller
                 'lieferant' => $anforderung->vergabevermerk->lieferant,
                 'lieferung_option' => $anforderung->vergabevermerk->lieferung_option,
                 'lieferadresse' => $anforderung->vergabevermerk->lieferadresse,
+                'leistungsort' => $anforderung->vergabevermerk->leistungsort,
                 'bestellnummer' => $anforderung->vergabevermerk->bestellnummer,
             ] : null,
             'genehmigungen' => $anforderung->genehmigungen->map(fn ($genehmigung) => [

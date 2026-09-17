@@ -105,8 +105,7 @@ watch(search, () => {
 });
 
 const updateSetting = async (count = selectionCount.value) => {
-    const previousCount = selectionCount.value;
-    selectionCount.value = Number(count);
+    if (settingSaving.value) return;
     settingSaving.value = true;
 
     try {
@@ -114,7 +113,7 @@ const updateSetting = async (count = selectionCount.value) => {
             partner_id: props.partner.id,
             schuljahr: props.schuljahr,
             teil: props.teil,
-            auswahl_anzahl: selectionCount.value,
+            auswahl_anzahl: Number(count),
             zugang_aktiv: accessEnabled.value,
         });
 
@@ -129,7 +128,6 @@ const updateSetting = async (count = selectionCount.value) => {
             showConfirmButton: false,
         });
     } catch (error) {
-        selectionCount.value = previousCount;
         Swal.fire({
             title: 'Fehler',
             text: error.response?.data?.message || 'Die Vorgabe konnte nicht gespeichert werden.',
@@ -195,7 +193,7 @@ const copyPublicUrl = async () => {
                         <input
                             v-model="accessEnabled"
                             type="checkbox"
-                            :disabled="!canPlanSelection()"
+                            :disabled="settingSaving || !canPlanSelection()"
                             class="rounded border-gray-300 text-zbb focus:ring-zbb"
                             @change="updateSetting(selectionCount)"
                         />
@@ -258,6 +256,7 @@ const copyPublicUrl = async () => {
             :alle_teilnehmer="alle_teilnehmer"
             :alle_bereiche="projekt.bereiche"
             :selection-count="selectionCount"
+            :setting-saving="settingSaving"
             :search="search"
             :can-create="can('bereichsauswahl.store')"
             :can-update="can('bereichsauswahl.update')"

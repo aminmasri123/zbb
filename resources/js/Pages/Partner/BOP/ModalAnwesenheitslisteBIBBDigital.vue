@@ -596,6 +596,7 @@ const pdfPrintStyle = {
   headerFontSize: 7.1,
   tableHeaderFontSize: 6.4,
   rowFontSize: 6.1,
+  participantFontSize: 7,
   tableLineWidth: 0.2,
 }
 
@@ -629,6 +630,26 @@ const drawPdfSignature = (doc, signature, x, y, width, height) => {
     imageWidth,
     imageHeight
   )
+}
+
+const drawPdfParticipantText = (doc, value, x, y, width, height, padding) => {
+  const text = String(value || '')
+  if (!text) return
+  const maxWidth = width - (2 * padding)
+  const maxHeight = height - 1
+  let fontSize = pdfPrintStyle.participantFontSize
+  let lines, fontHeight, textHeight
+  // Keep longer names inside the existing row without truncating them.
+  do {
+    doc.setFontSize(fontSize)
+    lines = doc.splitTextToSize(text, maxWidth)
+    fontHeight = fontSize * 25.4 / 72
+    textHeight = fontHeight * (1 + (lines.length - 1) * 1.15)
+    if (textHeight <= maxHeight || fontSize <= 1) break
+    fontSize = Math.max(1, fontSize - 0.25)
+  } while (true)
+  const baseline = y + (height - textHeight) / 2 + fontHeight * 0.8
+  doc.text(lines, x + padding, baseline, { lineHeightFactor: 1.15 })
 }
 
 const pdfLayout = (doc) => {
@@ -1042,12 +1063,8 @@ const createSignedPdf = async () => {
 
           if (column.key === 'nr') {
             doc.text(String(absoluteIndex + 1), cursorX + pad, textY)
-          } else if (column.key === 'nachname') {
-            doc.text(String(participant?.nachname || ''), cursorX + pad, textY, { maxWidth: column.width - (2 * pad) })
-          } else if (column.key === 'vorname') {
-            doc.text(String(participant?.vorname || ''), cursorX + pad, textY, { maxWidth: column.width - (2 * pad) })
-          } else if (column.key === 'klasse') {
-            doc.text(String(participant?.klasse || ''), cursorX + pad, textY, { maxWidth: column.width - (2 * pad) })
+          } else if (['nachname', 'vorname', 'klasse'].includes(column.key)) {
+            drawPdfParticipantText(doc, participant?.[column.key], cursorX, y, column.width, layout.rowHeight, pad)
           } else if (column.day && participant) {
             const key = signatureKey(column.day, participant)
             const signature = pdfSignatures[key]

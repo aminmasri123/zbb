@@ -1,11 +1,15 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
-import { computed, ref } from 'vue'
+import ProcurementFields from './ProcurementFields.vue'
+import { purchaseTotals, inputPrice } from './purchaseTotals'
+import Offers from './Offers.vue'
+import { computed, ref, watch } from 'vue'
 import { Head, Link, router, useForm } from '@inertiajs/vue3'
 import Swal from 'sweetalert2'
 
 const props = defineProps({
     anforderung: Object,
+    standorte: Array, purchaseRules: Object, approval: Object, canConfirmDirector: Boolean,
     kostenstellen: { type: Array, default: () => [] },
     canEditMaterialanforderung: Boolean,
     canConfirmKaufmaenisch: Boolean,
@@ -25,22 +29,27 @@ const deliveryOpen = ref(false)
 const deleting = ref(false)
 const commentOpen = ref(false)
 const liefermengen = ref(Object.fromEntries(props.anforderung.artikeln.map((item) => [item.id, Number(item.gelieferte_menge || 0)])))
-const vergabe = props.anforderung.vergabevermerk || {}
+const vergabe = computed(() => props.anforderung.vergabevermerk || {})
 const offeneRueckfragen = computed(() => props.kommentare.filter((item) => item.antwort_erforderlich && !item.geklaert_am))
-const form = useForm({
-    id: props.anforderung.id,
-    kostenstelle: props.anforderung.kostenstelle,
-    benoetigt_am: props.anforderung.benoetigt_am?.substring(0, 10) || '',
-    prioritaet: props.anforderung.prioritaet || 'normal',
-    bemerkungen: props.anforderung.bemerkungen || '',
-    positionen: props.anforderung.artikeln.map((item) => ({
+function formData(order) {
+    const vergabe = order.vergabevermerk || {}
+    return {
+    id: order.id, preisart: order.preisart || 'netto',
+    revision: order.revision, standort_id: order.standort_id || '',
+    versand_netto: Number(order.preisart === 'brutto' ? (order.versand_brutto ?? 0) : (order.versand_netto || 0)), versand_mwst: Number(order.versand_mwst ?? 19),
+    lieferant_adresse: order.lieferant_adresse || '', lieferantenreferenz: order.lieferantenreferenz || '',
+    kostenstelle: order.kostenstelle,
+    benoetigt_am: order.benoetigt_am?.substring(0, 10) || '',
+    prioritaet: order.prioritaet || 'normal',
+    bemerkungen: order.bemerkungen || '',
+    positionen: order.artikeln.map((item) => ({
         id: item.id,
         pos: item.pos,
         artikel: item.artikel,
         link: item.link || '',
         stueck: Number(item.stueck),
         art_nr: item.art_nr || '',
-        einzelpreis: Number(item.einzelpreis),
+        einzelpreis: inputPrice(item, order.preisart),
         mwst: Number(item.mwst),
     })),
     vergabe: {
@@ -51,9 +60,14 @@ const form = useForm({
         lieferant: vergabe.lieferant || '',
         lieferung_option: vergabe.lieferung_option || 'per Lieferung',
         lieferadresse: vergabe.lieferadresse || '',
-        bestellnummer: vergabe.bestellnummer || '',
+        leistungsort: vergabe.leistungsort || '',
+        bestellnummer: order.bestellnummer || '',
     },
-})
+}
+}
+const form = useForm(formData(props.anforderung))
+function resetForm() { form.defaults(formData(props.anforderung)); form.reset(); form.clearErrors() }
+watch(() => props.anforderung, () => { if (!editing.value) resetForm() })
 
 const commentForm = useForm({
     artikel_id: '',
@@ -67,6 +81,9 @@ const commentForm = useForm({
 })
 
 const statusMeta = {
+    gf_pruefung: ['Wartet auf Geschäftsführung', 'bg-amber-100 text-amber-900'],
+    gf_genehmigt: ['Durch Geschäftsführung freigegeben', 'bg-emerald-100 text-emerald-900'],
+    abgelehnt: ['Abgelehnt', 'bg-red-100 text-red-800'],
     entwurf: ['Entwurf', 'bg-gray-100 text-gray-700'],
     eingereicht: ['Eingereicht', 'bg-blue-100 text-blue-700'],
     sachlich_genehmigt: ['Sachlich genehmigt', 'bg-violet-100 text-violet-700'],
@@ -79,8 +96,10 @@ const statusMeta = {
     storniert: ['Storniert', 'bg-red-100 text-red-700'],
 }
 const editable = computed(() => props.canEditMaterialanforderung && ['entwurf', 'zur_ueberarbeitung'].includes(props.anforderung.status))
-const netto = computed(() => form.positionen.reduce((sum, item) => sum + item.stueck * item.einzelpreis, 0))
-const mwst = computed(() => form.positionen.reduce((sum, item) => sum + item.stueck * item.einzelpreis * item.mwst / 100, 0))
+const totals = computed(() => purchaseTotals(form.positionen, form.versand_netto, form.versand_mwst, form.preisart))
+const netto = computed(() => totals.value.net)
+const mwst = computed(() => totals.value.tax)
+const brutto = computed(() => totals.value.gross)
 const begruendungen = [
     ['nur_ein_anbieter', 'Es existiert nur ein Anbieter'],
     ['besondere_gruende', 'Aufgrund besonderer Gründe'],
@@ -111,7 +130,7 @@ function removePosition(index) {
 function save() {
     form.put(route('materialanforderung.update'), {
         preserveScroll: true,
-        onSuccess: () => { editing.value = false },
+        onSuccess: () => { editing.value = false; resetForm() },
     })
 }
 
@@ -245,7 +264,7 @@ async function deleteFinalizedMaterialanforderung() {
                     <div><dt class="text-xs text-slate-500">Vorgang</dt><dd class="font-semibold">#${props.anforderung.id}</dd></div>
                     <div><dt class="text-xs text-slate-500">Projekt</dt><dd class="font-semibold">${escapeHtml(props.anforderung.projekt?.name || '–')}</dd></div>
                     <div><dt class="text-xs text-slate-500">Status</dt><dd class="font-semibold">${escapeHtml(statusLabel)}</dd></div>
-                    <div><dt class="text-xs text-slate-500">Bestellnummer</dt><dd class="font-semibold">${escapeHtml(vergabe.bestellnummer || '–')}</dd></div>
+                    <div><dt class="text-xs text-slate-500">Bestellnummer</dt><dd class="font-semibold">${escapeHtml(props.anforderung.bestellnummer || '–')}</dd></div>
                     <div class="col-span-2"><dt class="text-xs text-slate-500">Endsumme</dt><dd class="font-semibold">${escapeHtml(euro(props.anforderung.endsumme))}</dd></div>
                 </dl>
                 <label for="delete-reason" class="block font-semibold">Löschbegründung *</label>
@@ -282,28 +301,10 @@ async function deleteFinalizedMaterialanforderung() {
 }
 
 async function markOrdered() {
-    const result = await Swal.fire({
-        title: 'Als bestellt markieren',
-        input: 'text',
-        inputLabel: 'Bestellnummer *',
-        inputValue: vergabe.bestellnummer || '',
-        inputValidator: (value) => !value?.trim() ? 'Bitte die Bestellnummer eintragen.' : undefined,
-        showCancelButton: true,
-        confirmButtonText: 'Bestellung speichern',
-        cancelButtonText: 'Abbrechen',
-        confirmButtonColor: '#0e7490',
-    })
+    const result = await Swal.fire({ title: 'Als bestellt markieren?', text: 'Bestellnummer: ' + (props.anforderung.bestellnummer || 'wird automatisch vergeben'), icon: 'question', showCancelButton: true, confirmButtonText: 'Bestellung speichern', cancelButtonText: 'Abbrechen' })
     if (!result.isConfirmed) return
-    router.put(route('materialanforderung.genehmigen', { id: props.anforderung.id, status: 'bestellt' }), {
-        bestellnummer: result.value.trim(),
-    }, {
-        preserveScroll: true,
-        onError: (errors) => Swal.fire({
-            title: 'Bestellung noch nicht möglich',
-            text: errors.status || Object.values(errors)[0] || 'Bitte offene Rückfragen zuerst klären.',
-            icon: 'warning',
-            confirmButtonText: 'Verstanden',
-        }),
+    router.put(route('materialanforderung.genehmigen', { id: props.anforderung.id, status: 'bestellt' }), {}, {
+        preserveScroll: true, onError: errors => Swal.fire({ title: 'Bestellung noch nicht möglich', text: Object.values(errors).join(' '), icon: 'warning' }),
     })
 }
 
@@ -334,10 +335,19 @@ function submitPartialDelivery() {
 <template>
     <Head :title="`Materialanforderung #${anforderung.id}`" />
     <AppLayout>
-        <template #header>Materialanforderung #{{ anforderung.id }}</template>
+        <template #header>Materialanforderung {{ anforderung.bestellnummer || "#" + anforderung.id }}</template>
 
         <div class="mx-auto max-w-7xl space-y-5 pb-12">
-            <section class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
+            <section class="rounded-xl border bg-white p-5 text-sm">
+                <div class="flex flex-wrap gap-x-8 gap-y-2"><strong>Nr. {{ anforderung.bestellnummer || 'Wird bei der Bestellung vergeben' }}</strong><span>{{ anforderung.standort?.name || 'Standort noch auswählen' }}</span><strong>{{ euro(anforderung.endsumme) }} brutto inkl. {{ vergabe.lieferung_art === 'Dienstleistung' ? 'Nebenkosten' : 'Versand' }}</strong></div>
+                <p class="mt-3 text-gray-700">Antrag → sachliche Freigabe → {{ approval.gf_required || anforderung.status === 'gf_genehmigt' ? 'Geschäftsführung' : 'kaufmännische Freigabe' }} → Bestellwesen → Lieferung</p>
+                <p v-if="approval.gf_required" class="mt-2 text-amber-900">Geschäftsführung erforderlich: {{ (approval.reasons || []).join(' · ') }}</p>
+                <p v-if="approval.gf_required && !approval.director_configured" class="mt-2 font-semibold text-amber-900">Es ist noch keine Geschäftsführung eingerichtet. Bitte unter Bestellwesen → Freigaberegeln eine zuständige Person auswählen.</p>
+                <p v-if="anforderung.status === 'gf_genehmigt'" class="mt-2 text-green-800">Abschließend freigegeben. Die kaufmännische Leitung wurde informiert. Das Bestellwesen kann bestellen.</p>
+                <nav class="mt-3 flex flex-wrap gap-4 text-blue-700"><a href="#bestelldaten">Bestelldaten</a><a href="#angebote">Angebote</a><a href="#kommunikation">Rückfragen</a></nav>
+            </section>
+            <ProcurementFields v-if="editing" :form="form" :standorte="standorte" />
+            <section id="bestelldaten" class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                         <div class="flex flex-wrap items-center gap-2">
@@ -349,7 +359,8 @@ function submitPartialDelivery() {
                     </div>
                     <div class="flex flex-wrap gap-2">
                         <Link v-if="canUseChat" :href="route('chat.index', { materialanforderung: anforderung.id })" class="inline-flex items-center gap-2 rounded-lg border border-cyan-300 bg-cyan-50 px-3 py-2 text-sm font-semibold text-cyan-800"><i class="las la-comments"></i> Im Chat besprechen</Link>
-                        <a :href="route('materialanforderung.pdf', anforderung.id)" class="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700"><i class="las la-file-pdf text-red-600"></i> PDF</a>
+                        <a :href="route('materialanforderung.pdf', anforderung.id)" class="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700"><i class="las la-file-pdf text-red-600"></i> Materialanforderung PDF</a>
+                        <template v-if="['bestellt', 'teilweise_geliefert', 'geliefert'].includes(anforderung.status)"><a v-for="format in ['pdf', 'docx']" :key="format" :href="route('materialanforderung.order.export', { materialanforderung: anforderung.id, format })" class="rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white">Bestellschein {{ format === 'docx' ? 'Word' : 'PDF' }}</a></template>
                         <button v-if="editable && !editing" type="button" class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold" @click="editing = true"><i class="las la-edit mr-1"></i> Bearbeiten</button>
                         <button v-if="canDeleteMaterialanforderung && !editing" type="button" :disabled="deleting" class="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 disabled:cursor-wait disabled:opacity-60" @click="deleteDraft">{{ deleting ? 'Wird gelöscht …' : 'Löschen' }}</button>
                         <button v-if="canDeleteFinalizedMaterialanforderung && !editing" type="button" :disabled="deleting" class="rounded-lg border border-red-600 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-600 hover:text-white disabled:cursor-wait disabled:opacity-60" @click="deleteFinalizedMaterialanforderung"><i class="las la-trash mr-1"></i> {{ deleting ? 'Wird gelöscht …' : 'Vorgang endgültig löschen' }}</button>
@@ -362,11 +373,13 @@ function submitPartialDelivery() {
                     <button v-if="anforderung.status === 'eingereicht' && canEditMaterialanforderung" class="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800" @click="changeStatus('zurueckgezogen', 'Einreichung zurückziehen?', true)">Einreichung zurückziehen</button>
                     <button v-if="anforderung.status === 'eingereicht' && canConfirmSachlich" class="rounded-lg bg-violet-700 px-4 py-2 text-sm font-semibold text-white" @click="changeStatus('sachlich_genehmigt', 'Sachlich genehmigen?')">Sachlich genehmigen</button>
                     <button v-if="anforderung.status === 'eingereicht' && canConfirmSachlich" class="rounded-lg border border-orange-300 px-4 py-2 text-sm font-semibold text-orange-700" @click="changeStatus('zur_ueberarbeitung', 'Zur Überarbeitung zurückgeben?', true)">Zurückgeben</button>
-                    <button v-if="anforderung.status === 'sachlich_genehmigt' && canConfirmKaufmaenisch" class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white" @click="changeStatus('kaufmaennisch_genehmigt', 'Kaufmännisch genehmigen?')">Kaufmännisch genehmigen</button>
+                    <button v-if="anforderung.status === 'sachlich_genehmigt' && canConfirmKaufmaenisch && !approval.gf_required" class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white" @click="changeStatus('kaufmaennisch_genehmigt', 'Kaufmännisch genehmigen?')">Kaufmännisch genehmigen</button>
                     <button v-if="anforderung.status === 'sachlich_genehmigt' && canConfirmKaufmaenisch" class="rounded-lg border border-orange-300 px-4 py-2 text-sm font-semibold text-orange-700" @click="changeStatus('zur_ueberarbeitung', 'Zur Überarbeitung zurückgeben?', true)">Zurückgeben</button>
-                    <template v-if="canBestellen && ['kaufmaennisch_genehmigt', 'bestellt', 'teilweise_geliefert'].includes(anforderung.status)">
-                        <button v-if="anforderung.status === 'kaufmaennisch_genehmigt'" class="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50" :disabled="offeneRueckfragen.length > 0" :title="offeneRueckfragen.length ? 'Offene Rückfragen zuerst klären' : ''" @click="markOrdered">Als bestellt markieren</button>
-                        <button v-if="anforderung.status === 'kaufmaennisch_genehmigt'" class="rounded-lg border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-800" @click="changeStatus('zur_ueberarbeitung', 'Zur Überarbeitung an den Antragsteller zurückgeben?', true)">Zur Überarbeitung</button>
+                    <button v-if="canConfirmKaufmaenisch && approval.manual_referral && ['sachlich_genehmigt', 'kaufmaennisch_genehmigt'].includes(anforderung.status)" class="rounded-lg border border-amber-400 px-4 py-2 text-sm font-semibold text-amber-900" @click="changeStatus('gf_pruefung', 'Zur Entscheidung an die Geschäftsführung?', true)">An Geschäftsführung weiterleiten</button>
+                    <template v-if="canConfirmDirector && anforderung.status === 'gf_pruefung'"><button class="rounded-lg border border-orange-400 px-4 py-2 text-sm text-orange-800" @click="changeStatus('zur_ueberarbeitung', 'Zur Überarbeitung zurückgeben?', true)">Zurückgeben</button><button class="rounded-lg border border-red-300 px-4 py-2 text-sm text-red-700" @click="changeStatus('abgelehnt', 'Materialanforderung ablehnen?', true)">Ablehnen</button></template>
+                    <template v-if="canBestellen && ['kaufmaennisch_genehmigt', 'gf_genehmigt', 'bestellt', 'teilweise_geliefert'].includes(anforderung.status)">
+                        <button v-if="['kaufmaennisch_genehmigt', 'gf_genehmigt'].includes(anforderung.status)" class="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50" :disabled="offeneRueckfragen.length > 0" :title="offeneRueckfragen.length ? 'Offene Rückfragen zuerst klären' : ''" @click="markOrdered">Als bestellt markieren</button>
+                        <button v-if="['kaufmaennisch_genehmigt', 'gf_genehmigt'].includes(anforderung.status)" class="rounded-lg border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-800" @click="changeStatus('zur_ueberarbeitung', 'Zur Überarbeitung an den Antragsteller zurückgeben?', true)">Zur Überarbeitung</button>
                         <button v-if="['bestellt', 'teilweise_geliefert'].includes(anforderung.status)" class="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white" @click="deliveryOpen = true">Teillieferung erfassen</button>
                         <button v-if="['bestellt', 'teilweise_geliefert'].includes(anforderung.status)" class="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white" @click="changeStatus('geliefert', 'Als vollständig geliefert markieren?')">Vollständig geliefert</button>
                     </template>
@@ -380,8 +393,8 @@ function submitPartialDelivery() {
                         <h2 class="mb-4 text-lg font-semibold">Artikel</h2>
                         <div class="overflow-x-auto">
                             <table class="min-w-[760px] w-full text-sm">
-                                <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500"><tr><th class="px-3 py-3">Pos.</th><th class="px-3 py-3">Artikel</th><th class="px-3 py-3">Stück</th><th v-if="['bestellt', 'teilweise_geliefert', 'geliefert'].includes(anforderung.status)" class="px-3 py-3">Geliefert</th><th class="px-3 py-3">Art.-Nr.</th><th class="px-3 py-3 text-right">Einzelpreis</th><th class="px-3 py-3 text-right">MwSt.</th><th class="px-3 py-3 text-right">Gesamt</th></tr></thead>
-                                <tbody class="divide-y divide-gray-100"><tr v-for="item in anforderung.artikeln" :key="item.id"><td class="px-3 py-3">{{ item.pos }}</td><td class="px-3 py-3 font-medium"><a v-if="item.link" :href="item.link" target="_blank" class="text-blue-700 hover:underline">{{ item.artikel }}</a><span v-else>{{ item.artikel }}</span></td><td class="px-3 py-3">{{ item.stueck }}</td><td v-if="['bestellt', 'teilweise_geliefert', 'geliefert'].includes(anforderung.status)" class="px-3 py-3 font-semibold">{{ item.gelieferte_menge || 0 }}</td><td class="px-3 py-3">{{ item.art_nr || '–' }}</td><td class="px-3 py-3 text-right">{{ euro(item.einzelpreis) }}</td><td class="px-3 py-3 text-right">{{ item.mwst }} %</td><td class="px-3 py-3 text-right font-semibold">{{ euro(item.gesamtpreis) }}</td></tr></tbody>
+                                <thead class="bg-gray-50 text-left text-xs uppercase text-gray-500"><tr><th class="px-3 py-3">Pos.</th><th class="px-3 py-3">Artikel</th><th class="px-3 py-3">Stück</th><th v-if="['bestellt', 'teilweise_geliefert', 'geliefert'].includes(anforderung.status)" class="px-3 py-3">Geliefert</th><th class="px-3 py-3">Art.-Nr.</th><th class="px-3 py-3 text-right">Einzelpreis {{ anforderung.preisart || 'netto' }}</th><th class="px-3 py-3 text-right">MwSt.</th><th class="px-3 py-3 text-right">Gesamt {{ anforderung.preisart || 'netto' }}</th></tr></thead>
+                                <tbody class="divide-y divide-gray-100"><tr v-for="item in anforderung.artikeln" :key="item.id"><td class="px-3 py-3">{{ item.pos }}</td><td class="px-3 py-3 font-medium"><a v-if="item.link" :href="item.link" target="_blank" class="text-blue-700 hover:underline">{{ item.artikel }}</a><span v-else>{{ item.artikel }}</span></td><td class="px-3 py-3">{{ item.stueck }}</td><td v-if="['bestellt', 'teilweise_geliefert', 'geliefert'].includes(anforderung.status)" class="px-3 py-3 font-semibold">{{ item.gelieferte_menge || 0 }}</td><td class="px-3 py-3">{{ item.art_nr || '–' }}</td><td class="px-3 py-3 text-right">{{ euro(inputPrice(item, anforderung.preisart)) }}</td><td class="px-3 py-3 text-right">{{ item.mwst }} %</td><td class="px-3 py-3 text-right font-semibold">{{ euro(anforderung.preisart === 'brutto' ? inputPrice(item, 'brutto') * item.stueck : item.gesamtpreis) }}</td></tr></tbody>
                             </table>
                         </div>
                     </section>
@@ -393,8 +406,8 @@ function submitPartialDelivery() {
                 </div>
 
                 <section class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                    <h2 class="mb-4 text-lg font-semibold">Vergabevermerk und Lieferung</h2>
-                    <dl class="grid grid-cols-1 gap-4 text-sm md:grid-cols-2"><div class="md:col-span-2"><dt class="text-gray-500">Kurzbeschreibung</dt><dd class="whitespace-pre-wrap font-medium">{{ vergabe.kurzbeschreibung || '–' }}</dd></div><div><dt class="text-gray-500">Art der Leistung</dt><dd class="font-medium">{{ vergabe.lieferung_art || '–' }}</dd></div><div><dt class="text-gray-500">Lieferung</dt><dd class="font-medium">{{ vergabe.lieferung_option || '–' }}</dd></div><div><dt class="text-gray-500">Lieferant</dt><dd class="font-medium">{{ vergabe.lieferant || '–' }}</dd></div><div><dt class="text-gray-500">Bestellnummer</dt><dd class="font-medium">{{ vergabe.bestellnummer || '–' }}</dd></div><div class="md:col-span-2"><dt class="text-gray-500">Lieferadresse</dt><dd class="whitespace-pre-wrap">{{ vergabe.lieferadresse || '–' }}</dd></div><div class="md:col-span-2"><dt class="text-gray-500">Begründung</dt><dd class="whitespace-pre-wrap">{{ vergabe.begruendung || '–' }}</dd></div></dl>
+                    <h2 class="mb-4 text-lg font-semibold">Vergabevermerk und Ausführung</h2>
+                    <dl class="grid grid-cols-1 gap-4 text-sm md:grid-cols-2"><div class="md:col-span-2"><dt class="text-gray-500">Kurzbeschreibung</dt><dd class="whitespace-pre-wrap font-medium">{{ vergabe.kurzbeschreibung || '–' }}</dd></div><div><dt class="text-gray-500">Art der Leistung</dt><dd class="font-medium">{{ vergabe.lieferung_art || '–' }}</dd></div><div v-if="vergabe.lieferung_art !== 'Dienstleistung'"><dt class="text-gray-500">Lieferung</dt><dd class="font-medium">{{ vergabe.lieferung_option || '–' }}</dd></div><div><dt class="text-gray-500">Lieferant / Dienstleister</dt><dd class="font-medium">{{ vergabe.lieferant || '–' }}</dd></div><div><dt class="text-gray-500">Bestellnummer</dt><dd class="font-medium">{{ props.anforderung.bestellnummer || '–' }}</dd></div><div v-if="vergabe.lieferung_art !== 'Dienstleistung' && vergabe.lieferung_option === 'per Lieferung'" class="md:col-span-2"><dt class="text-gray-500">Lieferadresse</dt><dd class="whitespace-pre-wrap">{{ vergabe.lieferadresse || '–' }}</dd></div><div v-if="vergabe.lieferung_art === 'Dienstleistung'" class="md:col-span-2"><dt class="text-gray-500">Leistungsort</dt><dd class="whitespace-pre-wrap">{{ vergabe.leistungsort || 'Nicht angegeben' }}</dd></div><div class="md:col-span-2"><dt class="text-gray-500">Anschrift des Lieferanten / Dienstleisters</dt><dd class="whitespace-pre-wrap">{{ anforderung.lieferant_adresse || '–' }}</dd></div><div class="md:col-span-2"><dt class="text-gray-500">Begründung</dt><dd class="whitespace-pre-wrap">{{ vergabe.begruendung || '–' }}</dd></div></dl>
                 </section>
             </template>
 
@@ -405,15 +418,16 @@ function submitPartialDelivery() {
                 </section>
                 <section class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
                     <div class="mb-4 flex items-center justify-between"><h2 class="text-lg font-semibold">Artikel bearbeiten</h2><button type="button" class="rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white" @click="addPosition">+ Artikel</button></div>
-                    <div class="space-y-3"><article v-for="(item, index) in form.positionen" :key="item.id || index" class="grid grid-cols-2 gap-3 rounded-lg border border-gray-200 p-4 md:grid-cols-8"><label class="text-sm md:col-span-2">Artikel *<input v-model="item.artikel" class="mt-1 w-full rounded-lg border-gray-300" /></label><label class="text-sm">Stück *<input v-model.number="item.stueck" type="number" min="1" class="mt-1 w-full rounded-lg border-gray-300" /></label><label class="text-sm">Art.-Nr.<input v-model="item.art_nr" class="mt-1 w-full rounded-lg border-gray-300" /></label><label class="text-sm">Einzelpreis *<input v-model.number="item.einzelpreis" type="number" min="0" step="0.01" class="mt-1 w-full rounded-lg border-gray-300" /></label><label class="text-sm">MwSt. *<input v-model.number="item.mwst" type="number" min="0" max="100" step="0.01" class="mt-1 w-full rounded-lg border-gray-300" /></label><label class="text-sm md:col-span-2">Link<input v-model="item.link" type="url" class="mt-1 w-full rounded-lg border-gray-300" /></label><div class="col-span-2 flex items-center justify-between md:col-span-8"><strong>{{ euro(item.stueck * item.einzelpreis) }}</strong><button v-if="form.positionen.length > 1" type="button" class="text-sm text-red-600" @click="removePosition(index)">Entfernen</button></div></article></div>
+                    <div class="space-y-3"><article v-for="(item, index) in form.positionen" :key="item.id || index" class="grid grid-cols-2 gap-3 rounded-lg border border-gray-200 p-4 md:grid-cols-8"><label class="text-sm md:col-span-2">Artikel *<input v-model="item.artikel" class="mt-1 w-full rounded-lg border-gray-300" /></label><label class="text-sm">Stück *<input v-model.number="item.stueck" type="number" min="1" class="mt-1 w-full rounded-lg border-gray-300" /></label><label class="text-sm">Art.-Nr.<input v-model="item.art_nr" class="mt-1 w-full rounded-lg border-gray-300" /></label><label class="text-sm">Einzelpreis {{ form.preisart }} *<input v-model.number="item.einzelpreis" type="number" min="0" step="0.01" class="mt-1 w-full rounded-lg border-gray-300" /></label><label class="text-sm">MwSt. *<input v-model.number="item.mwst" type="number" min="0" max="100" step="0.01" class="mt-1 w-full rounded-lg border-gray-300" /></label><label class="text-sm md:col-span-2">Link<input v-model="item.link" type="url" class="mt-1 w-full rounded-lg border-gray-300" /></label><div class="col-span-2 flex items-center justify-between md:col-span-8"><strong>{{ euro(item.stueck * item.einzelpreis) }} {{ form.preisart }}</strong><button v-if="form.positionen.length > 1" type="button" class="text-sm text-red-600" @click="removePosition(index)">Entfernen</button></div></article></div>
                 </section>
                 <section class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
                     <h2 class="mb-4 text-lg font-semibold">Vergabevermerk bearbeiten</h2>
-                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2"><label class="text-sm md:col-span-2">Kurzbeschreibung<textarea v-model="form.vergabe.kurzbeschreibung" rows="2" class="mt-1 w-full rounded-lg border-gray-300"></textarea></label><label class="text-sm">Art der Leistung<select v-model="form.vergabe.lieferung_art" class="mt-1 w-full rounded-lg border-gray-300"><option>Lieferleistung</option><option>Dienstleistung</option></select></label><label class="text-sm">Lieferung<select v-model="form.vergabe.lieferung_option" class="mt-1 w-full rounded-lg border-gray-300"><option>per Lieferung</option><option>per Abholung</option></select></label><fieldset class="md:col-span-2"><legend class="text-sm">Begründungsmerkmale</legend><div class="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2"><label v-for="option in begruendungen" :key="option[0]" class="flex gap-2 rounded-lg border p-2 text-sm"><input v-model="form.vergabe.begruendung_optionen" type="checkbox" :value="option[0]" /> {{ option[1] }}</label></div></fieldset><label class="text-sm md:col-span-2">Ergänzende Begründung<textarea v-model="form.vergabe.begruendung" rows="2" class="mt-1 w-full rounded-lg border-gray-300"></textarea></label><label class="text-sm">Lieferant<input v-model="form.vergabe.lieferant" class="mt-1 w-full rounded-lg border-gray-300" /></label><label v-if="form.vergabe.lieferung_option === 'per Lieferung'" class="text-sm">Lieferadresse *<textarea v-model="form.vergabe.lieferadresse" rows="2" class="mt-1 w-full rounded-lg border-gray-300"></textarea></label><label class="text-sm">Bestellnummer<input v-model="form.vergabe.bestellnummer" class="mt-1 w-full rounded-lg border-gray-300" /></label></div>
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2"><label class="text-sm md:col-span-2">Kurzbeschreibung<textarea v-model="form.vergabe.kurzbeschreibung" rows="2" class="mt-1 w-full rounded-lg border-gray-300"></textarea></label><label class="text-sm">Art der Leistung<select v-model="form.vergabe.lieferung_art" class="mt-1 w-full rounded-lg border-gray-300"><option>Lieferleistung</option><option>Dienstleistung</option></select></label><label v-if="form.vergabe.lieferung_art === 'Lieferleistung'" class="text-sm">Lieferung<select v-model="form.vergabe.lieferung_option" class="mt-1 w-full rounded-lg border-gray-300"><option>per Lieferung</option><option>per Abholung</option></select></label><fieldset class="md:col-span-2"><legend class="text-sm">Begründungsmerkmale</legend><div class="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2"><label v-for="option in begruendungen" :key="option[0]" class="flex gap-2 rounded-lg border p-2 text-sm"><input v-model="form.vergabe.begruendung_optionen" type="checkbox" :value="option[0]" /> {{ option[1] }}</label></div></fieldset><label class="text-sm md:col-span-2">Ergänzende Begründung<textarea v-model="form.vergabe.begruendung" rows="2" class="mt-1 w-full rounded-lg border-gray-300"></textarea></label><label class="text-sm">Lieferant / Dienstleister<input v-model="form.vergabe.lieferant" class="mt-1 w-full rounded-lg border-gray-300" /></label><label v-if="form.vergabe.lieferung_art === 'Lieferleistung' && form.vergabe.lieferung_option === 'per Lieferung'" class="text-sm">Lieferadresse *<textarea v-model="form.vergabe.lieferadresse" rows="2" class="mt-1 w-full rounded-lg border-gray-300"></textarea></label><label v-if="form.vergabe.lieferung_art === 'Dienstleistung'" class="text-sm md:col-span-2">Leistungsort (optional)<textarea v-model="form.vergabe.leistungsort" rows="2" maxlength="1000" class="mt-1 w-full rounded-lg border-gray-300" placeholder="Zum Beispiel Standort und Raum oder online"></textarea></label><label class="text-sm">Bestellnummer<input :value="anforderung.bestellnummer" readonly class="mt-1 w-full rounded-lg border-gray-300" /></label></div>
                 </section>
-                <div class="sticky bottom-3 flex flex-col gap-3 rounded-xl border border-gray-200 bg-white/95 p-4 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between"><div class="text-sm"><span class="text-gray-500">Endsumme:</span> <strong class="text-lg text-orange-600">{{ euro(netto + mwst) }}</strong></div><div class="flex gap-2"><button type="button" class="flex-1 rounded-lg border border-gray-300 px-4 py-2 font-semibold" @click="editing = false">Abbrechen</button><button type="submit" :disabled="form.processing" class="flex-1 rounded-lg bg-orange-600 px-4 py-2 font-semibold text-white">Speichern</button></div></div>
+                <div class="sticky bottom-3 flex flex-col gap-3 rounded-xl border border-gray-200 bg-white/95 p-4 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between"><div class="text-sm"><span class="text-gray-500">Endsumme:</span> <strong class="text-lg text-orange-600">{{ euro(brutto) }}</strong></div><div class="flex gap-2"><button type="button" class="flex-1 rounded-lg border border-gray-300 px-4 py-2 font-semibold" @click="editing = false; resetForm()">Abbrechen</button><button type="submit" :disabled="form.processing" class="flex-1 rounded-lg bg-orange-600 px-4 py-2 font-semibold text-white">Speichern</button></div></div>
             </form>
 
+            <Offers :key="anforderung.revision" :order="anforderung" :editable="editable && !editing" :approval="approval" :director="canConfirmDirector" />
             <section id="kommunikation" class="scroll-mt-24 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div>

@@ -23,6 +23,12 @@ class InjectUserPermissions
 
         if ($user) {
             $permissions = $user->getAllPermissions()->pluck('name');
+            if (\Illuminate\Support\Facades\Schema::hasTable('purchase_rules')
+                && (app(\App\Services\Purchasing\PurchaseWorkflow::class)->isDirector($user)
+                    || $user->can('materialanforderung.settings.manage'))) {
+                // Navigation only. Controllers still authorize every operation and record.
+                $permissions->push('materialanforderung.index');
+            }
 
             $permissionAliases = $permissions->flatMap(function ($permission) {
                 if (str_starts_with($permission, 'raeumlichkeiten.')) {

@@ -7,6 +7,7 @@ const props = defineProps({
     alle_teilnehmer: Array,
     alle_bereiche: Array,
     selectionCount: Number,
+    settingSaving: { type: Boolean, default: false },
     search: String,
     canCreate: { type: Boolean, default: false },
     canUpdate: { type: Boolean, default: false },
@@ -100,10 +101,10 @@ const isOptionDisabled = (row, bereichId, choiceIndex) => (
 const hasSavedChoices = (row) => [1, 2, 3, 4].some(
     (field) => row.bereichsauswahl?.[`bereich_id${field}`] != null
 );
-const canEditRow = (row) => hasSavedChoices(row) ? props.canUpdate : props.canCreate;
+const canEditRow = (row) => !props.settingSaving && (hasSavedChoices(row) ? props.canUpdate : props.canCreate);
 
 const saveRow = async (row, showSuccess = true) => {
-    if (!isComplete(row)) {
+    if (props.settingSaving || !isComplete(row)) {
         return;
     }
 

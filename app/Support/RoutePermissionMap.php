@@ -84,43 +84,17 @@ class RoutePermissionMap
         'dokumente.pakete.destroy' => ['projekt.store', 'projekt.update', 'projekt.index'],
         'geraet.edit' => 'geraet.update',
         'getGeraeteID' => 'geraet.index',
-        'materialanforderung.index' => [
-            'materialanforderung.index',
-            'materialanforderung.sachlische_freigabe.index',
-            'materialanforderung.sachlische_freigabe.update',
-            'materialanforderung.kaufmännische_freigabe.index',
-            'materialanforderung.kaufmännische_freigabe.update',
-            'materialanforderung.bestellwesen.update',
-            'materialanforderung.bestellte.destroy',
-        ],
-        'materialanforderung.show' => [
-            'materialanforderung.show',
-            'materialanforderung.update',
-            'materialanforderung.sachlische_freigabe.show',
-            'materialanforderung.sachlische_freigabe.index',
-            'materialanforderung.sachlische_freigabe.update',
-            'materialanforderung.kaufmännische_freigabe.show',
-            'materialanforderung.kaufmännische_freigabe.index',
-            'materialanforderung.kaufmännische_freigabe.update',
-            'materialanforderung.bestellwesen.update',
-            'materialanforderung.bestellte.destroy',
-        ],
+        'materialanforderung.index' => [], // Controller checks project visibility and configured directors.
+
+        'materialanforderung.show' => [], // Controller checks project visibility and configured directors.
+
         'materialanforderung.genehmigen' => [],
         'materialanforderung.kommentare.store' => [],
         'materialanforderung.kommentare.resolve' => [],
         'materialanforderung.kommentare.anhaenge.download' => [],
         'materialanforderung.destroy' => ['materialanforderung.destroy', 'materialanforderung.bestellte.destroy'],
-        'materialanforderung.pdf' => [
-            'materialanforderung.show',
-            'materialanforderung.sachlische_freigabe.show',
-            'materialanforderung.sachlische_freigabe.index',
-            'materialanforderung.sachlische_freigabe.update',
-            'materialanforderung.kaufmännische_freigabe.show',
-            'materialanforderung.kaufmännische_freigabe.index',
-            'materialanforderung.kaufmännische_freigabe.update',
-            'materialanforderung.bestellwesen.update',
-            'materialanforderung.bestellte.destroy',
-        ],
+        'materialanforderung.pdf' => [], // Controller checks project visibility and configured directors.
+
         'it-service.index' => [
             'it.service.index',
             'it.ticket.store',

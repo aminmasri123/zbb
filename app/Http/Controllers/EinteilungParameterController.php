@@ -1180,7 +1180,10 @@ class EinteilungParameterController extends Controller
 
     private function bereichsauswahlSettingFor(int $projektId, int $partnerId, string $schuljahr, string $teil, ?Projekt $projekt = null): BereichsauswahlSetting
     {
-        $setting = BereichsauswahlSetting::firstOrCreate(
+        $setting = BereichsauswahlSetting::query()
+            ->forContext($projektId, $partnerId, $schuljahr, $teil)
+            ->preferConfigured()
+            ->first() ?? BereichsauswahlSetting::firstOrCreate(
             [
                 'projekt_id' => $projektId,
                 'partner_id' => $partnerId,

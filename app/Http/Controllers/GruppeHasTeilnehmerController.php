@@ -222,7 +222,7 @@ class GruppeHasTeilnehmerController extends Controller
             ->whereIn('id', GruppeHasPersonen::query()
                 ->where('gruppe_id', $gruppe->id)
                 ->select('personen_id'))
-            ->with('schueler:id,person_id,eee')
+            ->with('schueler:id,person_id,eee,schule_id,schuljahr,teil,klasse')
             ->get(['id', 'vorname', 'nachname', 'geschlecht'])
             ->each(fn (Personen $teilnehmer) => $teilnehmer->setAttribute(
                 'parental_consent_received',
@@ -778,13 +778,17 @@ class GruppeHasTeilnehmerController extends Controller
         }
 
         $context = $this->bopGruppenContext($gruppe);
+        // Gruppenberichte benötigen nur die Gruppe. Der Schulkontext ist
+        // ausschließlich für die zusätzlichen schulweiten Exporte notwendig.
+        if ($this->istPotenzialanalyseGruppe($gruppe)) {
+            return array_merge($unterweisungsnachweis, $this->potenzialanalyseExporte($gruppe, $context ?? []));
+        }
+
         if (! $context) {
             return $unterweisungsnachweis;
         }
 
-        $bopExporte = $this->istPotenzialanalyseGruppe($gruppe)
-            ? $this->potenzialanalyseExporte($gruppe, $context)
-            : $this->poboExporte($gruppe, $context);
+        $bopExporte = $this->poboExporte($gruppe, $context);
 
         return array_merge($unterweisungsnachweis, $bopExporte);
     }
@@ -927,31 +931,36 @@ class GruppeHasTeilnehmerController extends Controller
                 'method' => 'get',
                 'url' => route('potenzialanalyse.gruppe.berichte', $gruppe->id),
             ],
-            [
-                'id' => 'bop-pa-auswertungsbogen',
-                'name' => 'Auswertungsbogen PA Schule',
-                'format' => 'PDF',
-                'typ' => 'Potenzialanalyse',
-                'method' => 'get',
-                'url' => route('export.auswertungsbogenPA.schule.pdf', [
-                    'partnerId' => $context['partner_id'],
-                    'schuljahr' => $context['schuljahr'],
-                    'teil' => $context['teil'],
-                ]),
-            ],
-            [
-                'id' => 'bop-pa-berichte-ordner',
-                'name' => 'PA Berichte in Ordner generieren',
-                'format' => 'ORDNER',
-                'typ' => 'Potenzialanalyse',
-                'method' => 'get',
-                'url' => route('export.auswertungPA.schule.pdf.tofolder', [
-                    'schulId' => $context['partner_id'],
-                    'schuljahr' => $context['schuljahr'],
-                    'teil' => $context['teil'],
-                ]),
-            ],
         ];
+
+        if (! empty($context['partner_id']) && ! empty($context['schuljahr']) && ! empty($context['teil'])) {
+            $items = array_merge($items, [
+                [
+                    'id' => 'bop-pa-auswertungsbogen',
+                    'name' => 'Auswertungsbogen PA Schule',
+                    'format' => 'PDF',
+                    'typ' => 'Potenzialanalyse',
+                    'method' => 'get',
+                    'url' => route('export.auswertungsbogenPA.schule.pdf', [
+                        'partnerId' => $context['partner_id'],
+                        'schuljahr' => $context['schuljahr'],
+                        'teil' => $context['teil'],
+                    ]),
+                ],
+                [
+                    'id' => 'bop-pa-berichte-ordner',
+                    'name' => 'PA Berichte in Ordner generieren',
+                    'format' => 'ORDNER',
+                    'typ' => 'Potenzialanalyse',
+                    'method' => 'get',
+                    'url' => route('export.auswertungPA.schule.pdf.tofolder', [
+                        'schulId' => $context['partner_id'],
+                        'schuljahr' => $context['schuljahr'],
+                        'teil' => $context['teil'],
+                    ]),
+                ],
+            ]);
+        }
 
         if (! empty($context['klasse']) && auth()->user()?->can('anwesenheit.abrechnung')) {
             array_unshift($items, [

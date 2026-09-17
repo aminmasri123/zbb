@@ -980,6 +980,12 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     });
 
     /*   Bestellungen // Materialanforderung */
+    Route::get('/Bestellungen/einstellungen', [\App\Http\Controllers\PurchaseRuleController::class, 'index'])->name('materialanforderung.settings');
+    Route::post('/Bestellungen/einstellungen', [\App\Http\Controllers\PurchaseRuleController::class, 'store'])->name('materialanforderung.settings.store');
+    Route::post('/Materialanforderung/{materialanforderung}/angebote', [\App\Http\Controllers\PurchaseOfferController::class, 'store'])->name('materialanforderung.offers.store');
+    Route::delete('/Bestellangebote/{offer}', [\App\Http\Controllers\PurchaseOfferController::class, 'destroy'])->name('materialanforderung.offers.destroy');
+    Route::get('/Bestellangebote/{offer}/datei', [\App\Http\Controllers\PurchaseOfferController::class, 'download'])->name('materialanforderung.offers.download');
+    Route::get('/Materialanforderung/{materialanforderung}/bestellschein/{format}', [MaterialanforderungController::class, 'exportOrder'])->name('materialanforderung.order.export');
     Route::get('/Bestellungen', [MaterialanforderungController::class, 'index'])->name('materialanforderung.index');
     Route::get('/Materialanforderung/{id}', [MaterialanforderungController::class, 'show'])->name('materialanforderung.show');
     Route::get('/Materialanforderung/{materialanforderung}/pdf', [MaterialanforderungController::class, 'exportPdf'])->name('materialanforderung.pdf');

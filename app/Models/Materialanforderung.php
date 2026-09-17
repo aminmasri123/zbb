@@ -15,6 +15,8 @@ class Materialanforderung extends Model
     use HasFactory;
 
     protected $fillable = [
+        'preisart', 'versand_brutto', 'bestellnummer', 'standort_id', 'versand_netto', 'versand_mwst', 'lieferant_adresse',
+        'lieferantenreferenz', 'approval_policy', 'revision', 'selected_offer_id', 'order_snapshot', 'bestellt_am',
         'projekt_id',
         'kostenstelle',
         'benoetigt_am',
@@ -27,6 +29,8 @@ class Materialanforderung extends Model
     ];
 
     protected $casts = [
+        'approval_policy' => 'array', 'order_snapshot' => 'array', 'revision' => 'integer',
+        'versand_brutto' => 'decimal:2', 'bestellt_am' => 'datetime', 'versand_netto' => 'decimal:2', 'versand_mwst' => 'decimal:2',
         'benoetigt_am' => 'date',
         'gesamtpreis' => 'decimal:2',
         'endsumme' => 'decimal:2',
@@ -35,6 +39,9 @@ class Materialanforderung extends Model
     protected static function booted(): void
     {
         static::deleting(function (Materialanforderung $anforderung) {
+            foreach ($anforderung->angebote as $offer) Storage::disk('local')->delete($offer->path);
+            Storage::disk('local')->deleteDirectory("materialanforderungen/{$anforderung->id}/angebote");
+            Storage::disk('local')->deleteDirectory("materialanforderungen/{$anforderung->id}/bestellschein");
             $anforderung->loadMissing('kommentare.attachments');
             foreach ($anforderung->kommentare as $kommentar) {
                 foreach ($kommentar->attachments as $attachment) {
@@ -44,6 +51,9 @@ class Materialanforderung extends Model
             Storage::disk('local')->deleteDirectory("materialanforderungen/{$anforderung->id}/kommentare");
         });
     }
+
+    public function angebote() { return $this->hasMany(PurchaseOffer::class, 'anforderung_id'); }
+    public function standort() { return $this->belongsTo(Standort::class); }
 
     public function vergabevermerke()
     {
@@ -80,9 +90,9 @@ class Materialanforderung extends Model
     // Berechne Gesamtsumme inkl. MwSt
     public function berechneEndsumme(): float
     {
-        return $this->artikeln->sum(function ($position) {
-            return $position->gesamtpreis + ($position->gesamtpreis * $position->mwst / 100);
-        });
+        return app(\App\Services\Purchasing\PurchaseWorkflow::class)->totals(
+            $this->artikeln->toArray(), $this->versand_netto, $this->versand_mwst, $this->versand_brutto
+        )[1];
     }
 
     // Materialanforderung.php

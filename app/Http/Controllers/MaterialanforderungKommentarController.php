@@ -141,7 +141,8 @@ class MaterialanforderungKommentarController extends Controller
     private function ensureVisible(Request $request, Materialanforderung $anforderung): void
     {
         $user = $request->user();
-        $visible = (int) $anforderung->ersteller_id === (int) $user->id
+        $visible = (app(\App\Services\Purchasing\PurchaseWorkflow::class)->isDirector($user) && in_array($anforderung->status, ['gf_pruefung', 'gf_genehmigt'], true))
+            || (int) $anforderung->ersteller_id === (int) $user->id
             || $anforderung->genehmigungen()->where('genehmiger_id', $user->id)->exists()
             || ($user->can('materialanforderung.sachlische_freigabe.index')
                 && $anforderung->status === 'eingereicht'
@@ -163,7 +164,10 @@ class MaterialanforderungKommentarController extends Controller
             ->unique()
             ->reject(fn ($id) => (int) $id === (int) $actor->id);
 
-        if (in_array($anforderung->status, ['kaufmaennisch_genehmigt', 'bestellt', 'teilweise_geliefert'], true)) {
+        if ($anforderung->status === 'gf_pruefung') {
+            $ids = $ids->merge(app(\App\Services\Purchasing\PurchaseWorkflow::class)->directors()->pluck('id'));
+        }
+        if (in_array($anforderung->status, ['kaufmaennisch_genehmigt', 'gf_genehmigt', 'bestellt', 'teilweise_geliefert'], true)) {
             try {
                 $ids = $ids->merge(User::permission('materialanforderung.bestellwesen.update')->pluck('id'));
             } catch (\Throwable) {

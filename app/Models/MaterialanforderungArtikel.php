@@ -16,6 +16,7 @@ class MaterialanforderungArtikel extends Model
         'gelieferte_menge',
         'art_nr',
         'einzelpreis',
+        'einzelpreis_brutto',
         'gesamtpreis',
         'mwst',
         'link',
@@ -34,6 +35,6 @@ class MaterialanforderungArtikel extends Model
     // Berechne Gesamtpreis inkl. MwSt
     public function gesamtMitMwst(): float
     {
-        return $this->gesamtpreis + ($this->gesamtpreis * $this->mwst / 100);
+        return \App\Services\Purchasing\PurchaseWorkflow::lineAmounts($this->toArray())[1] / 100;
     }
 }
