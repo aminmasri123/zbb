@@ -45,6 +45,10 @@ class PartnerDetailsPermissionTest extends TestCase
     {
         [$user] = $this->context();
         $this->grantTestPermission($user, 'kooperationspartner.details.view');
+        // Simulate a stale gate result while the assignment is already stored.
+        $user->setRelation('permissions', $user->permissions->reject(fn ($permission) => $permission->name === 'kooperationspartner.details.view'));
+        $this->assertFalse($user->can('kooperationspartner.details.view'));
+        $this->assertTrue($user->hasStoredPermission('kooperationspartner.details.view'));
         $this->actingAs($user)->getJson(route('partner.indexAjaxFresh', ['search' => 'VERTRAULICH']))
             ->assertOk()->assertJsonPath('partners.data.0.beschreibung', 'VERTRAULICH')
             ->assertJsonPath('partners.data.0.adresses.0.strasse', 'Geheimweg');

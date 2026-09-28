@@ -487,7 +487,12 @@ class ExportWordController extends Controller
             }
             return $this->downloadWordDocxZip($templateFile, $gruppe, $projekt, $dokument, $teilnehmer);
         }
-        if ($this->isBopHausordnung($projekt, $dokument, $templateFile)) {
+        $isLegacyPaEvaluation = $this->isBopPaGroup($gruppe, $projekt)
+            && count(array_intersect(
+                ['tag1', 'tag2', 'klasse', 'schule', 'pagebreak'],
+                (new TemplateProcessor($templateFile))->getVariables()
+            )) === 5;
+        if ($isLegacyPaEvaluation || $this->isBopHausordnung($projekt, $dokument, $templateFile)) {
             return $this->downloadWordCombinedSerienbrief(
                 $templateFile,
                 $gruppe,
@@ -1537,7 +1542,8 @@ class ExportWordController extends Controller
         $telefon = $person?->kontaktes?->first(fn ($kontakt) => in_array(strtolower($kontakt->kontakttyp?->name ?? ''), ['telefon', 'mobile', 'mobil'], true));
         $partnerValues = $this->partnerPlaceholderValues($gruppe, $projekt);
 
-        $participantClass = $this->participantClassForExport($person, $gruppe, $partnerValues);
+        $student = $this->participantSchoolRecordForExport($person, $gruppe, $partnerValues);
+        $participantClass = trim((string) $student?->klasse);
 
         $values = array_merge([
             'nr' => $nummer,
@@ -1595,6 +1601,15 @@ class ExportWordController extends Controller
             $values['klassen'] = $participantClass;
         }
 
+        if ($this->isBopPaGroup($gruppe, $projekt)) {
+            $values['tag1'] = $this->formatDate($gruppe->anfangsdatum);
+            $values['tag2'] = $this->formatDate($gruppe->enddatum);
+            $values['schule'] = $person ? ($student?->schule?->name ?? '') : ($partnerValues['partner_name'] ?? '');
+            // Legacy end marker: the document merger inserts the page break
+            // between participants, never after the last participant.
+            $values['pagebreak'] = '';
+        }
+
         if (app(\App\Services\Bop\BopEvaluationExportService::class)->isWorkshopGroup($gruppe)) {
             $values['anleiter'] = trim(($gruppe->betreuer?->vorname ?? '').' '.($gruppe->betreuer?->nachname ?? ''));
             if ($person) {
@@ -1616,10 +1631,16 @@ class ExportWordController extends Controller
         return $values;
     }
 
-    private function participantClassForExport(?Personen $person, Gruppe $gruppe, array $partnerValues): string
+    private function isBopPaGroup(Gruppe $gruppe, Projekt $projekt): bool
+    {
+        return str_contains(mb_strtolower((string) $projekt->name), 'bop')
+            && mb_strtolower(trim((string) $gruppe->bereich?->name)) === 'potenzialanalyse';
+    }
+
+    private function participantSchoolRecordForExport(?Personen $person, Gruppe $gruppe, array $partnerValues): ?PersonenIstSchueler
     {
         if (! $person?->getKey()) {
-            return '';
+            return null;
         }
 
         $gruppe->loadMissing(['partner', 'partners']);
@@ -1635,19 +1656,20 @@ class ExportWordController extends Controller
             ->when($schuljahr !== '', fn ($builder) => $builder->forSchuljahr($schuljahr))
             ->when($teil !== '', fn ($builder) => $builder->where('teil', $teil));
 
-        $klasse = trim((string) $query->orderByDesc('id')->value('klasse'));
+        $student = $query->with('schule')->orderByDesc('id')->first();
 
         // Bei älteren Gruppen fehlen teilweise Schuljahr/Teil am Exportkontext.
         // Dann ist die jüngste Schulzuordnung derselben Person die sichere Rückfallebene.
-        if ($klasse === '') {
-            $klasse = trim((string) PersonenIstSchueler::query()
+        if (trim((string) $student?->klasse) === '') {
+            $student = PersonenIstSchueler::query()
                 ->where('person_id', $person->getKey())
                 ->when($partnerId, fn ($builder) => $builder->where('schule_id', $partnerId))
+                ->with('schule')
                 ->orderByDesc('id')
-                ->value('klasse'));
+                ->first();
         }
 
-        return $klasse;
+        return $student;
     }
 
     private function partnerPlaceholderValues(Gruppe $gruppe, Projekt $projekt): array
@@ -2510,6 +2532,9 @@ class ExportWordController extends Controller
             'hausnummer', 'plz', 'stadt', 'ort', 'adresse', 'email', 'telefon',
         ]);
         $structuralVariables = collect();
+        if ($this->isBopPaGroup($gruppe, $projekt)) {
+            $participantKeys = $participantKeys->merge(['klasse', 'schule']);
+        }
         if (app(\App\Services\Bop\BopEvaluationExportService::class)->isWorkshopGroup($gruppe)) {
             $participantKeys = $participantKeys->merge(['klasse', 'schule'])
                 ->merge($variables->filter(fn ($variable) => preg_match('/^[a-k]-[1-5]$/', $variable)));
@@ -2662,6 +2687,9 @@ class ExportWordController extends Controller
         }
 
         foreach ($variables as $variable) {
+            if ($variable === 'pagebreak' && array_key_exists($variable, $values)) {
+                continue;
+            }
             // Unchecked boxes are intentionally empty, but unknown placeholders
             // must still fail validation outside the BOP field mapping.
             if (preg_match('/^[a-k]-[1-5]$/', $variable) && array_key_exists($variable, $values)) {

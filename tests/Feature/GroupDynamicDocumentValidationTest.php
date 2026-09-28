@@ -129,11 +129,11 @@ class GroupDynamicDocumentValidationTest extends TestCase
 
     public static function bopTemplateCases(): array
     {
-        return ['Hausordnung' => [false], 'BOP-Auswertung' => [true]];
+        return ['Hausordnung' => [false], 'BOP-Auswertung' => [true], 'PA-Originalvorlage' => [false, true]];
     }
 
     #[\PHPUnit\Framework\Attributes\DataProvider('bopTemplateCases')]
-    public function test_bop_templates_use_only_the_current_participants_data(bool $evaluation): void
+    public function test_bop_templates_use_only_the_current_participants_data(bool $evaluation, bool $pa = false): void
     {
         $user = User::factory()->create();
         $role = \App\Models\Role::create(['name' => 'BOP-Exporttest', 'guard_name' => 'web', 'color' => '#123456']);
@@ -147,7 +147,7 @@ class GroupDynamicDocumentValidationTest extends TestCase
         $user->update(['current_team_id' => $project->id]);
         $location = Standort::factory()->create();
         $partner = Partner::query()->create(['name' => 'Testschule']);
-        $area = Bereich::query()->create(['name' => 'Hauswirtschaft']);
+        $area = Bereich::query()->create(['name' => $pa ? 'Potenzialanalyse' : 'Hauswirtschaft']);
         $room = Raeume::query()->create([
             'name' => 'Lehrküche',
             'standort_id' => $location->id,
@@ -159,6 +159,8 @@ class GroupDynamicDocumentValidationTest extends TestCase
             'bereich_id' => $area->id,
             'projekt_id' => $project->id,
             'partner_id' => $partner->id,
+            'anfangsdatum' => '2026-09-01',
+            'enddatum' => '2026-09-02',
             'standort_id' => $location->id,
             'raum_id' => $room->id,
         ]);
@@ -175,6 +177,8 @@ class GroupDynamicDocumentValidationTest extends TestCase
                 'typ' => 'teilnehmer',
                 'vorname' => $vorname,
                 'nachname' => $nachname,
+                'geburtsdatum' => '2012-05-03',
+                'geschlecht' => $vorname === 'Anna' ? 'w' : 'm',
             ]);
             ProjektHasPersonen::query()->create([
                 'projekt_id' => $project->id,
@@ -210,7 +214,7 @@ class GroupDynamicDocumentValidationTest extends TestCase
         $permission = $this->permission('dokumente.export.bop-hausordnung-class');
         $user->givePermissionTo($permission);
         $document = Dokumente::query()->create([
-            'name' => $evaluation ? 'Auswertungsbogen BOP' : 'Hausordnung BOP',
+            'name' => $pa ? 'PA Auswertung' : ($evaluation ? 'Auswertungsbogen BOP' : 'Hausordnung BOP'),
             'typ' => 'word',
             'kontext' => 'gruppe',
             'einsatzbereich' => 'gruppe',
@@ -218,7 +222,7 @@ class GroupDynamicDocumentValidationTest extends TestCase
             'dateipfad' => '/app/temp/test-bop-template.docx',
             'aktiv' => true,
             'export_permission' => $permission->name,
-            'gruppen_export_modus' => 'einzelne_dateien',
+            'gruppen_export_modus' => $pa ? 'eine_datei' : 'einzelne_dateien',
         ]);
         $project->dokumente()->attach($document->id, [
             'gruppen_export' => true,
@@ -233,6 +237,10 @@ class GroupDynamicDocumentValidationTest extends TestCase
             : '${nachname}: ${klassen}');
         WordIOFactory::createWriter($word, 'Word2007')->save($templatePath);
 
+        if ($pa) {
+            copy(storage_path('vorlage/projekte/bop/word/Auswertung_PA.docx'), $templatePath);
+        }
+
         try {
             $response = $this->actingAs($user)->get(route('gruppe.export.serienbrief', [
                 'gruppe' => $group,
@@ -240,6 +248,7 @@ class GroupDynamicDocumentValidationTest extends TestCase
                 'format' => 'docx',
             ]));
 
+            $this->assertSame(200, $response->getStatusCode(), (string) session('error'));
             $response->assertOk();
             if (!$evaluation) $response->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
             $outputPath = $response->baseResponse->getFile()->getPathname();
@@ -262,8 +271,34 @@ class GroupDynamicDocumentValidationTest extends TestCase
             }
             $zip->close();
 
-            $this->assertStringContainsString('Erste: 7.1', $xml);
-            $this->assertStringContainsString('Zweite: 7.2', $xml);
+            if ($pa) {
+                $this->assertStringNotContainsString('${', $xml);
+                $this->assertSame(1, substr_count($xml, '<w:br w:type="page"/>'));
+                $text = html_entity_decode(strip_tags($xml));
+                foreach (['Erste, Anna', 'Zweite, Ben', '7.1', '7.2', 'Testschule', '01.09.2026', '02.09.2026'] as $expected) {
+                    $this->assertStringContainsString($expected, $text);
+                }
+                $document->update(['ausgabeformate' => ['docx', 'pdf']]);
+                $pdfResponse = $this->get(route('gruppe.export.serienbrief', ['gruppe' => $group, 'dokument' => $document, 'format' => 'pdf']))->assertOk();
+                $pdfPath = $pdfResponse->baseResponse->getFile()->getPathname();
+                try {
+                    $pages = (new \Smalot\PdfParser\Parser)->parseFile($pdfPath)->getPages();
+                    $this->assertCount(2, $pages);
+                    foreach (['Erste', 'Zweite'] as $index => $name) {
+                        $this->assertStringContainsString($name, $pages[$index]->getText());
+                        $this->assertStringContainsString('Testschule', $pages[$index]->getText());
+                    }
+                } finally {
+                    @unlink($pdfPath);
+                }
+                // Missing student data must still fail, rather than print blanks.
+                PersonenIstSchueler::query()->delete();
+                $this->get(route('gruppe.export.serienbrief', ['gruppe' => $group, 'dokument' => $document, 'format' => 'docx']))
+                    ->assertRedirect()->assertSessionHas('error', fn (string $message) => str_contains($message, 'Klasse') && str_contains($message, 'Schule'));
+            } else {
+                $this->assertStringContainsString('Erste: 7.1', $xml);
+                $this->assertStringContainsString('Zweite: 7.2', $xml);
+            }
             $this->assertStringNotContainsString('7.1 + 7.2', $xml);
             if ($evaluation) {
                 $text = html_entity_decode(strip_tags($xml));

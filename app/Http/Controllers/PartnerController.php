@@ -43,7 +43,7 @@ class PartnerController extends Controller
 
     private function partnerRelationsForProject($projektId)
     {
-        if (! auth()->user()->can('kooperationspartner.details.view')) {
+        if (! auth()->user()->hasStoredPermission('kooperationspartner.details.view')) {
             return ['partnerschaftstypens', 'schueler'];
         }
         $pivotIds = $this->projektPartnerPivotIds($projektId);
@@ -74,7 +74,7 @@ class PartnerController extends Controller
 
         $term = "%{$search}%";
 
-        if (! auth()->user()->can('kooperationspartner.details.view')) {
+        if (! auth()->user()->hasStoredPermission('kooperationspartner.details.view')) {
             return $query->where('partners.name', 'like', $term);
         }
 
@@ -129,7 +129,7 @@ class PartnerController extends Controller
 
     private function protectPartnerDetails($partners): void
     {
-        if (auth()->user()->can('kooperationspartner.details.view')) return;
+        if (auth()->user()->hasStoredPermission('kooperationspartner.details.view')) return;
         $partners->getCollection()->each(function (Partner $partner) {
             $partner->setVisible(['id', 'name', 'partnerschaftstypens', 'schueler', 'bop_plans']);
             $partner->partnerschaftstypens->each(fn ($type) => $type->setVisible(['id', 'bezeichnung']));
@@ -264,7 +264,7 @@ class PartnerController extends Controller
 
     public function store(Request $request)
     {
-        abort_unless($request->user()->can('kooperationspartner.details.view'), 403);
+        abort_unless($request->user()->hasStoredPermission('kooperationspartner.details.view'), 403);
         $data = $request->validate([
             'name' => 'required|string|max:255',
             'beschreibung' => 'nullable|string',
@@ -452,7 +452,7 @@ class PartnerController extends Controller
      */
     public function update(Request $request, $id)
     {
-        abort_unless($request->user()->can('kooperationspartner.details.view'), 403);
+        abort_unless($request->user()->hasStoredPermission('kooperationspartner.details.view'), 403);
         $data = $request->validate([
             'name' => 'required|string|max:255',
             'beschreibung' => 'nullable|string',

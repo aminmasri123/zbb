@@ -130,6 +130,39 @@ class SelectableBopAreasTest extends TestCase
         $this->assertSame($areas[1]->id, EinteilungBereiche::where('teilnehmende_id', $student->id)->where('runde', 2)->value('bereich_id'));
     }
 
+    public function test_staff_can_remove_only_the_selected_students_assignment_from_all_rounds(): void
+    {
+        [, , $school, $areas, $student, , $selection] = $this->context();
+        foreach ([1 => $areas[0]->id, 2 => $areas[1]->id] as $round => $areaId) {
+            EinteilungBereiche::create([
+                'teilnehmende_id' => $student->id,
+                'teilnehmende_type' => PersonenIstSchueler::class,
+                'bereich_id' => $areaId,
+                'runde' => $round,
+            ]);
+        }
+        $other = PersonenIstSchueler::create([
+            'person_id' => Personen::factory()->create(['typ' => 'teilnehmer'])->id,
+            'schule_id' => $school->id, 'schuljahr' => '2026/2027', 'teil' => '1', 'klasse' => '8',
+        ]);
+        EinteilungBereiche::create([
+            'teilnehmende_id' => $other->id, 'teilnehmende_type' => PersonenIstSchueler::class,
+            'bereich_id' => $areas[0]->id, 'runde' => 1,
+        ]);
+
+        $this->postJson(route('einteilung.update'), $this->payload($school) + [
+            'schueler_id' => $student->id, 'runde_1' => null, 'runde_2' => null,
+        ])->assertOk()
+            ->assertJsonPath('message', 'Einteilung des Teilnehmers wurde entfernt.')
+            ->assertJsonPath('schueler_id', $student->id)
+            ->assertJsonPath('einteilung_ids', []);
+
+        $this->assertFalse(EinteilungBereiche::where('teilnehmende_id', $student->id)->exists());
+        $this->assertTrue(EinteilungBereiche::where('teilnehmende_id', $other->id)->exists());
+        $this->assertDatabaseHas('bereichsauswahls', ['id' => $selection->id, 'teilnehmer_id' => $student->id]);
+        $this->assertDatabaseHas('personen_ist_schuelers', ['id' => $student->id]);
+    }
+
     public function test_settings_reject_stages_foreign_areas_and_too_few_choices(): void
     {
         [, , $school, $areas, , $setting] = $this->context();

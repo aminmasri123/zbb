@@ -537,7 +537,9 @@ class EinteilungParameterController extends Controller
         });
 
         return response()->json([
-            'message' => 'Einteilung erfolgreich aktualisiert.',
+            'message' => empty($rundeValues)
+                ? 'Einteilung des Teilnehmers wurde entfernt.'
+                : 'Einteilung erfolgreich aktualisiert.',
             'schueler_id' => $schueler->id,
             'einteilung_ids' => $schueler->einteilungen()->pluck('bereich_id', 'runde')->toArray(),
             'payload' => $this->pagePayload(

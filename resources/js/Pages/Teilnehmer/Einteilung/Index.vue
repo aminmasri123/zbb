@@ -241,6 +241,14 @@
       </template>
 
       <template #footer>
+        <button
+          type="button"
+          @click="submitRemoveAssignment"
+          :disabled="form.processing"
+          class="mr-auto rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 shadow-sm hover:bg-red-50 disabled:opacity-50"
+        >
+          Einteilung entfernen
+        </button>
          <button @click="submitUpdate" :disabled="form.processing" class="px-6 py-2 text-sm font-medium text-white bg-zbb border border-transparent rounded-md shadow-sm hover:bg-opacity-90 disabled:opacity-50" >
           {{ form.processing ? 'Speichert...' : 'Speichern' }}
         </button>
@@ -1093,6 +1101,7 @@ const openEditModal = (schueler) => {
 // Update via Axios
 const submitUpdate = async () => {
   if (!canEinteilungUpdate.value) return
+  form.processing = true
   try {
     const response = await axios.post(route('einteilung.update'), {
       schueler_id: form.schueler_id,
@@ -1145,8 +1154,20 @@ const submitUpdate = async () => {
   } catch (error) {
     console.error('Fehler:', error.response?.data || error);
     setStatus(await readError(error), 'error')
+  } finally {
+    form.processing = false
   }
 };
+
+const submitRemoveAssignment = async () => {
+  if (!canEinteilungUpdate.value || !selectedSchueler.value) return
+  const name = `${selectedSchueler.value.vorname} ${selectedSchueler.value.nachname}`.trim()
+  if (!confirm(`Die gesamte Einteilung von ${name} aus allen Runden entfernen?`)) return
+  runden.value.forEach((runde) => {
+    form['runde_' + runde] = null
+  })
+  await submitUpdate()
+}
 
 const formatDate = (date) => {
   if (!date) return ''

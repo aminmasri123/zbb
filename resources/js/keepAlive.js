@@ -11,6 +11,9 @@ let requestRunning = false;
 let redirecting = false;
 let expiresAtMs = null;
 let lastActivitySentAt = 0;
+let activityRequestRunning = false;
+let activityRevision = 0;
+let expiryCheckRunning = false;
 
 export const sessionRemainingSeconds = ref(null);
 export const sessionLifetimeSeconds = ref(30 * 60);
@@ -51,7 +54,14 @@ const updateCountdown = () => {
     sessionRemainingSeconds.value = remaining;
 
     if (remaining <= 0) {
-        redirectAfterSessionExpiry();
+        // Another tab or an in-flight activity request may have renewed the
+        // session. Only the server can confirm that it has really expired.
+        if (!expiryCheckRunning && !activityRequestRunning) {
+            expiryCheckRunning = true;
+            checkAuthenticatedSession().then((authenticated) => {
+                if (authenticated && !activityRequestRunning && sessionRemainingSeconds.value <= 0) redirectAfterSessionExpiry();
+            }).finally(() => { expiryCheckRunning = false; });
+        }
         return;
     }
 
@@ -61,6 +71,7 @@ const updateCountdown = () => {
 export const checkAuthenticatedSession = async ({ redirect = true } = {}) => {
     if (!navigator.onLine) return false;
 
+    const revision = activityRevision;
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), SESSION_REQUEST_TIMEOUT_MS);
 
@@ -84,7 +95,8 @@ export const checkAuthenticatedSession = async ({ redirect = true } = {}) => {
 
         if (!response.ok) return false;
 
-        applySessionPayload(await response.json());
+        const payload = await response.json();
+        if (revision === activityRevision && !activityRequestRunning) applySessionPayload(payload);
         return true;
     } catch {
         return false;
@@ -94,21 +106,27 @@ export const checkAuthenticatedSession = async ({ redirect = true } = {}) => {
 };
 
 export const recordAuthenticatedActivity = async ({ force = false } = {}) => {
-    if (redirecting || !navigator.onLine) return;
-    if (sessionWarningVisible.value && !force) return;
+    if (redirecting || !navigator.onLine || activityRequestRunning) return;
 
     const now = Date.now();
     if (!force && (now - lastActivitySentAt) < ACTIVITY_THROTTLE_MS) return;
     lastActivitySentAt = now;
+    activityRequestRunning = true;
+    activityRevision++;
 
     try {
         const response = await window.axios.post(sessionActivityUrl(), {}, {
             headers: { Accept: 'application/json' },
+            timeout: SESSION_REQUEST_TIMEOUT_MS,
         });
         applySessionPayload(response.data);
     } catch {
+        lastActivitySentAt = 0;
         // 401/419 behandelt der globale Axios-Interceptor. Kurze Netzfehler
         // verlängern die Sitzung bewusst nicht.
+    } finally {
+        activityRequestRunning = false;
+        activityRevision++;
     }
 };
 
@@ -144,7 +162,14 @@ export const pingBackend = async () => {
     }
 };
 
-const activityEvents = ['pointerdown', 'keydown', 'touchstart', 'scroll'];
+const activityEvents = ['pointerdown', 'keydown', 'touchstart', 'scroll', 'input', 'change'];
+
+const handleUserActivity = (event) => {
+    // Keep the warning's explicit yes/no buttons usable. Activity in the
+    // working form still counts, including events stopped by UI components.
+    if (!event.isTrusted || event.target?.closest?.('[aria-labelledby="session-warning-title"]')) return;
+    recordAuthenticatedActivity();
+};
 
 export const startBackendKeepAlive = () => {
     if (sessionCheckTimer !== null) return;
@@ -154,7 +179,7 @@ export const startBackendKeepAlive = () => {
     countdownTimer = window.setInterval(updateCountdown, 1000);
 
     activityEvents.forEach((eventName) => {
-        window.addEventListener(eventName, recordAuthenticatedActivity, { passive: true });
+        window.addEventListener(eventName, handleUserActivity, { passive: true, capture: true });
     });
 
     window.addEventListener('focus', pingBackend);
