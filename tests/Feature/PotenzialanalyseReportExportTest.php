@@ -16,10 +16,6 @@ class PotenzialanalyseReportExportTest extends TestCase
     public function test_pa_report_uses_self_contained_print_styles_and_original_bop_data(): void
     {
         $this->assertSame(
-            'c8b72ef81f5ebdc8103616c70bf61c529046c939047e0cab1df3f1beb66b808c',
-            hash_file('sha256', resource_path('views/pdf/berichtPA.blade.php'))
-        );
-        $this->assertSame(
             'fb73d15b9efd482f3c85975f976708c3bf1ea0ba618bd93984577ae806d39d99',
             hash_file('sha256', config_path('beurteilungen.php'))
         );
@@ -49,6 +45,42 @@ class PotenzialanalyseReportExportTest extends TestCase
         $this->assertStringStartsWith('%PDF-', $output);
         $this->assertGreaterThan(1000, strlen($output));
         $this->assertSame(4, $pdf->getDomPDF()->getCanvas()->get_page_count());
+    }
+
+    public function test_all_bop_competency_rows_mark_only_the_saved_rating(): void
+    {
+        foreach ([null, 1, 2, 3, 4, 5] as $rating) {
+            $participant = $this->participantFixture();
+            foreach (array_keys((array) $participant->auswertungPa) as $field) {
+                $participant->auswertungPa->$field = $rating;
+                // Different values also detect swapped self/coach assessments.
+                $participant->selbsteinschaetzung->$field = $rating === null ? null : 6 - $rating;
+            }
+
+            $html = view('pdf.berichtPA', [
+                'beurteilungen' => config('beurteilungen'),
+                'teilnehmer' => $participant,
+            ])->render();
+            $document = new \DOMDocument();
+            @$document->loadHTML('<?xml encoding="UTF-8">'.$html);
+            $xpath = new \DOMXPath($document);
+            $rows = $xpath->query('//tr[td[normalize-space(.)="TL" or normalize-space(.)="SE"]]');
+            $this->assertCount(22, $rows);
+
+            foreach ($rows as $index => $row) {
+                $cells = $xpath->query('./td', $row);
+                $isCoach = $index % 2 === 0;
+                $offset = $isCoach ? 2 : 1;
+                $expectedRating = $isCoach || $rating === null ? $rating : 6 - $rating;
+                for ($column = 1; $column <= 5; $column++) {
+                    $this->assertSame(
+                        $expectedRating === $column ? 'X' : '',
+                        trim($cells->item($offset + $column - 1)->textContent),
+                        'Row '.$index.', rating '.var_export($rating, true).', column '.$column,
+                    );
+                }
+            }
+        }
     }
 
     public function test_data_driven_profile_report_renders_without_bop_specific_fields(): void
@@ -93,6 +125,27 @@ class PotenzialanalyseReportExportTest extends TestCase
         $this->assertStringStartsWith('%PDF-', $output);
         $this->assertGreaterThan(1000, strlen($output));
         $this->assertSame(2, $pdf->getDomPDF()->getCanvas()->get_page_count());
+    }
+
+    public function test_exercise_rating_requires_points_and_a_valid_maximum(): void
+    {
+        foreach ([[null, 20, null], ['', 20, null], [0, 20, 1], [18, 20, 4], [20, 20, 5], [0, 0, null], [1, null, null]] as [$points, $maximum, $rating]) {
+            $participant = $this->participantFixture();
+            $participant->uebungen->first()->pivot->punkte = $points;
+            $participant->uebungen->first()->hoechstwert = $maximum;
+            $html = view('pdf.berichtPA', [
+                'beurteilungen' => config('beurteilungen'),
+                'teilnehmer' => $participant,
+            ])->render();
+            $document = new \DOMDocument();
+            @$document->loadHTML('<?xml encoding="UTF-8">'.$html);
+            $xpath = new \DOMXPath($document);
+            $cells = $xpath->query('//tr[td[normalize-space(.)="Hammerwerk"]]/td');
+            $this->assertCount(8, $cells);
+            for ($column = 1; $column <= 5; $column++) {
+                $this->assertSame($rating === $column ? 'X' : '', trim($cells->item($column + 2)->textContent));
+            }
+        }
     }
 
     public function test_group_export_merges_thirty_original_four_page_reports(): void

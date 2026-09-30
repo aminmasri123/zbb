@@ -372,7 +372,7 @@
                             <td class="text-center h-col2">{{$teilnehmer->selbsteinschaetzung?->arbeitsplanung == 2 ? 'X' : ''}}</td>
                             <td class="text-center h-col2">{{$teilnehmer->selbsteinschaetzung?->arbeitsplanung == 3 ? 'X' : ''}}</td>
                             <td class="text-center h-col2">{{$teilnehmer->selbsteinschaetzung?->arbeitsplanung == 4 ? 'X' : ''}}</td>
-                            <td class="text-center h-col2">{{$teilnehmer->selbsteinschaetzung?->arbeitsplanung == 1 ? 'X' : ''}}</td>
+                            <td class="text-center h-col2">{{$teilnehmer->selbsteinschaetzung?->arbeitsplanung == 5 ? 'X' : ''}}</td>
                             <td class="border-top-0 h-col2"></td>
                         </tr>
                     </tbody>
@@ -570,10 +570,11 @@
                                     <td class="lh-1" style="width: 1.33cm; line-height:1">Punkte:</td>
                                     <td class="lh-1 text-right" style="width: 1.33cm; line-height:1">{{ $uebung->pivot->punkte }}</td>
                                     @php
-                                        $hoechstwert = $uebung->hoechstwert ?: 1; // Falls hoechstwert 0 oder null ist, wird 1 verwendet
-                                        $verhaeltnis = $uebung->pivot->punkte / $hoechstwert;
+                                        $verhaeltnis = is_numeric($uebung->pivot->punkte) && $uebung->hoechstwert > 0
+                                            ? $uebung->pivot->punkte / $uebung->hoechstwert
+                                            : null;
                                     @endphp
-                                    <td class="text-center" style="line-height:1">{{ $verhaeltnis <= 0.02275 ? 'X'  : ''}}</td>
+                                    <td class="text-center" style="line-height:1">{{ $verhaeltnis !== null && $verhaeltnis <= 0.02275 ? 'X'  : ''}}</td>
                                     <td class="text-center" style="line-height:1">{{ $verhaeltnis > 0.02275 && $verhaeltnis <= 0.15865 ? 'X' : ''}}</td>
                                     <td class="text-center" style="line-height:1">{{ $verhaeltnis > 0.15865 && $verhaeltnis <= 0.845135 ? 'X' : ''}}</td>
                                     <td class="text-center" style="line-height:1">{{ $verhaeltnis > 0.845135 && $verhaeltnis <= 0.97725 ? 'X' : ''}}</td>
