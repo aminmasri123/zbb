@@ -18,6 +18,7 @@ const emit = defineEmits(['close', 'add-partner']);
 
 let form = ref({
     name: '',
+    schulnummer: '',
     beschreibung: '',
     typ: [],
     ansprechpartner: [
@@ -119,6 +120,10 @@ const save = () => {
             <label>Partnername <span class="text-red-500">*</span></label>
         </FloatLabel>
 
+        <FloatLabel class="mb-3">
+            <InputText v-model="form.schulnummer" maxlength="10" class="w-full" />
+            <label>Schulnummer</label>
+        </FloatLabel>
         <!-- Typen -->
         <FloatLabel class="mb-3">
             <MultiSelect

@@ -199,6 +199,9 @@ class PartnerController extends Controller
             'projektName' => $projektName,
             'kontaktypens' => $kontaktypens,
             'anzahlBereiche' => $anzahlBereiche,
+            'bopAreaReport' => $projekt->usesBopParticipantOverviewPreset() && $user->can('anwesenheit.abrechnung')
+                ? app(\App\Services\Bop\ParticipantAreaReport::class)->build($projekt, $request->input('bericht_typ') === 'ende' ? 'ende' : 'zwischen')
+                : null,
             'partnerDokumente' => $this->partnerDocumentsForProject($projekt, $user),
         ]);
     }
@@ -267,6 +270,7 @@ class PartnerController extends Controller
         abort_unless($request->user()->hasStoredPermission('kooperationspartner.details.view'), 403);
         $data = $request->validate([
             'name' => 'required|string|max:255',
+            'schulnummer' => 'nullable|string|max:10',
             'beschreibung' => 'nullable|string',
             'typ' => 'required|array',      // partnerschaftstypen
             'typ.*' => 'integer|exists:partnerschaftstypens,id',
@@ -297,6 +301,7 @@ class PartnerController extends Controller
         // 1️⃣ Partner anlegen
         $partner = Partner::create([
             'name' => $data['name'],
+            'schulnummer' => $data['schulnummer'] ?? null,
             'beschreibung' => $data['beschreibung'] ?? null,
         ]);
 
@@ -455,6 +460,7 @@ class PartnerController extends Controller
         abort_unless($request->user()->hasStoredPermission('kooperationspartner.details.view'), 403);
         $data = $request->validate([
             'name' => 'required|string|max:255',
+            'schulnummer' => 'nullable|string|max:10',
             'beschreibung' => 'nullable|string',
 
             'typ' => 'required|array',
@@ -489,6 +495,7 @@ class PartnerController extends Controller
 
         $partner->update([
             'name' => $data['name'],
+            'schulnummer' => $data['schulnummer'] ?? $partner->schulnummer,
             'beschreibung' => $data['beschreibung'] ?? null,
         ]);
 

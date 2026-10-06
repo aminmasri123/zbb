@@ -1049,10 +1049,13 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     Route::post('/einteilung/export-excel', [EinteilungParameterController::class, 'exportExcel'])->name('einteilung.export.excel')->middleware('can:einteilung.export');
 
     // zu bearbeiten
-    Route::get('/anwesenheitsdaten/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'anwesenheitsdaten'])->name('index-anpassung-anwesenheitsdaten');
-    Route::post('/anwesenheitsdaten/{schulId}/{schuljahr}/{teil}/export', [BopLegacyFunctionController::class, 'anwesenheitsdatenExport'])->name('export.anwesenheitsdaten.schule.excel');
+    Route::get('/anwesenheitsdaten/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'anwesenheitsdaten'])->where('schuljahr', '[0-9]{4}(?:[-/][0-9]{4})?')->name('index-anpassung-anwesenheitsdaten');
+    Route::put('/anwesenheitsdaten/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'saveSchoolAttendance'])->where('schuljahr', '[0-9]{4}(?:[-/][0-9]{4})?')->name('bop.school-attendance.store');
+    Route::post('/anwesenheitsdaten/{schulId}/{schuljahr}/{teil}/generieren', [BopLegacyFunctionController::class, 'generateSchoolAttendance'])->where('schuljahr', '[0-9]{4}(?:[-/][0-9]{4})?')->name('generieren.updatedaten.teilnehmer');
+    Route::get('/export/teilnehmerlisteDesProjekttraegers/{schulId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'projectProviderParticipants'])->where('schuljahr', '[0-9]{4}(?:[-/][0-9]{4})?')->name('export.teilnehmerlisteDesProjekttraegers');
+    Route::post('/anwesenheitsdaten/{schulId}/{schuljahr}/{teil}/export', [BopLegacyFunctionController::class, 'anwesenheitsdatenExport'])->where('schuljahr', '[0-9]{4}(?:[-/][0-9]{4})?')->name('export.anwesenheitsdaten.schule.excel');
     Route::post('/schulanwesenheit/{schulId}/{schuljahr}/{teil}/export', [BopLegacyFunctionController::class, 'schulAnwesenheitExport'])->name('export.schulanwesenheit.excel');
-    Route::get('/teilnehmerliste/excel/{schuleId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'teilnehmerliste'])->name('export.teilnehmerliste.schule.excel')->middleware(['module:participant_management', 'projectFeature:participant_management']);
+    Route::get('/teilnehmerliste/excel/{schuleId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'teilnehmerliste'])->where('schuljahr', '[0-9]{4}(?:[-/][0-9]{4})?')->name('export.teilnehmerliste.schule.excel')->middleware(['module:participant_management', 'projectFeature:participant_management']);
     Route::get('/teilnehmerccliste/excel/{schuleId}/{schuljahr}/{teil}', [MaterialanforderungController::class, 'index'])->name('teilnehmer.liste.schule')->middleware(['module:participant_management', 'projectFeature:participant_management']);
     Route::get('/alleTeilnehmer/folder/create/{idSchule}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'createFolderAll'])->name('alleTeilnehmer.folder.create');
     Route::get('/anwesenheitsliste/vorbereitung/bo/{schuleId}/{schuljahr}/{teil}', [BopLegacyFunctionController::class, 'anwesenheitslisteVorbereitung'])->name('anwesenheitslisteVorBOTage');

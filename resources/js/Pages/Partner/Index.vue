@@ -17,6 +17,7 @@ import ModalUsbStickBrief from './BOP/ModalUsbStickBrief.vue';
 import ModalPoboCertificates from './BOP/ModalPoboCertificates.vue';
 import BopRunPlanner from './BOP/BopRunPlanner.vue';
 import BopTimetablePlanner from './BOP/BopTimetablePlanner.vue';
+import ParticipantAreaReport from './BOP/ParticipantAreaReport.vue';
 import { usePermissions } from '@/utils/permissions';
 
 // Props
@@ -26,6 +27,7 @@ const props = defineProps({
     projektName: String,
     kontaktypens: Array,
     anzahlBereiche: Number,
+    bopAreaReport: Object,
     partnerDokumente: { type: Array, default: () => [] },
 });
 const { can, canAny } = usePermissions();
@@ -798,6 +800,7 @@ const updatePartnerAPI = async (form) => {
 
 
                                                         <a href="#">________________________________________</a>
+                                                        <Link v-if="can('anwesenheit.abrechnung')" :href="route('index-anpassung-anwesenheitsdaten', { schulId: partner.id, schuljahr: jahr, teil })" class="block px-4 py-1 hover:bg-gray-200">Anwesenheitsdaten</Link>
                                                         <button v-if="can('anwesenheit.abrechnung')" type="button" @click="openModal('schulanwesenheitExport', { partnerId: partner.id, jahr, teil, schoolName: partner.name })"
                                                             class="block w-full px-4 py-1 text-left hover:bg-gray-200">Anwesenheit für Schule exportieren</button>
 
@@ -962,6 +965,7 @@ const updatePartnerAPI = async (form) => {
         <ModalHausordnung v-if="activeModal === 'hausordnungConfig'" :visible="true" :partnerId="modalData.partnerId" :jahr="modalData.jahr" :teil="modalData.teil" @close="closeModal"/>
         <ModalUsbStickBrief v-if="activeModal === 'usbStickBrief'" :partner-id="modalData.partnerId" :schuljahr="modalData.jahr" :school-name="modalData.schoolName" @close="closeModal" />
         <ModalPoboCertificates v-if="activeModal === 'poboCertificates'" :partner-id="modalData.partnerId" :schuljahr="modalData.jahr" :teil="modalData.teil" :school-name="modalData.schoolName" @close="closeModal" />
+        <ParticipantAreaReport :report="bopAreaReport" />
         <BopRunPlanner
             v-if="activeModal === 'bopRunPlanner'"
             :visible="true"

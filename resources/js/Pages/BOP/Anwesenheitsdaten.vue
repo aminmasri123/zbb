@@ -3,6 +3,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import { Head } from '@inertiajs/vue3';
 import { computed, reactive, ref } from 'vue';
 import Swal from 'sweetalert2';
+import axios from 'axios';
 
 const props = defineProps({
     partner: Object,
@@ -13,45 +14,20 @@ const props = defineProps({
     summenTage: Array,
     gesamtAnwesenheitstage: Number,
     paAnzahl: Number,
+    initialStatuses: Object,
 });
 
 const dayKeys = Object.keys(props.tage);
 const search = ref('');
 const sortState = reactive({ key: 'nummer', direction: 'asc' });
-const storageKey = `zbb:anwesenheitsdaten:${props.partner.id}:${props.schuljahr}:${props.teil}`;
-
-function defaultStatus(key) {
-    return key === 'bo1' ? 'absent' : 'present';
-}
-
-function createDefaultStatuses() {
-    return props.schueler.reduce((data, student) => {
-        data[student.id] = {};
-        dayKeys.forEach((key) => {
-            data[student.id][key] = defaultStatus(key);
-        });
-        return data;
-    }, {});
-}
-
-function loadStatuses() {
-    const defaults = createDefaultStatuses();
-    try {
-        const stored = JSON.parse(localStorage.getItem(storageKey) || '{}');
-        props.schueler.forEach((student) => {
-            defaults[student.id] = {
-                ...defaults[student.id],
-                ...(stored[student.id] || {}),
-            };
-        });
-        return defaults;
-    } catch (error) {
-        return defaults;
-    }
-}
-
-const statuses = reactive(loadStatuses());
-
+const context = { schulId: props.partner.id, schuljahr: props.schuljahr, teil: props.teil };
+const statuses = reactive(JSON.parse(JSON.stringify(props.initialStatuses || {})));
+const saving = ref(false);
+const saveError = ref('');
+const ministryOpen = ref(false);
+const starttermin = ref('');
+const endtermin = ref('');
+let saveQueue = Promise.resolve();
 const filteredStudents = computed(() => {
     const term = search.value.trim().toLowerCase();
     const filtered = props.schueler.filter((student) => {
@@ -81,9 +57,31 @@ const totalPresent = computed(() => {
 });
 
 function persist() {
-    localStorage.setItem(storageKey, JSON.stringify(statuses));
+    const snapshot = JSON.parse(JSON.stringify(statuses));
+    saving.value = true;
+    saveQueue = saveQueue.catch(() => {}).then(async () => {
+        try {
+            await axios.put(route('bop.school-attendance.store', context), { statuses: snapshot });
+            saveError.value = '';
+        } catch (error) {
+            saveError.value = 'Speichern fehlgeschlagen. Bitte erneut speichern.';
+            throw error;
+        } finally {
+            saving.value = false;
+        }
+    });
+    saveQueue.catch(() => {});
+    return saveQueue;
 }
-
+const totalBibb = computed(() => props.schueler.reduce((total, student) => {
+    const sum = rowSum(student.id);
+    return total + (sum >= 5 ? sum : 0);
+}, 0));
+function toggleDay(key) {
+    const next = filteredStudents.value.every(student => statuses[student.id][key] === 'present') ? 'absent' : 'present';
+    filteredStudents.value.forEach(student => statuses[student.id][key] = next);
+    persist();
+}
 function rowSum(studentId) {
     return props.summenTage.filter((key) => statuses[studentId]?.[key] === 'present').length;
 }
@@ -102,7 +100,6 @@ function statusClass(status) {
 
 function nextStatus(current) {
     if (current === 'present') return 'absent';
-    if (current === 'absent') return 'empty';
     return 'present';
 }
 
@@ -168,13 +165,13 @@ async function confirmGenerate() {
 
     if (!result.isConfirmed) return;
 
-    props.schueler.forEach((student) => {
-        dayKeys.forEach((key) => {
-            statuses[student.id][key] = defaultStatus(key);
-        });
-    });
-    persist();
-    Swal.fire({ title: 'Success', text: 'Anwesenheitsdaten wurden generiert.', icon: 'success', timer: 1500, showConfirmButton: false });
+    try {
+        await saveQueue;
+        const response = await axios.post(route('generieren.updatedaten.teilnehmer', context));
+        Object.assign(statuses, response.data.statuses);
+        Swal.fire({ text: 'Anwesenheitsdaten wurden generiert.', icon: 'success' });
+    } catch { Swal.fire({ text: 'Generieren fehlgeschlagen.', icon: 'error' }); }
+
 }
 
 function exportCsv() {
@@ -200,7 +197,8 @@ function exportCsv() {
     URL.revokeObjectURL(link.href);
 }
 
-function submitExcelExport() {
+async function submitExcelExport() {
+    try { await saveQueue; } catch { return; }
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = route('export.anwesenheitsdaten.schule.excel', {
@@ -262,6 +260,7 @@ function printPage() {
                         <i class="las la-file-csv"></i>
                         CSV
                     </button>
+<button type="button" class="rounded-full bg-zbb px-4 py-2 text-xs text-white" @click="ministryOpen = !ministryOpen">Tabelle Ministerium</button>
                     <button type="button" class="inline-flex items-center gap-2 rounded-full bg-zbb px-4 py-2 text-xs text-white hover:bg-zbb/80" @click="printPage">
                         <i class="las la-print"></i>
                         Drucken
@@ -269,14 +268,21 @@ function printPage() {
                 </div>
             </section>
 
+            <div class="flex gap-3 text-sm"><span v-if="saving">Speichern …</span><button v-if="saveError" type="button" class="text-red-600" @click="persist">{{ saveError }}</button></div>
             <section class="flex flex-wrap gap-4 text-sm font-semibold text-[var(--primary)]">
-                <span>Gesamtanzahl Anwesenheitstage: {{ totalPresent }}</span>
+                <span>REEL: {{ totalPresent }}</span>
+                <span>BIBB Zahl (Fiktiv): {{ totalBibb }}</span>
                 <span>Schüleranzahl PA: {{ paAnzahl }}</span>
                 <span>Schule: {{ partner.name }}</span>
                 <span>Schuljahr: {{ schuljahr }}</span>
                 <span>Teil: {{ teil }}</span>
             </section>
 
+<form v-if="ministryOpen" :action="route('export.teilnehmerlisteDesProjekttraegers', context)" method="GET" class="flex flex-wrap items-end gap-3">
+                <label>Starttermin<input v-model="starttermin" name="starttermin" type="date" required class="block rounded border p-2"></label>
+                <label>Endtermin<input v-model="endtermin" name="endtermin" type="date" :min="starttermin" required class="block rounded border p-2"></label>
+                <button type="submit" :disabled="saving || !!saveError" class="rounded bg-zbb p-2 text-white">Exportieren</button>
+            </form>
             <section class="flex flex-wrap items-center gap-2">
                 <input v-model="search" type="search" class="w-full rounded border border-gray-300 px-3 py-2 text-sm lg:w-80" placeholder="Nach Name, Klasse oder ID filtern">
                 <button type="button" class="rounded border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-100" @click="setVisibleRows('present')">
@@ -299,7 +305,7 @@ function printPage() {
                             <th class="cursor-pointer border border-gray-300 px-2 py-2" @click="sortBy('vorname')">Vorname <span class="text-gray-400">⇅</span></th>
                             <th class="cursor-pointer border border-gray-300 px-2 py-2" @click="sortBy('geschlecht')">W/M <span class="text-gray-400">⇅</span></th>
                             <th class="cursor-pointer border border-gray-300 px-2 py-2" @click="sortBy('klasse')">Klasse <span class="text-gray-400">⇅</span></th>
-                            <th v-for="label in tage" :key="label" class="border border-gray-300 px-2 py-2">{{ label }}</th>
+                            <th v-for="(label, key) in tage" :key="key" class="border border-gray-300 px-2 py-2"><button type="button" :title="`${label}: Alle umschalten`" @click="toggleDay(key)">↕ {{ label }}</button></th>
                             <th class="cursor-pointer border border-gray-300 px-2 py-2" @click="sortBy('summe')">Summe <span class="text-gray-400">⇅</span></th>
                             <th class="border border-gray-300 px-2 py-2"><i class="las la-cog"></i></th>
                         </tr>

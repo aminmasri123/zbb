@@ -156,14 +156,15 @@ class BopLegacyFunctionController extends Controller
     public function anwesenheitsdaten(int $schulId, string $schuljahr, string $teil)
     {
         $partner = $this->partner($schulId);
-        $schueler = $this->schueler($schulId, $schuljahr, $teil);
+        $schueler = $this->schueler($schulId, $schuljahr, $teil)->sortBy('person.nachname', SORT_NATURAL | SORT_FLAG_CASE)->values();
         $tage = $this->anwesenheitsdatenTage();
         $summenTage = $this->anwesenheitsdatenSummenTage();
         $gesamtAnwesenheitstage = $schueler->count() * count(array_filter(
             $summenTage,
             fn ($key) => $this->defaultAnwesenheitsdatenStatus($key) === 'present'
         ));
-        $paAnzahl = $schueler->count();
+        $statuses = app(\App\Services\Bop\SchoolAttendance::class)->load((int) auth()->user()->current_team_id, $schueler);
+        $paAnzahl = $this->schoolPaReportCount($schueler, $schulId);
 
         return Inertia::render('BOP/Anwesenheitsdaten', [
             'partner' => [
@@ -186,7 +187,15 @@ class BopLegacyFunctionController extends Controller
             'summenTage' => $summenTage,
             'gesamtAnwesenheitstage' => $gesamtAnwesenheitstage,
             'paAnzahl' => $paAnzahl,
+            'initialStatuses' => $statuses,
         ]);
+    }
+
+    private function schoolPaReportCount($students, int $schoolId): int
+    {
+        return \App\Models\PotenzialanalyseKompetenzbewertung::whereIn('personen_id', $students->pluck('person_id'))
+            ->whereIn('gruppe_id', \App\Models\Gruppe::where('projekt_id', auth()->user()->current_team_id)->where('partner_id', $schoolId)->select('id'))
+            ->distinct()->count('personen_id');
     }
 
     private function anwesenheitsdatenTage(): array
@@ -210,7 +219,7 @@ class BopLegacyFunctionController extends Controller
 
     private function defaultAnwesenheitsdatenStatus(string $key): string
     {
-        return $key === 'bo1' ? 'absent' : 'present';
+        return 'absent';
     }
 
     private function anwesenheitsdatenSummenTage(): array
@@ -224,8 +233,7 @@ class BopLegacyFunctionController extends Controller
         $schueler = $this->schueler($schulId, $schuljahr, $teil);
         $tage = $this->anwesenheitsdatenTage();
         $summenTage = $this->anwesenheitsdatenSummenTage();
-        $statusPayload = json_decode((string) $request->input('status_payload', '{}'), true);
-        $statusPayload = is_array($statusPayload) ? $statusPayload : [];
+        $statusPayload = app(\App\Services\Bop\SchoolAttendance::class)->load((int) auth()->user()->current_team_id, $schueler);
         $defaultTotal = $schueler->count() * count(array_filter(
             $summenTage,
             fn ($key) => $this->defaultAnwesenheitsdatenStatus($key) === 'present'
@@ -250,7 +258,7 @@ class BopLegacyFunctionController extends Controller
         $sheet->setCellValue('A5', 'Gesamtanzahl Anwesenheitstage');
         $sheet->setCellValue('B5', $exportTotal);
         $sheet->setCellValue('C5', 'Schueleranzahl PA');
-        $sheet->setCellValue('D5', $schueler->count());
+        $sheet->setCellValue('D5', $this->schoolPaReportCount($schueler, $schulId));
 
         $headers = array_merge(['ID', 'Nachname', 'Vorname', 'W/M', 'Klasse'], array_values($tage), ['Summe']);
         foreach ($headers as $index => $header) {
@@ -302,12 +310,105 @@ class BopLegacyFunctionController extends Controller
         );
     }
 
+    public function saveSchoolAttendance(Request $request, int $schulId, string $schuljahr, string $teil)
+    {
+        $this->partner($schulId);
+        $students = $this->schueler($schulId, $schuljahr, $teil);
+        $data = $request->validate(['statuses' => ['required', 'array'], 'statuses.*' => ['required', 'array'], 'statuses.*.*' => ['required', 'in:present,absent,empty']]);
+        $allowed = $students->pluck('id')->map(fn ($id) => (string) $id)->all();
+        $statuses = [];
+        foreach ($data['statuses'] as $id => $days) {
+            abort_unless(in_array((string) $id, $allowed, true), 422);
+            abort_unless(count(array_diff(array_keys($days), \App\Services\Bop\SchoolAttendance::DAYS)) === 0, 422);
+            $statuses[$id] = array_replace(array_fill_keys(\App\Services\Bop\SchoolAttendance::DAYS, 'absent'), $days);
+        }
+        app(\App\Services\Bop\SchoolAttendance::class)->save((int) auth()->user()->current_team_id, $statuses);
+        return response()->json(['saved' => true]);
+    }
+
+    public function generateSchoolAttendance(int $schulId, string $schuljahr, string $teil)
+    {
+        $this->partner($schulId);
+        return response()->json(['statuses' => app(\App\Services\Bop\SchoolAttendance::class)->generate(
+            (int) auth()->user()->current_team_id, $schulId, $this->schueler($schulId, $schuljahr, $teil)
+        )]);
+    }
+
     public function teilnehmerliste(int $schuleId, string $schuljahr, string $teil)
     {
+        $partner = $this->partner($schuleId);
+        $students = $this->schueler($schuleId, $schuljahr, $teil);
+        $firstImport = $students->min('created_at');
+        $boundary = $firstImport ? Carbon::parse($firstImport)->startOfDay()->addDay() : null;
+        $sorted = $students->sortBy('person.nachname', SORT_NATURAL | SORT_FLAG_CASE);
+        $students = $sorted->filter(fn ($student) => $boundary && $student->created_at->gte($boundary))
+            ->concat($sorted->filter(fn ($student) => ! $boundary || $student->created_at->lt($boundary)))->values();
+        $spreadsheet = new Spreadsheet;
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->fromArray(['Vorname', 'Nachname', 'Geschlecht', 'Klasse', 'Schulnummer', 'Förderschüler', 'Geburtsdatum'], null, 'A1');
+        foreach ($students as $index => $student) {
+            $row = $index + 2;
+            $person = $student->person;
+            $values = [$person?->vorname, $person?->nachname, $person?->geschlecht, $student->klasse, $partner->schulnummer ?? '----', ($student->foerderschueler || $student->foederschueler) ? 'Ja' : 'Nein', $person?->geburtsdatum ? Carbon::parse($person->geburtsdatum)->format('d.m.Y') : ''];
+            foreach ($values as $column => $value) $sheet->setCellValueExplicit([$column + 1, $row], (string) $value, DataType::TYPE_STRING);
+            if ($boundary && $student->created_at->gte($boundary)) $sheet->getStyle("A{$row}:G{$row}")->getFont()->getColor()->setARGB('FFFF0000');
+        }
+        $sheet->getStyle('A1:G1')->getFont()->setBold(true)->setSize(14);
+        $sheet->getStyle('A1:G1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('A1:G1')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFF2F2F2');
+        $sheet->getStyle('A1:G'.max(1, $students->count() + 1))->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+        foreach (range('A', 'G') as $column) $sheet->getColumnDimension($column)->setAutoSize(true);
         return $this->downloadSpreadsheet(
-            $this->simpleSpreadsheet('Teilnehmerliste', $schuleId, $schuljahr, $teil),
+            $spreadsheet,
             'Teilnehmerliste_'.$schuleId.'_'.$this->safeName($schuljahr).'_Teil_'.$this->safeName($teil).'.xlsx'
         );
+    }
+
+    public function projectProviderParticipants(Request $request, int $schulId, string $schuljahr, string $teil)
+    {
+        $partner = $this->partner($schulId);
+        $data = $request->validate(['starttermin' => ['required', 'date_format:Y-m-d'], 'endtermin' => ['required', 'date_format:Y-m-d', 'after_or_equal:starttermin']]);
+        $students = $this->schueler($schulId, $schuljahr, $teil)->sortBy('person.nachname');
+        $statuses = app(\App\Services\Bop\SchoolAttendance::class)->load((int) auth()->user()->current_team_id, $students);
+        $template = storage_path('vorlage/projekte/bop/excel/Teilnehmerliste_des_Projekttraegers.xlsx');
+        $spreadsheet = is_file($template) ? IOFactory::load($template) : new Spreadsheet;
+        $sheet = $spreadsheet->getActiveSheet();
+        if (! is_file($template)) {
+            $sheet->setTitle('Teilnehmerliste');
+            $sheet->fromArray(['Nr.', 'Schule', 'Klasse', 'Anrede', 'Name', 'Adresse', 'Geburtsdatum', 'Potenzialanalyse', '', 'Träger', 'Werkstatttage', '', 'Mindestens 5 Tage', 'Anwesenheitstage'], null, 'A5');
+            $sheet->getStyle('A5:N5')->getFont()->setBold(true);
+            $sheet->getStyle('A5:N5')->getAlignment()->setWrapText(true);
+            foreach (range('A', 'N') as $column) $sheet->getColumnDimension($column)->setWidth(20);
+            $sheet->freezePane('A6');
+        }
+        $year = (int) substr($schuljahr, 0, 4);
+        $sheet->setCellValue('A1', 'Teilnehmerliste des Projektträgers zur Berufsorientierung (01.01.'.$year.' - 31.08.'.($year + 1).')');
+        $start = Carbon::parse($data['starttermin']);
+        $end = Carbon::parse($data['endtermin']);
+        $period = $start->format('d.m').' - '.$end->format('d.m.Y').' '.($start->diffInDays($end) + 1).' Tage';
+        $entries = GruppeHasPersonen::with('gruppe.bereich')->whereIn('personen_id', $students->pluck('person_id'))
+            ->whereHas('gruppe', fn ($q) => $q->where('projekt_id', auth()->user()->current_team_id)->where('partner_id', $schulId))->get()->groupBy('personen_id');
+        $row = 6;
+        foreach ($students as $student) {
+            $sheet->setCellValue('A'.$row, $row - 5);
+            $person = $student->person;
+            $pa = ($entries[$student->person_id] ?? collect())->first(fn ($entry) => $entry->gruppe->isPotentialAnalysisGroup())?->gruppe;
+            if (! $pa) {
+                foreach ($students->where('klasse', $student->klasse) as $classmate) {
+                    $pa = ($entries[$classmate->person_id] ?? collect())->first(fn ($entry) => $entry->gruppe->isPotentialAnalysisGroup())?->gruppe;
+                    if ($pa) break;
+                }
+            }
+            $paPeriod = $pa ? Carbon::parse($pa->anfangsdatum)->format('d.m.').' - '.Carbon::parse($pa->enddatum)->format('d.m.Y') : '----';
+            $sum = collect($statuses[$student->id])->only($this->anwesenheitsdatenSummenTage())->filter(fn ($status) => $status === 'present')->count();
+            $address = $person?->adresses?->first();
+            $values = ['B' => $partner->name, 'C' => $student->klasse, 'D' => $person?->geschlecht === 'm' ? 'Herr' : ($person?->geschlecht === 'w' ? 'Frau' : '----'), 'E' => $person?->nachname.', '.$person?->vorname,
+                'F' => $address ? trim($address->strasse.' '.$address->hausnummer.', '.$address->plz.' '.$address->stadt) : '----',
+                'G' => $person?->geburtsdatum ? Carbon::parse($person->geburtsdatum)->format('d.m.Y') : '----', 'H' => $paPeriod.' (jeweils 2 Tage)', 'J' => 'ZBB - Zentrum für Bildung und Beruf Saar gGmbH', 'K' => $period, 'M' => $sum >= 5 ? 'Ja' : 'Nein', 'N' => $sum];
+            foreach ($values as $column => $value) $sheet->setCellValueExplicit($column.$row, (string) $value, DataType::TYPE_STRING);
+            $row++;
+        }
+        return $this->downloadSpreadsheet($spreadsheet, 'TN_Liste_BOP_'.$year.'_'.($year + 1).'_Land_'.$this->safeName($partner->name).'_'.$this->safeName($teil).'.xlsx');
     }
 
     public function createFolderAll(int $idSchule, string $schuljahr, string $teil)

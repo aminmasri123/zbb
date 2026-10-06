@@ -25,6 +25,7 @@ const geschlechtOptions = [
 
 let form = ref({
     name: '',
+    schulnummer: '',
     beschreibung: '',
     typ: [],
 
@@ -48,6 +49,7 @@ watch(
 
     form.value = {
       name: val.name ?? '',
+      schulnummer: val.schulnummer ?? '',
       beschreibung: val.beschreibung ?? '',
       typ: val.partnerschaftstypens
         ? [...new Set(val.partnerschaftstypens.map(t => t.id))]
@@ -120,6 +122,10 @@ const save = () => {
         <FloatLabel class="mb-3">
             <InputText v-model="form.name" class="w-full" />
             <label>Partnername</label>
+        </FloatLabel>
+        <FloatLabel class="mb-3">
+            <InputText v-model="form.schulnummer" maxlength="10" class="w-full" />
+            <label>Schulnummer</label>
         </FloatLabel>
 
         <FloatLabel class="mb-3">
