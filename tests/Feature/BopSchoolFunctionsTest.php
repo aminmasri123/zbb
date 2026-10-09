@@ -123,6 +123,32 @@ class BopSchoolFunctionsTest extends TestCase
         ]))->assertUnprocessable();
     }
 
+    public function test_one_present_potential_analysis_day_sets_both_pa_checks(): void
+    {
+        [$user, $group, $project, $school] = $this->context();
+        $group->bereich->update(['name' => 'Potenzialanalyse']);
+        $students = PersonenIstSchueler::orderBy('id')->get();
+        $absent = Anwesenheitsstatuten::query()->create([
+            'status' => 'krank', 'abkuerzung' => 'K', 'farben' => '#ff0000',
+        ]);
+        GruppeHasPersonen::where('personen_id', $students[1]->person_id)
+            ->update(['anwesenheitsstatuten_id' => $absent->id]);
+
+        $service = app(\App\Services\Bop\SchoolAttendance::class);
+        $statuses = $service->generate($project->id, $school->id, $students);
+        foreach (['pa1', 'pa2'] as $day) {
+            $this->assertSame('present', $statuses[$students[0]->id][$day]);
+            $this->assertSame('absent', $statuses[$students[1]->id][$day]);
+        }
+        $this->assertSame($statuses, $service->load($project->id, $students));
+
+        GruppeHasPersonen::where('personen_id', $students[0]->person_id)
+            ->update(['anwesenheitsstatuten_id' => $absent->id]);
+        $statuses = $service->generate($project->id, $school->id, $students);
+        $this->assertSame('absent', $statuses[$students[0]->id]['pa1']);
+        $this->assertSame('absent', $statuses[$students[0]->id]['pa2']);
+    }
+
     private function context(): array
     {
         $user = User::factory()->create();

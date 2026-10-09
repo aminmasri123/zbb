@@ -46,7 +46,7 @@ class SchoolAttendance
             $dates = $paEntries->filter(fn ($entry) => $entry->anwesenheitsstatuten_id && !preg_match('/fehl|krank|abwes|unentsch|entschuld/i', (string) $entry->status?->status))
                 ->pluck('tag.datum')->filter()->unique()->sort()->values();
             $days['vorb'] = $dates->isNotEmpty() ? 'present' : 'absent';
-            $days['pa1'] = $days['pa2'] = $dates->count() >= 2 ? 'present' : 'absent';
+            $days['pa1'] = $days['pa2'] = $dates->isNotEmpty() ? 'present' : 'absent';
             $statuses[$student->id] = $days;
         }
         $this->save($projectId, $statuses);
