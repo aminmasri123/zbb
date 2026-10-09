@@ -370,27 +370,17 @@ class BopLegacyFunctionController extends Controller
         $data = $request->validate(['starttermin' => ['required', 'date_format:Y-m-d'], 'endtermin' => ['required', 'date_format:Y-m-d', 'after_or_equal:starttermin']]);
         $students = $this->schueler($schulId, $schuljahr, $teil)->sortBy('person.nachname');
         $statuses = app(\App\Services\Bop\SchoolAttendance::class)->load((int) auth()->user()->current_team_id, $students);
-        $template = storage_path('vorlage/projekte/bop/excel/Teilnehmerliste_des_Projekttraegers.xlsx');
-        $spreadsheet = is_file($template) ? IOFactory::load($template) : new Spreadsheet;
-        $sheet = $spreadsheet->getActiveSheet();
-        if (! is_file($template)) {
-            $sheet->setTitle('Teilnehmerliste');
-            $sheet->fromArray(['Nr.', 'Schule', 'Klasse', 'Anrede', 'Name', 'Adresse', 'Geburtsdatum', 'Potenzialanalyse', '', 'Träger', 'Werkstatttage', '', 'Mindestens 5 Tage', 'Anwesenheitstage'], null, 'A5');
-            $sheet->getStyle('A5:N5')->getFont()->setBold(true);
-            $sheet->getStyle('A5:N5')->getAlignment()->setWrapText(true);
-            foreach (range('A', 'N') as $column) $sheet->getColumnDimension($column)->setWidth(20);
-            $sheet->freezePane('A6');
-        }
         $year = (int) substr($schuljahr, 0, 4);
-        $sheet->setCellValue('A1', 'Teilnehmerliste des Projektträgers zur Berufsorientierung (01.01.'.$year.' - 31.08.'.($year + 1).')');
+        $template = storage_path('vorlage/projekte/bop/excel/Vorlage.TN-Liste.'.substr((string) $year, -2).'-'.substr((string) ($year + 1), -2).'.xlsx');
+        abort_unless(is_file($template), 422, 'Die Originalvorlage des Ministeriums für dieses Schuljahr fehlt.');
+        abort_if($students->count() > \App\Services\Bop\MinistryParticipantExport::CAPACITY, 422, 'Die unveränderte Ministeriumsvorlage bietet Platz für maximal 403 Teilnehmer.');
         $start = Carbon::parse($data['starttermin']);
         $end = Carbon::parse($data['endtermin']);
         $period = $start->format('d.m').' - '.$end->format('d.m.Y').' '.($start->diffInDays($end) + 1).' Tage';
         $entries = GruppeHasPersonen::with('gruppe.bereich')->whereIn('personen_id', $students->pluck('person_id'))
             ->whereHas('gruppe', fn ($q) => $q->where('projekt_id', auth()->user()->current_team_id)->where('partner_id', $schulId))->get()->groupBy('personen_id');
-        $row = 6;
+        $participants = [];
         foreach ($students as $student) {
-            $sheet->setCellValue('A'.$row, $row - 5);
             $person = $student->person;
             $pa = ($entries[$student->person_id] ?? collect())->first(fn ($entry) => $entry->gruppe->isPotentialAnalysisGroup())?->gruppe;
             if (! $pa) {
@@ -404,11 +394,15 @@ class BopLegacyFunctionController extends Controller
             $address = $person?->adresses?->first();
             $values = ['B' => $partner->name, 'C' => $student->klasse, 'D' => $person?->geschlecht === 'm' ? 'Herr' : ($person?->geschlecht === 'w' ? 'Frau' : '----'), 'E' => $person?->nachname.', '.$person?->vorname,
                 'F' => $address ? trim($address->strasse.' '.$address->hausnummer.', '.$address->plz.' '.$address->stadt) : '----',
-                'G' => $person?->geburtsdatum ? Carbon::parse($person->geburtsdatum)->format('d.m.Y') : '----', 'H' => $paPeriod.' (jeweils 2 Tage)', 'J' => 'ZBB - Zentrum für Bildung und Beruf Saar gGmbH', 'K' => $period, 'M' => $sum >= 5 ? 'Ja' : 'Nein', 'N' => $sum];
-            foreach ($values as $column => $value) $sheet->setCellValueExplicit($column.$row, (string) $value, DataType::TYPE_STRING);
-            $row++;
+                'G' => $person?->geburtsdatum ? \PhpOffice\PhpSpreadsheet\Shared\Date::PHPToExcel(Carbon::parse($person->geburtsdatum)) : '----', 'H' => $paPeriod.' (jeweils 2 Tage)', 'J' => 'ZBB - Zentrum für Bildung und Beruf Saar gGmbH', 'K' => $period, 'M' => $sum >= 5 ? 'Ja' : 'Nein', 'N' => $sum];
+            $participants[] = $values;
         }
-        return $this->downloadSpreadsheet($spreadsheet, 'TN_Liste_BOP_'.$year.'_'.($year + 1).'_Land_'.$this->safeName($partner->name).'_'.$this->safeName($teil).'.xlsx');
+        $filename = 'TN_Liste_BOP_'.$year.'_'.($year + 1).'_Land_'.$this->safeName($partner->name).'_'.$this->safeName($teil).'.xlsx';
+        $path = storage_path('app/tmp/'.Str::uuid().'_'.$filename);
+        File::ensureDirectoryExists(dirname($path));
+        app(\App\Services\Bop\MinistryParticipantExport::class)->write($template, $path, $participants);
+
+        return response()->download($path, $filename)->deleteFileAfterSend(true);
     }
 
     public function createFolderAll(int $idSchule, string $schuljahr, string $teil)

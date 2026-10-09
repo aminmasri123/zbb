@@ -606,6 +606,19 @@ const updatePartnerAPI = async (form) => {
                     class="la la-refresh"></i>
             </Link>
         </div>
+
+        <div v-if="isBopProject" class="mx-auto mb-4 w-full max-w-7xl rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-gray-700 shadow-sm">
+            <div class="flex items-start gap-3">
+                <i class="la la-info-circle mt-0.5 text-lg text-zbb"></i>
+                <div>
+                    <p class="font-semibold text-gray-900">BOP-Funktionen pro Schule</p>
+                    <p>Bei der gewünschten Schule zuerst das Schuljahr und danach den Teil anklicken. Dort befinden sich Anwesenheitsdaten, Teilnehmerliste und die weiteren BOP-Exporte.</p>
+                </div>
+            </div>
+        </div>
+
+        <ParticipantAreaReport :report="bopAreaReport" />
+
         <!-- Partnerausgabe -->
         <div class="relative mx-auto mb-10 w-full max-w-7xl overflow-visible">
             <table id="table"
@@ -796,10 +809,9 @@ const updatePartnerAPI = async (form) => {
 
 
 
-                                                        <!-- ⚠️ zu erlegigen -->
-
-
-                                                        <a href="#">________________________________________</a>
+                                                        <div v-if="can('anwesenheit.abrechnung') || can('teilnehmer.liste.export')" class="mt-1 border-t border-gray-300 bg-orange-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-zbb">
+                                                            BOP Auswertungen und Listen
+                                                        </div>
                                                         <Link v-if="can('anwesenheit.abrechnung')" :href="route('index-anpassung-anwesenheitsdaten', { schulId: partner.id, schuljahr: jahr, teil })" class="block px-4 py-1 hover:bg-gray-200">Anwesenheitsdaten</Link>
                                                         <button v-if="can('anwesenheit.abrechnung')" type="button" @click="openModal('schulanwesenheitExport', { partnerId: partner.id, jahr, teil, schoolName: partner.name })"
                                                             class="block w-full px-4 py-1 text-left hover:bg-gray-200">Anwesenheit für Schule exportieren</button>
@@ -965,7 +977,6 @@ const updatePartnerAPI = async (form) => {
         <ModalHausordnung v-if="activeModal === 'hausordnungConfig'" :visible="true" :partnerId="modalData.partnerId" :jahr="modalData.jahr" :teil="modalData.teil" @close="closeModal"/>
         <ModalUsbStickBrief v-if="activeModal === 'usbStickBrief'" :partner-id="modalData.partnerId" :schuljahr="modalData.jahr" :school-name="modalData.schoolName" @close="closeModal" />
         <ModalPoboCertificates v-if="activeModal === 'poboCertificates'" :partner-id="modalData.partnerId" :schuljahr="modalData.jahr" :teil="modalData.teil" :school-name="modalData.schoolName" @close="closeModal" />
-        <ParticipantAreaReport :report="bopAreaReport" />
         <BopRunPlanner
             v-if="activeModal === 'bopRunPlanner'"
             :visible="true"

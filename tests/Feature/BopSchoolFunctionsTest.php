@@ -81,8 +81,14 @@ class BopSchoolFunctionsTest extends TestCase
         $this->putJson(route('bop.school-attendance.store', $params), ['statuses' => [999999 => $statuses[$students[0]->id]]])->assertUnprocessable();
         $ministry = $this->get(route('export.teilnehmerlisteDesProjekttraegers', array_merge($params, ['starttermin' => '2026-09-01', 'endtermin' => '2026-09-10'])))->assertOk();
         $book = \PhpOffice\PhpSpreadsheet\IOFactory::load($ministry->baseResponse->getFile()->getPathname());
-        $this->assertSame('Ja', $book->getActiveSheet()->getCell('M6')->getValue());
-        $this->assertStringContainsString('10 Tage', $book->getActiveSheet()->getCell('K6')->getValue());
+        $this->assertSame('Ja', (string) $book->getActiveSheet()->getCell('M6')->getValue());
+        $this->assertStringContainsString('10 Tage', (string) $book->getActiveSheet()->getCell('K6')->getValue());
+        $this->assertSame('Tabelle1', $book->getActiveSheet()->getTitle());
+        $this->assertSame(10, $book->getActiveSheet()->getCell('N6')->getValue());
+        $this->assertSame(110, $book->getActiveSheet()->getCell('O6')->getCalculatedValue());
+        $this->assertSame(9, $book->getActiveSheet()->getCell('N7')->getValue());
+        $this->assertSame(99, $book->getActiveSheet()->getCell('O7')->getCalculatedValue());
+        $this->assertSame(209, $book->getActiveSheet()->getCell('O5')->getCalculatedValue());
         @unlink($ministry->baseResponse->getFile()->getPathname());
     }
 
@@ -102,6 +108,19 @@ class BopSchoolFunctionsTest extends TestCase
         $this->assertSame('Ja', $row[5]);
         $this->assertSame('01234', $row[4]);
         @unlink($response->baseResponse->getFile()->getPathname());
+    }
+
+    public function test_ministry_export_requires_the_original_template_for_the_selected_year(): void
+    {
+        [$user, $group, $project, $school] = $this->context();
+        $this->grantTestPermission($user, 'anwesenheit.abrechnung');
+        $this->actingAs($user)->get(route('export.teilnehmerlisteDesProjekttraegers', [
+            'schulId' => $school->id,
+            'schuljahr' => '2025/2026',
+            'teil' => 'Teil 1',
+            'starttermin' => '2025-09-01',
+            'endtermin' => '2025-09-10',
+        ]))->assertUnprocessable();
     }
 
     private function context(): array
