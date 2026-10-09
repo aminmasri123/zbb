@@ -149,6 +149,42 @@ class BopSchoolFunctionsTest extends TestCase
         $this->assertSame('absent', $statuses[$students[0]->id]['pa2']);
     }
 
+    public function test_only_the_second_pa_day_present_still_sets_both_pa_checks(): void
+    {
+        [$user, $group, $project, $school] = $this->context();
+        $group->bereich->update(['name' => 'Potenzialanalyse']);
+        $student = PersonenIstSchueler::firstOrFail();
+        $firstDay = GruppeHasPersonen::where('personen_id', $student->person_id)->firstOrFail();
+        $secondDay = $firstDay->replicate();
+        $secondDay->tage_id = Tage::create(['datum' => '2026-09-02', 'wochentag' => 'Mittwoch'])->id;
+        $secondDay->save();
+        $absent = Anwesenheitsstatuten::create([
+            'status' => 'unentschuldigt', 'abkuerzung' => 'U', 'farben' => '#ff0000',
+        ]);
+        $firstDay->update(['anwesenheitsstatuten_id' => $absent->id]);
+
+        $statuses = app(\App\Services\Bop\SchoolAttendance::class)
+            ->generate($project->id, $school->id, collect([$student]));
+        $this->assertSame('present', $statuses[$student->id]['vorb']);
+        $this->assertSame('present', $statuses[$student->id]['pa1']);
+        $this->assertSame('present', $statuses[$student->id]['pa2']);
+    }
+
+    public function test_visited_areas_include_the_group_id_and_link_without_duplicate_days(): void
+    {
+        [$user, $group, $project, $school] = $this->context();
+        $participant = PersonenIstSchueler::firstOrFail()->person;
+        GruppeHasPersonen::where('personen_id', $participant->id)->firstOrFail()->replicate()->save();
+        app(\App\Services\Participants\ParticipantOverviewService::class)
+            ->enrich(new \Illuminate\Database\Eloquent\Collection([$participant]), $project->id, '2026-09');
+
+        $areas = $participant->overview['school']['visited_areas'];
+        $this->assertCount(1, $areas);
+        $this->assertSame($group->id, $areas[0]['group_id']);
+        $this->assertSame(route('gruppeHasTeilnehmer.show', ['id' => $group->id]), $areas[0]['url']);
+        $this->assertStringContainsString('IT- und Mediengestaltung 01.09. - 03.09.', $areas[0]['label']);
+    }
+
     private function context(): array
     {
         $user = User::factory()->create();

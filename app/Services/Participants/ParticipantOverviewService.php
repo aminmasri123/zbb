@@ -246,10 +246,13 @@ class ParticipantOverviewService
                     $parts[] = $supervisor;
                 }
 
-                return implode(' ', $parts);
+                return [
+                    'label' => implode(' ', $parts),
+                    'group_id' => (int) $group->id,
+                    'url' => route('gruppeHasTeilnehmer.show', ['id' => $group->id]),
+                ];
             })
             ->filter()
-            ->unique()
             ->values();
 
         if ($fromGroups->isNotEmpty()) {
@@ -265,12 +268,14 @@ class ParticipantOverviewService
                     return null;
                 }
 
-                return $einteilung->runde
+                $label = $einteilung->runde
                     ? $name . ' (Runde ' . $einteilung->runde . ')'
                     : $name;
+
+                return ['label' => $label, 'group_id' => null, 'url' => null];
             })
             ->filter()
-            ->unique()
+            ->unique('label')
             ->values();
     }
 

@@ -1172,7 +1172,17 @@ const sortByColumn = (column) => {
                                 </template>
                                 <template v-else-if="column.key === 'visited_areas'">
                                     <ul v-if="teilnehmer.overview?.school?.visited_areas?.length" class="list-disc space-y-1 pl-4 text-gray-700">
-                                        <li v-for="area in teilnehmer.overview.school.visited_areas" :key="area">{{ area }}</li>
+                                        <li v-for="area in teilnehmer.overview.school.visited_areas" :key="area.group_id ?? area.label">
+                                            <div class="flex items-baseline justify-between gap-4">
+                                                <Link v-if="area.url" :href="area.url" class="min-w-0 text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900 hover:decoration-blue-700" :title="`Gruppe ${area.group_id} öffnen`">
+                                                    {{ area.label }}
+                                                </Link>
+                                                <span v-else class="min-w-0">{{ area.label }}</span>
+                                                <Link v-if="area.url" :href="area.url" class="shrink-0 whitespace-nowrap text-xs text-gray-500 hover:text-blue-700 hover:underline" :aria-label="`Gruppe ${area.group_id} öffnen`">
+                                                    ID {{ area.group_id }}
+                                                </Link>
+                                            </div>
+                                        </li>
                                     </ul>
                                     <span v-else>-</span>
                                 </template>
