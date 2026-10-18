@@ -33,14 +33,15 @@ class SchoolAttendance
 
     public function generate(int $projectId, int $schoolId, Collection $students): array
     {
-        $entries = GruppeHasPersonen::with('gruppe.bereich')->whereIn('personen_id', $students->pluck('person_id'))
-            ->whereHas('gruppe', fn ($query) => $query->where('projekt_id', $projectId)->where('partner_id', $schoolId))
+        $entries = GruppeHasPersonen::with(['gruppe.bereich', 'status', 'tag'])->whereIn('personen_id', $students->pluck('person_id'))
+            ->whereHas('gruppe', fn ($query) => $query->where('projekt_id', $projectId)->forSchoolPartner($schoolId))
             ->get()->groupBy('personen_id');
         $statuses = $this->load($projectId, $students);
         foreach ($students as $student) {
             if (! isset($entries[$student->person_id])) continue;
-            // BOP: Werkstatttage und Rolltag werden für die Abrechnung vorbelegt.
-            $days = array_fill_keys(self::DAYS, 'present');
+            // Keep the existing workshop defaults, but never apply them to PA-only participants.
+            $hasWorkshop = $entries[$student->person_id]->contains(fn ($entry) => ! $entry->gruppe->isPotentialAnalysisGroup());
+            $days = array_fill_keys(self::DAYS, $hasWorkshop ? 'present' : 'absent');
             $days['vorb'] = $days['pa1'] = $days['pa2'] = 'absent';
             $paEntries = ($entries[$student->person_id] ?? collect())->filter(fn ($entry) => $entry->gruppe->isPotentialAnalysisGroup());
             $dates = $paEntries->filter(fn ($entry) => $entry->anwesenheitsstatuten_id && !preg_match('/fehl|krank|abwes|unentsch|entschuld/i', (string) $entry->status?->status))

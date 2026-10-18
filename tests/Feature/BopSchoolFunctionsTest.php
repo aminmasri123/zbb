@@ -185,6 +185,99 @@ class BopSchoolFunctionsTest extends TestCase
         $this->assertStringContainsString('IT- und Mediengestaltung 01.09. - 03.09.', $areas[0]['label']);
     }
 
+    public function test_pa_only_group_with_partner_assignment_generates_pa_without_workshop_days(): void
+    {
+        [$user, $group, $project, $school] = $this->context();
+        $group->bereich->update(['name' => 'Potenzialanalyse']);
+        $group->update(['partner_id' => null]);
+        $group->partners()->attach($school->id);
+        $students = PersonenIstSchueler::orderBy('id')->get();
+        $firstDay = GruppeHasPersonen::where('personen_id', $students[0]->person_id)->firstOrFail();
+        $secondDay = $firstDay->replicate();
+        $secondDay->tage_id = Tage::create(['datum' => '2026-09-02', 'wochentag' => 'Mittwoch'])->id;
+        $secondDay->save();
+        $absent = Anwesenheitsstatuten::create(['status' => 'unentschuldigt', 'abkuerzung' => 'U', 'farben' => '#ff0000']);
+        $firstDay->update(['anwesenheitsstatuten_id' => $absent->id]);
+        GruppeHasPersonen::where('personen_id', $students[1]->person_id)->update(['anwesenheitsstatuten_id' => $absent->id]);
+        $originalAttendance = GruppeHasPersonen::orderBy('id')->get()->toArray();
+
+        $this->grantTestPermission($user, 'anwesenheit.abrechnung');
+        $response = $this->actingAs($user)->postJson(route('generieren.updatedaten.teilnehmer', [
+            'schulId' => $school->id, 'schuljahr' => '2026/2027', 'teil' => 'Teil 1',
+        ]))->assertOk();
+        foreach (['vorb', 'pa1', 'pa2'] as $day) {
+            $response->assertJsonPath('statuses.'.$students[0]->id.'.'.$day, 'present');
+            $response->assertJsonPath('statuses.'.$students[1]->id.'.'.$day, 'absent');
+        }
+        foreach (['rolltag', 'bo1', 'bo2', 'bo3', 'bo4', 'bo5', 'bo6', 'bo7', 'bo8', 'bo9'] as $day) {
+            $response->assertJsonPath('statuses.'.$students[0]->id.'.'.$day, 'absent');
+        }
+        $this->assertSame($originalAttendance, GruppeHasPersonen::orderBy('id')->get()->toArray());
+
+        \App\Models\PotenzialanalyseKompetenzbewertung::create([
+            'gruppe_id' => $group->id, 'personen_id' => $students[0]->person_id,
+            'typ' => 'anleiter', 'merkmal' => 'feinmotorik', 'bewertung' => 4,
+        ]);
+        $params = ['schulId' => $school->id, 'schuljahr' => '2026/2027', 'teil' => 'Teil 1'];
+        $this->get(route('index-anpassung-anwesenheitsdaten', $params))->assertOk()
+            ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+                ->component('BOP/Anwesenheitsdaten')->where('paAnzahl', 1)->etc());
+        $export = $this->get(route('export.teilnehmerlisteDesProjekttraegers', array_merge($params, [
+            'starttermin' => '2026-09-01', 'endtermin' => '2026-09-03',
+        ])))->assertOk();
+        try {
+            $sheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($export->getFile()->getPathname())->getActiveSheet();
+            $this->assertStringContainsString('01.09. - 03.09.2026', (string) $sheet->getCell('H6')->getValue());
+            $this->assertSame(0, $sheet->getCell('N6')->getValue());
+        } finally {
+            @unlink($export->getFile()->getPathname());
+        }
+    }
+
+    public function test_partner_assignment_does_not_include_another_school_or_project(): void
+    {
+        [$user, $group, $project, $school] = $this->context();
+        $group->bereich->update(['name' => 'Potenzialanalyse']);
+        $otherSchool = Partner::create(['name' => 'Andere Schule']);
+        $group->update(['partner_id' => null]);
+        $group->partners()->attach($otherSchool->id);
+        $foreignGroup = $group->replicate();
+        $foreignGroup->projekt_id = Projekt::factory()->create()->id;
+        $foreignGroup->save();
+        $foreignGroup->partners()->attach($school->id);
+        $source = GruppeHasPersonen::firstOrFail();
+        $foreignGroup->projekt->teilnehmer()->attach($source->personen_id);
+        $foreignEntry = $source->replicate();
+        $foreignEntry->gruppe_id = $foreignGroup->id;
+        $foreignEntry->save();
+        $students = PersonenIstSchueler::all();
+        $service = app(\App\Services\Bop\SchoolAttendance::class);
+        $before = $service->load($project->id, $students);
+
+        $this->assertSame($before, $service->generate($project->id, $school->id, $students));
+    }
+
+    public function test_mixed_legacy_workshop_and_partner_assigned_pa_keep_both_results(): void
+    {
+        [$user, $group, $project, $school] = $this->context();
+        $paGroup = $group->replicate();
+        $paGroup->partner_id = null;
+        $paGroup->bereich_id = Bereich::create(['name' => 'Potenzialanalyse'])->id;
+        $paGroup->save();
+        $paGroup->partners()->attach($school->id);
+        $source = GruppeHasPersonen::firstOrFail();
+        $paEntry = $source->replicate();
+        $paEntry->gruppe_id = $paGroup->id;
+        $paEntry->save();
+        $student = PersonenIstSchueler::where('person_id', $source->personen_id)->firstOrFail();
+
+        $statuses = app(\App\Services\Bop\SchoolAttendance::class)
+            ->generate($project->id, $school->id, collect([$student]));
+        foreach (\App\Services\Bop\SchoolAttendance::DAYS as $day) {
+            $this->assertSame('present', $statuses[$student->id][$day], $day);
+        }
+    }
+
     private function context(): array
     {
         $user = User::factory()->create();

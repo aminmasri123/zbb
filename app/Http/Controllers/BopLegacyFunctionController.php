@@ -194,7 +194,7 @@ class BopLegacyFunctionController extends Controller
     private function schoolPaReportCount($students, int $schoolId): int
     {
         return \App\Models\PotenzialanalyseKompetenzbewertung::whereIn('personen_id', $students->pluck('person_id'))
-            ->whereIn('gruppe_id', \App\Models\Gruppe::where('projekt_id', auth()->user()->current_team_id)->where('partner_id', $schoolId)->select('id'))
+            ->whereIn('gruppe_id', \App\Models\Gruppe::where('projekt_id', auth()->user()->current_team_id)->forSchoolPartner($schoolId)->select('id'))
             ->distinct()->count('personen_id');
     }
 
@@ -378,7 +378,7 @@ class BopLegacyFunctionController extends Controller
         $end = Carbon::parse($data['endtermin']);
         $period = $start->format('d.m').' - '.$end->format('d.m.Y').' '.($start->diffInDays($end) + 1).' Tage';
         $entries = GruppeHasPersonen::with('gruppe.bereich')->whereIn('personen_id', $students->pluck('person_id'))
-            ->whereHas('gruppe', fn ($q) => $q->where('projekt_id', auth()->user()->current_team_id)->where('partner_id', $schulId))->get()->groupBy('personen_id');
+            ->whereHas('gruppe', fn ($q) => $q->where('projekt_id', auth()->user()->current_team_id)->forSchoolPartner($schulId))->get()->groupBy('personen_id');
         $participants = [];
         foreach ($students as $student) {
             $person = $student->person;

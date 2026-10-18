@@ -13,6 +13,7 @@ use App\Models\RaumMeldung;
 use App\Models\GruppeHasPersonen;
 use App\Models\Klassenbuch;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
@@ -109,6 +110,14 @@ class Gruppe extends Model
             'gruppe_id',
             'partner_id'
         )->withTimestamps();
+    }
+
+    public function scopeForSchoolPartner(Builder $query, int $schoolId): Builder
+    {
+        // Support both legacy groups and the current multiple-partner assignment.
+        return $query->where(fn (Builder $schoolQuery) => $schoolQuery
+            ->where('gruppes.partner_id', $schoolId)
+            ->orWhereHas('partners', fn (Builder $partners) => $partners->whereKey($schoolId)));
     }
 
     public function raumMeldungen()
