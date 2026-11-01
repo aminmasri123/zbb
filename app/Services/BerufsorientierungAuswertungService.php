@@ -7,6 +7,8 @@ use Illuminate\Support\Str;
 
 class BerufsorientierungAuswertungService
 {
+    public const RETIRED_BOP_CRITERION = 'einschätzung_der_befähigung_und_eignung_zur_berufsorientierung';
+
     public const SCALE = [
         1 => 'Da geht noch was',
         2 => 'Ganz ok',
@@ -41,6 +43,9 @@ class BerufsorientierungAuswertungService
                 'sort_order' => (int) ($item['sort_order'] ?? $index),
             ])
             ->filter(fn ($item) => $item['key'] !== '' && $item['label'] !== '')
+            // Also exclude the retired point from existing, saved BOP configurations.
+            ->reject(fn ($item) => str_contains(mb_strtolower((string) $projekt->name), 'bop')
+                && $item['key'] === self::RETIRED_BOP_CRITERION)
             ->sortBy('sort_order')->values()->all();
 
         return [

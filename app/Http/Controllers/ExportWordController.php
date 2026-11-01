@@ -485,7 +485,7 @@ class ExportWordController extends Controller
                 return app(\App\Services\Bop\BopOriginalEvaluationPdf::class)
                     ->download($entries, $this->safeFileName($dokument->name.'_'.($gruppe->bereich?->name ?? 'Gruppe')).'.pdf');
             }
-            return $this->downloadWordDocxZip($templateFile, $gruppe, $projekt, $dokument, $teilnehmer);
+            return $this->downloadWordDocxZip($templateFile, $gruppe, $projekt, $dokument, $teilnehmer, true);
         }
         $isLegacyPaEvaluation = $this->isBopPaGroup($gruppe, $projekt)
             && count(array_intersect(
@@ -1120,7 +1120,7 @@ class ExportWordController extends Controller
         return response()->download($outputPath, $filename)->deleteFileAfterSend(true);
     }
 
-    private function downloadWordDocxZip(string $templateFile, Gruppe $gruppe, Projekt $projekt, Dokumente $dokument, $teilnehmer)
+    private function downloadWordDocxZip(string $templateFile, Gruppe $gruppe, Projekt $projekt, Dokumente $dokument, $teilnehmer, bool $bopEvaluation = false)
     {
         $tempDir = storage_path('app/temp');
         if (! is_dir($tempDir)) {
@@ -1147,7 +1147,9 @@ class ExportWordController extends Controller
         }
 
         foreach ($teilnehmer as $index => $person) {
-            $processor = new TemplateProcessor($templateFile);
+            $processor = $bopEvaluation
+                ? new \App\Services\Bop\BopEvaluationWordTemplate($templateFile)
+                : new TemplateProcessor($templateFile);
             $this->fillSerienbriefTemplate($processor, $gruppe, $projekt, $person, $index + 1);
 
             $docName = $this->safeFileName(($index + 1).'_'.$person->nachname.'_'.$person->vorname.'_'.$dokument->name).'.docx';

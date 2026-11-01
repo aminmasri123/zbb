@@ -129,11 +129,11 @@ class GroupDynamicDocumentValidationTest extends TestCase
 
     public static function bopTemplateCases(): array
     {
-        return ['Hausordnung' => [false], 'BOP-Auswertung' => [true], 'PA-Originalvorlage' => [false, true]];
+        return ['Hausordnung' => [false], 'BOP-Auswertung' => [true], 'BOP-Originalvorlage' => [true, false, true], 'PA-Originalvorlage' => [false, true]];
     }
 
     #[\PHPUnit\Framework\Attributes\DataProvider('bopTemplateCases')]
-    public function test_bop_templates_use_only_the_current_participants_data(bool $evaluation, bool $pa = false): void
+    public function test_bop_templates_use_only_the_current_participants_data(bool $evaluation, bool $pa = false, bool $originalBop = false): void
     {
         $user = User::factory()->create();
         $role = \App\Models\Role::create(['name' => 'BOP-Exporttest', 'guard_name' => 'web', 'color' => '#123456']);
@@ -240,6 +240,9 @@ class GroupDynamicDocumentValidationTest extends TestCase
         if ($pa) {
             copy(storage_path('vorlage/projekte/bop/word/Auswertung_PA.docx'), $templatePath);
         }
+        if ($originalBop) {
+            copy(storage_path('vorlage/projekte/bop/word/Auswertungsbogen_BOP.docx'), $templatePath);
+        }
 
         try {
             $response = $this->actingAs($user)->get(route('gruppe.export.serienbrief', [
@@ -262,7 +265,18 @@ class GroupDynamicDocumentValidationTest extends TestCase
                     file_put_contents($nestedPath, $zip->getFromIndex($i));
                     $nested = new ZipArchive;
                     $this->assertTrue($nested->open($nestedPath) === true);
-                    $xml .= $nested->getFromName('word/document.xml');
+                    $participantXml = $nested->getFromName('word/document.xml');
+                    if ($originalBop) {
+                        $dom = new \DOMDocument;
+                        $this->assertTrue($dom->loadXML($participantXml));
+                        $xpath = new \DOMXPath($dom);
+                        $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+                        $xpath->registerNamespace('wp', 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing');
+                        $xpath->registerNamespace('pic', 'http://schemas.openxmlformats.org/drawingml/2006/picture');
+                        // Ten rating graphics plus the logo; no orphaned eleventh box.
+                        $this->assertSame(11, $xpath->query('//wp:anchor[not(.//w:t) and .//pic:pic]')->length);
+                    }
+                    $xml .= $participantXml;
                     $nested->close();
                     unlink($nestedPath);
                 }
@@ -295,15 +309,23 @@ class GroupDynamicDocumentValidationTest extends TestCase
                 PersonenIstSchueler::query()->delete();
                 $this->get(route('gruppe.export.serienbrief', ['gruppe' => $group, 'dokument' => $document, 'format' => 'docx']))
                     ->assertRedirect()->assertSessionHas('error', fn (string $message) => str_contains($message, 'Klasse') && str_contains($message, 'Schule'));
-            } else {
+            } elseif (!$originalBop) {
                 $this->assertStringContainsString('Erste: 7.1', $xml);
                 $this->assertStringContainsString('Zweite: 7.2', $xml);
             }
             $this->assertStringNotContainsString('7.1 + 7.2', $xml);
             if ($evaluation) {
                 $text = html_entity_decode(strip_tags($xml));
-                $this->assertMatchesRegularExpression('/Erste: 7.1; Testschule; [^;]+; 5=X; 1=; unbewertet=/', $text);
-                $this->assertMatchesRegularExpression('/Zweite: 7.2; Testschule; [^;]+; 5=; 1=X; unbewertet=/', $text);
+                if ($originalBop) {
+                    $this->assertStringNotContainsString('Einschätzung der Befähigung', $text);
+                    $this->assertStringContainsString('Soziale', $text);
+                    $this->assertStringContainsString('Legende', $text);
+                    $this->assertStringContainsString('Erste', $text);
+                    $this->assertStringContainsString('Zweite', $text);
+                } else {
+                    $this->assertMatchesRegularExpression('/Erste: 7.1; Testschule; [^;]+; 5=X; 1=; unbewertet=/', $text);
+                    $this->assertMatchesRegularExpression('/Zweite: 7.2; Testschule; [^;]+; 5=; 1=X; unbewertet=/', $text);
+                }
                 $this->assertStringNotContainsString('${', $xml);
                 $document->update(['ausgabeformate' => ['docx', 'pdf']]);
                 $pdfResponse = $this->get(route('gruppe.export.serienbrief', ['gruppe' => $group, 'dokument' => $document, 'format' => 'pdf']))->assertOk();
@@ -312,7 +334,7 @@ class GroupDynamicDocumentValidationTest extends TestCase
                 foreach ($pdf->getPages() as $page) {
                     $this->assertMatchesRegularExpression('/1\.\s*Einhaltung/', $page->getText());
                     $this->assertMatchesRegularExpression('/10\.\s*Soziale/', $page->getText());
-                    $this->assertStringContainsString('Einschätzung der Befähigung und Eignung', $page->getText());
+                    $this->assertStringNotContainsString('Einschätzung der Befähigung und Eignung', $page->getText());
                     $this->assertDoesNotMatchRegularExpression('/(?:11|12)\.\s*Einhaltung/', $page->getText());
                 }
                 \App\Models\RoleDataAccessSetting::where('role_id', $role->id)->update(['participant_scope' => 'none']);

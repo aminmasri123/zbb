@@ -807,76 +807,7 @@
                         </tr>
                     </table>
                 </section>
-                <section>
-                    <hr style="border: none; border-top: 2px solid #ff8500; width: 100%;">
-                    <table>
-                        <tr>
-                            <td style="width: 60%;">
-                                <div class="beobachtung">
-                                    <span >11. Einschätzung der Befähigung und Eignung Berufsorientierung in dem jeweiligen Berufsfeld</span>
-                                </div>
-                            </td>
-                            <td class="center">
-                                <table style="width:250px">
-                                    <tr>
-                                        <td>
-                                            <div style="border: 4px solid black; border-radius: 10px; overflow: hidden; width: 250px; background-color: white;">
-                                                <table>
-                                                    <tr>
-                                                        <td class="center">
-                                                            <div style="width:0.5cm; height:0.5cm; border:1px solid black; border-radius:4px; margin:auto">
-                                                                <span>{{$teilnehmer->einschätzung_der_befähigung_und_eignung_zur_berufsorientierung == '5' ? 'X' : ''}}</span>
-                                                            </div>
-                                                        </td>
-                                                        <td class="center">
-                                                            <div style="width:0.5cm; height:0.5cm; border:1px solid black; border-radius:4px; margin:auto">
-                                                                <span>{{$teilnehmer->einschätzung_der_befähigung_und_eignung_zur_berufsorientierung == '4' ? 'X' : ''}}</span>
-                                                            </div>
-                                                        </td>
-                                                        <td class="center">
-                                                            <div style="width:0.5cm; height:0.5cm; border:1px solid black; border-radius:4px; margin:auto">
-                                                                <span>{{$teilnehmer->einschätzung_der_befähigung_und_eignung_zur_berufsorientierung == '3' ? 'X' : ''}}</span>
-                                                            </div>
-                                                        </td>
-                                                        <td class="center">
-                                                            <div style="width:0.5cm; height:0.5cm; border:1px solid black; border-radius:4px; margin:auto">
-                                                                <span>{{$teilnehmer->einschätzung_der_befähigung_und_eignung_zur_berufsorientierung == '2' ? 'X' : ''}}</span>
-                                                            </div>
-                                                        </td>
-                                                        <td class="center">
-                                                            <div style="width:0.5cm; height:0.5cm; border:1px solid black; border-radius:4px; margin:auto">
-                                                                <span>{{$teilnehmer->einschätzung_der_befähigung_und_eignung_zur_berufsorientierung == '1' ? 'X' : ''}}</span>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                    <tr>
-                                                        <td style="text-align: center;padding:0px">
-                                                            <img src="{{resource_path('documents/bop/star.png')}}" alt="stern" style="width: 0.86cm; margin: 0 auto;">
-                                                        </td>
-                                                        <td style="text-align: center; padding:0px">
-                                                            <img src="{{resource_path('documents/bop/star.png')}}" alt="stern" style="width: 0.82cm; margin: 0 auto;">
-                                                        </td>
-                                                        <td style="text-align: center; padding: 0px;">
-                                                            <img src="{{resource_path('documents/bop/star.png')}}" alt="stern" style="width: 0.73cm; margin: 0 auto;">
-                                                        </td>
-                                                        <td style="text-align: center; padding: 0px;">
-                                                            <img src="{{resource_path('documents/bop/star.png')}}" alt="stern" style="width: 0.64cm; margin: 0 auto;">
-                                                        </td>
-                                                        <td style="text-align: center; padding: 0px;">
-                                                            <img src="{{resource_path('documents/bop/star.png')}}" alt="stern" style="width: 0.59cm; margin: 0 auto;">
-                                                        </td>
-                                                    </tr>
-                                                </table>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
 
-
-                        </tr>
-                    </table>
-                </section>
                 <p style="text-align: center"><b>Legende:</b> "Hervorragend" <img src="{{resource_path('documents/bop/star.png')}}" alt="stern"  style="width: 0.86cm"> "Sehr gut" <img src="{{resource_path('documents/bop/star.png')}}" alt="stern"  style="width: 0.82cm"> "Gut" <img src="{{resource_path('documents/bop/star.png')}}" alt="stern"  style="width: 0.73cm"> "Ganz ok" <img src="{{resource_path('documents/bop/star.png')}}" alt="stern"  style="width: 0.64cm"> "Da geht noch was" <img src="{{resource_path('documents/bop/star.png')}}" alt="stern"  style="width: 0.59cm"></p>
             </div>
         <!-- Seitenumbruch nach jedem Teilnehmer -->

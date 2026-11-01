@@ -185,7 +185,7 @@ class BopEvaluationExportService
             'anleiter_name' => trim((string) ($group->betreuer?->vorname ?? '').' '.(string) ($group->betreuer?->nachname ?? '')),
             'schule_name' => (string) ($student?->schule?->name ?? $group->partner?->name ?? ''),
             'bereich_name' => (string) ($group->bereich?->name ?? ''),
-            'ratings' => $ratings,
+            'ratings' => $ratings->toBase()->only(array_column($this->config($group->projekt)['criteria'], 'key')),
         ];
     }
 

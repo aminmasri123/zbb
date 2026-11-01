@@ -25,6 +25,37 @@ class BopDailyEvaluationExportTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_workshop_ratings_can_be_saved_without_the_retired_point_and_old_ratings_are_preserved(): void
+    {
+        [$user, $group, $project] = $this->context();
+        $this->grantTestPermission($user, 'gruppeHasTeilnehmer.store');
+        $project->update(['berufsorientierung_auswertung_config' => [
+            'enabled' => true,
+            'criteria' => \App\Services\BerufsorientierungAuswertungService::BOP_CRITERIA,
+        ]]);
+        $person = $group->teilnehmer->first();
+        $retiredKey = \App\Services\BerufsorientierungAuswertungService::RETIRED_BOP_CRITERION;
+        $oldRating = BerufsorientierungBewertung::create([
+            'gruppe_id' => $group->id, 'personen_id' => $person->id, 'user_id' => $user->id,
+            'kriterium' => $retiredKey, 'kriterium_label' => 'Alte Einschätzung', 'bewertung' => 2,
+        ]);
+        $criteria = app(\App\Services\BerufsorientierungAuswertungService::class)->config($project)['criteria'];
+        $this->assertCount(10, $criteria);
+        $url = route('gruppe.bereichsauswertung.update', ['gruppe' => $group, 'personen' => $person]);
+        $this->actingAs($user)->putJson($url, ['bewertungen' => array_map(fn ($item) => [
+            'kriterium' => $item['key'], 'bewertung' => 4,
+        ], $criteria)])->assertOk();
+
+        $this->assertSame(11, BerufsorientierungBewertung::where('gruppe_id', $group->id)->where('personen_id', $person->id)->count());
+        $this->assertSame(2, (int) $oldRating->fresh()->bewertung);
+        $entry = app(\App\Services\Bop\BopEvaluationExportService::class)->groupEntries($group, $person->id)->first();
+        $this->assertCount(10, $entry['ratings']);
+        $this->assertFalse($entry['ratings']->has($retiredKey));
+        $this->putJson($url, ['bewertungen' => [['kriterium' => $retiredKey, 'bewertung' => 5]]])
+            ->assertUnprocessable()->assertJsonValidationErrors('bewertungen.0.kriterium');
+        $this->assertSame(2, (int) $oldRating->fresh()->bewertung);
+    }
+
     public function test_folder_exports_store_original_pdfs_in_private_file_manager_folders(): void
     {
         \Illuminate\Support\Facades\Storage::fake('local');
@@ -174,16 +205,16 @@ class BopDailyEvaluationExportTest extends TestCase
         $text = $document->getText();
 
         $this->assertSame(1, (int) $document->getDetails()['Pages']);
-        $this->assertStringContainsString('11. Einschätzung der Befähigung und Eignung', $text);
+        $this->assertStringNotContainsString('11. Einschätzung der Befähigung und Eignung', $text);
         $this->assertStringContainsString($selected->nachname, $text);
         $this->assertStringNotContainsString($other->nachname, $text);
         $this->assertStringContainsString('Einhaltung der Arbeitszeitregeln', $text);
-        // Actual PDF marks: row 3 must support score 1, and row 11 must use
-        // its own score 2 rather than copying the social-competence score 5.
+        // Actual PDF marks: row 3 must support score 1; the retired point
+        // must not produce a fourth mark, even when an old rating exists.
         $marks = collect($document->getPages()[0]->getDataTm())
             ->filter(fn ($item) => trim($item[1]) === 'X')->values();
-        $this->assertCount(4, $marks);
-        foreach ([372, 522, 372, 492] as $index => $expectedX) {
+        $this->assertCount(3, $marks);
+        foreach ([372, 522, 372] as $index => $expectedX) {
             $this->assertEqualsWithDelta($expectedX, (float) $marks[$index][0][4], 5);
         }
     }
@@ -211,7 +242,7 @@ class BopDailyEvaluationExportTest extends TestCase
         $this->assertSame(1, preg_match_all('/\bX\b/', $text));
         foreach ($document->getPages() as $page) {
             $this->assertStringContainsString('1. Einhaltung', $page->getText());
-            $this->assertStringContainsString('11. Einschätzung', $page->getText());
+            $this->assertStringNotContainsString('11. Einschätzung', $page->getText());
             $this->assertStringNotContainsString('12. Einhaltung', $page->getText());
         }
     }
@@ -410,7 +441,7 @@ class BopDailyEvaluationExportTest extends TestCase
             $text = $page->getText();
             $this->assertStringContainsString($entries[$index]['vorname'], $text);
             $this->assertStringContainsString('1. Einhaltung', $text);
-            $this->assertStringContainsString('11. Einschätzung', $text);
+            $this->assertStringNotContainsString('11. Einschätzung', $text);
             $this->assertDoesNotMatchRegularExpression('/\bX\b/', $text);
         }
     }

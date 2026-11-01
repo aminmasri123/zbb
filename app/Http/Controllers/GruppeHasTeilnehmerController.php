@@ -345,6 +345,7 @@ class GruppeHasTeilnehmerController extends Controller
             ? BerufsorientierungBewertung::query()
                 ->where('gruppe_id', $gruppe->id)
                 ->whereIn('personen_id', $gruppe->teilnehmer->pluck('id'))
+                ->whereIn('kriterium', array_column($config['criteria'], 'key'))
                 ->get()
                 ->groupBy('personen_id')
                 ->map(fn ($entries) => $entries->keyBy('kriterium')->map(fn ($entry) => [
