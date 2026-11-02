@@ -21,7 +21,7 @@
         }
         .container > p {
             /* Die Legende bleibt ohne Verkleinerung innerhalb des Druckrandes. */
-            margin: 4mm 0 0;
+            margin: 10mm 0 0;
             line-height: 1;
         }
         table {
