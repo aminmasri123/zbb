@@ -46,7 +46,11 @@
     const closeModalEdit = () => { isModalEditOpen.value = false; };
 
 
-    const updateBereich = (updatedBereich) => {
+    const unterweisungThemen = ref(props.unterweisungThemen);
+    watch(() => props.unterweisungThemen, (themen) => { unterweisungThemen.value = themen; });
+
+    const updateBereich = (updatedBereich, themen) => {
+        unterweisungThemen.value = themen;
     const index = localBereiche.value.findIndex(b => b.id === updatedBereich.id);
         if (index !== -1) {
             localBereiche.value[index] = updatedBereich;
@@ -280,8 +284,8 @@ export default {
          <!-- Modal für neue Bereich -->
 
 
-        <ModalCreate v-if="canCreateBereich" :visible="isModalCreateOpen" :unterweisung-themen="props.unterweisungThemen" @close="closeModalCreate" @add-bereich="addBereich"/>
-        <ModalEdit v-if="canUpdateBereich" :visible="isModalEditOpen" :toEdit="bereichToEdit" :unterweisung-themen="props.unterweisungThemen" @close="closeModalEdit" @updated="updateBereich"/>
+        <ModalCreate v-if="canCreateBereich" :visible="isModalCreateOpen" :unterweisung-themen="unterweisungThemen" @close="closeModalCreate" @add-bereich="addBereich"/>
+        <ModalEdit v-if="canUpdateBereich" :visible="isModalEditOpen" :toEdit="bereichToEdit" :unterweisung-themen="unterweisungThemen" @close="closeModalEdit" @updated="updateBereich"/>
         <!-- Modal für die Löschung des Bereiches-->
         <template v-if="canDeleteBereich">
         <ModalDestroy v-if="showModalLöschen" @delete="handleDelete" @close="showModalLöschen = false" :seite="seite"  :toDelete="bereichToDelete"></ModalDestroy>

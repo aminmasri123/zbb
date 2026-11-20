@@ -16,17 +16,21 @@ class Bereich extends Model
         'code',
         'beschreibung',
         'unterweisung_themen',
-        'unterweisung_themenliste',
     ];
 
     protected $casts = [
         'unterweisung_themen' => 'array',
-        'unterweisung_themenliste' => 'array',
+        'unterweisung_abweichungen' => 'array',
     ];
 
-    public function unterweisungThemenliste(): array
+    protected $hidden = ['unterweisung_themenliste'];
+
+    public function unterweisungThemen(?array $katalog = null): array
     {
-        return $this->unterweisung_themenliste ?? config('unterweisung.themen', []);
+        return array_filter(
+            array_replace($katalog ?? UnterweisungKatalog::themen(), $this->unterweisung_abweichungen ?? []),
+            fn ($label) => $label !== null,
+        );
     }
 
     public function projekte()

@@ -12,6 +12,7 @@ use App\Models\Projekt;
 use App\Models\Raeume;
 use App\Models\Standort;
 use App\Models\Tage;
+use App\Models\UnterweisungKatalog;
 use App\Models\User;
 use App\Models\Zeiten;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -107,29 +108,77 @@ class UnterweisungsnachweisExportTest extends TestCase
         $this->assertStringContainsString('X', $text);
     }
 
-    public function test_area_topic_edits_are_used_in_the_underweisung_pdf(): void
+    public function test_topic_edits_apply_to_the_shared_catalog_and_pdfs_of_other_areas(): void
     {
         [$user, $gruppe] = $this->context();
         $this->grantTestPermission($user, 'bereich.update');
         $bereich = $gruppe->bereich;
+        $andererBereich = Bereich::query()->create([
+            'name' => 'Anderer Bereich',
+            'unterweisung_themen' => ['elektrische_geraete'],
+        ]);
+        $themenstand = collect(config('unterweisung.themen'))
+            ->map(fn ($label, $key) => ['key' => $key, 'label' => $label])->values()->all();
 
         $this->actingAs($user)->putJson(route('bereich.update', $bereich->id), [
             'name' => $bereich->name,
+            'unterweisung_themenstand' => $themenstand,
             'unterweisung_themenliste' => [
                 ['key' => 'elektrische_geraete', 'label' => 'Geräteprüfung'],
                 ['key' => 'eigenes_thema_1', 'label' => 'Werkplatz vorbereiten'],
             ],
             'unterweisung_themen' => ['elektrische_geraete', 'eigenes_thema_1'],
         ])->assertOk()
-            ->assertJsonPath('bereich.unterweisung_themenliste.elektrische_geraete', 'Geräteprüfung')
+            ->assertJsonPath('unterweisungThemen.0.label', 'Geräteprüfung')
             ->assertJsonPath('bereich.unterweisung_themen.0', 'elektrische_geraete');
 
+        $this->putJson(route('bereich.update', $bereich->id), [
+            'name' => $bereich->name,
+            'unterweisung_bereichsstand' => [],
+            'unterweisung_abweichungen' => [
+                ['key' => 'elektrische_geraete', 'label' => 'Geräteprüfung vor Ort'],
+                ['key' => 'eigenes_thema_1', 'label' => null],
+                ['key' => 'eigenes_thema_2', 'label' => 'Lokales Thema'],
+            ],
+            'unterweisung_themen' => ['elektrische_geraete', 'eigenes_thema_2'],
+        ])->assertOk()->assertJsonPath('unterweisungThemen.0.label', 'Geräteprüfung');
+
+        $lokalesPdf = $this->get(route('gruppe.bop.export.unterweisungsnachweis', $gruppe))->assertOk();
+        $lokalerText = (new Parser)->parseContent($lokalesPdf->getContent())->getText();
+        $this->assertStringContainsString('Geräteprüfung vor Ort', $lokalerText);
+        $this->assertStringContainsString('Lokales Thema', $lokalerText);
+        $this->assertStringNotContainsString('Werkplatz vorbereiten', $lokalerText);
+
+        $gruppe->update(['bereich_id' => $andererBereich->id]);
+        $this->assertSame(['elektrische_geraete'], $andererBereich->fresh()->unterweisung_themen);
         $response = $this->get(route('gruppe.bop.export.unterweisungsnachweis', $gruppe))->assertOk();
         $text = (new Parser)->parseContent($response->getContent())->getText();
         $this->assertStringContainsString('Geräteprüfung', $text);
         $this->assertStringContainsString('Werkplatz vorbereiten', $text);
+        $this->assertStringNotContainsString('Lokales Thema', $text);
         $this->assertStringNotContainsString('Elektrische Geräte', $text);
         $this->assertStringNotContainsString('Brandschutz', $text);
+    }
+
+    public function test_existing_area_topic_rename_stays_with_its_area_after_migration(): void
+    {
+        $migration = require database_path('migrations/2026_11_20_000002_create_unterweisung_katalog.php');
+        $migration->down();
+
+        $bereich = Bereich::query()->create([
+            'name' => 'Friseur',
+            'unterweisung_themen' => ['metallwerkstatt_allgemein'],
+        ]);
+        DB::table('bereiches')->where('id', $bereich->id)->update([
+            'unterweisung_themenliste' => json_encode(['metallwerkstatt_allgemein' => 'Allgemein'], JSON_THROW_ON_ERROR),
+        ]);
+
+        $migration->up();
+
+        $this->assertSame('Metallwerkstatt allgemein', UnterweisungKatalog::themen()['metallwerkstatt_allgemein']);
+        $this->assertSame('Erste Hilfe', UnterweisungKatalog::themen()['erste_hilfe']);
+        $this->assertSame(['metallwerkstatt_allgemein' => 'Allgemein'], $bereich->fresh()->unterweisungThemen());
+        $this->assertSame(['metallwerkstatt_allgemein'], $bereich->fresh()->unterweisung_themen);
     }
 
     public function test_assigned_instructor_can_export_without_stored_signature(): void

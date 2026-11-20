@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Bereich;
+use App\Models\UnterweisungKatalog;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
@@ -67,6 +69,7 @@ class BereichController extends Controller
         // Standardmäßige Rückgabe für die Inertia-Ansicht
         return Inertia::render('Bereich/Index', [
             'bereiche' => $bereiche,
+            'unterweisungThemen' => $this->unterweisungThemen(),
         ]);
     }
 
@@ -88,7 +91,7 @@ class BereichController extends Controller
             'code' => 'nullable|string|max:10',
             'beschreibung' => 'nullable|string|max:200',
             'unterweisung_themen' => ['nullable', 'array'],
-            'unterweisung_themen.*' => ['string', 'in:'.implode(',', array_keys(config('unterweisung.themen', [])))],
+            'unterweisung_themen.*' => ['string', Rule::in(array_keys(UnterweisungKatalog::themen()))],
         ]);
 
         try {
@@ -136,39 +139,62 @@ class BereichController extends Controller
 
     public function update(Request $request, $id)
     {
-        $bereich = Bereich::findOrFail($id);
         $themenliste = $request->validate([
             'unterweisung_themenliste' => ['sometimes', 'array', 'list', 'max:100'],
             'unterweisung_themenliste.*' => ['required', 'array:key,label'],
             'unterweisung_themenliste.*.key' => ['required', 'string', 'max:80', 'regex:/^[a-z][a-z0-9_]*$/', 'distinct'],
             'unterweisung_themenliste.*.label' => ['required', 'string', 'max:120'],
+            'unterweisung_abweichungen' => ['sometimes', 'array', 'list', 'max:200'],
+            'unterweisung_abweichungen.*' => ['required', 'array:key,label'],
+            'unterweisung_abweichungen.*.key' => ['required', 'string', 'max:80', 'regex:/^[a-z][a-z0-9_]*$/', 'distinct'],
+            'unterweisung_abweichungen.*.label' => ['present', 'nullable', 'string', 'max:120'],
         ]);
-        $neueThemenliste = null;
-        if (array_key_exists('unterweisung_themenliste', $themenliste)) {
+        if ($themenliste !== []) {
             abort_unless($request->user()?->can('bereich.update'), 403);
-            $neueThemenliste = array_column($themenliste['unterweisung_themenliste'], 'label', 'key');
         }
 
-        $validated = $request->validate([
-            'name' => 'required|string|max:30',
-            'code' => 'nullable|string|max:10',
-            'beschreibung' => 'nullable|string|max:200',
-            'unterweisung_themen' => ['nullable', 'array'],
-            'unterweisung_themen.*' => ['string', Rule::in(array_keys($neueThemenliste ?? $bereich->unterweisungThemenliste()))],
-        ]);
+        return DB::transaction(function () use ($request, $id, $themenliste) {
+            $katalog = UnterweisungKatalog::query()->lockForUpdate()->findOrFail(1);
+            $bereich = Bereich::query()->lockForUpdate()->findOrFail($id);
+            $neueThemenliste = isset($themenliste['unterweisung_themenliste'])
+                ? array_column($themenliste['unterweisung_themenliste'], 'label', 'key')
+                : null;
+            if (isset($themenliste['unterweisung_abweichungen'])) {
+                $bereichsstand = $request->input('unterweisung_bereichsstand');
+                $abweichungen = $bereich->unterweisung_abweichungen ?? [];
+                abort_unless(is_array($bereichsstand) && $bereichsstand == $abweichungen, 409,
+                    'Die Themen dieses Bereichs wurden inzwischen geändert. Bitte laden Sie die Seite neu.');
+                $bereich->unterweisung_abweichungen = array_column($themenliste['unterweisung_abweichungen'], 'label', 'key');
+            }
+            $validated = $request->validate([
+                'name' => 'required|string|max:30',
+                'code' => 'nullable|string|max:10',
+                'beschreibung' => 'nullable|string|max:200',
+                'unterweisung_themen' => ['nullable', 'array'],
+                'unterweisung_themen.*' => ['string', Rule::in(array_keys($bereich->unterweisungThemen($neueThemenliste ?? $katalog->themen)))],
+            ]);
 
-        $bereich->update([
-            'name' => trim($validated['name']),
-            'code' => $this->nullableTrimmedValue($validated['code'] ?? null),
-            'beschreibung' => $this->nullableTrimmedValue($validated['beschreibung'] ?? null),
-            'unterweisung_themen' => array_values(array_unique($validated['unterweisung_themen'] ?? [])),
-            'unterweisung_themenliste' => $neueThemenliste ?? $bereich->unterweisung_themenliste,
-        ]);
+            if ($neueThemenliste !== null) {
+                abort_unless($request->input('unterweisung_themenstand') === $this->unterweisungThemen($katalog->themen), 409,
+                    'Die Themenliste wurde inzwischen geändert. Bitte laden Sie die Seite neu.');
+                $katalog->themen = $neueThemenliste;
+                $katalog->save();
+                $katalog->refresh();
+            }
 
-        return response()->json([
-            'message' => 'Bereich erfolgreich aktualisiert',
-            'bereich' => $bereich,
-        ]);
+            $bereich->update([
+                'name' => trim($validated['name']),
+                'code' => $this->nullableTrimmedValue($validated['code'] ?? null),
+                'beschreibung' => $this->nullableTrimmedValue($validated['beschreibung'] ?? null),
+                'unterweisung_themen' => array_values(array_unique($validated['unterweisung_themen'] ?? [])),
+            ]);
+
+            return response()->json([
+                'message' => 'Bereich erfolgreich aktualisiert',
+                'bereich' => $bereich,
+                'unterweisungThemen' => $this->unterweisungThemen($katalog->themen),
+            ]);
+        });
     }
 
     /**
@@ -202,9 +228,9 @@ class BereichController extends Controller
         return $value === '' ? null : $value;
     }
 
-    private function unterweisungThemen(): array
+    private function unterweisungThemen(?array $themen = null): array
     {
-        return collect(config('unterweisung.themen', []))
+        return collect($themen ?? UnterweisungKatalog::themen())
             ->map(fn (string $label, string $key) => ['key' => $key, 'label' => $label])
             ->values()
             ->all();
