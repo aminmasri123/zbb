@@ -262,19 +262,33 @@ class GruppeHasTeilnehmerController extends Controller
             'teilnehmer' => Inertia::defer(function () use ($gruppe, $projektId, $standortId) {
                 $schulkontext = $this->teilnehmerAuswahlSchulkontext($gruppe);
 
-                return Personen::Teilnehmer()
+                $auswahl = Personen::Teilnehmer()
                     ->whereHas('projekte', function ($query) use ($projektId, $standortId) {
                         $query->where('projekts.id', $projektId);
                         if ($standortId) {
                             $query->where('projekt_has_personens.standort_id', $standortId);
                         }
                     })
-                    ->when($schulkontext, fn ($query) => $query->whereHas('schueler', fn ($schueler) => $schueler
-                        ->where('schule_id', $schulkontext['partner_id'])
-                        ->where('schuljahr', $schulkontext['schuljahr'])))
                     ->orderBy('nachname')
-                    ->orderBy('vorname')
-                    ->get(['id', 'vorname', 'nachname', 'geschlecht']);
+                    ->orderBy('vorname');
+
+                $spalten = ['id', 'vorname', 'nachname', 'geschlecht'];
+                if ($schulkontext) {
+                    $passendeTeilnehmer = (clone $auswahl)
+                        ->whereHas('schueler', fn ($schueler) => $schueler
+                            ->where('schule_id', $schulkontext['partner_id'])
+                            ->where('schuljahr', $schulkontext['schuljahr']))
+                        ->get($spalten);
+
+                    if ($passendeTeilnehmer->isNotEmpty()) {
+                        return ['optionen' => $passendeTeilnehmer, 'schulfilterOhneTreffer' => false];
+                    }
+                }
+
+                return [
+                    'optionen' => $auswahl->get($spalten),
+                    'schulfilterOhneTreffer' => $schulkontext !== null,
+                ];
             }, 'teilnehmer'),
             'anwesenheit' => Inertia::defer(
                 fn () => $this->anwesenheitPayload($gruppe, $canReadAttendance),

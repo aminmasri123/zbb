@@ -20,7 +20,7 @@
     const props = defineProps({
     gruppe: { type: Object, required: true },
     canCollectGroupSignatures: { type: Boolean, default: false },
-    teilnehmer: { type: Array, default: () => [] },
+    teilnehmer: { type: Object, default: null },
     anwesenheit: { type: Object, default: () => ({ teilnehmer: {} }) },
     anwesenheitsstatuten: { type: Array, required: true },
     nonWorkingDays: { type: Array, default: () => [] },
@@ -2451,7 +2451,11 @@ const exportMitTag = async () => {
             <FloatLabel variant="on">
               <MultiSelect
                 v-model="selectedTeilnehmerIds"
-                :options="props.teilnehmer"
+                :options="props.teilnehmer?.optionen ?? []"
+                :loading="props.teilnehmer === null"
+                :disabled="props.teilnehmer === null"
+                emptyMessage="Keine Teilnehmer für dieses Projekt und diesen Standort verfügbar."
+                emptyFilterMessage="Keine Teilnehmer für diesen Suchbegriff gefunden."
                 :filter="true"
                 display="chip"
                 optionValue="id"
@@ -2462,6 +2466,9 @@ const exportMitTag = async () => {
                 panelClass="z-[9999]"
               />
             </FloatLabel>
+            <p v-if="props.teilnehmer?.schulfilterOhneTreffer && props.teilnehmer.optionen.length" class="text-sm text-gray-600" role="status">
+              Für Schule und Schuljahr wurden keine Teilnehmer gefunden. Angezeigt werden die verfügbaren Teilnehmer aus Projekt und Standort.
+            </p>
 
 
 
