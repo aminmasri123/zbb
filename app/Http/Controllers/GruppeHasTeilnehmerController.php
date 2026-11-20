@@ -259,7 +259,9 @@ class GruppeHasTeilnehmerController extends Controller
         return Inertia::render('Gruppe/GruppeHasTeilnehmer/Index', [
             'canCollectGroupSignatures' => app(\App\Services\Bop\GroupAttendanceSignatures::class)->allowed($user, $gruppe),
             'gruppe' => $gruppe,
-            'teilnehmer' => Inertia::defer(function () use ($projektId, $standortId) {
+            'teilnehmer' => Inertia::defer(function () use ($gruppe, $projektId, $standortId) {
+                $schulkontext = $this->teilnehmerAuswahlSchulkontext($gruppe);
+
                 return Personen::Teilnehmer()
                     ->whereHas('projekte', function ($query) use ($projektId, $standortId) {
                         $query->where('projekts.id', $projektId);
@@ -267,6 +269,9 @@ class GruppeHasTeilnehmerController extends Controller
                             $query->where('projekt_has_personens.standort_id', $standortId);
                         }
                     })
+                    ->when($schulkontext, fn ($query) => $query->whereHas('schueler', fn ($schueler) => $schueler
+                        ->where('schule_id', $schulkontext['partner_id'])
+                        ->where('schuljahr', $schulkontext['schuljahr'])))
                     ->orderBy('nachname')
                     ->orderBy('vorname')
                     ->get(['id', 'vorname', 'nachname', 'geschlecht']);
@@ -827,6 +832,26 @@ class GruppeHasTeilnehmerController extends Controller
         }
 
         return $context;
+    }
+
+    private function teilnehmerAuswahlSchulkontext(Gruppe $gruppe): ?array
+    {
+        $bemerkung = $this->contextAusGruppenBemerkung($gruppe);
+        if ($bemerkung !== []) {
+            return $bemerkung;
+        }
+
+        $zuordnungen = $gruppe->teilnehmer
+            ->flatMap(fn ($person) => $person->schueler)
+            ->filter(fn ($schueler) => $schueler->schule_id && filled($schueler->schuljahr)
+                && (! $gruppe->partner_id || (int) $gruppe->partner_id === (int) $schueler->schule_id))
+            ->map(fn ($schueler) => [
+                'partner_id' => (int) $schueler->schule_id,
+                'schuljahr' => (string) $schueler->schuljahr,
+            ])
+            ->unique();
+
+        return $zuordnungen->count() === 1 ? $zuordnungen->first() : null;
     }
 
     private function contextAusGruppenBemerkung(Gruppe $gruppe): array
