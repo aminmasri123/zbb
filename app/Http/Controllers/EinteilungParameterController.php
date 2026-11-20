@@ -30,7 +30,10 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Shared\Drawing as DrawingUnits;
 use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
+use PhpOffice\PhpSpreadsheet\Worksheet\MemoryDrawing;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class EinteilungParameterController extends Controller
@@ -826,15 +829,16 @@ class EinteilungParameterController extends Controller
 
         $sheet->mergeCells("A1:{$lastColumn}1");
         $sheet->setCellValue('A1', 'Einteilung · '.$partner->name);
-        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(18)->getColor()->setARGB('FF172033');
-        $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
-        $sheet->getRowDimension(1)->setRowHeight(30);
+        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(26)->getColor()->setARGB('FF172033');
+        $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER)->setShrinkToFit(true);
+        $sheet->getRowDimension(1)->setRowHeight(43);
 
+        $teilLabel = preg_match('/^Teil(?:\s|$)/iu', $teil) ? $teil : 'Teil '.$teil;
         $sheet->mergeCells("A2:{$lastColumn}2");
-        $sheet->setCellValue('A2', 'Schuljahr '.$schuljahr.' · Teil '.$teil.' · '.($ausgewaehlteRunde ? 'Runde '.$ausgewaehlteRunde : 'Alle Runden'));
-        $sheet->getStyle('A2')->getFont()->setSize(10)->getColor()->setARGB('FF667085');
-        $sheet->getStyle('A2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-        $sheet->getRowDimension(2)->setRowHeight(20);
+        $sheet->setCellValue('A2', 'Schuljahr '.$schuljahr.' · '.$teilLabel.' · '.($ausgewaehlteRunde ? 'Runde '.$ausgewaehlteRunde : 'Alle Runden'));
+        $sheet->getStyle('A2')->getFont()->setSize(14)->getColor()->setARGB('FF475467');
+        $sheet->getStyle('A2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER)->setShrinkToFit(true);
+        $sheet->getRowDimension(2)->setRowHeight(33);
 
         $headerRow = 3;
         $sheet->setCellValue([1, $headerRow], 'RUNDE');
@@ -894,13 +898,13 @@ class EinteilungParameterController extends Controller
             $sheet->getColumnDimensionByColumn($column)->setWidth(29);
         }
         $logoRow = $lastRow + 2;
+        $sheet->getRowDimension($lastRow + 1)->setRowHeight(12);
         $this->addEinteilungExportLogos($sheet, $lastColumnIndex, $logoRow);
-        $sheet->getRowDimension($logoRow)->setRowHeight(62);
         $sheet->freezePane('B4');
         $sheet->getPageSetup()->setOrientation('landscape')->setFitToWidth(1)->setFitToHeight(0);
         $sheet->getPageMargins()->setTop(0.3)->setRight(0.25)->setBottom(0.3)->setLeft(0.25);
         $sheet->getPageSetup()->setRowsToRepeatAtTopByStartAndEnd(1, $headerRow);
-        $sheet->getHeaderFooter()->setOddFooter('&L'.$partner->name.'&CSeite &P von &N&R'.$schuljahr.' · Teil '.$teil);
+        $sheet->getHeaderFooter()->setOddFooter('&L'.$partner->name.'&CSeite &P von &N&R'.$schuljahr.' · '.$teilLabel);
 
         return $this->downloadSpreadsheet(
             $spreadsheet,
@@ -908,35 +912,75 @@ class EinteilungParameterController extends Controller
         );
     }
 
-    private function addEinteilungExportLogos($sheet, int $lastColumnIndex, int $logoRow): void
+    private function addEinteilungExportLogos(Worksheet $sheet, int $lastColumnIndex, int $logoRow): void
     {
-        $partnerColumns = [
-            2,
-            max(2, (int) round($lastColumnIndex * 0.4)),
-            max(2, (int) round($lastColumnIndex * 0.65)),
-            max(2, (int) round($lastColumnIndex * 0.85)),
-        ];
+        $defaultFont = $sheet->getParent()->getDefaultStyle()->getFont();
+        $columnWidths = [];
+        for ($column = 1; $column <= $lastColumnIndex; $column++) {
+            $columnWidths[$column] = DrawingUnits::cellDimensionToPixels(
+                $sheet->getColumnDimensionByColumn($column)->getWidth(),
+                $defaultFont,
+            );
+        }
+        $tableWidth = array_sum($columnWidths);
+        $padding = 10;
+        $gap = 26;
+
+        // Crop the whitespace around the ministry wordmarks in the exported drawings.
         $logos = [
-            [public_path('img/einteilung-export/zbb.png'), 'A'.$logoRow, 32, 'ZBB'],
-            [public_path('img/einteilung-export/partner-berufsorientierung.png'), Coordinate::stringFromColumnIndex($partnerColumns[0]).$logoRow, 28, 'Berufsorientierung'],
-            [public_path('img/einteilung-export/partner-ministerium-saarland.png'), Coordinate::stringFromColumnIndex($partnerColumns[1]).$logoRow, 34, 'Ministerium Saarland'],
-            [public_path('img/einteilung-export/partner-bundesministerium.png'), Coordinate::stringFromColumnIndex($partnerColumns[2]).$logoRow, 34, 'Bundesministerium'],
-            [public_path('img/einteilung-export/partner-bibb.png'), Coordinate::stringFromColumnIndex($partnerColumns[3]).$logoRow, 28, 'BIBB'],
+            ['zbb.png', 'ZBB', 38, null],
+            ['partner-berufsorientierung.png', 'Berufsorientierung', 28, null],
+            ['partner-ministerium-saarland.png', 'Ministerium Saarland', 38, ['x' => 24, 'y' => 36, 'width' => 1242, 'height' => 412]],
+            ['partner-bundesministerium.png', 'Bundesministerium', 46, ['x' => 180, 'y' => 167, 'width' => 1349, 'height' => 498]],
+            ['partner-bibb.png', 'BIBB', 32, null],
         ];
 
-        foreach ($logos as [$path, $coordinate, $height, $name]) {
+        $rows = [[]];
+        $rowIndex = 0;
+        $rowWidth = 0;
+        foreach ($logos as [$file, $name, $height, $crop]) {
+            $path = public_path('img/einteilung-export/'.$file);
             if (! file_exists($path)) {
                 continue;
             }
-            $drawing = new Drawing;
+            if ($crop === null) {
+                $drawing = new Drawing;
+                $drawing->setPath($path);
+            } else {
+                $drawing = new MemoryDrawing;
+                $drawing->setImageResource(imagecrop(imagecreatefrompng($path), $crop));
+            }
             $drawing->setName($name);
             $drawing->setDescription($name.' Logo');
-            $drawing->setPath($path);
-            $drawing->setCoordinates($coordinate);
             $drawing->setHeight($height);
-            $drawing->setOffsetX(6);
-            $drawing->setOffsetY(3);
-            $drawing->setWorksheet($sheet);
+            $drawing->setWidth(min($drawing->getWidth(), $tableWidth - 2 * $padding));
+
+            if ($rowWidth > 0 && $rowWidth + $gap + $drawing->getWidth() > $tableWidth - 2 * $padding) {
+                $rowIndex++;
+                $rowWidth = 0;
+            }
+            $rowWidth += ($rowWidth > 0 ? $gap : 0) + $drawing->getWidth();
+            $rows[$rowIndex][] = $drawing;
+        }
+
+        foreach (array_filter($rows) as $drawings) {
+            $rowWidth = array_sum(array_map(fn ($drawing) => $drawing->getWidth(), $drawings)) + $gap * (count($drawings) - 1);
+            $rowHeight = max(array_map(fn ($drawing) => $drawing->getHeight(), $drawings)) + 2 * $padding;
+            $sheet->getRowDimension($logoRow)->setRowHeight(DrawingUnits::pixelsToPoints($rowHeight));
+
+            $column = 1;
+            $offset = intdiv($tableWidth - $rowWidth, 2);
+            foreach ($drawings as $drawing) {
+                while ($offset >= $columnWidths[$column]) {
+                    $offset -= $columnWidths[$column++];
+                }
+                $drawing->setCoordinates(Coordinate::stringFromColumnIndex($column).$logoRow);
+                $drawing->setOffsetX($offset);
+                $drawing->setOffsetY(intdiv($rowHeight - $drawing->getHeight(), 2));
+                $drawing->setWorksheet($sheet);
+                $offset += $drawing->getWidth() + $gap;
+            }
+            $logoRow++;
         }
     }
 

@@ -94,17 +94,27 @@ class PotenzialanalyseGroupExportMenuTest extends TestCase
         $this->get(route('potenzialanalyse.gruppe.berichte', $group))->assertForbidden();
     }
 
-    public function test_participant_picker_falls_back_only_without_school_year_matches(): void
+    public function test_participant_picker_requires_matching_school_and_school_year(): void
     {
         [$user, $group, $participants] = $this->paGroup();
         $school = Partner::query()->create(['name' => 'Testschule']);
-        $group->update(['bemerkung' => "BOP Einteilung Schule {$school->id} Schuljahr 2026 Teil 1 Runde 1"]);
         $url = route('gruppeHasTeilnehmer.show', $group->id);
 
         $this->actingAs($user)->get($url)->assertInertia(fn (Assert $page) => $page
             ->loadDeferredProps('teilnehmer', fn (Assert $reload) => $reload
-                ->where('teilnehmer.schulfilterOhneTreffer', true)
-                ->has('teilnehmer.optionen', 2)));
+                ->where('teilnehmer.schulkontextFehlt', true)
+                ->has('teilnehmer.optionen', 0)));
+
+        $group->update(['bemerkung' => "BOP Einteilung Schule {$school->id} Schuljahr 2026 Teil 1 Runde 1"]);
+        PersonenIstSchueler::query()->create([
+            'person_id' => $participants->last()->id, 'schule_id' => $school->id,
+            'schuljahr' => '2025', 'teil' => '1', 'klasse' => '7.1',
+        ]);
+
+        $this->get($url)->assertInertia(fn (Assert $page) => $page
+            ->loadDeferredProps('teilnehmer', fn (Assert $reload) => $reload
+                ->where('teilnehmer.schulkontextFehlt', false)
+                ->has('teilnehmer.optionen', 0)));
 
         $participant = $participants->first();
         PersonenIstSchueler::query()->create([
@@ -114,7 +124,7 @@ class PotenzialanalyseGroupExportMenuTest extends TestCase
 
         $this->get($url)->assertInertia(fn (Assert $page) => $page
             ->loadDeferredProps('teilnehmer', fn (Assert $reload) => $reload
-                ->where('teilnehmer.schulfilterOhneTreffer', false)
+                ->where('teilnehmer.schulkontextFehlt', false)
                 ->has('teilnehmer.optionen', 1)
                 ->where('teilnehmer.optionen.0.id', $participant->id)));
     }

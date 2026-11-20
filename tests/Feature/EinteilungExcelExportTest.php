@@ -11,7 +11,9 @@ use App\Models\PersonenIstSchueler;
 use App\Models\Projekt;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Shared\Drawing;
 use Tests\TestCase;
 
 class EinteilungExcelExportTest extends TestCase
@@ -46,7 +48,19 @@ class EinteilungExcelExportTest extends TestCase
             ['ZBB', 'Berufsorientierung', 'Ministerium Saarland', 'Bundesministerium', 'BIBB'],
             collect($sheet->getDrawingCollection())->map->getName()->values()->all()
         );
-
+        $columnWidths = array_map(
+            fn (string $column) => Drawing::cellDimensionToPixels($sheet->getColumnDimension($column)->getWidth(), $workbook->getDefaultStyle()->getFont()),
+            ['A', 'B', 'C']
+        );
+        $rightEdgeByRow = [];
+        foreach ($sheet->getDrawingCollection() as $logo) {
+            [$column, $row] = Coordinate::indexesFromString($logo->getCoordinates());
+            $leftEdge = array_sum(array_slice($columnWidths, 0, $column - 1)) + $logo->getOffsetX();
+            $this->assertGreaterThan($rightEdgeByRow[$row] ?? 0, $leftEdge);
+            $rightEdgeByRow[$row] = $leftEdge + $logo->getWidth();
+            $this->assertLessThan(array_sum($columnWidths), $rightEdgeByRow[$row]);
+        }
+        $this->assertCount(2, $rightEdgeByRow);
     }
 
     public function test_a_single_round_can_be_exported(): void
@@ -62,6 +76,10 @@ class EinteilungExcelExportTest extends TestCase
 
         $this->assertStringContainsString('Runde_2.xlsx', (string) $response->headers->get('content-disposition'));
         $sheet = IOFactory::load($response->getFile()->getPathname())->getActiveSheet();
+        $this->assertSame('Einteilung · Testschule', $sheet->getCell('A1')->getValue());
+        $this->assertSame('Schuljahr 2026/2027 · Teil 1 · Runde 2', $sheet->getCell('A2')->getValue());
+        $this->assertEquals(26, $sheet->getStyle('A1')->getFont()->getSize());
+        $this->assertEquals(14, $sheet->getStyle('A2')->getFont()->getSize());
 
         $this->assertStringContainsString('Runde 2', (string) $sheet->getCell('A4')->getValue());
         $this->assertSame('', (string) $sheet->getCell('A5')->getValue());

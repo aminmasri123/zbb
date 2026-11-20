@@ -2454,7 +2454,9 @@ const exportMitTag = async () => {
                 :options="props.teilnehmer?.optionen ?? []"
                 :loading="props.teilnehmer === null"
                 :disabled="props.teilnehmer === null"
-                emptyMessage="Keine Teilnehmer für dieses Projekt und diesen Standort verfügbar."
+                :emptyMessage="props.teilnehmer?.schulkontextFehlt
+                  ? 'Für diese Gruppe fehlen eine eindeutige Schule oder ein eindeutiges Schuljahr.'
+                  : 'Keine Teilnehmer für die Schule und das Schuljahr dieser Gruppe gefunden.'"
                 emptyFilterMessage="Keine Teilnehmer für diesen Suchbegriff gefunden."
                 :filter="true"
                 display="chip"
@@ -2466,9 +2468,6 @@ const exportMitTag = async () => {
                 panelClass="z-[9999]"
               />
             </FloatLabel>
-            <p v-if="props.teilnehmer?.schulfilterOhneTreffer && props.teilnehmer.optionen.length" class="text-sm text-gray-600" role="status">
-              Für Schule und Schuljahr wurden keine Teilnehmer gefunden. Angezeigt werden die verfügbaren Teilnehmer aus Projekt und Standort.
-            </p>
 
 
 

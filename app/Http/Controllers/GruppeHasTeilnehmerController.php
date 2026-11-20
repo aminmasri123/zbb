@@ -262,33 +262,25 @@ class GruppeHasTeilnehmerController extends Controller
             'teilnehmer' => Inertia::defer(function () use ($gruppe, $projektId, $standortId) {
                 $schulkontext = $this->teilnehmerAuswahlSchulkontext($gruppe);
 
-                $auswahl = Personen::Teilnehmer()
+                if ($schulkontext === null) {
+                    return ['optionen' => [], 'schulkontextFehlt' => true];
+                }
+
+                $optionen = Personen::Teilnehmer()
                     ->whereHas('projekte', function ($query) use ($projektId, $standortId) {
                         $query->where('projekts.id', $projektId);
                         if ($standortId) {
                             $query->where('projekt_has_personens.standort_id', $standortId);
                         }
                     })
+                    ->whereHas('schueler', fn ($schueler) => $schueler
+                        ->where('schule_id', $schulkontext['partner_id'])
+                        ->where('schuljahr', $schulkontext['schuljahr']))
                     ->orderBy('nachname')
-                    ->orderBy('vorname');
+                    ->orderBy('vorname')
+                    ->get(['id', 'vorname', 'nachname', 'geschlecht']);
 
-                $spalten = ['id', 'vorname', 'nachname', 'geschlecht'];
-                if ($schulkontext) {
-                    $passendeTeilnehmer = (clone $auswahl)
-                        ->whereHas('schueler', fn ($schueler) => $schueler
-                            ->where('schule_id', $schulkontext['partner_id'])
-                            ->where('schuljahr', $schulkontext['schuljahr']))
-                        ->get($spalten);
-
-                    if ($passendeTeilnehmer->isNotEmpty()) {
-                        return ['optionen' => $passendeTeilnehmer, 'schulfilterOhneTreffer' => false];
-                    }
-                }
-
-                return [
-                    'optionen' => $auswahl->get($spalten),
-                    'schulfilterOhneTreffer' => $schulkontext !== null,
-                ];
+                return ['optionen' => $optionen, 'schulkontextFehlt' => false];
             }, 'teilnehmer'),
             'anwesenheit' => Inertia::defer(
                 fn () => $this->anwesenheitPayload($gruppe, $canReadAttendance),
