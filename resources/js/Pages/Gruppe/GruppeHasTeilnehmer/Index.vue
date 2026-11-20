@@ -2454,9 +2454,9 @@ const exportMitTag = async () => {
                 :options="props.teilnehmer?.optionen ?? []"
                 :loading="props.teilnehmer === null"
                 :disabled="props.teilnehmer === null"
-                :emptyMessage="props.teilnehmer?.schulkontextFehlt
-                  ? 'Für diese Gruppe fehlen eine eindeutige Schule oder ein eindeutiges Schuljahr.'
-                  : 'Keine Teilnehmer für die Schule und das Schuljahr dieser Gruppe gefunden.'"
+                :emptyMessage="props.teilnehmer?.schuleFehlt
+                  ? 'Für diese Gruppe ist keine eindeutige Schule hinterlegt.'
+                  : 'Keine Teilnehmer für die Schule dieser Gruppe gefunden.'"
                 emptyFilterMessage="Keine Teilnehmer für diesen Suchbegriff gefunden."
                 :filter="true"
                 display="chip"

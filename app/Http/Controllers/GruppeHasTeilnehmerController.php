@@ -260,27 +260,30 @@ class GruppeHasTeilnehmerController extends Controller
             'canCollectGroupSignatures' => app(\App\Services\Bop\GroupAttendanceSignatures::class)->allowed($user, $gruppe),
             'gruppe' => $gruppe,
             'teilnehmer' => Inertia::defer(function () use ($gruppe, $projektId, $standortId) {
-                $schulkontext = $this->teilnehmerAuswahlSchulkontext($gruppe);
+                $schulId = $this->teilnehmerAuswahlSchule($gruppe);
 
-                if ($schulkontext === null) {
-                    return ['optionen' => [], 'schulkontextFehlt' => true];
+                if ($schulId === null) {
+                    return ['optionen' => [], 'schuleFehlt' => true];
                 }
 
+                $schule = fn ($query) => $query->where('schule_id', $schulId);
                 $optionen = Personen::Teilnehmer()
+                    ->select(['id', 'vorname', 'nachname', 'geschlecht'])
                     ->whereHas('projekte', function ($query) use ($projektId, $standortId) {
                         $query->where('projekts.id', $projektId);
                         if ($standortId) {
                             $query->where('projekt_has_personens.standort_id', $standortId);
                         }
                     })
-                    ->whereHas('schueler', fn ($schueler) => $schueler
-                        ->where('schule_id', $schulkontext['partner_id'])
-                        ->where('schuljahr', $schulkontext['schuljahr']))
-                    ->orderBy('nachname')
-                    ->orderBy('vorname')
-                    ->get(['id', 'vorname', 'nachname', 'geschlecht']);
+                    ->whereHas('schueler', $schule)
+                    ->withMax(['schueler as schulzuordnung_erstellt_am' => $schule], 'created_at')
+                    ->orderByDesc('schulzuordnung_erstellt_am')
+                    ->orderByDesc('id')
+                    ->limit(180)
+                    ->get()
+                    ->makeHidden('schulzuordnung_erstellt_am');
 
-                return ['optionen' => $optionen, 'schulkontextFehlt' => false];
+                return ['optionen' => $optionen, 'schuleFehlt' => false];
             }, 'teilnehmer'),
             'anwesenheit' => Inertia::defer(
                 fn () => $this->anwesenheitPayload($gruppe, $canReadAttendance),
@@ -840,24 +843,20 @@ class GruppeHasTeilnehmerController extends Controller
         return $context;
     }
 
-    private function teilnehmerAuswahlSchulkontext(Gruppe $gruppe): ?array
+    private function teilnehmerAuswahlSchule(Gruppe $gruppe): ?int
     {
-        $bemerkung = $this->contextAusGruppenBemerkung($gruppe);
-        if ($bemerkung !== []) {
-            return $bemerkung;
+        $schulId = $gruppe->partner_id ?: ($this->contextAusGruppenBemerkung($gruppe)['partner_id'] ?? null);
+        if ($schulId) {
+            return (int) $schulId;
         }
 
-        $zuordnungen = $gruppe->teilnehmer
+        $schulen = $gruppe->teilnehmer
             ->flatMap(fn ($person) => $person->schueler)
-            ->filter(fn ($schueler) => $schueler->schule_id && filled($schueler->schuljahr)
-                && (! $gruppe->partner_id || (int) $gruppe->partner_id === (int) $schueler->schule_id))
-            ->map(fn ($schueler) => [
-                'partner_id' => (int) $schueler->schule_id,
-                'schuljahr' => (string) $schueler->schuljahr,
-            ])
+            ->pluck('schule_id')
+            ->filter()
             ->unique();
 
-        return $zuordnungen->count() === 1 ? $zuordnungen->first() : null;
+        return $schulen->count() === 1 ? (int) $schulen->first() : null;
     }
 
     private function contextAusGruppenBemerkung(Gruppe $gruppe): array

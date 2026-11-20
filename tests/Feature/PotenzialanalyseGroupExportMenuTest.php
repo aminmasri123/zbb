@@ -94,7 +94,7 @@ class PotenzialanalyseGroupExportMenuTest extends TestCase
         $this->get(route('potenzialanalyse.gruppe.berichte', $group))->assertForbidden();
     }
 
-    public function test_participant_picker_requires_matching_school_and_school_year(): void
+    public function test_participant_picker_lists_only_the_180_newest_students_at_the_group_school(): void
     {
         [$user, $group, $participants] = $this->paGroup();
         $school = Partner::query()->create(['name' => 'Testschule']);
@@ -102,31 +102,43 @@ class PotenzialanalyseGroupExportMenuTest extends TestCase
 
         $this->actingAs($user)->get($url)->assertInertia(fn (Assert $page) => $page
             ->loadDeferredProps('teilnehmer', fn (Assert $reload) => $reload
-                ->where('teilnehmer.schulkontextFehlt', true)
+                ->where('teilnehmer.schuleFehlt', true)
                 ->has('teilnehmer.optionen', 0)));
 
-        $group->update(['bemerkung' => "BOP Einteilung Schule {$school->id} Schuljahr 2026 Teil 1 Runde 1"]);
+        $group->update(['partner_id' => $school->id]);
+        $otherSchool = Partner::query()->create(['name' => 'Andere Schule']);
         PersonenIstSchueler::query()->create([
-            'person_id' => $participants->last()->id, 'schule_id' => $school->id,
+            'person_id' => $participants->last()->id, 'schule_id' => $otherSchool->id,
             'schuljahr' => '2025', 'teil' => '1', 'klasse' => '7.1',
         ]);
 
         $this->get($url)->assertInertia(fn (Assert $page) => $page
             ->loadDeferredProps('teilnehmer', fn (Assert $reload) => $reload
-                ->where('teilnehmer.schulkontextFehlt', false)
+                ->where('teilnehmer.schuleFehlt', false)
                 ->has('teilnehmer.optionen', 0)));
 
         $participant = $participants->first();
-        PersonenIstSchueler::query()->create([
+        $oldest = PersonenIstSchueler::query()->create([
             'person_id' => $participant->id, 'schule_id' => $school->id,
             'schuljahr' => '2026', 'teil' => '1', 'klasse' => '7.1',
         ]);
+        $oldest->forceFill(['created_at' => now()->subDay()])->save();
+
+        $recent = Personen::factory()->count(180)->create(['typ' => 'teilnehmer', 'aktiv' => true]);
+        foreach ($recent as $student) {
+            $student->projekte()->attach($group->projekt_id, ['standort_id' => $group->standort_id, 'status' => 'aktiv']);
+            $student->schueler()->create([
+                'schule_id' => $school->id, 'schuljahr' => '2025', 'teil' => '1', 'klasse' => '7.1',
+            ]);
+        }
 
         $this->get($url)->assertInertia(fn (Assert $page) => $page
             ->loadDeferredProps('teilnehmer', fn (Assert $reload) => $reload
-                ->where('teilnehmer.schulkontextFehlt', false)
-                ->has('teilnehmer.optionen', 1)
-                ->where('teilnehmer.optionen.0.id', $participant->id)));
+                ->where('teilnehmer.schuleFehlt', false)
+                ->has('teilnehmer.optionen', 180)
+                ->where('teilnehmer.optionen', fn (\Illuminate\Support\Collection $options) =>
+                    $options->pluck('id')->all() === $recent->pluck('id')->reverse()->values()->all()
+                )));
     }
 
     private function exportMenu(User $user, Gruppe $group): \Illuminate\Support\Collection
