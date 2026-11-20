@@ -107,6 +107,31 @@ class UnterweisungsnachweisExportTest extends TestCase
         $this->assertStringContainsString('X', $text);
     }
 
+    public function test_area_topic_edits_are_used_in_the_underweisung_pdf(): void
+    {
+        [$user, $gruppe] = $this->context();
+        $this->grantTestPermission($user, 'bereich.update');
+        $bereich = $gruppe->bereich;
+
+        $this->actingAs($user)->putJson(route('bereich.update', $bereich->id), [
+            'name' => $bereich->name,
+            'unterweisung_themenliste' => [
+                ['key' => 'elektrische_geraete', 'label' => 'Geräteprüfung'],
+                ['key' => 'eigenes_thema_1', 'label' => 'Werkplatz vorbereiten'],
+            ],
+            'unterweisung_themen' => ['elektrische_geraete', 'eigenes_thema_1'],
+        ])->assertOk()
+            ->assertJsonPath('bereich.unterweisung_themenliste.elektrische_geraete', 'Geräteprüfung')
+            ->assertJsonPath('bereich.unterweisung_themen.0', 'elektrische_geraete');
+
+        $response = $this->get(route('gruppe.bop.export.unterweisungsnachweis', $gruppe))->assertOk();
+        $text = (new Parser)->parseContent($response->getContent())->getText();
+        $this->assertStringContainsString('Geräteprüfung', $text);
+        $this->assertStringContainsString('Werkplatz vorbereiten', $text);
+        $this->assertStringNotContainsString('Elektrische Geräte', $text);
+        $this->assertStringNotContainsString('Brandschutz', $text);
+    }
+
     public function test_assigned_instructor_can_export_without_stored_signature(): void
     {
         [$user, $gruppe] = $this->context();

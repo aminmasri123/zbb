@@ -6,6 +6,7 @@ use App\Models\Bereich;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class BereichController extends Controller
@@ -135,20 +136,33 @@ class BereichController extends Controller
 
     public function update(Request $request, $id)
     {
+        $bereich = Bereich::findOrFail($id);
+        $themenliste = $request->validate([
+            'unterweisung_themenliste' => ['sometimes', 'array', 'list', 'max:100'],
+            'unterweisung_themenliste.*' => ['required', 'array:key,label'],
+            'unterweisung_themenliste.*.key' => ['required', 'string', 'max:80', 'regex:/^[a-z][a-z0-9_]*$/', 'distinct'],
+            'unterweisung_themenliste.*.label' => ['required', 'string', 'max:120'],
+        ]);
+        $neueThemenliste = null;
+        if (array_key_exists('unterweisung_themenliste', $themenliste)) {
+            abort_unless($request->user()?->can('bereich.update'), 403);
+            $neueThemenliste = array_column($themenliste['unterweisung_themenliste'], 'label', 'key');
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:30',
             'code' => 'nullable|string|max:10',
             'beschreibung' => 'nullable|string|max:200',
             'unterweisung_themen' => ['nullable', 'array'],
-            'unterweisung_themen.*' => ['string', 'in:'.implode(',', array_keys(config('unterweisung.themen', [])))],
+            'unterweisung_themen.*' => ['string', Rule::in(array_keys($neueThemenliste ?? $bereich->unterweisungThemenliste()))],
         ]);
 
-        $bereich = Bereich::findOrFail($id);
         $bereich->update([
             'name' => trim($validated['name']),
             'code' => $this->nullableTrimmedValue($validated['code'] ?? null),
             'beschreibung' => $this->nullableTrimmedValue($validated['beschreibung'] ?? null),
             'unterweisung_themen' => array_values(array_unique($validated['unterweisung_themen'] ?? [])),
+            'unterweisung_themenliste' => $neueThemenliste ?? $bereich->unterweisung_themenliste,
         ]);
 
         return response()->json([

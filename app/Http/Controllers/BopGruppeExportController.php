@@ -275,7 +275,7 @@ class BopGruppeExportController extends Controller
             return back()->with('error', 'Die Gruppe verfügt derzeit über keine Teilnehmer.');
         }
 
-        $themen = collect(config('unterweisung.themen', []));
+        $themen = collect($gruppe->bereich?->unterweisungThemenliste() ?? config('unterweisung.themen', []));
         $ausgewaehlteThemen = collect($gruppe->bereich?->unterweisung_themen ?? [])
             ->filter(fn (string $key) => $themen->has($key))
             ->values();

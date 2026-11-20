@@ -16,11 +16,18 @@ class Bereich extends Model
         'code',
         'beschreibung',
         'unterweisung_themen',
+        'unterweisung_themenliste',
     ];
 
     protected $casts = [
         'unterweisung_themen' => 'array',
+        'unterweisung_themenliste' => 'array',
     ];
+
+    public function unterweisungThemenliste(): array
+    {
+        return $this->unterweisung_themenliste ?? config('unterweisung.themen', []);
+    }
 
     public function projekte()
     {
