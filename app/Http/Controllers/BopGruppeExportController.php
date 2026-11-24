@@ -48,7 +48,7 @@ class BopGruppeExportController extends Controller
         return $this->namensschilderDownload($teilnehmer->pluck('voller_name'), $filename);
     }
 
-    public function partnerNamensschilder(Request $request, Partner $partner)
+    public function partnerNamensschilder(Request $request, Partner $partner, ?int $exportProjectId = null)
     {
         $validated = $request->validate([
             'schuljahr' => ['required', 'string'],
@@ -64,18 +64,10 @@ class BopGruppeExportController extends Controller
             404
         );
 
-        $names = PersonenIstSchueler::query()
+        $students = PersonenIstSchueler::forExportProject($exportProjectId)
             ->filterSchueler($partner->id, $validated['schuljahr'], $validated['teil'])
-            ->with('person')
-            ->get()
-            ->unique('person_id')
-            ->sort(function ($a, $b) {
-                $lastName = strnatcasecmp((string) ($a->person?->nachname ?? ''), (string) ($b->person?->nachname ?? ''));
-
-                return $lastName !== 0
-                    ? $lastName
-                    : strnatcasecmp((string) ($a->person?->vorname ?? ''), (string) ($b->person?->vorname ?? ''));
-            })
+            ->get()->unique('person_id');
+        $names = PersonenIstSchueler::sortForPackage($students, $request->query('sortierung') === 'klasse' ? 'klasse' : 'nachname')
             ->map(fn (PersonenIstSchueler $student) => trim(
                 (string) ($student->person?->vorname ?? '').' '.(string) ($student->person?->nachname ?? '')
             ))

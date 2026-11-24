@@ -695,6 +695,7 @@ class ProjektController extends Controller
 
         $projekt->update([
             'rule_settings' => [
+                ...($projekt->rule_settings ?? []),
                 'max_group_participants' => isset($validated['rules']['max_group_participants'])
                     ? (int) $validated['rules']['max_group_participants']
                     : null,

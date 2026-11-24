@@ -1709,7 +1709,7 @@ class ProjektBopController extends Controller
         ]);
     }
 
-    public function anwesenheitslistePAPreparationExportWord(Request $request)
+    public function anwesenheitslistePAPreparationExportWord(Request $request, ?int $exportProjectId = null, string $sort = 'klasse')
     {
         $this->ensureMemoryLimit(512 * 1024 * 1024);
         $scope = $this->paDraftScope($request);
@@ -1744,7 +1744,8 @@ class ProjektBopController extends Controller
             $scope['teil'],
             $scope['export_mode'],
             $scope['klasse'],
-            $scope['list_type']
+            $scope['list_type'],
+            $exportProjectId
         );
         abort_if($participants->isEmpty(), 422, 'Die Schule hat keine Teilnehmer für diese Auswahl.');
 
@@ -1761,7 +1762,7 @@ class ProjektBopController extends Controller
 
         $this->paPreparationWordExport->create(
             $school,
-            $participants,
+            PersonenIstSchueler::sortForPackage($participants, $sort),
             $day,
             is_array($payload['signatures'] ?? null) ? $payload['signatures'] : [],
             $scope['schuljahr'],
@@ -2630,9 +2631,11 @@ class ProjektBopController extends Controller
         string $teil,
         string $exportMode,
         ?string $klasse,
-        string $listType = 'pa'
+        string $listType = 'pa',
+        ?int $exportProjectId = null
     ): Collection {
         return PersonenIstSchueler::query()
+            ->forExportProject($exportProjectId)
             ->filterSchueler($schuleId, $schuljahr, $teil)
             ->when($exportMode === 'klasse', fn ($query) => $query->where('klasse', $klasse))
             ->with('person')
@@ -2803,15 +2806,15 @@ class ProjektBopController extends Controller
                 return response()->download($exportPath)->deleteFileAfterSend(true);
     }
 
-    public function anwesenheitslistePOBOTag1(Request $request, $partnerID, $schuljahr, $teil, $klasse = 'exportAlleKlassen')
+    public function anwesenheitslistePOBOTag1(Request $request, $partnerID, $schuljahr, $teil, $klasse = 'exportAlleKlassen', ?int $exportProjectId = null)
     {
         $this->ensurePartnerInActiveProject((int) $partnerID);
 
         // Query Parameter
-        $anzahlBereiche = request()->query('anzahlBereiche', 6);
-        $anzahlRaeumlichkeiten = request()->query('anzahlRaeumlichkeiten', $anzahlBereiche);
-        $kapazitaeten = request()->query('kapazitaeten', []);
-        $termin = request()->query('termin', date('Y-m-d')) ;
+        $anzahlBereiche = $request->query('anzahlBereiche', 6);
+        $anzahlRaeumlichkeiten = $request->query('anzahlRaeumlichkeiten', $anzahlBereiche);
+        $kapazitaeten = $request->query('kapazitaeten', []);
+        $termin = $request->query('termin', date('Y-m-d')) ;
         $request->validate(['termin' => ['nullable', 'date']]);
         abort_unless($this->attendanceDateAllowed($termin), 422, 'Wochenenden und Feiertage sind für diese Anwesenheitsliste ausgeschlossen.');
         $raumNamen = $request->input('raumNamen', []);
@@ -2824,7 +2827,7 @@ class ProjektBopController extends Controller
         $schule = Partner::findOrFail($partnerID);
 
         // Teilnehmer laden
-        $alleTeilnehmer = PersonenIstSchueler::where('schule_id', $schule->id)
+        $alleTeilnehmer = PersonenIstSchueler::forExportProject($exportProjectId)->where('schule_id', $schule->id)
             ->forSchuljahr($schuljahr)
             ->where('teil', $teil)
             ->when($klasse !== 'exportAlleKlassen' && $klasse !== 'exportAlleKlassenZip' , fn($q) => $q->where('klasse', $klasse))
@@ -2886,16 +2889,19 @@ class ProjektBopController extends Controller
         if ($klasse === 'exportAlleKlassenZip') {
                       Log::info('fall 2');
 
-            $templateFile = storage_path('vorlage/projekte/bop/excel/bo/botag1/Anwesenheitsliste-BO-TAG1-klasse.xlsx');
+            $templateFile = storage_path('vorlage/projekte/bop/excel/bo/botag1/Anwesenheitsliste-BO-TAG1-Klasse.xlsx');
             if (!file_exists($templateFile)) {
                 return back()->with('error', 'Template fehlt.');
             }
 
             // 👉 Teilnehmer nach Klassen gruppieren
-            $gruppenNachKlassen = $alleTeilnehmer->groupBy('klasse');
+            $alphabetisch = $exportProjectId !== null && $request->query('sortierung') === 'nachname';
+            $gruppenNachKlassen = $alphabetisch
+                ? collect(['alle Klassen' => PersonenIstSchueler::sortForPackage($alleTeilnehmer, 'nachname')])
+                : $alleTeilnehmer->groupBy('klasse')->sortKeys(SORT_NATURAL | SORT_FLAG_CASE);
 
             // 👉 Temp Ordner
-            $tempDir = storage_path('temp_excel');
+            $tempDir = storage_path('temp_excel_'.Str::uuid());
             if (!is_dir($tempDir)) mkdir($tempDir, 0777, true);
 
             array_map('unlink', glob($tempDir . '/*'));
@@ -2912,7 +2918,7 @@ class ProjektBopController extends Controller
 
                 // Kopf
                 $sheet->setCellValue('H5', $terminDatum);
-                $sheet->setCellValue('C2', "Rolltag - Klasse $klassenName - " . $schule->name);
+                $sheet->setCellValue('C2', ($alphabetisch ? 'Rolltag - nach Nachname - ' : "Rolltag - Klasse $klassenName - ") . $schule->name);
 
                 // Teilnehmer eintragen
                 $row = 8;
@@ -2925,7 +2931,7 @@ class ProjektBopController extends Controller
                 }
 
                 // Datei speichern
-                $fileName = "Rolltag_{$klassenName}.xlsx";
+                $fileName = 'Rolltag_'.Str::slug((string) $klassenName, '_').'_'.(count($dateien) + 1).'.xlsx';
                 $filePath = $tempDir . '/' . $fileName;
 
                 (new Xlsx($spreadsheet))->save($filePath);
@@ -2934,7 +2940,7 @@ class ProjektBopController extends Controller
             }
 
             // 👉 ZIP erstellen
-            $zipFileName = storage_path('Rolltag_Klassen_' . date('Ymd_His') . '.zip');
+            $zipFileName = storage_path('Rolltag_Klassen_'.Str::uuid().'.zip');
             $zip = new ZipArchive();
 
             if ($zip->open($zipFileName, ZipArchive::CREATE | ZipArchive::OVERWRITE) === TRUE) {
@@ -3147,7 +3153,7 @@ class ProjektBopController extends Controller
     }
 
 
-    public function hausordnungExportPdf($partnerID, $schuljahr, $teil, $sortBy, $termin)
+    public function hausordnungExportPdf($partnerID, $schuljahr, $teil, $sortBy, $termin, ?int $exportProjectId = null)
     {
         $this->ensurePartnerInActiveProject((int) $partnerID);
         $schule = Partner::findOrFail($partnerID);
@@ -3160,7 +3166,7 @@ class ProjektBopController extends Controller
             }
         // Daten aus der Tabelle abrufen
        if($sortBy == 'nachname'){
-             $alle_teilnehmer = PersonenIstSchueler::where('schule_id', $partnerID)
+             $alle_teilnehmer = PersonenIstSchueler::forExportProject($exportProjectId)->where('schule_id', $partnerID)
             ->forSchuljahr($schuljahr)
                 ->where('teil', $teil)
                 ->with('person')
@@ -3169,7 +3175,7 @@ class ProjektBopController extends Controller
 
 
        }elseif($sortBy == 'klasse'){
-           $alle_teilnehmer = PersonenIstSchueler::where('schule_id', $partnerID)
+           $alle_teilnehmer = PersonenIstSchueler::forExportProject($exportProjectId)->where('schule_id', $partnerID)
             ->forSchuljahr($schuljahr)
             ->where('teil', $teil)
             ->with('person')
@@ -3574,20 +3580,15 @@ class ProjektBopController extends Controller
 
 
 
-    public function exportElterneinverstaendniserklaerungSchule($partnerId, $schuljahr, $teil)
+    public function exportElterneinverstaendniserklaerungSchule($partnerId, $schuljahr, $teil, ?int $exportProjectId = null, string $sort = 'klasse')
     {
         $this->ensurePartnerInActiveProject((int) $partnerId);
         $alle_teilnehmer = PersonenIstSchueler::with('person')
+            ->forExportProject($exportProjectId)
             ->filterSchueler($partnerId, $schuljahr, $teil)
             ->where('eee', '0')
-            ->get()
-             ->sort(function($a, $b) {
-                $klasseCompare = strnatcasecmp($a->klasse, $b->klasse);
-                if ($klasseCompare !== 0) return $klasseCompare;
-
-                return strnatcasecmp($a->person->nachname ?? '', $b->person->nachname ?? '');
-            })
-            ->values();
+            ->get();
+        $alle_teilnehmer = PersonenIstSchueler::sortForPackage($alle_teilnehmer, $sort);
         $partner = Partner::findOrFail($partnerId);
         if(!$partner){
             return redirect()->back()->with('error', 'Die Schule konnte nicht gefunden werden.' );
@@ -3631,12 +3632,14 @@ class ProjektBopController extends Controller
         // Excel-Datei speichern
 
         $writer = new Xlsx($spreadsheet);
-       $updatedFile = 'Ausstehende Elterneinverstaendniserklaerung-' . $partner->name .'-'. date('d-m-Y') . '.xlsx';
+       $filename = 'Ausstehende Elterneinverstaendniserklaerung-' . $partner->name . '-' . date('d-m-Y') . '.xlsx';
+       File::ensureDirectoryExists(storage_path('exports'));
+       $updatedFile = storage_path('exports/'.Str::uuid().'.xlsx');
        $writer->save($updatedFile);
 
        // Aktualisierte Excel-Datei herunterladen
        return response()
-        ->download($updatedFile)
+        ->download($updatedFile, $filename)
         ->deleteFileAfterSend(true);
 
     }

@@ -737,7 +737,8 @@ class ExportWordController extends Controller
         Request $request,
         Partner $partner,
         Dokumente $dokument,
-        ActiveProjectContext $activeProjectContext
+        ActiveProjectContext $activeProjectContext,
+        ?int $exportProjectId = null
     ) {
         $context = $request->validate([
             'schuljahr' => ['required', 'string', 'max:20'],
@@ -777,12 +778,16 @@ class ExportWordController extends Controller
             );
         }
 
-        $studentRows = PersonenIstSchueler::query()
+        $studentRows = PersonenIstSchueler::forExportProject($exportProjectId)
             ->where('schule_id', $partner->id)
             ->forSchuljahr($context['schuljahr'])
             ->where('teil', $context['teil'])
             ->with(['person.adresses', 'person.kontaktes.kontakttyp', 'person.sozialedaten'])
             ->get();
+
+        if ($exportProjectId !== null) {
+            $studentRows = PersonenIstSchueler::sortForPackage($studentRows, (string) $request->query('sortierung', 'klasse'));
+        }
 
         $teilnehmer = $studentRows->pluck('person')->filter()->unique('id')->values();
         $partner->loadMissing(['adresses', 'kontaktes.kontakttyp']);

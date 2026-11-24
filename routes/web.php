@@ -810,6 +810,10 @@ Route::middleware(['auth', 'injectUserPermissions', 'injectUserProjekte', 'route
     });
 
     // Partner
+    Route::get('/organisation/partner/berichte', [PartnerController::class, 'reports'])->name('partner.reports');
+    Route::get('/organisation/partner/bop-pakete/schulen', [\App\Http\Controllers\BopPartnerPackageController::class, 'schools'])->name('partner.bop.packages.schools')->can('kooperationspartner.index');
+    Route::put('/organisation/partner/bop-pakete/{package}', [\App\Http\Controllers\BopPartnerPackageController::class, 'update'])->name('partner.bop.packages.update')->can('kooperationspartner.index');
+    Route::post('/organisation/partner/{partner}/bop-pakete/{package}', \App\Http\Controllers\BopPartnerPackageController::class)->name('partner.bop.packages.download');
     Route::get('/organisation/partner', [PartnerController::class, 'index'])->name('partner.index');
     Route::redirect('/partner', '/organisation/partner')->name('dashboard.partner.index');
     Route::post('/organisation/partner/anlegen', [PartnerController::class, 'store'])->name('partner.store');

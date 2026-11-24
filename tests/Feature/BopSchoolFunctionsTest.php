@@ -49,12 +49,16 @@ class BopSchoolFunctionsTest extends TestCase
         $this->assertSame(2, $service->build($project, 'ende')['schools'][0]['counts'][$group->bereich_id][2026]);
         $this->grantTestPermission($user, 'kooperationspartner.index');
         $this->actingAs($user)->get(route('partner.index'))->assertOk()
-            ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->where('bopAreaReport', null)->etc());
+            ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->where('canViewBopReports', false)->missing('bopAreaReport')->etc());
+        $this->get(route('partner.reports'))->assertForbidden();
         $this->grantTestPermission($user, 'anwesenheit.abrechnung');
-        $this->get(route('partner.index', ['bericht_typ' => 'ende']))->assertOk()
+        $this->get(route('partner.index'))->assertOk()
+            ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->where('canViewBopReports', true)->missing('bopAreaReport')->etc());
+        $this->get(route('partner.reports', ['bericht_typ' => 'ende']))->assertOk()
             ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
-                ->where('bopAreaReport.type', 'ende')
-                ->where('bopAreaReport.schools.0.counts.'.$group->bereich_id.'.2026', 2)->etc());
+                ->component('Partner/Reports')
+                ->where('report.type', 'ende')
+                ->where('report.schools.0.counts.'.$group->bereich_id.'.2026', 2)->etc());
     }
 
     public function test_attendance_is_saved_reloaded_and_exported_with_project_boundaries(): void

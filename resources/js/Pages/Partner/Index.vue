@@ -17,7 +17,7 @@ import ModalUsbStickBrief from './BOP/ModalUsbStickBrief.vue';
 import ModalPoboCertificates from './BOP/ModalPoboCertificates.vue';
 import BopRunPlanner from './BOP/BopRunPlanner.vue';
 import BopTimetablePlanner from './BOP/BopTimetablePlanner.vue';
-import ParticipantAreaReport from './BOP/ParticipantAreaReport.vue';
+import DocumentPackagesDialog from './BOP/DocumentPackagesDialog.vue';
 import { usePermissions } from '@/utils/permissions';
 
 // Props
@@ -27,7 +27,8 @@ const props = defineProps({
     projektName: String,
     kontaktypens: Array,
     anzahlBereiche: Number,
-    bopAreaReport: Object,
+    canViewBopReports: Boolean,
+    bopPackages: { type: Array, default: () => [] },
     partnerDokumente: { type: Array, default: () => [] },
 });
 const { can, canAny } = usePermissions();
@@ -52,6 +53,8 @@ const participantPartsEnabled = computed(() => page.props.currentProjekt?.rules?
 // States
 let seite = 'partner';
 let search = ref('');
+const packageOptions = ref(props.bopPackages);
+watch(() => props.bopPackages, packages => { packageOptions.value = packages; });
 let partnerToDelete = ref(null);
 let showModalLöschen = ref(false);
 let isModalCreateOpen = ref(false);
@@ -607,17 +610,16 @@ const updatePartnerAPI = async (form) => {
             </Link>
         </div>
 
-        <div v-if="isBopProject" class="mx-auto mb-4 w-full max-w-7xl rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-gray-700 shadow-sm">
-            <div class="flex items-start gap-3">
-                <i class="la la-info-circle mt-0.5 text-lg text-zbb"></i>
-                <div>
-                    <p class="font-semibold text-gray-900">BOP-Funktionen pro Schule</p>
-                    <p>Bei der gewünschten Schule zuerst das Schuljahr und danach den Teil anklicken. Dort befinden sich Anwesenheitsdaten, Teilnehmerliste und die weiteren BOP-Exporte.</p>
-                </div>
-            </div>
+        <div v-if="packageOptions.length || canViewBopReports" class="mx-auto mb-4 flex w-full max-w-7xl flex-wrap gap-2">
+            <button v-if="packageOptions.length" type="button" class="inline-flex items-center gap-2 rounded-md bg-zbb px-4 py-2 text-sm font-semibold text-white" @click="openModal('documentPackages')">
+                <i class="la la-file-archive text-lg" aria-hidden="true"></i>
+                Dokumentenpakete
+            </button>
+            <Link v-if="canViewBopReports" :href="route('partner.reports')" class="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50">
+                <i class="la la-chart-bar text-lg text-zbb" aria-hidden="true"></i>
+                Berichte
+            </Link>
         </div>
-
-        <ParticipantAreaReport :report="bopAreaReport" />
 
         <!-- Partnerausgabe -->
         <div class="relative mx-auto mb-10 w-full max-w-7xl overflow-visible">
@@ -664,7 +666,7 @@ const updatePartnerAPI = async (form) => {
 
                                 <div class="mt-2 flex flex-wrap gap-3" v-if="partner.ansprechpartners.some(p =>
                                     p.partner_typ?.some(t => t.bezeichnung === 'Kooperationsschule')
-                                )">
+                                ) || (isBopProject && partner.schueler?.length)">
 
                                     <div v-for="jahr in getSchuljahre(partner)" :key="jahr">
                                         <button
@@ -686,14 +688,10 @@ const updatePartnerAPI = async (form) => {
                                                 <div class="dropdown dropdown-action inline-block relative" @click.stop>
                                                     <button @click="openPartMenu(partner, jahr, teil)"
                                                         class="dropdown-toggle py-1 rounded text-xs w-full">
-                                                        {{ participantPartsEnabled ? normalizedPart(teil) : 'Aktionen' }}
+                                                        {{ participantPartsEnabled && isBopProject ? partLabel(teil) : (participantPartsEnabled ? normalizedPart(teil) : 'Aktionen') }}
                                                     </button>
                                                     <div v-show="isDropdownOpen(partner.id, jahr, teil)"
                                                         class="dropdown-menu absolute z-50 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded border bg-white text-xs shadow-lg">
-
-                                                        <!-- Links analog Blade -->
-
-                                                        <!-- Bearbeitet -->
 
                                                         <button
                                                             v-if="isBopProject && can('einteilung.planning')"
@@ -975,6 +973,8 @@ const updatePartnerAPI = async (form) => {
         <ModalAnwesenheitslistePA v-if="activeModal === 'anwesenheitslisteVorbereitungPA'" :visible="true" :partnerId="modalData.partnerId" :schuljahr="modalData.jahr" :klasse="modalData.klasse" :klassen="modalData.klassen" :teil="modalData.teil" list-type="pa_preparation" @update:visible="closeModal" @close="closeModal"/>
         <ModalBoTag1 v-if="activeModal === 'boTag1Config'" :visible="true" :anzahlBereiche="props.anzahlBereiche" :jahr="modalData.jahr" :teil="modalData.teil" :klassen="modalData.klassen" :teilnehmerCount="modalData.teilnehmerCount" :partnerId="modalData.partnerId" @close="closeModal" @submit="handleBoTag1" />
         <ModalHausordnung v-if="activeModal === 'hausordnungConfig'" :visible="true" :partnerId="modalData.partnerId" :jahr="modalData.jahr" :teil="modalData.teil" @close="closeModal"/>
+        <DocumentPackagesDialog v-if="activeModal === 'documentPackages'" :packages="packageOptions"
+            :can-edit="can('projekt.update')" @updated="packageOptions = $event" @close="closeModal" />
         <ModalUsbStickBrief v-if="activeModal === 'usbStickBrief'" :partner-id="modalData.partnerId" :schuljahr="modalData.jahr" :school-name="modalData.schoolName" @close="closeModal" />
         <ModalPoboCertificates v-if="activeModal === 'poboCertificates'" :partner-id="modalData.partnerId" :schuljahr="modalData.jahr" :teil="modalData.teil" :school-name="modalData.schoolName" @close="closeModal" />
         <BopRunPlanner

@@ -49,6 +49,24 @@ class PersonenIstSchueler extends Model
         return $query;
     }
 
+    public static function sortForPackage(\Illuminate\Support\Collection $students, string $sort): \Illuminate\Support\Collection
+    {
+        return $students->sort(function (self $a, self $b) use ($sort) {
+            $byClass = $sort === 'klasse' ? strnatcasecmp((string) $a->klasse, (string) $b->klasse) : 0;
+
+            return $byClass
+                ?: strnatcasecmp((string) $a->person?->nachname, (string) $b->person?->nachname)
+                ?: strnatcasecmp((string) $a->person?->vorname, (string) $b->person?->vorname);
+        })->values();
+    }
+
+    public function scopeForExportProject($query, ?int $projectId)
+    {
+        return $query->when($projectId !== null, fn ($query) => $query->whereIn('person_id',
+            ProjektHasPersonen::query()->where('projekt_id', $projectId)->select('personen_id')
+        ));
+    }
+
     public function scopeForSchuljahr($query, $schuljahr)
     {
         $value = trim((string) $schuljahr);

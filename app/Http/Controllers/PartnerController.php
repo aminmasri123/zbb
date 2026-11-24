@@ -136,7 +136,7 @@ class PartnerController extends Controller
         });
     }
 
-    private function partnerDocumentsForProject(Projekt $project, User $user)
+    public function partnerDocumentsForProject(Projekt $project, User $user)
     {
         return Dokumente::query()
             ->where('aktiv', true)
@@ -193,16 +193,35 @@ class PartnerController extends Controller
         }
 
         $this->protectPartnerDetails($partners);
+        $partnerDocuments = $this->partnerDocumentsForProject($projekt, $user);
         return Inertia::render('Partner/Index', [
             'partners' => $partners,
             'partnerschaftstypen' => $partnerschaftstypen,
             'projektName' => $projektName,
             'kontaktypens' => $kontaktypens,
             'anzahlBereiche' => $anzahlBereiche,
-            'bopAreaReport' => $projekt->usesBopParticipantOverviewPreset() && $user->can('anwesenheit.abrechnung')
-                ? app(\App\Services\Bop\ParticipantAreaReport::class)->build($projekt, $request->input('bericht_typ') === 'ende' ? 'ende' : 'zwischen')
-                : null,
-            'partnerDokumente' => $this->partnerDocumentsForProject($projekt, $user),
+            'canViewBopReports' => $this->canViewBopReports($projekt, $user),
+            'bopPackages' => BopPartnerPackageController::options($projekt, $user, $partnerDocuments),
+
+            'partnerDokumente' => $partnerDocuments,
+        ]);
+    }
+
+    private function canViewBopReports(Projekt $project, User $user): bool
+    {
+        return $project->usesBopParticipantOverviewPreset() && $user->can('anwesenheit.abrechnung');
+    }
+
+    public function reports(Request $request)
+    {
+        $project = $this->activeProjectContext->currentAvailableFor($request->user());
+        abort_unless($project && $this->canViewBopReports($project, $request->user()), 403);
+
+        return Inertia::render('Partner/Reports', [
+            'report' => app(\App\Services\Bop\ParticipantAreaReport::class)->build(
+                $project,
+                $request->input('bericht_typ') === 'ende' ? 'ende' : 'zwischen'
+            ),
         ]);
     }
 

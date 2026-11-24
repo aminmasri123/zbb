@@ -71,6 +71,8 @@ class RoutePermissionMap
         'dashboard.partner.index' => 'kooperationspartner.index',
         'schule.index' => 'kooperationspartner.index',
         'partner.index' => 'kooperationspartner.index',
+        'partner.reports' => 'kooperationspartner.index',
+        'partner.bop.packages.download' => 'kooperationspartner.index',
         'partner.indexAjaxFresh' => 'kooperationspartner.index',
         'partner.store' => 'kooperationspartner.store',
         'partner.update' => 'kooperationspartner.update',

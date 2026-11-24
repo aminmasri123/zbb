@@ -1,0 +1,209 @@
+<script setup>
+import { computed, onMounted, ref, watch } from 'vue';
+import axios from 'axios';
+
+const props = defineProps({
+    packages: { type: Array, required: true },
+    canEdit: Boolean,
+});
+const emit = defineEmits(['close', 'updated']);
+const dialog = ref(null);
+const schools = ref([]);
+const selected = ref(null);
+const editing = ref(null);
+const schoolId = ref('');
+const year = ref('');
+const part = ref('');
+const sort = ref('klasse');
+const date = ref('');
+const busy = ref(false);
+const loadingSchools = ref(false);
+const error = ref('');
+const form = ref({ name: '', documents: [] });
+const activePackage = computed(() => props.packages.find(item => item.id === selected.value));
+const editPackage = computed(() => props.packages.find(item => item.id === editing.value));
+const school = computed(() => schools.value.find(item => String(item.id) === schoolId.value));
+const years = computed(() => Object.keys(school.value?.years ?? {}).sort().reverse());
+const parts = computed(() => [...(school.value?.years?.[year.value] ?? [])]
+    .sort((a, b) => a.localeCompare(b, 'de', { numeric: true })));
+const needsDate = computed(() => activePackage.value?.id === 'rolltag'
+    && activePackage.value.documents.some(document => document !== 'Namensschilder'));
+const needsDraft = computed(() => activePackage.value?.id === 'vorbereitung-pa'
+    && activePackage.value.documents.includes('Anwesenheitsliste Vorbereitung PA'));
+
+onMounted(() => dialog.value.showModal());
+watch(schoolId, () => {
+    year.value = years.value.length === 1 ? years.value[0] : '';
+    part.value = parts.value.length === 1 ? parts.value[0] : '';
+});
+watch(year, () => { part.value = parts.value.length === 1 ? parts.value[0] : ''; });
+
+async function configure(item) {
+    selected.value = item.id;
+    error.value = '';
+    if (schools.value.length) return;
+    loadingSchools.value = true;
+    try {
+        const { data } = await axios.get(route('partner.bop.packages.schools'));
+        schools.value = data.schools;
+    } catch {
+        error.value = 'Die Schulen konnten nicht geladen werden. Bitte versuche es erneut.';
+    } finally {
+        loadingSchools.value = false;
+    }
+}
+
+function beginEdit(item) {
+    editing.value = item.id;
+    form.value = { name: item.name, documents: [...item.documents] };
+    error.value = '';
+}
+
+function back() {
+    selected.value = null;
+    editing.value = null;
+    error.value = '';
+}
+
+async function save() {
+    busy.value = true;
+    error.value = '';
+    try {
+        const { data } = await axios.put(route('partner.bop.packages.update', { package: editing.value }), form.value);
+        emit('updated', data.packages);
+        back();
+    } catch (exception) {
+        error.value = Object.values(exception.response?.data?.errors ?? {}).flat()[0]
+            ?? 'Die Änderungen konnten nicht gespeichert werden.';
+    } finally {
+        busy.value = false;
+    }
+}
+
+async function download() {
+    if (!activePackage.value || !school.value || !year.value || !part.value || busy.value) return;
+    busy.value = true;
+    error.value = '';
+    try {
+        const response = await axios.post(route('partner.bop.packages.download', {
+            partner: schoolId.value,
+            package: selected.value,
+        }), { schuljahr: year.value, teil: part.value, sortierung: sort.value, termin: needsDate.value ? date.value : null }, {
+            responseType: 'blob',
+            headers: { Accept: 'application/json, application/zip' },
+        });
+
+        if (!response.data.type.includes('zip')) throw new Error('Expected a ZIP export');
+        const filename = response.headers['content-disposition']?.match(/filename="?([^";]+)"?/i)?.[1]
+            ?? 'BOP-Dokumentenpaket.zip';
+        const url = URL.createObjectURL(response.data);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        dialog.value.close();
+    } catch (exception) {
+        const body = exception.response?.data;
+        let message;
+        if (body instanceof Blob && body.type.includes('json') && [403, 404, 422].includes(exception.response.status)) {
+            const details = await body.text().then(JSON.parse).catch(() => null);
+            message = Object.values(details?.errors ?? {}).flat()[0] ?? details?.message;
+        }
+        error.value = message ?? 'Das Paket konnte nicht erstellt werden. Bitte versuche es erneut.';
+    } finally {
+        busy.value = false;
+    }
+}
+</script>
+
+<template>
+    <dialog ref="dialog" aria-labelledby="bop-packages-title" class="w-[calc(100%-2rem)] max-w-2xl rounded-xl bg-white p-0 text-gray-900 shadow-xl backdrop:bg-black/50" @close="emit('close')" @cancel="busy && $event.preventDefault()">
+        <header class="flex items-start justify-between gap-4 border-b border-gray-200 p-5 sm:px-6">
+            <div>
+                <h2 id="bop-packages-title" class="text-lg font-semibold">{{ editPackage ? 'Paket bearbeiten' : (activePackage?.name ?? 'BOP-Dokumentenpakete') }}</h2>
+                <p v-if="activePackage" class="mt-1 text-sm text-gray-600">{{ activePackage.documents.join(' · ') }}</p>
+            </div>
+            <button type="button" autofocus aria-label="Schließen" class="rounded p-1 text-gray-600 hover:bg-gray-100 disabled:opacity-50" :disabled="busy" @click="dialog.close()">
+                <i class="la la-times text-xl" aria-hidden="true"></i>
+            </button>
+        </header>
+
+        <ul v-if="!activePackage && !editPackage" class="space-y-3 p-5 sm:px-6">
+            <li v-for="item in packages" :key="item.id" class="rounded-lg border border-gray-200 p-4">
+                <div class="flex flex-wrap items-baseline justify-between gap-2">
+                    <button type="button" class="text-left text-base font-semibold text-zbb hover:underline" @click="configure(item)">{{ item.name }}</button>
+                    <button v-if="canEdit" type="button" :aria-label="'Paket bearbeiten: ' + item.name" class="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50" @click="beginEdit(item)">Bearbeiten</button>
+                </div>
+                <p class="mt-2 text-sm text-gray-600">{{ item.documents.join(' · ') }}</p>
+                <p v-if="item.unavailableReason" class="mt-2 text-sm text-amber-900">{{ item.unavailableReason }}</p>
+            </li>
+        </ul>
+
+        <form v-else @submit.prevent="editPackage ? save() : download()">
+            <fieldset v-if="editPackage" :disabled="busy" class="space-y-4 p-5 sm:px-6">
+                <label class="block text-sm font-medium">
+                    Paketname
+                    <input v-model.trim="form.name" required maxlength="120" class="mt-1 block w-full rounded-md border-gray-300">
+                </label>
+                <fieldset class="space-y-2">
+                    <legend class="mb-2 text-sm font-medium">Enthaltene Dokumente</legend>
+                    <label v-for="document in editPackage.documentOptions" :key="document" class="flex items-start gap-2 text-sm">
+                        <input v-model="form.documents" type="checkbox" :value="document" class="mt-0.5 rounded border-gray-300 text-zbb">
+                        {{ document }}
+                    </label>
+                </fieldset>
+            </fieldset>
+
+            <fieldset v-else :disabled="busy || loadingSchools" class="grid gap-4 p-5 sm:grid-cols-2 sm:px-6">
+                <label class="block text-sm font-medium sm:col-span-2">
+                    Schule
+                    <select v-model="schoolId" required class="mt-1 block w-full rounded-md border-gray-300">
+                        <option value="" disabled>{{ loadingSchools ? 'Schulen werden geladen …' : 'Schule wählen' }}</option>
+                        <option v-for="item in schools" :key="item.id" :value="String(item.id)">{{ item.name }}</option>
+                    </select>
+                </label>
+                <label class="block text-sm font-medium">
+                    Schuljahr
+                    <select v-model="year" required :disabled="!school" class="mt-1 block w-full rounded-md border-gray-300 disabled:bg-gray-50">
+                        <option value="" disabled>Schuljahr wählen</option>
+                        <option v-for="item in years" :key="item" :value="item">{{ item }}</option>
+                    </select>
+                </label>
+                <label class="block text-sm font-medium">
+                    Teil
+                    <select v-model="part" required :disabled="!year" class="mt-1 block w-full rounded-md border-gray-300 disabled:bg-gray-50">
+                        <option value="" disabled>Teil wählen</option>
+                        <option v-for="item in parts" :key="item" :value="item">Teil {{ item.replace(/^Teil\s*/i, '') }}</option>
+                    </select>
+                </label>
+                <label class="block text-sm font-medium">
+                    Sortierung
+                    <select v-model="sort" class="mt-1 block w-full rounded-md border-gray-300">
+                        <option value="klasse">Nach Klasse</option>
+                        <option value="nachname">Nach Nachname</option>
+                    </select>
+                </label>
+                <label v-if="needsDate" class="block text-sm font-medium">
+                    Datum des Rolltags
+                    <input v-model="date" required type="date" class="mt-1 block w-full rounded-md border-gray-300">
+                </label>
+                <p v-if="needsDraft" class="text-sm text-gray-600 sm:col-span-2">Für die PA-Anwesenheitsliste muss ein Entwurf für die gesamte Schule gespeichert sein.</p>
+                <p v-if="!loadingSchools && !schools.length && !error" class="text-sm text-gray-600 sm:col-span-2">Im aktiven Projekt sind keine Schulen mit Teilnehmenden für den Export verfügbar.</p>
+                <p v-if="activePackage.unavailableReason" class="text-sm text-amber-900 sm:col-span-2">{{ activePackage.unavailableReason }}</p>
+            </fieldset>
+
+            <p v-if="error" role="alert" class="border-t border-red-100 bg-red-50 px-5 py-3 text-sm text-red-800 sm:px-6">{{ error }}</p>
+            <footer class="flex flex-wrap justify-between gap-2 border-t border-gray-200 px-5 py-4 sm:px-6">
+                <button type="button" class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-50" :disabled="busy" @click="back">Zur Paketliste</button>
+                <button v-if="editPackage" type="submit" class="rounded-md bg-zbb px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="busy || !form.name || !form.documents.length">{{ busy ? 'Wird gespeichert …' : 'Speichern' }}</button>
+                <button v-else type="submit" class="rounded-md bg-zbb px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                    :disabled="busy || loadingSchools || !school || !year || !part || Boolean(activePackage.unavailableReason) || (needsDate && !date)">
+                    {{ busy ? 'Paket wird erstellt …' : 'ZIP herunterladen' }}
+                </button>
+            </footer>
+        </form>
+    </dialog>
+</template>

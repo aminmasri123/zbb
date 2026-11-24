@@ -1,14 +1,14 @@
 <script setup>
 import { router } from '@inertiajs/vue3';
 defineProps({ report: Object });
-const selectReport = type => router.get(route('partner.index'), { bericht_typ: type }, { preserveScroll: true, preserveState: true });
+const selectReport = type => router.get(route('partner.reports'), { bericht_typ: type }, { preserveScroll: true, preserveState: true });
 </script>
 
 <template>
-    <section v-if="report" class="my-6 rounded-lg border border-[var(--border)] bg-[var(--card)] p-5">
+    <section v-if="report" class="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--card)] p-5">
         <h2 class="mb-4 text-lg font-semibold">Anzahl der Teilnehmenden pro Bereich</h2>
-        <div class="mb-5 flex gap-2">
-            <button v-for="option in [{ type: 'zwischen', label: 'Zwischenbericht' }, { type: 'ende', label: 'Endbericht' }]" :key="option.type" type="button" class="rounded px-4 py-2 text-white" :class="report.type === option.type ? 'bg-zbb' : 'bg-gray-500'" @click="selectReport(option.type)">{{ option.label }}</button>
+        <div class="mb-5 flex flex-wrap gap-2">
+            <button v-for="option in [{ type: 'zwischen', label: 'Zwischenbericht' }, { type: 'ende', label: 'Endbericht' }]" :key="option.type" type="button" class="rounded px-4 py-2 text-white" :class="report.type === option.type ? 'bg-zbb' : 'bg-gray-500'" :aria-pressed="report.type === option.type" @click="selectReport(option.type)">{{ option.label }}</button>
         </div>
         <div class="overflow-x-auto">
             <table class="w-full border-collapse text-sm">
