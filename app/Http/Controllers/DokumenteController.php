@@ -24,24 +24,32 @@ class DokumenteController extends Controller
 
         $user = $request->user();
         $currentProject = $context->currentAvailableFor($user);
-        $partnerController = app(PartnerController::class);
-        $bopProjects = $user->projekte()->whereRaw('UPPER(projekts.name) LIKE ?', ['%BOP%'])
-            ->orderBy('projekts.name')->get()
-            ->map(fn (Projekt $project) => [
-                'id' => $project->id,
-                'name' => $project->name,
-                'current' => $currentProject?->id === $project->id,
+        $projectId = $currentProject?->id;
+        $bopProjects = [];
+        if ($currentProject && str_contains(mb_strtoupper($currentProject->name), 'BOP')) {
+            $bopProjects[] = [
+                'id' => $projectId,
+                'name' => $currentProject->name,
+                'current' => true,
                 'packages' => BopPartnerPackageController::options(
-                    $project, $user, $partnerController->partnerDocumentsForProject($project, $user)
+                    $currentProject,
+                    $user,
+                    app(PartnerController::class)->partnerDocumentsForProject($currentProject, $user)
                 ),
-            ])->values();
+            ];
+        }
 
         return Inertia::render('Dokumente/Index', [
             'bopProjects' => $bopProjects,
-            'dokumente' => Dokumente::query()
+            'documentProjectId' => $projectId,
+            'dokumente' => $currentProject ? Dokumente::query()
+                ->where(function ($query) use ($projectId) {
+                    $query->whereHas('projekte', fn ($project) => $project->whereKey($projectId))
+                        ->orWhereHas('kategorien.projekte', fn ($project) => $project->whereKey($projectId));
+                })
                 ->with(['kategorien:id,name', 'projekte:id,name', 'bereiche:id,name'])
                 ->orderBy('name')
-                ->get(),
+                ->get() : [],
             'projekte' => Projekt::query()
                 ->with('dokumentKategorien:id,name')
                 ->orderBy('name')
@@ -52,10 +60,11 @@ class DokumenteController extends Controller
             'bereiche' => Bereich::query()
                 ->orderBy('name')
                 ->get(['id', 'name', 'code']),
-            'pakete' => DokumentPaket::query()
+            'pakete' => $currentProject ? DokumentPaket::query()
+                ->whereHas('projekte', fn ($project) => $project->whereKey($projectId))
                 ->with(['dokumente:id,name,typ,kontext,einsatzbereich,ausgabeformate,aktiv', 'projekte:id,name'])
                 ->orderBy('name')
-                ->get(),
+                ->get() : [],
             'platzhalter' => self::platzhalterDefinitionen(),
         ]);
     }

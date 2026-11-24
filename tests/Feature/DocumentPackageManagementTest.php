@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Dokumente;
+use App\Models\DokumentKategorie;
 use App\Models\DokumentPaket;
 use App\Models\Projekt;
 use App\Models\User;
@@ -72,6 +73,42 @@ class DocumentPackageManagementTest extends TestCase
         ])->assertSessionHasErrors('dokument_ids');
 
         $this->assertDatabaseMissing('dokument_pakete', ['name' => 'Ungültiges Paket']);
+    }
+
+    public function test_document_manager_lists_only_templates_and_packages_for_the_active_project(): void
+    {
+        $user = User::factory()->create();
+        $this->grantTestPermission($user, 'projekt.index');
+        $bop = Projekt::factory()->create(['name' => 'BOP']);
+        $other = Projekt::factory()->create(['name' => 'BvB Reha']);
+        $user->projekte()->attach([$bop->id, $other->id], ['status' => 'aktiv']);
+        $user->update(['current_team_id' => $other->id]);
+
+        $direct = $this->participantPdfDocument('Direkt zugeordnet');
+        $viaCategory = $this->participantPdfDocument('Über Kategorie');
+        $otherDocument = $this->participantPdfDocument('BvB-Vorlage');
+        $this->participantPdfDocument('Ohne Projekt');
+        $bop->dokumente()->attach($direct);
+        $other->dokumente()->attach($otherDocument);
+        $category = DokumentKategorie::create(['name' => 'BOP-Unterlagen']);
+        $category->projekte()->attach($bop);
+        $category->dokumente()->attach($viaCategory);
+        $package = DokumentPaket::create(['name' => 'BvB-Paket', 'aktiv' => true]);
+        $package->projekte()->attach($other);
+        $package->dokumente()->attach($otherDocument, ['sort_order' => 1]);
+
+        $url = route('dokumente.index');
+        $this->actingAs($user)->get($url)->assertOk()
+            ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+                ->has('dokumente', 1)->where('dokumente.0.id', $otherDocument->id)
+                ->has('pakete', 1)->where('pakete.0.id', $package->id)->has('bopProjects', 0)->etc());
+
+        $this->from($url)->post(route('projekt.switch'), ['projekt_id' => $bop->id])->assertRedirect($url);
+        $this->actingAs($user->fresh())->get($url)->assertOk()
+            ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+                ->where('documentProjectId', $bop->id)
+                ->has('dokumente', 2)->where('dokumente.0.id', $direct->id)->where('dokumente.1.id', $viaCategory->id)
+                ->has('pakete', 0)->has('bopProjects.0.packages', 3)->etc());
     }
 
     private function participantPdfDocument(string $name): Dokumente

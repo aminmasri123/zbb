@@ -16,6 +16,7 @@ const props = defineProps({
   bereiche: { type: Array, default: () => [] },
   pakete: { type: Array, default: () => [] },
   bopProjects: { type: Array, default: () => [] },
+  documentProjectId: Number,
   platzhalter: { type: Array, default: () => [] },
 });
 
@@ -64,7 +65,7 @@ const defaultForm = () => ({
   beschreibung: '',
   datei: null,
   ausgabeformate: ['docx', 'pdf'],
-  projekt_ids: [],
+  projekt_ids: props.documentProjectId ? [props.documentProjectId] : [],
   kategorie_ids: [],
   bereich_ids: [],
   gruppen_export: true,
@@ -78,7 +79,7 @@ const defaultPaketForm = () => ({
   name: '',
   beschreibung: '',
   aktiv: true,
-  projekt_ids: [],
+  projekt_ids: props.documentProjectId ? [props.documentProjectId] : [],
   dokument_ids: [],
 });
 const paketForm = ref(defaultPaketForm());
@@ -858,7 +859,6 @@ const token = (key) => '${' + key + '}';
         <div v-for="projekt in bopProjects" :key="projekt.id">
           <div class="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <h3 class="text-sm font-semibold text-gray-800">{{ projekt.name }}</h3>
-            <span v-if="!projekt.current && can('projekt.update')" class="text-xs text-gray-500">Zum Bearbeiten dieses Projekt im Projektmenü auswählen.</span>
           </div>
           <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             <article v-for="paket in projekt.packages" :key="paket.id" class="rounded border border-gray-200 p-4">

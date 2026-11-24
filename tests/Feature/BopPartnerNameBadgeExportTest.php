@@ -21,6 +21,7 @@ class BopPartnerNameBadgeExportTest extends TestCase
         $user = User::factory()->create();
         $this->grantTestPermission($user, 'gruppe.bop.export.namensschilder');
         $project = Projekt::factory()->create(['name' => 'BOP']);
+        $project->dokumente()->attach(\App\Models\Dokumente::where('export_permission', 'gruppe.bop.export.namensschilder')->firstOrFail());
         $school = Partner::query()->create(['name' => 'Testschule']);
 
         DB::table('projekt_has_partners')->insert([
@@ -38,6 +39,7 @@ class BopPartnerNameBadgeExportTest extends TestCase
         ]);
         $user->update(['current_team_id' => $project->id]);
 
+        $area = \App\Models\Bereich::create(['name' => 'Testbereich']);
         foreach ([
             ['Anna', 'Muster', '1'],
             ['Ben', 'Beispiel', '1'],
@@ -48,13 +50,14 @@ class BopPartnerNameBadgeExportTest extends TestCase
                 'vorname' => $firstName,
                 'nachname' => $lastName,
             ]);
-            PersonenIstSchueler::query()->create([
+            $student = PersonenIstSchueler::query()->create([
                 'person_id' => $person->id,
                 'klasse' => '7.1',
                 'schule_id' => $school->id,
                 'schuljahr' => '2026/2027',
                 'teil' => $part,
             ]);
+            \App\Models\Bereichsauswahl::create(['teilnehmer_id' => $student->id, 'access_code' => 'AB-CD-42-'.$firstName, 'user_create' => $user->id, 'bereich_id1' => $area->id, 'bereich_id2' => $area->id, 'bereich_id3' => $area->id, 'bereich_id4' => $area->id]);
         }
 
         $response = $this->actingAs($user->fresh())->get(route('partner.bop.export.namensschilder', [
@@ -70,6 +73,8 @@ class BopPartnerNameBadgeExportTest extends TestCase
         try {
             $documentXml = (string) $zip->getFromName('word/document.xml');
             $this->assertStringContainsString('Anna Muster', $documentXml);
+            $this->assertStringContainsString('AB-CD-42-Anna', $documentXml);
+            $this->assertStringNotContainsString('AB-CD-42-Nicht', $documentXml);
             $this->assertStringContainsString('Ben Beispiel', $documentXml);
             $this->assertStringNotContainsString('Nicht Exportieren', $documentXml);
             $this->assertSame(4, substr_count($documentXml, '-----------------------'));

@@ -45,7 +45,7 @@ class BopGruppeExportController extends Controller
 
         $filename = $this->safeFileName('Namensschilder_Gruppe_'.($gruppe->bereich?->name ?? $gruppe->id)).'.docx';
 
-        return $this->namensschilderDownload($teilnehmer->pluck('voller_name'), $filename);
+        return $this->namensschilderDownload($teilnehmer, $filename, $gruppe->projekt_id);
     }
 
     public function partnerNamensschilder(Request $request, Partner $partner, ?int $exportProjectId = null)
@@ -68,10 +68,11 @@ class BopGruppeExportController extends Controller
             ->filterSchueler($partner->id, $validated['schuljahr'], $validated['teil'])
             ->get()->unique('person_id');
         $names = PersonenIstSchueler::sortForPackage($students, $request->query('sortierung') === 'klasse' ? 'klasse' : 'nachname')
-            ->map(fn (PersonenIstSchueler $student) => trim(
-                (string) ($student->person?->vorname ?? '').' '.(string) ($student->person?->nachname ?? '')
-            ))
-            ->filter()
+            ->map(fn (PersonenIstSchueler $student) => [
+                'voller_name' => trim(($student->person?->vorname ?? '').' '.($student->person?->nachname ?? '')),
+                'bereichsauswahl_code' => $student->bereichsauswahl?->access_code ?? '',
+            ])
+            ->filter(fn (array $item) => $item['voller_name'] !== '')
             ->values();
 
         if ($names->isEmpty()) {
@@ -82,7 +83,7 @@ class BopGruppeExportController extends Controller
             'Namensschilder_'.$partner->name.'_'.$validated['schuljahr'].'_Teil_'.$validated['teil']
         ).'.docx';
 
-        return $this->namensschilderDownload($names, $filename);
+        return $this->namensschilderDownload($names, $filename, $project->id);
     }
 
     public function hausordnung(Gruppe $gruppe)
@@ -441,22 +442,52 @@ class BopGruppeExportController extends Controller
         return response()->download($outputPath, $filename)->deleteFileAfterSend(true);
     }
 
-    private function namensschilderDownload(Collection $names, string $filename)
+    private function namensschilderDownload(Collection $names, string $filename, int $projectId)
     {
+        $document = \App\Models\Dokumente::query()
+            ->where('export_permission', 'gruppe.bop.export.namensschilder')
+            ->whereHas('projekte', fn ($query) => $query->whereKey($projectId))
+            ->first();
+        if ($document) {
+            abort_unless($document->aktiv, 422, 'Die Namensschild-Vorlage ist deaktiviert.');
+            $template = storage_path(ltrim($document->dateipfad, '/'));
+            abort_unless(is_file($template), 422, 'Die Namensschild-Vorlage fehlt.');
+            $files = [];
+            $path = $this->tmpPath($filename);
+            try {
+                foreach ($names as $item) {
+                    $processor = new TemplateProcessor($template);
+                    $processor->setValue('voller_name', $item['voller_name']);
+                    $processor->setValue('bereichsauswahl_code', $item['bereichsauswahl_code'] ?? '');
+                    $file = $this->tmpPath(uniqid('Namensschild_', true).'.docx');
+                    $files[] = $file;
+                    $processor->saveAs($file);
+                }
+                $this->mergeDocxFiles($files, $path);
+            } finally {
+                File::delete($files);
+            }
+
+            return response()->download($path, $filename)->deleteFileAfterSend(true);
+        }
+
         $phpWord = new PhpWord;
         $section = $phpWord->addSection([
             'pageSizeW' => 11906,
             'pageSizeH' => 16838,
         ]);
 
-        foreach ($names->values() as $index => $name) {
+        foreach ($names->values() as $index => $item) {
             if ($index > 0) {
                 $section->addPageBreak();
             }
 
             $section->addTextBreak(8);
             $section->addText('-----------------------', ['size' => 40], ['alignment' => 'center']);
-            $section->addText((string) $name, ['size' => 48], ['alignment' => 'center']);
+            $section->addText((string) $item['voller_name'], ['size' => 48], ['alignment' => 'center']);
+            if (filled($item['bereichsauswahl_code'] ?? null)) {
+                $section->addText('Bereichsauswahl: '.$item['bereichsauswahl_code'], ['size' => 12], ['alignment' => 'center']);
+            }
             $section->addText('-----------------------', ['size' => 40], ['alignment' => 'center']);
         }
 
@@ -560,6 +591,7 @@ class BopGruppeExportController extends Controller
 
                 $values = [
                     'personen_id' => $person->id,
+                    'bereichsauswahl_code' => $schueler?->bereichsauswahl?->access_code ?? '',
                     'nr' => $index + 1,
                     'nummer' => $index + 1,
                     'teilnehmer_nr' => $teilnehmerNr ?? '',
