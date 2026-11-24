@@ -974,7 +974,8 @@ const updatePartnerAPI = async (form) => {
         <ModalBoTag1 v-if="activeModal === 'boTag1Config'" :visible="true" :anzahlBereiche="props.anzahlBereiche" :jahr="modalData.jahr" :teil="modalData.teil" :klassen="modalData.klassen" :teilnehmerCount="modalData.teilnehmerCount" :partnerId="modalData.partnerId" @close="closeModal" @submit="handleBoTag1" />
         <ModalHausordnung v-if="activeModal === 'hausordnungConfig'" :visible="true" :partnerId="modalData.partnerId" :jahr="modalData.jahr" :teil="modalData.teil" @close="closeModal"/>
         <DocumentPackagesDialog v-if="activeModal === 'documentPackages'" :packages="packageOptions"
-            :can-edit="can('projekt.update')" @updated="packageOptions = $event" @close="closeModal" />
+            :can-edit="can('projekt.update')" :can-view-documents="can('dokumente.index')"
+            @updated="packageOptions = $event" @close="closeModal" />
         <ModalUsbStickBrief v-if="activeModal === 'usbStickBrief'" :partner-id="modalData.partnerId" :schuljahr="modalData.jahr" :school-name="modalData.schoolName" @close="closeModal" />
         <ModalPoboCertificates v-if="activeModal === 'poboCertificates'" :partner-id="modalData.partnerId" :schuljahr="modalData.jahr" :teil="modalData.teil" :school-name="modalData.schoolName" @close="closeModal" />
         <BopRunPlanner

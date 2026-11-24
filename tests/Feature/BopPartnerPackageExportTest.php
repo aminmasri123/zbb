@@ -18,7 +18,7 @@ class BopPartnerPackageExportTest extends TestCase
     public function test_rolltag_package_contains_only_the_selected_project_school_year_and_part(): void
     {
         $user = User::factory()->create();
-        foreach (['kooperationspartner.index', 'projekt.update', 'dokumente.schule.export', 'gruppe.bop.export.namensschilder', 'anwesenheit.abrechnung'] as $permission) {
+        foreach (['kooperationspartner.index', 'projekt.update', 'dokumente.index', 'dokumente.schule.export', 'gruppe.bop.export.namensschilder', 'anwesenheit.abrechnung'] as $permission) {
             $this->grantTestPermission($user, $permission);
         }
         $project = Projekt::factory()->create(['name' => 'BOP']);
@@ -43,7 +43,14 @@ class BopPartnerPackageExportTest extends TestCase
             ]);
         }
 
-        $this->actingAs($user->fresh())->getJson(route('partner.bop.packages.schools'))
+        $this->actingAs($user->fresh())->get(route('dokumente.index'))->assertOk()
+            ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+                ->component('Dokumente/Index')
+                ->has('bopProjects.0.packages', 3)
+                ->where('bopProjects.0.current', true)
+                ->where('bopProjects.0.packages.2.name', 'Feedbackgespräch')
+                ->etc());
+        $this->getJson(route('partner.bop.packages.schools'))
             ->assertOk()->assertJsonPath('schools.0.name', 'Testschule')
             ->assertJsonCount(2, 'schools.0.years.2026');
         $response = $this->postJson(route('partner.bop.packages.download', [

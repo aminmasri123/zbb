@@ -1,11 +1,12 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
+import DocumentPackagesDialog from '@/Pages/Partner/BOP/DocumentPackagesDialog.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import Dialog from 'primevue/dialog';
 import { Head, router } from '@inertiajs/vue3';
 import axios from 'axios';
 import Swal from 'sweetalert2';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { usePermissions } from '@/utils/permissions';
 
 const props = defineProps({
@@ -14,6 +15,7 @@ const props = defineProps({
   kategorien: { type: Array, default: () => [] },
   bereiche: { type: Array, default: () => [] },
   pakete: { type: Array, default: () => [] },
+  bopProjects: { type: Array, default: () => [] },
   platzhalter: { type: Array, default: () => [] },
 });
 
@@ -22,6 +24,12 @@ const projektListe = ref([...(props.projekte || [])]);
 const kategorieListe = ref([...(props.kategorien || [])]);
 const bereichListe = ref([...(props.bereiche || [])]);
 const paketListe = ref([...(props.pakete || [])]);
+const bopProjects = ref(props.bopProjects);
+const editingBopId = ref(null);
+const currentBopProject = computed(() => bopProjects.value.find(project => project.current));
+function updateBopPackages(packages) {
+  currentBopProject.value.packages = packages;
+}
 const saving = ref(false);
 const categorySaving = ref(false);
 const search = ref('');
@@ -38,6 +46,14 @@ const canStoreKategorie = computed(() => can('dokumente.kategorien.store'));
 const canUpdateProjektKategorien = computed(() => can('dokumente.projekt-kategorien.update'));
 const canSubmitDokument = computed(() => editingDokument.value ? canUpdateDokument.value : canStoreDokument.value);
 const canUseDokumentActions = computed(() => canUpdateDokument.value || canDownloadDokument.value);
+const activeSection = ref('vorlagen');
+const sections = computed(() => [
+  { id: 'vorlagen', label: 'Vorlagen', icon: 'la-file-alt' },
+  { id: 'teilnehmerpakete', label: 'Teilnehmerpakete', icon: 'la-layer-group' },
+  ...(bopProjects.value.length ? [{ id: 'bop', label: 'BOP-Pakete', icon: 'la-school' }] : []),
+  ...(canStoreKategorie.value || canUpdateProjektKategorien.value ? [{ id: 'kategorien', label: 'Kategorien', icon: 'la-tags' }] : []),
+  { id: 'platzhalter', label: 'Platzhalter', icon: 'la-code' },
+]);
 
 const defaultForm = () => ({
   name: '',
@@ -108,6 +124,14 @@ const filteredDokumente = computed(() => {
     ].filter(Boolean).some((value) => String(value).toLowerCase().includes(term))
   );
 });
+
+const pageSize = 12;
+const pageNumber = ref(1);
+const pageCount = computed(() => Math.max(1, Math.ceil(filteredDokumente.value.length / pageSize)));
+const pageStart = computed(() => (pageNumber.value - 1) * pageSize);
+const visibleDokumente = computed(() => filteredDokumente.value.slice(pageStart.value, pageStart.value + pageSize));
+watch(search, () => { pageNumber.value = 1; });
+watch(pageCount, count => { pageNumber.value = Math.min(pageNumber.value, count); });
 
 const setTyp = (typ) => {
   form.value.typ = typ;
@@ -197,6 +221,7 @@ const refreshFromPage = (page) => {
   kategorieListe.value = [...(page.props.kategorien || [])];
   bereichListe.value = [...(page.props.bereiche || [])];
   paketListe.value = [...(page.props.pakete || [])];
+  bopProjects.value = page.props.bopProjects ?? [];
 };
 
 const openCreatePaket = () => {
@@ -373,8 +398,17 @@ const token = (key) => '${' + key + '}';
   <AppLayout>
     <template #header>Dokumentenmanager</template>
 
-    <div class="space-y-6 p-4">
-      <section class="space-y-4">
+    <div class="mx-auto max-w-screen-2xl space-y-4 px-3 py-4 sm:px-4">
+      <nav aria-label="Bereiche im Dokumentenmanager" class="flex flex-wrap gap-1 rounded-xl border border-gray-200 bg-white p-1.5 shadow-sm">
+        <button v-for="section in sections" :key="section.id" type="button"
+          :aria-pressed="activeSection === section.id" :aria-controls="'document-section-' + section.id"
+          class="inline-flex min-h-10 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-zbb"
+          :class="activeSection === section.id ? 'bg-zbb text-white' : 'text-gray-700 hover:bg-gray-100'"
+          @click="activeSection = section.id">
+          <i class="la text-lg" :class="section.icon" aria-hidden="true"></i>
+          {{ section.label }}
+        </button>
+      </nav>
         <Dialog
           v-model:visible="showDokumentModal"
           modal
@@ -662,9 +696,9 @@ const token = (key) => '${' + key + '}';
           </form>
         </Dialog>
 
-        <div class="rounded border bg-white p-4 shadow-sm">
+      <section v-show="activeSection === 'vorlagen'" id="document-section-vorlagen" aria-label="Vorlagen" class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
           <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-            <input v-model="search" class="w-full rounded border-gray-300 text-sm" placeholder="Vorlagen suchen" />
+            <input v-model="search" type="search" aria-label="Vorlagen suchen" class="w-full rounded border-gray-300 text-sm" placeholder="Vorlagen suchen" />
             <button
               v-if="canStoreDokument"
               type="button"
@@ -673,15 +707,6 @@ const token = (key) => '${' + key + '}';
             >
               <i class="las la-plus mr-2"></i>
               Neue Vorlage
-            </button>
-            <button
-              v-if="canStoreDokument"
-              type="button"
-              class="inline-flex h-10 shrink-0 items-center justify-center rounded border border-zbb px-4 text-sm font-semibold text-zbb hover:bg-zbb hover:text-white"
-              @click="openCreatePaket"
-            >
-              <i class="las la-layer-group mr-2"></i>
-              Neues Paket
             </button>
           </div>
 
@@ -712,7 +737,7 @@ const token = (key) => '${' + key + '}';
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="dokument in filteredDokumente" :key="dokument.id" class="border-t">
+                <tr v-for="dokument in visibleDokumente" :key="dokument.id" class="border-t">
                   <td class="px-3 py-2 align-top">
                     <div class="font-medium text-gray-800">{{ dokument.name }}</div>
                     <div class="break-words text-xs text-gray-500">{{ dokument.dateipfadName || dokument.dateipfad }}</div>
@@ -786,13 +811,20 @@ const token = (key) => '${' + key + '}';
               </tbody>
             </table>
           </div>
+        <p v-if="!filteredDokumente.length" class="py-6 text-center text-sm text-gray-500">Keine Vorlagen gefunden.</p>
+        <div v-else class="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 pt-3 text-sm">
+          <p class="text-gray-600" aria-live="polite">{{ pageStart + 1 }}–{{ pageStart + visibleDokumente.length }} von {{ filteredDokumente.length }} Vorlagen</p>
+          <div v-if="pageCount > 1" class="flex gap-2">
+            <button type="button" :disabled="pageNumber === 1" class="rounded-md border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40" @click="pageNumber--">Zurück</button>
+            <button type="button" :disabled="pageNumber === pageCount" class="rounded-md border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40" @click="pageNumber++">Weiter</button>
+          </div>
         </div>
       </section>
 
-      <section class="rounded border bg-white p-4 shadow-sm">
+      <section v-show="activeSection === 'teilnehmerpakete'" id="document-section-teilnehmerpakete" class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <div class="mb-4 flex items-center justify-between gap-3">
           <div>
-            <h2 class="text-base font-semibold text-gray-700">Dokumentenpakete</h2>
+            <h2 class="text-base font-semibold text-gray-700">Teilnehmerpakete</h2>
             <p class="mt-1 text-xs text-gray-500">Mehrere Teilnehmer-Vorlagen gemeinsam als eine PDF oder als ZIP exportieren.</p>
           </div>
           <button v-if="canStoreDokument" type="button" class="rounded border border-zbb px-3 py-2 text-sm font-semibold text-zbb" @click="openCreatePaket">Paket anlegen</button>
@@ -821,7 +853,31 @@ const token = (key) => '${' + key + '}';
         </div>
       </section>
 
-      <section class="grid gap-4 xl:grid-cols-[minmax(360px,430px)_1fr]">
+      <section v-if="bopProjects.length" v-show="activeSection === 'bop'" id="document-section-bop" class="space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <h2 class="text-base font-semibold text-gray-700">BOP-Dokumentenpakete</h2>
+        <div v-for="projekt in bopProjects" :key="projekt.id">
+          <div class="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h3 class="text-sm font-semibold text-gray-800">{{ projekt.name }}</h3>
+            <span v-if="!projekt.current && can('projekt.update')" class="text-xs text-gray-500">Zum Bearbeiten dieses Projekt im Projektmenü auswählen.</span>
+          </div>
+          <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <article v-for="paket in projekt.packages" :key="paket.id" class="rounded border border-gray-200 p-4">
+              <h4 class="font-semibold text-gray-800">{{ paket.name }}</h4>
+              <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">
+                <li v-for="dokument in paket.documents" :key="dokument">{{ dokument }}</li>
+              </ul>
+              <p v-if="paket.unavailableReason && projekt.current" class="mt-3 text-xs text-amber-900">{{ paket.unavailableReason }}</p>
+              <button v-if="projekt.current && can('projekt.update') && can('kooperationspartner.index')" type="button"
+                class="mt-4 rounded border border-zbb px-3 py-1 text-sm text-zbb" @click="editingBopId = paket.id">Bearbeiten</button>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <DocumentPackagesDialog v-if="editingBopId && currentBopProject" :packages="currentBopProject.packages"
+        :initial-edit-id="editingBopId" can-edit @updated="updateBopPackages" @close="editingBopId = null" />
+
+      <section v-show="activeSection === 'kategorien'" id="document-section-kategorien" class="grid gap-4 xl:grid-cols-[minmax(360px,430px)_1fr]">
         <div v-if="canStoreKategorie" class="rounded border bg-white p-4 shadow-sm">
           <h2 class="mb-4 text-base font-semibold text-gray-700">Kategorie anlegen</h2>
           <div class="space-y-3">
@@ -855,7 +911,7 @@ const token = (key) => '${' + key + '}';
         </div>
       </section>
 
-      <section class="rounded border bg-white p-4 shadow-sm">
+      <section v-show="activeSection === 'platzhalter'" id="document-section-platzhalter" class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <h2 class="mb-4 text-base font-semibold text-gray-700">Platzhalter</h2>
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div v-for="gruppe in platzhalter" :key="gruppe.gruppe" class="rounded border border-gray-200 p-3">

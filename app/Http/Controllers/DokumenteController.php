@@ -7,6 +7,7 @@ use App\Models\Dokumente;
 use App\Models\DokumentKategorie;
 use App\Models\DokumentPaket;
 use App\Models\Projekt;
+use App\Services\Projects\ActiveProjectContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -17,11 +18,26 @@ use Spatie\Permission\PermissionRegistrar;
 
 class DokumenteController extends Controller
 {
-    public function index()
+    public function index(Request $request, ActiveProjectContext $context)
     {
         $this->authorizeManager();
 
+        $user = $request->user();
+        $currentProject = $context->currentAvailableFor($user);
+        $partnerController = app(PartnerController::class);
+        $bopProjects = $user->projekte()->whereRaw('UPPER(projekts.name) LIKE ?', ['%BOP%'])
+            ->orderBy('projekts.name')->get()
+            ->map(fn (Projekt $project) => [
+                'id' => $project->id,
+                'name' => $project->name,
+                'current' => $currentProject?->id === $project->id,
+                'packages' => BopPartnerPackageController::options(
+                    $project, $user, $partnerController->partnerDocumentsForProject($project, $user)
+                ),
+            ])->values();
+
         return Inertia::render('Dokumente/Index', [
+            'bopProjects' => $bopProjects,
             'dokumente' => Dokumente::query()
                 ->with(['kategorien:id,name', 'projekte:id,name', 'bereiche:id,name'])
                 ->orderBy('name')

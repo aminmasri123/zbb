@@ -5,6 +5,8 @@ import axios from 'axios';
 const props = defineProps({
     packages: { type: Array, required: true },
     canEdit: Boolean,
+    canViewDocuments: Boolean,
+    initialEditId: String,
 });
 const emit = defineEmits(['close', 'updated']);
 const dialog = ref(null);
@@ -31,7 +33,11 @@ const needsDate = computed(() => activePackage.value?.id === 'rolltag'
 const needsDraft = computed(() => activePackage.value?.id === 'vorbereitung-pa'
     && activePackage.value.documents.includes('Anwesenheitsliste Vorbereitung PA'));
 
-onMounted(() => dialog.value.showModal());
+onMounted(() => {
+    dialog.value.showModal();
+    const initial = props.packages.find(item => item.id === props.initialEditId);
+    if (props.canEdit && initial) beginEdit(initial);
+});
 watch(schoolId, () => {
     year.value = years.value.length === 1 ? years.value[0] : '';
     part.value = parts.value.length === 1 ? parts.value[0] : '';
@@ -71,7 +77,8 @@ async function save() {
     try {
         const { data } = await axios.put(route('partner.bop.packages.update', { package: editing.value }), form.value);
         emit('updated', data.packages);
-        back();
+        if (props.initialEditId) dialog.value.close();
+        else back();
     } catch (exception) {
         error.value = Object.values(exception.response?.data?.errors ?? {}).flat()[0]
             ?? 'Die Änderungen konnten nicht gespeichert werden.';
@@ -155,6 +162,12 @@ async function download() {
                         {{ document }}
                     </label>
                 </fieldset>
+                <a v-if="canViewDocuments" :href="route('dokumente.index')" target="_blank" rel="noopener"
+                    class="inline-flex items-center gap-1.5 text-sm font-medium text-zbb underline underline-offset-2">
+                    Dokumente öffnen
+                    <i class="la la-external-link" aria-hidden="true"></i>
+                    <span class="sr-only">(öffnet in einem neuen Tab)</span>
+                </a>
             </fieldset>
 
             <fieldset v-else :disabled="busy || loadingSchools" class="grid gap-4 p-5 sm:grid-cols-2 sm:px-6">
@@ -197,7 +210,7 @@ async function download() {
 
             <p v-if="error" role="alert" class="border-t border-red-100 bg-red-50 px-5 py-3 text-sm text-red-800 sm:px-6">{{ error }}</p>
             <footer class="flex flex-wrap justify-between gap-2 border-t border-gray-200 px-5 py-4 sm:px-6">
-                <button type="button" class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-50" :disabled="busy" @click="back">Zur Paketliste</button>
+                <button type="button" class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-50" :disabled="busy" @click="initialEditId ? dialog.close() : back()">{{ initialEditId ? 'Abbrechen' : 'Zur Paketliste' }}</button>
                 <button v-if="editPackage" type="submit" class="rounded-md bg-zbb px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="busy || !form.name || !form.documents.length">{{ busy ? 'Wird gespeichert …' : 'Speichern' }}</button>
                 <button v-else type="submit" class="rounded-md bg-zbb px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                     :disabled="busy || loadingSchools || !school || !year || !part || Boolean(activePackage.unavailableReason) || (needsDate && !date)">
