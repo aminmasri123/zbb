@@ -1721,6 +1721,9 @@ class ProjektBopController extends Controller
         $draft = PaAttendanceListDraft::where('draft_hash', $scope['draft_hash'])->first();
         $legacyDraft = $this->legacyPaDraft($scope);
         $sourceDraft = $draft ?: $legacyDraft;
+        if ($request->boolean('usePlanning')) {
+            return $this->plannedPaPreparationExport($scope, $validated['exportFormat'] ?? 'A4', $exportProjectId, $sort, $asExcel, $request->input('termin'));
+        }
         if (!$sourceDraft) {
             return $this->plannedPaPreparationExport($scope, $validated['exportFormat'] ?? 'A4', $exportProjectId, $sort, $asExcel);
         }
@@ -1790,23 +1793,20 @@ class ProjektBopController extends Controller
         return response()->download($path, $filename)->deleteFileAfterSend(true);
     }
 
-    private function plannedPaPreparationExport(array $scope, string $format, ?int $projectId, string $sort, bool $asExcel = false)
+    private function plannedPaPreparationExport(array $scope, string $format, ?int $projectId, string $sort, bool $asExcel = false, ?string $fallbackDate = null)
     {
-        $runQuery = \App\Models\BopRun::with('phases')
-            ->where('projekt_id', $scope['projekt_id'])
-            ->where('partner_id', $scope['partner_id'])
-            ->forSchuljahr($scope['schuljahr']);
-        $run = (clone $runQuery)->where('teil', $scope['teil'])->first()
-            ?? (clone $runQuery)->where('teil', '_all')->first();
-        $phase = $run?->phases->firstWhere('phase_type', 'pa_preparation');
-        abort_unless($phase, 422, 'Bitte in der BOP-Planung einen Termin für Vorbereitung PA hinterlegen.');
+        $planning = app(\App\Services\Bop\PackagePlanning::class);
+        $phase = $planning->phase($scope['projekt_id'], $scope['partner_id'], $scope['schuljahr'], $scope['teil'], 'pa_preparation');
         $participants = $this->paTeilnehmer($scope['partner_id'], $scope['schuljahr'], $scope['teil'],
             $scope['export_mode'], $scope['klasse'], 'pa_preparation', $projectId);
         $participants = PersonenIstSchueler::sortForPackage($participants, $sort);
-        $dates = collect($phase->dates ?? [])->filter()->unique()->sort()->values();
-        $part = preg_replace('/^Teil\s*/i', '', (string) $scope['teil']);
-        if (!empty($phase->part_date_assignments)) {
-            $dates = $dates->intersect($phase->part_date_assignments[$part] ?? []);
+        $dates = collect($planning->dates($phase, $scope['projekt_id'], $scope['partner_id'], $scope['schuljahr'], $scope['teil']));
+        if ($dates->isEmpty() && $fallbackDate) {
+            $dates = collect([$fallbackDate]);
+            if ($phase) {
+                $phase = clone $phase;
+                $phase->class_date_assignments = [];
+            }
         }
         abort_if($dates->isEmpty(), 422, 'Für diesen Teil fehlt der Termin Vorbereitung PA in der BOP-Planung.');
         $school = Partner::findOrFail($scope['partner_id']);
@@ -1819,6 +1819,7 @@ class ProjektBopController extends Controller
             foreach ($dates as $date) {
                 abort_unless($this->attendanceDateAllowed($date), 422, 'Der geplante PA-Vorbereitungstermin liegt an einem ausgeschlossenen Tag.');
                 $selected = $participants->filter(function ($student) use ($phase, $date) {
+                    if (!$phase) return true;
                     if ($phase->scope_type === 'participants' && !$phase->participants->contains('personen_ist_schueler_id', $student->id)) return false;
                     if ($phase->scope_type === 'classes' && !in_array($student->klasse, $phase->selected_classes ?? [], true)) return false;
                     if (!empty($phase->class_date_assignments)) {
@@ -2922,6 +2923,7 @@ class ProjektBopController extends Controller
 
         // Teilnehmer laden
         $alleTeilnehmer = PersonenIstSchueler::forExportProject($exportProjectId)->where('schule_id', $schule->id)
+            ->when($request->attributes->get('bop_package_student_ids') !== null, fn ($query) => $query->whereIn('id', $request->attributes->get('bop_package_student_ids')))
             ->forSchuljahr($schuljahr)
             ->where('teil', $teil)
             ->when($klasse !== 'exportAlleKlassen' && $klasse !== 'exportAlleKlassenZip' , fn($q) => $q->where('klasse', $klasse))
@@ -3247,7 +3249,7 @@ class ProjektBopController extends Controller
     }
 
 
-    public function hausordnungExportPdf($partnerID, $schuljahr, $teil, $sortBy, $termin, ?int $exportProjectId = null)
+    public function hausordnungExportPdf($partnerID, $schuljahr, $teil, $sortBy, $termin, ?int $exportProjectId = null, ?array $plannedStudentIds = null)
     {
         $this->ensurePartnerInActiveProject((int) $partnerID);
         $schule = Partner::findOrFail($partnerID);
@@ -3285,6 +3287,7 @@ class ProjektBopController extends Controller
                 return strnatcasecmp($a->person->nachname, $b->person->nachname);
             });
         }
+        if ($plannedStudentIds !== null) $alle_teilnehmer = $alle_teilnehmer->whereIn('id', $plannedStudentIds);
         if($alle_teilnehmer->isEmpty()){
             return redirect()->back()->with('error', 'Die Schule verfügt derzeit keine Teilnehmer.');
         }

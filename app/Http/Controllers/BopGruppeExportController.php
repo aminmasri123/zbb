@@ -66,6 +66,7 @@ class BopGruppeExportController extends Controller
 
         $students = PersonenIstSchueler::forExportProject($exportProjectId)
             ->filterSchueler($partner->id, $validated['schuljahr'], $validated['teil'])
+            ->when($request->attributes->get('bop_package_student_ids') !== null, fn ($query) => $query->whereIn('id', $request->attributes->get('bop_package_student_ids')))
             ->get()->unique('person_id');
         $names = PersonenIstSchueler::sortForPackage($students, $request->query('sortierung') === 'klasse' ? 'klasse' : 'nachname')
             ->map(fn (PersonenIstSchueler $student) => [

@@ -18,6 +18,11 @@ const year = ref('');
 const part = ref('');
 const sort = ref('klasse');
 const date = ref('');
+const plannedDates = ref([]);
+const loadingPlanning = ref(false);
+const planningReady = ref(false);
+const needsDate = ref(false);
+let planningRequest = 0;
 const busy = ref(false);
 const loadingSchools = ref(false);
 const error = ref('');
@@ -29,10 +34,7 @@ const school = computed(() => schools.value.find(item => String(item.id) === sch
 const years = computed(() => Object.keys(school.value?.years ?? {}).sort().reverse());
 const parts = computed(() => [...(school.value?.years?.[year.value] ?? [])]
     .sort((a, b) => a.localeCompare(b, 'de', { numeric: true })));
-const needsDate = computed(() => activePackage.value?.id === 'rolltag'
-    && activePackage.value.documents.some(document => document !== 'Namensschilder'));
-const needsDraft = computed(() => activePackage.value?.id === 'vorbereitung-pa'
-    && activePackage.value.documents.includes('Anwesenheitsliste Vorbereitung PA'));
+const allDates = computed(() => selected.value === 'vorbereitung-pa');
 
 onMounted(() => {
     dialog.value.showModal();
@@ -44,6 +46,30 @@ watch(schoolId, () => {
     part.value = parts.value.length === 1 ? parts.value[0] : '';
 });
 watch(year, () => { part.value = parts.value.length === 1 ? parts.value[0] : ''; });
+watch([selected, schoolId, year, part], async () => {
+    const sequence = ++planningRequest;
+    date.value = '';
+    plannedDates.value = [];
+    planningReady.value = false;
+    loadingPlanning.value = false;
+    error.value = '';
+    if (!selected.value || !schoolId.value || !year.value || !part.value) return;
+    loadingPlanning.value = true;
+    try {
+        const { data } = await axios.post(route('partner.bop.packages.download', {
+            partner: schoolId.value, package: selected.value,
+        }), { schuljahr: year.value, teil: part.value, preview: true });
+        if (sequence !== planningRequest) return;
+        plannedDates.value = data.dates;
+        needsDate.value = data.needsDate;
+        if (data.dates.length === 1 || allDates.value) date.value = data.dates[0] ?? '';
+        planningReady.value = true;
+    } catch {
+        if (sequence === planningRequest) error.value = 'Die Planung konnte nicht geprüft werden. Bitte die Auswahl erneut treffen.';
+    } finally {
+        if (sequence === planningRequest) loadingPlanning.value = false;
+    }
+});
 
 async function configure(item) {
     selected.value = item.id;
@@ -214,11 +240,21 @@ async function download() {
                         <option value="nachname">Nach Nachname</option>
                     </select>
                 </label>
-                <label v-if="needsDate" class="block text-sm font-medium">
-                    Datum des Rolltags
+                <p v-if="loadingPlanning" class="text-sm text-gray-600 sm:col-span-2">Planung wird geprüft …</p>
+                <p v-if="planningReady && plannedDates.length" class="text-sm text-gray-600 sm:col-span-2">Termine aus der BOP-Planung: {{ plannedDates.map(day => day.split('-').reverse().join('.')).join(', ') }}.</p>
+                <label v-if="planningReady && needsDate && !plannedDates.length" class="block text-sm font-medium sm:col-span-2">
+                    Kein Termin in der Planung – bitte Datum angeben
                     <input v-model="date" required type="date" class="mt-1 block w-full rounded-md border-gray-300">
+                    <span class="mt-1 block text-xs text-gray-500">Gilt nur für diesen Export. Die Planung wird nicht geändert.</span>
                 </label>
-                <p v-if="needsDraft" class="text-sm text-gray-600 sm:col-span-2">Die PA-Anwesenheitsliste übernimmt Termine und Klassenzuordnungen aus der BOP-Planung. Ein gespeicherter Entwurf wird vorrangig verwendet.</p>
+                <label v-if="planningReady && needsDate && plannedDates.length > 1 && !allDates" class="block text-sm font-medium">
+                    Geplanten Termin wählen
+                    <select v-model="date" required class="mt-1 block w-full rounded-md border-gray-300">
+                        <option value="" disabled>Termin wählen</option>
+                        <option v-for="day in plannedDates" :key="day" :value="day">{{ day.split('-').reverse().join('.') }}</option>
+                    </select>
+                </label>
+                <p v-if="planningReady && allDates && plannedDates.length" class="text-sm text-gray-600 sm:col-span-2">Die PA-Anwesenheitsliste verwendet die aktuelle Planung und ihre Klassenzuordnungen. Jeder Termin erhält ein eigenes Excel-Blatt.</p>
                 <p v-if="!loadingSchools && !schools.length && !error" class="text-sm text-gray-600 sm:col-span-2">Im aktiven Projekt sind keine Schulen mit Teilnehmenden für den Export verfügbar.</p>
                 <p v-if="activePackage.unavailableReason" class="text-sm text-amber-900 sm:col-span-2">{{ activePackage.unavailableReason }}</p>
             </fieldset>
@@ -228,7 +264,7 @@ async function download() {
                 <button type="button" class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-50" :disabled="busy" @click="initialEditId ? dialog.close() : back()">{{ initialEditId ? 'Abbrechen' : 'Zur Paketliste' }}</button>
                 <button v-if="editPackage" type="submit" class="rounded-md bg-zbb px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="busy || !form.name || !form.documents.length">{{ busy ? 'Wird gespeichert …' : 'Speichern' }}</button>
                 <button v-else type="submit" class="rounded-md bg-zbb px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                    :disabled="busy || loadingSchools || !school || !year || !part || Boolean(activePackage.unavailableReason) || (needsDate && !date)">
+                    :disabled="busy || loadingSchools || loadingPlanning || !planningReady || !school || !year || !part || Boolean(activePackage.unavailableReason) || (needsDate && !date)">
                     {{ busy ? 'Paket wird erstellt …' : 'ZIP herunterladen' }}
                 </button>
             </footer>

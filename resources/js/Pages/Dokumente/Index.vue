@@ -568,6 +568,14 @@ const token = (key) => '${' + key + '}';
               </div>
             </div>
 
+            <label v-if="form.einsatzbereich === 'partner' && form.typ === 'word'" class="block text-sm font-medium">
+              Ausgabe für die Schule
+              <select v-model="form.gruppen_export_modus" class="mt-1 block w-full rounded border-gray-300">
+                <option value="kopf">Ein Dokument für die Schule</option>
+                <option value="eine_datei">Serienbrief für alle Teilnehmenden in einer Datei</option>
+              </select>
+            </label>
+
             <div v-if="form.einsatzbereich === 'gruppe'" class="flex flex-wrap gap-4 text-sm">
               <label class="inline-flex items-center gap-2">
                 <input v-model="form.gruppen_export" type="checkbox" class="rounded border-gray-300 text-zbb" />

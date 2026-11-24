@@ -779,6 +779,7 @@ class ExportWordController extends Controller
         }
 
         $studentRows = PersonenIstSchueler::forExportProject($exportProjectId)
+            ->when($request->attributes->get('bop_package_student_ids') !== null, fn ($query) => $query->whereIn('id', $request->attributes->get('bop_package_student_ids')))
             ->where('schule_id', $partner->id)
             ->forSchuljahr($context['schuljahr'])
             ->where('teil', $context['teil'])
@@ -798,6 +799,8 @@ class ExportWordController extends Controller
         ]);
         $gruppe->setAttribute('export_schuljahr', $context['schuljahr']);
         $gruppe->setAttribute('export_teil', $context['teil']);
+        $gruppe->setAttribute('bop_package_date', $request->attributes->get('bop_package_date'));
+        $gruppe->setAttribute('bop_package_phase', $request->attributes->get('bop_package_phase'));
         $gruppe->setRelation('partner', $partner);
         $gruppe->setRelation('partners', collect([$partner]));
         $gruppe->setRelation('teilnehmer', $teilnehmer);
@@ -816,6 +819,12 @@ class ExportWordController extends Controller
         Dokumente $dokument,
         string $format
     ) {
+        if ($dokument->typ === 'word' && $dokument->gruppen_export_modus === 'eine_datei') {
+            abort_if($gruppe->teilnehmer->isEmpty(), 422, 'Für diese Auswahl sind keine Teilnehmenden vorhanden.');
+
+            return $this->downloadWordCombinedSerienbrief($templateFile, $gruppe, $projekt, $dokument, $gruppe->teilnehmer, $format);
+        }
+
         $tempDir = storage_path('app/temp');
         if (! is_dir($tempDir)) {
             mkdir($tempDir, 0775, true);
@@ -1548,6 +1557,16 @@ class ExportWordController extends Controller
         $email = $person?->kontaktes?->first(fn ($kontakt) => strtolower($kontakt->kontakttyp?->name ?? '') === 'email');
         $telefon = $person?->kontaktes?->first(fn ($kontakt) => in_array(strtolower($kontakt->kontakttyp?->name ?? ''), ['telefon', 'mobile', 'mobil'], true));
         $partnerValues = $this->partnerPlaceholderValues($gruppe, $projekt);
+        if ($gruppe->getAttribute('bop_package_date')) {
+            $packageDate = $this->formatDate($gruppe->getAttribute('bop_package_date'));
+            $keys = match ($gruppe->getAttribute('bop_package_phase')) {
+                'pa_preparation' => ['vorbereitung_pa_datum'],
+                'roll_day' => ['rolltag_datum'],
+                'wt_feedback' => ['feedbackgespraech_wt_datum', 'feedbackgespraech_datum', 'auswertungsgespraech_datum'],
+                default => [],
+            };
+            foreach ($keys as $key) $partnerValues[$key] = $packageDate;
+        }
 
         $student = $this->participantSchoolRecordForExport($person, $gruppe, $partnerValues);
         $participantClass = trim((string) $student?->klasse);

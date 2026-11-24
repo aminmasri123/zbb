@@ -154,17 +154,36 @@ class BopPartnerPackageController extends Controller
             'schuljahr' => ['required', 'regex:/^\d{4}(?:[-\/]\d{2,4})?$/'],
             'teil' => ['required', 'string', 'max:20'],
             'termin' => ['nullable', 'date_format:Y-m-d'],
+            'preview' => ['nullable', 'boolean'],
             'sortierung' => ['nullable', 'in:klasse,nachname'],
         ]);
         $year = $data['schuljahr'];
         $part = $data['teil'];
         $date = $data['termin'] ?? null;
         $sort = $data['sortierung'] ?? 'klasse';
-        abort_if($package === 'rolltag' && ($includes(0) || $includes(2)) && ! $date, 422, 'Bitte den Rolltag-Termin auswählen.');
+        $planning = app(\App\Services\Bop\PackagePlanning::class);
+        $phaseType = ['vorbereitung-pa' => 'pa_preparation', 'rolltag' => 'roll_day', 'feedbackgespraech' => 'wt_feedback'][$package];
+        $phase = $planning->phase($project->id, $partner->id, $year, $part, $phaseType);
+        $plannedDates = $planning->dates($phase, $project->id, $partner->id, $year, $part);
+        $needsDate = $package === 'vorbereitung-pa' ? $includes(1)
+            : collect($definition['documents'])->contains(fn ($name) => $name !== 'Namensschilder');
+        if ($request->boolean('preview')) {
+            return response()->json(['dates' => $plannedDates, 'needsDate' => $needsDate]);
+        }
+        if ($plannedDates && $needsDate) {
+            if (count($plannedDates) === 1 || $package === 'vorbereitung-pa') $date = $plannedDates[0];
+            else abort_unless(in_array($date, $plannedDates, true), 422, 'Bitte einen Termin aus der Planung auswählen.');
+        }
+        abort_if($needsDate && !$date, 422, 'In der Planung fehlt der Termin. Bitte ein Datum für dieses Paket eingeben.');
 
         $students = PersonenIstSchueler::forExportProject($project->id)
             ->filterSchueler($partner->id, $year, $part);
         abort_unless((clone $students)->exists(), 422, 'Für diese Schule, dieses Schuljahr und diesen Teil wurden im aktiven Projekt keine Teilnehmenden gefunden.');
+        $plannedStudentIds = $phase && $package !== 'vorbereitung-pa'
+            ? (clone $students)->get()->filter(fn ($student) => $planning->includes($phase, $student, $plannedDates ? $date : null))->pluck('id')->all()
+            : null;
+        abort_if($plannedStudentIds === [], 422, 'Für diesen Planungstermin sind keine Teilnehmenden zugeordnet.');
+        $request->attributes->set('bop_package_student_ids', $plannedStudentIds);
 
         $builtIn = $package === 'feedbackgespraech' ? ['Namensschilder'] : [...self::PACKAGES[$package]['documents'], 'Namensschilder'];
         $documents = app(PartnerController::class)->partnerDocumentsForProject($project, $request->user())
@@ -191,6 +210,7 @@ class BopPartnerPackageController extends Controller
                 $scope = $this->exportRequest($request, [
                     'schuleId' => $partner->id, 'schuljahr' => $year, 'teil' => $part,
                     'listType' => 'pa_preparation', 'exportMode' => 'alle',
+                    'usePlanning' => true, 'termin' => $date,
                 ]);
                 if ($includes(1)) {
                     $this->add($zip, 'Anwesenheitsliste Vorbereitung PA.xlsx', $bop->anwesenheitslistePAPreparationExportWord($scope, $project->id, $sort, true), $temporary);
@@ -204,7 +224,7 @@ class BopPartnerPackageController extends Controller
             } elseif ($package === 'rolltag') {
                 $scope = $this->exportRequest($request, ['termin' => $date, 'schuljahr' => $year, 'teil' => $part, 'sortierung' => $sort]);
                 if ($includes(0)) {
-                    $hausordnung = $bop->hausordnungExportPdf($partner->id, $year, $part, $sort, $date, $project->id);
+                    $hausordnung = $bop->hausordnungExportPdf($partner->id, $year, $part, $sort, $date, $project->id, $plannedStudentIds);
                     abort_unless($hausordnung->isSuccessful() && str_starts_with((string) $hausordnung->headers->get('Content-Type'), 'application/pdf'), 422, 'Die Hausordnung konnte nicht erstellt werden.');
                     abort_unless($zip->addFromString('BOP Hausordnung.pdf', $hausordnung->getContent()), 500);
                 }
@@ -220,6 +240,8 @@ class BopPartnerPackageController extends Controller
             foreach ($templates as $template) {
                 $format = $template['ausgabeformate'][0];
                 $scope = $this->exportRequest($request, ['format' => $format, 'schuljahr' => $year, 'teil' => $part, 'sortierung' => $sort]);
+                $scope->attributes->set('bop_package_date', $date);
+                $scope->attributes->set('bop_package_phase', $phaseType);
                 $document = Dokumente::findOrFail($template['id']);
                 $response = app(ExportWordController::class)->partnerDokument($scope, $partner, $document, $context, $project->id);
                 $this->add($zip, basename($template['name']).'.'.$format, $response, $temporary, $document->typ !== 'pdf');
