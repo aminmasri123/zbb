@@ -124,15 +124,13 @@ class BopPartnerPackageExportTest extends TestCase
         $this->assertTrue($zip->open($plannedPath));
         $wordPath = tempnam(sys_get_temp_dir(), 'planned-pa-');
         try {
-            file_put_contents($wordPath, $zip->getFromName('Anwesenheitsliste Vorbereitung PA.docx'));
-            $wordZip = new ZipArchive;
-            $this->assertTrue($wordZip->open($wordPath));
-            $xml = $wordZip->getFromName('word/document.xml');
-            $this->assertStringContainsString('24.11.2026', $xml);
-            $this->assertStringContainsString('25.11.2026', $xml);
-            $this->assertStringContainsString('Anna', $xml);
-            $this->assertStringNotContainsString('Fremdprojekt', $xml);
-            $wordZip->close();
+            file_put_contents($wordPath, $zip->getFromName('Anwesenheitsliste Vorbereitung PA.xlsx'));
+            $book = \PhpOffice\PhpSpreadsheet\IOFactory::load($wordPath);
+            $this->assertSame(['2026-11-24', '2026-11-25'], $book->getSheetNames());
+            $cells = json_encode($book->getSheet(0)->toArray());
+            $this->assertStringContainsString('Anna', $cells);
+            $this->assertStringNotContainsString('Fremdprojekt', $cells);
+            $book->disconnectWorksheets();
         } finally {
             $zip->close();
             unlink($plannedPath);

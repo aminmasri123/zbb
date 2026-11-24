@@ -1709,7 +1709,7 @@ class ProjektBopController extends Controller
         ]);
     }
 
-    public function anwesenheitslistePAPreparationExportWord(Request $request, ?int $exportProjectId = null, string $sort = 'klasse')
+    public function anwesenheitslistePAPreparationExportWord(Request $request, ?int $exportProjectId = null, string $sort = 'klasse', bool $asExcel = false)
     {
         $this->ensureMemoryLimit(512 * 1024 * 1024);
         $scope = $this->paDraftScope($request);
@@ -1722,7 +1722,7 @@ class ProjektBopController extends Controller
         $legacyDraft = $this->legacyPaDraft($scope);
         $sourceDraft = $draft ?: $legacyDraft;
         if (!$sourceDraft) {
-            return $this->plannedPaPreparationExport($scope, $validated['exportFormat'] ?? 'A4', $exportProjectId, $sort);
+            return $this->plannedPaPreparationExport($scope, $validated['exportFormat'] ?? 'A4', $exportProjectId, $sort, $asExcel);
         }
 
         $payload = $this->decryptPaDraftPayloadSignatures($sourceDraft->payload ?? []);
@@ -1762,6 +1762,18 @@ class ProjektBopController extends Controller
         ) . '.docx';
         $path = storage_path('exports/' . Str::uuid() . '_' . $filename);
 
+        if ($asExcel) {
+            $filename = preg_replace('/\.docx$/', '.xlsx', $filename);
+            $path = preg_replace('/\.docx$/', '.xlsx', $path);
+            app(\App\Services\Bop\PaPreparationAttendanceTemplateExportService::class)->create(
+                $school, PersonenIstSchueler::sortForPackage($participants, $sort), $day,
+                is_array($payload['signatures'] ?? null) ? $payload['signatures'] : [],
+                $scope['export_mode'], $scope['klasse'], $exportFormat, $path
+            );
+
+            return response()->download($path, $filename)->deleteFileAfterSend(true);
+        }
+
         $this->paPreparationWordExport->create(
             $school,
             PersonenIstSchueler::sortForPackage($participants, $sort),
@@ -1778,7 +1790,7 @@ class ProjektBopController extends Controller
         return response()->download($path, $filename)->deleteFileAfterSend(true);
     }
 
-    private function plannedPaPreparationExport(array $scope, string $format, ?int $projectId, string $sort)
+    private function plannedPaPreparationExport(array $scope, string $format, ?int $projectId, string $sort, bool $asExcel = false)
     {
         $runQuery = \App\Models\BopRun::with('phases')
             ->where('projekt_id', $scope['projekt_id'])
@@ -1816,12 +1828,39 @@ class ProjektBopController extends Controller
                     return true;
                 })->values();
                 if ($selected->isEmpty()) continue;
-                $path = $directory.'/Vorbereitung_PA_'.$date.'.docx';
+                $path = $directory.'/Vorbereitung_PA_'.$date.($asExcel ? '.xlsx' : '.docx');
+                if ($asExcel) {
+                    app(\App\Services\Bop\PaPreparationAttendanceTemplateExportService::class)->create(
+                        $school, $selected, $this->paPreparationDayFromDate($date)[0], [],
+                        $scope['export_mode'], $scope['klasse'], $format, $path
+                    );
+                    $paths[] = $path;
+                    continue;
+                }
                 $this->paPreparationWordExport->create($school, $selected, $this->paPreparationDayFromDate($date)[0],
                     [], $scope['schuljahr'], $scope['teil'], $scope['export_mode'], $scope['klasse'], $format, $path);
                 $paths[] = $path;
             }
             abort_if(empty($paths), 422, 'Für die geplanten Vorbereitungstermine sind dieser Auswahl keine Teilnehmenden zugeordnet.');
+            if ($asExcel) {
+                $book = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+                $book->removeSheetByIndex(0);
+                foreach ($paths as $file) {
+                    $source = \PhpOffice\PhpSpreadsheet\IOFactory::load($file);
+                    $sheet = $source->getActiveSheet();
+                    $sheet->setTitle(substr(basename($file, '.xlsx'), -10));
+                    $book->addExternalSheet($sheet);
+                }
+                $book->setActiveSheetIndex(0);
+                $output = storage_path('exports/'.Str::uuid().'.xlsx');
+                try {
+                    (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($book))->save($output);
+                } finally {
+                    $book->disconnectWorksheets();
+                }
+
+                return response()->download($output, 'Anwesenheitsliste_Vorbereitung_PA.xlsx')->deleteFileAfterSend(true);
+            }
             $output = storage_path('exports/'.Str::uuid().'.docx');
             app(BopGruppeExportController::class)->mergeDocxFiles($paths, $output);
 

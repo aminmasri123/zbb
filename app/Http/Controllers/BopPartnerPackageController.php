@@ -193,7 +193,7 @@ class BopPartnerPackageController extends Controller
                     'listType' => 'pa_preparation', 'exportMode' => 'alle',
                 ]);
                 if ($includes(1)) {
-                    $this->add($zip, 'Anwesenheitsliste Vorbereitung PA.docx', $bop->anwesenheitslistePAPreparationExportWord($scope, $project->id, $sort), $temporary);
+                    $this->add($zip, 'Anwesenheitsliste Vorbereitung PA.xlsx', $bop->anwesenheitslistePAPreparationExportWord($scope, $project->id, $sort, true), $temporary);
                 }
 
                 if ($includes(0) && (clone $students)->where('eee', false)->exists()) {
