@@ -218,7 +218,7 @@ async function download() {
                     Datum des Rolltags
                     <input v-model="date" required type="date" class="mt-1 block w-full rounded-md border-gray-300">
                 </label>
-                <p v-if="needsDraft" class="text-sm text-gray-600 sm:col-span-2">Für die PA-Anwesenheitsliste muss ein Entwurf für die gesamte Schule gespeichert sein.</p>
+                <p v-if="needsDraft" class="text-sm text-gray-600 sm:col-span-2">Die PA-Anwesenheitsliste übernimmt Termine und Klassenzuordnungen aus der BOP-Planung. Ein gespeicherter Entwurf wird vorrangig verwendet.</p>
                 <p v-if="!loadingSchools && !schools.length && !error" class="text-sm text-gray-600 sm:col-span-2">Im aktiven Projekt sind keine Schulen mit Teilnehmenden für den Export verfügbar.</p>
                 <p v-if="activePackage.unavailableReason" class="text-sm text-amber-900 sm:col-span-2">{{ activePackage.unavailableReason }}</p>
             </fieldset>

@@ -104,5 +104,39 @@ class BopPartnerPackageExportTest extends TestCase
             $zip->close();
             unlink($shortPath);
         }
+        $run = \App\Models\BopRun::create([
+            'projekt_id' => $project->id, 'partner_id' => $school->id,
+            'schuljahr' => '2026/2027', 'teil' => '_all', 'status' => 'planning',
+        ]);
+        $run->phases()->create([
+            'phase_type' => 'pa_preparation', 'scope_type' => 'school',
+            'dates' => ['2026-11-24', '2026-11-25'],
+            'group_mode' => 'none',
+        ]);
+        $this->putJson(route('partner.bop.packages.update', ['package' => 'vorbereitung-pa']), [
+            'name' => 'Vorbereitung PA', 'documents' => ['Anwesenheitsliste Vorbereitung PA'],
+        ])->assertOk();
+        $planned = $this->postJson(route('partner.bop.packages.download', [
+            'partner' => $school->id, 'package' => 'vorbereitung-pa',
+        ]), ['schuljahr' => '2026', 'teil' => '1']);
+        $planned->assertOk()->assertDownload();
+        $plannedPath = $planned->baseResponse->getFile()->getPathname();
+        $this->assertTrue($zip->open($plannedPath));
+        $wordPath = tempnam(sys_get_temp_dir(), 'planned-pa-');
+        try {
+            file_put_contents($wordPath, $zip->getFromName('Anwesenheitsliste Vorbereitung PA.docx'));
+            $wordZip = new ZipArchive;
+            $this->assertTrue($wordZip->open($wordPath));
+            $xml = $wordZip->getFromName('word/document.xml');
+            $this->assertStringContainsString('24.11.2026', $xml);
+            $this->assertStringContainsString('25.11.2026', $xml);
+            $this->assertStringContainsString('Anna', $xml);
+            $this->assertStringNotContainsString('Fremdprojekt', $xml);
+            $wordZip->close();
+        } finally {
+            $zip->close();
+            unlink($plannedPath);
+            unlink($wordPath);
+        }
     }
 }

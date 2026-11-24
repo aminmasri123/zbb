@@ -497,7 +497,7 @@ class BopGruppeExportController extends Controller
         return response()->download($path, $filename)->deleteFileAfterSend(true);
     }
 
-    private function mergeDocxFiles(array $documentPaths, string $outputPath): void
+    public function mergeDocxFiles(array $documentPaths, string $outputPath): void
     {
         if (count($documentPaths) === 1) {
             File::copy($documentPaths[0], $outputPath);

@@ -1721,7 +1721,9 @@ class ProjektBopController extends Controller
         $draft = PaAttendanceListDraft::where('draft_hash', $scope['draft_hash'])->first();
         $legacyDraft = $this->legacyPaDraft($scope);
         $sourceDraft = $draft ?: $legacyDraft;
-        abort_unless($sourceDraft, 422, 'Bitte speichern Sie zuerst den Entwurf der Anwesenheitsliste.');
+        if (!$sourceDraft) {
+            return $this->plannedPaPreparationExport($scope, $validated['exportFormat'] ?? 'A4', $exportProjectId, $sort);
+        }
 
         $payload = $this->decryptPaDraftPayloadSignatures($sourceDraft->payload ?? []);
         if ($draft && $legacyDraft) {
@@ -1774,6 +1776,59 @@ class ProjektBopController extends Controller
         );
 
         return response()->download($path, $filename)->deleteFileAfterSend(true);
+    }
+
+    private function plannedPaPreparationExport(array $scope, string $format, ?int $projectId, string $sort)
+    {
+        $runQuery = \App\Models\BopRun::with('phases')
+            ->where('projekt_id', $scope['projekt_id'])
+            ->where('partner_id', $scope['partner_id'])
+            ->forSchuljahr($scope['schuljahr']);
+        $run = (clone $runQuery)->where('teil', $scope['teil'])->first()
+            ?? (clone $runQuery)->where('teil', '_all')->first();
+        $phase = $run?->phases->firstWhere('phase_type', 'pa_preparation');
+        abort_unless($phase, 422, 'Bitte in der BOP-Planung einen Termin für Vorbereitung PA hinterlegen.');
+        $participants = $this->paTeilnehmer($scope['partner_id'], $scope['schuljahr'], $scope['teil'],
+            $scope['export_mode'], $scope['klasse'], 'pa_preparation', $projectId);
+        $participants = PersonenIstSchueler::sortForPackage($participants, $sort);
+        $dates = collect($phase->dates ?? [])->filter()->unique()->sort()->values();
+        $part = preg_replace('/^Teil\s*/i', '', (string) $scope['teil']);
+        if (!empty($phase->part_date_assignments)) {
+            $dates = $dates->intersect($phase->part_date_assignments[$part] ?? []);
+        }
+        abort_if($dates->isEmpty(), 422, 'Für diesen Teil fehlt der Termin Vorbereitung PA in der BOP-Planung.');
+        $school = Partner::findOrFail($scope['partner_id']);
+
+        // Each planned date receives its own document, preserving its participant assignment.
+        $directory = storage_path('exports/pa-plan-'.Str::uuid());
+        File::ensureDirectoryExists($directory);
+        $paths = [];
+        try {
+            foreach ($dates as $date) {
+                abort_unless($this->attendanceDateAllowed($date), 422, 'Der geplante PA-Vorbereitungstermin liegt an einem ausgeschlossenen Tag.');
+                $selected = $participants->filter(function ($student) use ($phase, $date) {
+                    if ($phase->scope_type === 'participants' && !$phase->participants->contains('personen_ist_schueler_id', $student->id)) return false;
+                    if ($phase->scope_type === 'classes' && !in_array($student->klasse, $phase->selected_classes ?? [], true)) return false;
+                    if (!empty($phase->class_date_assignments)) {
+                        return in_array($date, $phase->class_date_assignments[$student->klasse] ?? [], true);
+                    }
+
+                    return true;
+                })->values();
+                if ($selected->isEmpty()) continue;
+                $path = $directory.'/Vorbereitung_PA_'.$date.'.docx';
+                $this->paPreparationWordExport->create($school, $selected, $this->paPreparationDayFromDate($date)[0],
+                    [], $scope['schuljahr'], $scope['teil'], $scope['export_mode'], $scope['klasse'], $format, $path);
+                $paths[] = $path;
+            }
+            abort_if(empty($paths), 422, 'Für die geplanten Vorbereitungstermine sind dieser Auswahl keine Teilnehmenden zugeordnet.');
+            $output = storage_path('exports/'.Str::uuid().'.docx');
+            app(BopGruppeExportController::class)->mergeDocxFiles($paths, $output);
+
+            return response()->download($output, 'Anwesenheitsliste_Vorbereitung_PA.docx')->deleteFileAfterSend(true);
+        } finally {
+            File::deleteDirectory($directory);
+        }
     }
 
     public function anwesenheitslistePAPreparationExportTemplate(
