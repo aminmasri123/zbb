@@ -21,6 +21,7 @@ const date = ref('');
 const busy = ref(false);
 const loadingSchools = ref(false);
 const error = ref('');
+const documentToAdd = ref('');
 const form = ref({ name: '', documents: [] });
 const activePackage = computed(() => props.packages.find(item => item.id === selected.value));
 const editPackage = computed(() => props.packages.find(item => item.id === editing.value));
@@ -60,6 +61,7 @@ async function configure(item) {
 }
 
 function beginEdit(item) {
+    documentToAdd.value = '';
     editing.value = item.id;
     form.value = { name: item.name, documents: [...item.documents] };
     error.value = '';
@@ -157,11 +159,24 @@ async function download() {
                 </label>
                 <fieldset class="space-y-2">
                     <legend class="mb-2 text-sm font-medium">Enthaltene Dokumente</legend>
-                    <label v-for="document in editPackage.documentOptions" :key="document" class="flex items-start gap-2 text-sm">
+                    <label v-for="document in [...new Set([...editPackage.documents, ...form.documents])]" :key="document" class="flex items-start gap-2 text-sm">
                         <input v-model="form.documents" type="checkbox" :value="document" class="mt-0.5 rounded border-gray-300 text-zbb">
                         {{ document }}
                     </label>
                 </fieldset>
+                <div class="flex flex-wrap items-end gap-2">
+                    <label class="min-w-0 flex-1 text-sm font-medium">
+                        Dokument hinzufügen
+                        <select v-model="documentToAdd" class="mt-1 block w-full rounded-md border-gray-300">
+                            <option value="">Vorlage wählen</option>
+                            <option v-for="document in editPackage.documentOptions.filter(item => !form.documents.includes(item))" :key="document" :value="document">
+                                {{ document === 'Namensschilder' ? 'Namensschilder BOP' : document }}
+                            </option>
+                        </select>
+                    </label>
+                    <button type="button" :disabled="!documentToAdd" class="rounded-md border border-zbb px-3 py-2 text-sm font-medium text-zbb disabled:opacity-40"
+                        @click="form.documents.push(documentToAdd); documentToAdd = ''">Hinzufügen</button>
+                </div>
                 <a v-if="canViewDocuments" :href="route('dokumente.index')" target="_blank" rel="noopener"
                     class="inline-flex items-center gap-1.5 text-sm font-medium text-zbb underline underline-offset-2">
                     Dokumente öffnen

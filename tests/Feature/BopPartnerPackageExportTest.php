@@ -62,8 +62,8 @@ class BopPartnerPackageExportTest extends TestCase
         $this->assertTrue($zip->open($path));
         try {
             $this->assertStringStartsWith('%PDF-', $zip->getFromName('BOP Hausordnung.pdf'));
-            $this->assertStringStartsWith('PK', $zip->getFromIndex(2));
-            $this->assertStringStartsWith('Anwesenheitsliste Rolltag/', $zip->getNameIndex(2));
+            $this->assertStringStartsWith('PK', $zip->getFromIndex(1));
+            $this->assertStringStartsWith('Anwesenheitsliste Rolltag/', $zip->getNameIndex(1));
             $this->assertSame(3, $zip->numFiles);
 
             $badgePath = tempnam(sys_get_temp_dir(), 'badge-');
@@ -85,14 +85,14 @@ class BopPartnerPackageExportTest extends TestCase
             unlink($path);
         }
 
-        $this->putJson(route('partner.bop.packages.update', ['package' => 'rolltag']), [
-            'name' => 'Rolltag kompakt',
+        $this->putJson(route('partner.bop.packages.update', ['package' => 'vorbereitung-pa']), [
+            'name' => 'PA mit Namensschildern',
             'documents' => ['Namensschilder'],
-        ])->assertOk()->assertJsonPath('packages.1.name', 'Rolltag kompakt');
-        $this->assertSame(['Namensschilder'], $project->refresh()->rule_settings['bop_partner_packages']['rolltag']['documents']);
+        ])->assertOk()->assertJsonPath('packages.0.name', 'PA mit Namensschildern');
+        $this->assertSame(['Namensschilder'], $project->refresh()->rule_settings['bop_partner_packages']['vorbereitung-pa']['documents']);
 
         $short = $this->postJson(route('partner.bop.packages.download', [
-            'partner' => $school->id, 'package' => 'rolltag',
+            'partner' => $school->id, 'package' => 'vorbereitung-pa',
         ]), ['schuljahr' => '2026', 'teil' => '1', 'sortierung' => 'nachname']);
         $short->assertOk()->assertDownload();
         $shortPath = $short->baseResponse->getFile()->getPathname();
