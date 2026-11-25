@@ -50,8 +50,7 @@ const canUseDokumentActions = computed(() => canUpdateDokument.value || canDownl
 const activeSection = ref('vorlagen');
 const sections = computed(() => [
   { id: 'vorlagen', label: 'Vorlagen', icon: 'la-file-alt' },
-  { id: 'teilnehmerpakete', label: 'Teilnehmerpakete', icon: 'la-layer-group' },
-  ...(bopProjects.value.length ? [{ id: 'bop', label: 'BOP-Pakete', icon: 'la-school' }] : []),
+  { id: 'pakete', label: 'Pakete', icon: 'la-layer-group' },
   ...(canStoreKategorie.value || canUpdateProjektKategorien.value ? [{ id: 'kategorien', label: 'Kategorien', icon: 'la-tags' }] : []),
   { id: 'platzhalter', label: 'Platzhalter', icon: 'la-code' },
 ]);
@@ -830,15 +829,15 @@ const token = (key) => '${' + key + '}';
         </div>
       </section>
 
-      <section v-show="activeSection === 'teilnehmerpakete'" id="document-section-teilnehmerpakete" class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+      <section v-show="activeSection === 'pakete'" id="document-section-pakete" class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <div class="mb-4 flex items-center justify-between gap-3">
           <div>
-            <h2 class="text-base font-semibold text-gray-700">Teilnehmerpakete</h2>
-            <p class="mt-1 text-xs text-gray-500">Mehrere Teilnehmer-Vorlagen gemeinsam als eine PDF oder als ZIP exportieren.</p>
+            <h2 class="text-base font-semibold text-gray-700">Dokumentenpakete</h2>
+            <p class="mt-1 text-xs text-gray-500">Alle Pakete des aktiven Projekts an einem Ort verwalten.</p>
           </div>
           <button v-if="canStoreDokument" type="button" class="rounded border border-zbb px-3 py-2 text-sm font-semibold text-zbb" @click="openCreatePaket">Paket anlegen</button>
         </div>
-        <div class="grid gap-3 lg:grid-cols-2">
+        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <div v-for="paket in paketListe" :key="paket.id" class="rounded border border-gray-200 p-4">
             <div class="flex items-start justify-between gap-3">
               <div>
@@ -858,27 +857,21 @@ const token = (key) => '${' + key + '}';
               <button type="button" class="rounded border border-red-200 px-3 py-1 text-sm text-red-600" @click="deletePaket(paket)">Löschen</button>
             </div>
           </div>
-          <div v-if="paketListe.length === 0" class="rounded border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500">Noch keine Dokumentenpakete vorhanden.</div>
-        </div>
-      </section>
-
-      <section v-if="bopProjects.length" v-show="activeSection === 'bop'" id="document-section-bop" class="space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-        <h2 class="text-base font-semibold text-gray-700">BOP-Dokumentenpakete</h2>
-        <div v-for="projekt in bopProjects" :key="projekt.id">
-          <div class="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <h3 class="text-sm font-semibold text-gray-800">{{ projekt.name }}</h3>
-          </div>
-          <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <template v-for="projekt in bopProjects" :key="'bop-' + projekt.id">
             <article v-for="paket in projekt.packages" :key="paket.id" class="rounded border border-gray-200 p-4">
-              <h4 class="font-semibold text-gray-800">{{ paket.name }}</h4>
-              <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">
+              <h3 class="font-semibold text-gray-800">{{ paket.name }}</h3>
+              <ol class="mt-3 list-decimal space-y-1 pl-5 text-sm text-gray-700">
                 <li v-for="dokument in paket.documents" :key="dokument">{{ dokument }}</li>
-              </ul>
+              </ol>
+              <div class="mt-3 flex flex-wrap gap-1">
+                <span class="rounded bg-zbbTrp px-2 py-1 text-xs text-zbb">{{ projekt.name }}</span>
+              </div>
               <p v-if="paket.unavailableReason && projekt.current" class="mt-3 text-xs text-amber-900">{{ paket.unavailableReason }}</p>
               <button v-if="projekt.current && can('projekt.update') && can('kooperationspartner.index')" type="button"
                 class="mt-4 rounded border border-zbb px-3 py-1 text-sm text-zbb" @click="editingBopId = paket.id">Bearbeiten</button>
             </article>
-          </div>
+          </template>
+          <div v-if="!paketListe.length && !bopProjects.some(projekt => projekt.packages.length)" class="rounded border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500 md:col-span-2 xl:col-span-3">Noch keine Dokumentenpakete vorhanden.</div>
         </div>
       </section>
 

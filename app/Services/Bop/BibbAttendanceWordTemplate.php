@@ -2,14 +2,55 @@
 
 namespace App\Services\Bop;
 
+use App\Models\Dokumente;
 use DOMDocument;
 use DOMXPath;
+use Illuminate\Validation\ValidationException;
 use PhpOffice\PhpWord\TemplateProcessor;
 use RuntimeException;
 use ZipArchive;
 
 class BibbAttendanceWordTemplate
 {
+    public const A3_EXPORT_PERMISSION = 'bop.bibb.a3.template';
+
+    public function a3TemplatePath(int $projectId): string
+    {
+        $document = Dokumente::query()
+            ->where('export_permission', self::A3_EXPORT_PERMISSION)
+            ->where('typ', 'word')
+            ->where(function ($query) use ($projectId) {
+                $query->whereHas('projekte', fn ($project) => $project->whereKey($projectId))
+                    ->orWhereHas('kategorien.projekte', fn ($project) => $project->whereKey($projectId));
+            })
+            ->first();
+
+        if (! $document) {
+            throw ValidationException::withMessages([
+                'vorlage' => 'Dem aktiven BOP-Projekt ist keine DIN-A3-Vorlage für die BO/BIBB-Anwesenheitsliste zugeordnet.',
+            ]);
+        }
+        if (! $document->aktiv) {
+            throw ValidationException::withMessages([
+                'vorlage' => 'Die DIN-A3-Vorlage für die BO/BIBB-Anwesenheitsliste ist deaktiviert.',
+            ]);
+        }
+        if (! in_array('docx', $document->ausgabeformate ?? [], true) || ! $document->dateipfad) {
+            throw ValidationException::withMessages([
+                'vorlage' => 'Die DIN-A3-Vorlage für die BO/BIBB-Anwesenheitsliste muss eine Word-Vorlage mit DOCX-Ausgabe sein.',
+            ]);
+        }
+
+        $path = storage_path(ltrim($document->dateipfad, '/\\'));
+        if (! is_file($path)) {
+            throw ValidationException::withMessages([
+                'vorlage' => 'Die Datei der DIN-A3-Vorlage für die BO/BIBB-Anwesenheitsliste wurde nicht gefunden.',
+            ]);
+        }
+
+        return $path;
+    }
+
     public function processor(string $source, int $participants): TemplateProcessor
     {
         $temporary = tempnam(sys_get_temp_dir(), 'bibb-word-');

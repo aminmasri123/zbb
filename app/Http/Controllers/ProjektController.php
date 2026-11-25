@@ -181,6 +181,22 @@ class ProjektController extends Controller
                 $projekt->bereiche()->sync($bereichSyncData);
                 $projekt->kostenstellen()->sync($kostenstelleSyncData);
 
+                if (str_contains(mb_strtoupper($projekt->name), 'BOP')) {
+                    $templateIds = Dokumente::query()
+                        ->whereIn('export_permission', [
+                            \App\Services\Bop\PaPreparationAttendanceTemplateExportService::EXPORT_PERMISSION,
+                            \App\Services\Bop\BibbAttendanceWordTemplate::A3_EXPORT_PERMISSION,
+                        ])
+                        ->pluck('id');
+                    $projekt->dokumente()->syncWithoutDetaching(
+                        $templateIds->mapWithKeys(fn ($id) => [$id => [
+                            'gruppen_export' => 1,
+                            'serienbrief' => 0,
+                            'sort_order' => 0,
+                        ]])->all()
+                    );
+                }
+
                 return $projekt;
             });
 

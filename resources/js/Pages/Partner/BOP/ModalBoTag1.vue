@@ -8,162 +8,160 @@ const props = defineProps({
   jahr: String,
   teil: String,
   partnerId: Number,
-  klassen: { type: Array, default: () => [] },
-  anzahlBereiche: Number,
-  teilnehmerCount: { type: Number, default: 0 },
 })
-
 const emit = defineEmits(['close'])
 
+const configuration = ref(null)
+const preparing = ref(true)
+const errorMessage = ref('')
 const termin = ref('')
 const selectedExport = ref('klasse')
 const selectedKlasse = ref('')
 const roomCount = ref(1)
 const raumKapazitaeten = ref([''])
-const raumNamen = ref([''])
+const raumNamen = ref(['Raum 1'])
 const loading = ref(false)
 
-const capacitySum = computed(() =>
-  raumKapazitaeten.value.reduce((sum, value) => sum + (parseInt(value, 10) || 0), 0)
+const klassen = computed(() => configuration.value?.classes || [])
+const plannedGroups = computed(() => Boolean(configuration.value?.has_groups))
+const plannedDates = computed(() => {
+  const dates = configuration.value?.dates || []
+  const assigned = configuration.value?.class_dates?.[selectedKlasse.value]
+  return selectedExport.value === 'klasse' && assigned
+    ? dates.filter((date) => assigned.includes(date))
+    : dates
+})
+const teilnehmerCount = computed(() =>
+  configuration.value?.counts_by_date?.[termin.value] ?? configuration.value?.count ?? 0
 )
-
-const missingCapacity = computed(() => Math.max(props.teilnehmerCount - capacitySum.value, 0))
+const capacitySum = computed(() =>
+  raumKapazitaeten.value.reduce((sum, value) => sum + (Number(value) || 0), 0)
+)
+const missingCapacity = computed(() => Math.max(teilnehmerCount.value - capacitySum.value, 0))
 
 const canExport = computed(() => {
-  if (!termin.value) return false
+  if (preparing.value || !configuration.value || !termin.value || !teilnehmerCount.value) return false
+  if (configuration.value.has_schedule && !plannedDates.value.includes(termin.value)) return false
   if (selectedExport.value === 'klasse') return Boolean(selectedKlasse.value)
-  if (selectedExport.value === 'raeume') {
-    return roomCount.value > 0
-      && raumNamen.value.every((name) => String(name || '').trim())
-      && raumKapazitaeten.value.every((capacity) => (parseInt(capacity, 10) || 0) > 0)
-      && capacitySum.value >= props.teilnehmerCount
-  }
+  if (selectedExport.value !== 'raeume' || plannedGroups.value) return true
 
-  return true
+  const names = raumNamen.value.map((name) => name.trim().toLowerCase())
+  return Number.isInteger(roomCount.value) && roomCount.value >= 1 && roomCount.value <= 50
+    && names.length === roomCount.value && names.every(Boolean) && new Set(names).size === names.length
+    && raumKapazitaeten.value.every((capacity) => Number.isInteger(capacity) && capacity > 0)
+    && missingCapacity.value === 0
 })
 
-watch(
-  () => props.visible,
-  async (visible) => {
-    if (!visible) return
-
-    termin.value = ''
-    selectedExport.value = 'klasse'
-    selectedKlasse.value = props.klassen[0] || ''
-    roomCount.value = 1
-    raumKapazitaeten.value = ['']
-    raumNamen.value = ['']
-    loading.value = false
-
-    try {
-      const response = await axios.get(route('bop.run.show', {
-        partner: props.partnerId,
-        schuljahr: props.jahr,
-        teil: props.teil,
-      }))
-      const phase = (response.data?.phases || []).find((item) => item.phase_type === 'roll_day')
-      termin.value = [...(phase?.dates || [])].sort()[0] || ''
-      if (phase?.group_mode === 'balanced') {
-        selectedExport.value = 'raeume'
-        roomCount.value = Math.max(1, Number(phase.group_count || 1))
-      } else if (phase?.group_mode === 'school') {
-        selectedExport.value = 'klassenZip'
-      }
-    } catch {
-      // Ohne gespeicherten BOP-Ablauf bleibt die manuelle Eingabe erhalten.
-    }
-  },
-  { immediate: true }
-)
-
-watch(roomCount, (value) => {
-  const count = Math.max(parseInt(value, 10) || 0, 0)
-  raumNamen.value = Array.from({ length: count }, (_, index) => raumNamen.value[index] || `Raum ${index + 1}`)
-  raumKapazitaeten.value = Array.from({ length: count }, (_, index) => raumKapazitaeten.value[index] || '')
-})
-
-function exportUrl() {
-  const params = new URLSearchParams({
-    termin: termin.value,
-    anzahlBereiche: props.anzahlBereiche || 0,
-  })
-
-  let klasse = 'exportAlleKlassenZip'
-
-  if (selectedExport.value === 'klasse') {
-    klasse = selectedKlasse.value
-  }
-
-  if (selectedExport.value === 'raeume') {
-    klasse = 'exportAlleKlassen'
-    params.set('anzahlRaeumlichkeiten', String(roomCount.value))
-    raumNamen.value.forEach((name, index) => params.append(`raumNamen[${index}]`, name))
-    raumKapazitaeten.value.forEach((capacity, index) => params.append(`kapazitaeten[${index}]`, capacity || 0))
-  }
-
+function endpoint(klasse) {
   return route('anwesenheitsliste.BoTag1.export', {
     partnerID: props.partnerId,
     schuljahr: props.jahr,
     teil: props.teil,
     klasse,
-  }) + '?' + params.toString()
+  })
 }
 
-function filenameFromResponse(response) {
-  const disposition = response.headers?.['content-disposition'] || ''
-  const match = disposition.match(/filename="?([^"]+)"?/)
-
-  if (match?.[1]) {
-    return decodeURIComponent(match[1])
+watch(plannedDates, (dates) => {
+  if (configuration.value?.has_schedule && !dates.includes(termin.value)) {
+    termin.value = dates[0] || ''
   }
+})
 
-  return selectedExport.value === 'klasse'
-    ? `Rolltag_${selectedKlasse.value}.xlsx`
-    : 'Rolltag.zip'
-}
+watch(() => [props.visible, props.partnerId, props.jahr, props.teil], async ([visible], _, onCleanup) => {
+  if (!visible) return
+  const controller = new AbortController()
+  onCleanup(() => controller.abort())
+  preparing.value = true
+  configuration.value = null
+  errorMessage.value = ''
+  termin.value = ''
+  roomCount.value = 1
+  raumNamen.value = ['Raum 1']
+  raumKapazitaeten.value = ['']
+
+  try {
+    const { data } = await axios.get(endpoint('exportAlleKlassenZip'), {
+      params: { dialog: 1, preview: 1 },
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    })
+    if (!Array.isArray(data?.classes) || !Array.isArray(data?.dates)) throw new Error('Ungültige Exportdaten')
+    configuration.value = data
+    selectedKlasse.value = data.classes[0] || ''
+    selectedExport.value = selectedKlasse.value ? 'klasse' : 'klassenZip'
+    termin.value = plannedDates.value[0] || ''
+    if (!data.count) errorMessage.value = 'Für diese Auswahl wurden keine Teilnehmer gefunden.'
+  } catch (error) {
+    if (!controller.signal.aborted) {
+      errorMessage.value = error.response?.data?.message || 'Die Rolltag-Daten konnten nicht geladen werden.'
+    }
+  } finally {
+    if (!controller.signal.aborted) preparing.value = false
+  }
+}, { immediate: true })
+
+watch(roomCount, (value) => {
+  const count = Math.min(50, Math.max(Math.floor(value) || 0, 0))
+  raumNamen.value = Array.from({ length: count }, (_, index) => raumNamen.value[index] ?? `Raum ${index + 1}`)
+  raumKapazitaeten.value = Array.from({ length: count }, (_, index) => raumKapazitaeten.value[index] ?? '')
+})
 
 async function submit() {
   if (!canExport.value || loading.value) return
-
   loading.value = true
-
+  errorMessage.value = ''
   try {
-    const response = await axios.get(exportUrl(), { responseType: 'blob' })
-    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const mode = selectedExport.value
+    let klasse = 'exportAlleKlassenZip'
+    const params = new URLSearchParams({ dialog: '1', termin: termin.value })
+    if (mode === 'klasse') klasse = selectedKlasse.value
+    if (mode === 'raeume') {
+      klasse = 'exportAlleKlassen'
+      if (!plannedGroups.value) {
+        params.set('anzahlRaeumlichkeiten', String(roomCount.value))
+        raumNamen.value.forEach((name, index) => params.append(`raumNamen[${index}]`, name.trim()))
+        raumKapazitaeten.value.forEach((capacity, index) => params.append(`kapazitaeten[${index}]`, capacity))
+      }
+    }
+
+    const response = await axios.get(endpoint(klasse), {
+      params,
+      responseType: 'blob',
+      headers: { Accept: 'application/json' },
+    })
+    const disposition = response.headers?.['content-disposition'] || ''
+    const signature = new Uint8Array(await response.data.slice(0, 4).arrayBuffer())
+    if (!/^attachment\b/i.test(disposition) || signature.join(',') !== '80,75,3,4') {
+      throw new Error('Ungültige Exportdatei')
+    }
+    const url = URL.createObjectURL(response.data)
     const link = document.createElement('a')
     link.href = url
-    link.download = filenameFromResponse(response)
+    link.download = disposition.match(/filename="?([^";]+)"?/i)?.[1] ||
+      (mode === 'klasse' ? 'Rolltag.xlsx' : 'Rolltag.zip')
     document.body.appendChild(link)
     link.click()
     link.remove()
-    window.URL.revokeObjectURL(url)
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
     emit('close')
   } catch (error) {
-    console.error('Rolltag-Export fehlgeschlagen:', error)
-    alert(await exportErrorMessage(error))
+    const data = error.response?.data
+    let message = data?.message
+    if (data instanceof Blob) {
+      try {
+        const body = JSON.parse(await data.text())
+        message = Object.values(body.errors || {}).flat()[0] || body.message
+      } catch {
+        message = null
+      }
+    }
+    errorMessage.value = message || 'Der Rolltag-Export ist fehlgeschlagen. Es wurde keine gültige Exportdatei empfangen.'
   } finally {
     loading.value = false
   }
 }
-
-async function exportErrorMessage(error) {
-  const fallback = 'Der Rolltag-Export ist fehlgeschlagen.'
-  const data = error.response?.data
-
-  if (data instanceof Blob) {
-    const text = await data.text()
-
-    try {
-      const json = JSON.parse(text)
-      return json.message || json.error || fallback
-    } catch {
-      return text || fallback
-    }
-  }
-
-  return data?.message || data?.error || fallback
-}
 </script>
+
 
 <template>
   <Modal v-if="visible" @close="$emit('close')">
@@ -171,19 +169,25 @@ async function exportErrorMessage(error) {
 
     <template #body>
       <div class="space-y-5">
-        <div class="rounded border border-orange-200 bg-orange-50 p-4">
-          <p class="text-sm text-gray-600">Gesamtzahl Schüler für diese Schule und diesen Teil</p>
+        <p v-if="preparing" role="status">Rolltag-Daten werden geladen …</p>
+        <p v-if="errorMessage" role="alert" class="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">{{ errorMessage }}</p>
+        <div v-if="configuration" class="rounded border border-orange-200 bg-orange-50 p-4">
+          <p class="text-sm text-gray-600">{{ plannedDates.length ? 'Schüler am gewählten Termin (alle Klassen)' : 'Schüler für diese Schule und diesen Teil' }}</p>
           <p class="text-2xl font-bold text-zbb">{{ teilnehmerCount }}</p>
         </div>
 
         <label class="block">
           <span class="mb-2 block text-sm font-medium text-gray-700">Termin <span class="text-red-500">*</span></span>
-          <input v-model="termin" type="date" required class="w-full rounded border border-gray-300 p-2 focus:border-zbb focus:ring-zbb" />
+          <select v-if="plannedDates.length" v-model="termin" class="w-full rounded border-gray-300">
+            <option v-for="date in plannedDates" :key="date" :value="date">{{ date.split('-').reverse().join('.') }}</option>
+          </select>
+          <p v-else-if="configuration?.has_schedule" class="text-sm text-gray-600">Für diese Auswahl ist kein Rolltag-Termin geplant.</p>
+          <input v-else v-model="termin" type="date" required :disabled="preparing" class="w-full rounded border border-gray-300 p-2 focus:border-zbb focus:ring-zbb" />
         </label>
 
         <div class="grid gap-3 md:grid-cols-3">
           <label class="cursor-pointer rounded border p-4" :class="selectedExport === 'klasse' ? 'border-zbb bg-orange-50' : 'border-gray-200'">
-            <input v-model="selectedExport" type="radio" value="klasse" class="mr-2 text-zbb focus:ring-zbb" />
+            <input v-model="selectedExport" type="radio" value="klasse" :disabled="!klassen.length" class="mr-2 text-zbb focus:ring-zbb" />
             <span class="font-semibold text-gray-800">Einzelne Klasse</span>
             <p class="mt-1 text-xs text-gray-500">Eine Excel-Datei für die ausgewählte Klasse.</p>
           </label>
@@ -196,8 +200,8 @@ async function exportErrorMessage(error) {
 
           <label class="cursor-pointer rounded border p-4" :class="selectedExport === 'raeume' ? 'border-zbb bg-orange-50' : 'border-gray-200'">
             <input v-model="selectedExport" type="radio" value="raeume" class="mr-2 text-zbb focus:ring-zbb" />
-            <span class="font-semibold text-gray-800">Nach Räumen</span>
-            <p class="mt-1 text-xs text-gray-500">Schüler nach Kapazitäten auf Räume verteilen.</p>
+            <span class="font-semibold text-gray-800">{{ plannedGroups ? 'Geplante Gruppen' : 'Nach Räumen' }}</span>
+            <p class="mt-1 text-xs text-gray-500">ZIP-Datei mit Anwesenheitslisten und Einteilung.</p>
           </label>
         </div>
 
@@ -210,16 +214,16 @@ async function exportErrorMessage(error) {
           </label>
         </div>
 
-        <div v-if="selectedExport === 'raeume'" class="space-y-3 rounded border border-gray-200 p-4">
+        <div v-if="selectedExport === 'raeume' && !plannedGroups" class="space-y-3 rounded border border-gray-200 p-4">
           <label class="block">
             <span class="mb-2 block text-sm font-medium text-gray-700">Anzahl Räume</span>
-            <input v-model.number="roomCount" type="number" min="1" class="w-full rounded border border-gray-300 p-2 focus:border-zbb focus:ring-zbb" />
+            <input v-model.number="roomCount" type="number" min="1" max="50" class="w-full rounded border border-gray-300 p-2 focus:border-zbb focus:ring-zbb" />
           </label>
 
           <div class="grid gap-2">
             <div v-for="(_, index) in raumKapazitaeten" :key="index" class="grid gap-2 md:grid-cols-2">
               <input v-model="raumNamen[index]" type="text" class="rounded border border-gray-300 p-2" :placeholder="`Raum ${index + 1}`" />
-              <input v-model="raumKapazitaeten[index]" type="number" min="1" class="rounded border border-gray-300 p-2" :placeholder="`Kapazität Raum ${index + 1}`" />
+              <input v-model.number="raumKapazitaeten[index]" type="number" min="1" class="rounded border border-gray-300 p-2" :placeholder="`Kapazität Raum ${index + 1}`" />
             </div>
           </div>
 

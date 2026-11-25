@@ -1,6 +1,7 @@
 <?php
 namespace Tests\Feature;
-use App\Models\{User,Projekt,Partner,Personen,PersonenIstSchueler};
+use App\Models\{Dokumente,User,Projekt,Partner,Personen,PersonenIstSchueler};
+use App\Services\Bop\BibbAttendanceWordTemplate;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 use ZipArchive;
@@ -11,6 +12,10 @@ class BibbAttendanceWordExportTest extends TestCase
     {
         $user=User::factory()->create();
         $project=Projekt::factory()->create(['name'=>'BOP']);
+        $project->dokumente()->attach(
+            Dokumente::where('export_permission', BibbAttendanceWordTemplate::A3_EXPORT_PERMISSION)->firstOrFail(),
+            ['gruppen_export'=>true,'serienbrief'=>true,'sort_order'=>0]
+        );
         $school=Partner::create(['name'=>'Testschule']);
         $user->projekte()->attach($project);
         $user->update(['current_team_id'=>$project->id]);
@@ -18,6 +23,7 @@ class BibbAttendanceWordExportTest extends TestCase
         $this->grantTestPermission($user,'anwesenheit.abrechnung');
         foreach([3,1,2] as $i) {
             $person=Personen::factory()->create(['typ'=>'teilnehmer','nachname'=>'Testname'.$i]);
+            $project->teilnehmer()->attach($person, ['status'=>'aktiv']);
             PersonenIstSchueler::create(['person_id'=>$person->id,'schule_id'=>$school->id,'schuljahr'=>'2026','teil'=>'1','klasse'=>'7.'.(4-$i)]);
         }
         foreach(['A3','A4'] as $format) {

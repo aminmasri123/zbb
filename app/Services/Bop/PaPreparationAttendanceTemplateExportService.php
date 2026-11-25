@@ -2,25 +2,27 @@
 
 namespace App\Services\Bop;
 
+use App\Models\Dokumente;
 use App\Models\Partner;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
-use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use Illuminate\Validation\ValidationException;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Worksheet\MemoryDrawing;
 use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
-use RuntimeException;
 use setasign\Fpdi\Fpdi;
 
 class PaPreparationAttendanceTemplateExportService
 {
     public const TEMPLATE_PATH = 'vorlage/projekte/bop/excel/Anwesenheitsliste-Vorbereitung-BO-Tage.xlsx';
+    public const EXPORT_PERMISSION = 'anwesenheit.abrechnung';
 
     public function create(
         Partner $school,
@@ -32,10 +34,13 @@ class PaPreparationAttendanceTemplateExportService
         string $paperFormat,
         string $outputPath,
         bool $forPdf = false,
+        ?int $projectId = null,
     ): void {
-        $template = storage_path(self::TEMPLATE_PATH);
+        $template = $this->templatePath($projectId);
         if (! is_file($template)) {
-            throw new RuntimeException('Die Excel-Vorlage für die Anwesenheitsliste Vorbereitung PA wurde nicht gefunden.');
+            throw ValidationException::withMessages([
+                'vorlage' => 'Die Datei der Vorlage „Anwesenheitsliste Vorbereitung PA“ wurde nicht gefunden.',
+            ]);
         }
 
         $workbook = IOFactory::load($template);
@@ -119,9 +124,49 @@ class PaPreparationAttendanceTemplateExportService
         }
     }
 
-    public function applyPdfFooter(string $pdfPath, bool $addPageNumbers = false): void
+    private function templatePath(?int $projectId): string
     {
-        $workbook = IOFactory::load(storage_path(self::TEMPLATE_PATH));
+        if (! $projectId) {
+            throw ValidationException::withMessages([
+                'vorlage' => 'Für die Anwesenheitsliste Vorbereitung PA fehlt der Projektbezug.',
+            ]);
+        }
+
+        $document = Dokumente::query()
+            ->where('export_permission', self::EXPORT_PERMISSION)
+            ->where(function ($query) use ($projectId) {
+                $query->whereHas('projekte', fn ($project) => $project->whereKey($projectId))
+                    ->orWhereHas('kategorien.projekte', fn ($project) => $project->whereKey($projectId));
+            })
+            ->first();
+
+        if (! $document) {
+            throw ValidationException::withMessages([
+                'vorlage' => 'Dem aktiven Projekt ist keine Vorlage „Anwesenheitsliste Vorbereitung PA“ zugeordnet.',
+            ]);
+        }
+        if (! $document->aktiv) {
+            throw ValidationException::withMessages([
+                'vorlage' => 'Die Vorlage „Anwesenheitsliste Vorbereitung PA“ ist deaktiviert.',
+            ]);
+        }
+        if ($document->typ !== 'excel' || ! in_array('xlsx', $document->ausgabeformate ?? [], true)) {
+            throw ValidationException::withMessages([
+                'vorlage' => 'Die Vorlage „Anwesenheitsliste Vorbereitung PA“ muss eine Excel-Vorlage mit XLSX-Ausgabe sein.',
+            ]);
+        }
+        if (! $document->dateipfad) {
+            throw ValidationException::withMessages([
+                'vorlage' => 'Für die Vorlage „Anwesenheitsliste Vorbereitung PA“ wurde keine Datei hinterlegt.',
+            ]);
+        }
+
+        return storage_path(ltrim($document->dateipfad, '/\\'));
+    }
+
+    public function applyPdfFooter(string $pdfPath, bool $addPageNumbers = false, ?string $workbookPath = null): void
+    {
+        $workbook = IOFactory::load($workbookPath ?? storage_path(self::TEMPLATE_PATH));
         $sheet = $workbook->getActiveSheet();
         $footerImage = $sheet->getHeaderFooter()->getImages()['LF'] ?? null;
         if ($footerImage === null) {
@@ -202,7 +247,9 @@ class PaPreparationAttendanceTemplateExportService
             ])->render());
             $pdf->render();
             File::put($pdfPath, $pdf->output());
-            $this->applyPdfFooter($pdfPath, true);
+            // Use the selected, filled managed workbook so a replaced template also
+            // controls the footer and print margins of the generated PDF.
+            $this->applyPdfFooter($pdfPath, true, $xlsxPath);
             return $pdfPath;
         } catch (\Throwable $exception) {
             File::delete($pdfPath);

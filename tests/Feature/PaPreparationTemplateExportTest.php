@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Partner;
+use App\Models\Dokumente;
 use App\Models\Personen;
 use App\Models\PersonenIstSchueler;
 use App\Models\Projekt;
@@ -112,6 +113,12 @@ class PaPreparationTemplateExportTest extends TestCase
         $user = User::factory()->create();
         $this->grantTestPermission($user, 'anwesenheit.abrechnung');
         $project = Projekt::factory()->create(['name' => 'BOP']);
+        $project->dokumente()->syncWithoutDetaching([
+            Dokumente::where('export_permission', PaPreparationAttendanceTemplateExportService::EXPORT_PERMISSION)
+                ->where('typ', 'excel')
+                ->firstOrFail()
+                ->id => ['gruppen_export' => false, 'serienbrief' => false, 'sort_order' => 0],
+        ]);
         $school = Partner::create(['name' => 'Vorlagen-Testschule']);
         DB::table('projekt_has_partners')->insert(['projekt_id' => $project->id, 'partner_id' => $school->id]);
         DB::table('projekt_has_personens')->insert(['projekt_id' => $project->id, 'personen_id' => $user->person_id, 'status' => 'aktiv']);

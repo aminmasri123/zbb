@@ -28,8 +28,8 @@ class BopPartnerPackageController extends Controller
         ],
         'rolltag' => [
             'name' => 'Rolltag',
-            'permissions' => ['dokumente.schule.export', 'gruppe.bop.export.namensschilder', 'anwesenheit.abrechnung'],
-            'documents' => ['BOP Hausordnung', 'Namensschilder', 'Anwesenheitsliste Rolltag'],
+            'permissions' => ['dokumente.schule.export', 'gruppe.bop.export.namensschilder', 'anwesenheit.abrechnung', 'anwesenheit.abrechnung'],
+            'documents' => ['BOP Hausordnung', 'Namensschilder', 'Anwesenheitsliste Rolltag', 'Anwesenheitsliste BO/BIBB DIN A3'],
         ],
         'feedbackgespraech' => [
             'name' => 'Feedbackgespräch',
@@ -44,40 +44,50 @@ class BopPartnerPackageController extends Controller
             return [];
         }
 
-        return collect(self::PACKAGES)->map(function ($package, $key) use ($project, $user, $partnerDocuments) {
+        $templates = $partnerDocuments->keyBy(fn ($document) => Str::slug($document['name']));
+
+        return collect(self::PACKAGES)->map(function ($package, $key) use ($project, $user, $templates) {
             $definition = self::definition($project, $key);
-            $documents = $partnerDocuments->keyBy(fn ($document) => Str::slug($document['name']));
-            $available = collect(self::requiredPermissions($key, $definition['documents']))->every(fn ($permission) => $user->can($permission));
-            $builtIn = $key === 'feedbackgespraech' ? ['Namensschilder'] : [...$package['documents'], 'Namensschilder'];
-            $missing = collect($definition['documents'])->reject(fn ($name) =>
-                in_array($name, $builtIn, true) || isset($documents[Str::slug($name)])
-            )->values()->all();
+            $documents = self::visibleDocuments($key, $definition['documents'], $user, $templates);
 
             return [
                 'id' => $key,
                 'name' => $definition['name'],
-                'documents' => $definition['documents'],
-                'documentOptions' => self::documentOptions($key, $partnerDocuments),
-                'unavailableReason' => ! $available
-                    ? 'Für dieses Paket fehlen Exportberechtigungen.'
-                    : ($missing ? 'Vorlage fehlt oder ist nicht freigegeben: '.implode(', ', $missing).'.' : null),
+                'documents' => $documents,
+                'documentOptions' => self::documentOptions($key, $user, $templates),
+                'unavailableReason' => $documents === [] ? 'Für dieses Paket sind keine Dokumente zum Export verfügbar.' : null,
             ];
         })->values()->all();
     }
 
-    private static function documentOptions(string $package, Collection $partnerDocuments): array
+    private static function documentOptions(string $package, User $user, Collection $templates): array
     {
-        return collect(self::PACKAGES[$package]['documents'])
-            ->push('Namensschilder')
-            ->merge($partnerDocuments->pluck('name'))
-            ->unique()->values()->all();
+        $options = array_merge(self::PACKAGES[$package]['documents'], ['Namensschilder'], $templates->pluck('name')->all());
+
+        return self::visibleDocuments($package, array_unique($options), $user, $templates);
     }
 
-    private static function requiredPermissions(string $package, array $documents): array
+    private static function builtInDocuments(string $package): array
     {
-        $preset = self::PACKAGES[$package];
+        return $package === 'feedbackgespraech' ? ['Namensschilder'] : [...self::PACKAGES[$package]['documents'], 'Namensschilder'];
+    }
 
-        return array_values(array_unique(array_merge(in_array('Namensschilder', $documents, true) ? ['gruppe.bop.export.namensschilder'] : [], array_filter($preset['permissions'], fn ($index) => in_array($preset['documents'][$index], $documents, true), ARRAY_FILTER_USE_KEY))));
+    private static function visibleDocuments(string $package, array $documents, User $user, Collection $templates): array
+    {
+        $builtIn = self::builtInDocuments($package);
+
+        return array_values(array_filter($documents, function ($name) use ($package, $user, $templates, $builtIn) {
+            if (! in_array($name, $builtIn, true)) {
+                return $templates->has(Str::slug($name));
+            }
+
+            $index = array_search($name, self::PACKAGES[$package]['documents'], true);
+            $permission = $name === 'Namensschilder'
+                ? 'gruppe.bop.export.namensschilder'
+                : self::PACKAGES[$package]['permissions'][$index];
+
+            return $user->can($permission);
+        }));
     }
 
     private static function definition(Projekt $project, string $package): array
@@ -111,15 +121,21 @@ class BopPartnerPackageController extends Controller
         $project = $this->bopProject($request, $context);
         abort_unless($request->user()->can('projekt.update'), 403);
         abort_unless(isset(self::PACKAGES[$package]), 404);
+        $user = $request->user();
+        $templates = app(PartnerController::class)->partnerDocumentsForProject($project, $user)
+            ->keyBy(fn ($document) => Str::slug($document['name']));
         $data = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'documents' => ['required', 'array', 'min:1'],
-            'documents.*' => ['required', 'string', 'distinct', Rule::in(self::documentOptions($package, app(PartnerController::class)->partnerDocumentsForProject($project, $request->user())))],
+            'documents.*' => ['required', 'string', 'distinct', Rule::in(self::documentOptions($package, $user, $templates))],
         ]);
 
-        DB::transaction(function () use ($project, $package, $data) {
+        DB::transaction(function () use ($project, $package, $data, $user, $templates) {
             $locked = Projekt::query()->lockForUpdate()->findOrFail($project->id);
             $settings = $locked->rule_settings ?? [];
+            $existing = self::definition($locked, $package)['documents'];
+            $hidden = array_diff($existing, self::visibleDocuments($package, $existing, $user, $templates));
+            $data['documents'] = array_values(array_merge($data['documents'], $hidden));
             $settings['bop_partner_packages'][$package] = $data;
             $locked->update(['rule_settings' => $settings]);
         });
@@ -144,11 +160,13 @@ class BopPartnerPackageController extends Controller
         abort_unless($project->partners()->whereKey($partner->id)->exists(), 404);
         abort_unless(isset(self::PACKAGES[$package]), 404);
 
+        $user = $request->user();
+        $availableTemplates = app(PartnerController::class)->partnerDocumentsForProject($project, $user)
+            ->keyBy(fn ($document) => Str::slug($document['name']));
         $definition = self::definition($project, $package);
+        $definition['documents'] = self::visibleDocuments($package, $definition['documents'], $user, $availableTemplates);
+        abort_if($definition['documents'] === [], 403, 'Für dieses Paket sind keine Dokumente zum Export verfügbar.');
         $includes = fn (int $index) => in_array(self::PACKAGES[$package]['documents'][$index], $definition['documents'], true);
-        foreach (self::requiredPermissions($package, $definition['documents']) as $permission) {
-            abort_unless($request->user()->can($permission), 403);
-        }
 
         $data = $request->validate([
             'schuljahr' => ['required', 'regex:/^\d{4}(?:[-\/]\d{2,4})?$/'],
@@ -185,17 +203,10 @@ class BopPartnerPackageController extends Controller
         abort_if($plannedStudentIds === [], 422, 'Für diesen Planungstermin sind keine Teilnehmenden zugeordnet.');
         $request->attributes->set('bop_package_student_ids', $plannedStudentIds);
 
-        $builtIn = $package === 'feedbackgespraech' ? ['Namensschilder'] : [...self::PACKAGES[$package]['documents'], 'Namensschilder'];
-        $documents = app(PartnerController::class)->partnerDocumentsForProject($project, $request->user())
-            ->keyBy(fn ($document) => Str::slug($document['name']));
+        $builtIn = self::builtInDocuments($package);
         $templates = collect($definition['documents'])
             ->reject(fn ($name) => in_array($name, $builtIn, true))
-            ->map(function ($name) use ($documents) {
-                $document = $documents->get(Str::slug($name));
-                abort_unless($document, 422, 'Vorlage fehlt oder ist nicht freigegeben: '.$name);
-
-                return $document;
-            });
+            ->map(fn ($name) => $availableTemplates->get(Str::slug($name)));
 
         $directory = storage_path('exports');
         File::ensureDirectoryExists($directory);
@@ -231,6 +242,17 @@ class BopPartnerPackageController extends Controller
                 if ($includes(2)) {
                     $attendance = $bop->anwesenheitslistePOBOTag1($scope, $partner->id, $year, $part, 'exportAlleKlassenZip', $project->id);
                     $this->addAttendanceLists($zip, $attendance, $temporary);
+                }
+                if ($includes(3)) {
+                    $bibbScope = $this->exportRequest($request, [
+                        'exportFormat' => 'A3',
+                        'schuleIdInputBibb' => $partner->id,
+                        'schuljahrInputBibb' => $year,
+                        'teilInputBibb' => $part,
+                        'days' => [['date' => $date, 'selected' => true]],
+                    ]);
+                    $this->add($zip, 'Anwesenheitsliste BO-BIBB DIN A3.docx',
+                        $bop->anwesenheitslistePOBOExportWordBIBB($bibbScope, $project->id), $temporary);
                 }
             }
             if (in_array('Namensschilder', $definition['documents'], true)) {

@@ -7,6 +7,7 @@ use App\Models\Bereichsauswahl;
 use App\Models\BereichsauswahlSetting;
 use App\Models\BibbAttendanceListDraft;
 use App\Models\BopRun;
+use App\Models\Dokumente;
 use App\Models\EinteilungBereiche;
 use App\Models\Gruppe;
 use App\Models\GruppeHasPersonen;
@@ -17,6 +18,7 @@ use App\Models\Personen;
 use App\Models\PersonenIstSchueler;
 use App\Models\Projekt;
 use App\Services\Bop\AttendanceFooterService;
+use App\Services\Bop\PackagePlanning;
 use App\Services\Bop\PaAttendanceSignatureHistoryService;
 use App\Services\Bop\PaPreparationAttendanceWordExportService;
 use App\Services\Bop\PublicAreaSelectionAccess;
@@ -1079,7 +1081,7 @@ class ProjektBopController extends Controller
         ];
     }
 
-    public function anwesenheitslistePOBOExportWordBIBB(Request $request)
+    public function anwesenheitslistePOBOExportWordBIBB(Request $request, ?int $exportProjectId = null)
     {
             $request->validate([
                 'exportFormat' => ['required', 'in:A3,A4'],
@@ -1102,21 +1104,25 @@ class ProjektBopController extends Controller
             $schulId = $request->schuleIdInputBibb;
             $teil = $request->teilInputBibb;
             $format = $request->exportFormat;
-            $this->ensurePartnerInActiveProject((int) $schulId);
+            $projectId = $this->ensurePartnerInActiveProject((int) $schulId);
 
             if($format == "A4")
             {
                 $templateFile = storage_path('vorlage/projekte/bop/word/bo/Teilnehmendenliste_zum_Nachweis_der_praktischen_Berufsorientierung_A4.docx');
             }elseif($format == "A3")
             {
-                $templateFile = storage_path('vorlage/projekte/bop/word/bo/Teilnehmendenliste_zum_Nachweis_der_praktischen_Berufsorientierung_A3.docx');
+                $templateFile = app(\App\Services\Bop\BibbAttendanceWordTemplate::class)
+                    ->a3TemplatePath($exportProjectId ?? $projectId);
             }
             if(!file_exists($templateFile)){
                 return redirect()->back()->with('error', 'Die Datei für den Export konnte nicht gefunden werden.');
             }
 
 
-            $alle_teilnehmer = PersonenIstSchueler::query()->filterSchueler( $schulId ?? null, $schuljahr ?? null, $teil ?? null)
+            $alle_teilnehmer = PersonenIstSchueler::forExportProject($exportProjectId ?? $projectId)
+            ->filterSchueler( $schulId ?? null, $schuljahr ?? null, $teil ?? null)
+            ->when($request->attributes->get('bop_package_student_ids') !== null,
+                fn ($query) => $query->whereIn('id', $request->attributes->get('bop_package_student_ids')))
             ->with('person')
             ->reorder()
             ->orderBy(Personen::select('nachname')->whereColumn('personens.id', (new PersonenIstSchueler)->qualifyColumn('person_id')))
@@ -1771,7 +1777,7 @@ class ProjektBopController extends Controller
             app(\App\Services\Bop\PaPreparationAttendanceTemplateExportService::class)->create(
                 $school, PersonenIstSchueler::sortForPackage($participants, $sort), $day,
                 is_array($payload['signatures'] ?? null) ? $payload['signatures'] : [],
-                $scope['export_mode'], $scope['klasse'], $exportFormat, $path
+                $scope['export_mode'], $scope['klasse'], $exportFormat, $path, false, $scope['projekt_id']
             );
 
             return response()->download($path, $filename)->deleteFileAfterSend(true);
@@ -1833,7 +1839,7 @@ class ProjektBopController extends Controller
                 if ($asExcel) {
                     app(\App\Services\Bop\PaPreparationAttendanceTemplateExportService::class)->create(
                         $school, $selected, $this->paPreparationDayFromDate($date)[0], [],
-                        $scope['export_mode'], $scope['klasse'], $format, $path
+                        $scope['export_mode'], $scope['klasse'], $format, $path, false, $scope['projekt_id']
                     );
                     $paths[] = $path;
                     continue;
@@ -1904,7 +1910,8 @@ class ProjektBopController extends Controller
         $outputPath = $xlsxPath;
         try {
             $exporter->create($school, $participants, $day, is_array($payload['signatures'] ?? null) ? $payload['signatures'] : [],
-                $scope['export_mode'], $scope['klasse'], $data['exportFormat'] ?? ($payload['form']['exportFormat'] ?? 'A4'), $xlsxPath, $data['format'] === 'pdf');
+                $scope['export_mode'], $scope['klasse'], $data['exportFormat'] ?? ($payload['form']['exportFormat'] ?? 'A4'),
+                $xlsxPath, $data['format'] === 'pdf', $scope['projekt_id']);
             if ($data['format'] === 'pdf') {
                 $outputPath = $exporter->createPdf($xlsxPath);
                 File::delete($xlsxPath);
@@ -2765,13 +2772,38 @@ class ProjektBopController extends Controller
         ]);
 
         $validated['exportMode'] = $validated['exportMode'] ?? (empty($validated['klasse']) ? 'alle' : 'klasse');
-        $this->ensurePartnerInActiveProject((int) $validated['schuleId']);
+        $projectId = $this->ensurePartnerInActiveProject((int) $validated['schuleId']);
+        $template = Dokumente::query()
+            ->where('export_permission', 'anwesenheit.abrechnung')
+            ->where('typ', 'word')
+            ->where(function ($query) use ($projectId) {
+                $query->whereHas('projekte', fn ($project) => $project->whereKey($projectId))
+                    ->orWhereHas('kategorien.projekte', fn ($project) => $project->whereKey($projectId));
+            })
+            ->first();
 
-        $templateFile = storage_path('vorlage/projekte/bop/word/pa/Anwesenheitsliste-PA.docx');
+        if (! $template) {
+            throw ValidationException::withMessages([
+                'vorlage' => 'Dem aktiven BOP-Projekt ist keine Vorlage „Anwesenheitsliste PA“ zugeordnet.',
+            ]);
+        }
+        if (! $template->aktiv) {
+            throw ValidationException::withMessages([
+                'vorlage' => 'Die Vorlage „Anwesenheitsliste PA“ ist deaktiviert.',
+            ]);
+        }
+        if (! in_array('docx', $template->ausgabeformate ?? [], true) || ! $template->dateipfad) {
+            throw ValidationException::withMessages([
+                'vorlage' => 'Die Vorlage „Anwesenheitsliste PA“ muss eine Word-Vorlage mit DOCX-Ausgabe sein.',
+            ]);
+        }
 
-            if(!file_exists($templateFile)){
-                return redirect()->back()->with('error', 'Die Datei für den Export konnte nicht gefunden werden.');
-            }
+        $templateFile = storage_path(ltrim($template->dateipfad, '/\\'));
+        if (! is_file($templateFile)) {
+            throw ValidationException::withMessages([
+                'vorlage' => 'Die Datei der Vorlage „Anwesenheitsliste PA“ wurde nicht gefunden.',
+            ]);
+        }
 
 
             $alle_teilnehmer = PersonenIstSchueler::query()
@@ -2903,56 +2935,90 @@ class ProjektBopController extends Controller
 
     public function anwesenheitslistePOBOTag1(Request $request, $partnerID, $schuljahr, $teil, $klasse = 'exportAlleKlassen', ?int $exportProjectId = null)
     {
-        $this->ensurePartnerInActiveProject((int) $partnerID);
+        $projectId = $this->ensurePartnerInActiveProject((int) $partnerID);
+        $dialog = $exportProjectId === null && $request->boolean('dialog');
+        $preview = $dialog && $request->boolean('preview');
 
         // Query Parameter
         $anzahlBereiche = $request->query('anzahlBereiche', 6);
         $anzahlRaeumlichkeiten = $request->query('anzahlRaeumlichkeiten', $anzahlBereiche);
         $kapazitaeten = $request->query('kapazitaeten', []);
         $termin = $request->query('termin', date('Y-m-d')) ;
-        $request->validate(['termin' => ['nullable', 'date']]);
-        abort_unless($this->attendanceDateAllowed($termin), 422, 'Wochenenden und Feiertage sind für diese Anwesenheitsliste ausgeschlossen.');
-        $raumNamen = $request->input('raumNamen', []);
+        if (! $preview) {
+            $request->validate(['termin' => [$dialog ? 'required' : 'sometimes', 'date_format:Y-m-d']]);
+            abort_unless($this->attendanceDateAllowed($termin), 422, 'Wochenenden und Feiertage sind für diese Anwesenheitsliste ausgeschlossen.');
+        }
 
         // Prüfen
         if (!$partnerID || !$schuljahr || !$teil || !$termin ){
-            return redirect()->route('partner.index')->with('error', 'Fehlende Daten.');
+            abort(422, 'Für den Rolltag-Export fehlen Angaben.');
         }
 
         $schule = Partner::findOrFail($partnerID);
+        $classExport = ! in_array($klasse, ['exportAlleKlassen', 'exportAlleKlassenZip'], true);
+        $planning = app(PackagePlanning::class);
+        $phase = $dialog ? $planning->phase($projectId, $schule->id, $schuljahr, $teil, 'roll_day') : null;
+        $plannedDates = collect($planning->dates($phase, $projectId, $schule->id, $schuljahr, $teil));
+        $classDates = collect($phase?->class_date_assignments ?? []);
+        $participants = $phase?->participants ?? collect();
+        $plannedGroups = $participants->filter(fn ($participant) => filled($participant->group_key))
+            ->pluck('group_key', 'personen_ist_schueler_id');
 
         // Teilnehmer laden
-        $alleTeilnehmer = PersonenIstSchueler::forExportProject($exportProjectId)->where('schule_id', $schule->id)
+        $alleTeilnehmer = PersonenIstSchueler::forExportProject($exportProjectId ?? $projectId)->where('schule_id', $schule->id)
             ->when($request->attributes->get('bop_package_student_ids') !== null, fn ($query) => $query->whereIn('id', $request->attributes->get('bop_package_student_ids')))
             ->forSchuljahr($schuljahr)
             ->where('teil', $teil)
-            ->when($klasse !== 'exportAlleKlassen' && $klasse !== 'exportAlleKlassenZip' , fn($q) => $q->where('klasse', $klasse))
+            ->when($classExport, fn ($query) => $query->where('klasse', $klasse))
+            ->when($participants->isNotEmpty() || $phase?->scope_type === 'participants',
+                fn ($query) => $query->whereIn('id', $participants->pluck('personen_ist_schueler_id')))
+            ->when($phase?->scope_type === 'classes', fn ($query) => $query->whereIn('klasse', $phase->selected_classes ?? []))
+            ->whereHas('person')
             ->with('person')
-            ->get()
-            ->sortBy(fn($t) => $t->person->nachname);
+            ->orderBy('id')
+            ->get();
+
+        $datesForStudent = fn ($student) => $classDates->isEmpty() ? $plannedDates->all() : ($classDates->get($student->klasse) ?? []);
+        if ($preview) {
+            $classes = $alleTeilnehmer->pluck('klasse')->filter()->unique()->sort(SORT_NATURAL)->values();
+            return response()->json([
+                'classes' => $classes,
+                'count' => $alleTeilnehmer->unique('person_id')->count(),
+                'counts_by_date' => $plannedDates->mapWithKeys(fn ($date) => [
+                    $date => $alleTeilnehmer->filter(fn ($student) => in_array($date, $datesForStudent($student), true))
+                        ->unique('person_id')->count(),
+                ]),
+                'dates' => $plannedDates,
+                'has_schedule' => ! empty($phase?->dates),
+                'class_dates' => $classes->mapWithKeys(fn ($class) => [
+                    $class => $classDates->isEmpty() ? $plannedDates->all() : ($classDates->get($class) ?? []),
+                ]),
+                'has_groups' => $alleTeilnehmer->contains(fn ($student) => $plannedGroups->has($student->id)),
+            ]);
+        }
+        if (! empty($phase?->dates)) {
+            abort_unless($plannedDates->contains($termin), 422, 'Bitte wählen Sie einen geplanten Rolltag-Termin.');
+            $alleTeilnehmer = $alleTeilnehmer->filter(fn ($student) => in_array($termin, $datesForStudent($student), true));
+        }
+        $alleTeilnehmer = PersonenIstSchueler::sortForPackage($alleTeilnehmer->unique('person_id'), 'nachname');
 
         if ($alleTeilnehmer->isEmpty()) {
-            return back()->with('error', 'Keine Teilnehmer gefunden.');
+            abort(422, 'Für diese Auswahl wurden keine Teilnehmer gefunden.');
         }
 
         // Template
         $templateFile = storage_path('vorlage/projekte/bop/excel/bo/botag1/Anwesenheitsliste-BO-TAG1.xlsx');
-        if (!file_exists($templateFile)) {
-            return back()->with('error', 'Template fehlt.');
+        if ($classExport || $klasse === 'exportAlleKlassenZip') {
+            $templateFile = dirname($templateFile).'/Anwesenheitsliste-BO-TAG1-Klasse.xlsx';
         }
+        abort_unless(is_file($templateFile), 500, 'Die Excel-Vorlage für den Rolltag fehlt.');
 
         /*
         |--------------------------------------------------------------------------
         | 🟢 FALL 1: EINZELNE KLASSE
         |--------------------------------------------------------------------------
         */
-        if ($klasse !== 'exportAlleKlassen' && $klasse !== 'exportAlleKlassenZip') {
-          Log::info('fall 1');
-
-            $templateFile = storage_path('vorlage/projekte/bop/excel/bo/botag1/Anwesenheitsliste-BO-TAG1-Klasse.xlsx');
-            if (!file_exists($templateFile)) {
-                return back()->with('error', 'Template fehlt.');
-            }
+        if ($classExport) {
 
             $spreadsheet = IOFactory::load($templateFile);
             $this->attendanceFooter->applyToSpreadsheet($spreadsheet);
@@ -2972,10 +3038,11 @@ class ProjektBopController extends Controller
                 $row++;
             }
 
-            $filePath = storage_path('Rolltag_' . $klasse . '.xlsx');
+            $filename = 'Rolltag_'.(Str::slug($klasse, '.') ?: 'Klasse').'.xlsx';
+            $filePath = storage_path(Str::uuid().'_'.$filename);
             (new Xlsx($spreadsheet))->save($filePath);
 
-            return response()->download($filePath)->deleteFileAfterSend(true);
+            return response()->download($filePath, $filename)->deleteFileAfterSend(true);
         }
         /*
         |--------------------------------------------------------------------------
@@ -2983,12 +3050,6 @@ class ProjektBopController extends Controller
         |--------------------------------------------------------------------------
         */
         if ($klasse === 'exportAlleKlassenZip') {
-                      Log::info('fall 2');
-
-            $templateFile = storage_path('vorlage/projekte/bop/excel/bo/botag1/Anwesenheitsliste-BO-TAG1-Klasse.xlsx');
-            if (!file_exists($templateFile)) {
-                return back()->with('error', 'Template fehlt.');
-            }
 
             // 👉 Teilnehmer nach Klassen gruppieren
             $alphabetisch = $exportProjectId !== null && $request->query('sortierung') === 'nachname';
@@ -3045,16 +3106,18 @@ class ProjektBopController extends Controller
                     $zip->addFile($file, basename($file));
                 }
 
-                $zip->close();
+                $closed = $zip->close();
 
                 // Temp löschen
                 array_map('unlink', glob($tempDir . '/*'));
                 rmdir($tempDir);
 
+                abort_unless($closed, 500, 'Die ZIP-Datei konnte nicht gespeichert werden.');
                 return response()->download($zipFileName)->deleteFileAfterSend(true);
             }
 
-            return back()->with('error', 'ZIP konnte nicht erstellt werden.');
+            File::deleteDirectory($tempDir);
+            abort(500, 'Die ZIP-Datei konnte nicht erstellt werden.');
         }
 
         /*
@@ -3062,93 +3125,33 @@ class ProjektBopController extends Controller
         | 🔵 FALL 3: Benutzerdefinierte Räume mit Namen und Kapazitäten
         |--------------------------------------------------------------------------
         */
-        if ($request->has('anzahlRaeumlichkeiten') && $request->has('raumNamen')) {
-            $anzahlRaeumlichkeiten = (int)$anzahlRaeumlichkeiten;
-            $alleTeilnehmer = $alleTeilnehmer->values();
-            $kapazitaeten = array_map(fn ($kapazitaet) => (int) $kapazitaet, $kapazitaeten ?? []);
+        $usePlannedGroups = $dialog && $plannedGroups->isNotEmpty();
+        if ($usePlannedGroups || ($request->has('anzahlRaeumlichkeiten') && $request->has('raumNamen'))) {
+            $groups = collect();
+            if ($usePlannedGroups) {
+                $groups = $alleTeilnehmer->groupBy(fn ($student) => $plannedGroups->get($student->id, 'Ohne Einteilung'));
+            } else {
+                $data = $request->validate([
+                    'anzahlRaeumlichkeiten' => ['required', 'integer', 'min:1', 'max:50'],
+                    'raumNamen' => ['required', 'array', 'list', 'size:'.$anzahlRaeumlichkeiten],
+                    'raumNamen.*' => ['required', 'string', 'max:120', 'distinct:ignore_case'],
+                    'kapazitaeten' => ['required', 'array', 'list', 'size:'.$anzahlRaeumlichkeiten],
+                    'kapazitaeten.*' => ['required', 'integer', 'min:1'],
+                ]);
+                abort_if(array_sum($data['kapazitaeten']) < $alleTeilnehmer->count(), 422,
+                    'Die eingegebenen Kapazitäten reichen nicht für alle Schüler aus.');
 
-            // Validierung
-            if ($anzahlRaeumlichkeiten < 1 || count($raumNamen) != $anzahlRaeumlichkeiten) {
-                return back()->with('error', 'Anzahl der Räume und Raumnamen stimmen nicht überein.');
-            }
-
-            $anzahlTeilnehmer = $alleTeilnehmer->count();
-
-            // Kapazitäten automatisch berechnen, falls leer
-            if (!$kapazitaeten || count($kapazitaeten) != $anzahlRaeumlichkeiten) {
-                $grundzahl = intdiv($anzahlTeilnehmer, $anzahlRaeumlichkeiten);
-                $rest = $anzahlTeilnehmer % $anzahlRaeumlichkeiten;
-
-                $kapazitaeten = [];
-                for ($i = 0; $i < $anzahlRaeumlichkeiten; $i++) {
-                    $kapazitaeten[$i] = $grundzahl + ($i < $rest ? 1 : 0);
+                $offset = 0;
+                foreach ($data['raumNamen'] as $index => $name) {
+                    $capacity = (int) $data['kapazitaeten'][$index];
+                    $groups->put($name, $alleTeilnehmer->slice($offset, $capacity));
+                    $offset += $capacity;
                 }
             }
-
-            if (array_sum($kapazitaeten) < $anzahlTeilnehmer) {
-                return response()->json([
-                    'message' => 'Die eingegebenen Kapazitäten reichen nicht für alle Schüler aus.',
-                ], 422);
-            }
-
-            // Temp Ordner vorbereiten
-            $tempDir = storage_path('temp_excel');
-            if (!is_dir($tempDir)) mkdir($tempDir, 0777, true);
-            array_map('unlink', glob($tempDir . '/*'));
-
-            $startIndex = 0;
-
-            for ($i = 0; $i < $anzahlRaeumlichkeiten; $i++) {
-                $spreadsheet = IOFactory::load($templateFile);
-                $this->attendanceFooter->applyToSpreadsheet($spreadsheet);
-                $sheet = $spreadsheet->getActiveSheet();
-
-                // Raumname oder generisch
-                $raumNameOriginal = $raumNamen[$i] ?? 'Raum ' . ($i + 1);
-                $raumName = Str::slug($raumNameOriginal, '_');
-
-                $anzahlAktuell = $kapazitaeten[$i];
-                $terminDatum = DateTime::createFromFormat('Y-m-d', $termin)->format('d.m.Y');
-
-                $sheet->setCellValue('H5', $terminDatum);
-                $sheet->setCellValue('C2', "Gruppe " . ($i + 1) . " - $raumName - " . $schule->name);
-
-                $row = 8;
-
-                for ($j = $startIndex; $j < $startIndex + $anzahlAktuell && $j < $anzahlTeilnehmer; $j++) {
-                    $t = $alleTeilnehmer[$j];
-
-                    $sheet->setCellValue('B' . $row, $t->person->nachname . ', ' . $t->person->vorname);
-                    $sheet->setCellValue('D' . $row, $t->klasse);
-                    $sheet->setCellValue('E' . $row, $t->geschlecht);
-                    $row++;
-                }
-
-                $startIndex += $anzahlAktuell;
-
-                // Excel speichern
-                (new Xlsx($spreadsheet))->save($tempDir . "/Rolltag_Raum_" . ($i + 1) . "_$raumName.xlsx");
-            }
-
-            // ZIP erstellen
-            $zipPath = storage_path('Rolltag_Raeume_' . date('Ymd_His') . '.zip');
-            $zip = new ZipArchive();
-
-            if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE)) {
-                foreach (glob($tempDir . '/*.xlsx') as $file) {
-                    $zip->addFile($file, basename($file));
-                }
-                $zip->close();
-
-                // Cleanup
-                array_map('unlink', glob($tempDir . '/*'));
-                rmdir($tempDir);
-
-                return response()->download($zipPath)->deleteFileAfterSend(true);
-            }
-
-            return back()->with('error', 'ZIP konnte nicht erstellt werden.');
+            return $this->rolltagRoomZip($groups, $templateFile, $schule->name, $termin);
         }
+
+        abort_if($dialog, 422, 'Bitte geben Sie Räume und Kapazitäten an.');
 
          /*
         |--------------------------------------------------------------------------
@@ -3160,7 +3163,8 @@ class ProjektBopController extends Controller
             ->sortBy(fn($t) => strtolower($t->person->nachname), SORT_NATURAL)
             ->values();
             // Temp Ordner
-            $tempDir = storage_path('temp_excel');
+            abort_if($anzahlRaeumlichkeiten < 1, 422, 'Bitte geben Sie mindestens einen Raum an.');
+            $tempDir = storage_path('temp_excel_'.Str::uuid());
             if (!is_dir($tempDir)) mkdir($tempDir, 0777, true);
             array_map('unlink', glob($tempDir . '/*'));
 
@@ -3177,12 +3181,12 @@ class ProjektBopController extends Controller
 
             // Bereiche laden
             $projekt = Projekt::with('bereiche')
-                ->where('id', auth()->user()->current_team_id)
+                ->where('id', $projectId)
                 ->first();
 
             // Als Array von Bereichsnamen
             $bereicheListe = $projekt->bereiche->pluck('name')->toArray();
-            $bereiche = array_slice($bereicheListe, 0, $anzahlBereiche);
+            $bereiche = array_slice($bereicheListe, 0, $anzahlBereiche) ?: ['Rolltag'];
 
             $startIndex = 0;
             $gruppenListe = [];
@@ -3227,10 +3231,10 @@ class ProjektBopController extends Controller
             }
 
             // ZIP erstellen
-            $zipPath = storage_path('Anwesenheitslisten.zip');
+            $zipPath = storage_path('Anwesenheitslisten_'.Str::uuid().'.zip');
             $zip = new ZipArchive();
 
-            if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE)) {
+            if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true) {
 
                 foreach (glob($tempDir . '/*.xlsx') as $file) {
                     $zip->addFile($file, basename($file));
@@ -3242,10 +3246,84 @@ class ProjektBopController extends Controller
                 array_map('unlink', glob($tempDir . '/*'));
                 rmdir($tempDir);
 
-                return response()->download($zipPath)->deleteFileAfterSend(true);
+                return response()->download($zipPath, 'Anwesenheitslisten.zip')->deleteFileAfterSend(true);
             }
 
-            return back()->with('error', 'ZIP konnte nicht erstellt werden.');
+            File::deleteDirectory($tempDir);
+            abort(500, 'Die ZIP-Datei konnte nicht erstellt werden.');
+    }
+
+    private function rolltagRoomZip(Collection $groups, string $template, string $school, string $date)
+    {
+        $path = storage_path('Rolltag_Gruppen_'.Str::uuid().'.zip');
+        $zip = new ZipArchive();
+        abort_unless($zip->open($path, ZipArchive::CREATE) === true, 500, 'Die ZIP-Datei konnte nicht erstellt werden.');
+
+        try {
+            $overview = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+            $overviewSheet = $overview->getActiveSheet();
+            $overviewSheet->setTitle('Einteilung');
+            $formattedDate = Carbon::parse($date)->format('d.m.Y');
+            $overviewSheet->fromArray(['Rolltag', $formattedDate]);
+            $overviewSheet->setCellValueExplicit('C1', $school, DataType::TYPE_STRING);
+            $overviewSheet->fromArray(['Gruppe / Raum', 'Klasse', 'Name'], null, 'A3');
+            $overviewRow = 4;
+            $index = 0;
+
+            foreach ($groups as $name => $students) {
+                $list = IOFactory::load($template);
+                $this->attendanceFooter->applyToSpreadsheet($list);
+                $sheet = $list->getActiveSheet();
+                $sheet->setCellValue('H5', $formattedDate);
+                $sheet->setCellValue('C2', "Rolltag - $name - $school");
+                $row = 8;
+
+                foreach ($students as $student) {
+                    $fullName = $student->person->nachname.', '.$student->person->vorname;
+                    $sheet->setCellValueExplicit('B'.$row, $fullName, DataType::TYPE_STRING);
+                    $sheet->setCellValueExplicit('D'.$row, (string) $student->klasse, DataType::TYPE_STRING);
+                    $sheet->setCellValue('E'.$row, $student->geschlecht);
+                    $row++;
+                    $overviewSheet->setCellValueExplicit('A'.$overviewRow, (string) $name, DataType::TYPE_STRING);
+                    $overviewSheet->setCellValueExplicit('B'.$overviewRow, (string) $student->klasse, DataType::TYPE_STRING);
+                    $overviewSheet->setCellValueExplicit('C'.$overviewRow, $fullName, DataType::TYPE_STRING);
+                    $overviewRow++;
+                }
+
+                $filename = 'Anwesenheitsliste_'.(++$index).'_'.Str::slug((string) $name, '_').'.xlsx';
+                $this->addRolltagWorkbook($zip, $filename, $list);
+            }
+
+            foreach (['A', 'B', 'C'] as $column) {
+                $overviewSheet->getColumnDimension($column)->setAutoSize(true);
+            }
+            $this->addRolltagWorkbook($zip, 'Einteilung.xlsx', $overview);
+            abort_unless($zip->close(), 500, 'Die ZIP-Datei konnte nicht gespeichert werden.');
+        } catch (\Throwable $error) {
+            if (isset($zip->filename)) {
+                $zip->close();
+            }
+            File::delete($path);
+            throw $error;
+        }
+
+        return response()->download($path, 'Rolltag_Gruppen.zip')->deleteFileAfterSend(true);
+    }
+
+    private function addRolltagWorkbook(ZipArchive $zip, string $filename, \PhpOffice\PhpSpreadsheet\Spreadsheet $workbook): void
+    {
+        $file = tempnam(storage_path(), 'rolltag_');
+        abort_if($file === false, 500, 'Die Excel-Datei konnte nicht erstellt werden.');
+
+        try {
+            (new Xlsx($workbook))->save($file);
+            $contents = file_get_contents($file);
+            abort_unless($contents !== false && $zip->addFromString($filename, $contents), 500,
+                'Die Excel-Datei konnte nicht zum ZIP hinzugefügt werden.');
+        } finally {
+            File::delete($file);
+            $workbook->disconnectWorksheets();
+        }
     }
 
 

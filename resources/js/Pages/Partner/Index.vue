@@ -61,7 +61,7 @@ let isModalCreateOpen = ref(false);
 let isModalEditOpen = ref(false);
 let partnerToEdit = ref(null);
 let activeModal = ref(null);
-let modalData = ref({ jahr: null, teil: null, klasse: null, partnerId: null, schoolName: null, schoolYears: [], klassen: [], teilnehmerCount: 0 });
+let modalData = ref({ jahr: null, teil: null, klasse: null, partnerId: null, schoolName: null, schoolYears: [], klassen: [] });
 const normalizePartner = (partner) => {
     const ansprechpartners = Object.values(
         (partner.ansprechpartners ?? []).reduce((persons, person) => {
@@ -153,15 +153,6 @@ function getKlassen(jahr, teil, partner) {
             .map(s => s.klasse)
             .filter(Boolean)
     )];
-}
-
-function getSchuelerCount(jahr, teil, partner) {
-    return new Set(
-        partner.schueler
-            .filter(s => sameSchoolYear(s.schuljahr, jahr) && s.teil === teil)
-            .map(s => s.personen_id ?? s.person_id ?? s.id)
-            .filter(Boolean)
-    ).size;
 }
 
 function getSchuljahre(partner) {
@@ -291,9 +282,9 @@ function openBopPlannerForYear(partner, jahr) {
 // -----------------------------
 // Modal-Funktionen
 // -----------------------------
-function openModal(modalName, { jahr = null, teil = null, klasse = null, partnerId = null, schoolName = null, schoolYears = [], klassen = null, teilnehmerCount = 0 } = {}) {
+function openModal(modalName, { jahr = null, teil = null, klasse = null, partnerId = null, schoolName = null, schoolYears = [], klassen = null } = {}) {
     activeModal.value = modalName;
-    modalData.value = { jahr, teil, klasse, partnerId, schoolName, schoolYears, klassen, teilnehmerCount };
+    modalData.value = { jahr, teil, klasse, partnerId, schoolName, schoolYears, klassen };
 }
 
 async function openPreparationPaModal({ jahr, teil, partner }) {
@@ -340,7 +331,7 @@ async function openPreparationPaModal({ jahr, teil, partner }) {
 
 function closeModal() {
     activeModal.value = null;
-    modalData.value = { jahr: null, teil: null, klasse: null, partnerId: null, schoolName: null, schoolYears: [], klassen: [], teilnehmerCount: 0 };
+    modalData.value = { jahr: null, teil: null, klasse: null, partnerId: null, schoolName: null, schoolYears: [], klassen: [] };
 }
 
 const openModalCreate = () => isModalCreateOpen.value = true;
@@ -517,39 +508,6 @@ const handleDelete = (partnerId) => {
     localPartners.value = localPartners.value.filter(p => p.id !== partnerId);
     showModalLöschen.value = false;
 };
-
-// -----------------------------
-// Modal BOTAG 1 Konf
-// -----------------------------
-const handleBoTag1 = (data) => {
-    closeModal()
-
-    if (data.mode === 'klasse') {
-        openModal('anwesenheitslisteBoTag1', {
-            ...modalData.value,
-            klasse: data.klasse
-        })
-    }
-
-    if (data.mode === 'raum') {
-        openModal('anwesenheitslisteBoTag1', {
-            ...modalData.value,
-            raum: 1
-        })
-    }
-
-    if (data.mode === 'custom') {
-        openModal('anwesenheitslisteBoTag1', {
-            ...modalData.value,
-            anzahl: data.value
-        })
-    }
-}
-
-
-
-
-
 
 // -----------------------------
 // Add / Update Partner via API
@@ -730,7 +688,7 @@ const updatePartnerAPI = async (form) => {
                                                         </a>
 
                                                         <!-- Rolltag -->
-                                                        <a v-if="can('anwesenheit.abrechnung')" @click.prevent="openModal('boTag1Config', { jahr, teil, klassen: getKlassen(jahr, teil, partner), partnerId: partner.id, teilnehmerCount: getSchuelerCount(jahr, teil, partner) })" class="block px-4 py-1 hover:bg-gray-200"> Rolltag </a>
+                                                        <a v-if="can('anwesenheit.abrechnung')" @click.prevent="openModal('boTag1Config', { jahr, teil, partnerId: partner.id })" class="block px-4 py-1 hover:bg-gray-200"> Rolltag </a>
 
                                                         <!-- 🔽 Hausordnung -->
 
@@ -971,7 +929,7 @@ const updatePartnerAPI = async (form) => {
         <ModalAnwesenheitslistePA v-if="activeModal === 'anwesenheitslistePATage'" :visible="true" :partnerId="modalData.partnerId" :schuljahr="modalData.jahr" :klasse="modalData.klasse" :klassen="modalData.klassen" :teil="modalData.teil" @update:visible="closeModal" @close="closeModal"/>
         <ModalSchulanwesenheitExport v-if="activeModal === 'schulanwesenheitExport'" :visible="true" :partner-id="modalData.partnerId" :schuljahr="modalData.jahr" :teil="modalData.teil" @close="closeModal" />
         <ModalAnwesenheitslistePA v-if="activeModal === 'anwesenheitslisteVorbereitungPA'" :visible="true" :partnerId="modalData.partnerId" :schuljahr="modalData.jahr" :klasse="modalData.klasse" :klassen="modalData.klassen" :teil="modalData.teil" list-type="pa_preparation" @update:visible="closeModal" @close="closeModal"/>
-        <ModalBoTag1 v-if="activeModal === 'boTag1Config'" :visible="true" :anzahlBereiche="props.anzahlBereiche" :jahr="modalData.jahr" :teil="modalData.teil" :klassen="modalData.klassen" :teilnehmerCount="modalData.teilnehmerCount" :partnerId="modalData.partnerId" @close="closeModal" @submit="handleBoTag1" />
+        <ModalBoTag1 v-if="activeModal === 'boTag1Config'" :visible="true" :jahr="modalData.jahr" :teil="modalData.teil" :partnerId="modalData.partnerId" @close="closeModal" />
         <ModalHausordnung v-if="activeModal === 'hausordnungConfig'" :visible="true" :partnerId="modalData.partnerId" :jahr="modalData.jahr" :teil="modalData.teil" @close="closeModal"/>
         <DocumentPackagesDialog v-if="activeModal === 'documentPackages'" :packages="packageOptions"
             :can-edit="can('projekt.update')" :can-view-documents="can('dokumente.index')"
