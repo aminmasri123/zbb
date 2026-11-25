@@ -174,6 +174,10 @@ class BopPartnerPackageController extends Controller
             'termin' => ['nullable', 'date_format:Y-m-d'],
             'preview' => ['nullable', 'boolean'],
             'sortierung' => ['nullable', 'in:klasse,nachname'],
+            'rolltag_mode' => ['nullable', 'in:classes,rooms'],
+            'rooms' => ['nullable', 'array', 'min:1', 'max:50'],
+            'rooms.*.name' => ['required_with:rooms', 'string', 'max:120', 'distinct:ignore_case'],
+            'rooms.*.capacity' => ['required_with:rooms', 'integer', 'min:1'],
         ]);
         $year = $data['schuljahr'];
         $part = $data['teil'];
@@ -183,10 +187,30 @@ class BopPartnerPackageController extends Controller
         $phaseType = ['vorbereitung-pa' => 'pa_preparation', 'rolltag' => 'roll_day', 'feedbackgespraech' => 'wt_feedback'][$package];
         $phase = $planning->phase($project->id, $partner->id, $year, $part, $phaseType);
         $plannedDates = $planning->dates($phase, $project->id, $partner->id, $year, $part);
+        $hasPlannedGroups = $package === 'rolltag' && ($phase?->participants
+            ?->contains(fn ($participant) => filled($participant->group_key)) ?? false);
         $needsDate = $package === 'vorbereitung-pa' ? $includes(1)
             : collect($definition['documents'])->contains(fn ($name) => $name !== 'Namensschilder');
+        $students = PersonenIstSchueler::forExportProject($project->id)
+            ->filterSchueler($partner->id, $year, $part);
+        abort_unless((clone $students)->exists(), 422, 'Für diese Schule, dieses Schuljahr und diesen Teil wurden im aktiven Projekt keine Teilnehmenden gefunden.');
         if ($request->boolean('preview')) {
-            return response()->json(['dates' => $plannedDates, 'needsDate' => $needsDate]);
+            $studentRows = (clone $students)->get();
+            $scopedRows = $phase && $package !== 'vorbereitung-pa'
+                ? $studentRows->filter(fn ($student) => $planning->includes($phase, $student, null))
+                : $studentRows;
+
+            return response()->json([
+                'dates' => $plannedDates,
+                'needsDate' => $needsDate,
+                'hasPlannedGroups' => $hasPlannedGroups,
+                'participantCount' => $scopedRows->count(),
+                'participantCountsByDate' => collect($plannedDates)->mapWithKeys(fn ($plannedDate) => [
+                    $plannedDate => $scopedRows
+                        ->filter(fn ($student) => $planning->includes($phase, $student, $plannedDate))
+                        ->count(),
+                ]),
+            ]);
         }
         if ($plannedDates && $needsDate) {
             if (count($plannedDates) === 1 || $package === 'vorbereitung-pa') $date = $plannedDates[0];
@@ -194,13 +218,17 @@ class BopPartnerPackageController extends Controller
         }
         abort_if($needsDate && !$date, 422, 'In der Planung fehlt der Termin. Bitte ein Datum für dieses Paket eingeben.');
 
-        $students = PersonenIstSchueler::forExportProject($project->id)
-            ->filterSchueler($partner->id, $year, $part);
-        abort_unless((clone $students)->exists(), 422, 'Für diese Schule, dieses Schuljahr und diesen Teil wurden im aktiven Projekt keine Teilnehmenden gefunden.');
         $plannedStudentIds = $phase && $package !== 'vorbereitung-pa'
             ? (clone $students)->get()->filter(fn ($student) => $planning->includes($phase, $student, $plannedDates ? $date : null))->pluck('id')->all()
             : null;
         abort_if($plannedStudentIds === [], 422, 'Für diesen Planungstermin sind keine Teilnehmenden zugeordnet.');
+        $roomMode = $package === 'rolltag' && ! $hasPlannedGroups && ($data['rolltag_mode'] ?? 'classes') === 'rooms';
+        if ($roomMode) {
+            abort_if(empty($data['rooms']), 422, 'Bitte mindestens einen Raum mit Kapazität angeben.');
+            $participantCount = $plannedStudentIds === null ? (clone $students)->count() : count($plannedStudentIds);
+            abort_if(collect($data['rooms'])->sum('capacity') < $participantCount, 422,
+                'Die Raumkapazitäten reichen nicht für alle Teilnehmenden aus.');
+        }
         $request->attributes->set('bop_package_student_ids', $plannedStudentIds);
 
         $builtIn = self::builtInDocuments($package);
@@ -239,6 +267,9 @@ class BopPartnerPackageController extends Controller
                     'teil' => $part,
                     'sortierung' => $sort,
                     'usePlanning' => true,
+                    'anzahlRaeumlichkeiten' => $roomMode ? count($data['rooms']) : null,
+                    'raumNamen' => $roomMode ? collect($data['rooms'])->pluck('name')->all() : null,
+                    'kapazitaeten' => $roomMode ? collect($data['rooms'])->pluck('capacity')->all() : null,
                 ]);
                 if ($includes(0)) {
                     $hausordnung = $bop->hausordnungExportPdf($partner->id, $year, $part, $sort, $date, $project->id, $plannedStudentIds);
@@ -246,14 +277,12 @@ class BopPartnerPackageController extends Controller
                     abort_unless($zip->addFromString('BOP Hausordnung.pdf', $hausordnung->getContent()), 500);
                 }
                 if ($includes(2)) {
-                    $hasPlannedGroups = $phase?->participants
-                        ?->contains(fn ($participant) => filled($participant->group_key)) ?? false;
                     $attendance = $bop->anwesenheitslistePOBOTag1(
                         $scope,
                         $partner->id,
                         $year,
                         $part,
-                        $hasPlannedGroups ? 'exportAlleKlassen' : 'exportAlleKlassenZip',
+                        ($hasPlannedGroups || $roomMode) ? 'exportAlleKlassen' : 'exportAlleKlassenZip',
                         $project->id
                     );
                     $this->addAttendanceLists($zip, $attendance, $temporary);

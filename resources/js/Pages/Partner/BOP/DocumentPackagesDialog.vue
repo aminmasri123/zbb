@@ -22,6 +22,13 @@ const plannedDates = ref([]);
 const loadingPlanning = ref(false);
 const planningReady = ref(false);
 const needsDate = ref(false);
+const hasPlannedGroups = ref(false);
+const participantCount = ref(0);
+const participantCountsByDate = ref({});
+const rolltagMode = ref('classes');
+const roomCount = ref(1);
+const roomNames = ref(['Raum 1']);
+const roomCapacities = ref(['']);
 let planningRequest = 0;
 const busy = ref(false);
 const loadingSchools = ref(false);
@@ -35,6 +42,19 @@ const years = computed(() => Object.keys(school.value?.years ?? {}).sort().rever
 const parts = computed(() => [...(school.value?.years?.[year.value] ?? [])]
     .sort((a, b) => a.localeCompare(b, 'de', { numeric: true })));
 const allDates = computed(() => selected.value === 'vorbereitung-pa');
+const isRolltag = computed(() => selected.value === 'rolltag');
+const selectedParticipantCount = computed(() => participantCountsByDate.value[date.value] ?? participantCount.value);
+const roomCapacity = computed(() => roomCapacities.value.reduce((sum, value) => sum + (Number(value) || 0), 0));
+const missingRoomCapacity = computed(() => Math.max(selectedParticipantCount.value - roomCapacity.value, 0));
+const roomsValid = computed(() => {
+    if (!isRolltag.value || hasPlannedGroups.value || rolltagMode.value !== 'rooms') return true;
+    const names = roomNames.value.map(name => name.trim().toLowerCase());
+    return roomCount.value >= 1 && roomCount.value <= 50
+        && names.length === roomCount.value && names.every(Boolean) && new Set(names).size === names.length
+        && roomCapacities.value.length === roomCount.value
+        && roomCapacities.value.every(capacity => Number.isInteger(Number(capacity)) && Number(capacity) > 0)
+        && missingRoomCapacity.value === 0;
+});
 
 onMounted(() => {
     dialog.value.showModal();
@@ -50,6 +70,13 @@ watch([selected, schoolId, year, part], async () => {
     const sequence = ++planningRequest;
     date.value = '';
     plannedDates.value = [];
+    hasPlannedGroups.value = false;
+    participantCount.value = 0;
+    participantCountsByDate.value = {};
+    rolltagMode.value = 'classes';
+    roomCount.value = 1;
+    roomNames.value = ['Raum 1'];
+    roomCapacities.value = [''];
     planningReady.value = false;
     loadingPlanning.value = false;
     error.value = '';
@@ -62,6 +89,9 @@ watch([selected, schoolId, year, part], async () => {
         if (sequence !== planningRequest) return;
         plannedDates.value = data.dates;
         needsDate.value = data.needsDate;
+        hasPlannedGroups.value = Boolean(data.hasPlannedGroups);
+        participantCount.value = Number(data.participantCount) || 0;
+        participantCountsByDate.value = data.participantCountsByDate || {};
         if (data.dates.length === 1 || allDates.value) date.value = data.dates[0] ?? '';
         planningReady.value = true;
     } catch {
@@ -69,6 +99,12 @@ watch([selected, schoolId, year, part], async () => {
     } finally {
         if (sequence === planningRequest) loadingPlanning.value = false;
     }
+});
+
+watch(roomCount, value => {
+    const count = Math.min(50, Math.max(1, Math.floor(Number(value)) || 1));
+    roomNames.value = Array.from({ length: count }, (_, index) => roomNames.value[index] ?? `Raum ${index + 1}`);
+    roomCapacities.value = Array.from({ length: count }, (_, index) => roomCapacities.value[index] ?? '');
 });
 
 async function configure(item) {
@@ -120,10 +156,19 @@ async function download() {
     busy.value = true;
     error.value = '';
     try {
+        const payload = { schuljahr: year.value, teil: part.value, sortierung: sort.value, termin: needsDate.value ? date.value : null };
+        if (isRolltag.value && !hasPlannedGroups.value) {
+            payload.rolltag_mode = rolltagMode.value;
+            if (rolltagMode.value === 'rooms') {
+                payload.rooms = roomNames.value.map((name, index) => ({
+                    name: name.trim(), capacity: Number(roomCapacities.value[index]),
+                }));
+            }
+        }
         const response = await axios.post(route('partner.bop.packages.download', {
             partner: schoolId.value,
             package: selected.value,
-        }), { schuljahr: year.value, teil: part.value, sortierung: sort.value, termin: needsDate.value ? date.value : null }, {
+        }), payload, {
             responseType: 'blob',
             headers: { Accept: 'application/json, application/zip' },
         });
@@ -240,6 +285,40 @@ async function download() {
                         <option value="nachname">Nach Nachname</option>
                     </select>
                 </label>
+                <div v-if="isRolltag && planningReady" class="space-y-3 rounded-lg border border-gray-200 p-4 sm:col-span-2">
+                    <template v-if="hasPlannedGroups">
+                        <p class="text-sm font-semibold text-gray-800">Geplante Gruppen werden verwendet</p>
+                        <p class="text-xs text-gray-600">Das Paket enthält eine Anwesenheitsliste je geplanter Gruppe sowie eine Einteilungsübersicht.</p>
+                    </template>
+                    <template v-else>
+                        <p class="text-sm font-semibold text-gray-800">Aufteilung der Rolltag-Anwesenheitslisten</p>
+                        <div class="grid gap-2 sm:grid-cols-2">
+                            <label class="rounded border p-3 text-sm" :class="rolltagMode === 'classes' ? 'border-zbb bg-orange-50' : 'border-gray-200'">
+                                <input v-model="rolltagMode" type="radio" value="classes" class="mr-2 text-zbb">
+                                Eine Liste je Klasse
+                            </label>
+                            <label class="rounded border p-3 text-sm" :class="rolltagMode === 'rooms' ? 'border-zbb bg-orange-50' : 'border-gray-200'">
+                                <input v-model="rolltagMode" type="radio" value="rooms" class="mr-2 text-zbb">
+                                Nach Räumen aufteilen
+                            </label>
+                        </div>
+                        <div v-if="rolltagMode === 'rooms'" class="space-y-3">
+                            <label class="block text-sm font-medium">
+                                Anzahl Räume
+                                <input v-model.number="roomCount" type="number" min="1" max="50" class="mt-1 block w-full rounded-md border-gray-300">
+                            </label>
+                            <div v-for="(_, index) in roomNames" :key="index" class="grid gap-2 sm:grid-cols-2">
+                                <input v-model="roomNames[index]" required maxlength="120" class="rounded-md border-gray-300" :placeholder="`Raum ${index + 1}`">
+                                <input v-model.number="roomCapacities[index]" required type="number" min="1" class="rounded-md border-gray-300" placeholder="Kapazität">
+                            </div>
+                            <div class="rounded bg-gray-50 p-3 text-sm">
+                                <p>Teilnehmende: <strong>{{ selectedParticipantCount }}</strong> · Plätze: <strong>{{ roomCapacity }}</strong></p>
+                                <p v-if="missingRoomCapacity" class="mt-1 text-red-700">Es fehlen {{ missingRoomCapacity }} Plätze.</p>
+                                <p v-else class="mt-1 text-green-700">Die Kapazitäten reichen aus.</p>
+                            </div>
+                        </div>
+                    </template>
+                </div>
                 <p v-if="loadingPlanning" class="text-sm text-gray-600 sm:col-span-2">Planung wird geprüft …</p>
                 <p v-if="planningReady && plannedDates.length" class="text-sm text-gray-600 sm:col-span-2">Termine aus der BOP-Planung: {{ plannedDates.map(day => day.split('-').reverse().join('.')).join(', ') }}.</p>
                 <label v-if="planningReady && needsDate && !plannedDates.length" class="block text-sm font-medium sm:col-span-2">
@@ -264,7 +343,7 @@ async function download() {
                 <button type="button" class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-50" :disabled="busy" @click="initialEditId ? dialog.close() : back()">{{ initialEditId ? 'Abbrechen' : 'Zur Paketliste' }}</button>
                 <button v-if="editPackage" type="submit" class="rounded-md bg-zbb px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" :disabled="busy || !form.name || !form.documents.length">{{ busy ? 'Wird gespeichert …' : 'Speichern' }}</button>
                 <button v-else type="submit" class="rounded-md bg-zbb px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                    :disabled="busy || loadingSchools || loadingPlanning || !planningReady || !school || !year || !part || Boolean(activePackage.unavailableReason) || (needsDate && !date)">
+                    :disabled="busy || loadingSchools || loadingPlanning || !planningReady || !school || !year || !part || Boolean(activePackage.unavailableReason) || (needsDate && !date) || !roomsValid">
                     {{ busy ? 'Paket wird erstellt …' : 'ZIP herunterladen' }}
                 </button>
             </footer>
