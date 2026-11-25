@@ -10,6 +10,7 @@ use App\Models\Projekt;
 use App\Models\User;
 use App\Services\Bop\PaPreparationAttendanceTemplateExportService;
 use App\Services\Bop\BibbAttendanceWordTemplate;
+use App\Services\Bop\RolltagAttendanceTemplateResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 use ZipArchive;
@@ -23,6 +24,7 @@ class BopPartnerPackageExportTest extends TestCase
         $user = User::factory()->create();
         $this->grantTestPermission($user, 'anwesenheit.abrechnung');
         $project = Projekt::factory()->create(['name' => 'BOP']);
+        $this->attachRolltagTemplates($project);
         $school = Partner::create(['name' => 'Rolltagschule']);
         $project->partners()->attach($school);
         $project->teilnehmer()->attach($user->person_id, ['status' => 'aktiv']);
@@ -94,6 +96,7 @@ class BopPartnerPackageExportTest extends TestCase
         ]]]);
         $this->attachPaPreparationTemplate($project);
         $this->attachBibbA3Template($project);
+        $this->attachRolltagTemplates($project);
         $school = Partner::create(['name' => 'Planungsschule']);
         $project->partners()->attach($school);
         $project->teilnehmer()->attach($user->person_id, ['status' => 'aktiv']);
@@ -165,6 +168,7 @@ class BopPartnerPackageExportTest extends TestCase
         $project = Projekt::factory()->create(['name' => 'BOP']);
         $this->attachPaPreparationTemplate($project);
         $this->attachBibbA3Template($project);
+        $this->attachRolltagTemplates($project);
         $school = Partner::create(['name' => 'Testschule']);
         $project->partners()->attach($school);
         $project->teilnehmer()->attach($user->person_id, ['status' => 'aktiv']);
@@ -341,5 +345,21 @@ class BopPartnerPackageExportTest extends TestCase
         $project->dokumente()->syncWithoutDetaching([
             $template->id => ['gruppen_export' => true, 'serienbrief' => true, 'sort_order' => 0],
         ]);
+    }
+
+    private function attachRolltagTemplates(Projekt $project): void
+    {
+        $templates = Dokumente::query()
+            ->whereIn('export_permission', [
+                RolltagAttendanceTemplateResolver::CLASS_EXPORT_PERMISSION,
+                RolltagAttendanceTemplateResolver::GROUP_EXPORT_PERMISSION,
+            ])
+            ->pluck('id');
+
+        $project->dokumente()->syncWithoutDetaching(
+            $templates->mapWithKeys(fn ($id) => [
+                $id => ['gruppen_export' => true, 'serienbrief' => false, 'sort_order' => 0],
+            ])->all()
+        );
     }
 }

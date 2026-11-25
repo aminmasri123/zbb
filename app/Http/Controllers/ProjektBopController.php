@@ -23,6 +23,7 @@ use App\Services\Bop\PaAttendanceSignatureHistoryService;
 use App\Services\Bop\PaPreparationAttendanceWordExportService;
 use App\Services\Bop\PublicAreaSelectionAccess;
 use App\Services\Bop\RolandEvaluationPdfService;
+use App\Services\Bop\RolltagAttendanceTemplateResolver;
 use App\Services\MyDatum;
 use App\Services\Projects\ActiveProjectContext;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
@@ -2937,6 +2938,7 @@ class ProjektBopController extends Controller
     {
         $projectId = $this->ensurePartnerInActiveProject((int) $partnerID);
         $dialog = $exportProjectId === null && $request->boolean('dialog');
+        $usePlanning = $dialog || $request->boolean('usePlanning');
         $preview = $dialog && $request->boolean('preview');
 
         // Query Parameter
@@ -2957,7 +2959,7 @@ class ProjektBopController extends Controller
         $schule = Partner::findOrFail($partnerID);
         $classExport = ! in_array($klasse, ['exportAlleKlassen', 'exportAlleKlassenZip'], true);
         $planning = app(PackagePlanning::class);
-        $phase = $dialog ? $planning->phase($projectId, $schule->id, $schuljahr, $teil, 'roll_day') : null;
+        $phase = $usePlanning ? $planning->phase($projectId, $schule->id, $schuljahr, $teil, 'roll_day') : null;
         $plannedDates = collect($planning->dates($phase, $projectId, $schule->id, $schuljahr, $teil));
         $classDates = collect($phase?->class_date_assignments ?? []);
         $participants = $phase?->participants ?? collect();
@@ -3000,18 +3002,20 @@ class ProjektBopController extends Controller
             abort_unless($plannedDates->contains($termin), 422, 'Bitte wählen Sie einen geplanten Rolltag-Termin.');
             $alleTeilnehmer = $alleTeilnehmer->filter(fn ($student) => in_array($termin, $datesForStudent($student), true));
         }
-        $alleTeilnehmer = PersonenIstSchueler::sortForPackage($alleTeilnehmer->unique('person_id'), 'nachname');
+        $alleTeilnehmer = PersonenIstSchueler::sortForPackage(
+            $alleTeilnehmer->unique('person_id'),
+            $request->query('sortierung', 'klasse')
+        );
 
         if ($alleTeilnehmer->isEmpty()) {
             abort(422, 'Für diese Auswahl wurden keine Teilnehmer gefunden.');
         }
 
-        // Template
-        $templateFile = storage_path('vorlage/projekte/bop/excel/bo/botag1/Anwesenheitsliste-BO-TAG1.xlsx');
-        if ($classExport || $klasse === 'exportAlleKlassenZip') {
-            $templateFile = dirname($templateFile).'/Anwesenheitsliste-BO-TAG1-Klasse.xlsx';
-        }
-        abort_unless(is_file($templateFile), 500, 'Die Excel-Vorlage für den Rolltag fehlt.');
+        $usePlannedGroups = $usePlanning && $plannedGroups->isNotEmpty();
+        $templates = app(RolltagAttendanceTemplateResolver::class);
+        $templateFile = ($classExport || $klasse === 'exportAlleKlassenZip')
+            ? $templates->classTemplate($projectId)
+            : $templates->groupTemplate($projectId);
 
         /*
         |--------------------------------------------------------------------------
@@ -3052,10 +3056,7 @@ class ProjektBopController extends Controller
         if ($klasse === 'exportAlleKlassenZip') {
 
             // 👉 Teilnehmer nach Klassen gruppieren
-            $alphabetisch = $exportProjectId !== null && $request->query('sortierung') === 'nachname';
-            $gruppenNachKlassen = $alphabetisch
-                ? collect(['alle Klassen' => PersonenIstSchueler::sortForPackage($alleTeilnehmer, 'nachname')])
-                : $alleTeilnehmer->groupBy('klasse')->sortKeys(SORT_NATURAL | SORT_FLAG_CASE);
+            $gruppenNachKlassen = $alleTeilnehmer->groupBy('klasse')->sortKeys(SORT_NATURAL | SORT_FLAG_CASE);
 
             // 👉 Temp Ordner
             $tempDir = storage_path('temp_excel_'.Str::uuid());
@@ -3075,7 +3076,7 @@ class ProjektBopController extends Controller
 
                 // Kopf
                 $sheet->setCellValue('H5', $terminDatum);
-                $sheet->setCellValue('C2', ($alphabetisch ? 'Rolltag - nach Nachname - ' : "Rolltag - Klasse $klassenName - ") . $schule->name);
+                $sheet->setCellValue('C2', "Rolltag - Klasse $klassenName - ".$schule->name);
 
                 // Teilnehmer eintragen
                 $row = 8;
@@ -3125,11 +3126,12 @@ class ProjektBopController extends Controller
         | 🔵 FALL 3: Benutzerdefinierte Räume mit Namen und Kapazitäten
         |--------------------------------------------------------------------------
         */
-        $usePlannedGroups = $dialog && $plannedGroups->isNotEmpty();
         if ($usePlannedGroups || ($request->has('anzahlRaeumlichkeiten') && $request->has('raumNamen'))) {
             $groups = collect();
             if ($usePlannedGroups) {
-                $groups = $alleTeilnehmer->groupBy(fn ($student) => $plannedGroups->get($student->id, 'Ohne Einteilung'));
+                $groups = $alleTeilnehmer
+                    ->groupBy(fn ($student) => $plannedGroups->get($student->id, 'Ohne Einteilung'))
+                    ->sortKeys(SORT_NATURAL | SORT_FLAG_CASE);
             } else {
                 $data = $request->validate([
                     'anzahlRaeumlichkeiten' => ['required', 'integer', 'min:1', 'max:50'],

@@ -186,6 +186,8 @@ class ProjektController extends Controller
                         ->whereIn('export_permission', [
                             \App\Services\Bop\PaPreparationAttendanceTemplateExportService::EXPORT_PERMISSION,
                             \App\Services\Bop\BibbAttendanceWordTemplate::A3_EXPORT_PERMISSION,
+                            \App\Services\Bop\RolltagAttendanceTemplateResolver::CLASS_EXPORT_PERMISSION,
+                            \App\Services\Bop\RolltagAttendanceTemplateResolver::GROUP_EXPORT_PERMISSION,
                         ])
                         ->pluck('id');
                     $projekt->dokumente()->syncWithoutDetaching(

@@ -233,14 +233,29 @@ class BopPartnerPackageController extends Controller
                     abort_unless($zip->addFromString('Elterneinverständniserklärung.txt', "Für diese Auswahl sind keine ausstehenden Elterneinverständniserklärungen erfasst.\r\n"), 500);
                 }
             } elseif ($package === 'rolltag') {
-                $scope = $this->exportRequest($request, ['termin' => $date, 'schuljahr' => $year, 'teil' => $part, 'sortierung' => $sort]);
+                $scope = $this->exportRequest($request, [
+                    'termin' => $date,
+                    'schuljahr' => $year,
+                    'teil' => $part,
+                    'sortierung' => $sort,
+                    'usePlanning' => true,
+                ]);
                 if ($includes(0)) {
                     $hausordnung = $bop->hausordnungExportPdf($partner->id, $year, $part, $sort, $date, $project->id, $plannedStudentIds);
                     abort_unless($hausordnung->isSuccessful() && str_starts_with((string) $hausordnung->headers->get('Content-Type'), 'application/pdf'), 422, 'Die Hausordnung konnte nicht erstellt werden.');
                     abort_unless($zip->addFromString('BOP Hausordnung.pdf', $hausordnung->getContent()), 500);
                 }
                 if ($includes(2)) {
-                    $attendance = $bop->anwesenheitslistePOBOTag1($scope, $partner->id, $year, $part, 'exportAlleKlassenZip', $project->id);
+                    $hasPlannedGroups = $phase?->participants
+                        ?->contains(fn ($participant) => filled($participant->group_key)) ?? false;
+                    $attendance = $bop->anwesenheitslistePOBOTag1(
+                        $scope,
+                        $partner->id,
+                        $year,
+                        $part,
+                        $hasPlannedGroups ? 'exportAlleKlassen' : 'exportAlleKlassenZip',
+                        $project->id
+                    );
                     $this->addAttendanceLists($zip, $attendance, $temporary);
                 }
                 if ($includes(3)) {
